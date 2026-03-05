@@ -535,7 +535,7 @@ function TurneFormModal({ kayit, plays, onSave, onClose }) {
                 ]
               }),
               P.jsxs("div", { children: [label("SAHNE / MEKAN"), inp("sahne", { placeholder: "Devlet Tiyatrosu Büyük Sahne" })] })
-            ]},
+            ]}),
             // ULAŞIM
             aktifBolum === "ulasim" && P.jsxs(P.Fragment, { children: [
               P.jsxs("div", {
@@ -561,7 +561,7 @@ function TurneFormModal({ kayit, plays, onSave, onClose }) {
                 ]
               }),
               P.jsxs("div", { children: [label("AKTARMA BİLGİSİ"), inp("aktarma", { placeholder: "Ankara Esenboğa aktarmalı (THY TK442)" })] })
-            ]},
+            ]}),
             // KONAKLAMA
             aktifBolum === "konaklama" && P.jsxs(P.Fragment, { children: [
               P.jsx("p", { className: "text-sm", style: { color: S.mutedFg }, children: "Konaklama bilgileri yalnızca çok günlü (2+ gün) turnelerde gereklidir." }),
@@ -571,7 +571,7 @@ function TurneFormModal({ kayit, plays, onSave, onClose }) {
                 P.jsxs("div", { children: [label("TELEFON"), inp("otelTelefon", { type: "tel", placeholder: "0388 000 00 00" })] }),
                 P.jsxs("div", { children: [label("REZERVASYONNumarası"), inp("otelRezNo", { placeholder: "REZ-12345" })] })
               ]})
-            ]},
+            ]}),
             // LOJİSTİK
             aktifBolum === "lojistik" && P.jsxs(P.Fragment, { children: [
               P.jsxs("div", { className: "grid grid-cols-2 gap-3", children: [
@@ -587,7 +587,7 @@ function TurneFormModal({ kayit, plays, onSave, onClose }) {
                   style: { background: S.bg, color: S.fg, fontFamily: "inherit" }
                 })
               ]})
-            ]}
+            ]})
           ]})
         }),
         // Footer
