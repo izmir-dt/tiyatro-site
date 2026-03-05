@@ -112,14 +112,77 @@ const STATU_OPTS = [
 
 function getStatu(val) { return STATU_OPTS.find(s => s.val === val) || STATU_OPTS[0]; }
 
-// ── STORAGE ─────────────────────────────────────────────────────────
+// ── STORAGE + GOOGLE SHEETS SYNC ────────────────────────────────────
+// Google Apps Script URL - buraya kendi Apps Script URL'nizi girin
+const GAS_URL = "https://script.google.com/macros/s/AKfycbxeb7hAD3I0Tv_6kkacEFsATqd7-YlQig2gB4sBtXodPchUWPYWKdK8hZWFiJGyAsmI/exec";
+const SHEETS_ENABLED = GAS_URL !== "APPS_SCRIPT_URL_BURAYA";
+
+// localStorage'a yaz (her zaman - offline fallback)
 function kn(e) { try { localStorage.setItem(Hi, JSON.stringify(e)); } catch(x) {} }
-function cx() {
+
+// Google Sheets'e kaydet (async, arka planda)
+async function sheetsYaz(liste) {
+  if (!SHEETS_ENABLED) return;
   try {
-    // v5 key
+    await fetch(GAS_URL, {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify({ action: "saveAll", data: liste })
+    });
+  } catch(e) { console.warn("Sheets sync hatası:", e); }
+}
+
+// Google Sheets'ten oku
+async function sheetsOku() {
+  if (!SHEETS_ENABLED) return null;
+  try {
+    const res = await fetch(GAS_URL + "?action=getAll", { mode: "cors" });
+    if (!res.ok) return null;
+    const json = await res.json();
+    return Array.isArray(json) ? json : null;
+  } catch(e) { console.warn("Sheets okuma hatası:", e); return null; }
+}
+
+// Hem localStorage hem Sheets'e kaydet
+async function kaydetHepsine(liste) {
+  kn(liste); // önce anında localStorage
+  await sheetsYaz(liste); // arka planda Sheets
+}
+
+// Yükle: önce Sheets, yoksa localStorage
+async function yukle() {
+  // 1. Google Sheets'ten dene
+  const sheetsData = await sheetsOku();
+  if (sheetsData && sheetsData.length > 0) {
+    kn(sheetsData); // Sheets'ten geleni localStorage'a da yaz (offline için)
+    return sheetsData;
+  }
+  // 2. localStorage'dan fallback
+  try {
     const v5 = localStorage.getItem(Hi);
     if (v5) return JSON.parse(v5);
-    // migrate from v4
+    const v4 = localStorage.getItem("turne_kayitlari_v4");
+    if (v4) {
+      const data = JSON.parse(v4);
+      const migrated = data.map(k => ({
+        ...k,
+        statu: k.statu || "tamamlandi",
+        baslangicTarih: k.baslangicTarih || k.tarih || "",
+        bitisTarih: k.bitisTarih || k.tarih || "",
+      }));
+      kn(migrated);
+      return migrated;
+    }
+  } catch {}
+  return [];
+}
+
+// Senkron ilk yükleme (localStorage'dan - Sheets async sonra gelir)
+function cx() {
+  try {
+    const v5 = localStorage.getItem(Hi);
+    if (v5) return JSON.parse(v5);
     const v4 = localStorage.getItem("turne_kayitlari_v4");
     if (v4) {
       const data = JSON.parse(v4);
@@ -174,7 +237,7 @@ function turneGunleri(k) {
 }
 
 // ── VERİ YEDEKLEME (JSON) ────────────────────────────────────────────
-function YedeklemePaneli({ kayitlar, onRestore }) {
+function YedeklemePaneli({ kayitlar, onRestore, syncDurum }) {
   const [showRestore, setShowRestore] = Le.useState(false);
   const [mesaj, setMesaj] = Le.useState("");
 
@@ -236,6 +299,15 @@ function YedeklemePaneli({ kayitlar, onRestore }) {
         className: "text-xs font-semibold px-2 py-1 rounded-lg",
         style: { background: mesaj.startsWith("✓") ? "#d1fae5" : "#fee2e2", color: mesaj.startsWith("✓") ? "#065f46" : "#991b1b" },
         children: mesaj
+      }),
+      SHEETS_ENABLED && P.jsx("span", {
+        className: "text-xs font-semibold px-2 py-1 rounded-full ml-auto",
+        title: syncDurum === "syncing" ? "Google Sheets ile senkronize ediliyor..." : syncDurum === "ok" ? "Google Sheets'e kaydedildi" : syncDurum === "error" ? "Sheets bağlantı hatası - veriler localStorage'da saklandı" : syncDurum === "offline" ? "Sheets'e ulaşılamıyor - çevrimdışı mod" : "",
+        style: {
+          background: syncDurum === "syncing" ? "#fef9c3" : syncDurum === "ok" ? "#d1fae5" : syncDurum === "error" ? "#fee2e2" : syncDurum === "offline" ? "#f3f4f6" : "#f3f4f6",
+          color: syncDurum === "syncing" ? "#92400e" : syncDurum === "ok" ? "#065f46" : syncDurum === "error" ? "#991b1b" : "#6b7280",
+        },
+        children: syncDurum === "syncing" ? "⏳ Sheets'e kaydediliyor…" : syncDurum === "ok" ? "✅ Sheets'e kaydedildi" : syncDurum === "error" ? "⚠️ Sheets bağlantı hatası" : syncDurum === "offline" ? "📴 Çevrimdışı mod" : "☁️ Sheets bağlı"
       })
     ]
   });
@@ -854,8 +926,7 @@ function TurneKarti({ kayit, playRows, onEdit, onDelete, onKisiYonet }) {
                   "LOCATION:" + decodeURIComponent(loc),
                   "DESCRIPTION:" + (kayit.notlar || "İzmir Devlet Tiyatrosu Turne"),
                   "END:VEVENT", "END:VCALENDAR"
-                ].join("
-");
+                ].join("\n");
                 const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" });
                 const url  = URL.createObjectURL(blob);
                 const a    = document.createElement("a");
@@ -1678,7 +1749,33 @@ function Ax() {
     return Array.from(s).sort((a, b) => a.localeCompare(b, "tr"));
   }, [playRows]);
 
-  const kaydet = (liste) => { setKayitlar(liste); kn(liste); };
+  const [syncDurum, setSyncDurum] = Le.useState("idle"); // idle | syncing | ok | error | offline
+
+  const kaydet = (liste) => {
+    setKayitlar(liste);
+    kn(liste); // anında localStorage
+    if (SHEETS_ENABLED) {
+      setSyncDurum("syncing");
+      sheetsYaz(liste)
+        .then(() => { setSyncDurum("ok"); setTimeout(() => setSyncDurum("idle"), 2000); })
+        .catch(() => { setSyncDurum("error"); setTimeout(() => setSyncDurum("idle"), 3000); });
+    }
+  };
+
+  // İlk yüklemede Google Sheets'ten al
+  Le.useEffect(() => {
+    if (!SHEETS_ENABLED) return;
+    setSyncDurum("syncing");
+    yukle().then(liste => {
+      if (liste && liste.length > 0) {
+        setKayitlar(liste);
+        kn(liste);
+      }
+      setSyncDurum("ok");
+      setTimeout(() => setSyncDurum("idle"), 1500);
+    }).catch(() => setSyncDurum("offline"));
+  }, []);
+
   const onAdd = (k) => kaydet([{ ...k, id: Date.now().toString() }, ...kayitlar]);
   const onDelete = (id) => kaydet(kayitlar.filter(k => k.id !== id));
   const onEdit = (k) => kaydet(kayitlar.map(x => x.id === k.id ? k : x));
@@ -1780,6 +1877,13 @@ function Ax() {
             aktifTab === "takvim"      && P.jsx(px, { kayitlar }),
             aktifTab === "istatistik"  && P.jsx(Istatistik, { kayitlar })
           ]})
+      }),
+
+      // ── Alt Araç Çubuğu: Yedekleme + Sync Durumu ────────────────
+      P.jsx("div", {
+        className: "shrink-0 border-t border-border px-4 py-2",
+        style: { background: S.card },
+        children: P.jsx(YedeklemePaneli, { kayitlar, onRestore, syncDurum })
       })
     ]
   });
