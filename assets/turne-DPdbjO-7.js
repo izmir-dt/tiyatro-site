@@ -617,93 +617,86 @@ function gorevlendirmePdfOlustur(kayit) {
   const sure = turneSuresi(kayit);
   const kisiler = kayit.kisiListesi || [];
   const tarihStr = sure > 1
-    ? formatTarih(kayit.baslangicTarih) + " – " + formatTarih(kayit.bitisTarih)
+    ? formatTarih(kayit.baslangicTarih) + " \u2013 " + formatTarih(kayit.bitisTarih)
     : formatTarih(kayit.baslangicTarih || kayit.tarih);
 
-  const satirlar = kisiler.map((k, idx) =>
-    `<tr style="background:${idx % 2 === 0 ? '#f9f5f0' : '#fff'}">
-      <td style="padding:6px 10px;border:1px solid #ddd;text-align:center">${idx + 1}</td>
-      <td style="padding:6px 10px;border:1px solid #ddd;font-weight:600">${k.kisi}</td>
-      <td style="padding:6px 10px;border:1px solid #ddd">${k.gorev || ""}</td>
-      <td style="padding:6px 10px;border:1px solid #ddd">${k.kategori || ""}</td>
-    </tr>`
-  ).join("");
+  const satirlar = kisiler.map(function(k, idx) {
+    const bg = idx % 2 === 0 ? "#f9f5f0" : "#fff";
+    return "<tr style=\"background:" + bg + "\">"
+      + "<td style=\"padding:6px 10px;border:1px solid #ddd;text-align:center\">" + (idx + 1) + "</td>"
+      + "<td style=\"padding:6px 10px;border:1px solid #ddd;font-weight:600\">" + k.kisi + "</td>"
+      + "<td style=\"padding:6px 10px;border:1px solid #ddd\">" + (k.gorev || "") + "</td>"
+      + "<td style=\"padding:6px 10px;border:1px solid #ddd\">" + (k.kategori || "") + "</td>"
+      + "</tr>";
+  }).join("");
 
-  const html = `<!DOCTYPE html>
-<html lang="tr">
-<head><meta charset="UTF-8"><title>Görevlendirme Listesi</title>
-<style>
-  body { font-family: Arial, sans-serif; font-size: 12px; margin: 0; padding: 20px; color: #1a1a1a; }
-  .header { text-align: center; border-bottom: 3px solid #6b1b1b; padding-bottom: 16px; margin-bottom: 20px; }
-  .header h1 { font-size: 15px; font-weight: bold; margin: 0 0 4px; text-transform: uppercase; letter-spacing: 1px; }
-  .header h2 { font-size: 11px; font-weight: normal; margin: 0; color: #555; }
-  .logo-area { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 10px; }
-  .logo-badge { width: 48px; height: 48px; background: #6b1b1b; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 900; font-size: 16px; }
-  .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px; }
-  .info-box { border: 1px solid #ddd; border-radius: 6px; padding: 8px 12px; background: #fafafa; }
-  .info-box label { font-size: 10px; color: #777; text-transform: uppercase; display: block; }
-  .info-box span { font-weight: 700; font-size: 13px; display: block; margin-top: 2px; }
-  table { width: 100%; border-collapse: collapse; margin-top: 12px; }
-  th { background: #6b1b1b; color: white; padding: 8px 10px; border: 1px solid #5a1717; text-align: left; font-size: 11px; }
-  .footer { margin-top: 32px; display: grid; grid-template-columns: 1fr 1fr; gap: 40px; }
-  .imza { border-top: 1px solid #999; padding-top: 6px; text-align: center; font-size: 11px; color: #444; }
-  .statu-badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; background: #d1fae5; color: #065f46; }
-  @media print { body { margin: 0; } }
-</style>
-</head>
-<body>
-  <div class="header">
-    <div class="logo-area">
-      <div class="logo-badge">İDT</div>
-      <div>
-        <h1>İzmir Devlet Tiyatrosu</h1>
-        <h2>Sanat Teknik Bürosu · Turne Görevlendirme Listesi</h2>
-      </div>
-    </div>
-  </div>
+  const tarihBaslik = tarihStr + (sure > 1 ? " (" + sure + " g\xFCn)" : "");
+  const sehirBaslik = kayit.sehir + (kayit.sahne ? " \xB7 " + kayit.sahne : "");
+  const statuLabel = getStatu(kayit.statu).label;
+  const gidisHtml = kayit.gidisUlasim
+    ? "<div class=\"info-box\"><label>Gidi\u015F Ula\u015F\u0131m\u0131</label><span>" + kayit.gidisUlasim + (kayit.gidisSaat ? " \xB7 " + kayit.gidisSaat : "") + "</span></div>"
+    : "";
+  const donusHtml = kayit.donusUlasim
+    ? "<div class=\"info-box\"><label>D\xF6n\u00FC\u015F Ula\u015F\u0131m\u0131</label><span>" + kayit.donusUlasim + (kayit.donusSaat ? " \xB7 " + kayit.donusSaat : "") + "</span></div>"
+    : "";
+  const aktarmaHtml = kayit.aktarma
+    ? "<div class=\"info-box\" style=\"grid-column:1/-1\"><label>Aktarma Bilgisi</label><span>" + kayit.aktarma + "</span></div>"
+    : "";
+  const otelHtml = kayit.otelAdi
+    ? "<div class=\"info-box\" style=\"grid-column:1/-1\"><label>Konaklama</label><span>" + kayit.otelAdi + (kayit.otelAdres ? " \xB7 " + kayit.otelAdres : "") + (kayit.otelTelefon ? " \xB7 " + kayit.otelTelefon : "") + "</span></div>"
+    : "";
+  const kamyonHtml = kayit.kamyonSayisi
+    ? "<div class=\"info-box\"><label>Kiralanan Kamyon</label><span>" + kayit.kamyonSayisi + " adet</span></div>"
+    : "";
+  const sahneKapHtml = kayit.sahneKapasitesi
+    ? "<div class=\"info-box\"><label>Sahne Kapasitesi</label><span>" + kayit.sahneKapasitesi + " ki\u015Fi</span></div>"
+    : "";
+  const tabloHtml = kisiler.length === 0
+    ? "<p style=\"font-style:italic;color:#777;font-size:11px\">Kat\u0131l\u0131mc\u0131 listesi hen\xFCz eklenmemi\u015Ftir.</p>"
+    : "<table><thead><tr><th style=\"width:40px\">#</th><th>Ad Soyad</th><th>G\xF6revi</th><th>Kategorisi</th></tr></thead><tbody>" + satirlar + "</tbody></table>";
+  const notlarHtml = kayit.notlar
+    ? "<div style=\"margin-top:12px;padding:10px;background:#fef3c7;border-radius:6px;border-left:3px solid #d97706\"><p style=\"font-size:11px;margin:0;color:#444\"><strong>Not:</strong> " + kayit.notlar + "</p></div>"
+    : "";
+  const tarihOpts = { day: "numeric", month: "long", year: "numeric" };
+  const bugunStr = new Date().toLocaleDateString("tr-TR", tarihOpts);
 
-  <div class="info-grid">
-    <div class="info-box"><label>Oyun Adı</label><span>${kayit.oyunAdi}</span></div>
-    <div class="info-box"><label>Gidilecek Şehir / Sahne</label><span>${kayit.sehir}${kayit.sahne ? " · " + kayit.sahne : ""}</span></div>
-    <div class="info-box"><label>Tarih</label><span>${tarihStr}${sure > 1 ? " (" + sure + " gün)" : ""}</span></div>
-    <div class="info-box"><label>Turne Durumu</label><span><span class="statu-badge">${getStatu(kayit.statu).label}</span></span></div>
-    ${kayit.gidisUlasim ? `<div class="info-box"><label>Gidiş Ulaşımı</label><span>${kayit.gidisUlasim}${kayit.gidisSaat ? " · " + kayit.gidisSaat : ""}</span></div>` : ""}
-    ${kayit.donusUlasim ? `<div class="info-box"><label>Dönüş Ulaşımı</label><span>${kayit.donusUlasim}${kayit.donusSaat ? " · " + kayit.donusSaat : ""}</span></div>` : ""}
-    ${kayit.aktarma ? `<div class="info-box" style="grid-column:1/-1"><label>Aktarma Bilgisi</label><span>${kayit.aktarma}</span></div>` : ""}
-    ${kayit.otelAdi ? `<div class="info-box" style="grid-column:1/-1"><label>Konaklama</label><span>${kayit.otelAdi}${kayit.otelAdres ? " · " + kayit.otelAdres : ""}${kayit.otelTelefon ? " · " + kayit.otelTelefon : ""}</span></div>` : ""}
-    ${kayit.kamyonSayisi ? `<div class="info-box"><label>Kiralanan Kamyon</label><span>${kayit.kamyonSayisi} adet</span></div>` : ""}
-    ${kayit.sahneKapasitesi ? `<div class="info-box"><label>Sahne Kapasitesi</label><span>${kayit.sahneKapasitesi} kişi</span></div>` : ""}
-  </div>
-
-  <h3 style="font-size:12px;margin:12px 0 4px;color:#6b1b1b;text-transform:uppercase;letter-spacing:0.5px">Görevlendirilen Personel (${kisiler.length} kişi)</h3>
-  ${kisiler.length === 0
-    ? `<p style="font-style:italic;color:#777;font-size:11px">Katılımcı listesi henüz eklenmemiştir.</p>`
-    : `<table>
-        <thead>
-          <tr>
-            <th style="width:40px">#</th>
-            <th>Ad Soyad</th>
-            <th>Görevi</th>
-            <th>Kategorisi</th>
-          </tr>
-        </thead>
-        <tbody>${satirlar}</tbody>
-      </table>`
-  }
-
-  ${kayit.notlar ? `<div style="margin-top:12px;padding:10px;background:#fef3c7;border-radius:6px;border-left:3px solid #d97706"><p style="font-size:11px;margin:0;color:#444"><strong>Not:</strong> ${kayit.notlar}</p></div>` : ""}
-
-  <div class="footer">
-    <div class="imza">Hazırlayan<br><br><br>Sanat Teknik Bürosu</div>
-    <div class="imza">Onaylayan<br><br><br>Müdür</div>
-  </div>
-
-  <p style="text-align:center;font-size:10px;color:#aaa;margin-top:20px">
-    Düzenlenme tarihi: ${new Date().toLocaleDateString("tr-TR", { day:"numeric",month:"long",year:"numeric" })}
-  </p>
-  <script>window.onload = () => { window.print(); }</script>
-</body>
-</html>`;
+  const html = "<!DOCTYPE html><html lang=\"tr\"><head><meta charset=\"UTF-8\"><title>G\xF6revlendirme Listesi</title>"
+    + "<style>"
+    + "body{font-family:Arial,sans-serif;font-size:12px;margin:0;padding:20px;color:#1a1a1a}"
+    + ".header{text-align:center;border-bottom:3px solid #6b1b1b;padding-bottom:16px;margin-bottom:20px}"
+    + ".header h1{font-size:15px;font-weight:bold;margin:0 0 4px;text-transform:uppercase;letter-spacing:1px}"
+    + ".header h2{font-size:11px;font-weight:normal;margin:0;color:#555}"
+    + ".logo-area{display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:10px}"
+    + ".logo-badge{width:48px;height:48px;background:#6b1b1b;border-radius:8px;display:flex;align-items:center;justify-content:center;color:white;font-weight:900;font-size:16px}"
+    + ".info-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px}"
+    + ".info-box{border:1px solid #ddd;border-radius:6px;padding:8px 12px;background:#fafafa}"
+    + ".info-box label{font-size:10px;color:#777;text-transform:uppercase;display:block}"
+    + ".info-box span{font-weight:700;font-size:13px;display:block;margin-top:2px}"
+    + "table{width:100%;border-collapse:collapse;margin-top:12px}"
+    + "th{background:#6b1b1b;color:white;padding:8px 10px;border:1px solid #5a1717;text-align:left;font-size:11px}"
+    + ".footer{margin-top:32px;display:grid;grid-template-columns:1fr 1fr;gap:40px}"
+    + ".imza{border-top:1px solid #999;padding-top:6px;text-align:center;font-size:11px;color:#444}"
+    + ".statu-badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;background:#d1fae5;color:#065f46}"
+    + "@media print{body{margin:0}}"
+    + "</style></head><body>"
+    + "<div class=\"header\"><div class=\"logo-area\"><div class=\"logo-badge\">\u0130DT</div><div>"
+    + "<h1>\u0130zmir Devlet Tiyatrosu</h1>"
+    + "<h2>Sanat Teknik B\xFCrosu \xB7 Turne G\xF6revlendirme Listesi</h2>"
+    + "</div></div></div>"
+    + "<div class=\"info-grid\">"
+    + "<div class=\"info-box\"><label>Oyun Ad\u0131</label><span>" + kayit.oyunAdi + "</span></div>"
+    + "<div class=\"info-box\"><label>Gidilecek \u015Eehir / Sahne</label><span>" + sehirBaslik + "</span></div>"
+    + "<div class=\"info-box\"><label>Tarih</label><span>" + tarihBaslik + "</span></div>"
+    + "<div class=\"info-box\"><label>Turne Durumu</label><span><span class=\"statu-badge\">" + statuLabel + "</span></span></div>"
+    + gidisHtml + donusHtml + aktarmaHtml + otelHtml + kamyonHtml + sahneKapHtml
+    + "</div>"
+    + "<h3 style=\"font-size:12px;margin:12px 0 4px;color:#6b1b1b;text-transform:uppercase;letter-spacing:0.5px\">G\xF6revlendirilen Personel (" + kisiler.length + " ki\u015Fi)</h3>"
+    + tabloHtml
+    + notlarHtml
+    + "<div class=\"footer\"><div class=\"imza\">Haz\u0131rlayan<br><br><br>Sanat Teknik B\xFCrosu</div><div class=\"imza\">Onaylayan<br><br><br>M\xFCd\xFCr</div></div>"
+    + "<p style=\"text-align:center;font-size:10px;color:#aaa;margin-top:20px\">D\xFCzenlenme tarihi: " + bugunStr + "</p>"
+    + "<" + "script>window.onload=function(){window.print()};<" + "/script>"
+    + "</body></html>";
 
   const win = window.open("", "_blank");
   win.document.write(html);
