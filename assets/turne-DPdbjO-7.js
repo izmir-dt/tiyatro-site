@@ -155,9 +155,8 @@ const S = {
 // ── YARDIMCI FONKSİYONLAR ────────────────────────────────────────────
 function formatTarih(tarih, kisa) {
   if (!tarih) return "-";
-  return new Date(tarih).toLocaleDateString("tr-TR", kisa
-    ? { day: "numeric", month: "short" }
-    : { day: "numeric", month: "long", year: "numeric" });
+  const opts = kisa ? { day: "numeric", month: "short" } : { day: "numeric", month: "long", year: "numeric" };
+  return new Date(tarih).toLocaleDateString("tr-TR", opts);
 }
 function turneSuresi(k) {
   if (!k.baslangicTarih || !k.bitisTarih) return 1;
