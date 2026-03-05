@@ -114,7 +114,7 @@ function getStatu(val) { return STATU_OPTS.find(s => s.val === val) || STATU_OPT
 
 // ── STORAGE + GOOGLE SHEETS SYNC ────────────────────────────────────
 // Google Apps Script URL - buraya kendi Apps Script URL'nizi girin
-const GAS_URL = "https://script.google.com/macros/s/AKfycbxeb7hAD3I0Tv_6kkacEFsATqd7-YlQig2gB4sBtXodPchUWPYWKdK8hZWFiJGyAsmI/exec";
+const GAS_URL = "https://script.google.com/macros/s/AKfycbyZc8-PhLukDjLm3hd6ca8CyexTX4dZvxtfgkDu_XZdfyXHlpkOkyqKOwnArPtW2Vs/exec";
 const SHEETS_ENABLED = GAS_URL !== "APPS_SCRIPT_URL_BURAYA";
 
 // localStorage'a yaz (her zaman - offline fallback)
