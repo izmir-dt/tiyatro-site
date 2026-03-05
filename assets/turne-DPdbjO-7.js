@@ -831,42 +831,7 @@ function TurneKarti({ kayit, playRows, onEdit, onDelete, onKisiYonet }) {
             })
           ]}),
           // Notlar
-          kayit.notlar && P.jsx("p", { className: "text-xs italic", style: { color: S.mutedFg }, children: "📝 " + kayit.notlar }),
-
-          // ── ICS / Takvime Ekle ──────────────────────────────────
-          P.jsx("div", {
-            className: "pt-2 border-t border-border/60",
-            children: P.jsx("button", {
-              onClick: function(e) {
-                e.stopPropagation();
-                const bas   = (kayit.baslangicTarih || kayit.tarih || "").replace(/-/g,"");
-                const bit   = (kayit.bitisTarih     || kayit.tarih || "").replace(/-/g,"");
-                const title = encodeURIComponent(kayit.oyunAdi + " - " + kayit.sehir);
-                const loc   = encodeURIComponent(kayit.sahne ? kayit.sehir + ", " + kayit.sahne : kayit.sehir);
-                const uid   = "turne-" + kayit.id + "@izmir-dt";
-                const ics   = [
-                  "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//İzmir DT//Turne//TR",
-                  "BEGIN:VEVENT",
-                  "UID:" + uid,
-                  "DTSTART;VALUE=DATE:" + bas,
-                  "DTEND;VALUE=DATE:"   + (bit || bas),
-                  "SUMMARY:" + decodeURIComponent(title),
-                  "LOCATION:" + decodeURIComponent(loc),
-                  "DESCRIPTION:" + (kayit.notlar || "İzmir Devlet Tiyatrosu Turne"),
-                  "END:VEVENT", "END:VCALENDAR"
-                ].join("
-");
-                const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" });
-                const url  = URL.createObjectURL(blob);
-                const a    = document.createElement("a");
-                a.href = url; a.download = "turne-" + (kayit.sehir || "etkinlik") + ".ics"; a.click();
-                setTimeout(() => URL.revokeObjectURL(url), 1000);
-              },
-              className: "flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg transition-all hover:opacity-80",
-              style: { background: S.primaryBg(0.1), color: S.primary },
-              children: ["📅 Takvime Ekle (.ics)"]
-            })
-          })
+          kayit.notlar && P.jsx("p", { className: "text-xs italic", style: { color: S.mutedFg }, children: "📝 " + kayit.notlar })
         ]
       })
     ]
@@ -883,8 +848,6 @@ function hx({ kayitlar, plays, playRows, onAdd, onDelete, onEdit, onUpdate }) {
   const [statuFiltre, setStatuFiltre] = Le.useState("tum");
   const [zamanFiltre, setZamanFiltre] = Le.useState("tum");
   const [sirala, setSirala] = Le.useState("tarih-desc");
-  const [tarihBas, setTarihBas] = Le.useState("");
-  const [tarihBit, setTarihBit] = Le.useState("");
 
   const bugun = new Date().toISOString().slice(0, 10);
   const oyunlar = Le.useMemo(() => { const s = new Set; kayitlar.forEach(k => s.add(k.oyunAdi)); return Array.from(s).sort((a,b) => a.localeCompare(b,"tr")); }, [kayitlar]);
@@ -903,9 +866,7 @@ function hx({ kayitlar, plays, playRows, onAdd, onDelete, onEdit, onUpdate }) {
         : zamanFiltre === "gecmis" ? bitisTarih < bugun
         : zamanFiltre === "aktif" ? baslangic <= bugun && bitisTarih >= bugun
         : true;
-      const tarihBasOk = !tarihBas || baslangic >= tarihBas;
-      const tarihBitOk = !tarihBit || bitisTarih <= tarihBit;
-      return esles && oyunOk && statuOk && zamanOk && tarihBasOk && tarihBitOk;
+      return esles && oyunOk && statuOk && zamanOk;
     });
     if (sirala === "tarih-desc") list.sort((a, b) => (b.baslangicTarih || b.tarih || "") > (a.baslangicTarih || a.tarih || "") ? 1 : -1);
     else if (sirala === "tarih-asc") list.sort((a, b) => (a.baslangicTarih || a.tarih || "") > (b.baslangicTarih || b.tarih || "") ? 1 : -1);
@@ -928,11 +889,6 @@ function hx({ kayitlar, plays, playRows, onAdd, onDelete, onEdit, onUpdate }) {
     })));
     const wb = Rn.book_new(); Rn.book_append_sheet(wb, ws, "Turne"); $u(wb, "turne-listesi.xlsx");
   };
-
-  // Yaklaşan turneleri ayır (önce göster)
-  const bugunStr2 = new Date().toISOString().slice(0, 10);
-  const yaklaşanlar = filtrelenmis.filter(k => (k.baslangicTarih || k.tarih || "") >= bugunStr2 && k.statu !== "iptal");
-  const gecmisler   = filtrelenmis.filter(k => !((k.baslangicTarih || k.tarih || "") >= bugunStr2 && k.statu !== "iptal"));
 
   return P.jsxs("div", { className: "space-y-3", children: [
     // Araç çubuğu
@@ -987,46 +943,9 @@ function hx({ kayitlar, plays, playRows, onAdd, onDelete, onEdit, onUpdate }) {
         }),
         P.jsxs("button", { onClick: excelIndir, className: "flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-border text-xs font-semibold hover:bg-muted transition-colors", style: { color: S.mutedFg }, children: [P.jsx(hs, { className: "w-3.5 h-3.5" }), " Excel"] }),
         P.jsx("span", { className: "text-xs ml-auto", style: { color: S.mutedFg }, children: filtrelenmis.length + " kayıt" })
-      ]}),
-      // ── Tarih Aralığı Filtresi ──────────────────────────────────
-      (tarihBas || tarihBit) && P.jsxs("div", {
-        className: "flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs",
-        style: { background: S.primaryBg(0.07), border: "1px solid " + S.primaryBg(0.2) },
-        children: [
-          P.jsx("span", { style: { color: S.mutedFg }, children: "📅 Aralık:" }),
-          tarihBas && P.jsx("span", { className: "font-bold", style: { color: S.fg }, children: formatTarih(tarihBas, true) }),
-          (tarihBas && tarihBit) && P.jsx("span", { style: { color: S.mutedFg }, children: "→" }),
-          tarihBit && P.jsx("span", { className: "font-bold", style: { color: S.fg }, children: formatTarih(tarihBit, true) }),
-          P.jsxs("button", {
-            onClick: () => { setTarihBas(""); setTarihBit(""); },
-            className: "ml-auto text-xs font-bold hover:opacity-70 transition-opacity",
-            style: { color: S.primary },
-            children: "✕ Temizle"
-          })
-        ]
-      }),
-      P.jsxs("div", { className: "flex gap-2 items-center", children: [
-        P.jsx("span", { className: "text-xs shrink-0", style: { color: S.mutedFg }, children: "📅 Aralık:" }),
-        P.jsx("input", {
-          type: "date", value: tarihBas, onChange: e => setTarihBas(e.target.value),
-          className: "h-8 text-xs rounded-lg border border-input px-2 flex-1",
-          style: { background: S.bg, color: S.fg }
-        }),
-        P.jsx("span", { className: "text-xs", style: { color: S.mutedFg }, children: "–" }),
-        P.jsx("input", {
-          type: "date", value: tarihBit, onChange: e => setTarihBit(e.target.value),
-          className: "h-8 text-xs rounded-lg border border-input px-2 flex-1",
-          style: { background: S.bg, color: S.fg }
-        }),
-        (tarihBas || tarihBit) && P.jsx("button", {
-          onClick: () => { setTarihBas(""); setTarihBit(""); },
-          className: "text-xs font-bold shrink-0",
-          style: { color: S.mutedFg },
-          children: "✕"
-        })
       ]})
     ]}),
-    // ── Liste ───────────────────────────────────────────────────────
+    // Liste
     P.jsxs("div", { className: "space-y-2", children: [
       filtrelenmis.length === 0 && P.jsxs("div", {
         className: "text-center py-16 space-y-2",
@@ -1034,65 +953,16 @@ function hx({ kayitlar, plays, playRows, onAdd, onDelete, onEdit, onUpdate }) {
           P.jsx("div", { className: "text-4xl", children: "🎭" }),
           P.jsx("p", { className: "text-sm font-semibold", style: { color: S.mutedFg }, children: arama || oyunFiltre !== "tum" || statuFiltre !== "tum" ? "Arama kriterlerine uyan kayıt bulunamadı." : "Henüz turne kaydı yok." }),
           !arama && oyunFiltre === "tum" && statuFiltre === "tum" && P.jsxs("button", {
-            onClick: () => { setDuzenlened(null); setFormAcik(true); },
+            onClick: () => { setDuzenlenen(null); setFormAcik(true); },
             className: "px-4 py-2 rounded-lg text-sm font-semibold transition-colors",
             style: { background: S.primary, color: S.primaryFg },
             children: "+ İlk Turneyi Ekle"
           })
         ]
       }),
-
-      // Yaklaşan turneler – vurgulu bölüm
-      yaklaşanlar.length > 0 && zamanFiltre === "tum" && P.jsxs("div", { className: "space-y-2", children: [
-        P.jsx("div", {
-          className: "flex items-center gap-2 px-1",
-          children: [
-            P.jsx("div", { className: "h-px flex-1", style: { background: "rgba(22,163,74,0.25)" } }),
-            P.jsx("span", {
-              className: "text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full",
-              style: { background: "rgba(22,163,74,0.12)", color: "#16a34a" },
-              children: "🔜 " + yaklaşanlar.length + " Yaklaşan Turne"
-            }),
-            P.jsx("div", { className: "h-px flex-1", style: { background: "rgba(22,163,74,0.25)" } })
-          ]
-        }),
-        ...yaklaşanlar.map(k => P.jsx("div", {
-          style: { outline: "2px solid rgba(22,163,74,0.35)", borderRadius: "12px" },
-          children: P.jsx(TurneKarti, {
-            kayit: k, playRows,
-            onEdit: kayit => { setDuzenlenen(kayit); setFormAcik(true); },
-            onDelete,
-            onKisiYonet: kayit => setKisiModalKayit(kayit)
-          }, k.id)
-        }, k.id))
-      ]}),
-
-      // Geçmiş / diğer turneler
-      gecmisler.length > 0 && P.jsxs("div", { className: "space-y-2", children: [
-        yaklaşanlar.length > 0 && zamanFiltre === "tum" && P.jsx("div", {
-          className: "flex items-center gap-2 px-1 mt-1",
-          children: [
-            P.jsx("div", { className: "h-px flex-1", style: { background: S.border } }),
-            P.jsx("span", {
-              className: "text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full",
-              style: { background: S.muted, color: S.mutedFg },
-              children: "Geçmiş & Diğer"
-            }),
-            P.jsx("div", { className: "h-px flex-1", style: { background: S.border } })
-          ]
-        }),
-        ...gecmisler.map(k => P.jsx(TurneKarti, {
-          kayit: k, playRows,
-          onEdit: kayit => { setDuzenlenen(kayit); setFormAcik(true); },
-          onDelete,
-          onKisiYonet: kayit => setKisiModalKayit(kayit)
-        }, k.id))
-      ]}),
-
-      // Tek liste (filtreli mod)
-      zamanFiltre !== "tum" && filtrelenmis.map(k => P.jsx(TurneKarti, {
+      filtrelenmis.map(k => P.jsx(TurneKarti, {
         kayit: k, playRows,
-        onEdit: kayit => { setDuzenlened(kayit); setFormAcik(true); },
+        onEdit: kayit => { setDuzenlenen(kayit); setFormAcik(true); },
         onDelete,
         onKisiYonet: kayit => setKisiModalKayit(kayit)
       }, k.id))
@@ -1326,16 +1196,7 @@ function dx({ kayitlar }) {
                 ]}),
                 P.jsxs("div", { className: "flex items-center gap-2", children: [
                   toplamGun > count && P.jsx("span", { className: "text-xs", style: { color: S.mutedFg }, children: toplamGun + " gün" }),
-                  P.jsx("span", { className: "text-xs font-bold px-2.5 py-1 rounded-full", style: { background: S.primaryBg(0.15), color: S.primary }, children: count + " temsil" }),
-                  P.jsx("a", {
-                    href: "https://www.google.com/maps/search/" + encodeURIComponent(sehir + " Türkiye tiyatro"),
-                    target: "_blank",
-                    rel: "noopener noreferrer",
-                    onClick: e => e.stopPropagation(),
-                    className: "text-xs px-1.5 py-0.5 rounded font-bold hover:opacity-80 transition-opacity",
-                    style: { background: S.muted, color: S.mutedFg },
-                    children: "🗺️"
-                  })
+                  P.jsx("span", { className: "text-xs font-bold px-2.5 py-1 rounded-full", style: { background: S.primaryBg(0.15), color: S.primary }, children: count + " temsil" })
                 ]})
               ]}),
               P.jsx("div", { className: "px-4 pb-1", children: P.jsx("div", { className: "w-full h-1.5 rounded-full", style: { background: S.muted }, children: P.jsx("div", { className: "h-1.5 rounded-full", style: { width: (count / maxCount * 100) + "%", background: S.primary } }) }) }),
@@ -1389,35 +1250,11 @@ function px({ kayitlar }) {
   const oncekiAy = () => { if (ay === 0) { setAy(11); setYil(y => y - 1); } else setAy(a => a - 1); setSecilenGun(null); };
   const sonrakiAy = () => { if (ay === 11) { setAy(0); setYil(y => y + 1); } else setAy(a => a + 1); setSecilenGun(null); };
 
-  // Bu ay özet metrikleri
-  const buAyTurneler = Array.from(gunKayitlari.values()).flat().filter((k, i, arr) => arr.findIndex(x => x.id === k.id) === i);
-  const buAyToplamGun = buAyTurneler.reduce((a, k) => {
-    const gunler = turneGunleri(k).filter(g => { const d = new Date(g); return d.getFullYear() === yil && d.getMonth() === ay; });
-    return a + gunler.length;
-  }, 0);
-
   return P.jsxs("div", { className: "space-y-3", children: [
-    // Ay navigasyon + özet
-    P.jsxs("div", { className: "space-y-2", children: [
-      P.jsxs("div", { className: "flex items-center justify-between", children: [
-        P.jsx("button", { onClick: oncekiAy, className: "w-9 h-9 rounded-xl flex items-center justify-center hover:bg-muted transition-colors", style: { color: S.fg }, children: P.jsx(v0, { className: "w-4 h-4 rotate-90" }) }),
-        P.jsxs("span", { className: "text-lg font-extrabold", style: { color: S.fg }, children: [aylar[ay], " ", yil] }),
-        P.jsx("button", { onClick: sonrakiAy, className: "w-9 h-9 rounded-xl flex items-center justify-center hover:bg-muted transition-colors", style: { color: S.fg }, children: P.jsx(v0, { className: "w-4 h-4 -rotate-90" }) })
-      ]}),
-      buAyTurneler.length > 0 && P.jsx("div", {
-        className: "flex gap-2 flex-wrap justify-center",
-        children: [
-          { icon: "🎭", val: buAyTurneler.length, lbl: "turne" },
-          { icon: "📆", val: buAyToplamGun,       lbl: "gün" },
-          { icon: "📍", val: new Set(buAyTurneler.map(k => k.sehir)).size, lbl: "şehir" },
-        ].map(({ icon, val, lbl }) =>
-          P.jsxs("span", {
-            className: "flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold",
-            style: { background: S.primaryBg(0.1), color: S.primary },
-            children: [icon, " ", P.jsx("strong", { children: val }), " ", lbl]
-          }, lbl)
-        )
-      })
+    P.jsxs("div", { className: "flex items-center justify-between", children: [
+      P.jsx("button", { onClick: oncekiAy, className: "w-9 h-9 rounded-xl flex items-center justify-center hover:bg-muted transition-colors", style: { color: S.fg }, children: P.jsx(v0, { className: "w-4 h-4 rotate-90" }) }),
+      P.jsxs("span", { className: "text-lg font-extrabold", style: { color: S.fg }, children: [aylar[ay], " ", yil] }),
+      P.jsx("button", { onClick: sonrakiAy, className: "w-9 h-9 rounded-xl flex items-center justify-center hover:bg-muted transition-colors", style: { color: S.fg }, children: P.jsx(v0, { className: "w-4 h-4 -rotate-90" }) })
     ]}),
     P.jsxs("div", {
       className: "rounded-xl border border-border overflow-hidden",
@@ -1565,7 +1402,7 @@ function Istatistik({ kayitlar }) {
     // Özet kartlar
     P.jsx("div", { className: "grid grid-cols-2 gap-3", children: [
       P.jsx(StatKart, { label: "Toplam Turne", value: kayitlar.length, sub: stats.tamamlanan + " tamamlandı" }),
-      P.jsx(StatKart, { label: "Toplam Turne Günü", value: stats.toplamGun, sub: "Sahne+seyahat günleri" }),
+      P.jsx(StatKart, { label: "Toplam Turne Günü", value: stats.toplamGun, sub: "Toplam sahne dışı gün" }),
       P.jsx(StatKart, { label: "Ziyaret Edilen İl", value: stats.ilSirali.length, sub: stats.ilSirali[0] ? "En çok: " + stats.ilSirali[0][0] : "" }),
       P.jsx(StatKart, { label: "Yaklaşan Turne", value: stats.yaklasan, sub: "Onaylı & planlanmış", color: stats.yaklasan > 0 ? "#16a34a" : S.mutedFg })
     ]}),
@@ -1698,61 +1535,11 @@ function Ax() {
   const bugun = new Date().toISOString().slice(0, 10);
   const yaklasan = kayitlar.filter(k => (k.baslangicTarih || k.tarih || "") >= bugun && k.statu !== "iptal").length;
 
-  // Ek hesaplamalar – hızlı şerit için
-  const toplamGun     = kayitlar.reduce((a, k) => a + turneSuresi(k), 0);
-  const tamamlananSay = kayitlar.filter(k => k.statu === "tamamlandi").length;
-  const ilSayisi      = new Set(kayitlar.map(k => k.sehir)).size;
-  const enYakin       = kayitlar
-    .filter(k => (k.baslangicTarih || k.tarih || "") >= bugun && k.statu !== "iptal")
-    .sort((a, b) => (a.baslangicTarih || a.tarih || "") > (b.baslangicTarih || b.tarih || "") ? 1 : -1)[0];
-
   return P.jsxs("div", {
     className: "flex flex-col h-full",
     children: [
 
-      // ── Hızlı İstatistik Şeridi ─────────────────────────────────
-      P.jsx("div", {
-        className: "shrink-0 border-b border-border",
-        style: { background: S.card },
-        children: P.jsx("div", {
-          className: "flex overflow-x-auto px-3 py-2 gap-1.5",
-          style: { scrollbarWidth: "none" },
-          children: [
-            ...[
-              { icon: "📋", val: kayitlar.length, lbl: "turne" },
-              { icon: "✅", val: tamamlananSay, lbl: "tamamlandı" },
-              { icon: "📍", val: ilSayisi, lbl: "il" },
-              { icon: "📆", val: toplamGun, lbl: "gün" },
-              { icon: "🔜", val: yaklasan, lbl: "yaklaşan", highlight: yaklasan > 0 },
-            ].map(function({ icon, val, lbl, highlight }) {
-              return P.jsxs("div", {
-                key: lbl,
-                className: "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold shrink-0 select-none",
-                style: highlight
-                  ? { background: "rgba(22,163,74,0.12)", color: "#16a34a", border: "1px solid rgba(22,163,74,0.3)" }
-                  : { background: S.muted, color: S.mutedFg },
-                children: [
-                  P.jsx("span", { children: icon }),
-                  P.jsx("span", { style: { color: highlight ? "#16a34a" : S.fg, fontWeight: 900 }, children: val }),
-                  P.jsx("span", { children: lbl })
-                ]
-              }, lbl);
-            }),
-            enYakin && P.jsxs("div", {
-              className: "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold shrink-0 select-none ml-1",
-              style: { background: S.primaryBg(0.1), color: S.primary, border: "1px solid " + S.primaryBg(0.25) },
-              children: [
-                P.jsx("span", { children: "🎭" }),
-                P.jsx("span", { className: "max-w-[100px] truncate", children: enYakin.oyunAdi }),
-                P.jsxs("span", { style: { opacity: 0.7 }, children: ["· ", formatTarih(enYakin.baslangicTarih || enYakin.tarih, true)] }),
-                P.jsx("span", { className: "hidden sm:inline", style: { opacity: 0.55 }, children: " " + enYakin.sehir })
-              ]
-            })
-          ]
-        })
-      }),
-
-      // ── Sekmeler ────────────────────────────────────────────────
+      // Tabs
       P.jsx("div", {
         className: "shrink-0 flex overflow-x-auto gap-1 px-4 py-2 border-b border-border",
         style: { background: S.sidebar },
@@ -1767,7 +1554,7 @@ function Ax() {
           }, tab)
         )
       }),
-      // ── İçerik ──────────────────────────────────────────────────
+      // İçerik
       P.jsx("div", {
         className: "flex-1 overflow-y-auto p-4",
         children: isLoading
