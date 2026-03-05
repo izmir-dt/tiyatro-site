@@ -1388,10 +1388,10 @@ function Istatistik({ kayitlar }) {
     });
     const aylikSirali = Object.entries(aylikData).sort((a, b) => a[0] > b[0] ? 1 : -1).slice(-12);
 
-    const yaklaşan = kayitlar.filter(k => (k.baslangicTarih || k.tarih || "") >= bugun && k.statu !== "iptal").length;
+    const yaklasan = kayitlar.filter(k => (k.baslangicTarih || k.tarih || "") >= bugun && k.statu !== "iptal").length;
     const tamamlanan = kayitlar.filter(k => k.statu === "tamamlandi").length;
 
-    return { toplamGun, ilSirali, oyunSirali, statuData, kisiSirali, aylikSirali, yaklaşan, tamamlanan };
+    return { toplamGun, ilSirali, oyunSirali, statuData, kisiSirali, aylikSirali, yaklasan, tamamlanan };
   }, [kayitlar]);
 
   const StatKart = ({ label, value, sub, color }) => P.jsxs("div", {
@@ -1412,7 +1412,7 @@ function Istatistik({ kayitlar }) {
       P.jsx(StatKart, { label: "Toplam Turne", value: kayitlar.length, sub: stats.tamamlanan + " tamamlandı" }),
       P.jsx(StatKart, { label: "Toplam Turne Günü", value: stats.toplamGun, sub: "Toplam sahne dışı gün" }),
       P.jsx(StatKart, { label: "Ziyaret Edilen İl", value: stats.ilSirali.length, sub: stats.ilSirali[0] ? "En çok: " + stats.ilSirali[0][0] : "" }),
-      P.jsx(StatKart, { label: "Yaklaşan Turne", value: stats.yaklaşan, sub: "Onaylı & planlanmış", color: stats.yaklaşan > 0 ? "#16a34a" : S.mutedFg })
+      P.jsx(StatKart, { label: "Yaklaşan Turne", value: stats.yaklasan, sub: "Onaylı & planlanmış", color: stats.yaklasan > 0 ? "#16a34a" : S.mutedFg })
     ]}),
     // Turne durumu dağılımı
     P.jsxs("div", {
@@ -1541,7 +1541,7 @@ function Ax() {
 
   // Özet istatistikler (header için)
   const bugun = new Date().toISOString().slice(0, 10);
-  const yaklaşan = kayitlar.filter(k => (k.baslangicTarih || k.tarih || "") >= bugun && k.statu !== "iptal").length;
+  const yaklasan = kayitlar.filter(k => (k.baslangicTarih || k.tarih || "") >= bugun && k.statu !== "iptal").length;
 
   return P.jsxs("div", {
     className: "flex flex-col h-full",
@@ -1557,7 +1557,7 @@ function Ax() {
               P.jsxs("p", { className: "text-xs mt-0.5", style: { color: S.mutedFg }, children: [
                 kayitlar.length, " kayıt · ",
                 new Set(kayitlar.map(k => k.sehir)).size, " il",
-                yaklaşan > 0 && P.jsxs("span", { className: "ml-2 font-bold", style: { color: "#16a34a" }, children: ["· ", yaklaşan, " yaklaşan turne"] })
+                yaklasan > 0 && P.jsxs("span", { className: "ml-2 font-bold", style: { color: "#16a34a" }, children: ["· ", yaklasan, " yaklaşan turne"] })
               ]})
             ]})
           ]}),
