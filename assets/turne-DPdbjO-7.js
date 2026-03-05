@@ -1538,25 +1538,7 @@ function Ax() {
   return P.jsxs("div", {
     className: "flex flex-col h-full",
     children: [
-      // Header
-      P.jsx("div", {
-        className: "shrink-0 border-b border-border px-4 py-3",
-        style: { background: S.card },
-        children: P.jsxs("div", { className: "space-y-2", children: [
-          P.jsxs("div", { className: "flex items-start justify-between gap-3", children: [
-            P.jsxs("div", { children: [
-              P.jsxs("h1", { className: "font-extrabold text-base flex items-center gap-2", style: { color: S.fg }, children: [P.jsx(aa, { className: "w-5 h-5 shrink-0", style: { color: S.primary } }), "TURNE YÖNETİMİ"] }),
-              P.jsxs("p", { className: "text-xs mt-0.5", style: { color: S.mutedFg }, children: [
-                kayitlar.length, " kayıt · ",
-                new Set(kayitlar.map(k => k.sehir)).size, " il",
-                yaklasan > 0 && P.jsxs("span", { className: "ml-2 font-bold", style: { color: "#16a34a" }, children: ["· ", yaklasan, " yaklaşan turne"] })
-              ]})
-            ]})
-          ]}),
-          // Yedekleme araçları
-          P.jsx(YedeklemePaneli, { kayitlar, onRestore })
-        ]})
-      }),
+
       // Tabs
       P.jsx("div", {
         className: "shrink-0 flex overflow-x-auto gap-1 px-4 py-2 border-b border-border",
