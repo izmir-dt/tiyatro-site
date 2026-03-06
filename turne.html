@@ -798,6 +798,7 @@ function turneCard(t) {
     + '<div class="turne-card-footer">'
     +   chips
     +   '<div class="ml-auto" style="display:flex;gap:4px">'
+    +     '<button class="btn btn-outline" style="height:26px;font-size:10px;padding:0 8px" onclick="gorevlendirmePdf(' + t._rowIdx + ')" title="Görevlendirme Listesi PDF">📄</button>'
     +     '<button class="btn btn-outline" style="height:26px;font-size:10px;padding:0 8px" onclick="editTurne(' + t._rowIdx + ')">✏️</button>'
     +     '<button class="btn btn-outline" style="height:26px;font-size:10px;padding:0 8px;color:var(--destructive)" onclick="deleteTurne(' + t._rowIdx + ')">🗑</button>'
     +   '</div>'
@@ -1238,6 +1239,62 @@ async function deleteTurne(rowIdx) {
     renderCalendar();
     setLoading(false);
   } catch(e) { alert('Hata: ' + e.message); }
+}
+
+
+// ============================================================
+// GÖREVLENDİRME PDF
+// ============================================================
+function gorevlendirmePdf(rowIdx) {
+  var t = turneler.find(function(x){ return x._rowIdx === rowIdx; });
+  if (!t) return;
+  var sure = turneSuresi(t);
+  var tarihStr = sure > 1
+    ? formatTarih(t.baslangicTarih) + ' – ' + formatTarih(t.bitisTarih) + ' (' + sure + ' gün)'
+    : formatTarih(t.baslangicTarih || t.tarih);
+  var personel = getPersonelForOyun(t.oyun);
+  var sr = statuRenk(t.statu || 'tamamlandi');
+  var satirlar = personel.map(function(p, idx) {
+    return '<tr style="background:' + (idx%2===0?'#f9f5f0':'#fff') + '">'
+      + '<td style="padding:6px 10px;border:1px solid #ddd;text-align:center">' + (idx+1) + '</td>'
+      + '<td style="padding:6px 10px;border:1px solid #ddd;font-weight:600">' + p.kisi + '</td>'
+      + '<td style="padding:6px 10px;border:1px solid #ddd">' + (p.gorev||'') + '</td>'
+      + '<td style="padding:6px 10px;border:1px solid #ddd">' + (p.kategori||'') + '</td>'
+      + '</tr>';
+  }).join('');
+  var infoRows = [
+    ['Oyun Adı', t.oyun],
+    ['Şehir / Sahne', t.il + (t.mekan ? ' · ' + t.mekan : '')],
+    ['Tarih', tarihStr],
+    ['Turne Durumu', '<span style="padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;background:'+sr.bg+';color:'+sr.fg+'">'+sr.label+'</span>'],
+  ];
+  if (t.gidisUlasim) infoRows.push(['Gidiş Ulaşımı', t.gidisUlasim + (t.gidisSaat?' · '+t.gidisSaat:'')]);
+  if (t.donusUlasim) infoRows.push(['Dönüş Ulaşımı', t.donusUlasim + (t.donusSaat?' · '+t.donusSaat:'')]);
+  if (t.aktarma)     infoRows.push(['Aktarma', t.aktarma]);
+  if (t.otelAdi)     infoRows.push(['Konaklama', t.otelAdi + (t.otelAdres?' · '+t.otelAdres:'') + (t.otelTelefon?' · '+t.otelTelefon:'')]);
+  if (t.kamyonSayisi)     infoRows.push(['Kamyon', t.kamyonSayisi + ' adet']);
+  if (t.sahneKapasitesi)  infoRows.push(['Sahne Kapasitesi', t.sahneKapasitesi + ' kişi']);
+  var infoGrid = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">'
+    + infoRows.map(function(r){ return '<div style="border:1px solid #ddd;border-radius:6px;padding:8px 12px;background:#fafafa"><div style="font-size:10px;color:#777;text-transform:uppercase">' + r[0] + '</div><div style="font-weight:700;font-size:13px;margin-top:2px">' + r[1] + '</div></div>'; }).join('')
+    + '</div>';
+  var notStr = (t.not || t.notlar) ? '<div style="margin-top:12px;padding:10px;background:#fef3c7;border-radius:6px;border-left:3px solid #d97706"><p style="font-size:11px;margin:0;color:#444"><strong>Not:</strong> ' + (t.not||t.notlar) + '</p></div>' : '';
+  var html = '<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Görevlendirme – ' + t.oyun + '</title>'
+    + '<style>body{font-family:Arial,sans-serif;font-size:12px;margin:0;padding:20px;color:#1a1a1a}.header{text-align:center;border-bottom:3px solid #6b1b1b;padding-bottom:16px;margin-bottom:20px}.logo-area{display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:10px}.logo-badge{width:48px;height:48px;background:#6b1b1b;border-radius:8px;display:flex;align-items:center;justify-content:center;color:white;font-weight:900;font-size:16px}.h1{font-size:15px;font-weight:bold;margin:0 0 4px;text-transform:uppercase;letter-spacing:1px}.h2{font-size:11px;font-weight:normal;margin:0;color:#555}table{width:100%;border-collapse:collapse;margin-top:12px}th{background:#6b1b1b;color:white;padding:8px 10px;border:1px solid #5a1717;text-align:left;font-size:11px}.footer{margin-top:32px;display:grid;grid-template-columns:1fr 1fr;gap:40px}.imza{border-top:1px solid #999;padding-top:6px;text-align:center;font-size:11px;color:#444}@media print{body{margin:0}}</style>'
+    + '</head><body>'
+    + '<div class="header"><div class="logo-area"><div class="logo-badge">İDT</div><div><div class="h1">İzmir Devlet Tiyatrosu</div><div class="h2">Sanat Teknik Bürosu · Turne Görevlendirme Listesi</div></div></div></div>'
+    + infoGrid
+    + '<h3 style="font-size:12px;margin:12px 0 4px;color:#6b1b1b;text-transform:uppercase;letter-spacing:.5px">Görevlendirilen Personel (' + personel.length + ' kişi)</h3>'
+    + (personel.length === 0
+      ? '<p style="font-style:italic;color:#777;font-size:11px">Personel listesi yüklenemedi.</p>'
+      : '<table><thead><tr><th style="width:40px">#</th><th>Ad Soyad</th><th>Görevi</th><th>Kategorisi</th></tr></thead><tbody>' + satirlar + '</tbody></table>')
+    + notStr
+    + '<div class="footer"><div class="imza">Hazırlayan<br><br><br>Sanat Teknik Bürosu</div><div class="imza">Onaylayan<br><br><br>Müdür</div></div>'
+    + '<p style="text-align:center;font-size:10px;color:#aaa;margin-top:20px">Düzenlenme tarihi: ' + new Date().toLocaleDateString("tr-TR",{day:"numeric",month:"long",year:"numeric"}) + '</p>'
+    + '<script>window.onload=function(){window.print();}<\/script>'
+    + '</body></html>';
+  var win = window.open('', '_blank');
+  win.document.write(html);
+  win.document.close();
 }
 
 // ============================================================
