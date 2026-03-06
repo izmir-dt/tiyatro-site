@@ -575,13 +575,26 @@ async function fetchPersonel() {
   try {
     const res = await fetch(API + '?sheet=' + encodeURIComponent(SHEET));
     const data = await res.json();
-    if (!data.rows) return;
-    tumPersonel = data.rows
+    if (!data.rows || data.rows.length < 2) return;
+    
+    // Header satırından sütun indexlerini bul (gerçek site gibi)
+    const header = data.rows[0].map(h => (h || '').trim().toLowerCase());
+    const iOyun = header.findIndex(h => h === 'oyun' || h.startsWith('oyun'));
+    const iKat  = header.findIndex(h => h === 'kategori' || h.startsWith('kategori'));
+    const iGorev= header.findIndex(h => h === 'görev' || h.startsWith('görev') || h === 'gorev');
+    const iKisi = header.findIndex(h => h === 'kişi' || h.startsWith('kişi') || h === 'kisi');
+    
+    const nOyun  = iOyun  >= 0 ? iOyun  : 0;
+    const nKat   = iKat   >= 0 ? iKat   : 1;
+    const nGorev = iGorev >= 0 ? iGorev : 2;
+    const nKisi  = iKisi  >= 0 ? iKisi  : 3;
+    
+    tumPersonel = data.rows.slice(1)
       .map(r => ({
-        oyun: r[0] || '',
-        kategori: r[1] || '',
-        gorev: r[2] || '',
-        kisi: r[3] || ''
+        oyun: (r[nOyun] || '').trim(),
+        kategori: (r[nKat] || '').trim(),
+        gorev: (r[nGorev] || '').trim(),
+        kisi: (r[nKisi] || '').trim()
       }))
       .filter(r => r.oyun && r.kisi);
     populateFilters();
