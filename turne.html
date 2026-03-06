@@ -357,6 +357,7 @@
   <button class="tab-btn" onclick="switchTab('kisi')">👤 Kişiye Göre</button>
   <button class="tab-btn" onclick="switchTab('il')">📍 İle Göre</button>
   <button class="tab-btn" onclick="switchTab('takvim')">📅 Takvim</button>
+    <button class="tab-btn" onclick="switchTab('istatistik')">📊 İstatistik</button>
 </div>
 
 <!-- CONTENT -->
@@ -372,7 +373,26 @@
       <select class="filter-select" id="filter-il" onchange="renderListe()">
         <option value="">Tüm İller</option>
       </select>
-      <div class="ml-auto" style="display:flex;gap:6px">
+      <select class="filter-select" id="filter-statu" onchange="statuFiltre=this.value;renderListe()">
+        <option value="tum">Tüm Statüler</option>
+        <option value="taslak">Taslak</option>
+        <option value="onay-bekliyor">Onay Bekliyor</option>
+        <option value="onaylandi">Onaylandı</option>
+        <option value="tamamlandi">Tamamlandı</option>
+        <option value="iptal">İptal</option>
+      </select>
+      <select class="filter-select" id="filter-zaman" onchange="zamanFiltre=this.value;renderListe()">
+        <option value="tum">Tüm Zamanlar</option>
+        <option value="gelecek">Yaklaşan</option>
+        <option value="aktif">Devam Eden</option>
+        <option value="gecmis">Geçmiş</option>
+      </select>
+      <div class="ml-auto" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <span id="yedek-mesaj" style="font-size:11px;color:#16a34a;font-weight:600"></span>
+        <button class="btn btn-outline" onclick="yedekAl()" title="JSON indir" style="font-size:11px">💾 Yedek Al</button>
+        <label class="btn btn-outline" style="cursor:pointer;font-size:11px" title="JSON yükle">
+          📂 Geri Yükle<input type="file" accept=".json" onchange="geriYukle(event)" style="display:none">
+        </label>
         <button class="btn btn-outline" onclick="exportExcel()">📥 Excel</button>
         <button class="btn btn-primary" onclick="openModal()">+ Turne Ekle</button>
       </div>
@@ -427,6 +447,9 @@
     </div>
   </div>
 
+  <!-- TAB: İSTATİSTİK -->
+  <div class="tab-panel scroll-area" id="tab-istatistik"></div>
+
   <!-- TAB: TAKVİM -->
   <div class="tab-panel" id="tab-takvim">
     <div class="filters-bar">
@@ -474,8 +497,24 @@
           <input class="form-input" type="text" id="m-il" placeholder="İzmir, Ankara...">
         </div>
         <div class="form-group">
-          <label class="form-label">Tarih *</label>
+          <label class="form-label">Statü</label>
+          <select class="form-select" id="m-statu">
+            <option value="taslak">Taslak</option>
+            <option value="onay-bekliyor">Onay Bekliyor</option>
+            <option value="onaylandi">Onaylandı</option>
+            <option value="tamamlandi">Tamamlandı</option>
+            <option value="iptal">İptal</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label class="form-label">Başlangıç Tarihi *</label>
           <input class="form-input" type="date" id="m-tarih">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Bitiş Tarihi</label>
+          <input class="form-input" type="date" id="m-bitis">
         </div>
       </div>
       <div class="form-group">
@@ -492,6 +531,27 @@
           <input class="form-input" type="text" id="m-not" placeholder="Opsiyonel...">
         </div>
       </div>
+      <details style="margin-top:8px">
+        <summary style="cursor:pointer;font-size:12px;font-weight:600;color:var(--muted-fg,#888);padding:4px 0">🏨 Konaklama Bilgileri</summary>
+        <div style="margin-top:8px;display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div class="form-group">
+            <label class="form-label">Otel Adı</label>
+            <input class="form-input" type="text" id="m-otel-adi" placeholder="Hilton, Radisson...">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Rezervasyon No</label>
+            <input class="form-input" type="text" id="m-otel-rez" placeholder="RES-12345">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Otel Telefon</label>
+            <input class="form-input" type="text" id="m-otel-tel" placeholder="0232 123 45 67">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Otel Adres</label>
+            <input class="form-input" type="text" id="m-otel-adr" placeholder="Adres...">
+          </div>
+        </div>
+      </details>
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal()">İptal</button>
@@ -505,15 +565,39 @@
 // CONFIG
 // ============================================================
 const API             = 'https://tiyatro-backend.vercel.app/api/sheets';
-const TURNE_SHEET     = 'TURNE';
+const TURNE_SHEET     = 'TURNE_KAYITLARI';
 const PERSONEL_SHEET  = 'BÜTÜN OYUNLAR';
 const SK              = 'tiyatro_sifre';
 const VARSAYILAN_SIFRE = '525327';
 
 const DAHIL_KATEGORILER = ['Oyuncu','Koro','Müzisyen','Solist','Figüran','Dansçı','Koro/Dans Ekibi'];
 
+const STATU_OPTS = [
+  { val: 'taslak',        label: 'Taslak',         bg: '#e5e7eb', fg: '#374151' },
+  { val: 'onay-bekliyor', label: 'Onay Bekliyor',  bg: '#fef3c7', fg: '#92400e' },
+  { val: 'onaylandi',     label: 'Onaylandı',      bg: '#d1fae5', fg: '#065f46' },
+  { val: 'tamamlandi',    label: 'Tamamlandı',     bg: '#dbeafe', fg: '#1e40af' },
+  { val: 'iptal',         label: 'İptal',          bg: '#fee2e2', fg: '#991b1b' },
+];
+
+function statuRenk(val) {
+  return STATU_OPTS.find(x => x.val === val) || STATU_OPTS[0];
+}
+
+function turneSuresi(t) {
+  try {
+    if (t.baslangicTarih && t.bitisTarih) {
+      const diff = new Date(t.bitisTarih) - new Date(t.baslangicTarih);
+      return Math.max(1, Math.round(diff / 86400000) + 1);
+    }
+    return 1;
+  } catch { return 1; }
+}
+
 let tumPersonel = [];  // {oyun, kategori, gorev, kisi}
-let turneler    = [];  // {_rowIdx, oyun, il, tarih, mekan, sayi, not}
+let turneler    = [];  // {_rowIdx, oyun, il, tarih, baslangicTarih, bitisTarih, mekan, sayi, not, statu, otelAdi, otelAdres, otelTelefon, otelRezNo}
+let zamanFiltre = 'tum';
+let statuFiltre = 'tum';
 let calYear, calMonth;
 
 // ============================================================
@@ -633,14 +717,1323 @@ async function fetchTurneler() {
     const iSay  = h.findIndex(x => x.startsWith('temsil') || x.startsWith('sayı') || x.startsWith('sayi'));
     const iNot  = h.findIndex(x => x.startsWith('not'));
 
+    const iStat = h.findIndex(x => x.startsWith('stat'));
+    const iBas  = h.findIndex(x => x.startsWith('başla') || x.startsWith('basla'));
+    const iBit  = h.findIndex(x => x.startsWith('biti'));
+    const iOtel = h.findIndex(x => x.startsWith('otel'));
+    const iORez = h.findIndex(x => x.includes('rezno') || x.includes('rez.no'));
+    const iOTel = h.findIndex(x => x.includes('otel') && x.includes('tel'));
+    const iOAdr = h.findIndex(x => x.includes('adres'));
+
+    const safeRows = allRows.filter(r => r[0] && r[0] !== 'ID' && r[0] !== 'Oyun Adı');
+    turneler = safeRows.map((r, i) => ({
+      _rowIdx:       i,
+      oyun:          (r[iOyun >= 0 ? iOyun : 0] || '').trim(),
+      il:            (r[iIl   >= 0 ? iIl   : 1] || '').trim(),
+      baslangicTarih:(r[iBas  >= 0 ? iBas  : iTar >= 0 ? iTar : 2] || '').trim(),
+      bitisTarih:    (r[iBit  >= 0 ? iBit  : iTar >= 0 ? iTar : 2] || '').trim(),
+      tarih:         (r[iTar  >= 0 ? iTar  : 2] || '').trim(),
+      mekan:         (r[iMek  >= 0 ? iMek  : 3] || '').trim(),
+      sayi:          parseInt(r[iSay >= 0 ? iSay : 4]) || 1,
+      not:           (r[iNot  >= 0 ? iNot  : 5] || '').trim(),
+      statu:         (r[iStat >= 0 ? iStat : 6] || 'tamamlandi').trim(),
+      otelAdi:       (r[iOtel >= 0 ? iOtel : 7] || '').trim(),
+      otelAdres:     (r[iOAdr >= 0 ? iOAdr : 8] || '').trim(),
+      otelTelefon:   (r[iOTel >= 0 ? iOTel : 9] || '').trim(),
+      otelRezNo:     (r[iORez >= 0 ? iORez : 10] || '').trim(),
+    })).filter(r => r.oyun && r.il);
+  } catch(e) {
+    console.warn('Turne verisi çekilemedi:', e);
+    turneler = [];
+  }
+}
+
+// ============================================================
+// FİLTRELER
+// ============================================================
+function populateFilters() {
+  const oyunlar = [...new Set(tumPersonel.map(p => p.oyun))].sort();
+  const iller   = [...new Set(turneler.map(t => t.il))].filter(Boolean).sort();
+
+  ['filter-oyun','m-oyun','oyun-sec'].forEach(id => {
+    const sel   = document.getElementById(id);
+    const first = sel.options[0];
+    sel.innerHTML = '';
+    sel.appendChild(first);
+    oyunlar.forEach(o => { const opt = document.createElement('option'); opt.value = o; opt.textContent = o; sel.appendChild(opt); });
+  });
+
+  const fi = document.getElementById('filter-il');
+  fi.innerHTML = '<option value="">Tüm İller</option>';
+  iller.forEach(il => { const opt = document.createElement('option'); opt.value = il; opt.textContent = il; fi.appendChild(opt); });
+}
+
+// ============================================================
+// TAB
+// ============================================================
+function switchTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach((b, i) => {
+    b.classList.toggle('active', ['liste','oyun','kisi','il','takvim','istatistik'][i] === tab);
+  });
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+  if (tab === 'il')          renderIlStats();
+  if (tab === 'takvim')      renderCalendar();
+  if (tab === 'istatistik')  renderIstatistik();
+}
+
+// ============================================================
+// LİSTE RENDER
+// ============================================================
+function renderListe() {
+  const search = document.getElementById('filter-search').value.toLowerCase();
+  const fOyun  = document.getElementById('filter-oyun').value;
+  const fIl    = document.getElementById('filter-il').value;
+
+  const bugun = new Date().toISOString().slice(0,10);
+  let filtered = turneler.filter(t => {
+    if (fOyun && t.oyun !== fOyun) return false;
+    if (fIl   && t.il   !== fIl)   return false;
+    if (statuFiltre !== 'tum' && t.statu !== statuFiltre) return false;
+    const tBaslangic = t.baslangicTarih || t.tarih || '';
+    const tBitis     = t.bitisTarih     || t.tarih || '';
+    if (zamanFiltre === 'gelecek' && tBaslangic < bugun) return false;
+    if (zamanFiltre === 'gecmis'  && tBitis     >= bugun) return false;
+    if (zamanFiltre === 'aktif'   && !(tBaslangic <= bugun && tBitis >= bugun)) return false;
+    if (search && !`${t.oyun} ${t.il} ${t.mekan}`.toLowerCase().includes(search)) return false;
+    return true;
+  });
+  filtered.sort((a,b) => new Date(b.tarih) - new Date(a.tarih));
+
+  const el = document.getElementById('liste-content');
+  if (!filtered.length) {
+    el.innerHTML = `<div class="empty-state"><div class="empty-icon">🎭</div><div class="empty-text">Turne kaydı bulunamadı</div><div class="empty-sub">Sağ üstten yeni turne ekleyebilirsiniz</div></div>`;
+    return;
+  }
+  el.innerHTML = `<div class="cards-grid">${filtered.map(turneCard).join('')}</div>`;
+}
+
+function turneCard(t) {
+  const personel   = getPersonelForOyun(t.oyun);
+  const kategoriler = [...new Set(personel.map(p => p.kategori))];
+  const chips = kategoriler.slice(0,4).map(k => `<span class="kategori-chip ${chipClass(k)}">${k}</span>`).join('');
+  const sr = statuRenk(t.statu || 'tamamlandi');
+  const sure = turneSuresi(t);
+  const tarihGoster = sure > 1
+    ? `${formatTarih(t.baslangicTarih)} – ${formatTarih(t.bitisTarih)} (${sure} gün)`
+    : formatTarih(t.baslangicTarih || t.tarih);
+  const otelInfo = t.otelAdi ? `<div class="turne-info-row">🏨 <strong>${t.otelAdi}</strong>${t.otelTelefon ? ` · ${t.otelTelefon}` : ''}</div>` : '';
+  return `<div class="turne-card" style="border-left:4px solid ${sr.bg}">
+    <div class="turne-card-header">
+      <div class="turne-card-title">${t.oyun}</div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:20px;background:${sr.bg};color:${sr.fg}">${sr.label}</span>
+        <div class="turne-card-badge">${t.sayi||1} temsil</div>
+      </div>
+    </div>
+    <div class="turne-card-body">
+      <div class="turne-info-row">📍 <strong>${t.il}</strong>${t.mekan ? ` · ${t.mekan}` : ''}</div>
+      <div class="turne-info-row">📅 <strong>${tarihGoster}</strong></div>
+      ${otelInfo}
+      ${t.not ? `<div class="turne-info-row">📝 ${t.not}</div>` : ''}
+      <div class="turne-info-row">👥 <strong>${personel.length}</strong> kişi katılacak</div>
+    </div>
+    <div class="turne-card-footer">
+      ${chips}
+      <div class="ml-auto" style="display:flex;gap:4px">
+        <button class="btn btn-outline" style="height:26px;font-size:10px;padding:0 8px" onclick="editTurne(${t._rowIdx})">✏️</button>
+        <button class="btn btn-outline" style="height:26px;font-size:10px;padding:0 8px;color:var(--destructive)" onclick="deleteTurne(${t._rowIdx})">🗑</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function chipClass(k) {
+  if (k === 'Oyuncu') return 'chip-oyuncu';
+  if (k.includes('Koro') || k.includes('Dans')) return 'chip-koro';
+  if (['Müzisyen','Solist','Dansçı'].includes(k)) return 'chip-muzisyen';
+  if (k.includes('Figüran')) return 'chip-figuran';
+  return 'chip-oyuncu';
+}
+
+// ============================================================
+// OYUNA GÖRE
+// ============================================================
+function renderOyunDetay() {
+  const oyun = document.getElementById('oyun-sec').value;
+  const el   = document.getElementById('oyun-content');
+  const stat = document.getElementById('oyun-istatistik');
+
+  if (!oyun) {
+    el.innerHTML = `<div class="empty-state"><div class="empty-icon">🎭</div><div class="empty-text">Oyun seçin</div></div>`;
+    stat.textContent = '';
+    return;
+  }
+
+  const oyunTurneleri = turneler.filter(t => t.oyun === oyun).sort((a,b) => new Date(b.tarih)-new Date(a.tarih));
+  const personel      = getPersonelForOyun(oyun);
+  const toplamTemsil  = oyunTurneleri.reduce((s,t) => s+(t.sayi||1), 0);
+  const iller         = [...new Set(oyunTurneleri.map(t => t.il))];
+  stat.textContent    = `${oyunTurneleri.length} turne · ${toplamTemsil} temsil · ${iller.length} il`;
+
+  const gruplar = {};
+  personel.forEach(p => { if (!gruplar[p.kategori]) gruplar[p.kategori]=[]; gruplar[p.kategori].push(p); });
+
+  const kisiHTML = Object.entries(gruplar).map(([kat, kisiler]) => `
+    <div class="kisi-section">
+      <div class="kisi-section-header"><span class="kisi-section-title">${kat}</span><span class="kisi-count">${kisiler.length} kişi</span></div>
+      <div class="kisi-list">${kisiler.map(k => `<span class="kisi-chip">${k.kisi}${k.gorev?` <span style="color:var(--muted-foreground);font-size:10px">· ${k.gorev}</span>`:''}</span>`).join('')}</div>
+    </div>`).join('');
+
+  const turneHTML = oyunTurneleri.length
+    ? `<div class="table-wrap" style="margin-bottom:16px"><table><thead><tr><th>Tarih</th><th>Şehir/İl</th><th>Mekan</th><th>Temsil</th><th>Notlar</th></tr></thead><tbody>${oyunTurneleri.map(t=>`<tr><td>${formatTarih(t.tarih)}</td><td><span class="badge-il">${t.il}</span></td><td>${t.mekan||'—'}</td><td>${t.sayi||1}</td><td style="color:var(--muted-foreground)">${t.not||'—'}</td></tr>`).join('')}</tbody></table></div>`
+    : `<div class="empty-state" style="height:80px"><div class="empty-sub">Bu oyun için henüz turne kaydı yok</div></div>`;
+
+  el.innerHTML = `<div style="max-width:900px">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px">
+      <div class="stat-card"><div class="stat-label">Toplam Turne</div><div class="stat-value">${oyunTurneleri.length}</div></div>
+      <div class="stat-card"><div class="stat-label">Toplam Temsil</div><div class="stat-value">${toplamTemsil}</div></div>
+      <div class="stat-card"><div class="stat-label">Gidilen İl</div><div class="stat-value">${iller.length}</div></div>
+    </div>
+    ${turneHTML}
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:16px">
+      <div style="font-size:13px;font-weight:700;margin-bottom:12px">👥 Turne Kadrosu (${personel.length} kişi)</div>
+      ${kisiHTML || '<div class="empty-sub text-muted">Personel verisi yüklenemedi</div>'}
+    </div>
+  </div>`;
+}
+
+// ============================================================
+// KİŞİYE GÖRE
+// ============================================================
+function renderKisiAra() {
+  const ara  = document.getElementById('kisi-search').value.trim().toLowerCase();
+  const el   = document.getElementById('kisi-content');
+  const stat = document.getElementById('kisi-sonuc');
+
+  if (ara.length < 2) {
+    el.innerHTML = `<div class="empty-state"><div class="empty-icon">👤</div><div class="empty-text">En az 2 karakter girin</div></div>`;
+    stat.textContent = '';
+    return;
+  }
+
+  const eslesen = tumPersonel.filter(p =>
+    p.kisi.toLowerCase().includes(ara) &&
+    DAHIL_KATEGORILER.some(k => p.kategori.includes(k) || p.kategori === k)
+  );
+
+  if (!eslesen.length) {
+    el.innerHTML = `<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-text">Kişi bulunamadı</div></div>`;
+    stat.textContent = '';
+    return;
+  }
+
+  const kisiler = [...new Set(eslesen.map(p => p.kisi))];
+  stat.textContent = `${kisiler.length} kişi bulundu`;
+
+  const html = kisiler.map(kisi => {
+    const oyunlar      = [...new Set(eslesen.filter(p => p.kisi === kisi).map(p => p.oyun))];
+    const kisiTurneleri = turneler.filter(t => oyunlar.includes(t.oyun)).sort((a,b) => new Date(b.tarih)-new Date(a.tarih));
+    const toplamTemsil  = kisiTurneleri.reduce((s,t) => s+(t.sayi||1), 0);
+    return `<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div style="font-size:14px;font-weight:700">${kisi}</div>
+        <div style="font-size:11px;color:var(--muted-foreground)">${toplamTemsil} temsil · ${oyunlar.length} oyun</div>
+      </div>
+      <div style="margin-bottom:8px">${oyunlar.map(o=>`<span class="kisi-chip" style="margin-right:4px;margin-bottom:4px">${o}</span>`).join('')}</div>
+      ${kisiTurneleri.length
+        ? `<table style="width:100%;font-size:11px;border-collapse:collapse"><thead><tr style="background:var(--muted)"><th style="padding:5px 8px;text-align:left">Oyun</th><th style="padding:5px 8px;text-align:left">Tarih</th><th style="padding:5px 8px;text-align:left">İl</th><th style="padding:5px 8px;text-align:left">Mekan</th></tr></thead><tbody>${kisiTurneleri.map(t=>`<tr><td style="padding:5px 8px;border-bottom:1px solid var(--border)">${t.oyun}</td><td style="padding:5px 8px;border-bottom:1px solid var(--border)">${formatTarih(t.tarih)}</td><td style="padding:5px 8px;border-bottom:1px solid var(--border)"><span class="badge-il">${t.il}</span></td><td style="padding:5px 8px;border-bottom:1px solid var(--border)">${t.mekan||'—'}</td></tr>`).join('')}</tbody></table>`
+        : `<div style="font-size:11px;color:var(--muted-foreground)">Henüz turne kaydı yok</div>`
+      }
+    </div>`;
+  }).join('');
+
+  el.innerHTML = html;
+}
+
+// ============================================================
+// İLE GÖRE
+// ============================================================
+function renderIlStats() {
+  const ilSayilar = {};
+  turneler.forEach(t => { if (!t.il) return; ilSayilar[t.il] = (ilSayilar[t.il]||0) + (t.sayi||1); });
+  const sorted       = Object.entries(ilSayilar).sort((a,b) => b[1]-a[1]);
+  const max          = sorted[0]?.[1] || 1;
+  const totalTemsil  = turneler.reduce((s,t) => s+(t.sayi||1), 0);
+
+  document.getElementById('il-stats-cards').innerHTML = `
+    <div class="stat-card"><div class="stat-label">Toplam Temsil</div><div class="stat-value">${totalTemsil}</div><div class="stat-sub">Tüm illerde</div></div>
+    <div class="stat-card"><div class="stat-label">Gidilen İl</div><div class="stat-value">${sorted.length}</div></div>
+    <div class="stat-card"><div class="stat-label">En Çok Gidilen</div><div class="stat-value" style="font-size:16px">${sorted[0]?.[0]||'—'}</div><div class="stat-sub">${sorted[0]?.[1]||0} temsil</div></div>
+    <div class="stat-card"><div class="stat-label">Toplam Turne</div><div class="stat-value">${turneler.length}</div></div>`;
+
+  document.getElementById('il-bars').innerHTML = sorted.length
+    ? sorted.map(([il,sayi]) => `<div class="il-bar-row"><div class="il-name">${il}</div><div class="il-bar-bg"><div class="il-bar-fill" style="width:${(sayi/max*100).toFixed(1)}%"></div></div><div class="il-count">${sayi}</div></div>`).join('')
+    : '<div class="empty-state" style="height:100px"><div class="empty-sub">Henüz turne verisi yok</div></div>';
+}
+
+// ============================================================
+// TAKVİM
+// ============================================================
+function renderCalendar() {
+  const aylar = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
+  document.getElementById('cal-title').textContent = `${aylar[calMonth]} ${calYear}`;
+  const bugun   = new Date();
+  const ilkGun  = new Date(calYear, calMonth, 1);
+  const sonGun  = new Date(calYear, calMonth + 1, 0);
+  let baslangic = (ilkGun.getDay() + 6) % 7;
+  const gunler  = [];
+  for (let i = baslangic-1; i >= 0; i--) gunler.push({ date: new Date(calYear,calMonth,-i), otherMonth:true });
+  for (let d = 1; d <= sonGun.getDate(); d++) gunler.push({ date: new Date(calYear,calMonth,d), otherMonth:false });
+  const kalan = 42 - gunler.length;
+  for (let d = 1; d <= kalan; d++) gunler.push({ date: new Date(calYear,calMonth+1,d), otherMonth:true });
+
+  const turneMap = {};
+  turneler.forEach(t => { if (!t.tarih) return; if (!turneMap[t.tarih]) turneMap[t.tarih]=[]; turneMap[t.tarih].push(t); });
+
+  document.getElementById('cal-days').innerHTML = gunler.map(g => {
+    const key    = g.date.toISOString().split('T')[0];
+    const events = turneMap[key] || [];
+    const isToday = g.date.toDateString() === bugun.toDateString();
+    return `<div class="cal-day${isToday?' today':''}${g.otherMonth?' other-month':''}">
+      <span style="color:${isToday?'var(--primary)':''};font-weight:${isToday?700:600}">${g.date.getDate()}</span>
+      ${events.map(e=>`<div class="cal-event" title="${e.oyun} – ${e.il}">${e.oyun.slice(0,12)}</div>`).join('')}
+    </div>`;
+  }).join('');
+}
+
+function calPrev()  { calMonth--; if(calMonth<0){calMonth=11;calYear--;}  renderCalendar(); }
+function calNext()  { calMonth++; if(calMonth>11){calMonth=0;calYear++;}  renderCalendar(); }
+function calToday() { const n=new Date(); calYear=n.getFullYear(); calMonth=n.getMonth(); renderCalendar(); }
+
+// ============================================================
+// MODAL
+// ============================================================
+// ============================================================
+// YEDEKLEME
+// ============================================================
+function yedekAl() {
+  const veri = { versiyon: 'v1', tarih: new Date().toISOString(), turneler };
+  const blob = new Blob([JSON.stringify(veri, null, 2)], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = 'turne-yedek-' + new Date().toISOString().slice(0,10) + '.json';
+  a.click();
+  URL.revokeObjectURL(url);
+  const el = document.getElementById('yedek-mesaj');
+  if (el) { el.textContent = '✓ Yedek indirildi'; setTimeout(() => el.textContent = '', 3000); }
+}
+
+function geriYukle(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async (ev) => {
+    try {
+      const json = JSON.parse(ev.target.result);
+      const liste = json.turneler || json;
+      if (!Array.isArray(liste)) throw new Error('Geçersiz format');
+      if (!confirm(liste.length + ' kayıt yüklenecek. Devam?')) return;
+      // Sheets'e yaz
+      setLoading(true);
+      for (const t of liste) {
+        await fetch(`${API}/${encodeURIComponent(TURNE_SHEET)}/row`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ values: [t.oyun||'', t.il||'', t.baslangicTarih||t.tarih||'', t.bitisTarih||t.tarih||'', t.mekan||'', String(t.sayi||1), t.not||'', t.statu||'tamamlandi', t.otelAdi||'', t.otelAdres||'', t.otelTelefon||'', t.otelRezNo||''] })
+        });
+      }
+      await fetchTurneler();
+      populateFilters(); renderListe(); renderIlStats(); renderCalendar();
+      setLoading(false);
+      const el = document.getElementById('yedek-mesaj');
+      if (el) { el.textContent = '✓ ' + liste.length + ' kayıt yüklendi'; setTimeout(() => el.textContent = '', 3000); }
+    } catch(e) { alert('Hata: ' + e.message); }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
+// ============================================================
+// İSTATİSTİK
+// ============================================================
+function renderIstatistik() {
+  const el = document.getElementById('tab-istatistik');
+  if (!el) return;
+  const bugun = new Date().toISOString().slice(0,10);
+  const toplamGun = turneler.reduce((a,t) => a + turneSuresi(t), 0);
+  const yaklaşan  = turneler.filter(t => (t.baslangicTarih||t.tarih||'') >= bugun && t.statu !== 'iptal').length;
+  const illData   = {}; turneler.forEach(t => { illData[t.il] = (illData[t.il]||0)+1; });
+  const ilSirali  = Object.entries(illData).sort((a,b) => b[1]-a[1]);
+  const oyunData  = {}; turneler.forEach(t => { oyunData[t.oyun] = (oyunData[t.oyun]||0)+1; });
+  const oyunSirali= Object.entries(oyunData).sort((a,b) => b[1]-a[1]);
+  const aylikData = {}; turneler.forEach(t => {
+    const tarih = t.baslangicTarih||t.tarih; if (!tarih) return;
+    const key = tarih.slice(0,7); aylikData[key] = (aylikData[key]||0)+1;
+  });
+  const aylikSirali = Object.entries(aylikData).sort((a,b) => a[0]>b[0]?1:-1).slice(-12);
+  const maxAylik = Math.max(...aylikSirali.map(([,c])=>c), 1);
+  const ayAdlari = ['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'];
+
+  el.innerHTML = `
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-label">Toplam Turne</div><div class="stat-value">${turneler.length}</div></div>
+      <div class="stat-card"><div class="stat-label">Toplam Turne Günü</div><div class="stat-value">${toplamGun}</div></div>
+      <div class="stat-card"><div class="stat-label">Ziyaret Edilen İl</div><div class="stat-value">${ilSirali.length}</div></div>
+      <div class="stat-card"><div class="stat-label">Yaklaşan Turne</div><div class="stat-value" style="color:${yaklaşan>0?'#16a34a':'inherit'}">${yaklaşan}</div></div>
+    </div>
+    <div class="il-bar-wrap" style="margin-bottom:16px">
+      <div class="il-bar-header">Durum Dağılımı</div>
+      <div style="padding:14px">
+        ${STATU_OPTS.map(o => {
+          const count = turneler.filter(t => t.statu === o.val).length;
+          const pct = turneler.length ? Math.round(count/turneler.length*100) : 0;
+          return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+            <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:20px;background:${o.bg};color:${o.fg};width:110px;flex-shrink:0">${o.label}</span>
+            <div style="flex:1;height:8px;border-radius:4px;background:var(--muted)"><div style="width:${pct}%;height:100%;border-radius:4px;background:${o.fg};transition:width .4s"></div></div>
+            <span style="font-size:11px;font-weight:700;width:24px;text-align:right">${count}</span>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+    ${aylikSirali.length > 0 ? `<div class="il-bar-wrap" style="margin-bottom:16px">
+      <div class="il-bar-header">Aylık Turne Trendi</div>
+      <div style="padding:14px;display:flex;align-items:flex-end;gap:4px;height:120px">
+        ${aylikSirali.map(([ay,count]) => {
+          const h = Math.round(count/maxAylik*100);
+          const mm = parseInt(ay.split('-')[1])-1;
+          return `<div style="display:flex;flex-direction:column;align-items:center;flex:1;gap:2px">
+            <span style="font-size:10px;font-weight:700;color:var(--primary)">${count}</span>
+            <div style="width:100%;border-radius:3px 3px 0 0;background:var(--primary);height:${h}%;min-height:4px;opacity:.85"></div>
+            <span style="font-size:9px;color:var(--muted-foreground)">${ayAdlari[mm]}</span>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>` : ''}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="il-bar-wrap">
+        <div class="il-bar-header">📍 En Çok Gidilen İller</div>
+        <div style="padding:10px">
+          ${ilSirali.slice(0,6).map(([il,count],i) => `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border)">
+            <span style="font-size:11px;font-weight:900;color:var(--muted-foreground);width:16px">${i+1}</span>
+            <span style="font-size:12px;font-weight:600;flex:1">${il}</span>
+            <span style="font-size:11px;font-weight:700;padding:1px 7px;border-radius:20px;background:hsl(42,80%,88%);color:hsl(42,70%,25%)">${count}</span>
+          </div>`).join('')}
+        </div>
+      </div>
+      <div class="il-bar-wrap">
+        <div class="il-bar-header">🎭 En Çok Turneye Çıkan Oyunlar</div>
+        <div style="padding:10px">
+          ${oyunSirali.slice(0,6).map(([oyun,count],i) => `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border)">
+            <span style="font-size:11px;font-weight:900;color:var(--muted-foreground);width:16px">${i+1}</span>
+            <span style="font-size:12px;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${oyun}</span>
+            <span style="font-size:11px;font-weight:700;padding:1px 7px;border-radius:20px;background:hsl(42,80%,88%);color:hsl(42,70%,25%)">${count}</span>
+          </div>`).join('')}
+        </div>
+      </div>
+    </div>`;
+}
+
+function openModal(rowIdx) {
+  document.getElementById('modal-overlay').classList.add('on');
+  if (rowIdx === undefined) {
+    document.getElementById('modal-title').textContent = 'Turne Ekle';
+    document.getElementById('edit-rowidx').value = '';
+    document.getElementById('m-oyun').value  = '';
+    document.getElementById('m-il').value    = '';
+    document.getElementById('m-tarih').value = '';
+    document.getElementById('m-mekan').value = '';
+    document.getElementById('m-sayi').value  = '1';
+    document.getElementById('m-not').value   = '';
+  }
+}
+
+function editTurne(rowIdx) {
+  const t = turneler.find(x => x._rowIdx === rowIdx);
+  if (!t) return;
+  document.getElementById('modal-title').textContent = 'Turne Düzenle';
+  document.getElementById('edit-rowidx').value = rowIdx;
+  document.getElementById('m-oyun').value    = t.oyun;
+  document.getElementById('m-il').value      = t.il;
+  document.getElementById('m-tarih').value   = t.baslangicTarih || t.tarih || '';
+  document.getElementById('m-bitis').value   = t.bitisTarih || t.tarih || '';
+  document.getElementById('m-statu').value   = t.statu || 'tamamlandi';
+  document.getElementById('m-mekan').value   = t.mekan || '';
+  document.getElementById('m-sayi').value    = t.sayi  || 1;
+  document.getElementById('m-not').value     = t.not   || '';
+  document.getElementById('m-otel-adi').value = t.otelAdi      || '';
+  document.getElementById('m-otel-rez').value = t.otelRezNo    || '';
+  document.getElementById('m-otel-tel').value = t.otelTelefon  || '';
+  document.getElementById('m-otel-adr').value = t.otelAdres    || '';
+  document.getElementById('modal-overlay').classList.add('on');
+}
+
+function closeModal() {
+  document.getElementById('modal-overlay').classList.remove('on');
+}
+
+// ============================================================
+// KAYDET (Google Sheets'e yaz)
+// ============================================================
+async function saveTurne() {
+  const oyun  = document.getElementById('m-oyun').value.trim();
+  const il    = document.getElementById('m-il').value.trim();
+  const tarih = document.getElementById('m-tarih').value.trim();
+  if (!oyun || !il || !tarih) { alert('Oyun, Şehir/İl ve Tarih zorunludur!'); return; }
+
+  const mekan       = document.getElementById('m-mekan').value.trim();
+  const sayi        = parseInt(document.getElementById('m-sayi').value) || 1;
+  const not_        = document.getElementById('m-not').value.trim();
+  const statu       = document.getElementById('m-statu').value || 'tamamlandi';
+  const basTarih    = document.getElementById('m-tarih').value.trim();
+  const bitisTarih  = document.getElementById('m-bitis').value.trim() || basTarih;
+  const otelAdi     = document.getElementById('m-otel-adi').value.trim();
+  const otelRezNo   = document.getElementById('m-otel-rez').value.trim();
+  const otelTelefon = document.getElementById('m-otel-tel').value.trim();
+  const otelAdres   = document.getElementById('m-otel-adr').value.trim();
+  const editIdx     = document.getElementById('edit-rowidx').value;
+
+  const saveBtn  = document.querySelector('.modal-footer .btn-primary');
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Kaydediliyor...';
+
+  try {
+    if (editIdx !== '') {
+      // GÜNCELLE — her sütunu ayrı ayrı güncelle
+      const idx = parseInt(editIdx);
+      const cols = [oyun, il, basTarih, bitisTarih, mekan, String(sayi), not_, statu, otelAdi, otelAdres, otelTelefon, otelRezNo];
+      for (let c = 0; c < cols.length; c++) {
+        await fetch(`${API}/${encodeURIComponent(TURNE_SHEET)}/cell`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ row: idx, col: c, value: cols[c] })
+        });
+      }
+    } else {
+      // YENİ SATIR EKLE — sheet yoksa backend otomatik oluşturur
+      // İlk ekleme ise header satırı da yaz
+      if (turneler.length === 0) {
+        await fetch(`${API}/${encodeURIComponent(TURNE_SHEET)}/row`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ values: ['Oyun Adı','Şehir/İl','Başlangıç Tarihi','Bitiş Tarihi','Sahne/Mekan','Temsil Sayısı','Notlar','Statü','Otel Adı','Otel Adres','Otel Telefon','Otel Rez No'] })
+        });
+      }
+      const r = await fetch(`${API}/${encodeURIComponent(TURNE_SHEET)}/row`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ values: [oyun, il, basTarih, bitisTarih, mekan, String(sayi), not_, statu, otelAdi, otelAdres, otelTelefon, otelRezNo] })
+      });
+      if (!r.ok) { const err = await r.json(); throw new Error(err.error || r.status); }
+    }
+
+    closeModal();
+    setLoading(true);
+    await fetchTurneler();
+    populateFilters();
+    renderListe();
+    renderIlStats();
+    renderCalendar();
+    setLoading(false);
+  } catch(e) {
+    alert('Hata: ' + e.message);
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'Kaydet';
+  }
+}
+
+// ============================================================
+// SİL
+// ============================================================
+async function deleteTurne(rowIdx) {
+  if (!confirm('Bu turne kaydını silmek istiyor musunuz?')) return;
+  try {
+    const r = await fetch(`${API}/${encodeURIComponent(TURNE_SHEET)}/row/${rowIdx}`, {
+      method: 'DELETE'
+    });
+    if (!r.ok) { const err = await r.json(); throw new Error(err.error || r.status); }
+    setLoading(true);
+    await fetchTurneler();
+    populateFilters();
+    renderListe();
+    renderIlStats();
+    renderCalendar();
+    setLoading(false);
+  } catch(e) {
+    alert('Silme hatası: ' + e.message);
+  }
+}
+
+// ============================================================
+// YARDIMCI
+// ============================================================
+function getPersonelForOyun(oyun) {
+  return tumPersonel.filter(p =>
+    p.oyun === oyun &&
+    DAHIL_KATEGORILER.some(k => p.kategori === k || p.kategori.includes(k))
+  );
+}
+
+function formatTarih(str) {
+  if (!str) return '—';
+  const d = new Date(str + (str.includes('T') ? '' : 'T00:00:00'));
+  return isNaN(d) ? str : d.toLocaleDateString('tr-TR',{day:'2-digit',month:'long',year:'numeric'});
+}
+
+function exportExcel() {
+  const rows = [['Oyun Adı','Şehir/İl','Tarih','Sahne/Mekan','Temsil Sayısı','Notlar']];
+  turneler.forEach(t => rows.push([t.oyun, t.il, t.tarih, t.mekan||'', t.sayi||1, t.not||'']));
+  const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = 'turneler.csv'; a.click();
+}
+
+document.getElementById('modal-overlay').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+</script>
+</body>
+</html></select>
+      <select class="filter-select" id="filter-statu" onchange="statuFiltre=this.value;renderListe()">
+        <option value="tum">Tüm Statüler</option>
+        <option value="taslak">Taslak</option>
+        <option value="onay-bekliyor">Onay Bekliyor</option>
+        <option value="onaylandi">Onaylandı</option>
+        <option value="tamamlandi">Tamamlandı</option>
+        <option value="iptal">İptal</option>
+      </select>
+      <select class="filter-select" id="filter-zaman" onchange="zamanFiltre=this.value;renderListe()">
+        <option value="tum">Tüm Zamanlar</option>
+        <option value="gelecek">Yaklaşan</option>
+        <option value="aktif">Devam Eden</option>
+        <option value="gecmis">Geçmiş</option>
+      </select>
+    </div>ml lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+  <link rel="icon" type="image/png" href="/tiyatro-site/favicon.png" />
+  <title>Turne Yönetimi – İzmir Devlet Tiyatrosu</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --background: hsl(38, 28%, 96%);
+      --foreground: hsl(350, 35%, 8%);
+      --border: hsl(38, 18%, 87%);
+      --card: hsl(38, 20%, 99%);
+      --sidebar: hsl(350, 55%, 9%);
+      --sidebar-foreground: hsl(38, 35%, 92%);
+      --sidebar-border: hsl(350, 45%, 15%);
+      --sidebar-primary: hsl(42, 92%, 50%);
+      --primary: hsl(350, 68%, 40%);
+      --primary-foreground: #fff;
+      --muted: hsl(38, 18%, 92%);
+      --muted-foreground: hsl(38, 10%, 45%);
+      --accent: hsl(42, 80%, 91%);
+      --accent-foreground: hsl(42, 70%, 20%);
+      --destructive: hsl(0, 80%, 55%);
+      --chart-1: hsl(350, 68%, 45%);
+      --chart-2: hsl(42, 92%, 52%);
+      --chart-3: hsl(155, 65%, 38%);
+      --chart-4: hsl(25, 90%, 50%);
+      --chart-5: hsl(270, 65%, 52%);
+      --radius: 0.5rem;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Poppins', sans-serif;
+      background: var(--background);
+      color: var(--foreground);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* NAVBAR */
+    nav {
+      background: var(--sidebar);
+      color: var(--sidebar-foreground);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      height: 56px;
+      border-bottom: 1px solid var(--sidebar-border);
+      shrink: 0;
+      flex-shrink: 0;
+    }
+    .nav-brand { display: flex; align-items: center; gap: 10px; }
+    .nav-logo {
+      width: 32px; height: 32px; border-radius: 8px;
+      background: var(--sidebar-primary);
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 900; font-size: 13px; color: var(--sidebar);
+    }
+    .nav-title { font-size: 13px; font-weight: 700; color: var(--sidebar-foreground); letter-spacing: .3px; }
+    .nav-sub { font-size: 10px; color: hsl(38,20%,65%); font-weight: 400; }
+    .nav-back {
+      font-size: 11px; color: hsl(38,20%,65%);
+      text-decoration: none; display: flex; align-items: center; gap: 4px;
+      padding: 6px 10px; border-radius: 6px; border: 1px solid var(--sidebar-border);
+      transition: all .15s;
+    }
+    .nav-back:hover { color: var(--sidebar-foreground); border-color: hsl(350,40%,25%); }
+
+    /* TABS */
+    .tabs-bar {
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      gap: 2px;
+      flex-shrink: 0;
+    }
+    .tab-btn {
+      padding: 10px 14px; font-size: 12px; font-weight: 600;
+      border: none; background: transparent; cursor: pointer;
+      color: var(--muted-foreground); border-bottom: 2px solid transparent;
+      transition: all .15s; font-family: 'Poppins', sans-serif;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
+    .tab-btn:hover:not(.active) { color: var(--foreground); }
+
+    /* CONTENT */
+    .content { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+    .tab-panel { display: none; flex: 1; overflow: hidden; flex-direction: column; }
+    .tab-panel.active { display: flex; }
+
+    /* FILTERS BAR */
+    .filters-bar {
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 16px;
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+      flex-shrink: 0;
+    }
+    .filter-input {
+      height: 32px; padding: 0 10px; font-size: 12px;
+      border: 1px solid var(--border); border-radius: 6px;
+      background: var(--background); color: var(--foreground);
+      font-family: 'Poppins', sans-serif; outline: none;
+    }
+    .filter-input:focus { border-color: var(--primary); }
+    .filter-select {
+      height: 32px; padding: 0 8px; font-size: 12px;
+      border: 1px solid var(--border); border-radius: 6px;
+      background: var(--background); color: var(--foreground);
+      font-family: 'Poppins', sans-serif; outline: none; cursor: pointer;
+    }
+    .btn {
+      height: 32px; padding: 0 12px; font-size: 12px; font-weight: 600;
+      border-radius: 6px; border: none; cursor: pointer;
+      font-family: 'Poppins', sans-serif; display: flex; align-items: center; gap: 6px;
+      transition: all .15s;
+    }
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-primary:hover { background: hsl(350,68%,35%); }
+    .btn-outline { background: transparent; color: var(--muted-foreground); border: 1px solid var(--border); }
+    .btn-outline:hover { background: var(--muted); color: var(--foreground); }
+    .btn-success { background: hsl(155,65%,38%); color: #fff; }
+    .btn-success:hover { background: hsl(155,65%,32%); }
+    .ml-auto { margin-left: auto; }
+
+    /* SCROLL AREA */
+    .scroll-area { flex: 1; overflow-y: auto; padding: 16px; }
+
+    /* CARDS GRID */
+    .cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+
+    .turne-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      transition: box-shadow .15s;
+    }
+    .turne-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,.08); }
+    .turne-card-header {
+      background: var(--sidebar);
+      padding: 12px 14px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .turne-card-title { font-size: 13px; font-weight: 700; color: var(--sidebar-foreground); }
+    .turne-card-badge {
+      font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 20px;
+      background: var(--sidebar-primary); color: var(--sidebar);
+    }
+    .turne-card-body { padding: 12px 14px; }
+    .turne-info-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; font-size: 11px; color: var(--muted-foreground); }
+    .turne-info-row:last-child { margin-bottom: 0; }
+    .turne-info-row strong { color: var(--foreground); font-weight: 600; }
+    .turne-card-footer {
+      border-top: 1px solid var(--border);
+      padding: 8px 14px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .kategori-chip {
+      font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 4px;
+    }
+    .chip-oyuncu { background: hsl(350,68%,90%); color: hsl(350,68%,30%); }
+    .chip-koro { background: hsl(42,80%,88%); color: hsl(42,70%,25%); }
+    .chip-muzisyen { background: hsl(155,65%,88%); color: hsl(155,65%,25%); }
+    .chip-figuran { background: hsl(270,65%,90%); color: hsl(270,65%,30%); }
+
+    /* TABLE */
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    thead tr { background: var(--muted); }
+    th { padding: 8px 12px; text-align: left; font-size: 11px; font-weight: 600; color: var(--muted-foreground); white-space: nowrap; }
+    td { padding: 8px 12px; border-bottom: 1px solid var(--border); color: var(--foreground); }
+    tr:hover td { background: hsl(38,18%,97%); }
+    tr:last-child td { border-bottom: none; }
+
+    /* STATS */
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin-bottom: 16px; }
+    .stat-card {
+      background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+      padding: 14px 16px;
+    }
+    .stat-label { font-size: 11px; color: var(--muted-foreground); font-weight: 500; margin-bottom: 4px; }
+    .stat-value { font-size: 24px; font-weight: 700; color: var(--foreground); }
+    .stat-sub { font-size: 10px; color: var(--muted-foreground); margin-top: 2px; }
+
+    /* IL STATS */
+    .il-bar-wrap { background: var(--card); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+    .il-bar-header { padding: 12px 14px; border-bottom: 1px solid var(--border); font-size: 13px; font-weight: 600; }
+    .il-bar-row { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-bottom: 1px solid hsl(38,18%,94%); }
+    .il-bar-row:last-child { border-bottom: none; }
+    .il-name { font-size: 12px; font-weight: 600; width: 120px; flex-shrink: 0; }
+    .il-bar-bg { flex: 1; background: var(--muted); border-radius: 4px; height: 8px; overflow: hidden; }
+    .il-bar-fill { height: 100%; border-radius: 4px; background: var(--primary); transition: width .4s; }
+    .il-count { font-size: 11px; color: var(--muted-foreground); width: 40px; text-align: right; }
+
+    /* CALENDAR */
+    .calendar-wrap { background: var(--card); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+    .cal-header { padding: 12px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+    .cal-nav-btn { background: none; border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 12px; font-family: 'Poppins', sans-serif; }
+    .cal-title { font-size: 14px; font-weight: 700; }
+    .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); }
+    .cal-day-header { padding: 8px; text-align: center; font-size: 10px; font-weight: 600; color: var(--muted-foreground); border-bottom: 1px solid var(--border); }
+    .cal-day {
+      min-height: 72px; padding: 6px; border-right: 1px solid hsl(38,18%,94%);
+      border-bottom: 1px solid hsl(38,18%,94%); font-size: 11px; font-weight: 600;
+      color: var(--muted-foreground); vertical-align: top;
+    }
+    .cal-day:nth-child(7n) { border-right: none; }
+    .cal-day.today { background: hsl(42,80%,96%); }
+    .cal-day.other-month { opacity: .35; }
+    .cal-event {
+      margin-top: 3px; padding: 2px 5px; border-radius: 3px; font-size: 9px;
+      font-weight: 600; background: var(--primary); color: #fff;
+      cursor: pointer; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+    }
+
+    /* MODAL */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0; z-index: 1000;
+      background: rgba(12,12,22,.7); align-items: center; justify-content: center;
+    }
+    .modal-overlay.on { display: flex; }
+    .modal {
+      background: var(--card); border-radius: 14px; width: 480px; max-width: 95vw;
+      max-height: 85vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,.3);
+    }
+    .modal-header {
+      padding: 16px 20px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .modal-title { font-size: 15px; font-weight: 700; }
+    .modal-close { background: none; border: none; font-size: 18px; cursor: pointer; color: var(--muted-foreground); padding: 2px 6px; }
+    .modal-body { padding: 20px; }
+    .form-group { margin-bottom: 14px; }
+    .form-label { display: block; font-size: 11px; font-weight: 600; color: var(--muted-foreground); margin-bottom: 5px; text-transform: uppercase; letter-spacing: .5px; }
+    .form-input {
+      width: 100%; height: 36px; padding: 0 10px; font-size: 13px;
+      border: 1px solid var(--border); border-radius: 7px;
+      background: var(--background); color: var(--foreground);
+      font-family: 'Poppins', sans-serif; outline: none;
+    }
+    .form-input:focus { border-color: var(--primary); }
+    .form-select {
+      width: 100%; height: 36px; padding: 0 10px; font-size: 13px;
+      border: 1px solid var(--border); border-radius: 7px;
+      background: var(--background); color: var(--foreground);
+      font-family: 'Poppins', sans-serif; outline: none; cursor: pointer;
+    }
+    .modal-footer { padding: 14px 20px; border-top: 1px solid var(--border); display: flex; gap: 8px; justify-content: flex-end; }
+
+    /* KISI LISTESI */
+    .kisi-section { margin-bottom: 16px; }
+    .kisi-section-header {
+      display: flex; align-items: center; gap: 8px; padding: 6px 10px;
+      background: var(--sidebar); border-radius: 6px; margin-bottom: 6px;
+    }
+    .kisi-section-title { font-size: 11px; font-weight: 700; color: var(--sidebar-foreground); }
+    .kisi-count { font-size: 10px; color: hsl(38,20%,65%); }
+    .kisi-list { display: flex; flex-wrap: wrap; gap: 5px; }
+    .kisi-chip {
+      font-size: 11px; font-weight: 500; padding: 3px 8px; border-radius: 5px;
+      background: var(--muted); color: var(--foreground); border: 1px solid var(--border);
+    }
+
+    .empty-state {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      height: 200px; color: var(--muted-foreground); gap: 8px;
+    }
+    .empty-icon { font-size: 32px; }
+    .empty-text { font-size: 13px; font-weight: 500; }
+    .empty-sub { font-size: 11px; }
+
+    /* LOADING */
+    .loading { display: flex; align-items: center; justify-content: center; height: 200px; }
+    .spinner { width: 24px; height: 24px; border: 3px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin .6s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ŞİFRE OVERLAY */
+    #sp-overlay {
+      display: none; position: fixed; inset: 0; z-index: 9999;
+      background: rgba(12,12,22,.98); align-items: center; justify-content: center;
+      font-family: 'Poppins', sans-serif;
+    }
+    #sp-overlay.on { display: flex; }
+    #sp-box {
+      background: #1a1a2e; border: 1px solid #2d2d4e; border-radius: 16px;
+      padding: 40px 36px; width: 340px; box-shadow: 0 25px 60px rgba(0,0,0,.7);
+    }
+    #sp-box h2 { color: #e2e2f0; font-size: 18px; font-weight: 600; margin: 0 0 6px; text-align: center; }
+    #sp-sub { color: #8b8baa; font-size: 13px; text-align: center; margin: 0 0 26px; }
+    .sp-label { display: block; color: #9090b0; font-size: 11px; font-weight: 600; margin-bottom: 5px; letter-spacing: .6px; text-transform: uppercase; }
+    .sp-inp {
+      width: 100%; background: #0e0e24; border: 1px solid #2d2d4e; border-radius: 8px;
+      color: #e2e2f0; font-size: 16px; padding: 10px 14px; outline: none;
+      box-sizing: border-box; font-family: 'Poppins', sans-serif; margin-bottom: 14px;
+    }
+    .sp-inp:focus { border-color: #5c5cf5; }
+    .sp-inp.err { border-color: #e05c5c; }
+    #sp-errmsg { color: #e05c5c; font-size: 12px; text-align: center; min-height: 16px; margin-bottom: 10px; }
+    #sp-login-btn {
+      width: 100%; border: none; border-radius: 8px; padding: 11px;
+      font-size: 14px; font-weight: 600; cursor: pointer; font-family: 'Poppins', sans-serif;
+      background: #5c5cf5; color: #fff;
+    }
+    #sp-login-btn:hover { background: #4a4ae0; }
+
+    .badge-il {
+      font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 4px;
+      background: hsl(42,80%,88%); color: hsl(42,70%,25%);
+    }
+    .text-muted { color: var(--muted-foreground); }
+    .font-bold { font-weight: 700; }
+  </style>
+</head>
+<body>
+
+<!-- ŞİFRE OVERLAY -->
+<div id="sp-overlay">
+  <div id="sp-box">
+    <h2>🔒 Giriş Gerekli</h2>
+    <p id="sp-sub">Turne sayfasına erişmek için şifre giriniz</p>
+    <label class="sp-label">Şifre</label>
+    <input class="sp-inp" type="password" id="sp-inp" placeholder="Şifrenizi girin" maxlength="30" autocomplete="off" />
+    <div id="sp-errmsg"></div>
+    <button id="sp-login-btn">Giriş Yap</button>
+  </div>
+</div>
+
+<!-- NAVBAR -->
+<nav>
+  <div class="nav-brand">
+    <div class="nav-logo">İDT</div>
+    <div>
+      <div class="nav-title">İZMİR DEVLET TİYATROSU</div>
+      <div class="nav-sub">TURNE YÖNETİMİ</div>
+    </div>
+  </div>
+  <a href="/tiyatro-site/" class="nav-back">← Ana Sayfaya Dön</a>
+</nav>
+
+<!-- TABS -->
+<div class="tabs-bar">
+  <button class="tab-btn active" onclick="switchTab('liste')">🗂 Turne Listesi</button>
+  <button class="tab-btn" onclick="switchTab('oyun')">🎭 Oyuna Göre</button>
+  <button class="tab-btn" onclick="switchTab('kisi')">👤 Kişiye Göre</button>
+  <button class="tab-btn" onclick="switchTab('il')">📍 İle Göre</button>
+  <button class="tab-btn" onclick="switchTab('takvim')">📅 Takvim</button>
+</div>
+
+<!-- CONTENT -->
+<div class="content">
+
+  <!-- TAB: LİSTE -->
+  <div class="tab-panel active" id="tab-liste">
+    <div class="filters-bar">
+      <input class="filter-input" type="text" id="filter-search" placeholder="🔍 Oyun, şehir, mekan ara..." oninput="renderListe()" style="width:220px">
+      <select class="filter-select" id="filter-oyun" onchange="renderListe()">
+        <option value="">Tüm Oyunlar</option>
+      </select>
+      <select class="filter-select" id="filter-il" onchange="renderListe()">
+        <option value="">Tüm İller</option>
+      </select>
+      <div class="ml-auto" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <span id="yedek-mesaj" style="font-size:11px;color:#16a34a;font-weight:600"></span>
+        <button class="btn btn-outline" onclick="yedekAl()" title="JSON indir" style="font-size:11px">💾 Yedek Al</button>
+        <label class="btn btn-outline" style="cursor:pointer;font-size:11px" title="JSON yükle">
+          📂 Geri Yükle<input type="file" accept=".json" onchange="geriYukle(event)" style="display:none">
+        </label>
+        <button class="btn btn-outline" onclick="exportExcel()">📥 Excel</button>
+        <button class="btn btn-primary" onclick="openModal()">+ Turne Ekle</button>
+      </div>
+    </div>
+    <div class="scroll-area">
+      <div id="liste-content">
+        <div class="loading"><div class="spinner"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: OYUNA GÖRE -->
+  <div class="tab-panel" id="tab-oyun">
+    <div class="filters-bar">
+      <select class="filter-select" id="oyun-sec" onchange="renderOyunDetay()" style="min-width:200px">
+        <option value="">Oyun seçin...</option>
+      </select>
+      <span id="oyun-istatistik" class="text-muted" style="font-size:12px"></span>
+    </div>
+    <div class="scroll-area" id="oyun-content">
+      <div class="empty-state">
+        <div class="empty-icon">🎭</div>
+        <div class="empty-text">Bir oyun seçin</div>
+        <div class="empty-sub">Sol taraftan oyun seçerek turne geçmişini görüntüleyin</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: KİŞİYE GÖRE -->
+  <div class="tab-panel" id="tab-kisi">
+    <div class="filters-bar">
+      <input class="filter-input" type="text" id="kisi-search" placeholder="🔍 Kişi adı ara..." oninput="renderKisiAra()" style="width:220px">
+      <span id="kisi-sonuc" class="text-muted" style="font-size:12px"></span>
+    </div>
+    <div class="scroll-area" id="kisi-content">
+      <div class="empty-state">
+        <div class="empty-icon">👤</div>
+        <div class="empty-text">Kişi adı girin</div>
+        <div class="empty-sub">Bir kişinin katıldığı turneleri görüntüleyin</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: İLE GÖRE -->
+  <div class="tab-panel" id="tab-il">
+    <div class="scroll-area">
+      <div class="stats-grid" id="il-stats-cards"></div>
+      <div class="il-bar-wrap" id="il-bar-wrap">
+        <div class="il-bar-header">📍 İllere Göre Temsil Sayısı</div>
+        <div id="il-bars"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: TAKVİM -->
+  <div class="tab-panel" id="tab-takvim">
+    <div class="filters-bar">
+      <button class="btn btn-outline" id="cal-prev" onclick="calPrev()">◀</button>
+      <span id="cal-title" class="font-bold" style="font-size:14px;min-width:140px;text-align:center"></span>
+      <button class="btn btn-outline" id="cal-next" onclick="calNext()">▶</button>
+      <button class="btn btn-outline" onclick="calToday()">Bugün</button>
+    </div>
+    <div class="scroll-area">
+      <div class="calendar-wrap">
+        <div class="cal-grid">
+          <div class="cal-day-header">Pzt</div>
+          <div class="cal-day-header">Sal</div>
+          <div class="cal-day-header">Çar</div>
+          <div class="cal-day-header">Per</div>
+          <div class="cal-day-header">Cum</div>
+          <div class="cal-day-header">Cmt</div>
+          <div class="cal-day-header">Paz</div>
+        </div>
+        <div class="cal-grid" id="cal-days"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- TURNE EKLE/DÜZENLE MODAL -->
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-title">Turne Ekle</div>
+      <button class="modal-close" onclick="closeModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="edit-rowidx">
+      <div class="form-group">
+        <label class="form-label">Oyun Adı *</label>
+        <select class="form-select" id="m-oyun">
+          <option value="">Oyun seçin...</option>
+        </select>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label class="form-label">Şehir/İl *</label>
+          <input class="form-input" type="text" id="m-il" placeholder="İzmir, Ankara...">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Statü</label>
+          <select class="form-select" id="m-statu">
+            <option value="taslak">Taslak</option>
+            <option value="onay-bekliyor">Onay Bekliyor</option>
+            <option value="onaylandi">Onaylandı</option>
+            <option value="tamamlandi">Tamamlandı</option>
+            <option value="iptal">İptal</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label class="form-label">Başlangıç Tarihi *</label>
+          <input class="form-input" type="date" id="m-tarih">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Bitiş Tarihi</label>
+          <input class="form-input" type="date" id="m-bitis">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Sahne / Mekan</label>
+        <input class="form-input" type="text" id="m-mekan" placeholder="Atatürk Kültür Merkezi...">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label class="form-label">Temsil Sayısı</label>
+          <input class="form-input" type="number" id="m-sayi" min="1" value="1">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Notlar</label>
+          <input class="form-input" type="text" id="m-not" placeholder="Opsiyonel...">
+        </div>
+      </div>
+      <details style="margin-top:8px">
+        <summary style="cursor:pointer;font-size:12px;font-weight:600;color:var(--muted-fg,#888);padding:4px 0">🏨 Konaklama Bilgileri</summary>
+        <div style="margin-top:8px;display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div class="form-group">
+            <label class="form-label">Otel Adı</label>
+            <input class="form-input" type="text" id="m-otel-adi" placeholder="Hilton, Radisson...">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Rezervasyon No</label>
+            <input class="form-input" type="text" id="m-otel-rez" placeholder="RES-12345">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Otel Telefon</label>
+            <input class="form-input" type="text" id="m-otel-tel" placeholder="0232 123 45 67">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Otel Adres</label>
+            <input class="form-input" type="text" id="m-otel-adr" placeholder="Adres...">
+          </div>
+        </div>
+      </details>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal()">İptal</button>
+      <button class="btn btn-primary" onclick="saveTurne()">Kaydet</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// CONFIG
+// ============================================================
+const API             = 'https://tiyatro-backend.vercel.app/api/sheets';
+const TURNE_SHEET     = 'TURNE_KAYITLARI';
+const PERSONEL_SHEET  = 'BÜTÜN OYUNLAR';
+const SK              = 'tiyatro_sifre';
+const VARSAYILAN_SIFRE = '525327';
+
+const DAHIL_KATEGORILER = ['Oyuncu','Koro','Müzisyen','Solist','Figüran','Dansçı','Koro/Dans Ekibi'];
+
+const STATU_OPTS = [
+  { val: 'taslak',        label: 'Taslak',         bg: '#e5e7eb', fg: '#374151' },
+  { val: 'onay-bekliyor', label: 'Onay Bekliyor',  bg: '#fef3c7', fg: '#92400e' },
+  { val: 'onaylandi',     label: 'Onaylandı',      bg: '#d1fae5', fg: '#065f46' },
+  { val: 'tamamlandi',    label: 'Tamamlandı',     bg: '#dbeafe', fg: '#1e40af' },
+  { val: 'iptal',         label: 'İptal',          bg: '#fee2e2', fg: '#991b1b' },
+];
+
+function statuRenk(val) {
+  return STATU_OPTS.find(x => x.val === val) || STATU_OPTS[0];
+}
+
+function turneSuresi(t) {
+  try {
+    if (t.baslangicTarih && t.bitisTarih) {
+      const diff = new Date(t.bitisTarih) - new Date(t.baslangicTarih);
+      return Math.max(1, Math.round(diff / 86400000) + 1);
+    }
+    return 1;
+  } catch { return 1; }
+}
+
+let tumPersonel = [];  // {oyun, kategori, gorev, kisi}
+let turneler    = [];  // {_rowIdx, oyun, il, tarih, baslangicTarih, bitisTarih, mekan, sayi, not, statu, otelAdi, otelAdres, otelTelefon, otelRezNo}
+let zamanFiltre = 'tum';
+let statuFiltre = 'tum';
+let calYear, calMonth;
+
+// ============================================================
+// ŞİFRE
+// ============================================================
+(function(){
+  const getSifre = () => localStorage.getItem(SK) || VARSAYILAN_SIFRE;
+  const overlay  = document.getElementById('sp-overlay');
+  const inp      = document.getElementById('sp-inp');
+  const errmsg   = document.getElementById('sp-errmsg');
+  const btn      = document.getElementById('sp-login-btn');
+
+  if (sessionStorage.getItem('turne_erisim') !== 'true') {
+    overlay.classList.add('on');
+    setTimeout(() => inp.focus(), 100);
+  }
+
+  btn.addEventListener('click', () => {
+    if (inp.value === getSifre()) {
+      sessionStorage.setItem('turne_erisim', 'true');
+      overlay.classList.remove('on');
+      init();
+    } else {
+      errmsg.textContent = 'Şifre hatalı!';
+      inp.classList.add('err');
+      inp.value = '';
+      setTimeout(() => inp.focus(), 30);
+    }
+  });
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'Enter') btn.click();
+    inp.classList.remove('err');
+    errmsg.textContent = '';
+  });
+
+  if (sessionStorage.getItem('turne_erisim') === 'true') init();
+})();
+
+// ============================================================
+// INIT
+// ============================================================
+async function init() {
+  setLoading(true);
+  await Promise.all([fetchPersonel(), fetchTurneler()]);
+  populateFilters();
+  renderListe();
+  renderIlStats();
+  const now = new Date();
+  calYear = now.getFullYear();
+  calMonth = now.getMonth();
+  renderCalendar();
+  setLoading(false);
+}
+
+function setLoading(on) {
+  let bar = document.getElementById('_loadbar');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = '_loadbar';
+    bar.style.cssText = 'position:fixed;top:56px;left:0;right:0;height:3px;background:var(--sidebar-primary);z-index:9999;transition:opacity .4s';
+    document.body.appendChild(bar);
+  }
+  bar.style.opacity = on ? '1' : '0';
+}
+
+// ============================================================
+// PERSONEL VERİSİ ÇEK (BÜTÜN OYUNLAR)
+// ============================================================
+async function fetchPersonel() {
+  try {
+    const res  = await fetch(`${API}/${encodeURIComponent(PERSONEL_SHEET)}`);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+
+    // Backend { rows: [[header], [data], ...] } formatında döner
+    const allRows = data.rows || [];
+    if (allRows.length < 1) return;
+
+    const h     = (data.headers || []).map(x => (x||'').trim().toLowerCase());
+    const iOyun = h.findIndex(x => x.startsWith('oyun'));
+    const iKat  = h.findIndex(x => x.startsWith('kategori'));
+    const iGor  = h.findIndex(x => x.startsWith('görev') || x.startsWith('gorev'));
+    const iKisi = h.findIndex(x => x.startsWith('kişi') || x.startsWith('kisi'));
+
+    tumPersonel = allRows
+      .map(r => ({
+        oyun:     (r[iOyun >= 0 ? iOyun : 0] || '').trim(),
+        kategori: (r[iKat  >= 0 ? iKat  : 1] || '').trim(),
+        gorev:    (r[iGor  >= 0 ? iGor  : 2] || '').trim(),
+        kisi:     (r[iKisi >= 0 ? iKisi : 3] || '').trim()
+      }))
+      .filter(r => r.oyun && r.kisi);
+    console.log('Personel yüklendi:', tumPersonel.length, 'kayıt');
+  } catch(e) {
+    console.warn('Personel çekilemedi:', e);
+  }
+}
+
+// ============================================================
+// TURNE VERİSİ ÇEK (TURNE sheet)
+// ============================================================
+async function fetchTurneler() {
+  try {
+    const res  = await fetch(`${API}/${encodeURIComponent(TURNE_SHEET)}`);
+    if (!res.ok) { turneler = []; return; }
+    const data = await res.json();
+
+    // Backend { rows: [[header], [data], ...] } formatında döner
+    const allRows = data.rows || [];
+    if (allRows.length < 1) { turneler = []; return; }
+
+    const h     = (data.headers || []).map(x => (x||'').trim().toLowerCase());
+    const iOyun = h.findIndex(x => x.startsWith('oyun'));
+    const iIl   = h.findIndex(x => x === 'il' || x.startsWith('şehir') || x.startsWith('sehir'));
+    const iTar  = h.findIndex(x => x.startsWith('tarih'));
+    const iMek  = h.findIndex(x => x.startsWith('mekan') || x.startsWith('sahne'));
+    const iSay  = h.findIndex(x => x.startsWith('temsil') || x.startsWith('sayı') || x.startsWith('sayi'));
+    const iNot  = h.findIndex(x => x.startsWith('not'));
+
+    const iStat = h.findIndex(x => x.startsWith('stat'));
+    const iBas  = h.findIndex(x => x.startsWith('başla') || x.startsWith('basla'));
+    const iBit  = h.findIndex(x => x.startsWith('biti'));
+    const iOtel = h.findIndex(x => x.startsWith('otel'));
+    const iORez = h.findIndex(x => x.includes('rezno') || x.includes('rez.no'));
+    const iOTel = h.findIndex(x => x.includes('otel') && x.includes('tel'));
+    const iOAdr = h.findIndex(x => x.includes('adres'));
+
     turneler = allRows.map((r, i) => ({
-      _rowIdx: i,          // 0-based rows index (backend DELETE uses this)
-      oyun:    (r[iOyun >= 0 ? iOyun : 0] || '').trim(),
-      il:      (r[iIl   >= 0 ? iIl   : 1] || '').trim(),
-      tarih:   (r[iTar  >= 0 ? iTar  : 2] || '').trim(),
-      mekan:   (r[iMek  >= 0 ? iMek  : 3] || '').trim(),
-      sayi:    parseInt(r[iSay >= 0 ? iSay : 4]) || 1,
-      not:     (r[iNot  >= 0 ? iNot  : 5] || '').trim()
+      _rowIdx:       i,
+      oyun:          (r[iOyun >= 0 ? iOyun : 0] || '').trim(),
+      il:            (r[iIl   >= 0 ? iIl   : 1] || '').trim(),
+      baslangicTarih:(r[iBas  >= 0 ? iBas  : iTar >= 0 ? iTar : 2] || '').trim(),
+      bitisTarih:    (r[iBit  >= 0 ? iBit  : iTar >= 0 ? iTar : 2] || '').trim(),
+      tarih:         (r[iTar  >= 0 ? iTar  : 2] || '').trim(),
+      mekan:         (r[iMek  >= 0 ? iMek  : 3] || '').trim(),
+      sayi:          parseInt(r[iSay >= 0 ? iSay : 4]) || 1,
+      not:           (r[iNot  >= 0 ? iNot  : 5] || '').trim(),
+      statu:         (r[iStat >= 0 ? iStat : 6] || 'tamamlandi').trim(),
+      otelAdi:       (r[iOtel >= 0 ? iOtel : 7] || '').trim(),
+      otelAdres:     (r[iOAdr >= 0 ? iOAdr : 8] || '').trim(),
+      otelTelefon:   (r[iOTel >= 0 ? iOTel : 9] || '').trim(),
+      otelRezNo:     (r[iORez >= 0 ? iORez : 10] || '').trim(),
     })).filter(r => r.oyun && r.il);
   } catch(e) {
     console.warn('Turne verisi çekilemedi:', e);
