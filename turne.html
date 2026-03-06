@@ -1231,14 +1231,110 @@ function renderOyunDetay() {
           return '<tr><td>' + formatTarih(t.baslangicTarih||t.tarih) + '</td><td><span class="badge-il">' + t.il + '</span></td><td>' + (t.mekan||'—') + '</td><td>' + turneSuresi(t) + '</td><td><span class="badge-statu" style="background:' + sr.bg + ';color:' + sr.fg + '">' + sr.label + '</span></td></tr>';
         }).join('') + '</tbody></table></div>'
     : '<div class="empty-state" style="height:60px"><div class="empty-sub">Bu oyun için henüz turne kaydı yok</div></div>';
-  el.innerHTML = '<div style="max-width:860px">'
+  el.innerHTML = '<div style="display:flex;gap:14px;align-items:flex-start">'
+    + '<div style="flex:1;min-width:0">'
     + '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px">'
-    + '<div class="stat-card"><div class="stat-label">Toplam Turne</div><div class="stat-value">' + oyunT.length + '</div></div>'
-    + '<div class="stat-card"><div class="stat-label">Toplam Gün</div><div class="stat-value">' + toplamGun + '</div></div>'
-    + '<div class="stat-card"><div class="stat-label">Gidilen İl</div><div class="stat-value">' + iller.length + '</div></div>'
+    + '<div class="stat-card" style="cursor:pointer;transition:box-shadow .15s,transform .1s" onmouseenter="this.style.boxShadow=\'0 4px 12px rgba(0,0,0,.1)\';this.style.transform=\'translateY(-2px)\'" onmouseleave="this.style.boxShadow=\'\';this.style.transform=\'\'" onclick="oyunDetayPanelAc(\'turne\',\'' + encodeURIComponent(oyun) + '\')">'
+    +   '<div style="font-size:10px;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;display:flex;align-items:center;gap:4px"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="1,6 1,22 8,18 16,22 23,18 23,2 16,6 8,2 1,6"/></svg>Toplam Turne</div>'
+    +   '<div class="stat-value">' + oyunT.length + '</div>'
+    +   '<div style="font-size:10px;color:var(--muted-foreground);margin-top:4px">Tüm turneleri gör →</div>'
+    + '</div>'
+    + '<div class="stat-card" style="cursor:pointer;transition:box-shadow .15s,transform .1s" onmouseenter="this.style.boxShadow=\'0 4px 12px rgba(0,0,0,.1)\';this.style.transform=\'translateY(-2px)\'" onmouseleave="this.style.boxShadow=\'\';this.style.transform=\'\'" onclick="oyunDetayPanelAc(\'gun\',\'' + encodeURIComponent(oyun) + '\')">'
+    +   '<div style="font-size:10px;font-weight:700;color:#0369a1;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;display:flex;align-items:center;gap:4px"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Toplam Gün</div>'
+    +   '<div class="stat-value" style="color:#0369a1">' + toplamGun + '</div>'
+    +   '<div style="font-size:10px;color:var(--muted-foreground);margin-top:4px">Tarih detayı →</div>'
+    + '</div>'
+    + '<div class="stat-card" style="cursor:pointer;transition:box-shadow .15s,transform .1s" onmouseenter="this.style.boxShadow=\'0 4px 12px rgba(0,0,0,.1)\';this.style.transform=\'translateY(-2px)\'" onmouseleave="this.style.boxShadow=\'\';this.style.transform=\'\'" onclick="oyunDetayPanelAc(\'il\',\'' + encodeURIComponent(oyun) + '\')">'
+    +   '<div style="font-size:10px;font-weight:700;color:#7c3aed;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;display:flex;align-items:center;gap:4px"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>Gidilen İl</div>'
+    +   '<div class="stat-value" style="color:#7c3aed">' + iller.length + '</div>'
+    +   '<div style="font-size:10px;color:var(--muted-foreground);margin-top:4px">İller listesi →</div>'
+    + '</div>'
     + '</div>' + turneHTML
     + '<div class="section-wrap"><div class="section-header">👥 Turne Kadrosu <span style="font-size:11px;font-weight:500;color:var(--muted-foreground)">(' + personel.length + ' kişi)</span></div>'
-    + '<div style="padding:12px">' + (kisiHTML || '<div class="empty-state" style="height:60px"><div class="empty-sub">Personel verisi yüklenemedi</div></div>') + '</div></div></div>';
+    + '<div style="padding:12px">' + (kisiHTML || '<div class="empty-state" style="height:60px"><div class="empty-sub">Personel verisi yüklenemedi</div></div>') + '</div></div>'
+    + '</div>'
+    // Sağ panel placeholder
+    + '<div id="oyun-detay-panel" style="width:0;overflow:hidden;transition:width .25s;flex-shrink:0"></div>'
+    + '</div>';
+}
+
+// ============================================================
+// OYUNA GÖRE – DETAY PANELİ
+// ============================================================
+var _oyunPanelAcik = null;
+function oyunDetayPanelAc(tip, oyunEnc) {
+  const oyun = decodeURIComponent(oyunEnc);
+  const panel = document.getElementById('oyun-detay-panel');
+  if (!panel) return;
+
+  // Aynı butona tekrar basılırsa kapat
+  if (_oyunPanelAcik === tip + oyun) {
+    panel.style.width = '0';
+    panel.style.overflow = 'hidden';
+    panel.innerHTML = '';
+    _oyunPanelAcik = null;
+    return;
+  }
+  _oyunPanelAcik = tip + oyun;
+
+  const oyunT = turneler.filter(t => t.oyun === oyun).sort((a,b) => new Date(a.baslangicTarih||a.tarih||0) - new Date(b.baslangicTarih||b.tarih||0));
+  const personel = getPersonelForOyun(oyun);
+
+  let icerik = '';
+  let baslik = '';
+
+  if (tip === 'turne') {
+    baslik = 'Tüm Turneler';
+    icerik = oyunT.map(t => {
+      const sr = statuRenk(t.statu);
+      const sure = turneSuresi(t);
+      return '<div style="padding:10px 14px;border-bottom:1px solid var(--border)">'
+        + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">'
+        +   '<span class="badge-il" style="font-size:11px;padding:2px 8px">' + t.il + '</span>'
+        +   '<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:' + sr.bg + ';color:' + sr.fg + '">' + sr.label + '</span>'
+        + '</div>'
+        + '<div style="font-size:12px;font-weight:600;color:var(--foreground)">' + formatTarih(t.baslangicTarih||t.tarih) + (t.bitisTarih && t.bitisTarih !== (t.baslangicTarih||t.tarih) ? ' – ' + formatTarih(t.bitisTarih) : '') + '</div>'
+        + '<div style="font-size:10px;color:var(--muted-foreground);margin-top:2px">' + sure + ' gün' + (t.mekan ? ' · ' + t.mekan : '') + '</div>'
+        + '<button class="btn btn-outline" style="margin-top:6px;height:24px;font-size:10px;padding:0 8px" onclick="editTurne(' + t._rowIdx + ')">✏️ Düzenle</button>'
+        + '</div>';
+    }).join('') || '<div style="padding:14px;font-size:12px;color:var(--muted-foreground)">Kayıt yok</div>';
+  } else if (tip === 'gun') {
+    baslik = 'Tarih Detayı';
+    icerik = oyunT.map(t => {
+      const sure = turneSuresi(t);
+      return '<div style="padding:10px 14px;border-bottom:1px solid var(--border)">'
+        + '<div style="font-size:12px;font-weight:700;color:var(--foreground)">' + t.il + '</div>'
+        + '<div style="font-size:11px;color:var(--muted-foreground);margin-top:2px">' + formatTarih(t.baslangicTarih||t.tarih) + (t.bitisTarih && t.bitisTarih !== (t.baslangicTarih||t.tarih) ? ' – ' + formatTarih(t.bitisTarih) : '') + '</div>'
+        + '<div style="display:inline-flex;align-items:center;gap:4px;margin-top:5px;padding:3px 10px;border-radius:20px;background:#eff6ff;border:1px solid #bfdbfe;font-size:11px;font-weight:700;color:#1d4ed8">'
+        +   '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>'
+        +   sure + ' gün'
+        + '</div>'
+        + '</div>';
+    }).join('') || '<div style="padding:14px;font-size:12px;color:var(--muted-foreground)">Kayıt yok</div>';
+    // Toplam özet ekle
+    var topGun = oyunT.reduce((s,t)=>s+turneSuresi(t),0);
+    icerik = '<div style="padding:12px 14px;background:hsl(210,60%,97%);border-bottom:1px solid #bfdbfe;display:flex;align-items:center;justify-content:space-between"><span style="font-size:11px;color:#0369a1;font-weight:700">Toplam</span><span style="font-size:18px;font-weight:800;color:#0369a1">' + topGun + ' gün</span></div>' + icerik;
+  } else if (tip === 'il') {
+    baslik = 'Gidilen İller';
+    var ilSet = {};
+    oyunT.forEach(t => { if(t.il) ilSet[t.il] = (ilSet[t.il]||0)+1; });
+    icerik = Object.entries(ilSet).sort((a,b)=>b[1]-a[1]).map(([il, sayi]) =>
+      '<div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">'
+      + '<span class="badge-il" style="font-size:11px;padding:2px 8px">' + il + '</span>'
+      + '<span style="font-size:12px;font-weight:700;color:var(--primary)">' + sayi + 'x</span>'
+      + '</div>'
+    ).join('') || '<div style="padding:14px;font-size:12px;color:var(--muted-foreground)">Kayıt yok</div>';
+  }
+
+  panel.innerHTML = '<div style="width:280px;background:var(--card);border:1px solid var(--border);border-radius:10px;overflow:hidden;flex-shrink:0">'
+    + '<div style="padding:10px 14px;background:var(--sidebar);display:flex;align-items:center;justify-content:space-between">'
+    +   '<span style="font-size:12px;font-weight:700;color:var(--sidebar-foreground)">' + baslik + '</span>'
+    +   '<button onclick="_oyunPanelAcik=null;var p=document.getElementById(\'oyun-detay-panel\');p.style.width=\'0\';p.innerHTML=\'\'" style="background:none;border:none;color:var(--sidebar-foreground);opacity:.6;cursor:pointer;font-size:16px;line-height:1">×</button>'
+    + '</div>'
+    + '<div style="max-height:500px;overflow-y:auto">' + icerik + '</div>'
+    + '</div>';
+  panel.style.overflow = 'visible';
+  panel.style.width = '294px';
 }
 
 // ============================================================
@@ -1771,18 +1867,23 @@ function renderIstatistik() {
   var html = '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:16px">';
   const kpis = [
     { icon:'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9,22 9,12 15,12 15,22"/></svg>',
-      label:'Toplam Turne', val:turneler.length, sub:tamamlanan+' tamamlandı', color:'#9b1c2e', bg:'#fef2f2', border:'#fecdd3' },
+      label:'Toplam Turne', val:turneler.length, sub:tamamlanan+' tamamlandı', color:'#9b1c2e', bg:'#fef2f2', border:'#fecdd3',
+      onclick:"switchTab('liste')" },
     { icon:'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
-      label:'Turne Günü', val:toplamGun, sub:'toplam seyahat', color:'#0369a1', bg:'#f0f9ff', border:'#bae6fd' },
+      label:'Turne Günü', val:toplamGun, sub:'toplam seyahat', color:'#0369a1', bg:'#f0f9ff', border:'#bae6fd',
+      onclick:"switchTab('takvim')" },
     { icon:'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>',
-      label:'Ziyaret İl', val:ilSirali.length, sub:(ilSirali[0]?'En çok: '+ilSirali[0][0]:''), color:'#7c3aed', bg:'#faf5ff', border:'#ddd6fe' },
+      label:'Ziyaret İl', val:ilSirali.length, sub:(ilSirali[0]?'En çok: '+ilSirali[0][0]:''), color:'#7c3aed', bg:'#faf5ff', border:'#ddd6fe',
+      onclick:"switchTab('harita')" },
     { icon:'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
-      label:'Ort. Kadro', val: turneler.length ? Math.round(toplamKisi/turneler.length) : 0, sub:'kişi/turne', color:'#b45309', bg:'#fffbeb', border:'#fde68a' },
+      label:'Ort. Kadro', val: turneler.length ? Math.round(toplamKisi/turneler.length) : 0, sub:'kişi/turne', color:'#b45309', bg:'#fffbeb', border:'#fde68a',
+      onclick:"switchTab('kadro')" },
     { icon:'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>',
-      label:'Yaklaşan', val:yaklaşan, sub:aktif>0?aktif+' aktif turne':'planlı turne', color:'#15803d', bg:'#f0fdf4', border:'#bbf7d0' },
+      label:'Yaklaşan', val:yaklaşan, sub:aktif>0?aktif+' aktif turne':'planlı turne', color:'#15803d', bg:'#f0fdf4', border:'#bbf7d0',
+      onclick:"document.getElementById('filter-zaman').value='gelecek';zamanFiltre='gelecek';switchTab('liste')" },
   ];
   kpis.forEach(function(k) {
-    html += '<div style="background:' + k.bg + ';border:1px solid ' + k.border + ';border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:4px;position:relative;overflow:hidden">'
+    html += '<div style="background:' + k.bg + ';border:1px solid ' + k.border + ';border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:4px;position:relative;overflow:hidden;cursor:pointer;transition:box-shadow .15s,transform .1s" onclick="' + k.onclick + '" onmouseenter="this.style.boxShadow=\'0 6px 18px rgba(0,0,0,.12)\';this.style.transform=\'translateY(-2px)\'" onmouseleave="this.style.boxShadow=\'\';this.style.transform=\'\'">'
       + '<div style="position:absolute;top:-8px;right:-8px;opacity:.07;pointer-events:none">' + k.icon.replace('width="22" height="22"','width="72" height="72"') + '</div>'
       + '<div style="color:' + k.color + '">' + k.icon + '</div>'
       + '<div style="font-size:28px;font-weight:800;color:' + k.color + ';line-height:1;margin-top:2px">' + k.val + '</div>'
@@ -1799,10 +1900,10 @@ function renderIstatistik() {
   STATU_OPTS.forEach(function(o) {
     var count = statuSayilar[o.val] || 0;
     var pct   = turneler.length ? Math.round(count/turneler.length*100) : 0;
-    html += '<div style="flex:1;min-width:100px;padding:14px;border-radius:10px;background:' + o.bg + ';border:1.5px solid ' + o.border + ';position:relative;overflow:hidden">'
+    html += '<div style="flex:1;min-width:100px;padding:14px;border-radius:10px;background:' + o.bg + ';border:1.5px solid ' + o.border + ';position:relative;overflow:hidden;cursor:pointer;transition:box-shadow .15s,transform .1s" onclick="document.getElementById(\'filter-statu\').value=\'' + o.val + '\';statuFiltre=\'' + o.val + '\';switchTab(\'liste\')" onmouseenter="this.style.boxShadow=\'0 4px 12px rgba(0,0,0,.1)\';this.style.transform=\'translateY(-2px)\'" onmouseleave="this.style.boxShadow=\'\';this.style.transform=\'\'">'
       + '<div style="font-size:28px;font-weight:800;color:' + o.fg + ';line-height:1">' + count + '</div>'
       + '<div style="font-size:11px;font-weight:700;color:' + o.fg + ';margin-top:4px">' + o.label + '</div>'
-      + (turneler.length ? '<div style="margin-top:8px;height:4px;background:rgba(0,0,0,.08);border-radius:2px"><div style="height:100%;border-radius:2px;background:' + o.fg + ';opacity:.5;width:' + pct + '%"></div></div><div style="font-size:9px;color:' + o.fg + ';opacity:.65;margin-top:4px">%' + pct + '</div>' : '')
+      + (turneler.length ? '<div style="margin-top:8px;height:4px;background:rgba(0,0,0,.08);border-radius:2px"><div style="height:100%;border-radius:2px;background:' + o.fg + ';opacity:.5;width:' + pct + '%"></div></div><div style="font-size:9px;color:' + o.fg + ';opacity:.65;margin-top:4px">%' + pct + ' · tıkla →</div>' : '')
       + '</div>';
   });
   html += '</div></div>';
@@ -1981,36 +2082,45 @@ async function saveTurne() {
   var saveBtn = document.querySelector('#modal-overlay .btn-primary');
   saveBtn.disabled = true; saveBtn.textContent = 'Kaydediliyor...';
   var values = [oyun, il, basTarih, bitisTarih, mekan, String(sayi), not_, statu, otelAdi, otelAdres, otelTelefon, gidisUlasim, gidisSaat, donusUlasim, donusSaat, aktarma, kamyon, kapasite, lojNot];
+
+  // Yerel veriyi hemen güncelle (optimistik)
+  var yeniKayit = {
+    _rowIdx: editIdx !== '' ? parseInt(editIdx) : (turneler.length > 0 ? Math.max(...turneler.map(x=>x._rowIdx)) + 1 : 0),
+    oyun, il, baslangicTarih: basTarih, bitisTarih, mekan, sayi, not: not_, statu,
+    otelAdi, otelAdres, otelTelefon, gidisUlasim, gidisSaat, donusUlasim, donusSaat,
+    aktarma, kamyonSayisi: kamyon, sahneKapasitesi: kapasite, notlar: lojNot,
+    katilimcilar: editIdx !== '' ? (turneler.find(x=>x._rowIdx===parseInt(editIdx))||{}).katilimcilar : undefined
+  };
+  if (editIdx !== '') {
+    var idx2 = turneler.findIndex(x => x._rowIdx === parseInt(editIdx));
+    if (idx2 >= 0) turneler[idx2] = yeniKayit;
+  } else {
+    turneler.push(yeniKayit);
+  }
+  closeModal();
+  populateFilters(); renderListe(); renderCalendar();
+  saveBtn.disabled = false; saveBtn.textContent = 'Kaydet';
+
+  // Arka planda API'ye kaydet
   try {
     if (editIdx !== '') {
       var idx = parseInt(editIdx);
-      // Tek seferde tüm satırı güncelle (19 ayrı istek yerine 1 istek)
       var r = await fetch(API + '/' + encodeURIComponent(TURNE_SHEET) + '/row/' + idx, {
-        method:'PUT',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({ values: values })
+        method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ values: values })
       });
       if (!r.ok) {
-        // Fallback: eski yöntem (API row PUT desteklemiyorsa)
         for (var c = 0; c < values.length; c++) {
           await fetch(API + '/' + encodeURIComponent(TURNE_SHEET) + '/cell', { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ row:idx, col:c, value:values[c] }) });
         }
       }
     } else {
-      if (turneler.length === 0) {
+      if (turneler.length === 1) {
         await fetch(API + '/' + encodeURIComponent(TURNE_SHEET) + '/row', { method:'POST', headers:{'Content-Type':'application/json'},
           body:JSON.stringify({ values:['Oyun Adı','Şehir/İl','Başlangıç Tarihi','Bitiş Tarihi','Sahne/Mekan','Temsil Sayısı','Notlar','Statü','Otel Adı','Otel Adres','Otel Telefon','Gidiş Ulaşım','Gidiş Saat','Dönüş Ulaşım','Dönüş Saat','Aktarma','Kamyon','Kapasite','Lojistik Not'] }) });
       }
       var r = await fetch(API + '/' + encodeURIComponent(TURNE_SHEET) + '/row', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ values:values }) });
-      if (!r.ok) { var err = await r.json(); throw new Error(err.error || r.status); }
     }
-    closeModal();
-    setLoading(true);
-    await fetchTurneler();
-    populateFilters(); renderListe(); renderCalendar();
-    setLoading(false);
-  } catch(e) { alert('Hata: ' + e.message); }
-  finally { saveBtn.disabled = false; saveBtn.textContent = 'Kaydet'; }
+  } catch(e) { console.warn('API kayıt hatası (yerel veri güncellendi):', e); }
 }
 
 // ============================================================
