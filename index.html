@@ -250,7 +250,7 @@
     </script>
 
     <script>
-    // TURNE NAV LINK - ARŞİV OYUNLAR yanına ekle
+    // TURNE NAV LINK
     (function(){
       var TURNE_URL = '/tiyatro-site/turne.html';
       var LINK_ID = 'turne-nav-injected';
@@ -258,13 +258,13 @@
       function injectLink() {
         if (document.getElementById(LINK_ID)) return;
 
-        // ARŞİV OYUNLAR linkini bul (secondary nav'da)
-        var allLinks = document.querySelectorAll('a, button');
+        // ARŞİV OYUNLAR linkini bul
+        var allEls = document.querySelectorAll('a, div[data-testid]');
         var arsivEl = null;
-        allLinks.forEach(function(el) {
+        allEls.forEach(function(el) {
           var txt = (el.textContent || '').replace(/\s/g,'').toUpperCase();
-          if (txt.indexOf('ARŞİVOYUNLAR') !== -1 || txt.indexOf('ARSIVOYUNLAR') !== -1) {
-            arsivEl = el;
+          if (txt === 'ARŞİVOYUNLAR' || txt === 'ARSİVOYUNLAR') {
+            arsivEl = el.closest('a') || el;
           }
         });
 
@@ -274,45 +274,48 @@
         if (!parent) return;
 
         var isActive = window.location.href.indexOf('turne') !== -1;
-        var cs = window.getComputedStyle(arsivEl);
 
         var link = document.createElement('a');
         link.id = LINK_ID;
         link.href = TURNE_URL;
-        link.style.cssText = [
-          'display:inline-flex',
+        link.style.textDecoration = 'none';
+
+        var inner = document.createElement('div');
+        inner.style.cssText = [
+          'display:flex',
           'align-items:center',
           'gap:6px',
           'padding:6px 12px',
           'border-radius:8px',
-          'font-size:' + cs.fontSize,
-          'font-weight:' + cs.fontWeight,
-          'font-family:' + cs.fontFamily,
-          'letter-spacing:' + cs.letterSpacing,
-          'color:' + (isActive ? 'hsl(var(--sidebar-primary-foreground))' : 'hsl(var(--sidebar-foreground) / 0.70)'),
-          'background:' + (isActive ? 'hsl(var(--sidebar-primary))' : 'transparent'),
-          'text-decoration:none',
+          'font-size:11px',
+          'font-weight:600',
+          'letter-spacing:0.5px',
           'cursor:pointer',
-          'transition:background .15s, color .15s',
+          'transition:background 0.15s,color 0.15s',
+          'user-select:none',
           'white-space:nowrap',
+          isActive
+            ? 'background:hsl(var(--sidebar-primary));color:hsl(var(--sidebar-primary-foreground))'
+            : 'background:transparent;color:hsl(var(--sidebar-foreground) / 0.70)'
         ].join(';');
 
-        link.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M8 6v6"/><path d="M15 6v6"/><path d="M2 12h19.6"/><path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5c-.2-.6-.7-1-1.4-1H2"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/></svg> TURNE';
+        inner.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M8 6v6"/><path d="M15 6v6"/><path d="M2 12h19.6"/><path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5c-.2-.6-.7-1-1.4-1H2"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/></svg> TURNE';
 
-        link.addEventListener('mouseenter', function() {
+        inner.addEventListener('mouseenter', function() {
           if (!isActive) {
             this.style.background = 'hsl(var(--sidebar-accent))';
             this.style.color = 'hsl(var(--sidebar-foreground))';
           }
         });
-        link.addEventListener('mouseleave', function() {
+        inner.addEventListener('mouseleave', function() {
           if (!isActive) {
             this.style.background = 'transparent';
             this.style.color = 'hsl(var(--sidebar-foreground) / 0.70)';
           }
         });
 
-        // ARŞİV OYUNLAR'ın hemen arkasına ekle
+        link.appendChild(inner);
+
         if (arsivEl.nextSibling) {
           parent.insertBefore(link, arsivEl.nextSibling);
         } else {
