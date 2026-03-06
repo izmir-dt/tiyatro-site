@@ -194,7 +194,7 @@
     .form-error { font-size: 10px; color: var(--destructive); margin-top: 2px; font-weight: 600; }
     .form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .sure-banner { display: flex; align-items: center; gap: 8px; padding: 9px 13px; border-radius: 8px; background: hsl(350,68%,96%); margin-bottom: 12px; font-size: 12px; font-weight: 600; color: var(--primary); }
-    .durak-row { display:grid; grid-template-columns:1fr 1fr 80px 26px; gap:5px; align-items:start; padding:8px; border:1px solid var(--border); border-radius:8px; background:var(--card); margin-bottom:6px; position:relative; }
+    .durak-row { display:flex; flex-direction:column; gap:5px; padding:8px; border:1px solid var(--border); border-radius:8px; background:var(--card); margin-bottom:6px; position:relative; }
     .durak-row:before { content:''; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--primary); border-radius:8px 0 0 8px; opacity:.4; }
     .durak-il-wrap { position:relative; grid-column:1/3; }
     .grup-badge { display:inline-flex; align-items:center; gap:4px; padding:2px 8px; border-radius:12px; background:hsl(38,92%,94%); border:1px solid hsl(38,80%,75%); color:hsl(32,80%,35%); font-size:10px; font-weight:700; }
@@ -401,7 +401,8 @@
           <div class="section-header" style="display:flex;align-items:center;justify-content:space-between">
             <span>🗺️ Türkiye Turne Haritası <span id="harita-ozet" style="font-size:11px;color:var(--muted-foreground);font-weight:500"></span></span>
             <div style="display:flex;gap:6px;font-size:10px;align-items:center">
-              <span style="color:var(--muted-foreground);font-weight:600">Filtre:</span>
+              <button onclick="if(_leafletMap)_leafletMap.fitBounds([[35.8,25.6],[42.1,44.9]],{animate:true})" style="padding:2px 8px;border-radius:12px;border:1px solid var(--border);background:var(--card);color:var(--foreground);font-size:10px;font-weight:600;cursor:pointer;font-family:Poppins,sans-serif">🇹🇷 Türkiye</button>
+              <span style="color:var(--muted-foreground);font-weight:600">|</span>
               <button id="hf-hepsi" onclick="haritaFiltre('hepsi')" style="padding:2px 8px;border-radius:12px;border:1px solid var(--border);background:var(--primary);color:#fff;font-size:10px;font-weight:700;cursor:pointer;font-family:Poppins,sans-serif">Tüm Turneler</button>
               <button id="hf-gidilen" onclick="haritaFiltre('gidilen')" style="padding:2px 8px;border-radius:12px;border:1px solid var(--border);background:var(--card);color:var(--foreground);font-size:10px;font-weight:600;cursor:pointer;font-family:Poppins,sans-serif">Gidilen İller</button>
               <button id="hf-gidilmeyen" onclick="haritaFiltre('gidilmeyen')" style="padding:2px 8px;border-radius:12px;border:1px solid var(--border);background:var(--card);color:var(--foreground);font-size:10px;font-weight:600;cursor:pointer;font-family:Poppins,sans-serif">Gidilmeyen İller</button>
@@ -453,7 +454,7 @@
 
   <!-- İSTATİSTİK -->
   <div class="tab-panel" id="tab-istatistik">
-    <div class="scroll-area" id="istatistik-content"></div>
+    <div class="scroll-area" id="istatistik-content" style="padding:14px 16px"></div>
   </div>
 
 </div>
@@ -1747,16 +1748,14 @@ function renderHarita() {
 
   if (!_leafletMap) {
     _leafletMap = L.map('leaflet-map', {
-      center: [39.0, 35.5],
-      zoom: 6,
       zoomControl: true,
       attributionControl: false,
     });
+    _leafletMap.fitBounds([[35.8, 25.6], [42.1, 44.9]]);
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-      maxZoom: 12,
+      maxZoom: 14,
       subdomains: 'abcd',
     }).addTo(_leafletMap);
-    // Attribution minimal
     L.control.attribution({prefix: '© OpenStreetMap, CartoDB'}).addTo(_leafletMap);
   }
 
@@ -1821,11 +1820,7 @@ function renderHarita() {
 function haritaIlTikla(il) {
   seciliIl = seciliIl === il ? null : il;
   renderHarita();
-  if (seciliIl) {
-    // Seçilen ile zoom yap
-    var ll = IL_LATLON[il];
-    if (ll && _leafletMap) _leafletMap.setView(ll, 8, {animate: true});
-  }
+  // Zoom yok — kullanıcı isteyince zoom yapar
 }
 
 function haritaIlDetay(il, ilSayilar) {
@@ -1849,7 +1844,7 @@ function haritaIlDetay(il, ilSayilar) {
   }).join('');
   el.innerHTML = '<div class="section-header" style="border-radius:10px 10px 0 0">'
     +'<div style="display:flex;flex-direction:column"><span style="font-size:13px;font-weight:700">📍 '+il+'</span><span style="font-size:10px;font-weight:500;color:var(--muted-foreground)">'+sayi+' turne · '+toplamGun+' gün</span></div>'
-    +'<button class="btn btn-outline" style="height:24px;font-size:10px;padding:0 8px" onclick="seciliIl=null;if(_leafletMap)_leafletMap.setView([39.0,35.5],6,{animate:true});renderHarita()">× Kapat</button>'
+    +'<button class="btn btn-outline" style="height:24px;font-size:10px;padding:0 8px" onclick="seciliIl=null;renderHarita()">× Kapat</button>'
     +'</div>'
     +'<table style="width:100%"><thead><tr style="background:var(--muted)"><th style="padding:6px 10px;font-size:10px;font-weight:700;color:var(--muted-foreground)">Oyun</th><th style="padding:6px 10px;font-size:10px;font-weight:700;color:var(--muted-foreground)">Tarih</th><th style="padding:6px 10px;font-size:10px;font-weight:700;color:var(--muted-foreground)">Statü</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>';
 }
@@ -1981,161 +1976,203 @@ function calToday() { const n=new Date(); calYear=n.getFullYear(); calMonth=n.ge
 // İSTATİSTİK (sade, temiz)
 // ============================================================
 function renderIstatistik(filtreStatu) {
-  const el    = document.getElementById('istatistik-content');
+  const el = document.getElementById('istatistik-content');
   if (!el) return;
   const bugun = new Date().toISOString().slice(0,10);
 
-  // Geri dön butonu + filtre bilgisi
-  var geriHTML = '';
   var kaynakTurneler = turneler;
+  var filtreAktif = !!filtreStatu;
   if (filtreStatu) {
-    var sr2 = STATU_OPTS.find(x=>x.val===filtreStatu);
-    var label2 = sr2 ? sr2.label : filtreStatu;
-    geriHTML = '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding:10px 14px;background:var(--card);border:1px solid var(--border);border-radius:10px">'
-      + '<button onclick="renderIstatistik()" style="display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border:1px solid var(--border);border-radius:7px;background:var(--background);font-size:12px;font-weight:600;cursor:pointer;font-family:Poppins,sans-serif"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15,18 9,12 15,6"/></svg> Tüm İstatistikler</button>'
-      + '<span style="font-size:12px;color:var(--muted-foreground)">Filtre:</span>'
-      + '<span style="font-size:12px;font-weight:700;padding:2px 10px;border-radius:20px;background:' + (sr2?sr2.bg:'#f3f4f6') + ';color:' + (sr2?sr2.fg:'#374151') + ';border:1px solid ' + (sr2?sr2.border:'#d1d5db') + '">' + label2 + '</span>'
-      + '</div>';
-    kaynakTurneler = turneler.filter(t => t.statu === filtreStatu);
+    kaynakTurneler = turneler.filter(function(t){ return t.statu === filtreStatu; });
   }
 
-  // Hesaplamalar
-  const toplamGun    = kaynakTurneler.reduce((a,t) => a + turneSuresi(t), 0);
-  const yaklaşan     = kaynakTurneler.filter(t => (t.baslangicTarih||t.tarih||'') >= bugun && t.statu !== 'iptal').length;
-  const aktif        = kaynakTurneler.filter(t => { const b=t.baslangicTarih||t.tarih||'',e=t.bitisTarih||t.tarih||''; return b<=bugun&&e>=bugun; }).length;
-  const tamamlanan   = kaynakTurneler.filter(t => t.statu === 'tamamlandi').length;
-  const toplamKisi   = kaynakTurneler.reduce((a,t) => a + (t.katilimcilar ? t.katilimcilar.length : getPersonelForOyun(t.oyun).length), 0);
+  // ── Hesaplamalar ──
+  const toplamGun   = kaynakTurneler.reduce(function(a,t){ return a + turneSuresi(t); }, 0);
+  const yaklaşan    = kaynakTurneler.filter(function(t){ return (t.baslangicTarih||t.tarih||'') >= bugun && t.statu !== 'iptal'; }).length;
+  const aktif       = kaynakTurneler.filter(function(t){ var b=t.baslangicTarih||t.tarih||'',e=t.bitisTarih||t.tarih||''; return b<=bugun&&e>=bugun; }).length;
+  const tamamlanan  = kaynakTurneler.filter(function(t){ return t.statu === 'tamamlandi'; }).length;
 
   const illData = {};
-  kaynakTurneler.forEach(t => {
+  kaynakTurneler.forEach(function(t) {
     durakIllerListesi(t).forEach(function(il) {
-      if (il) illData[il.toUpperCase()] = (illData[il.toUpperCase()]||0)+1;
+      if (il) illData[il.split('/')[0].trim()] = (illData[il.split('/')[0].trim()]||0)+1;
     });
   });
-  const ilSirali = Object.entries(illData).sort((a,b)=>b[1]-a[1]);
+  const ilSirali = Object.entries(illData).sort(function(a,b){ return b[1]-a[1]; });
 
   const oyunData = {};
-  kaynakTurneler.forEach(t => { oyunData[t.oyun] = (oyunData[t.oyun]||0)+1; });
-  const oyunSirali = Object.entries(oyunData).sort((a,b)=>b[1]-a[1]);
+  kaynakTurneler.forEach(function(t){ if(t.oyun) oyunData[t.oyun] = (oyunData[t.oyun]||0)+1; });
+  const oyunSirali = Object.entries(oyunData).sort(function(a,b){ return b[1]-a[1]; });
 
   const aylikData = {};
-  kaynakTurneler.forEach(t => {
-    const tarih = t.baslangicTarih||t.tarih; if (!tarih) return;
-    const key = tarih.slice(0,7);
+  kaynakTurneler.forEach(function(t) {
+    var tarih = t.baslangicTarih||t.tarih; if (!tarih) return;
+    var key = tarih.slice(0,7);
     aylikData[key] = (aylikData[key]||0)+1;
   });
-  const aylikSirali = Object.entries(aylikData).sort((a,b)=>a[0]>b[0]?1:-1).slice(-12);
-  const maxAylik = Math.max(...aylikSirali.map(x=>x[1]), 1);
-  const maxIl    = ilSirali[0] ? ilSirali[0][1] : 1;
-  const maxOyun  = oyunSirali[0] ? oyunSirali[0][1] : 1;
+  const aylikSirali = Object.entries(aylikData).sort(function(a,b){ return a[0]>b[0]?1:-1; }).slice(-12);
+  const maxAylik = Math.max.apply(null, aylikSirali.map(function(x){ return x[1]; }).concat([1]));
   const ayAdlari = ['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'];
 
-  // Statü sayıları
   const statuSayilar = {};
-  STATU_OPTS.forEach(o => { statuSayilar[o.val] = kaynakTurneler.filter(t => t.statu === o.val).length; });
+  STATU_OPTS.forEach(function(o){ statuSayilar[o.val] = kaynakTurneler.filter(function(t){ return t.statu === o.val; }).length; });
 
-  // ── Başla ──
-  var html = geriHTML;
+  // ── En çok katılan kişiler ──
+  const kisiData = {};
+  kaynakTurneler.forEach(function(t) {
+    var liste = (t.katilimcilar && t.katilimcilar.length)
+      ? t.katilimcilar
+      : getPersonelForOyun(t.oyun).map(function(p){ return { kisi:p.kisi, gorev:p.gorev||p.kategori }; });
+    liste.forEach(function(k) {
+      if (!k.kisi) return;
+      var ad = k.kisi.trim();
+      if (!kisiData[ad]) kisiData[ad] = { turne:0, gorev:k.gorev||'' };
+      kisiData[ad].turne++;
+    });
+  });
+  const kisiSirali = Object.entries(kisiData).sort(function(a,b){ return b[1].turne-a[1].turne; }).slice(0,10);
+  const maxKisi = kisiSirali[0] ? kisiSirali[0][1].turne : 1;
 
-  // ── KPI Kartları ──
-  html += '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:16px">';
-  const kpis = [
-    { icon:'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9,22 9,12 15,12 15,22"/></svg>',
-      label:'Toplam Turne', val:kaynakTurneler.length, sub:tamamlanan+' tamamlandı', color:'#9b1c2e', bg:'#fef2f2', border:'#fecdd3',
-      onclick:"switchTab('liste')" },
-    { icon:'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
-      label:'Turne Günü', val:toplamGun, sub:'toplam seyahat', color:'#0369a1', bg:'#f0f9ff', border:'#bae6fd',
-      onclick:"switchTab('takvim')" },
-    { icon:'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>',
-      label:'Ziyaret İl', val:ilSirali.length, sub:(ilSirali[0]?'En çok: '+ilSirali[0][0]:''), color:'#7c3aed', bg:'#faf5ff', border:'#ddd6fe',
-      onclick:"switchTab('harita')" },
-    { icon:'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
-      label:'Ort. Kadro', val: turneler.length ? Math.round(toplamKisi/turneler.length) : 0, sub:'kişi/turne', color:'#b45309', bg:'#fffbeb', border:'#fde68a',
-      onclick:"switchTab('kadro')" },
-    { icon:'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>',
-      label:'Yaklaşan', val:yaklaşan, sub:aktif>0?aktif+' aktif turne':'planlı turne', color:'#15803d', bg:'#f0fdf4', border:'#bbf7d0',
-      onclick:"document.getElementById('filter-zaman').value='gelecek';zamanFiltre='gelecek';switchTab('liste')" },
-  ];
-  kpis.forEach(function(k) {
-    html += '<div style="background:' + k.bg + ';border:1px solid ' + k.border + ';border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:4px;position:relative;overflow:hidden;cursor:pointer;transition:box-shadow .15s,transform .1s" onclick="' + k.onclick + '" onmouseenter="this.style.boxShadow=\'0 6px 18px rgba(0,0,0,.12)\';this.style.transform=\'translateY(-2px)\'" onmouseleave="this.style.boxShadow=\'\';this.style.transform=\'\'">'
-      + '<div style="position:absolute;top:-8px;right:-8px;opacity:.07;pointer-events:none">' + k.icon.replace('width="22" height="22"','width="72" height="72"') + '</div>'
-      + '<div style="color:' + k.color + '">' + k.icon + '</div>'
-      + '<div style="font-size:28px;font-weight:800;color:' + k.color + ';line-height:1;margin-top:2px">' + k.val + '</div>'
-      + '<div style="font-size:12px;font-weight:700;color:hsl(0,0%,20%)">' + k.label + '</div>'
-      + '<div style="font-size:10px;color:hsl(0,0%,50%)">' + k.sub + '</div>'
+  // ── Build HTML ──
+  var html = '';
+
+  // Filtre geri butonu
+  if (filtreAktif) {
+    var sr2 = STATU_OPTS.find(function(x){ return x.val===filtreStatu; });
+    html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;padding:8px 14px;background:var(--card);border:1px solid var(--border);border-radius:8px">'
+      + '<button onclick="renderIstatistik()" style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border:1px solid var(--border);border-radius:6px;background:var(--background);font-size:11px;font-weight:600;cursor:pointer;font-family:Poppins,sans-serif">← Tüm İstatistikler</button>'
+      + '<span style="font-size:11px;color:var(--muted-foreground)">Filtre: <strong style="padding:1px 8px;border-radius:20px;background:'+(sr2?sr2.bg:'#f3f4f6')+';color:'+(sr2?sr2.fg:'#374151')+';border:1px solid '+(sr2?sr2.border:'#d1d5db')+'">'+( sr2?sr2.label:filtreStatu)+'</strong></span>'
+      + '</div>';
+  }
+
+  // ── KPI satırı ──
+  html += '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px">';
+  [
+    { label:'Toplam Turne', val:kaynakTurneler.length, sub:tamamlanan+' tamamlandı', color:'#9b1c2e', bg:'#fff1f2', border:'#fecdd3',
+      icon:'<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9,22 9,12 15,12 15,22"/>',
+      action:"switchTab('liste')" },
+    { label:'Turne Günü', val:toplamGun, sub:'toplam gün', color:'#0369a1', bg:'#f0f9ff', border:'#bae6fd',
+      icon:'<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
+      action:"switchTab('takvim')" },
+    { label:'Ziyaret İl', val:ilSirali.length, sub:ilSirali[0]?'En çok: '+ilSirali[0][0]:'', color:'#7c3aed', bg:'#faf5ff', border:'#ddd6fe',
+      icon:'<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>',
+      action:"switchTab('harita')" },
+    { label:'Yaklaşan Turne', val:yaklaşan, sub:aktif>0?aktif+' aktif':'planlı', color:'#15803d', bg:'#f0fdf4', border:'#bbf7d0',
+      icon:'<circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/>',
+      action:"document.getElementById('filter-zaman').value='gelecek';zamanFiltre='gelecek';switchTab('liste')" },
+    { label:'İptal Turne', val:statuSayilar['iptal']||0, sub:'iptal edilen', color:'#b91c1c', bg:'#fff1f2', border:'#fca5a5',
+      icon:'<circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>',
+      action:"renderIstatistik('iptal')" },
+  ].forEach(function(k) {
+    html += '<div onclick="'+k.action+'" style="background:'+k.bg+';border:1px solid '+k.border+';border-radius:10px;padding:14px 16px;cursor:pointer;transition:box-shadow .15s,transform .1s;display:flex;flex-direction:column;gap:3px" onmouseenter="this.style.boxShadow=\'0 6px 18px rgba(0,0,0,.1)\';this.style.transform=\'translateY(-2px)\'" onmouseleave="this.style.boxShadow=\'\';this.style.transform=\'\'">'
+      + '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="'+k.color+'" stroke-width="2">'+k.icon+'</svg>'
+      + '<div style="font-size:26px;font-weight:800;color:'+k.color+';line-height:1.1;margin-top:2px">'+k.val+'</div>'
+      + '<div style="font-size:11px;font-weight:700;color:hsl(0,0%,15%)">'+k.label+'</div>'
+      + '<div style="font-size:10px;color:hsl(0,0%,50%)">'+k.sub+'</div>'
       + '</div>';
   });
   html += '</div>';
 
-  // ── Statü Dağılımı ──
-  html += '<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:12px">'
-    + '<div style="font-size:13px;font-weight:700;margin-bottom:14px;display:flex;align-items:center;gap:7px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>Statü Dağılımı</div>'
-    + '<div style="display:flex;gap:8px;flex-wrap:wrap">';
+  // ── 2 sütun: Sol = statü + trend, Sağ = iller + oyunlar ──
+  html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">';
+
+  // Sol kolon
+  html += '<div style="display:flex;flex-direction:column;gap:12px">';
+
+  // Statü dağılımı
+  html += '<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px">'
+    + '<div style="font-size:12px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:6px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>Statü Dağılımı <span style="font-size:10px;font-weight:500;color:var(--muted-foreground)">(tıklayınca filtreler)</span></div>'
+    + '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px">';
   STATU_OPTS.forEach(function(o) {
     var count = statuSayilar[o.val] || 0;
     var pct   = turneler.length ? Math.round(count/turneler.length*100) : 0;
-    html += '<div style="flex:1;min-width:100px;padding:14px;border-radius:10px;background:' + o.bg + ';border:1.5px solid ' + o.border + ';position:relative;overflow:hidden;cursor:pointer;transition:box-shadow .15s,transform .1s" onclick="renderIstatistik(\'' + o.val + '\')" onmouseenter="this.style.boxShadow=\'0 4px 12px rgba(0,0,0,.1)\';this.style.transform=\'translateY(-2px)\'" onmouseleave="this.style.boxShadow=\'\';this.style.transform=\'\'">'
-      + '<div style="font-size:28px;font-weight:800;color:' + o.fg + ';line-height:1">' + count + '</div>'
-      + '<div style="font-size:11px;font-weight:700;color:' + o.fg + ';margin-top:4px">' + o.label + '</div>'
-      + (turneler.length ? '<div style="margin-top:8px;height:4px;background:rgba(0,0,0,.08);border-radius:2px"><div style="height:100%;border-radius:2px;background:' + o.fg + ';opacity:.5;width:' + pct + '%"></div></div><div style="font-size:9px;color:' + o.fg + ';opacity:.65;margin-top:4px">%' + pct + ' · tıkla →</div>' : '')
+    html += '<div onclick="renderIstatistik(\''+o.val+'\')" style="border-radius:8px;background:'+o.bg+';border:1.5px solid '+o.border+';padding:10px 8px;text-align:center;cursor:pointer;transition:transform .1s,box-shadow .1s" onmouseenter="this.style.transform=\'scale(1.04)\';this.style.boxShadow=\'0 4px 12px rgba(0,0,0,.1)\'" onmouseleave="this.style.transform=\'\';this.style.boxShadow=\'\'">'
+      + '<div style="font-size:22px;font-weight:800;color:'+o.fg+';line-height:1">'+count+'</div>'
+      + '<div style="font-size:9px;font-weight:700;color:'+o.fg+';margin-top:3px">'+o.label+'</div>'
+      + '<div style="margin-top:6px;height:3px;background:rgba(0,0,0,.08);border-radius:2px"><div style="height:100%;background:'+o.fg+';border-radius:2px;width:'+pct+'%"></div></div>'
       + '</div>';
   });
   html += '</div></div>';
 
-  // ── Aylık Trend ──
+  // Aylık trend
   if (aylikSirali.length > 0) {
-    html += '<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:12px">'
-      + '<div style="font-size:12px;font-weight:700;margin-bottom:14px">Aylık Turne Trendi</div>'
-      + '<div style="display:flex;align-items:flex-end;gap:6px;height:100px">';
+    html += '<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px">'
+      + '<div style="font-size:12px;font-weight:700;margin-bottom:10px">📈 Aylık Turne Trendi</div>'
+      + '<div style="display:flex;align-items:flex-end;gap:4px;height:80px">';
     aylikSirali.forEach(function(entry) {
-      var ay=entry[0]; var cnt=entry[1];
-      var barH = Math.round(cnt/maxAylik*80);
-      var mm   = parseInt(ay.split('-')[1])-1;
-      html += '<div style="display:flex;flex-direction:column;align-items:center;flex:1;gap:2px">'
-        + '<span style="font-size:11px;font-weight:700;color:var(--primary)">' + cnt + '</span>'
-        + '<div title="'+ayAdlari[mm]+' '+ay.split('-')[0]+'" style="width:100%;background:var(--primary);border-radius:4px 4px 0 0;height:' + Math.max(barH,4) + 'px;opacity:.8;cursor:pointer" onclick="document.getElementById(\'filter-zaman\').value=\'tum\';switchTab(\'liste\')"></div>'
-        + '<span style="font-size:9px;color:var(--muted-foreground)">' + ayAdlari[mm] + '</span>'
+      var ay=entry[0], cnt=entry[1];
+      var barH = Math.round(cnt/maxAylik*64);
+      var mm = parseInt(ay.split('-')[1])-1;
+      html += '<div style="display:flex;flex-direction:column;align-items:center;flex:1;gap:2px;cursor:pointer" title="'+cnt+' turne" onclick="switchTab(\'liste\')">'
+        + '<span style="font-size:10px;font-weight:700;color:var(--primary)">'+cnt+'</span>'
+        + '<div style="width:100%;background:var(--primary);border-radius:4px 4px 0 0;height:'+Math.max(barH,4)+'px;opacity:.8;transition:opacity .15s" onmouseenter="this.style.opacity=\'1\'" onmouseleave="this.style.opacity=\'.8\'"></div>'
+        + '<span style="font-size:9px;color:var(--muted-foreground)">'+ayAdlari[mm]+'</span>'
         + '</div>';
     });
     html += '</div></div>';
   }
 
-  // ── İller + Oyunlar yan yana ──
-  html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">';
+  html += '</div>'; // sol kolon bitti
 
-  // İller
+  // Sağ kolon
+  html += '<div style="display:flex;flex-direction:column;gap:12px">';
+
+  // En çok gidilen iller (tıklanabilir → harita)
   html += '<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;overflow:hidden">'
-    + '<div style="padding:12px 14px;border-bottom:1px solid var(--border);font-size:12px;font-weight:700;display:flex;align-items:center;gap:6px">'
-    + '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>'
-    + 'En Çok Gidilen İller</div><div style="padding:6px 0">';
-  ilSirali.slice(0,8).forEach(function(entry, i) {
-    var il=entry[0]; var sayi=entry[1];
-    html += '<div style="display:flex;align-items:center;gap:8px;padding:6px 14px;border-bottom:1px solid hsl(38,18%,95%)">'
-      + '<span style="font-size:10px;font-weight:700;color:var(--muted-foreground);width:14px">' + (i+1) + '</span>'
-      + '<span style="font-size:12px;font-weight:600;flex:1">' + il + '</span>'
-      + '<div style="width:80px;height:6px;background:var(--muted);border-radius:3px;overflow:hidden"><div style="height:100%;background:var(--primary);border-radius:3px;width:' + Math.round(sayi/maxIl*100) + '%"></div></div>'
-      + '<span style="font-size:10px;font-weight:700;color:var(--primary);width:20px;text-align:right">' + sayi + '</span>'
+    + '<div style="padding:10px 14px;border-bottom:1px solid var(--border);font-size:12px;font-weight:700;display:flex;align-items:center;gap:6px">'
+    + '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>'
+    + 'En Çok Gidilen İller <span style="font-size:10px;font-weight:500;color:var(--muted-foreground)">(tıkla → harita)</span></div>';
+  ilSirali.slice(0,6).forEach(function(entry, i) {
+    var il=entry[0], sayi=entry[1], maxI=ilSirali[0][1];
+    html += '<div onclick="seciliIl=\''+il+'\';switchTab(\'harita\')" style="display:flex;align-items:center;gap:8px;padding:6px 14px;border-bottom:1px solid hsl(38,18%,95%);cursor:pointer;transition:background .12s" onmouseenter="this.style.background=\'var(--muted)\'" onmouseleave="this.style.background=\'\'">'
+      + '<span style="font-size:10px;font-weight:700;color:var(--muted-foreground);width:14px">'+(i+1)+'</span>'
+      + '<span style="font-size:11px;font-weight:600;flex:1">'+il+'</span>'
+      + '<div style="width:70px;height:5px;background:var(--muted);border-radius:3px;overflow:hidden"><div style="height:100%;background:var(--primary);border-radius:3px;width:'+Math.round(sayi/maxI*100)+'%"></div></div>'
+      + '<span style="font-size:10px;font-weight:700;color:var(--primary);width:20px;text-align:right">'+sayi+'</span>'
       + '</div>';
   });
-  html += '</div></div>';
+  html += '</div>';
 
-  // Oyunlar
+  // Turne oyunları (tıklanabilir → Oyuna Göre)
   html += '<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;overflow:hidden">'
-    + '<div style="padding:12px 14px;border-bottom:1px solid var(--border);font-size:12px;font-weight:700;display:flex;align-items:center;gap:6px">'
-    + '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2.5"><polygon points="19,20 9,12 19,4 19,20"/><line x1="5" y1="4" x2="5" y2="20"/></svg>'
-    + 'Turne Oyunları</div><div style="padding:6px 0">';
-  oyunSirali.slice(0,8).forEach(function(entry, i) {
-    var oyun=entry[0]; var sayi=entry[1];
-    html += '<div style="display:flex;align-items:center;gap:8px;padding:6px 14px;border-bottom:1px solid hsl(38,18%,95%)">'
-      + '<span style="font-size:10px;font-weight:700;color:var(--muted-foreground);width:14px">' + (i+1) + '</span>'
-      + '<span style="font-size:12px;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+oyun+'">' + oyun + '</span>'
-      + '<div style="width:80px;height:6px;background:var(--muted);border-radius:3px;overflow:hidden"><div style="height:100%;background:var(--primary);border-radius:3px;width:' + Math.round(sayi/maxOyun*100) + '%"></div></div>'
-      + '<span style="font-size:10px;font-weight:700;color:var(--primary);width:20px;text-align:right">' + sayi + '</span>'
+    + '<div style="padding:10px 14px;border-bottom:1px solid var(--border);font-size:12px;font-weight:700;display:flex;align-items:center;gap:6px">'
+    + '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2.5"><polygon points="19,20 9,12 19,4 19,20"/><line x1="5" y1="4" x2="5" y2="20"/></svg>'
+    + 'Turne Oyunları <span style="font-size:10px;font-weight:500;color:var(--muted-foreground)">(tıkla → oyunlar)</span></div>';
+  oyunSirali.slice(0,5).forEach(function(entry, i) {
+    var oyun=entry[0], sayi=entry[1], maxO=oyunSirali[0][1];
+    html += '<div onclick="switchTab(\'oyuna-gore\')" style="display:flex;align-items:center;gap:8px;padding:6px 14px;border-bottom:1px solid hsl(38,18%,95%);cursor:pointer;transition:background .12s" onmouseenter="this.style.background=\'var(--muted)\'" onmouseleave="this.style.background=\'\'">'
+      + '<span style="font-size:10px;font-weight:700;color:var(--muted-foreground);width:14px">'+(i+1)+'</span>'
+      + '<span style="font-size:11px;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+oyun+'">'+oyun+'</span>'
+      + '<div style="width:70px;height:5px;background:var(--muted);border-radius:3px;overflow:hidden"><div style="height:100%;background:var(--primary);border-radius:3px;width:'+Math.round(sayi/maxO*100)+'%"></div></div>'
+      + '<span style="font-size:10px;font-weight:700;color:var(--primary);width:20px;text-align:right">'+sayi+'</span>'
       + '</div>';
   });
-  html += '</div></div>';
+  html += '</div>';
 
-  html += '</div>'; // grid
+  html += '</div>'; // sağ kolon bitti
+  html += '</div>'; // 2 sütun grid bitti
+
+  // ── En çok turnede bulunan personel ──
+  if (kisiSirali.length > 0) {
+    html += '<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:12px">'
+      + '<div style="padding:10px 14px;border-bottom:1px solid var(--border);font-size:12px;font-weight:700;display:flex;align-items:center;gap:6px">'
+      + '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>'
+      + 'En Çok Turnede Bulunan Personel</div>'
+      + '<div style="display:grid;grid-template-columns:repeat(5,1fr)">';
+    kisiSirali.forEach(function(entry, i) {
+      var ad=entry[0], info=entry[1];
+      var baş = ad.trim().split(/\s+/).map(function(w){ return w[0]; }).join('').slice(0,2).toUpperCase();
+      var renkler = ['#9b1c2e','#0369a1','#7c3aed','#b45309','#15803d','#6b7280','#0891b2','#dc2626','#7c2d12','#166534'];
+      var renk = renkler[i % renkler.length];
+      html += '<div onclick="switchTab(\'kisi-gore\')" style="padding:12px 10px;border-right:1px solid var(--border);border-bottom:1px solid var(--border);text-align:center;cursor:pointer;transition:background .12s" onmouseenter="this.style.background=\'var(--muted)\'" onmouseleave="this.style.background=\'\'">'
+        + '<div style="width:36px;height:36px;border-radius:50%;background:'+renk+';color:#fff;font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center;margin:0 auto 6px">'+baş+'</div>'
+        + '<div style="font-size:10px;font-weight:700;line-height:1.3;margin-bottom:2px">'+ad+'</div>'
+        + '<div style="font-size:9px;color:var(--muted-foreground)">'+info.gorev+'</div>'
+        + '<div style="font-size:11px;font-weight:800;color:'+renk+';margin-top:4px">'+info.turne+'<span style="font-size:8px;font-weight:500"> turne</span></div>'
+        + '</div>';
+    });
+    html += '</div></div>';
+  }
 
   el.innerHTML = html;
 }
@@ -2431,12 +2468,13 @@ function gorevlendirmePdf(rowIdx) {
   }).join('');
 
   // ── Uçuş / Ulaşım tablosu ──
+  var ilStr = durakIlStr(t);
   var ucusRows = [];
   if (t.gidisUlasim) {
     ucusRows.push(
       '<tr style="background:#f9f5f0">'
       + '<td style="padding:7px 10px;border:1px solid #ddd;font-size:11px">' + formatTarih(t.baslangicTarih||t.tarih) + '</td>'
-      + '<td style="padding:7px 10px;border:1px solid #ddd;font-weight:700;font-size:11px">İzmir → ' + t.il + '</td>'
+      + '<td style="padding:7px 10px;border:1px solid #ddd;font-weight:700;font-size:11px">İzmir → ' + ilStr + '</td>'
       + '<td style="padding:7px 10px;border:1px solid #ddd;font-size:11px">' + t.gidisUlasim + '</td>'
       + '<td style="padding:7px 10px;border:1px solid #ddd;font-size:11px">' + (t.gidisSaat||'—') + '</td>'
       + '</tr>'
@@ -2451,7 +2489,7 @@ function gorevlendirmePdf(rowIdx) {
     ucusRows.push(
       '<tr style="background:#f9f5f0">'
       + '<td style="padding:7px 10px;border:1px solid #ddd;font-size:11px">' + formatTarih(t.bitisTarih||t.tarih) + '</td>'
-      + '<td style="padding:7px 10px;border:1px solid #ddd;font-weight:700;font-size:11px">' + t.il + ' → İzmir</td>'
+      + '<td style="padding:7px 10px;border:1px solid #ddd;font-weight:700;font-size:11px">' + ilStr + ' → İzmir</td>'
       + '<td style="padding:7px 10px;border:1px solid #ddd;font-size:11px">' + t.donusUlasim + '</td>'
       + '<td style="padding:7px 10px;border:1px solid #ddd;font-size:11px">' + (t.donusSaat||'—') + '</td>'
       + '</tr>'
@@ -2467,22 +2505,32 @@ function gorevlendirmePdf(rowIdx) {
       + '</tr></thead><tbody>' + ucusRows.join('') + '</tbody></table>'
     : '';
 
-  // ── Konaklama ──
+  // ── Konaklama — durak bazlı ──
   var konakHTML = '';
-  if (t.otelAdi) {
-    konakHTML = '<div style="padding:9px 14px;background:#f0fdf4;border-radius:5px;border-left:3px solid #16a34a;font-size:11px;margin-bottom:4px">'
+  var durakListeK = (t.duraklar && t.duraklar.length) ? t.duraklar : (t.il ? [{ il:t.il, otelAdi:t.otelAdi, otelAdres:t.otelAdres, otelTel:t.otelTelefon }] : []);
+  var otelBulunan = durakListeK.filter(function(d){ return d.otelAdi && d.otelAdi.trim(); });
+  if (otelBulunan.length > 0) {
+    otelBulunan.forEach(function(d) {
+      konakHTML += '<div style="padding:8px 14px;background:#f0fdf4;border-radius:5px;border-left:3px solid #16a34a;font-size:11px;margin-bottom:4px">'
+        + '<strong style="color:#15803d">🏨 ' + (d.il ? d.il + ': ' : '') + d.otelAdi + '</strong>'
+        + (d.otelAdres ? ' &nbsp;·&nbsp; ' + d.otelAdres : '')
+        + ((d.otelTel||d.otelTelefon) ? ' &nbsp;·&nbsp; Tel: ' + (d.otelTel||d.otelTelefon) : '')
+        + '</div>';
+    });
+  } else if (t.otelAdi) {
+    konakHTML = '<div style="padding:8px 14px;background:#f0fdf4;border-radius:5px;border-left:3px solid #16a34a;font-size:11px;margin-bottom:4px">'
       + '<strong style="color:#15803d">🏨 ' + t.otelAdi + '</strong>'
-      + (t.otelAdres   ? ' &nbsp;·&nbsp; ' + t.otelAdres   : '')
+      + (t.otelAdres ? ' &nbsp;·&nbsp; ' + t.otelAdres : '')
       + (t.otelTelefon ? ' &nbsp;·&nbsp; Tel: ' + t.otelTelefon : '')
-      + (t.otelRezNo   ? ' &nbsp;·&nbsp; Rez: ' + t.otelRezNo   : '')
       + '</div>';
   }
 
   // ── Nakliye / Kamyon ──
   var nakliyeHTML = '';
   if (t.kamyonSayisi) {
-    nakliyeHTML = '<div style="padding:9px 14px;background:#eff6ff;border-radius:5px;border-left:3px solid #3b82f6;font-size:11px;margin-bottom:4px">'
+    nakliyeHTML = '<div style="padding:8px 14px;background:#eff6ff;border-radius:5px;border-left:3px solid #3b82f6;font-size:11px;margin-bottom:4px">'
       + '<strong style="color:#1d4ed8">🚛 Nakliye:</strong> ' + t.kamyonSayisi + ' adet kamyon'
+      + (t.sahneKapasitesi ? ' · Sahne kapasitesi: ' + t.sahneKapasitesi + ' kişi' : '')
       + '</div>';
   }
 
@@ -2569,7 +2617,14 @@ function gorevlendirmePdf(rowIdx) {
     + '<div class="sec"><div class="sec-title">Turne Bilgileri</div>'
     + '<div class="info-grid">'
     +   '<div class="info-box"><div class="info-lbl">Oyun Adı</div><div class="info-val">' + t.oyun + '</div></div>'
-    +   '<div class="info-box"><div class="info-lbl">Şehir / Sahne</div><div class="info-val">' + t.il + (t.mekan ? ' · ' + t.mekan : '') + '</div></div>'
+    +   '<div class="info-box"><div class="info-lbl">Şehir / Sahne</div><div class="info-val" style="font-size:11px">' + (function(){
+          if (t.duraklar && t.duraklar.length && t.duraklar.some(function(d){ return d.il; })) {
+            return t.duraklar.filter(function(d){ return d.il; }).map(function(d){
+              return d.il + (d.ilce ? '/'+d.ilce : '') + (d.mekan ? ' — ' + d.mekan : '');
+            }).join('<br>');
+          }
+          return (t.il || '') + (t.mekan ? ' — ' + t.mekan : '');
+        })() + '</div></div>'
     +   '<div class="info-box"><div class="info-lbl">Tarih</div><div class="info-val">' + tarihStr + '</div></div>'
     +   '<div class="info-box"><div class="info-lbl">Durum</div><div class="info-val"><span style="padding:2px 9px;border-radius:20px;font-size:10px;background:' + sr.bg + ';color:' + sr.fg + '">' + sr.label + '</span></div></div>'
     + '</div></div>'
@@ -2678,6 +2733,10 @@ function renderDuraklar() {
     return;
   }
   var html = duraklar.map(function(d,i) {
+    // Mevcut oyun listesi için m-oyun değeri de dahil et
+    var mOyunV = document.getElementById('m-oyun') ? document.getElementById('m-oyun').value : '';
+    var oyunListesi = [...new Set(tumPersonel.map(function(p){ return p.oyun; }).filter(Boolean))].sort();
+    if (mOyunV && oyunListesi.indexOf(mOyunV) < 0) oyunListesi.unshift(mOyunV);
     return '<div class="durak-row">'
       + '<div style="grid-column:1/3;display:flex;gap:4px;align-items:center">'
       + '  <div style="position:relative;flex:1">'
@@ -2688,13 +2747,19 @@ function renderDuraklar() {
       + '    <div id="durak-dd-'+i+'" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:600;background:var(--card);border:1px solid var(--border);border-radius:6px;max-height:160px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.15)"></div>'
       + '  </div>'
       + '  <input class="form-input" type="text" placeholder="İlçe / Semt" value="' + (d.ilce||'') + '" '
-      + '    oninput="duraklar['+i+'].ilce=this.value" style="font-size:11px;padding:5px 8px;width:110px;flex-shrink:0">'
+      + '    oninput="duraklar['+i+'].ilce=this.value" style="font-size:11px;padding:5px 8px;width:100px;flex-shrink:0">'
       + '</div>'
-      + '<input class="form-input" type="text" placeholder="Sahne/Mekan" value="' + (d.mekan||'') + '" '
-      + '  oninput="duraklar['+i+'].mekan=this.value" style="font-size:11px;padding:5px 8px;grid-column:1/3">'
-      + '<input class="form-input" type="number" placeholder="Temsil" value="' + (d.sayi||1) + '" min="1" '
-      + '  oninput="duraklar['+i+'].sayi=parseInt(this.value)||1" style="font-size:11px;padding:5px 6px">'
-      + '<button onclick="durakSil('+i+')" title="Kaldır" style="height:28px;width:26px;border-radius:5px;border:1px solid var(--border);background:transparent;cursor:pointer;color:var(--destructive);font-size:14px;display:flex;align-items:center;justify-content:center">×</button>'
+      + '<div style="grid-column:1/3;display:flex;gap:4px;align-items:center">'
+      + '  <input class="form-input" type="text" placeholder="Sahne/Mekan (opsiyonel)" value="' + (d.mekan||'') + '" '
+      + '    oninput="duraklar['+i+'].mekan=this.value" style="font-size:11px;padding:5px 8px;flex:1">'
+      + '  <select onchange="duraklar['+i+'].oyun=this.value" style="width:130px;border:1px solid var(--border);border-radius:6px;padding:5px 6px;font-size:11px;background:var(--card);font-family:Poppins,sans-serif;color:var(--foreground);flex-shrink:0" title="Bu duraktaki oyun (opsiyonel)">'
+      + '    <option value="">Oyun (opsiyonel)</option>'
+      + oyunListesi.map(function(o){ return '<option value="'+o+'"'+(d.oyun===o?' selected':'')+'>'+o+'</option>'; }).join('')
+      + '  </select>'
+      + '  <input class="form-input" type="number" placeholder="Temsil" value="' + (d.sayi||1) + '" min="1" '
+      + '    oninput="duraklar['+i+'].sayi=parseInt(this.value)||1" style="font-size:11px;padding:5px 6px;width:68px;flex-shrink:0">'
+      + '  <button onclick="durakSil('+i+')" title="Kaldır" style="height:28px;width:26px;border-radius:5px;border:1px solid var(--border);background:transparent;cursor:pointer;color:var(--destructive);font-size:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0">×</button>'
+      + '</div>'
       + '</div>';
   }).join('');
   wrap.innerHTML = html;
@@ -2837,23 +2902,26 @@ function programTarihlerOtoDoldur() {
   var endD = new Date(bit);
   var sure = Math.round((endD-d)/86400000)+1;
 
+  var mOyunVal = (document.getElementById('m-oyun') && document.getElementById('m-oyun').value) || '';
+
   if (gecerliDuraklar.length > 1 && sure >= gecerliDuraklar.length) {
     // Durak bazlı otomatik program: her durak için 1 oyun günü, aralarında yol
     // Gidiş günü
     var dt0 = new Date(bas);
     programSatirlar.push({ tarih: dt0.toISOString().slice(0,10), gun: GUNLER[dt0.getDay()],
-      program: 'Yol', saat: '', sehir: gecerliDuraklar[0].il });
+      program: 'Yol', saat: '', sehir: gecerliDuraklar[0].il, oyun: '' });
     // Her durak için
     var gunSayaci = 1;
     for (var di=0; di<gecerliDuraklar.length; di++) {
       var dur = gecerliDuraklar[di];
       // Bu durak için kaç temsil?
       var temsilSayisi = dur.sayi || 1;
+      var durakOyun = dur.oyun || mOyunVal || '';
       for (var ti=0; ti<temsilSayisi; ti++) {
         var dtX = new Date(bas); dtX.setDate(dtX.getDate() + gunSayaci);
         if (dtX > endD) break;
         programSatirlar.push({ tarih: dtX.toISOString().slice(0,10), gun: GUNLER[dtX.getDay()],
-          program: 'Oyun', saat: '20:30', sehir: dur.il });
+          program: 'Oyun', saat: '20:30', sehir: dur.il, oyun: durakOyun });
         gunSayaci++;
       }
       // Sonraki durağa geçiş günü (son durak değilse)
@@ -2861,7 +2929,7 @@ function programTarihlerOtoDoldur() {
         var dtY = new Date(bas); dtY.setDate(dtY.getDate() + gunSayaci);
         if (dtY <= endD) {
           programSatirlar.push({ tarih: dtY.toISOString().slice(0,10), gun: GUNLER[dtY.getDay()],
-            program: 'Yol', saat: '', sehir: gecerliDuraklar[di+1].il });
+            program: 'Yol', saat: '', sehir: gecerliDuraklar[di+1].il, oyun: '' });
           gunSayaci++;
         }
       }
@@ -2869,7 +2937,7 @@ function programTarihlerOtoDoldur() {
     // Dönüş günü
     var dtSon = new Date(bit);
     programSatirlar.push({ tarih: dtSon.toISOString().slice(0,10), gun: GUNLER[dtSon.getDay()],
-      program: 'Dönüş', saat: '', sehir: 'İzmir' });
+      program: 'Dönüş', saat: '', sehir: 'İzmir', oyun: '' });
   } else {
     // Tekli durak veya eski format
     for (var i=0; i<sure; i++) {
@@ -2879,7 +2947,7 @@ function programTarihlerOtoDoldur() {
       if (i===0) sehirI = sehirI;
       else if (i===sure-1) sehirI = 'İzmir';
       programSatirlar.push({ tarih: dtI.toISOString().slice(0,10), gun: GUNLER[dtI.getDay()],
-        program: prog, saat: prog==='Oyun'?'20:30':'', sehir: sehirI });
+        program: prog, saat: prog==='Oyun'?'20:30':'', sehir: sehirI, oyun: prog==='Oyun'?mOyunVal:'' });
     }
   }
   renderProgramGunler();
