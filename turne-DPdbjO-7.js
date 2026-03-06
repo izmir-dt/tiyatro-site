@@ -117,11 +117,15 @@ function kn(e) { try { localStorage.setItem(Hi, JSON.stringify(e)); } catch(x) {
 async function syncToSheets(liste) {
   try {
     const BASE = "https://tiyatro-backend.vercel.app/api/sheets";
-    const SHEET = encodeURIComponent("TURNE");
+    const SHEET = encodeURIComponent("TURNE_KAYITLARI");
     const resp = await fetch(`${BASE}/${SHEET}`);
     if (!resp.ok) return;
     const mevcut = await resp.json();
     const mevcutIds = (mevcut.rows || []).map(r => r[0]);
+    if ((mevcut.rows || []).length === 0) {
+      await fetch(`${BASE}/${SHEET}/row`, {method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({values:["ID","Oyun Adi","Sehir","Baslangic Tarihi","Bitis Tarihi","Sahne","Statu","Notlar","Konaklama"]})});
+    }
     for (const k of liste) {
       if (!mevcutIds.includes(k.id)) {
         const row = [k.id, k.oyunAdi||"", k.sehir||"", k.baslangicTarih||k.tarih||"", k.bitisTarih||k.tarih||"", k.sahne||"", k.statu||"tamamlandi", k.notlar||"", k.konaklama||""];
@@ -1540,13 +1544,14 @@ function Ax() {
 
   // Sheets'ten turne verilerini yükle
   const { data: turneSheetData } = is({
-    queryKey: ["https://tiyatro-backend.vercel.app/api/sheets", "TURNE"],
+    queryKey: ["https://tiyatro-backend.vercel.app/api/sheets", "TURNE_KAYITLARI"],
     staleTime: 30000
   });
   Le.useEffect(() => {
     if (!turneSheetData?.rows?.length) return;
     const rows = turneSheetData.rows;
-    const sheetKayitlar = rows.map(r => ({
+    const dataRows = rows.filter(r => r[0] && r[0] !== "ID" && !isNaN(r[0]));
+    const sheetKayitlar = dataRows.map(r => ({
       id: r[0] || Date.now().toString(),
       oyunAdi: r[1] || "",
       sehir: r[2] || "",
