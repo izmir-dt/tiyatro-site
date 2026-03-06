@@ -248,5 +248,85 @@
 
     })();
     </script>
+
+    <script>
+    // TURNE NAV LINK - MutationObserver ile kalıcı enjeksiyon
+    (function(){
+      var TURNE_URL = '/tiyatro-site/turne.html';
+      var LINK_ID = 'turne-nav-injected';
+
+      function injectLink() {
+        if (document.getElementById(LINK_ID)) return;
+
+        // Nav içindeki tüm butonları tara, "DİĞER" olanı bul
+        var allBtns = document.querySelectorAll('header button, header a, nav button, nav a');
+        var digerEl = null;
+        allBtns.forEach(function(el) {
+          if (el.textContent && el.textContent.replace(/\s/g,'').toUpperCase().indexOf('DİĞER') !== -1) {
+            digerEl = el;
+          }
+        });
+
+        if (!digerEl) return; // React henüz yüklemediyse bekle
+
+        var parent = digerEl.parentNode;
+        if (!parent) return;
+
+        // DİĞER butonunun stilini referans al
+        var cs = window.getComputedStyle(digerEl);
+
+        var link = document.createElement('a');
+        link.id = LINK_ID;
+        link.href = TURNE_URL;
+        link.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M8 6v6"/><path d="M15 6v6"/><path d="M2 12h19.6"/><path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5c-.2-.6-.7-1-1.4-1H2"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/></svg> TURNE';
+        link.style.cssText = [
+          'display:inline-flex',
+          'align-items:center',
+          'gap:6px',
+          'padding:6px 12px',
+          'border-radius:8px',
+          'font-size:' + cs.fontSize,
+          'font-weight:' + cs.fontWeight,
+          'font-family:' + cs.fontFamily,
+          'letter-spacing:' + cs.letterSpacing,
+          'color:hsl(var(--sidebar-foreground) / 0.70)',
+          'text-decoration:none',
+          'cursor:pointer',
+          'transition:background .15s, color .15s',
+          'white-space:nowrap',
+          'background:transparent',
+        ].join(';');
+
+        link.addEventListener('mouseenter', function() {
+          this.style.background = 'hsl(var(--sidebar-accent))';
+          this.style.color = 'hsl(var(--sidebar-foreground))';
+        });
+        link.addEventListener('mouseleave', function() {
+          this.style.background = 'transparent';
+          this.style.color = 'hsl(var(--sidebar-foreground) / 0.70)';
+        });
+
+        // Aktif sayfa kontrolü
+        if (window.location.href.indexOf('turne') !== -1) {
+          link.style.background = 'hsl(var(--sidebar-primary))';
+          link.style.color = 'hsl(var(--sidebar-primary-foreground))';
+        }
+
+        parent.insertBefore(link, digerEl);
+      }
+
+      // MutationObserver ile DOM değişikliklerini izle — React re-render'larda da çalışır
+      var observer = new MutationObserver(function() {
+        if (!document.getElementById(LINK_ID)) injectLink();
+      });
+
+      observer.observe(document.body, { childList: true, subtree: true });
+
+      // İlk denemeler
+      setTimeout(injectLink, 300);
+      setTimeout(injectLink, 800);
+      setTimeout(injectLink, 1500);
+    })();
+    </script>
   </body>
 </html>
