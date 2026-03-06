@@ -461,7 +461,7 @@
       <button class="modal-close" onclick="closeModal()">×</button>
     </div>
     <div class="modal-body">
-      <input type="hidden" id="edit-id">
+      <input type="hidden" id="edit-rowidx">
       <div class="form-group">
         <label class="form-label">Oyun Adı *</label>
         <select class="form-select" id="m-oyun">
@@ -502,19 +502,18 @@
 
 <script>
 // ============================================================
-// VERİ
+// CONFIG
 // ============================================================
-const API = 'https://tiyatro-backend.vercel.app/api/sheets';
-  const SHEET = 'BÜTÜN OYUNLAR';
-const SK = 'tiyatro_sifre';
+const API             = 'https://tiyatro-backend.vercel.app/api/sheets';
+const TURNE_SHEET     = 'TURNE';
+const PERSONEL_SHEET  = 'BÜTÜN OYUNLAR';
+const SK              = 'tiyatro_sifre';
 const VARSAYILAN_SIFRE = '525327';
-const TURNE_KEY = 'tiyatro_turneler';
 
-// Dahil olan kategoriler
-const DAHIL_KATEGORILER = ['Oyuncu', 'Koro', 'Müzisyen', 'Solist', 'Figüran', 'Dansçı', 'Koro/Dans Ekibi'];
+const DAHIL_KATEGORILER = ['Oyuncu','Koro','Müzisyen','Solist','Figüran','Dansçı','Koro/Dans Ekibi'];
 
-let tumPersonel = []; // {oyun, kategori, gorev, kisi}
-let turneler = [];    // {id, oyun, il, tarih, mekan, sayi, not}
+let tumPersonel = [];  // {oyun, kategori, gorev, kisi}
+let turneler    = [];  // {_rowIdx, oyun, il, tarih, mekan, sayi, not}
 let calYear, calMonth;
 
 // ============================================================
@@ -522,10 +521,10 @@ let calYear, calMonth;
 // ============================================================
 (function(){
   const getSifre = () => localStorage.getItem(SK) || VARSAYILAN_SIFRE;
-  const overlay = document.getElementById('sp-overlay');
-  const inp = document.getElementById('sp-inp');
-  const errmsg = document.getElementById('sp-errmsg');
-  const btn = document.getElementById('sp-login-btn');
+  const overlay  = document.getElementById('sp-overlay');
+  const inp      = document.getElementById('sp-inp');
+  const errmsg   = document.getElementById('sp-errmsg');
+  const btn      = document.getElementById('sp-login-btn');
 
   if (sessionStorage.getItem('turne_erisim') !== 'true') {
     overlay.classList.add('on');
@@ -557,8 +556,8 @@ let calYear, calMonth;
 // INIT
 // ============================================================
 async function init() {
-  loadTurneler();
-  await fetchPersonel();
+  setLoading(true);
+  await Promise.all([fetchPersonel(), fetchTurneler()]);
   populateFilters();
   renderListe();
   renderIlStats();
@@ -566,97 +565,119 @@ async function init() {
   calYear = now.getFullYear();
   calMonth = now.getMonth();
   renderCalendar();
+  setLoading(false);
+}
+
+function setLoading(on) {
+  let bar = document.getElementById('_loadbar');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = '_loadbar';
+    bar.style.cssText = 'position:fixed;top:56px;left:0;right:0;height:3px;background:var(--sidebar-primary);z-index:9999;transition:opacity .4s';
+    document.body.appendChild(bar);
+  }
+  bar.style.opacity = on ? '1' : '0';
 }
 
 // ============================================================
-// PERSONEL VERİSİ ÇEK
+// PERSONEL VERİSİ ÇEK (BÜTÜN OYUNLAR)
 // ============================================================
 async function fetchPersonel() {
   try {
-    const res = await fetch(API + '?sheet=' + encodeURIComponent(SHEET));
+    const res  = await fetch(`${API}?sheet=${encodeURIComponent(PERSONEL_SHEET)}`);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
-    if (!data.rows || data.rows.length < 2) return;
-    
-    // Header satırından sütun indexlerini bul (gerçek site gibi)
-    const header = data.rows[0].map(h => (h || '').trim().toLowerCase());
-    const iOyun = header.findIndex(h => h === 'oyun' || h.startsWith('oyun'));
-    const iKat  = header.findIndex(h => h === 'kategori' || h.startsWith('kategori'));
-    const iGorev= header.findIndex(h => h === 'görev' || h.startsWith('görev') || h === 'gorev');
-    const iKisi = header.findIndex(h => h === 'kişi' || h.startsWith('kişi') || h === 'kisi');
-    
-    const nOyun  = iOyun  >= 0 ? iOyun  : 0;
-    const nKat   = iKat   >= 0 ? iKat   : 1;
-    const nGorev = iGorev >= 0 ? iGorev : 2;
-    const nKisi  = iKisi  >= 0 ? iKisi  : 3;
-    
-    tumPersonel = data.rows.slice(1)
+
+    // Backend { rows: [[header], [data], ...] } formatında döner
+    const allRows = data.rows || [];
+    if (allRows.length < 2) return;
+
+    const h     = allRows[0].map(x => (x||'').trim().toLowerCase());
+    const iOyun = h.findIndex(x => x.startsWith('oyun'));
+    const iKat  = h.findIndex(x => x.startsWith('kategori'));
+    const iGor  = h.findIndex(x => x.startsWith('görev') || x.startsWith('gorev'));
+    const iKisi = h.findIndex(x => x.startsWith('kişi') || x.startsWith('kisi'));
+
+    tumPersonel = allRows.slice(1)
       .map(r => ({
-        oyun: (r[nOyun] || '').trim(),
-        kategori: (r[nKat] || '').trim(),
-        gorev: (r[nGorev] || '').trim(),
-        kisi: (r[nKisi] || '').trim()
+        oyun:     (r[iOyun >= 0 ? iOyun : 0] || '').trim(),
+        kategori: (r[iKat  >= 0 ? iKat  : 1] || '').trim(),
+        gorev:    (r[iGor  >= 0 ? iGor  : 2] || '').trim(),
+        kisi:     (r[iKisi >= 0 ? iKisi : 3] || '').trim()
       }))
       .filter(r => r.oyun && r.kisi);
-    populateFilters();
-    renderListe();
-    renderIlStats();
-    renderCalendar();
+    console.log('Personel yüklendi:', tumPersonel.length, 'kayıt');
   } catch(e) {
-    console.warn('Personel verisi cekilemedi', e);
+    console.warn('Personel çekilemedi:', e);
   }
 }
 
 // ============================================================
-// TURNELER (localStorage)
+// TURNE VERİSİ ÇEK (TURNE sheet)
 // ============================================================
-function loadTurneler() {
-  try { turneler = JSON.parse(localStorage.getItem(TURNE_KEY) || '[]'); }
-  catch(e) { turneler = []; }
-}
-function saveTurnelerLS() {
-  localStorage.setItem(TURNE_KEY, JSON.stringify(turneler));
+async function fetchTurneler() {
+  try {
+    const res  = await fetch(`${API}?sheet=${encodeURIComponent(TURNE_SHEET)}`);
+    if (!res.ok) { turneler = []; return; }
+    const data = await res.json();
+
+    // Backend { rows: [[header], [data], ...] } formatında döner
+    const allRows = data.rows || [];
+    if (allRows.length < 2) { turneler = []; return; }
+
+    const h     = allRows[0].map(x => (x||'').trim().toLowerCase());
+    const iOyun = h.findIndex(x => x.startsWith('oyun'));
+    const iIl   = h.findIndex(x => x === 'il' || x.startsWith('şehir') || x.startsWith('sehir'));
+    const iTar  = h.findIndex(x => x.startsWith('tarih'));
+    const iMek  = h.findIndex(x => x.startsWith('mekan') || x.startsWith('sahne'));
+    const iSay  = h.findIndex(x => x.startsWith('temsil') || x.startsWith('sayı') || x.startsWith('sayi'));
+    const iNot  = h.findIndex(x => x.startsWith('not'));
+
+    turneler = allRows.slice(1).map((r, i) => ({
+      _rowIdx: i,          // 0-based rows index (backend DELETE uses this)
+      oyun:    (r[iOyun >= 0 ? iOyun : 0] || '').trim(),
+      il:      (r[iIl   >= 0 ? iIl   : 1] || '').trim(),
+      tarih:   (r[iTar  >= 0 ? iTar  : 2] || '').trim(),
+      mekan:   (r[iMek  >= 0 ? iMek  : 3] || '').trim(),
+      sayi:    parseInt(r[iSay >= 0 ? iSay : 4]) || 1,
+      not:     (r[iNot  >= 0 ? iNot  : 5] || '').trim()
+    })).filter(r => r.oyun && r.il);
+  } catch(e) {
+    console.warn('Turne verisi çekilemedi:', e);
+    turneler = [];
+  }
 }
 
 // ============================================================
-// FİLTRELER DOLDUR
+// FİLTRELER
 // ============================================================
 function populateFilters() {
   const oyunlar = [...new Set(tumPersonel.map(p => p.oyun))].sort();
-  const iller = [...new Set(turneler.map(t => t.il))].filter(Boolean).sort();
+  const iller   = [...new Set(turneler.map(t => t.il))].filter(Boolean).sort();
 
-  ['filter-oyun', 'm-oyun', 'oyun-sec'].forEach(id => {
-    const sel = document.getElementById(id);
+  ['filter-oyun','m-oyun','oyun-sec'].forEach(id => {
+    const sel   = document.getElementById(id);
     const first = sel.options[0];
     sel.innerHTML = '';
     sel.appendChild(first);
-    oyunlar.forEach(o => {
-      const opt = document.createElement('option');
-      opt.value = o; opt.textContent = o;
-      sel.appendChild(opt);
-    });
+    oyunlar.forEach(o => { const opt = document.createElement('option'); opt.value = o; opt.textContent = o; sel.appendChild(opt); });
   });
 
-  const filterIl = document.getElementById('filter-il');
-  filterIl.innerHTML = '<option value="">Tüm İller</option>';
-  iller.forEach(il => {
-    const opt = document.createElement('option');
-    opt.value = il; opt.textContent = il;
-    filterIl.appendChild(opt);
-  });
+  const fi = document.getElementById('filter-il');
+  fi.innerHTML = '<option value="">Tüm İller</option>';
+  iller.forEach(il => { const opt = document.createElement('option'); opt.value = il; opt.textContent = il; fi.appendChild(opt); });
 }
 
 // ============================================================
 // TAB
 // ============================================================
 function switchTab(tab) {
-  document.querySelectorAll('.tab-btn').forEach((b,i) => {
-    const tabs = ['liste','oyun','kisi','il','takvim'];
-    b.classList.toggle('active', tabs[i] === tab);
+  document.querySelectorAll('.tab-btn').forEach((b, i) => {
+    b.classList.toggle('active', ['liste','oyun','kisi','il','takvim'][i] === tab);
   });
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.getElementById('tab-' + tab).classList.add('active');
-
-  if (tab === 'il') renderIlStats();
+  if (tab === 'il')     renderIlStats();
   if (tab === 'takvim') renderCalendar();
 }
 
@@ -665,41 +686,33 @@ function switchTab(tab) {
 // ============================================================
 function renderListe() {
   const search = document.getElementById('filter-search').value.toLowerCase();
-  const filterOyun = document.getElementById('filter-oyun').value;
-  const filterIl = document.getElementById('filter-il').value;
+  const fOyun  = document.getElementById('filter-oyun').value;
+  const fIl    = document.getElementById('filter-il').value;
 
   let filtered = turneler.filter(t => {
-    if (filterOyun && t.oyun !== filterOyun) return false;
-    if (filterIl && t.il !== filterIl) return false;
+    if (fOyun && t.oyun !== fOyun) return false;
+    if (fIl   && t.il   !== fIl)   return false;
     if (search && !`${t.oyun} ${t.il} ${t.mekan}`.toLowerCase().includes(search)) return false;
     return true;
   });
-
   filtered.sort((a,b) => new Date(b.tarih) - new Date(a.tarih));
 
   const el = document.getElementById('liste-content');
-
   if (!filtered.length) {
-    el.innerHTML = `<div class="empty-state">
-      <div class="empty-icon">🎭</div>
-      <div class="empty-text">Turne kaydı bulunamadı</div>
-      <div class="empty-sub">Sağ üstten yeni turne ekleyebilirsiniz</div>
-    </div>`;
+    el.innerHTML = `<div class="empty-state"><div class="empty-icon">🎭</div><div class="empty-text">Turne kaydı bulunamadı</div><div class="empty-sub">Sağ üstten yeni turne ekleyebilirsiniz</div></div>`;
     return;
   }
-
-  el.innerHTML = `<div class="cards-grid">${filtered.map(t => turneCard(t)).join('')}</div>`;
+  el.innerHTML = `<div class="cards-grid">${filtered.map(turneCard).join('')}</div>`;
 }
 
 function turneCard(t) {
-  const personel = getPersonelForOyun(t.oyun);
+  const personel   = getPersonelForOyun(t.oyun);
   const kategoriler = [...new Set(personel.map(p => p.kategori))];
   const chips = kategoriler.slice(0,4).map(k => `<span class="kategori-chip ${chipClass(k)}">${k}</span>`).join('');
-
   return `<div class="turne-card">
     <div class="turne-card-header">
       <div class="turne-card-title">${t.oyun}</div>
-      <div class="turne-card-badge">${t.sayi || 1} temsil</div>
+      <div class="turne-card-badge">${t.sayi||1} temsil</div>
     </div>
     <div class="turne-card-body">
       <div class="turne-info-row">📍 <strong>${t.il}</strong>${t.mekan ? ` · ${t.mekan}` : ''}</div>
@@ -710,8 +723,8 @@ function turneCard(t) {
     <div class="turne-card-footer">
       ${chips}
       <div class="ml-auto" style="display:flex;gap:4px">
-        <button class="btn btn-outline" style="height:26px;font-size:10px;padding:0 8px" onclick="editTurne('${t.id}')">✏️</button>
-        <button class="btn btn-outline" style="height:26px;font-size:10px;padding:0 8px;color:var(--destructive)" onclick="deleteTurne('${t.id}')">🗑</button>
+        <button class="btn btn-outline" style="height:26px;font-size:10px;padding:0 8px" onclick="editTurne(${t._rowIdx})">✏️</button>
+        <button class="btn btn-outline" style="height:26px;font-size:10px;padding:0 8px;color:var(--destructive)" onclick="deleteTurne(${t._rowIdx})">🗑</button>
       </div>
     </div>
   </div>`;
@@ -719,9 +732,9 @@ function turneCard(t) {
 
 function chipClass(k) {
   if (k === 'Oyuncu') return 'chip-oyuncu';
-  if (k === 'Koro' || k === 'Koro/Dans Ekibi') return 'chip-koro';
+  if (k.includes('Koro') || k.includes('Dans')) return 'chip-koro';
   if (['Müzisyen','Solist','Dansçı'].includes(k)) return 'chip-muzisyen';
-  if (k === 'Figüran') return 'chip-figuran';
+  if (k.includes('Figüran')) return 'chip-figuran';
   return 'chip-oyuncu';
 }
 
@@ -730,7 +743,7 @@ function chipClass(k) {
 // ============================================================
 function renderOyunDetay() {
   const oyun = document.getElementById('oyun-sec').value;
-  const el = document.getElementById('oyun-content');
+  const el   = document.getElementById('oyun-content');
   const stat = document.getElementById('oyun-istatistik');
 
   if (!oyun) {
@@ -739,68 +752,45 @@ function renderOyunDetay() {
     return;
   }
 
-  const oyunTurneleri = turneler.filter(t => t.oyun === oyun).sort((a,b) => new Date(b.tarih) - new Date(a.tarih));
-  const personel = getPersonelForOyun(oyun);
-  const toplamTemsil = oyunTurneleri.reduce((s,t) => s + (t.sayi||1), 0);
-  const iller = [...new Set(oyunTurneleri.map(t => t.il))];
+  const oyunTurneleri = turneler.filter(t => t.oyun === oyun).sort((a,b) => new Date(b.tarih)-new Date(a.tarih));
+  const personel      = getPersonelForOyun(oyun);
+  const toplamTemsil  = oyunTurneleri.reduce((s,t) => s+(t.sayi||1), 0);
+  const iller         = [...new Set(oyunTurneleri.map(t => t.il))];
+  stat.textContent    = `${oyunTurneleri.length} turne · ${toplamTemsil} temsil · ${iller.length} il`;
 
-  stat.textContent = `${oyunTurneleri.length} turne · ${toplamTemsil} temsil · ${iller.length} il`;
-
-  // Personel grupla
   const gruplar = {};
-  personel.forEach(p => {
-    if (!gruplar[p.kategori]) gruplar[p.kategori] = [];
-    gruplar[p.kategori].push(p);
-  });
+  personel.forEach(p => { if (!gruplar[p.kategori]) gruplar[p.kategori]=[]; gruplar[p.kategori].push(p); });
 
   const kisiHTML = Object.entries(gruplar).map(([kat, kisiler]) => `
     <div class="kisi-section">
-      <div class="kisi-section-header">
-        <span class="kisi-section-title">${kat}</span>
-        <span class="kisi-count">${kisiler.length} kişi</span>
-      </div>
-      <div class="kisi-list">
-        ${kisiler.map(k => `<span class="kisi-chip">${k.kisi}${k.gorev ? ` <span style="color:var(--muted-foreground);font-size:10px">· ${k.gorev}</span>` : ''}</span>`).join('')}
-      </div>
+      <div class="kisi-section-header"><span class="kisi-section-title">${kat}</span><span class="kisi-count">${kisiler.length} kişi</span></div>
+      <div class="kisi-list">${kisiler.map(k => `<span class="kisi-chip">${k.kisi}${k.gorev?` <span style="color:var(--muted-foreground);font-size:10px">· ${k.gorev}</span>`:''}</span>`).join('')}</div>
     </div>`).join('');
 
-  const turneHTML = oyunTurneleri.length ? `
-    <div class="table-wrap" style="margin-bottom:16px">
-      <table>
-        <thead><tr><th>Tarih</th><th>Şehir/İl</th><th>Mekan</th><th>Temsil</th><th>Notlar</th></tr></thead>
-        <tbody>${oyunTurneleri.map(t => `
-          <tr>
-            <td>${formatTarih(t.tarih)}</td>
-            <td><span class="badge-il">${t.il}</span></td>
-            <td>${t.mekan || '—'}</td>
-            <td>${t.sayi || 1}</td>
-            <td style="color:var(--muted-foreground)">${t.not || '—'}</td>
-          </tr>`).join('')}
-        </tbody>
-      </table>
-    </div>` : `<div class="empty-state" style="height:80px"><div class="empty-sub">Bu oyun için henüz turne kaydı yok</div></div>`;
+  const turneHTML = oyunTurneleri.length
+    ? `<div class="table-wrap" style="margin-bottom:16px"><table><thead><tr><th>Tarih</th><th>Şehir/İl</th><th>Mekan</th><th>Temsil</th><th>Notlar</th></tr></thead><tbody>${oyunTurneleri.map(t=>`<tr><td>${formatTarih(t.tarih)}</td><td><span class="badge-il">${t.il}</span></td><td>${t.mekan||'—'}</td><td>${t.sayi||1}</td><td style="color:var(--muted-foreground)">${t.not||'—'}</td></tr>`).join('')}</tbody></table></div>`
+    : `<div class="empty-state" style="height:80px"><div class="empty-sub">Bu oyun için henüz turne kaydı yok</div></div>`;
 
-  el.innerHTML = `
-    <div style="max-width:900px">
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px">
-        <div class="stat-card"><div class="stat-label">Toplam Turne</div><div class="stat-value">${oyunTurneleri.length}</div></div>
-        <div class="stat-card"><div class="stat-label">Toplam Temsil</div><div class="stat-value">${toplamTemsil}</div></div>
-        <div class="stat-card"><div class="stat-label">Gidilen İl</div><div class="stat-value">${iller.length}</div></div>
-      </div>
-      ${turneHTML}
-      <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:16px">
-        <div style="font-size:13px;font-weight:700;margin-bottom:12px">👥 Turne Kadrosu (${personel.length} kişi)</div>
-        ${kisiHTML || '<div class="empty-sub text-muted">Personel verisi yüklenemedi</div>'}
-      </div>
-    </div>`;
+  el.innerHTML = `<div style="max-width:900px">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px">
+      <div class="stat-card"><div class="stat-label">Toplam Turne</div><div class="stat-value">${oyunTurneleri.length}</div></div>
+      <div class="stat-card"><div class="stat-label">Toplam Temsil</div><div class="stat-value">${toplamTemsil}</div></div>
+      <div class="stat-card"><div class="stat-label">Gidilen İl</div><div class="stat-value">${iller.length}</div></div>
+    </div>
+    ${turneHTML}
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:16px">
+      <div style="font-size:13px;font-weight:700;margin-bottom:12px">👥 Turne Kadrosu (${personel.length} kişi)</div>
+      ${kisiHTML || '<div class="empty-sub text-muted">Personel verisi yüklenemedi</div>'}
+    </div>
+  </div>`;
 }
 
 // ============================================================
 // KİŞİYE GÖRE
 // ============================================================
 function renderKisiAra() {
-  const ara = document.getElementById('kisi-search').value.trim().toLowerCase();
-  const el = document.getElementById('kisi-content');
+  const ara  = document.getElementById('kisi-search').value.trim().toLowerCase();
+  const el   = document.getElementById('kisi-content');
   const stat = document.getElementById('kisi-sonuc');
 
   if (ara.length < 2) {
@@ -820,27 +810,23 @@ function renderKisiAra() {
     return;
   }
 
-  // Her eşleşen kişi için turneleri bul
   const kisiler = [...new Set(eslesen.map(p => p.kisi))];
   stat.textContent = `${kisiler.length} kişi bulundu`;
 
   const html = kisiler.map(kisi => {
-    const oyunlar = [...new Set(eslesen.filter(p => p.kisi === kisi).map(p => p.oyun))];
+    const oyunlar      = [...new Set(eslesen.filter(p => p.kisi === kisi).map(p => p.oyun))];
     const kisiTurneleri = turneler.filter(t => oyunlar.includes(t.oyun)).sort((a,b) => new Date(b.tarih)-new Date(a.tarih));
-    const toplamTemsil = kisiTurneleri.reduce((s,t) => s + (t.sayi||1), 0);
-
+    const toplamTemsil  = kisiTurneleri.reduce((s,t) => s+(t.sayi||1), 0);
     return `<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
         <div style="font-size:14px;font-weight:700">${kisi}</div>
         <div style="font-size:11px;color:var(--muted-foreground)">${toplamTemsil} temsil · ${oyunlar.length} oyun</div>
       </div>
-      <div style="margin-bottom:8px">
-        ${oyunlar.map(o => `<span class="kisi-chip" style="margin-right:4px;margin-bottom:4px">${o}</span>`).join('')}
-      </div>
-      ${kisiTurneleri.length ? `<table style="width:100%;font-size:11px;border-collapse:collapse">
-        <thead><tr style="background:var(--muted)"><th style="padding:5px 8px;text-align:left">Oyun</th><th style="padding:5px 8px;text-align:left">Tarih</th><th style="padding:5px 8px;text-align:left">İl</th><th style="padding:5px 8px;text-align:left">Mekan</th></tr></thead>
-        <tbody>${kisiTurneleri.map(t => `<tr><td style="padding:5px 8px;border-bottom:1px solid var(--border)">${t.oyun}</td><td style="padding:5px 8px;border-bottom:1px solid var(--border)">${formatTarih(t.tarih)}</td><td style="padding:5px 8px;border-bottom:1px solid var(--border)"><span class="badge-il">${t.il}</span></td><td style="padding:5px 8px;border-bottom:1px solid var(--border)">${t.mekan||'—'}</td></tr>`).join('')}</tbody>
-      </table>` : `<div style="font-size:11px;color:var(--muted-foreground)">Henüz turne kaydı yok</div>`}
+      <div style="margin-bottom:8px">${oyunlar.map(o=>`<span class="kisi-chip" style="margin-right:4px;margin-bottom:4px">${o}</span>`).join('')}</div>
+      ${kisiTurneleri.length
+        ? `<table style="width:100%;font-size:11px;border-collapse:collapse"><thead><tr style="background:var(--muted)"><th style="padding:5px 8px;text-align:left">Oyun</th><th style="padding:5px 8px;text-align:left">Tarih</th><th style="padding:5px 8px;text-align:left">İl</th><th style="padding:5px 8px;text-align:left">Mekan</th></tr></thead><tbody>${kisiTurneleri.map(t=>`<tr><td style="padding:5px 8px;border-bottom:1px solid var(--border)">${t.oyun}</td><td style="padding:5px 8px;border-bottom:1px solid var(--border)">${formatTarih(t.tarih)}</td><td style="padding:5px 8px;border-bottom:1px solid var(--border)"><span class="badge-il">${t.il}</span></td><td style="padding:5px 8px;border-bottom:1px solid var(--border)">${t.mekan||'—'}</td></tr>`).join('')}</tbody></table>`
+        : `<div style="font-size:11px;color:var(--muted-foreground)">Henüz turne kaydı yok</div>`
+      }
     </div>`;
   }).join('');
 
@@ -852,31 +838,19 @@ function renderKisiAra() {
 // ============================================================
 function renderIlStats() {
   const ilSayilar = {};
-  turneler.forEach(t => {
-    if (!t.il) return;
-    ilSayilar[t.il] = (ilSayilar[t.il] || 0) + (t.sayi || 1);
-  });
+  turneler.forEach(t => { if (!t.il) return; ilSayilar[t.il] = (ilSayilar[t.il]||0) + (t.sayi||1); });
+  const sorted       = Object.entries(ilSayilar).sort((a,b) => b[1]-a[1]);
+  const max          = sorted[0]?.[1] || 1;
+  const totalTemsil  = turneler.reduce((s,t) => s+(t.sayi||1), 0);
 
-  const sorted = Object.entries(ilSayilar).sort((a,b) => b[1]-a[1]);
-  const max = sorted[0]?.[1] || 1;
-
-  // Stat cards
-  const totalTemsil = turneler.reduce((s,t) => s+(t.sayi||1), 0);
-  const uniqueIller = sorted.length;
   document.getElementById('il-stats-cards').innerHTML = `
     <div class="stat-card"><div class="stat-label">Toplam Temsil</div><div class="stat-value">${totalTemsil}</div><div class="stat-sub">Tüm illerde</div></div>
-    <div class="stat-card"><div class="stat-label">Gidilen İl</div><div class="stat-value">${uniqueIller}</div></div>
-    <div class="stat-card"><div class="stat-label">En Çok Gidilen</div><div class="stat-value" style="font-size:16px">${sorted[0]?.[0] || '—'}</div><div class="stat-sub">${sorted[0]?.[1] || 0} temsil</div></div>
+    <div class="stat-card"><div class="stat-label">Gidilen İl</div><div class="stat-value">${sorted.length}</div></div>
+    <div class="stat-card"><div class="stat-label">En Çok Gidilen</div><div class="stat-value" style="font-size:16px">${sorted[0]?.[0]||'—'}</div><div class="stat-sub">${sorted[0]?.[1]||0} temsil</div></div>
     <div class="stat-card"><div class="stat-label">Toplam Turne</div><div class="stat-value">${turneler.length}</div></div>`;
 
-  // Bar chart
   document.getElementById('il-bars').innerHTML = sorted.length
-    ? sorted.map(([il, sayi]) => `
-      <div class="il-bar-row">
-        <div class="il-name">${il}</div>
-        <div class="il-bar-bg"><div class="il-bar-fill" style="width:${(sayi/max*100).toFixed(1)}%"></div></div>
-        <div class="il-count">${sayi}</div>
-      </div>`).join('')
+    ? sorted.map(([il,sayi]) => `<div class="il-bar-row"><div class="il-name">${il}</div><div class="il-bar-bg"><div class="il-bar-fill" style="width:${(sayi/max*100).toFixed(1)}%"></div></div><div class="il-count">${sayi}</div></div>`).join('')
     : '<div class="empty-state" style="height:100px"><div class="empty-sub">Henüz turne verisi yok</div></div>';
 }
 
@@ -886,131 +860,153 @@ function renderIlStats() {
 function renderCalendar() {
   const aylar = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
   document.getElementById('cal-title').textContent = `${aylar[calMonth]} ${calYear}`;
-
-  const bugun = new Date();
-  const ilkGun = new Date(calYear, calMonth, 1);
-  const sonGun = new Date(calYear, calMonth + 1, 0);
-
-  // Pazartesi başlangıç (0=Pzt, 6=Paz)
+  const bugun   = new Date();
+  const ilkGun  = new Date(calYear, calMonth, 1);
+  const sonGun  = new Date(calYear, calMonth + 1, 0);
   let baslangic = (ilkGun.getDay() + 6) % 7;
-
-  const gunler = [];
-  // Önceki ay
-  for (let i = baslangic - 1; i >= 0; i--) {
-    const d = new Date(calYear, calMonth, -i);
-    gunler.push({ date: d, otherMonth: true });
-  }
-  // Bu ay
-  for (let d = 1; d <= sonGun.getDate(); d++) {
-    gunler.push({ date: new Date(calYear, calMonth, d), otherMonth: false });
-  }
-  // Sonraki ay
+  const gunler  = [];
+  for (let i = baslangic-1; i >= 0; i--) gunler.push({ date: new Date(calYear,calMonth,-i), otherMonth:true });
+  for (let d = 1; d <= sonGun.getDate(); d++) gunler.push({ date: new Date(calYear,calMonth,d), otherMonth:false });
   const kalan = 42 - gunler.length;
-  for (let d = 1; d <= kalan; d++) {
-    gunler.push({ date: new Date(calYear, calMonth + 1, d), otherMonth: true });
-  }
+  for (let d = 1; d <= kalan; d++) gunler.push({ date: new Date(calYear,calMonth+1,d), otherMonth:true });
 
   const turneMap = {};
-  turneler.forEach(t => {
-    if (!t.tarih) return;
-    const key = t.tarih;
-    if (!turneMap[key]) turneMap[key] = [];
-    turneMap[key].push(t);
-  });
+  turneler.forEach(t => { if (!t.tarih) return; if (!turneMap[t.tarih]) turneMap[t.tarih]=[]; turneMap[t.tarih].push(t); });
 
   document.getElementById('cal-days').innerHTML = gunler.map(g => {
-    const key = g.date.toISOString().split('T')[0];
+    const key    = g.date.toISOString().split('T')[0];
     const events = turneMap[key] || [];
     const isToday = g.date.toDateString() === bugun.toDateString();
-    return `<div class="cal-day${isToday ? ' today' : ''}${g.otherMonth ? ' other-month' : ''}">
-      <span style="color:${isToday ? 'var(--primary)' : ''};font-weight:${isToday?'700':'600'}">${g.date.getDate()}</span>
-      ${events.map(e => `<div class="cal-event" title="${e.oyun} – ${e.il}">${e.oyun.slice(0,12)}</div>`).join('')}
+    return `<div class="cal-day${isToday?' today':''}${g.otherMonth?' other-month':''}">
+      <span style="color:${isToday?'var(--primary)':''};font-weight:${isToday?700:600}">${g.date.getDate()}</span>
+      ${events.map(e=>`<div class="cal-event" title="${e.oyun} – ${e.il}">${e.oyun.slice(0,12)}</div>`).join('')}
     </div>`;
   }).join('');
 }
 
-function calPrev() { calMonth--; if(calMonth < 0){calMonth=11;calYear--;} renderCalendar(); }
-function calNext() { calMonth++; if(calMonth > 11){calMonth=0;calYear++;} renderCalendar(); }
+function calPrev()  { calMonth--; if(calMonth<0){calMonth=11;calYear--;}  renderCalendar(); }
+function calNext()  { calMonth++; if(calMonth>11){calMonth=0;calYear++;}  renderCalendar(); }
 function calToday() { const n=new Date(); calYear=n.getFullYear(); calMonth=n.getMonth(); renderCalendar(); }
 
 // ============================================================
 // MODAL
 // ============================================================
-function openModal(id) {
+function openModal(rowIdx) {
   document.getElementById('modal-overlay').classList.add('on');
-  document.getElementById('modal-title').textContent = id ? 'Turne Düzenle' : 'Turne Ekle';
-  if (!id) {
-    document.getElementById('edit-id').value = '';
-    document.getElementById('m-oyun').value = '';
-    document.getElementById('m-il').value = '';
+  if (rowIdx === undefined) {
+    document.getElementById('modal-title').textContent = 'Turne Ekle';
+    document.getElementById('edit-rowidx').value = '';
+    document.getElementById('m-oyun').value  = '';
+    document.getElementById('m-il').value    = '';
     document.getElementById('m-tarih').value = '';
     document.getElementById('m-mekan').value = '';
-    document.getElementById('m-sayi').value = '1';
-    document.getElementById('m-not').value = '';
+    document.getElementById('m-sayi').value  = '1';
+    document.getElementById('m-not').value   = '';
   }
 }
 
-function editTurne(id) {
-  const t = turneler.find(x => x.id === id);
+function editTurne(rowIdx) {
+  const t = turneler.find(x => x._rowIdx === rowIdx);
   if (!t) return;
-  document.getElementById('edit-id').value = t.id;
-  document.getElementById('m-oyun').value = t.oyun;
-  document.getElementById('m-il').value = t.il;
+  document.getElementById('modal-title').textContent  = 'Turne Düzenle';
+  document.getElementById('edit-rowidx').value = rowIdx;
+  document.getElementById('m-oyun').value  = t.oyun;
+  document.getElementById('m-il').value    = t.il;
   document.getElementById('m-tarih').value = t.tarih;
   document.getElementById('m-mekan').value = t.mekan || '';
-  document.getElementById('m-sayi').value = t.sayi || 1;
-  document.getElementById('m-not').value = t.not || '';
-  openModal(id);
+  document.getElementById('m-sayi').value  = t.sayi  || 1;
+  document.getElementById('m-not').value   = t.not   || '';
+  document.getElementById('modal-overlay').classList.add('on');
 }
 
 function closeModal() {
   document.getElementById('modal-overlay').classList.remove('on');
 }
 
-function saveTurne() {
-  const oyun = document.getElementById('m-oyun').value;
-  const il = document.getElementById('m-il').value.trim();
-  const tarih = document.getElementById('m-tarih').value;
+// ============================================================
+// KAYDET (Google Sheets'e yaz)
+// ============================================================
+async function saveTurne() {
+  const oyun  = document.getElementById('m-oyun').value.trim();
+  const il    = document.getElementById('m-il').value.trim();
+  const tarih = document.getElementById('m-tarih').value.trim();
+  if (!oyun || !il || !tarih) { alert('Oyun, Şehir/İl ve Tarih zorunludur!'); return; }
 
-  if (!oyun || !il || !tarih) {
-    alert('Oyun, Şehir/İl ve Tarih zorunludur!');
-    return;
+  const mekan    = document.getElementById('m-mekan').value.trim();
+  const sayi     = parseInt(document.getElementById('m-sayi').value) || 1;
+  const not_     = document.getElementById('m-not').value.trim();
+  const editIdx  = document.getElementById('edit-rowidx').value;
+
+  const saveBtn  = document.querySelector('.modal-footer .btn-primary');
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Kaydediliyor...';
+
+  try {
+    if (editIdx !== '') {
+      // GÜNCELLE — her sütunu ayrı ayrı güncelle
+      const idx = parseInt(editIdx);
+      const cols = [oyun, il, tarih, mekan, String(sayi), not_];
+      for (let c = 0; c < cols.length; c++) {
+        await fetch(`${API}/${encodeURIComponent(TURNE_SHEET)}/cell`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ row: idx, col: c, value: cols[c] })
+        });
+      }
+    } else {
+      // YENİ SATIR EKLE — sheet yoksa backend otomatik oluşturur
+      // İlk ekleme ise header satırı da yaz
+      if (turneler.length === 0) {
+        await fetch(`${API}/${encodeURIComponent(TURNE_SHEET)}/row`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ values: ['Oyun Adı','Şehir/İl','Tarih','Sahne/Mekan','Temsil Sayısı','Notlar'] })
+        });
+      }
+      const r = await fetch(`${API}/${encodeURIComponent(TURNE_SHEET)}/row`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ values: [oyun, il, tarih, mekan, String(sayi), not_] })
+      });
+      if (!r.ok) { const err = await r.json(); throw new Error(err.error || r.status); }
+    }
+
+    closeModal();
+    setLoading(true);
+    await fetchTurneler();
+    populateFilters();
+    renderListe();
+    renderIlStats();
+    renderCalendar();
+    setLoading(false);
+  } catch(e) {
+    alert('Hata: ' + e.message);
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'Kaydet';
   }
-
-  const editId = document.getElementById('edit-id').value;
-  const turne = {
-    id: editId || Date.now().toString(),
-    oyun,
-    il,
-    tarih,
-    mekan: document.getElementById('m-mekan').value.trim(),
-    sayi: parseInt(document.getElementById('m-sayi').value) || 1,
-    not: document.getElementById('m-not').value.trim()
-  };
-
-  if (editId) {
-    const idx = turneler.findIndex(t => t.id === editId);
-    turneler[idx] = turne;
-  } else {
-    turneler.push(turne);
-  }
-
-  saveTurnelerLS();
-  closeModal();
-  populateFilters();
-  renderListe();
-  renderIlStats();
-  renderCalendar();
 }
 
-function deleteTurne(id) {
+// ============================================================
+// SİL
+// ============================================================
+async function deleteTurne(rowIdx) {
   if (!confirm('Bu turne kaydını silmek istiyor musunuz?')) return;
-  turneler = turneler.filter(t => t.id !== id);
-  saveTurnelerLS();
-  populateFilters();
-  renderListe();
-  renderIlStats();
-  renderCalendar();
+  try {
+    const r = await fetch(`${API}/${encodeURIComponent(TURNE_SHEET)}/row/${rowIdx}`, {
+      method: 'DELETE'
+    });
+    if (!r.ok) { const err = await r.json(); throw new Error(err.error || r.status); }
+    setLoading(true);
+    await fetchTurneler();
+    populateFilters();
+    renderListe();
+    renderIlStats();
+    renderCalendar();
+    setLoading(false);
+  } catch(e) {
+    alert('Silme hatası: ' + e.message);
+  }
 }
 
 // ============================================================
@@ -1025,27 +1021,19 @@ function getPersonelForOyun(oyun) {
 
 function formatTarih(str) {
   if (!str) return '—';
-  const d = new Date(str);
-  return d.toLocaleDateString('tr-TR', {day:'2-digit', month:'long', year:'numeric'});
+  const d = new Date(str + (str.includes('T') ? '' : 'T00:00:00'));
+  return isNaN(d) ? str : d.toLocaleDateString('tr-TR',{day:'2-digit',month:'long',year:'numeric'});
 }
 
-// ============================================================
-// EXCEL EXPORT
-// ============================================================
 function exportExcel() {
   const rows = [['Oyun Adı','Şehir/İl','Tarih','Sahne/Mekan','Temsil Sayısı','Notlar']];
   turneler.forEach(t => rows.push([t.oyun, t.il, t.tarih, t.mekan||'', t.sayi||1, t.not||'']));
-
-  let csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
-  const bom = '\uFEFF';
-  const blob = new Blob([bom + csv], {type:'text/csv;charset=utf-8'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'turneler.csv';
-  a.click();
+  const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = 'turneler.csv'; a.click();
 }
 
-// Modal dışına tıklayınca kapat
 document.getElementById('modal-overlay').addEventListener('click', function(e) {
   if (e.target === this) closeModal();
 });
