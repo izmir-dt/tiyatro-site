@@ -610,36 +610,81 @@
       <!-- ULAŞIM -->
       <div class="modal-section" id="ms-ulasim">
         <div class="ulasim-box">
-          <div class="section-title">🚌 Gidiş</div>
+          <div class="section-title">🛫 Gidiş</div>
           <div class="form-grid-2">
             <div class="form-group">
               <label class="form-label">Ulaşım Türü</label>
-              <select class="form-select" id="m-gidis-ulasim">
+              <select class="form-select" id="m-gidis-ulasim" onchange="ulasimTuruDegisti('gidis')">
                 <option value="">-- Seçin --</option>
                 <option>Otobüs</option><option>Uçak (Direkt)</option><option>Uçak (Aktarmalı)</option>
                 <option>Servis</option><option>Minibüs</option><option>Tren</option><option>Kiralık Araç</option><option>Diğer</option>
               </select>
             </div>
             <div class="form-group">
-              <label class="form-label">Hareket Saati</label>
+              <label class="form-label">Kalkış Saati</label>
               <input class="form-input" type="time" id="m-gidis-saat">
             </div>
           </div>
+          <div class="form-grid-2" id="gidis-ucak-row" style="display:none">
+            <div class="form-group">
+              <label class="form-label">İniş Saati</label>
+              <input class="form-input" type="time" id="m-gidis-inis">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Uçuş No / Havayolu</label>
+              <input class="form-input" type="text" id="m-gidis-ucus-no" placeholder="TK123 / Turkish Airlines">
+            </div>
+          </div>
+          <div class="form-group" id="gidis-arac-row" style="display:none">
+            <label class="form-label">Araç Kiralama Detayı</label>
+            <input class="form-input" type="text" id="m-gidis-arac" placeholder="Firma adı, plaka, sürücü...">
+          </div>
         </div>
         <div class="ulasim-box">
-          <div class="section-title">🏠 Dönüş</div>
+          <div class="section-title">🛬 Dönüş</div>
           <div class="form-grid-2">
             <div class="form-group">
               <label class="form-label">Ulaşım Türü</label>
-              <select class="form-select" id="m-donus-ulasim">
+              <select class="form-select" id="m-donus-ulasim" onchange="ulasimTuruDegisti('donus')">
                 <option value="">-- Seçin --</option>
                 <option>Otobüs</option><option>Uçak (Direkt)</option><option>Uçak (Aktarmalı)</option>
                 <option>Servis</option><option>Minibüs</option><option>Tren</option><option>Kiralık Araç</option><option>Diğer</option>
               </select>
             </div>
             <div class="form-group">
-              <label class="form-label">Hareket Saati</label>
+              <label class="form-label">Kalkış Saati</label>
               <input class="form-input" type="time" id="m-donus-saat">
+            </div>
+          </div>
+          <div class="form-grid-2" id="donus-ucak-row" style="display:none">
+            <div class="form-group">
+              <label class="form-label">İniş Saati</label>
+              <input class="form-input" type="time" id="m-donus-inis">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Uçuş No / Havayolu</label>
+              <input class="form-input" type="text" id="m-donus-ucus-no" placeholder="TK456 / Turkish Airlines">
+            </div>
+          </div>
+          <div class="form-group" id="donus-arac-row" style="display:none">
+            <label class="form-label">Araç Kiralama Detayı</label>
+            <input class="form-input" type="text" id="m-donus-arac" placeholder="Firma adı, plaka, sürücü...">
+          </div>
+        </div>
+        <div class="ulasim-box">
+          <div class="section-title">🚗 Şehir İçi Ulaşım</div>
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label class="form-label">Araç Türü</label>
+              <select class="form-select" id="m-sehir-arac-tur">
+                <option value="">-- Yok --</option>
+                <option>Kiralık Minibüs</option><option>Kiralık Otobüs</option><option>Kiralık Araç</option>
+                <option>Servis</option><option>Taksi / Transfer</option><option>Diğer</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Araç / Firma Detayı</label>
+              <input class="form-input" type="text" id="m-sehir-arac-detay" placeholder="Firma, plaka, adet...">
             </div>
           </div>
         </div>
@@ -984,6 +1029,8 @@ async function fetchTurneler() {
       var duraklarRaw = (r[iDurak >= 0 ? iDurak : -1] || '').trim();
       var parsedDuraklar = null;
       try { if (duraklarRaw) parsedDuraklar = JSON.parse(duraklarRaw); } catch(e) {}
+      // Yeni sütunlar: kolon indekslerini sona bakarak bul
+      const rLen = r.length;
       return {
       _rowIdx:        i,
       oyun:           (r[iOyun >= 0 ? iOyun : 0] || '').trim(),
@@ -1008,6 +1055,14 @@ async function fetchTurneler() {
       notlar:         (r[iLNot >= 0 ? iLNot : 17] || '').trim(),
       grup:           (r[iGrup >= 0 ? iGrup : -1] || '').trim(),
       duraklar:       parsedDuraklar || null,
+      gidisInis:      (r[21] || '').trim(),
+      gidisUcusNo:    (r[22] || '').trim(),
+      gidisArac:      (r[23] || '').trim(),
+      donusInis:      (r[24] || '').trim(),
+      donusUcusNo:    (r[25] || '').trim(),
+      donusArac:      (r[26] || '').trim(),
+      sehirAracTur:   (r[27] || '').trim(),
+      sehirAracDetay: (r[28] || '').trim(),
       };
     }).filter(r => r.oyun && r.il);
   } catch(e) { console.warn('Turne verisi çekilemedi:', e); turneler = []; }
@@ -1163,7 +1218,16 @@ function turneCard(t) {
     : (t.otelAdi ? [t.otelAdi] : []);
   const otelStr = _otellerArr.length ? '<div class="turne-info-row"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0"><path d="M3 22V8l9-6 9 6v14H3z"/><rect x="9" y="14" width="6" height="8"/></svg>' + _otellerArr.join(' · ') + '</div>' : '';
   const notStr  = t.not ? '<div class="turne-info-row"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>' + t.not + '</div>' : '';
-  const ulasimStr = t.gidisUlasim ? '<div class="turne-info-row"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="m16 8 5 4-5 4V8z"/></svg>' + t.gidisUlasim + '</div>' : '';
+  var ulasimParts = [];
+  if (t.gidisUlasim) {
+    var gStr = t.gidisUlasim;
+    if (t.gidisSaat) gStr += ' ' + t.gidisSaat;
+    if (t.gidisInis) gStr += '→' + t.gidisInis;
+    if (t.gidisUcusNo) gStr += ' (' + t.gidisUcusNo + ')';
+    ulasimParts.push(gStr);
+  }
+  if (t.sehirAracTur) ulasimParts.push('🚗 ' + t.sehirAracTur);
+  const ulasimStr = ulasimParts.length ? '<div class="turne-info-row"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="m16 8 5 4-5 4V8z"/></svg>' + ulasimParts.join(' · ') + '</div>' : '';
   const toplamTemsil = durakToplamTemsil(t);
   const grupStr = t.grup ? '<span class="grup-badge"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>' + t.grup + '</span>' : '';
 
@@ -1405,7 +1469,7 @@ function updateKisiCount() {
   if (el) el.textContent = kisiModalSecili.length + ' kişi seçili';
 }
 
-async function saveKisiModal() {
+async async function saveKisiModal() {
   const t = turneler.find(x => x._rowIdx === kisiModalRowIdx);
   if (!t) return;
   t.katilimcilar = kisiModalSecili;
@@ -2586,7 +2650,8 @@ function openModal(rowIdx) {
   if (rowIdx === undefined) {
     document.getElementById('modal-title').textContent = 'Yeni Turne Ekle';
     document.getElementById('edit-rowidx').value = '';
-    ['m-oyun','m-tarih','m-bitis','m-not','m-gidis-ulasim','m-gidis-saat','m-donus-ulasim','m-donus-saat','m-aktarma','m-otel-adi','m-otel-adr','m-otel-tel','m-kamyon','m-kapasite','m-lojistik-not','m-grup'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    ['m-oyun','m-tarih','m-bitis','m-not','m-gidis-ulasim','m-gidis-saat','m-gidis-inis','m-gidis-ucus-no','m-gidis-arac','m-donus-ulasim','m-donus-saat','m-donus-inis','m-donus-ucus-no','m-donus-arac','m-sehir-arac-tur','m-sehir-arac-detay','m-aktarma','m-otel-adi','m-otel-adr','m-otel-tel','m-kamyon','m-kapasite','m-lojistik-not','m-grup'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    ['gidis-ucak-row','gidis-arac-row','donus-ucak-row','donus-arac-row'].forEach(id => { var el=document.getElementById(id); if(el) el.style.display='none'; });
     document.getElementById('m-statu').value = 'taslak';
     document.getElementById('sure-info').style.display = 'none';
     document.getElementById('modal-sure').textContent = '';
@@ -2609,9 +2674,18 @@ function editTurne(rowIdx) {
   document.getElementById('m-grup').value  = t.grup  || '';
   document.getElementById('m-gidis-ulasim').value = t.gidisUlasim || '';
   document.getElementById('m-gidis-saat').value   = t.gidisSaat   || '';
+  document.getElementById('m-gidis-inis').value   = t.gidisInis   || '';
+  document.getElementById('m-gidis-ucus-no').value= t.gidisUcusNo || '';
+  document.getElementById('m-gidis-arac').value   = t.gidisArac   || '';
   document.getElementById('m-donus-ulasim').value = t.donusUlasim || '';
   document.getElementById('m-donus-saat').value   = t.donusSaat   || '';
+  document.getElementById('m-donus-inis').value   = t.donusInis   || '';
+  document.getElementById('m-donus-ucus-no').value= t.donusUcusNo || '';
+  document.getElementById('m-donus-arac').value   = t.donusArac   || '';
+  document.getElementById('m-sehir-arac-tur').value   = t.sehirAracTur   || '';
+  document.getElementById('m-sehir-arac-detay').value = t.sehirAracDetay || '';
   document.getElementById('m-aktarma').value      = t.aktarma     || '';
+  ulasimTuruDegisti('gidis'); ulasimTuruDegisti('donus');
   document.getElementById('m-otel-adi').value = t.otelAdi     || '';
   document.getElementById('m-otel-adr').value = t.otelAdres   || '';
   document.getElementById('m-otel-tel').value = t.otelTelefon || '';
@@ -2653,8 +2727,16 @@ async function saveTurne() {
   var grup        = document.getElementById('m-grup').value.trim();
   var gidisUlasim = document.getElementById('m-gidis-ulasim').value;
   var gidisSaat   = document.getElementById('m-gidis-saat').value;
+  var gidisInis   = (document.getElementById('m-gidis-inis')||{}).value||'';
+  var gidisUcusNo = (document.getElementById('m-gidis-ucus-no')||{}).value||'';
+  var gidisArac   = (document.getElementById('m-gidis-arac')||{}).value||'';
   var donusUlasim = document.getElementById('m-donus-ulasim').value;
   var donusSaat   = document.getElementById('m-donus-saat').value;
+  var donusInis   = (document.getElementById('m-donus-inis')||{}).value||'';
+  var donusUcusNo = (document.getElementById('m-donus-ucus-no')||{}).value||'';
+  var donusArac   = (document.getElementById('m-donus-arac')||{}).value||'';
+  var sehirAracTur   = (document.getElementById('m-sehir-arac-tur')||{}).value||'';
+  var sehirAracDetay = (document.getElementById('m-sehir-arac-detay')||{}).value||'';
   var aktarma     = document.getElementById('m-aktarma').value.trim();
   // Otel bilgilerini ilk geçerli duraktan al (geriye dönük uyumluluk)
   var gecerliOtelDurak = duraklar.find(function(d){ return d.il && d.il.trim(); }) || {};
@@ -2691,14 +2773,17 @@ async function saveTurne() {
   var saveBtn = document.querySelector('#modal-overlay .btn-primary');
   saveBtn.disabled = true; saveBtn.textContent = 'Kaydediliyor...';
   var duraklarJSON = JSON.stringify(gecerliDuraklar);
-  var values = [oyun, il, basTarih, bitisTarih, mekan, String(sayi), not_, statu, otelAdi, otelAdres, otelTelefon, gidisUlasim, gidisSaat, donusUlasim, donusSaat, aktarma, kamyon, kapasite, lojNot, grup, duraklarJSON];
+  var values = [oyun, il, basTarih, bitisTarih, mekan, String(sayi), not_, statu, otelAdi, otelAdres, otelTelefon, gidisUlasim, gidisSaat, donusUlasim, donusSaat, aktarma, kamyon, kapasite, lojNot, grup, duraklarJSON, gidisInis, gidisUcusNo, gidisArac, donusInis, donusUcusNo, donusArac, sehirAracTur, sehirAracDetay];
 
   // Yerel veriyi hemen güncelle (optimistik)
   var yeniKayit = {
     _rowIdx: editIdx !== '' ? parseInt(editIdx) : (turneler.length > 0 ? Math.max(...turneler.map(x=>x._rowIdx)) + 1 : 0),
     oyun, il, mekan, sayi, baslangicTarih: basTarih, bitisTarih, not: not_, statu, grup,
     duraklar: JSON.parse(JSON.stringify(gecerliDuraklar)),
-    otelAdi, otelAdres, otelTelefon, gidisUlasim, gidisSaat, donusUlasim, donusSaat,
+    otelAdi, otelAdres, otelTelefon,
+    gidisUlasim, gidisSaat, gidisInis, gidisUcusNo, gidisArac,
+    donusUlasim, donusSaat, donusInis, donusUcusNo, donusArac,
+    sehirAracTur, sehirAracDetay,
     aktarma, kamyonSayisi: kamyon, sahneKapasitesi: kapasite, notlar: lojNot,
     programSatirlar: JSON.parse(JSON.stringify(programSatirlar)),
     katilimcilar: editIdx !== '' ? (turneler.find(x=>x._rowIdx===parseInt(editIdx))||{}).katilimcilar : undefined
@@ -2900,7 +2985,7 @@ function _pdfIcerik(t) {
       + '<td style="padding:7px 10px;border:1px solid #ddd;font-size:11px">' + formatTarih(t.baslangicTarih||t.tarih) + '</td>'
       + '<td style="padding:7px 10px;border:1px solid #ddd;font-weight:700;font-size:11px">İzmir → ' + ilStr + '</td>'
       + '<td style="padding:7px 10px;border:1px solid #ddd;font-size:11px">' + t.gidisUlasim + '</td>'
-      + '<td style="padding:7px 10px;border:1px solid #ddd;font-size:11px">' + (t.gidisSaat||'—') + '</td>'
+      + '<td style="padding:7px 10px;border:1px solid #ddd;font-size:11px">' + (t.gidisSaat||'—') + (t.gidisInis?' → '+t.gidisInis:'') + (t.gidisUcusNo?' ('+t.gidisUcusNo+')':'') + '</td>'
       + '</tr>');
   }
   if (t.aktarma) {
@@ -2911,7 +2996,7 @@ function _pdfIcerik(t) {
       + '<td style="padding:7px 10px;border:1px solid #ddd;font-size:11px">' + formatTarih(t.bitisTarih||t.tarih) + '</td>'
       + '<td style="padding:7px 10px;border:1px solid #ddd;font-weight:700;font-size:11px">' + ilStr + ' → İzmir</td>'
       + '<td style="padding:7px 10px;border:1px solid #ddd;font-size:11px">' + t.donusUlasim + '</td>'
-      + '<td style="padding:7px 10px;border:1px solid #ddd;font-size:11px">' + (t.donusSaat||'—') + '</td>'
+      + '<td style="padding:7px 10px;border:1px solid #ddd;font-size:11px">' + (t.donusSaat||'—') + (t.donusInis?' → '+t.donusInis:'') + (t.donusUcusNo?' ('+t.donusUcusNo+')':'') + '</td>'
       + '</tr>');
   }
   var ucusHTML = ucusRows.length
@@ -3169,6 +3254,17 @@ function syncIlFromDuraklar() {
   var ilField = document.getElementById('m-il');
   if (ilField) ilField.value = duraklar.length ? duraklar.map(function(d){ return d.il+(d.ilce?'/'+d.ilce:''); }).join(', ') : '';
 }
+
+function ulasimTuruDegisti(yon) {
+  var tur = (document.getElementById('m-' + yon + '-ulasim') || {}).value || '';
+  var isUcak = tur.includes('Uçak');
+  var isArac = tur === 'Kiralık Araç';
+  var ucakRow = document.getElementById(yon + '-ucak-row');
+  var aracRow = document.getElementById(yon + '-arac-row');
+  if (ucakRow) ucakRow.style.display = isUcak ? '' : 'none';
+  if (aracRow) aracRow.style.display = isArac ? '' : 'none';
+}
+
 
 function durakIlStr(t) {
   // Turne objesinden il string döndür (çoklu veya tekli)
