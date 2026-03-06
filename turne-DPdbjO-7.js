@@ -1541,6 +1541,73 @@ function Ax() {
   }, [playRows]);
 
   const kaydet = (liste) => { setKayitlar(liste); kn(liste); };
+  const [mesaj, setMesaj] = Le.useState("");
+  const bugun = new Date().toISOString().slice(0, 10);
+
+  // Yedekleme
+  const yedekAl = () => {
+    const blob = new Blob([JSON.stringify({ versiyon: "v5", tarih: new Date().toISOString(), kayitlar }, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "turne-yedek-" + new Date().toISOString().slice(0, 10) + ".json";
+    a.click();
+    URL.revokeObjectURL(url);
+    setMesaj("✓ Yedek dosyası indirildi.");
+    setTimeout(() => setMesaj(""), 3000);
+  };
+
+  const geriYukle = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const json = JSON.parse(ev.target.result);
+        const liste = json.kayitlar || json;
+        if (!Array.isArray(liste)) throw new Error("Geçersiz format");
+        if (!confirm(\`\${liste.length} kayıt yüklenecek. Mevcut veriler silinecek. Devam?\`)) return;
+        const migrated = liste.map(k => ({
+          ...k,
+          statu: k.statu || "tamamlandi",
+          baslangicTarih: k.baslangicTarih || k.tarih || "",
+          bitisTarih: k.bitisTarih || k.tarih || "",
+        }));
+        const nl = migrated;
+        kaydet(nl);
+        syncToSheets(nl);
+        setMesaj("✓ " + liste.length + " kayıt geri yüklendi.");
+        setTimeout(() => setMesaj(""), 3000);
+      } catch(err) { alert("Hata: " + err.message); }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  };
+
+  // İstatistik hesapla
+  const stats = Le.useMemo(() => {
+    const toplamGun = kayitlar.reduce((a, k) => a + turneSuresi(k), 0);
+    const illData = {};
+    kayitlar.forEach(k => { illData[k.sehir] = (illData[k.sehir] || 0) + 1; });
+    const ilSirali = Object.entries(illData).sort((a, b) => b[1] - a[1]);
+    const oyunData = {};
+    kayitlar.forEach(k => { oyunData[k.oyunAdi] = (oyunData[k.oyunAdi] || 0) + 1; });
+    const oyunSirali = Object.entries(oyunData).sort((a, b) => b[1] - a[1]);
+    const statuData = {};
+    STATU_OPTS.forEach(o => { statuData[o.val] = kayitlar.filter(k => k.statu === o.val).length; });
+    const kisiData = {};
+    kayitlar.forEach(k => { (k.kisiListesi || []).forEach(p => { kisiData[p.kisi] = (kisiData[p.kisi] || 0) + 1; }); });
+    const kisiSirali = Object.entries(kisiData).sort((a, b) => b[1] - a[1]).slice(0, 10);
+    const aylikData = {};
+    kayitlar.forEach(k => {
+      const tarih = k.baslangicTarih || k.tarih;
+      if (tarih) { const ayKey = tarih.slice(0, 7); aylikData[ayKey] = (aylikData[ayKey] || 0) + 1; }
+    });
+    const aylikSirali = Object.entries(aylikData).sort((a, b) => a[0] > b[0] ? 1 : -1).slice(-12);
+    const yaklaşan = kayitlar.filter(k => (k.baslangicTarih || k.tarih || "") >= bugun && k.statu !== "iptal").length;
+    const tamamlanan = kayitlar.filter(k => k.statu === "tamamlandi").length;
+    return { toplamGun, ilSirali, oyunSirali, statuData, kisiSirali, aylikSirali, yaklaşan, tamamlanan };
+  }, [kayitlar]);
 
   // Sheets'ten turne verilerini yükle
   const { data: turneSheetData } = is({
@@ -1591,6 +1658,46 @@ function Ax() {
     className: "flex flex-col h-full",
     children: [
 
+      // Header - Yedekleme araçları
+      P.jsxs("div", {
+        className: "shrink-0 border-b border-border px-4 py-2.5",
+        style: { background: S.card },
+        children: [
+          P.jsxs("div", { className: "flex items-center justify-between gap-3", children: [
+            P.jsxs("div", { className: "flex items-center gap-2", children: [
+              P.jsx(aa, { className: "w-4 h-4 shrink-0", style: { color: S.primary } }),
+              P.jsxs("span", { className: "text-sm font-extrabold", style: { color: S.fg }, children: [
+                "TURNE YÖNETİMİ · ",
+                P.jsxs("span", { style: { color: S.mutedFg, fontWeight: 600 }, children: [
+                  kayitlar.length, " kayıt · ",
+                  new Set(kayitlar.map(k => k.sehir)).size, " il",
+                  stats.yaklaşan > 0 && P.jsxs("span", { style: { color: "#16a34a", marginLeft: 8 }, children: ["· ", stats.yaklaşan, " yaklaşan"] })
+                ]})
+              ]})
+            ]}),
+            P.jsxs("div", { className: "flex items-center gap-1.5", children: [
+              mesaj && P.jsx("span", { className: "text-xs font-semibold", style: { color: "#16a34a" }, children: mesaj }),
+              P.jsx("button", {
+                onClick: yedekAl,
+                className: "flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-border hover:bg-muted transition-colors",
+                style: { color: S.fg },
+                title: "Tüm verileri JSON olarak indir",
+                children: "💾 Yedek Al"
+              }),
+              P.jsxs("label", {
+                className: "flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-border hover:bg-muted transition-colors cursor-pointer",
+                style: { color: S.fg },
+                title: "JSON dosyasından geri yükle",
+                children: [
+                  "📂 Geri Yükle",
+                  P.jsx("input", { type: "file", accept: ".json", className: "hidden", onChange: geriYukle })
+                ]
+              })
+            ]})
+          ]})
+        ]
+      }),
+
       // Tabs
       P.jsx("div", {
         className: "shrink-0 flex overflow-x-auto gap-1 px-4 py-2 border-b border-border",
@@ -1617,11 +1724,98 @@ function Ax() {
             aktifTab === "kisiye-gore" && P.jsx(xx, { kayitlar, playRows }),
             aktifTab === "ile-gore"    && P.jsx(dx, { kayitlar }),
             aktifTab === "takvim"      && P.jsx(px, { kayitlar }),
+            aktifTab === "istatistik"  && P.jsx(IstatistikTab, { kayitlar, stats, STATU_OPTS, S }),
             aktifTab === "istatistik"  && P.jsx(Istatistik, { kayitlar })
           ]})
       })
     ]
   });
+}
+
+
+// ── İSTATİSTİK SEKMESİ ───────────────────────────────────────────────
+function IstatistikTab({ kayitlar, stats, STATU_OPTS, S }) {
+  const maxAylik = Math.max(...stats.aylikSirali.map(([, c]) => c), 1);
+  const StatKart = ({ label, value, sub, color }) => P.jsxs("div", {
+    className: "rounded-xl border border-border p-4",
+    style: { background: S.card },
+    children: [
+      P.jsx("p", { className: "text-3xl font-black", style: { color: color || S.primary }, children: value }),
+      P.jsx("p", { className: "text-sm font-bold mt-0.5", style: { color: S.fg }, children: label }),
+      sub && P.jsx("p", { className: "text-xs mt-0.5", style: { color: S.mutedFg }, children: sub })
+    ]
+  });
+
+  return P.jsxs("div", { className: "space-y-4", children: [
+    // Özet kartlar
+    P.jsx("div", { className: "grid grid-cols-2 gap-3", children: [
+      P.jsx(StatKart, { label: "Toplam Turne", value: kayitlar.length, sub: stats.tamamlanan + " tamamlandı" }),
+      P.jsx(StatKart, { label: "Toplam Turne Günü", value: stats.toplamGun }),
+      P.jsx(StatKart, { label: "Ziyaret Edilen İl", value: stats.ilSirali.length, sub: stats.ilSirali[0] ? "En çok: " + stats.ilSirali[0][0] : "" }),
+      P.jsx(StatKart, { label: "Yaklaşan Turne", value: stats.yaklaşan, color: stats.yaklaşan > 0 ? "#16a34a" : S.mutedFg })
+    ]}),
+    // Durum dağılımı
+    P.jsxs("div", { className: "rounded-xl border border-border overflow-hidden", style: { background: S.card }, children: [
+      P.jsx("div", { className: "px-4 py-3 border-b border-border", style: { background: S.sidebar }, children: P.jsx("p", { className: "text-sm font-bold", style: { color: S.sidebarFg }, children: "Durum Dağılımı" }) }),
+      P.jsx("div", { className: "p-4 space-y-2", children: STATU_OPTS.map(o => {
+        const count = stats.statuData[o.val] || 0;
+        const pct = kayitlar.length ? Math.round(count / kayitlar.length * 100) : 0;
+        return P.jsxs("div", { className: "flex items-center gap-3", children: [
+          P.jsx("span", { className: "text-xs font-bold w-28 shrink-0 px-2 py-0.5 rounded-full", style: { background: o.bg, color: o.fg }, children: o.label }),
+          P.jsx("div", { className: "flex-1 h-2 rounded-full", style: { background: S.muted }, children: P.jsx("div", { className: "h-2 rounded-full transition-all", style: { width: pct + "%", background: o.fg } }) }),
+          P.jsx("span", { className: "text-xs font-bold w-8 text-right", style: { color: S.fg }, children: count })
+        ]}, o.val);
+      })})
+    ]}),
+    // Aylık trend
+    stats.aylikSirali.length > 0 && P.jsxs("div", { className: "rounded-xl border border-border overflow-hidden", style: { background: S.card }, children: [
+      P.jsx("div", { className: "px-4 py-3 border-b border-border", style: { background: S.sidebar }, children: P.jsx("p", { className: "text-sm font-bold", style: { color: S.sidebarFg }, children: "Aylık Turne Trendi" }) }),
+      P.jsx("div", { className: "p-4", children: P.jsx("div", { className: "flex items-end gap-1 h-32", children: stats.aylikSirali.map(([ay, count]) => {
+        const h = Math.round(count / maxAylik * 100);
+        const [, mm] = ay.split("-");
+        const ayAdi = ["Oca","Şub","Mar","Nis","May","Haz","Tem","Ağu","Eyl","Eki","Kas","Ara"][parseInt(mm)-1];
+        return P.jsxs("div", { className: "flex flex-col items-center flex-1 gap-1", children: [
+          P.jsx("span", { className: "text-[10px] font-bold", style: { color: S.primary }, children: count }),
+          P.jsx("div", { className: "w-full rounded-t", style: { height: h + "%", background: S.primary, opacity: 0.85, minHeight: "4px" } }),
+          P.jsx("span", { className: "text-[9px]", style: { color: S.mutedFg }, children: ayAdi })
+        ]}, ay);
+      })})})
+    ]}),
+    // İller ve Oyunlar
+    stats.ilSirali.length > 0 && P.jsx("div", { className: "grid grid-cols-2 gap-3", children: [
+      P.jsxs("div", { className: "rounded-xl border border-border overflow-hidden", style: { background: S.card }, children: [
+        P.jsx("div", { className: "px-4 py-3 border-b border-border", style: { background: S.sidebar }, children: P.jsx("p", { className: "text-sm font-bold", style: { color: S.sidebarFg }, children: "📍 En Çok Gidilen İller" }) }),
+        P.jsx("div", { className: "p-3 space-y-1.5", children: stats.ilSirali.slice(0, 6).map(([il, count], i) =>
+          P.jsxs("div", { className: "flex items-center gap-2", children: [
+            P.jsx("span", { className: "text-xs font-black w-4", style: { color: S.mutedFg }, children: i + 1 }),
+            P.jsx("span", { className: "text-sm font-semibold flex-1", style: { color: S.fg }, children: il }),
+            P.jsx("span", { className: "text-xs font-bold px-1.5 py-0.5 rounded-full", style: { background: S.primaryBg(0.12), color: S.primary }, children: count })
+          ]}, il))
+        })
+      ]}),
+      P.jsxs("div", { className: "rounded-xl border border-border overflow-hidden", style: { background: S.card }, children: [
+        P.jsx("div", { className: "px-4 py-3 border-b border-border", style: { background: S.sidebar }, children: P.jsx("p", { className: "text-sm font-bold", style: { color: S.sidebarFg }, children: "🎭 En Çok Turneye Çıkan Oyunlar" }) }),
+        P.jsx("div", { className: "p-3 space-y-1.5", children: stats.oyunSirali.slice(0, 6).map(([oyun, count], i) =>
+          P.jsxs("div", { className: "flex items-center gap-2", children: [
+            P.jsx("span", { className: "text-xs font-black w-4", style: { color: S.mutedFg }, children: i + 1 }),
+            P.jsx("span", { className: "text-sm font-semibold flex-1 truncate", style: { color: S.fg }, children: oyun }),
+            P.jsx("span", { className: "text-xs font-bold px-1.5 py-0.5 rounded-full", style: { background: S.primaryBg(0.12), color: S.primary }, children: count })
+          ]}, oyun))
+        })
+      ]})
+    ]}),
+    // En aktif personel
+    stats.kisiSirali.length > 0 && P.jsxs("div", { className: "rounded-xl border border-border overflow-hidden", style: { background: S.card }, children: [
+      P.jsx("div", { className: "px-4 py-3 border-b border-border", style: { background: S.sidebar }, children: P.jsx("p", { className: "text-sm font-bold", style: { color: S.sidebarFg }, children: "👤 En Aktif Personel" }) }),
+      P.jsx("div", { className: "p-3 grid grid-cols-2 gap-1.5", children: stats.kisiSirali.map(([kisi, count], i) =>
+        P.jsxs("div", { className: "flex items-center gap-2 py-1", children: [
+          P.jsx("span", { className: "text-xs font-black w-4", style: { color: S.mutedFg }, children: i + 1 }),
+          P.jsx("span", { className: "text-sm flex-1 truncate", style: { color: S.fg }, children: kisi }),
+          P.jsx("span", { className: "text-xs font-bold", style: { color: S.primary }, children: count + "x" })
+        ]}, kisi))
+      })
+    ]})
+  ]});
 }
 
 export{Ax as default};
