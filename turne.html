@@ -192,6 +192,15 @@
     .form-error { font-size: 10px; color: var(--destructive); margin-top: 2px; font-weight: 600; }
     .form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .sure-banner { display: flex; align-items: center; gap: 8px; padding: 9px 13px; border-radius: 8px; background: hsl(350,68%,96%); margin-bottom: 12px; font-size: 12px; font-weight: 600; color: var(--primary); }
+    .durak-row { display:grid; grid-template-columns:1fr 1fr 80px 26px; gap:5px; align-items:start; padding:8px; border:1px solid var(--border); border-radius:8px; background:var(--card); margin-bottom:6px; position:relative; }
+    .durak-row:before { content:''; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--primary); border-radius:8px 0 0 8px; opacity:.4; }
+    .durak-il-wrap { position:relative; grid-column:1/3; }
+    .grup-badge { display:inline-flex; align-items:center; gap:4px; padding:2px 8px; border-radius:12px; background:hsl(38,92%,94%); border:1px solid hsl(38,80%,75%); color:hsl(32,80%,35%); font-size:10px; font-weight:700; }
+    .cards-group { margin-bottom:18px; }
+    .cards-group-header { display:flex; align-items:center; gap:8px; margin-bottom:8px; padding:6px 10px; background:var(--card); border:1px solid var(--border); border-radius:8px; cursor:pointer; }
+    .cards-group-header:hover { background:hsl(38,28%,93%); }
+    .cards-group-title { font-size:13px; font-weight:700; color:var(--foreground); flex:1; }
+    .cards-group-count { font-size:11px; color:var(--muted-foreground); }
     .section-title { font-size: 10px; font-weight: 700; color: var(--muted-foreground); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 10px; padding-bottom: 5px; border-bottom: 1px solid var(--border); }
     .ulasim-box { background: hsl(38,18%,97%); border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 10px; }
 
@@ -466,16 +475,6 @@
         </div>
         <div class="form-grid-2">
           <div class="form-group">
-            <label class="form-label required">Şehir / İl</label>
-            <div style="position:relative">
-              <input class="form-input" type="text" id="m-il" placeholder="İl veya İl/İlçe yazın..." autocomplete="off"
-                oninput="ilDropdownFiltre(this.value)" onfocus="ilDropdownFiltre(this.value)" onblur="setTimeout(()=>ilDropdownKapat(),200)">
-              <div id="il-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--card);border:1px solid var(--border);border-radius:6px;max-height:200px;overflow-y:auto;z-index:500;box-shadow:0 4px 12px rgba(0,0,0,.15)"></div>
-            </div>
-            <div style="font-size:10px;color:var(--muted-foreground);margin-top:3px">İl seçin, ardından ilçe ekleyebilirsiniz (örn: Niğde / Merkez)</div>
-            <div class="form-error" id="err-il"></div>
-          </div>
-          <div class="form-group">
             <label class="form-label">Statü</label>
             <select class="form-select" id="m-statu">
               <option value="taslak">Taslak</option>
@@ -484,6 +483,11 @@
               <option value="tamamlandi">Tamamlandı</option>
               <option value="iptal">İptal</option>
             </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Turne Grubu</label>
+            <input class="form-input" type="text" id="m-grup" placeholder="örn: Ege Turnesi 2026" autocomplete="off">
+            <div style="font-size:10px;color:var(--muted-foreground);margin-top:3px">Birden fazla kaydı gruplamak için kullanın</div>
           </div>
         </div>
         <div class="form-grid-2">
@@ -499,19 +503,23 @@
           </div>
         </div>
         <div class="sure-banner" id="sure-info" style="display:none">📅 <span id="sure-text"></span></div>
+
+        <!-- ÇOKLU DURAK -->
         <div class="form-group">
-          <label class="form-label">Sahne / Mekan</label>
-          <input class="form-input" type="text" id="m-mekan" placeholder="Devlet Tiyatrosu Büyük Sahne...">
-        </div>
-        <div class="form-grid-2">
-          <div class="form-group">
-            <label class="form-label">Temsil Sayısı</label>
-            <input class="form-input" type="number" id="m-sayi" min="1" value="1">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+            <label class="form-label" style="margin:0">Şehir / Duraklar <span style="color:var(--destructive)">*</span></label>
+            <button type="button" onclick="durakEkle()" style="padding:3px 10px;border:1px solid var(--primary);border-radius:6px;background:hsl(350,68%,97%);color:var(--primary);font-size:11px;font-weight:700;cursor:pointer;font-family:Poppins,sans-serif">+ Durak Ekle</button>
           </div>
+          <div id="durak-listesi"></div>
+          <div class="form-error" id="err-il"></div>
+        </div>
+
+        <div class="form-grid-2">
           <div class="form-group">
             <label class="form-label">Notlar</label>
             <input class="form-input" type="text" id="m-not" placeholder="Opsiyonel...">
           </div>
+          <div style="display:none"><input id="m-il" type="hidden"><input id="m-mekan" type="hidden"><input id="m-sayi" type="hidden" value="1"></div>
         </div>
       </div>
 
@@ -848,8 +856,14 @@ async function fetchTurneler() {
     const iKam  = h.findIndex(x => x.includes('kamyon'));
     const iKap  = h.findIndex(x => x.includes('kapasite'));
     const iLNot = h.findIndex(x => x.includes('loji'));
+    const iGrup  = h.findIndex(x => x === 'grup' || x.startsWith('turne grup'));
+    const iDurak = h.findIndex(x => x.startsWith('durak') && x.includes('json') || x === 'duraklar');
     const safeRows = allRows.filter(r => r[0] && r[0] !== 'ID' && r[0] !== 'Oyun Adı');
-    turneler = safeRows.map((r, i) => ({
+    turneler = safeRows.map((r, i) => {
+      var duraklarRaw = (r[iDurak >= 0 ? iDurak : -1] || '').trim();
+      var parsedDuraklar = null;
+      try { if (duraklarRaw) parsedDuraklar = JSON.parse(duraklarRaw); } catch(e) {}
+      return {
       _rowIdx:        i,
       oyun:           (r[iOyun >= 0 ? iOyun : 0] || '').trim(),
       il:             (r[iIl   >= 0 ? iIl   : 1] || '').trim(),
@@ -871,7 +885,10 @@ async function fetchTurneler() {
       kamyonSayisi:   (r[iKam  >= 0 ? iKam  : 15] || '').trim(),
       sahneKapasitesi:(r[iKap  >= 0 ? iKap  : 16] || '').trim(),
       notlar:         (r[iLNot >= 0 ? iLNot : 17] || '').trim(),
-    })).filter(r => r.oyun && r.il);
+      grup:           (r[iGrup >= 0 ? iGrup : -1] || '').trim(),
+      duraklar:       parsedDuraklar || null,
+      };
+    }).filter(r => r.oyun && r.il);
   } catch(e) { console.warn('Turne verisi çekilemedi:', e); turneler = []; }
 }
 
@@ -943,6 +960,13 @@ function hesaplaSure() {
 // ============================================================
 // LİSTE
 // ============================================================
+function grupToggle(enc) {
+  window._grupKapali = window._grupKapali || {};
+  var g = decodeURIComponent(enc);
+  window._grupKapali[g] = !window._grupKapali[g];
+  renderListe();
+}
+
 function renderListe() {
   const search = document.getElementById('filter-search').value.toLowerCase();
   const fOyun  = document.getElementById('filter-oyun').value;
@@ -957,7 +981,8 @@ function renderListe() {
     if (zamanFiltre === 'gelecek' && tBas  <  bugun) return false;
     if (zamanFiltre === 'gecmis'  && tBit  >= bugun) return false;
     if (zamanFiltre === 'aktif'   && !(tBas <= bugun && tBit >= bugun)) return false;
-    if (search && !(t.oyun + ' ' + t.il + ' ' + (t.mekan||'')).toLowerCase().includes(search)) return false;
+    const ilStr2 = durakIllerListesi(t).join(' ');
+    if (search && !(t.oyun + ' ' + t.il + ' ' + ilStr2 + ' ' + (t.mekan||'') + ' ' + (t.grup||'')).toLowerCase().includes(search)) return false;
     return true;
   });
   filtered.sort((a,b) => new Date(b.baslangicTarih||b.tarih||0) - new Date(a.baslangicTarih||a.tarih||0));
@@ -966,13 +991,41 @@ function renderListe() {
     el.innerHTML = '<div class="empty-state"><div class="empty-icon"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div><div class="empty-text">Turne bulunamadı</div><div class="empty-sub">Filtre değiştirin veya yeni turne ekleyin</div></div>';
     return;
   }
-  el.innerHTML = '<div class="cards-grid">' + filtered.map(turneCard).join('') + '</div>';
+  // Grupları ayır
+  const gruplu = {}, grupsuz = [];
+  filtered.forEach(t => {
+    if (t.grup && t.grup.trim()) {
+      if (!gruplu[t.grup]) gruplu[t.grup] = [];
+      gruplu[t.grup].push(t);
+    } else {
+      grupsuz.push(t);
+    }
+  });
+  var html = '';
+  // Gruplu olanlar
+  Object.keys(gruplu).sort().forEach(g => {
+    const list = gruplu[g];
+    const collapsed = (window._grupKapali||{})[g];
+    html += '<div class="cards-group">'
+      + '<div class="cards-group-header" onclick="grupToggle(\'' + encodeURIComponent(g) + '\')">'
+      + '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="transition:.2s;transform:rotate(' + (collapsed?'-90':'0') + 'deg)"><polyline points="6,9 12,15 18,9"/></svg>'
+      + '<span class="cards-group-title"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>' + g + '</span>'
+      + '<span class="cards-group-count">' + list.length + ' turne</span>'
+      + '</div>'
+      + (collapsed ? '' : '<div class="cards-grid">' + list.map(turneCard).join('') + '</div>')
+      + '</div>';
+  });
+  // Grupsuz olanlar
+  if (grupsuz.length) {
+    html += '<div class="cards-grid">' + grupsuz.map(turneCard).join('') + '</div>';
+  }
+  el.innerHTML = html;
 }
 
 function turneCard(t) {
   const personel    = getPersonelForOyun(t.oyun);
   const kategoriler = [...new Set(personel.map(p => p.kategori))];
-  const chips       = kategoriler.slice(0,3).map(k => '<span class="kategori-chip ' + chipClass(k) + '">' + k + '</span>').join('');
+  const chips = kategoriler.slice(0,3).map(function(k){ return "<span class='kategori-chip " + chipClass(k) + "'>" + k + "</span>"; }).join('');
   const sr          = statuRenk(t.statu || 'tamamlandi');
   const sure        = turneSuresi(t);
   const tarihStr    = sure > 1
@@ -982,22 +1035,40 @@ function turneCard(t) {
   const otelStr = t.otelAdi ? '<div class="turne-info-row"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0"><path d="M3 22V8l9-6 9 6v14H3z"/><rect x="9" y="14" width="6" height="8"/></svg><strong>' + t.otelAdi + '</strong></div>' : '';
   const notStr  = t.not ? '<div class="turne-info-row"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>' + t.not + '</div>' : '';
   const ulasimStr = t.gidisUlasim ? '<div class="turne-info-row"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="m16 8 5 4-5 4V8z"/></svg>' + t.gidisUlasim + '</div>' : '';
+  const toplamTemsil = durakToplamTemsil(t);
+  const grupStr = t.grup ? '<span class="grup-badge"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>' + t.grup + '</span>' : '';
+
+  // Durak satırları
+  var durakHtml = '';
+  if (t.duraklar && t.duraklar.length > 1) {
+    durakHtml = t.duraklar.map(function(d,i){
+      var arrow = i < t.duraklar.length-1 ? '<span style="color:var(--muted-foreground);margin:0 3px;font-size:9px">›</span>' : '';
+      return '<span style="font-weight:' + (i===0?'700':'600') + ';color:var(--foreground)">' + (d.il||'?').toUpperCase() + (d.ilce?'<span style="font-weight:400;font-size:9px">/'+d.ilce+'</span>':'') + '</span>' + arrow;
+    }).join('');
+    durakHtml = '<div class="turne-info-row" style="flex-wrap:wrap;gap:1px"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0;color:var(--primary)"><circle cx="12" cy="5" r="2"/><path d="M12 7v10"/><circle cx="12" cy="19" r="2"/></svg>' + durakHtml + '</div>'
+      + (t.duraklar.some(function(d){ return d.mekan; }) ? '<div class="turne-info-row" style="padding-left:15px;flex-wrap:wrap">' + t.duraklar.filter(function(d){ return d.mekan; }).map(function(d){ return '<span style="font-size:10px;color:var(--muted-foreground)">' + d.il + ': ' + d.mekan + '</span>'; }).join(' · ') + '</div>' : '');
+  } else {
+    const ilStr = durakIlStr(t);
+    const mekanStr = (t.duraklar && t.duraklar[0] && t.duraklar[0].mekan) ? t.duraklar[0].mekan : (t.mekan||'');
+    durakHtml = '<div class="turne-info-row"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0;color:var(--primary)"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg><strong>' + ilStr.toUpperCase() + '</strong>' + (mekanStr ? ' <span style="font-weight:400;color:var(--muted-foreground)">· ' + mekanStr + '</span>' : '') + '</div>';
+  }
 
   return '<div class="turne-card" style="border-left:5px solid ' + sr.headerBorder + '" onclick="openCardDetail(' + t._rowIdx + ')">'
     + '<div class="turne-card-header" style="background:' + sr.headerBg + ';border-bottom:2px solid ' + sr.headerBorder + '">'
     +   '<div style="flex:1;min-width:0">'
     +     '<div class="turne-card-title" style="color:' + sr.headerFg + '">' + t.oyun + '</div>'
+    +     (grupStr ? '<div style="margin-top:2px">' + grupStr + '</div>' : '')
     +   '</div>'
     +   '<div style="display:flex;align-items:center;gap:5px;flex-shrink:0">'
     +     '<span style="font-size:10px;font-weight:700;padding:2px 10px;border-radius:20px;background:rgba(255,255,255,0.2);color:' + sr.headerFg + ';border:1px solid rgba(255,255,255,0.35);letter-spacing:.2px">' + sr.label + '</span>'
-    +     '<span style="font-size:10px;font-weight:700;padding:2px 9px;border-radius:20px;background:rgba(0,0,0,0.25);color:' + sr.headerFg + ';border:1px solid rgba(255,255,255,0.2);display:inline-flex;align-items:center;gap:3px"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5,3 19,12 5,21 5,3"/></svg>' + (t.sayi||1) + ' temsil</span>'
+    +     '<span style="font-size:10px;font-weight:700;padding:2px 9px;border-radius:20px;background:rgba(0,0,0,0.25);color:' + sr.headerFg + ';border:1px solid rgba(255,255,255,0.2);display:inline-flex;align-items:center;gap:3px"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5,3 19,12 5,21 5,3"/></svg>' + toplamTemsil + ' temsil</span>'
     +   '</div>'
     + '</div>'
     + '<div class="turne-card-body">'
-    +   '<div class="turne-info-row"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0;color:var(--primary)"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg><strong>' + t.il.toUpperCase() + '</strong>' + (t.mekan ? ' <span style="font-weight:400;color:var(--muted-foreground)">· ' + t.mekan + '</span>' : '') + '</div>'
+    +   durakHtml
     +   '<div class="turne-info-row"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><strong>' + tarihStr + '</strong>' + gunStr + '</div>'
     +   ulasimStr + otelStr + notStr
-    +   '<div class="turne-info-row"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><strong>' + personel.length + '</strong> kişi' + (t.gidisUlasim ? '' : '') + '</div>'
+    +   '<div class="turne-info-row"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><strong>' + personel.length + '</strong> kişi</div>'
     + '</div>'
     + '<div class="turne-card-footer">'
     +   chips
@@ -1598,9 +1669,11 @@ let seciliIl = null;
 function renderHarita() {
   const ilSayilar = {};
   turneler.forEach(t => {
-    if (!t.il) return;
-    const ilAdi = t.il.split('/')[0].trim();
-    ilSayilar[ilAdi] = (ilSayilar[ilAdi]||0) + 1;
+    durakIllerListesi(t).forEach(function(il) {
+      if (!il) return;
+      const ilAdi = il.split('/')[0].trim();
+      ilSayilar[ilAdi] = (ilSayilar[ilAdi]||0) + 1;
+    });
   });
   document.getElementById('harita-ozet').textContent = Object.keys(ilSayilar).length + ' ilde ' + turneler.length + ' turne';
   const svg = document.getElementById('harita-svg');
@@ -1868,7 +1941,11 @@ function renderIstatistik(filtreStatu) {
   const toplamKisi   = kaynakTurneler.reduce((a,t) => a + (t.katilimcilar ? t.katilimcilar.length : getPersonelForOyun(t.oyun).length), 0);
 
   const illData = {};
-  kaynakTurneler.forEach(t => { if(t.il) illData[t.il.toUpperCase()] = (illData[t.il.toUpperCase()]||0)+1; });
+  kaynakTurneler.forEach(t => {
+    durakIllerListesi(t).forEach(function(il) {
+      if (il) illData[il.toUpperCase()] = (illData[il.toUpperCase()]||0)+1;
+    });
+  });
   const ilSirali = Object.entries(illData).sort((a,b)=>b[1]-a[1]);
 
   const oyunData = {};
@@ -2040,13 +2117,14 @@ function openModal(rowIdx) {
   if (rowIdx === undefined) {
     document.getElementById('modal-title').textContent = 'Yeni Turne Ekle';
     document.getElementById('edit-rowidx').value = '';
-    ['m-oyun','m-il','m-tarih','m-bitis','m-mekan','m-not','m-gidis-ulasim','m-gidis-saat','m-donus-ulasim','m-donus-saat','m-aktarma','m-otel-adi','m-otel-adr','m-otel-tel','m-kamyon','m-kapasite','m-lojistik-not'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    ['m-oyun','m-tarih','m-bitis','m-not','m-gidis-ulasim','m-gidis-saat','m-donus-ulasim','m-donus-saat','m-aktarma','m-otel-adi','m-otel-adr','m-otel-tel','m-kamyon','m-kapasite','m-lojistik-not','m-grup'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
     document.getElementById('m-statu').value = 'taslak';
-    document.getElementById('m-sayi').value = '1';
     document.getElementById('sure-info').style.display = 'none';
     document.getElementById('modal-sure').textContent = '';
     ['err-oyun','err-il','err-tarih','err-bitis'].forEach(id => { document.getElementById(id).textContent = ''; });
     programSatirlar = [];
+    duraklar = [{ il:'', ilce:'', mekan:'', sayi:1 }];
+    renderDuraklar();
   }
 }
 function editTurne(rowIdx) {
@@ -2055,13 +2133,11 @@ function editTurne(rowIdx) {
   document.getElementById('modal-title').textContent = 'Turne Düzenle';
   document.getElementById('edit-rowidx').value = rowIdx;
   document.getElementById('m-oyun').value  = t.oyun;
-  document.getElementById('m-il').value    = t.il;
   document.getElementById('m-tarih').value = t.baslangicTarih || t.tarih || '';
   document.getElementById('m-bitis').value = t.bitisTarih || t.tarih || '';
   document.getElementById('m-statu').value = t.statu || 'tamamlandi';
-  document.getElementById('m-mekan').value = t.mekan || '';
-  document.getElementById('m-sayi').value  = t.sayi  || 1;
   document.getElementById('m-not').value   = t.not   || '';
+  document.getElementById('m-grup').value  = t.grup  || '';
   document.getElementById('m-gidis-ulasim').value = t.gidisUlasim || '';
   document.getElementById('m-gidis-saat').value   = t.gidisSaat   || '';
   document.getElementById('m-donus-ulasim').value = t.donusUlasim || '';
@@ -2073,6 +2149,14 @@ function editTurne(rowIdx) {
   document.getElementById('m-kamyon').value   = t.kamyonSayisi    || '';
   document.getElementById('m-kapasite').value = t.sahneKapasitesi || '';
   document.getElementById('m-lojistik-not').value = t.notlar || '';
+  // Durakları yükle (eski format uyumlu)
+  if (t.duraklar && t.duraklar.length) {
+    duraklar = JSON.parse(JSON.stringify(t.duraklar));
+  } else {
+    duraklar = [{ il: t.il||'', ilce:'', mekan: t.mekan||'', sayi: t.sayi||1 }];
+  }
+  renderDuraklar();
+  syncIlFromDuraklar();
   programSatirlar = t.programSatirlar ? JSON.parse(JSON.stringify(t.programSatirlar)) : [];
   document.getElementById('modal-overlay').classList.add('on');
   switchModalTab('genel', 0);
@@ -2085,13 +2169,11 @@ function closeModal() { document.getElementById('modal-overlay').classList.remov
 // ============================================================
 async function saveTurne() {
   var oyun        = document.getElementById('m-oyun').value.trim();
-  var il          = document.getElementById('m-il').value.trim();
   var basTarih    = document.getElementById('m-tarih').value.trim();
   var bitisTarih  = document.getElementById('m-bitis').value.trim() || basTarih;
   var statu       = document.getElementById('m-statu').value || 'taslak';
-  var mekan       = document.getElementById('m-mekan').value.trim();
-  var sayi        = parseInt(document.getElementById('m-sayi').value) || 1;
   var not_        = document.getElementById('m-not').value.trim();
+  var grup        = document.getElementById('m-grup').value.trim();
   var gidisUlasim = document.getElementById('m-gidis-ulasim').value;
   var gidisSaat   = document.getElementById('m-gidis-saat').value;
   var donusUlasim = document.getElementById('m-donus-ulasim').value;
@@ -2105,21 +2187,29 @@ async function saveTurne() {
   var lojNot      = document.getElementById('m-lojistik-not').value.trim();
   var editIdx     = document.getElementById('edit-rowidx').value;
 
+  // Durakları temizle
+  var gecerliDuraklar = duraklar.filter(function(d){ return d.il && d.il.trim(); });
+  var il     = gecerliDuraklar.map(function(d){ return d.il+(d.ilce?'/'+d.ilce:''); }).join(', ') || '';
+  var mekan  = gecerliDuraklar.map(function(d){ return d.mekan; }).filter(Boolean).join(', ');
+  var sayi   = gecerliDuraklar.reduce(function(s,d){ return s+(d.sayi||1); }, 0) || 1;
+
   var hatalar = false;
   if (!oyun)     { document.getElementById('err-oyun').textContent='Oyun seçilmeli'; document.getElementById('m-oyun').classList.add('error'); hatalar=true; } else { document.getElementById('err-oyun').textContent=''; document.getElementById('m-oyun').classList.remove('error'); }
-  if (!il)       { document.getElementById('err-il').textContent='Şehir girilmeli'; document.getElementById('m-il').classList.add('error'); hatalar=true; } else { document.getElementById('err-il').textContent=''; document.getElementById('m-il').classList.remove('error'); }
+  if (!gecerliDuraklar.length) { document.getElementById('err-il').textContent='En az bir durak girilmeli'; hatalar=true; } else { document.getElementById('err-il').textContent=''; }
   if (!basTarih) { document.getElementById('err-tarih').textContent='Tarih girilmeli'; document.getElementById('m-tarih').classList.add('error'); hatalar=true; } else { document.getElementById('err-tarih').textContent=''; document.getElementById('m-tarih').classList.remove('error'); }
   if (bitisTarih && bitisTarih < basTarih) { document.getElementById('err-bitis').textContent='Bitiş başlangıçtan önce olamaz'; hatalar=true; } else { document.getElementById('err-bitis').textContent=''; }
   if (hatalar) { switchModalTab('genel', 0); return; }
 
   var saveBtn = document.querySelector('#modal-overlay .btn-primary');
   saveBtn.disabled = true; saveBtn.textContent = 'Kaydediliyor...';
-  var values = [oyun, il, basTarih, bitisTarih, mekan, String(sayi), not_, statu, otelAdi, otelAdres, otelTelefon, gidisUlasim, gidisSaat, donusUlasim, donusSaat, aktarma, kamyon, kapasite, lojNot];
+  var duraklarJSON = JSON.stringify(gecerliDuraklar);
+  var values = [oyun, il, basTarih, bitisTarih, mekan, String(sayi), not_, statu, otelAdi, otelAdres, otelTelefon, gidisUlasim, gidisSaat, donusUlasim, donusSaat, aktarma, kamyon, kapasite, lojNot, grup, duraklarJSON];
 
   // Yerel veriyi hemen güncelle (optimistik)
   var yeniKayit = {
     _rowIdx: editIdx !== '' ? parseInt(editIdx) : (turneler.length > 0 ? Math.max(...turneler.map(x=>x._rowIdx)) + 1 : 0),
-    oyun, il, baslangicTarih: basTarih, bitisTarih, mekan, sayi, not: not_, statu,
+    oyun, il, mekan, sayi, baslangicTarih: basTarih, bitisTarih, not: not_, statu, grup,
+    duraklar: JSON.parse(JSON.stringify(gecerliDuraklar)),
     otelAdi, otelAdres, otelTelefon, gidisUlasim, gidisSaat, donusUlasim, donusSaat,
     aktarma, kamyonSayisi: kamyon, sahneKapasitesi: kapasite, notlar: lojNot,
     programSatirlar: JSON.parse(JSON.stringify(programSatirlar)),
@@ -2179,9 +2269,9 @@ function exportExcel() {
   // Türkçe başlıklı, tüm alanlar dahil kapsamlı Excel raporu
   var baslik = [
     'Oyun Adı','Şehir / İl','Sahne / Mekan','Başlangıç Tarihi','Bitiş Tarihi',
-    'Süre (Gün)','Temsil Sayısı','Statü','Gidiş Ulaşım','Gidiş Saati',
+    'Süre (Gün)','Temsil Sayısı','Statü','Turne Grubu','Gidiş Ulaşım','Gidiş Saati',
     'Dönüş Ulaşım','Dönüş Saati','Aktarma','Otel Adı','Otel Adresi',
-    'Otel Tel','Rezervasyon No','Kamyon','Kapasite','Notlar','Katılımcı Sayısı'
+    'Otel Tel','Rezervasyon No','Kamyon','Kapasite','Notlar','Katılımcı Sayısı','Duraklar (JSON)'
   ];
   var rows = [baslik];
   turneler.forEach(function(t) {
@@ -2195,6 +2285,7 @@ function exportExcel() {
       turneSuresi(t),
       t.sayi || 1,
       sr.label,
+      t.grup || '',
       t.gidisUlasim || '',
       t.gidisSaat   || '',
       t.donusUlasim || '',
@@ -2207,7 +2298,8 @@ function exportExcel() {
       t.kamyonSayisi     || '',
       t.sahneKapasitesi  || '',
       t.not || '',
-      (t.katilimcilar ? t.katilimcilar.length : getPersonelForOyun(t.oyun).length)
+      (t.katilimcilar ? t.katilimcilar.length : getPersonelForOyun(t.oyun).length),
+      t.duraklar ? JSON.stringify(t.duraklar) : ''
     ]);
   });
   var csv = '\uFEFF' + rows.map(function(r) {
@@ -2392,7 +2484,7 @@ function gorevlendirmePdf(rowIdx) {
 
     // BAŞLIK
     + '<div class="title-block">'
-    +   '<h1>' + t.oyun.toUpperCase() + ' – ' + t.il.toUpperCase() + ' TURNESİ</h1>'
+    +   '<h1>' + t.oyun.toUpperCase() + ' – ' + durakIlStr(t).toUpperCase() + ' TURNESİ</h1>'
     +   '<p>' + tarihStr + (t.sayi && t.sayi > 1 ? ' &nbsp;·&nbsp; ' + t.sayi + ' Temsil' : '') + '</p>'
     + '</div>'
 
@@ -2451,6 +2543,101 @@ function gorevlendirmePdf(rowIdx) {
   win.document.close();
 }
 
+
+// ============================================================
+// ÇOKLU DURAK YÖNETİMİ
+// ============================================================
+var duraklar = []; // [{il, ilce, mekan, sayi}]
+
+function durakEkle(il, ilce, mekan, sayi) {
+  duraklar.push({ il: il||'', ilce: ilce||'', mekan: mekan||'', sayi: sayi||1 });
+  renderDuraklar();
+}
+
+function durakSil(idx) {
+  duraklar.splice(idx,1);
+  renderDuraklar();
+  syncIlFromDuraklar();
+}
+
+function renderDuraklar() {
+  var wrap = document.getElementById('durak-listesi');
+  if (!wrap) return;
+  if (!duraklar.length) {
+    wrap.innerHTML = '<div onclick="durakEkle()" style="padding:10px 14px;border:1.5px dashed var(--border);border-radius:8px;text-align:center;font-size:11px;color:var(--muted-foreground);cursor:pointer">Henüz durak yok — tıklayarak ekleyin</div>';
+    return;
+  }
+  var html = duraklar.map(function(d,i) {
+    return '<div class="durak-row">'
+      + '<div style="grid-column:1/3;display:flex;gap:4px;align-items:center">'
+      + '  <div style="position:relative;flex:1">'
+      + '    <input class="form-input" type="text" placeholder="İl..." value="' + (d.il||'') + '" '
+      + '      oninput="duraklar['+i+'].il=this.value;syncIlFromDuraklar();durakIlDropdown(this,'+i+')" '
+      + '      onfocus="durakIlDropdown(this,'+i+')" onblur="setTimeout(()=>durakDropdownKapat('+i+'),200)" '
+      + '      style="font-size:11px;padding:5px 8px">'
+      + '    <div id="durak-dd-'+i+'" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:600;background:var(--card);border:1px solid var(--border);border-radius:6px;max-height:160px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.15)"></div>'
+      + '  </div>'
+      + '  <input class="form-input" type="text" placeholder="İlçe / Semt" value="' + (d.ilce||'') + '" '
+      + '    oninput="duraklar['+i+'].ilce=this.value" style="font-size:11px;padding:5px 8px;width:110px;flex-shrink:0">'
+      + '</div>'
+      + '<input class="form-input" type="text" placeholder="Sahne/Mekan" value="' + (d.mekan||'') + '" '
+      + '  oninput="duraklar['+i+'].mekan=this.value" style="font-size:11px;padding:5px 8px;grid-column:1/3">'
+      + '<input class="form-input" type="number" placeholder="Temsil" value="' + (d.sayi||1) + '" min="1" '
+      + '  oninput="duraklar['+i+'].sayi=parseInt(this.value)||1" style="font-size:11px;padding:5px 6px">'
+      + '<button onclick="durakSil('+i+')" title="Kaldır" style="height:28px;width:26px;border-radius:5px;border:1px solid var(--border);background:transparent;cursor:pointer;color:var(--destructive);font-size:14px;display:flex;align-items:center;justify-content:center">×</button>'
+      + '</div>';
+  }).join('');
+  wrap.innerHTML = html;
+}
+
+function durakIlDropdown(input, idx) {
+  var val = input.value.toLowerCase().trim();
+  var dd = document.getElementById('durak-dd-'+idx);
+  if (!dd) return;
+  var matches = IL_LISTESI.filter(function(il){ return !val || il.toLowerCase().startsWith(val); }).slice(0,8);
+  if (!matches.length) { dd.style.display='none'; return; }
+  dd.innerHTML = matches.map(function(il){
+    return '<div onclick="duraklar['+idx+'].il=\''+il+'\';document.getElementById(\'durak-dd-'+idx+'\').style.display=\'none\';syncIlFromDuraklar();renderDuraklar()" '
+      + 'style="padding:7px 12px;font-size:11px;cursor:pointer;border-bottom:1px solid var(--border)" '
+      + 'onmouseenter="this.style.background=\'var(--muted)\'" onmouseleave="this.style.background=\'\'">'
+      + il + '</div>';
+  }).join('');
+  dd.style.display='block';
+}
+
+function durakDropdownKapat(idx) {
+  var dd = document.getElementById('durak-dd-'+idx);
+  if (dd) dd.style.display='none';
+}
+
+function syncIlFromDuraklar() {
+  // m-il hidden field'ı güncelle (validation için)
+  var ilField = document.getElementById('m-il');
+  if (ilField) ilField.value = duraklar.length ? duraklar.map(function(d){ return d.il+(d.ilce?'/'+d.ilce:''); }).join(', ') : '';
+}
+
+function durakIlStr(t) {
+  // Turne objesinden il string döndür (çoklu veya tekli)
+  if (t.duraklar && t.duraklar.length) {
+    return t.duraklar.map(function(d){ return d.il+(d.ilce?'/'+d.ilce:''); }).filter(Boolean).join(' › ');
+  }
+  return t.il || '';
+}
+
+function durakIllerListesi(t) {
+  // Harita/istatistik için il listesi
+  if (t.duraklar && t.duraklar.length) {
+    return [...new Set(t.duraklar.map(function(d){ return d.il; }).filter(Boolean))];
+  }
+  return t.il ? [t.il] : [];
+}
+
+function durakToplamTemsil(t) {
+  if (t.duraklar && t.duraklar.length) {
+    return t.duraklar.reduce(function(s,d){ return s+(d.sayi||1); },0);
+  }
+  return t.sayi || 1;
+}
 
 // ============================================================
 // TURNE PROGRAMI
