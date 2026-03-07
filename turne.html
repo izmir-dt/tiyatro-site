@@ -4205,10 +4205,19 @@ async function saveTurne() {
       console.log('[saveTurne] POST sonuç:', postR2.status, postR2.ok);
       if (postR2.ok) {
         apiBasarili = true;
-        // Yerel veri zaten güncel — arka plan sync YOK
-        // Sheets geciktiği için fetchTurneler çağrılmıyor, kart kaybolmuyor
-        // Kullanıcı sayfayı yenileyince Sheets'teki gerçek veri gelir
-        console.log('[saveTurne] Yerel veri güncellendi, Sheets sync bekleniyor (sayfa yenilemede)');
+        // Backend'den gerçek rowIndex'i al, _rowIdx'i güncelle
+        try {
+          var postData = await postR2.json();
+          if (typeof postData.rowIndex === 'number') {
+            // turneler dizisinde az önce eklenen kaydı bul ve _rowIdx'ini güncelle
+            var eklenanKayit = turneler[turneler.length - 1];
+            if (eklenanKayit && eklenanKayit._rowIdx !== postData.rowIndex) {
+              eklenanKayit._rowIdx = postData.rowIndex;
+              console.log('[saveTurne] _rowIdx güncellendi:', postData.rowIndex);
+            }
+          }
+        } catch(e) { /* rowIndex alınamadı, sorun değil */ }
+        console.log('[saveTurne] Sheets\'e yazıldı, _rowIdx senkronize edildi');
       } else {
         var errText = '';
         try { var errJson = await postR2.json(); errText = errJson.error || postR2.status; } catch(e) { errText = postR2.status; }
