@@ -2089,9 +2089,11 @@ function turneCard(t) {
     +   ulasimStr + otelStr + notStr
     +   '<div class="turne-info-row"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>'
     + (function(){
-        var anaKadro = getPersonelForOyun(t.oyun).length;
+        // Oyun adı: durak bazlı ise orada ara
+        var _oyunAdiKart = t.oyun || (t.duraklar && t.duraklar.length ? [...new Set(t.duraklar.map(function(d){return d.oyun||'';}).filter(Boolean))].join(' / ') : '');
+        var anaKadro = getPersonelForOyun(_oyunAdiKart).length;
         var turneKadro = t.katilimcilar && t.katilimcilar.length;
-        if (turneKadro && turneKadro !== anaKadro) {
+        if (turneKadro) {
           return 'Ana: <strong>' + anaKadro + '</strong> · Turne: <strong style="color:var(--primary)">' + turneKadro + '</strong> kişi';
         }
         return '<strong>' + anaKadro + '</strong> kişi';
@@ -4453,11 +4455,13 @@ function _pdfIcerik(t) {
   var bugun = new Date().toLocaleDateString('tr-TR', { day:'numeric', month:'long', year:'numeric' });
   var sure = turneSuresi(t);
   var tarihStr = sure > 1
-    ? formatTarih(t.baslangicTarih) + ' – ' + formatTarih(t.bitisTarih) + ' (' + sure + ' gün)'
+    ? formatTarih(t.baslangicTarih) + ' \u2013 ' + formatTarih(t.bitisTarih) + ' (' + sure + ' g\u00fcn)'
     : formatTarih(t.baslangicTarih || t.tarih);
 
-  var TEKNIK_HARIC = ['Yönetmen','Yönetmen Yardımcısı','Dramaturg','Reji Asistanı'];
-  var personel = getPersonelForOyun(t.oyun);
+  // Oyun ad\u0131: direkt veya durak bazl\u0131
+  var oyunAdi = t.oyun || (t.duraklar ? [...new Set(t.duraklar.map(function(d){return d.oyun||'';}).filter(Boolean))].join(' / ') : '');
+
+  var personel = getPersonelForOyun(oyunAdi);
   var baseList = (t.katilimcilar && t.katilimcilar.length)
     ? t.katilimcilar
     : personel.map(function(p){ return { kisi:p.kisi, gorev:p.gorev||p.kategori, kategori:p.kategori }; });
@@ -4470,8 +4474,9 @@ function _pdfIcerik(t) {
   });
 
   var sr = statuRenk(t.statu || 'tamamlandi');
+  var ilStr = _temizleIlPdf(durakIlStr(t));
 
-  var OYUNCU_KATS_PDF = ['Sanatçı','Figüran','Koro','Solist','Dansçı','Koro/Dans Ekibi'];
+  var OYUNCU_KATS_PDF = ['Sanat\u00e7\u0131','Fig\u00fcran','Koro','Solist','Dans\u00e7\u0131','Koro/Dans Ekibi'];
   var satirlar = katilimcilar.map(function(p, i) {
     var kat = (p.kategori || '');
     var unvan = OYUNCU_KATS_PDF.indexOf(kat) >= 0 ? kat : ((p.gorev && p.gorev !== p.kategori && p.gorev.trim()) ? p.gorev : kat);
@@ -4482,35 +4487,97 @@ function _pdfIcerik(t) {
       + '</tr>';
   }).join('');
 
-  // Güzergah için MERKEZ'siz il adı
-  var ilStr = _temizleIlPdf(durakIlStr(t));
-
+  // ============================================================
+  // ULAS\u0130M: Eski basit sat\u0131r + YEN\u0130 u\u00e7u\u015f bacaklar\u0131 detayl\u0131
+  // ============================================================
   var ucusRows = [];
+
+  function _bacakSatirlari(yon, tarih, ulasimTur) {
+    var bacaklar = [];
+    try {
+      var jsonStr = yon === 'gidis' ? t.gidisUcusBacakJSON : t.donusUcusBacakJSON;
+      if (jsonStr) bacaklar = JSON.parse(jsonStr);
+    } catch(e) {}
+    if (!bacaklar.length) return null; // bacak yoksa null
+
+    var rows = '';
+    var ilkTarih = tarih;
+    bacaklar.forEach(function(b, bi) {
+      var nereden = b.nereden || (yon==='gidis' ? '\u0130zmir' : ilStr);
+      var nereye  = b.nereye  || (yon==='gidis' ? ilStr : '\u0130zmir');
+      var saat    = (b.kalkis ? b.kalkis : '\u2014') + (b.inis ? ' \u2192 ' + b.inis : '');
+      var ucusNo  = b.ucusNo  || '';
+      rows += '<tr style="background:' + (bi%2===0?'#f0f4ff':'#ffffff') + '">'
+        + '<td style="padding:5px 8px;border:1px solid #ddd;font-size:10px;color:#666">'
+        + (bi===0 ? ilkTarih : '<span style="color:#aaa">\u2514\u00a0Aktarma</span>') + '</td>'
+        + '<td style="padding:5px 8px;border:1px solid #ddd;font-size:11px;font-weight:700">'
+        + nereden + ' \u2192 ' + nereye + '</td>'
+        + '<td style="padding:5px 8px;border:1px solid #ddd;font-size:11px">' + ulasimTur + '</td>'
+        + '<td style="padding:5px 8px;border:1px solid #ddd;font-size:11px">' + saat + '</td>'
+        + '<td style="padding:5px 8px;border:1px solid #ddd;font-size:11px;color:#1d4ed8;font-weight:600">' + ucusNo + '</td>'
+        + '</tr>';
+    });
+    return rows;
+  }
+
+  // Gidi\u015f
   if (t.gidisUlasim) {
-    ucusRows.push('<tr style="background:#f9f5f0">'
-      + '<td style="padding:7px 10px;border:1px solid #ddd;font-size:11px">' + formatTarih(t.baslangicTarih||t.tarih) + '</td>'
-      + '<td style="padding:7px 10px;border:1px solid #ddd;font-weight:700;font-size:11px">İzmir → ' + ilStr + '</td>'
-      + '<td style="padding:7px 10px;border:1px solid #ddd;font-size:11px">' + t.gidisUlasim + '</td>'
-      + '<td style="padding:7px 10px;border:1px solid #ddd;font-size:11px">' + (t.gidisSaat||'—') + (t.gidisInis?' → '+t.gidisInis:'') + (t.gidisUcusNo?' ('+t.gidisUcusNo+')':'') + '</td>'
-      + '</tr>');
+    var gBacakRows = _bacakSatirlari('gidis', formatTarih(t.baslangicTarih||t.tarih), t.gidisUlasim);
+    if (gBacakRows) {
+      ucusRows.push(gBacakRows);
+    } else {
+      // Bacak bilgisi yoksa basit sat\u0131r
+      ucusRows.push('<tr style="background:#f9f5f0">'
+        + '<td style="padding:7px 10px;border:1px solid #ddd;font-size:11px">' + formatTarih(t.baslangicTarih||t.tarih) + '</td>'
+        + '<td style="padding:7px 10px;border:1px solid #ddd;font-weight:700;font-size:11px">\u0130zmir \u2192 ' + ilStr + '</td>'
+        + '<td style="padding:7px 10px;border:1px solid #ddd;font-size:11px">' + t.gidisUlasim + '</td>'
+        + '<td style="padding:7px 10px;border:1px solid #ddd;font-size:11px">' + (t.gidisSaat||'\u2014') + (t.gidisInis?' \u2192 '+t.gidisInis:'') + '</td>'
+        + '<td style="padding:7px 10px;border:1px solid #ddd;font-size:11px;color:#1d4ed8">' + (t.gidisUcusNo||'') + '</td>'
+        + '</tr>');
+    }
   }
+
+  // Aktarma notu
   if (t.aktarma) {
-    ucusRows.push('<tr style="background:#fffbf0"><td colspan="4" style="padding:5px 10px;border:1px solid #ddd;font-size:10px;color:#92400e;font-style:italic">📍 Aktarma: ' + t.aktarma + '</td></tr>');
+    ucusRows.push('<tr style="background:#fffbf0"><td colspan="5" style="padding:5px 10px;border:1px solid #ddd;font-size:10px;color:#92400e;font-style:italic">\ud83d\udccd Aktarma: ' + t.aktarma + '</td></tr>');
   }
-  if (t.donusUlasim) {
-    ucusRows.push('<tr style="background:#f9f5f0">'
-      + '<td style="padding:7px 10px;border:1px solid #ddd;font-size:11px">' + formatTarih(t.bitisTarih||t.tarih) + '</td>'
-      + '<td style="padding:7px 10px;border:1px solid #ddd;font-weight:700;font-size:11px">' + ilStr + ' → İzmir</td>'
-      + '<td style="padding:7px 10px;border:1px solid #ddd;font-size:11px">' + t.donusUlasim + '</td>'
-      + '<td style="padding:7px 10px;border:1px solid #ddd;font-size:11px">' + (t.donusSaat||'—') + (t.donusInis?' → '+t.donusInis:'') + (t.donusUcusNo?' ('+t.donusUcusNo+')':'') + '</td>'
+
+  // \u015eehir i\u00e7i ula\u015f\u0131m
+  if (t.sehirAracTur) {
+    var sehirStr = t.sehirAracTur
+      + (t.sehirAracDetay ? ' \u2013 ' + t.sehirAracDetay : '')
+      + (t.sehirSurucu ? ' \u00b7 S\u00fcr\u00fcr: ' + t.sehirSurucu : '')
+      + (t.sehirKisiSayisi ? ' \u00b7 ' + t.sehirKisiSayisi + ' ki\u015fi' : '')
+      + (t.sehirTel ? ' \u00b7 Tel: ' + t.sehirTel : '');
+    ucusRows.push('<tr style="background:#f0fdf4">'
+      + '<td style="padding:6px 10px;border:1px solid #ddd;font-size:10px;color:#15803d;font-style:italic">Turne S\u00fcresince</td>'
+      + '<td colspan="4" style="padding:6px 10px;border:1px solid #ddd;font-size:11px;color:#15803d;font-weight:600">\ud83d\ude97 \u015eehir \u0130\u00e7i: ' + sehirStr + '</td>'
       + '</tr>');
   }
+
+  // D\u00f6n\u00fc\u015f
+  if (t.donusUlasim) {
+    var dBacakRows = _bacakSatirlari('donus', formatTarih(t.bitisTarih||t.tarih), t.donusUlasim);
+    if (dBacakRows) {
+      ucusRows.push(dBacakRows);
+    } else {
+      ucusRows.push('<tr style="background:#fdf4ff">'
+        + '<td style="padding:7px 10px;border:1px solid #ddd;font-size:11px">' + formatTarih(t.bitisTarih||t.tarih) + '</td>'
+        + '<td style="padding:7px 10px;border:1px solid #ddd;font-weight:700;font-size:11px">' + ilStr + ' \u2192 \u0130zmir</td>'
+        + '<td style="padding:7px 10px;border:1px solid #ddd;font-size:11px">' + t.donusUlasim + '</td>'
+        + '<td style="padding:7px 10px;border:1px solid #ddd;font-size:11px">' + (t.donusSaat||'\u2014') + (t.donusInis?' \u2192 '+t.donusInis:'') + '</td>'
+        + '<td style="padding:7px 10px;border:1px solid #ddd;font-size:11px;color:#1d4ed8">' + (t.donusUcusNo||'') + '</td>'
+        + '</tr>');
+    }
+  }
+
   var ucusHTML = ucusRows.length
     ? '<table style="width:100%;border-collapse:collapse;margin-bottom:4px"><thead><tr style="background:#5a1717">'
       + '<th style="padding:6px 10px;color:#fff;text-align:left;border:1px solid #4a1212;font-size:10px">Tarih</th>'
-      + '<th style="padding:6px 10px;color:#fff;text-align:left;border:1px solid #4a1212;font-size:10px">Güzergah</th>'
-      + '<th style="padding:6px 10px;color:#fff;text-align:left;border:1px solid #4a1212;font-size:10px">Araç / Havayolu</th>'
-      + '<th style="padding:6px 10px;color:#fff;text-align:left;border:1px solid #4a1212;font-size:10px">Saat</th>'
+      + '<th style="padding:6px 10px;color:#fff;text-align:left;border:1px solid #4a1212;font-size:10px">G\u00fczerg\u00e2h</th>'
+      + '<th style="padding:6px 10px;color:#fff;text-align:left;border:1px solid #4a1212;font-size:10px">Ara\u00e7 / Havayolu</th>'
+      + '<th style="padding:6px 10px;color:#fff;text-align:left;border:1px solid #4a1212;font-size:10px">Saat (Kalk\u0131\u015f \u2192 \u0130ni\u015f)</th>'
+      + '<th style="padding:6px 10px;color:#fff;text-align:left;border:1px solid #4a1212;font-size:10px">U\u00e7u\u015f No</th>'
       + '</tr></thead><tbody>' + ucusRows.join('') + '</tbody></table>'
     : '';
 
@@ -4520,28 +4587,28 @@ function _pdfIcerik(t) {
   if (otelBulunan.length > 0) {
     otelBulunan.forEach(function(d) {
       konakHTML += '<div style="padding:8px 14px;background:#f0fdf4;border-radius:5px;border-left:3px solid #16a34a;font-size:11px;margin-bottom:4px">'
-        + '<strong style="color:#15803d">🏨 ' + (d.il ? _temizleIlPdf(d.il) + ': ' : '') + d.otelAdi + '</strong>'
-        + (d.otelAdres ? ' · ' + d.otelAdres : '')
-        + ((d.otelTel||d.otelTelefon) ? ' · Tel: ' + (d.otelTel||d.otelTelefon) : '')
+        + '<strong style="color:#15803d">\ud83c\udfe8 ' + (d.il ? _temizleIlPdf(d.il) + ': ' : '') + d.otelAdi + '</strong>'
+        + (d.otelAdres ? ' \u00b7 ' + d.otelAdres : '')
+        + ((d.otelTel||d.otelTelefon) ? ' \u00b7 Tel: ' + (d.otelTel||d.otelTelefon) : '')
         + '</div>';
     });
   } else if (t.otelAdi) {
     konakHTML = '<div style="padding:8px 14px;background:#f0fdf4;border-radius:5px;border-left:3px solid #16a34a;font-size:11px;margin-bottom:4px">'
-      + '<strong style="color:#15803d">🏨 ' + t.otelAdi + '</strong>'
-      + (t.otelAdres ? ' · ' + t.otelAdres : '') + (t.otelTelefon ? ' · Tel: ' + t.otelTelefon : '') + '</div>';
+      + '<strong style="color:#15803d">\ud83c\udfe8 ' + t.otelAdi + '</strong>'
+      + (t.otelAdres ? ' \u00b7 ' + t.otelAdres : '') + (t.otelTelefon ? ' \u00b7 Tel: ' + t.otelTelefon : '') + '</div>';
   }
 
   var nakliyeHTML = '';
   if (t.kamyonSayisi) {
     nakliyeHTML = '<div style="padding:8px 14px;background:#eff6ff;border-radius:5px;border-left:3px solid #3b82f6;font-size:11px;margin-bottom:4px">'
-      + '<strong style="color:#1d4ed8">🚛 Nakliye:</strong> ' + t.kamyonSayisi + ' adet kamyon'
-      + (t.sahneKapasitesi ? ' · Sahne kapasitesi: ' + t.sahneKapasitesi + ' kişi' : '') + '</div>';
+      + '<strong style="color:#1d4ed8">\ud83d\ude9b Nakliye:</strong> ' + t.kamyonSayisi + ' adet kamyon'
+      + (t.sahneKapasitesi ? ' \u00b7 Sahne kapasitesi: ' + t.sahneKapasitesi + ' ki\u015fi' : '') + '</div>';
   }
 
   var programHTML = '';
   if (t.programSatirlar && t.programSatirlar.length > 0) {
-    var PROG_RENK = { 'Yol':'#fff7ed','Oyun':'#f0fdf4','Prova':'#eff6ff','Dönüş':'#fef2f2','Dinlenme':'#fafafa','Hazırlık':'#faf5ff','Diğer':'#fafafa' };
-    var PROG_BORDER = { 'Yol':'#f59e0b','Oyun':'#16a34a','Prova':'#3b82f6','Dönüş':'#ef4444','Dinlenme':'#9ca3af','Hazırlık':'#8b5cf6','Diğer':'#9ca3af' };
+    var PROG_RENK = { 'Yol':'#fff7ed','Oyun':'#f0fdf4','Prova':'#eff6ff','D\u00f6n\u00fc\u015f':'#fef2f2','Dinlenme':'#fafafa','Haz\u0131rl\u0131k':'#faf5ff','Di\u011fer':'#fafafa' };
+    var PROG_BORDER = { 'Yol':'#f59e0b','Oyun':'#16a34a','Prova':'#3b82f6','D\u00f6n\u00fc\u015f':'#ef4444','Dinlenme':'#9ca3af','Haz\u0131rl\u0131k':'#8b5cf6','Di\u011fer':'#9ca3af' };
     var gecerliSatirlar = t.programSatirlar.filter(function(s){ return s.tarih || s.gun || s.program; });
     var progRows = gecerliSatirlar.map(function(s) {
       var bg = PROG_RENK[s.program]||'#fafafa', bc = PROG_BORDER[s.program]||'#9ca3af';
@@ -4549,15 +4616,15 @@ function _pdfIcerik(t) {
         + '<td style="padding:6px 10px;border:1px solid #e5ddd5;font-size:11px">'+(s.tarih?s.tarih.split('-').reverse().join('/'):'—')+'</td>'
         + '<td style="padding:6px 10px;border:1px solid #e5ddd5;font-size:11px">'+(s.gun||'—')+'</td>'
         + '<td style="padding:6px 10px;border:1px solid #e5ddd5;font-size:11px;font-weight:600">'+(s.sehir||'—')+'</td>'
-        + '<td style="padding:6px 10px;border:1px solid #e5ddd5;font-size:11px;font-weight:700;color:'+bc+'">'+(s.program||'—')+(s.oyun&&s.program==='Oyun'?'<span style="color:#374151;font-weight:500"> · '+s.oyun+'</span>':'')+'</td>'
+        + '<td style="padding:6px 10px;border:1px solid #e5ddd5;font-size:11px;font-weight:700;color:'+bc+'">'+(s.program||'—')+(s.oyun&&s.program==='Oyun'?'<span style="color:#374151;font-weight:500"> \u00b7 '+s.oyun+'</span>':'')+'</td>'
         + '<td style="padding:6px 10px;border:1px solid #e5ddd5;font-size:11px">'+(s.saat||'—')+'</td></tr>';
     }).join('');
     if (progRows) {
-      programHTML = '<div class="sec"><div class="sec-title">Turne Programı</div>'
+      programHTML = '<div class="sec"><div class="sec-title">Turne Program\u0131</div>'
         + '<table><thead><tr style="background:#6b1b1b">'
         + '<th style="padding:6px 10px;font-size:10px;border:1px solid #5a1717">Tarih</th>'
-        + '<th style="padding:6px 10px;font-size:10px;border:1px solid #5a1717">Gün</th>'
-        + '<th style="padding:6px 10px;font-size:10px;border:1px solid #5a1717">Şehir</th>'
+        + '<th style="padding:6px 10px;font-size:10px;border:1px solid #5a1717">G\u00fcn</th>'
+        + '<th style="padding:6px 10px;font-size:10px;border:1px solid #5a1717">\u015eehir</th>'
         + '<th style="padding:6px 10px;font-size:10px;border:1px solid #5a1717">Program / Oyun</th>'
         + '<th style="padding:6px 10px;font-size:10px;border:1px solid #5a1717">Saat</th>'
         + '</tr></thead><tbody>' + progRows + '</tbody></table></div>';
@@ -4565,78 +4632,90 @@ function _pdfIcerik(t) {
   }
 
   var notHTML = (t.not||t.notlar)
-    ? '<div style="padding:9px 14px;background:#fef3c7;border-radius:5px;border-left:3px solid #d97706;font-size:11px;margin-top:12px"><strong>📝 Not:</strong> '+(t.not||t.notlar)+'</div>'
+    ? '<div style="padding:9px 14px;background:#fef3c7;border-radius:5px;border-left:3px solid #d97706;font-size:11px;margin-top:12px"><strong>\ud83d\udcdd Not:</strong> '+(t.not||t.notlar)+'</div>'
     : '';
 
-  // Başlık: MERKEZ olmadan
   var ilAdiBaslik = _temizleIlPdf(durakIlStr(t)).toUpperCase();
-  var oyunAdiBaslik = t.oyun ? t.oyun.toUpperCase() : '';
+  var oyunAdiBaslik = oyunAdi ? oyunAdi.toUpperCase() : '';
   var tarihKisaBaslik = (function(){
     var bas=t.baslangicTarih||t.tarih||'', bit=t.bitisTarih||t.tarih||'';
     if (!bas) return '';
     var fk=function(d){var p=d.split('-');return p[2]+'.'+p[1]+'.'+p[0];};
-    return bas===bit?fk(bas):fk(bas)+' – '+fk(bit);
+    return bas===bit?fk(bas):fk(bas)+' \u2013 '+fk(bit);
   })();
   var toplamTemsil = durakToplamTemsil(t);
 
-  // Sahne/Şehir bilgisi (MERKEZ olmadan)
   var sehirSahne = (function(){
     if (t.duraklar && t.duraklar.length && t.duraklar.some(function(d){return d.il;})) {
       return t.duraklar.filter(function(d){return d.il;}).map(function(d){
-        return _temizleIlPdf(d.il+(d.ilce&&d.ilce.toLowerCase()!=='merkez'?'/'+d.ilce:'')) + (d.mekan?' — '+d.mekan:'');
+        return _temizleIlPdf(d.il+(d.ilce&&d.ilce.toLowerCase()!=='merkez'?'/'+d.ilce:'')) + (d.mekan?' \u2014 '+d.mekan:'');
       }).join('<br>');
     }
-    return _temizleIlPdf(t.il||'') + (t.mekan?' — '+t.mekan:'');
+    return _temizleIlPdf(t.il||'') + (t.mekan?' \u2014 '+t.mekan:'');
   })();
 
   return ''
-    // HEADER
     + '<div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:6px;border-bottom:2px solid #6b1b1b;margin-bottom:14px">'
     +   '<div style="display:flex;align-items:center;gap:8px">'
-    +     '<div style="width:32px;height:32px;background:#6b1b1b;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#e8c84a;font-weight:900;font-size:10px;flex-shrink:0">İDT</div>'
-    +     '<div style="font-size:10px;font-weight:700;color:#1a1a1a">İzmir Devlet Tiyatrosu</div>'
+    +     '<div style="width:32px;height:32px;background:#6b1b1b;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#e8c84a;font-weight:900;font-size:10px;flex-shrink:0">\u0130DT</div>'
+    +     '<div style="font-size:10px;font-weight:700;color:#1a1a1a">\u0130zmir Devlet Tiyatrosu</div>'
     +   '</div>'
-    +   '<div style="text-align:right;font-size:9px;color:#888">Turne Görevlendirme &nbsp;·&nbsp; <strong style="color:#6b1b1b">' + bugun + '</strong></div>'
+    +   '<div style="text-align:right;font-size:9px;color:#888">Turne G\u00f6revlendirme &nbsp;\u00b7&nbsp; <strong style="color:#6b1b1b">' + bugun + '</strong></div>'
     + '</div>'
-    // BAŞLIK
     + '<div style="text-align:center;margin-bottom:16px;padding:10px 0 8px">'
     +   '<div style="font-size:16px;font-weight:900;letter-spacing:.5px;color:#1a1a1a;line-height:1.3">'
     +   (oyunAdiBaslik ? oyunAdiBaslik + '<br>' : '')
-    +   '<span style="font-size:13px;font-weight:700;color:#6b1b1b">' + ilAdiBaslik + ' TURNESİ</span>'
+    +   '<span style="font-size:13px;font-weight:700;color:#6b1b1b">' + ilAdiBaslik + ' TURNES\u0130</span>'
     +   '</div>'
-    +   '<div style="font-size:10px;color:#555;margin-top:5px;font-weight:500">' + tarihKisaBaslik + (toplamTemsil>1?' &nbsp;·&nbsp; '+toplamTemsil+' Temsil':'') + '</div>'
+    +   '<div style="font-size:10px;color:#555;margin-top:5px;font-weight:500">' + tarihKisaBaslik + (toplamTemsil>1?' &nbsp;\u00b7&nbsp; '+toplamTemsil+' Temsil':'') + '</div>'
     + '</div>'
-    // BİLGİLER
     + '<div class="sec"><div class="sec-title">Turne Bilgileri</div><div class="info-grid">'
-    + (t.oyun?'<div class="info-box"><div class="info-lbl">Oyun Adı</div><div class="info-val">'+t.oyun+'</div></div>':'')
-    + '<div class="info-box"><div class="info-lbl">Şehir / Sahne</div><div class="info-val" style="font-size:11px">'+sehirSahne+'</div></div>'
+    + (oyunAdi?'<div class="info-box"><div class="info-lbl">Oyun Ad\u0131</div><div class="info-val">'+oyunAdi+'</div></div>':'')
+    + '<div class="info-box"><div class="info-lbl">\u015eehir / Sahne</div><div class="info-val" style="font-size:11px">'+sehirSahne+'</div></div>'
     + '<div class="info-box"><div class="info-lbl">Tarih</div><div class="info-val">'+tarihStr+'</div></div>'
     + '<div class="info-box"><div class="info-lbl">Durum</div><div class="info-val"><span style="padding:2px 9px;border-radius:20px;font-size:10px;background:'+sr.bg+';color:'+sr.fg+'">'+sr.label+'</span></div></div>'
     + '</div></div>'
-    + (ucusHTML ? '<div class="sec"><div class="sec-title">Ulaşım Bilgileri</div>' + ucusHTML + '</div>' : '')
+    + (ucusHTML ? '<div class="sec"><div class="sec-title">Ula\u015f\u0131m Bilgileri</div>' + ucusHTML + '</div>' : '')
     + (konakHTML ? '<div class="sec"><div class="sec-title">Konaklama</div>' + konakHTML + '</div>' : '')
-    + (nakliyeHTML ? '<div class="sec"><div class="sec-title">Lojistik</div>' + nakliyeHTML + (t.notlar?'<div style="padding:8px 14px;background:#fef3c7;border-radius:5px;border-left:3px solid #d97706;font-size:11px;margin-top:6px"><strong>📝 Lojistik Notu:</strong> '+t.notlar+'</div>':'') + '</div>' : '')
+    + (nakliyeHTML ? '<div class="sec"><div class="sec-title">Lojistik</div>' + nakliyeHTML + (t.notlar?'<div style="padding:8px 14px;background:#fef3c7;border-radius:5px;border-left:3px solid #d97706;font-size:11px;margin-top:6px"><strong>\ud83d\udcdd Lojistik Notu:</strong> '+t.notlar+'</div>':'') + '</div>' : '')
     + programHTML
-    + '<div class="sec"><div class="sec-title">Görevlendirilen Personel</div>'
+    + '<div class="sec"><div class="sec-title">G\u00f6revlendirilen Personel</div>'
     + (katilimcilar.length===0
-        ? '<p style="color:#777;font-style:italic;font-size:11px">Personel listesi bulunamadı.</p>'
-        : '<table><thead><tr><th style="width:32px">#</th><th>Ad Soyad</th><th>Görevi / Unvanı</th></tr></thead><tbody>'+satirlar+'</tbody></table>')
+        ? '<p style="color:#777;font-style:italic;font-size:11px">Personel listesi bulunamad\u0131.</p>'
+        : '<table><thead><tr><th style="width:32px">#</th><th>Ad Soyad</th><th>G\u00f6revi / Unvan\u0131</th></tr></thead><tbody>'+satirlar+'</tbody></table>')
     + '</div>'
-    + notHTML
-    + '<div class="page-foot">Bu belge İzmir Devlet Tiyatrosu Turne Yönetim Sistemi tarafından oluşturulmuştur · ' + bugun + '</div>';
+    + notHTML;
 }
 
 function gorevlendirmePdf(rowIdx) {
   var t = turneler.find(x => x._rowIdx === rowIdx);
   if (!t) return;
+  var oyunAdi = t.oyun || (t.duraklar ? [...new Set(t.duraklar.map(function(d){return d.oyun||'';}).filter(Boolean))].join(' / ') : 'Rapor');
+  var ilStr = _temizleIlPdf(durakIlStr(t));
+  var baslik = (oyunAdi !== 'Rapor' ? oyunAdi + ' – ' : '') + ilStr + ' Turnesi';
 
+  var icerik = _pdfIcerik(t);
   var docHTML = '<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8">'
-    + '<title>Turne Görevlendirme – ' + (t.oyun||'Rapor') + '</title>'
-    + '<style>' + _pdfCSS() + '@media print{body{padding:10px 14px}@page{margin:12mm}}</style>'
+    + '<title>Turne Görevlendirme – ' + baslik + '</title>'
+    + '<style>' + _pdfCSS() + '@media print{body{padding:10px 14px}@page{margin:12mm}.no-print{display:none!important}}</style>'
     + '</head><body>'
-    + _pdfIcerik(t)
-    + '<script>window.onload=function(){window.print();};<\/script>'
-    + '<\/body><\/html>';
+    + '<div class="no-print" style="position:fixed;top:10px;right:10px;display:flex;gap:8px;z-index:999">'
+    +   '<button onclick="window.print()" style="padding:8px 18px;background:#6b1b1b;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;font-family:sans-serif">🖨 PDF Yazdır</button>'
+    +   '<button onclick="wordIndir()" style="padding:8px 18px;background:#1d4ed8;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;font-family:sans-serif">📄 Word İndir</button>'
+    + '</div>'
+    + '<div id="rapor-icerik">' + icerik + '</div>'
+    + '<script>'
+    + 'function wordIndir(){'
+    +   'var ic=document.getElementById("rapor-icerik").innerHTML;'
+    +   'var html="<html xmlns:o=\'urn:schemas-microsoft-com:office:office\' xmlns:w=\'urn:schemas-microsoft-com:office:word\' xmlns=\'http://www.w3.org/TR/REC-html40\'><head><meta charset=\'utf-8\'><title>' + baslik.replace(/'/g,"\'") + '</title></head><body style=\'font-family:Calibri,sans-serif;font-size:11pt;margin:2cm\'>" + ic + "</body></html>";'
+    +   'var blob=new Blob([html],{type:"application/msword"});'
+    +   'var a=document.createElement("a");'
+    +   'a.href=URL.createObjectURL(blob);'
+    +   'a.download="' + baslik.replace(/[^a-zA-Z0-9ğüşıöçĞÜŞİÖÇ\s\-]/g,'').trim() + '.doc";'
+    +   'a.click();'
+    + '}'
+    + '<\/script>'
+    + '</body></html>';
 
   var win = window.open('', '_blank');
   if (!win) { alert('Lütfen pop-up engelleyiciyi kapatın.'); return; }
