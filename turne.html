@@ -2438,11 +2438,21 @@ async function saveKisiModal() {
       katJSON2,  // index 40 — katilimcilar
       (t.programSatirlar && t.programSatirlar.length ? JSON.stringify(t.programSatirlar) : '')  // index 41 — turne programı
     ];
-    await fetch(API + '/' + encodeURIComponent(TURNE_SHEET) + '/row/' + t._rowIdx, {
-      method: 'PUT',
+    console.log('[saveKisiModal] DELETE+POST row:', t._rowIdx, 'kat:', kisiModalSecili.length);
+    // DELETE + POST: index offset sorununu ortadan kaldırır
+    const delRes = await fetch(API + '/' + encodeURIComponent(TURNE_SHEET) + '/row/' + t._rowIdx, { method: 'DELETE' });
+    console.log('[saveKisiModal] DELETE sonuç:', delRes.status);
+    const postRes = await fetch(API + '/' + encodeURIComponent(TURNE_SHEET) + '/row', {
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ values: turneValues })
     });
+    console.log('[saveKisiModal] POST sonuç:', postRes.status, postRes.ok);
+    if (!postRes.ok) {
+      const errBody = await postRes.text();
+      console.error('[saveKisiModal] POST hata:', errBody);
+      throw new Error('POST başarısız: ' + errBody);
+    }
   } catch(e) {
     console.warn('Katılımcı kaydı yazılamadı:', e);
     // Yerel veri güncellendi ama Sheets'e yazılamadı — kullanıcıyı bilgilendir
@@ -4145,23 +4155,25 @@ async function saveTurne() {
   try {
     if (editIdx !== '') {
       var idx = parseInt(editIdx);
-      var r = await fetch(API + '/' + encodeURIComponent(TURNE_SHEET) + '/row/' + idx, {
-        method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ values: values })
+      console.log('[saveTurne] güncelleme: önce DELETE row:', idx, 'sonra POST');
+      // DELETE + POST stratejisi: _rowIdx offset sorununu tamamen ortadan kaldırır
+      var delR = await fetch(API + '/' + encodeURIComponent(TURNE_SHEET) + '/row/' + idx, { method:'DELETE' });
+      console.log('[saveTurne] DELETE sonuç:', delR.status);
+      // DELETE başarılı ya da değil, her durumda POST ile yeni satır ekle
+      var postR = await fetch(API + '/' + encodeURIComponent(TURNE_SHEET) + '/row', {
+        method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ values: values })
       });
-      if (!r.ok) {
-        // Satır bazlı PUT başarısız → hücre bazlı dene
-        var cellBasarili = true;
-        for (var ci = 0; ci < values.length; ci++) {
-          var cr = await fetch(API + '/' + encodeURIComponent(TURNE_SHEET) + '/cell', { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ row:idx, col:ci, value:values[ci] }) });
-          if (!cr.ok) { cellBasarili = false; break; }
-        }
-        if (!cellBasarili) {
-          alert('⚠️ Değişiklikler ekranda görünüyor ancak sunucuya kaydedilemedi.\nİnternet bağlantınızı kontrol edip tekrar deneyin.');
-        }
+      console.log('[saveTurne] POST sonuç:', postR.status, postR.ok);
+      if (!postR.ok) {
+        var errText2 = '';
+        try { var errJson2 = await postR.json(); errText2 = errJson2.error || postR.status; } catch(e2) { errText2 = postR.status; }
+        alert('⚠️ Değişiklikler ekranda görünüyor ancak sunucuya kaydedilemedi (Hata: ' + errText2 + ').\nİnternet bağlantınızı kontrol edip tekrar deneyin.');
       }
     } else {
       // Header satırı Sheets'te zaten var — buraya yazma
+      console.log('[saveTurne] POST values length:', values.length);
       var r = await fetch(API + '/' + encodeURIComponent(TURNE_SHEET) + '/row', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ values:values }) });
+      console.log('[saveTurne] POST sonuç:', r.status, r.ok);
       if (!r.ok) {
         var errText = '';
         try { var errJson = await r.json(); errText = errJson.error || r.status; } catch(e) { errText = r.status; }
