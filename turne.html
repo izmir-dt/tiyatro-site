@@ -1790,33 +1790,37 @@ async function fetchTurneler() {
       .map((r, realIdx) => ({ r, realIdx }))
       .filter(({ r }) => r[0] && r[0] !== 'ID' && r[0] !== 'Oyun Adı');
     turneler = safeRows.map(({ r, realIdx }) => {
-      var duraklarRaw = (r[iDurak >= 0 ? iDurak : -1] || '').trim();
+      // SABİT INDEX — values dizisiyle birebir eşleşiyor
+      // [0]oyun [1]il [2]basTarih [3]bitTarih [4]mekan [5]sayi [6]not [7]statu
+      // [8]otelAdi [9]otelAdres [10]otelTel [11]gidisUlasim [12]gidisSaat
+      // [13]donusUlasim [14]donusSaat [15]aktarma [16]kamyon [17]kapasite
+      // [18]lojNot [19]grup [20]duraklarJSON
+      var duraklarRaw = (r[20] || '').trim();
       var parsedDuraklar = null;
       try { if (duraklarRaw) parsedDuraklar = JSON.parse(duraklarRaw); } catch(e) {}
-      const rLen = r.length;
       return {
-      _rowIdx:        realIdx,  // rows[] dizisindeki 0-tabanlı index (backend PUT/DELETE için)
-      oyun:           (r[iOyun >= 0 ? iOyun : 0] || '').trim(),
-      il:             (r[iIl   >= 0 ? iIl   : 1] || '').trim(),
-      baslangicTarih: (r[iBas  >= 0 ? iBas  : iTar >= 0 ? iTar : 2] || '').trim(),
-      bitisTarih:     (r[iBit  >= 0 ? iBit  : iTar >= 0 ? iTar : 2] || '').trim(),
-      tarih:          (r[iTar  >= 0 ? iTar  : 2] || '').trim(),
-      mekan:          (r[iMek  >= 0 ? iMek  : 3] || '').trim(),
-      sayi:           parseInt(r[iSay >= 0 ? iSay : 4]) || 1,
-      not:            (r[iNot  >= 0 ? iNot  : 5] || '').trim(),
-      statu:          (r[iStat >= 0 ? iStat : 6] || 'tamamlandi').trim(),
-      otelAdi:        (r[iOtel >= 0 ? iOtel : 7] || '').trim(),
-      otelAdres:      (r[iOAdr >= 0 ? iOAdr : 8] || '').trim(),
-      otelTelefon:    (r[iOTel >= 0 ? iOTel : 9] || '').trim(),
-      gidisUlasim:    (r[iGid  >= 0 ? iGid  : 10] || '').trim(),
-      gidisSaat:      (r[iGidS >= 0 ? iGidS : 11] || '').trim(),
-      donusUlasim:    (r[iDon  >= 0 ? iDon  : 12] || '').trim(),
-      donusSaat:      (r[iDonS >= 0 ? iDonS : 13] || '').trim(),
-      aktarma:        (r[iAkt  >= 0 ? iAkt  : 14] || '').trim(),
-      kamyonSayisi:   (r[iKam  >= 0 ? iKam  : 15] || '').trim(),
-      sahneKapasitesi:(r[iKap  >= 0 ? iKap  : 16] || '').trim(),
-      notlar:         (r[iLNot >= 0 ? iLNot : 17] || '').trim(),
-      grup:           (r[iGrup >= 0 ? iGrup : -1] || '').trim(),
+      _rowIdx:        realIdx,
+      oyun:           (r[0]  || '').trim(),
+      il:             (r[1]  || '').trim(),
+      baslangicTarih: (r[2]  || '').trim(),
+      bitisTarih:     (r[3]  || '').trim(),
+      tarih:          (r[2]  || '').trim(),
+      mekan:          (r[4]  || '').trim(),
+      sayi:           parseInt(r[5]) || 1,
+      not:            (r[6]  || '').trim(),
+      statu:          (r[7]  || 'tamamlandi').trim(),
+      otelAdi:        (r[8]  || '').trim(),
+      otelAdres:      (r[9]  || '').trim(),
+      otelTelefon:    (r[10] || '').trim(),
+      gidisUlasim:    (r[11] || '').trim(),
+      gidisSaat:      (r[12] || '').trim(),
+      donusUlasim:    (r[13] || '').trim(),
+      donusSaat:      (r[14] || '').trim(),
+      aktarma:        (r[15] || '').trim(),
+      kamyonSayisi:   (r[16] || '').trim(),
+      sahneKapasitesi:(r[17] || '').trim(),
+      notlar:         (r[18] || '').trim(),
+      grup:           (r[19] || '').trim(),
       duraklar:       parsedDuraklar || null,
       gidisInis:      (r[21] || '').trim(),
       gidisUcusNo:    (r[22] || '').trim(),
@@ -1855,7 +1859,7 @@ async function fetchTurneler() {
         try { var p = JSON.parse(raw); return Array.isArray(p) ? p : []; } catch(e) { return []; }
       })(),
       };
-    }).filter(r => r.il || r.oyun || (r.duraklar && r.duraklar.length));  // en az bir tanımlayıcı alan olsun
+    }).filter(r => r.oyun || r.il || r.baslangicTarih || (r.duraklar && r.duraklar.length));
   } catch(e) { console.warn('Turne verisi çekilemedi:', e); turneler = []; }
 }
 
@@ -4185,11 +4189,20 @@ async function saveTurne() {
         _gosterKayitHatasi('Turne kaydedilemedi (Hata: ' + errText + ')');
       }
     }
-    // Başarılıysa Sheets'ten taze veri çek (yeni _rowIdx için)
+    // Başarılıysa yerel veri zaten güncel — fetchTurneler çağırma (Sheets gecikir, kayıt kaybolur)
     if (apiBasarili) {
-      console.log('[saveTurne] Başarılı — taze veri çekiliyor');
-      await fetchTurneler();
-      populateFilters(); renderListe(); renderCalendar();
+      console.log('[saveTurne] Başarılı — yerel veri korunuyor');
+      // 3 saniye sonra arka planda _rowIdx senkronizasyonu için sessizce çek
+      setTimeout(async function() {
+        var eskiTurneler = JSON.parse(JSON.stringify(turneler));
+        await fetchTurneler();
+        // fetchTurneler boş döndürdüyse yerel veriyi geri yükle
+        if (!turneler.length && eskiTurneler.length) {
+          console.warn('[saveTurne] fetchTurneler boş döndü — yerel veri geri yüklendi');
+          turneler = eskiTurneler;
+        }
+        populateFilters(); renderListe(); renderCalendar();
+      }, 3000);
     }
   } catch(e) {
     console.warn('API kayıt hatası:', e);
