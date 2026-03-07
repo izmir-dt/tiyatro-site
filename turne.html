@@ -1754,10 +1754,16 @@ async function fetchPersonel() {
 async function fetchTurneler() {
   try {
     const res  = await fetch(API + '/' + encodeURIComponent(TURNE_SHEET));
-    if (!res.ok) { turneler = []; return; }
+    if (!res.ok) {
+      console.warn('fetchTurneler: API hata', res.status, '— mevcut veri korundu');
+      return; // turneler = [] YAPMA
+    }
     const data = await res.json();
     const allRows = data.rows || [];
-    if (!allRows.length) { turneler = []; return; }
+    if (!allRows.length) {
+      console.warn('fetchTurneler: boş yanıt — mevcut veri korundu');
+      return; // turneler = [] YAPMA
+    }
     const h = (data.headers || []).map(x => (x||'').trim().toLowerCase());
     const iOyun = h.findIndex(x => x.startsWith('oyun'));
     const iIl   = h.findIndex(x => x === 'il' || x.startsWith('şehir') || x.startsWith('sehir'));
@@ -1781,15 +1787,17 @@ async function fetchTurneler() {
     const iLNot = h.findIndex(x => x.includes('loji'));
     const iGrup  = h.findIndex(x => x === 'grup' || x.startsWith('turne grup'));
     const iDurak = h.findIndex(x => x.startsWith('durak') && x.includes('json') || x === 'duraklar');
-    const safeRows = allRows.filter(r => r[0] && r[0] !== 'ID' && r[0] !== 'Oyun Adı');
-    turneler = safeRows.map((r, i) => {
+    // safeRows: her satıra allRows içindeki gerçek indeksi (rowIdx) ekle
+    const safeRows = allRows
+      .map((r, realIdx) => ({ r, realIdx }))
+      .filter(({ r }) => r[0] && r[0] !== 'ID' && r[0] !== 'Oyun Adı');
+    turneler = safeRows.map(({ r, realIdx }) => {
       var duraklarRaw = (r[iDurak >= 0 ? iDurak : -1] || '').trim();
       var parsedDuraklar = null;
       try { if (duraklarRaw) parsedDuraklar = JSON.parse(duraklarRaw); } catch(e) {}
-      // Yeni sütunlar: kolon indekslerini sona bakarak bul
       const rLen = r.length;
       return {
-      _rowIdx:        i,
+      _rowIdx:        realIdx,  // allRows'taki GERÇEK pozisyon — PUT/DELETE için kritik
       oyun:           (r[iOyun >= 0 ? iOyun : 0] || '').trim(),
       il:             (r[iIl   >= 0 ? iIl   : 1] || '').trim(),
       baslangicTarih: (r[iBas  >= 0 ? iBas  : iTar >= 0 ? iTar : 2] || '').trim(),
