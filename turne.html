@@ -1795,7 +1795,7 @@ async function fetchTurneler() {
       try { if (duraklarRaw) parsedDuraklar = JSON.parse(duraklarRaw); } catch(e) {}
       const rLen = r.length;
       return {
-      _rowIdx:        realIdx,  // allRows'taki GERÇEK pozisyon — PUT/DELETE için kritik
+      _rowIdx:        realIdx,  // rows[] dizisindeki 0-tabanlı index (backend PUT/DELETE için)
       oyun:           (r[iOyun >= 0 ? iOyun : 0] || '').trim(),
       il:             (r[iIl   >= 0 ? iIl   : 1] || '').trim(),
       baslangicTarih: (r[iBas  >= 0 ? iBas  : iTar >= 0 ? iTar : 2] || '').trim(),
@@ -2000,6 +2000,10 @@ function renderListe() {
     html += '<div class="cards-grid">' + grupsuz.map(turneCard).join('') + '</div>';
   }
   el.innerHTML = html;
+  // Açık kart varsa yeniden göster (renderListe DOM'u sıfırlamaz kartı kapatmaz ama modal state korunur)
+  if (window._acikKartRowIdx != null) {
+    setTimeout(function(){ openCardDetail(window._acikKartRowIdx); }, 0);
+  }
 }
 
 function turneCard(t) {
@@ -2194,10 +2198,12 @@ function openCardDetail(rowIdx) {
 
   document.getElementById('card-detail-box').innerHTML = html;
   document.getElementById('card-detail-modal').classList.add('on');
+  window._acikKartRowIdx = rowIdx;
 }
 
 function closeCardDetail() {
   document.getElementById('card-detail-modal').classList.remove('on');
+  window._acikKartRowIdx = null;
 }
 
 function filterKisiList() {
@@ -2438,20 +2444,17 @@ async function saveKisiModal() {
       katJSON2,  // index 40 — katilimcilar
       (t.programSatirlar && t.programSatirlar.length ? JSON.stringify(t.programSatirlar) : '')  // index 41 — turne programı
     ];
-    console.log('[saveKisiModal] DELETE+POST row:', t._rowIdx, 'kat:', kisiModalSecili.length);
-    // DELETE + POST: index offset sorununu ortadan kaldırır
-    const delRes = await fetch(API + '/' + encodeURIComponent(TURNE_SHEET) + '/row/' + t._rowIdx, { method: 'DELETE' });
-    console.log('[saveKisiModal] DELETE sonuç:', delRes.status);
-    const postRes = await fetch(API + '/' + encodeURIComponent(TURNE_SHEET) + '/row', {
-      method: 'POST',
+    console.log('[saveKisiModal] PUT row:', t._rowIdx, 'kat:', kisiModalSecili.length);
+    const putRes = await fetch(API + '/' + encodeURIComponent(TURNE_SHEET) + '/row/' + t._rowIdx, {
+      method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ values: turneValues })
     });
-    console.log('[saveKisiModal] POST sonuç:', postRes.status, postRes.ok);
-    if (!postRes.ok) {
-      const errBody = await postRes.text();
-      console.error('[saveKisiModal] POST hata:', errBody);
-      throw new Error('POST başarısız: ' + errBody);
+    console.log('[saveKisiModal] PUT sonuç:', putRes.status, putRes.ok);
+    if (!putRes.ok) {
+      const errBody = await putRes.text();
+      console.error('[saveKisiModal] PUT hata:', errBody);
+      throw new Error('PUT başarısız: ' + errBody);
     }
   } catch(e) {
     console.warn('Katılımcı kaydı yazılamadı:', e);
@@ -4153,41 +4156,57 @@ async function saveTurne() {
 
   // Arka planda API'ye kaydet
   try {
+    var apiBasarili = false;
     if (editIdx !== '') {
       var idx = parseInt(editIdx);
-      console.log('[saveTurne] güncelleme: önce DELETE row:', idx, 'sonra POST');
-      // DELETE + POST stratejisi: _rowIdx offset sorununu tamamen ortadan kaldırır
-      var delR = await fetch(API + '/' + encodeURIComponent(TURNE_SHEET) + '/row/' + idx, { method:'DELETE' });
-      console.log('[saveTurne] DELETE sonuç:', delR.status);
-      // DELETE başarılı ya da değil, her durumda POST ile yeni satır ekle
-      var postR = await fetch(API + '/' + encodeURIComponent(TURNE_SHEET) + '/row', {
-        method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ values: values })
+      console.log('[saveTurne] PUT row:', idx, 'values:', values.length);
+      var putR = await fetch(API + '/' + encodeURIComponent(TURNE_SHEET) + '/row/' + idx, {
+        method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ values: values })
       });
-      console.log('[saveTurne] POST sonuç:', postR.status, postR.ok);
-      if (!postR.ok) {
-        var errText2 = '';
-        try { var errJson2 = await postR.json(); errText2 = errJson2.error || postR.status; } catch(e2) { errText2 = postR.status; }
-        alert('⚠️ Değişiklikler ekranda görünüyor ancak sunucuya kaydedilemedi (Hata: ' + errText2 + ').\nİnternet bağlantınızı kontrol edip tekrar deneyin.');
+      console.log('[saveTurne] PUT sonuç:', putR.status, putR.ok);
+      if (putR.ok) {
+        apiBasarili = true;
+      } else {
+        var errPut = '';
+        try { var errPutJ = await putR.json(); errPut = errPutJ.error || putR.status; } catch(ep) { errPut = putR.status; }
+        console.error('[saveTurne] PUT hata:', errPut);
+        _gosterKayitHatasi('Güncelleme kaydedilemedi (Hata: ' + errPut + ')');
       }
     } else {
-      // Header satırı Sheets'te zaten var — buraya yazma
       console.log('[saveTurne] POST values length:', values.length);
-      var r = await fetch(API + '/' + encodeURIComponent(TURNE_SHEET) + '/row', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ values:values }) });
-      console.log('[saveTurne] POST sonuç:', r.status, r.ok);
-      if (!r.ok) {
+      var postR2 = await fetch(API + '/' + encodeURIComponent(TURNE_SHEET) + '/row', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ values:values }) });
+      console.log('[saveTurne] POST sonuç:', postR2.status, postR2.ok);
+      if (postR2.ok) {
+        apiBasarili = true;
+      } else {
         var errText = '';
-        try { var errJson = await r.json(); errText = errJson.error || r.status; } catch(e) { errText = r.status; }
+        try { var errJson = await postR2.json(); errText = errJson.error || postR2.status; } catch(e) { errText = postR2.status; }
         console.warn('POST başarısız:', errText);
-        // Yerel veri korundu — kullanıcıya bilgi ver
-        alert('⚠️ Turne ekranda görünüyor ancak sunucuya kaydedilemedi (Hata: ' + errText + ').\nİnternet bağlantınızı kontrol edip tekrar deneyin.');
+        _gosterKayitHatasi('Turne kaydedilemedi (Hata: ' + errText + ')');
       }
-      // fetchTurneler ÇAĞIRMA — yerel veri zaten güncel, gereksiz fetch listeyi bozuyor
+    }
+    // Başarılıysa Sheets'ten taze veri çek (yeni _rowIdx için)
+    if (apiBasarili) {
+      console.log('[saveTurne] Başarılı — taze veri çekiliyor');
+      await fetchTurneler();
+      populateFilters(); renderListe(); renderCalendar();
     }
   } catch(e) {
     console.warn('API kayıt hatası:', e);
-    // Yerel veri korundu, kullanıcıyı bilgilendir
-    alert('⚠️ Bağlantı hatası: Turne ekranda görünüyor ancak sunucuya kaydedilemedi.\n' + (e.message||''));
+    _gosterKayitHatasi('Bağlantı hatası: ' + (e.message||'bilinmiyor'));
   }
+}
+
+function _gosterKayitHatasi(mesaj) {
+  var el = document.getElementById('kayit-hata-banner');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'kayit-hata-banner';
+    el.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#c0392b;color:#fff;padding:12px 20px;border-radius:10px;font-size:13px;font-weight:600;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,.3);display:flex;gap:10px;align-items:center;max-width:500px';
+    document.body.appendChild(el);
+  }
+  el.innerHTML = '⚠️ ' + mesaj + ' <button onclick="this.parentNode.remove()" style="background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:5px;padding:2px 8px;cursor:pointer;font-size:12px">Kapat</button>';
+  setTimeout(function(){ if(el.parentNode) el.remove(); }, 8000);
 }
 
 // ============================================================
