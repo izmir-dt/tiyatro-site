@@ -768,19 +768,71 @@
 
       <!-- LOJİSTİK -->
       <div class="modal-section" id="ms-lojistik">
-        <div class="form-grid-2">
-          <div class="form-group">
-            <label class="form-label">Kiralanan Kamyon</label>
-            <input class="form-input" type="number" min="0" id="m-kamyon" placeholder="2">
+        <!-- Araç türü + sayı + liftli -->
+        <div class="form-grid-2" style="grid-template-columns:1fr 1fr;gap:10px">
+          <div class="form-group" style="margin:0">
+            <label class="form-label">Araç Türü</label>
+            <select class="form-select" id="m-arac-tur">
+              <option value="">— Seçilmedi —</option>
+              <option value="Kamyon">Kamyon</option>
+              <option value="Kamyon (Liftli)">Kamyon (Liftli)</option>
+              <option value="Kamyonet">Kamyonet</option>
+              <option value="Kamyonet (Liftli)">Kamyonet (Liftli)</option>
+              <option value="Kamyon + Kamyonet">Kamyon + Kamyonet</option>
+              <option value="Tır">Tır</option>
+              <option value="Araç Gerekmez">Araç Gerekmez</option>
+            </select>
           </div>
-          <div class="form-group">
-            <label class="form-label">Sahne Kapasitesi</label>
-            <input class="form-input" type="number" min="0" id="m-kapasite" placeholder="300">
+          <div class="form-group" style="margin:0">
+            <label class="form-label">Araç Sayısı</label>
+            <input class="form-input" type="number" min="0" id="m-kamyon" placeholder="1">
           </div>
         </div>
-        <div class="form-group">
+        <!-- Yükleme -->
+        <div style="background:var(--muted);border-radius:8px;padding:10px 12px;margin-top:8px">
+          <div style="font-size:10px;font-weight:700;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">📦 Yükleme</div>
+          <div class="form-grid-2" style="gap:8px">
+            <div class="form-group" style="margin:0">
+              <label class="form-label">Saat</label>
+              <input class="form-input" type="time" id="m-yukleme-saat">
+            </div>
+            <div class="form-group" style="margin:0">
+              <label class="form-label">Yer / Adres</label>
+              <input class="form-input" type="text" id="m-yukleme-yer" placeholder="Sahne girişi, depo...">
+            </div>
+          </div>
+        </div>
+        <!-- Boşaltma -->
+        <div style="background:var(--muted);border-radius:8px;padding:10px 12px;margin-top:6px">
+          <div style="font-size:10px;font-weight:700;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">📤 Boşaltma</div>
+          <div class="form-grid-2" style="gap:8px">
+            <div class="form-group" style="margin:0">
+              <label class="form-label">Saat</label>
+              <input class="form-input" type="time" id="m-bosaltma-saat">
+            </div>
+            <div class="form-group" style="margin:0">
+              <label class="form-label">Yer / Adres</label>
+              <input class="form-input" type="text" id="m-bosaltma-yer" placeholder="Sahne, dekor deposu...">
+            </div>
+          </div>
+        </div>
+        <!-- Kapasite + Not -->
+        <div class="form-grid-2" style="gap:10px;margin-top:8px">
+          <div class="form-group" style="margin:0">
+            <label class="form-label">Sahne Kapasitesi (kişi)</label>
+            <input class="form-input" type="number" min="0" id="m-kapasite" placeholder="300">
+          </div>
+          <div class="form-group" style="margin:0">
+            <label class="form-label">&nbsp;</label>
+            <div style="display:flex;align-items:center;gap:8px;height:36px;padding:0 10px;background:var(--card);border:1px solid var(--border);border-radius:7px;cursor:pointer" onclick="document.getElementById('m-arac-liftli').click()">
+              <input type="checkbox" id="m-arac-liftli" style="cursor:pointer;accent-color:var(--primary);width:14px;height:14px">
+              <label for="m-arac-liftli" style="font-size:11px;cursor:pointer;user-select:none">Liftli Araç</label>
+            </div>
+          </div>
+        </div>
+        <div class="form-group" style="margin-top:8px">
           <label class="form-label">Lojistik Notlar</label>
-          <textarea class="form-textarea" id="m-lojistik-not" placeholder="Sahne teknik gereksinimleri..."></textarea>
+          <textarea class="form-textarea" id="m-lojistik-not" placeholder="Sahne teknik gereksinimleri, özel ekipman..."></textarea>
         </div>
       </div>
 
@@ -1674,7 +1726,9 @@ function formatTarih(tarih) {
   } catch { return tarih; }
 }
 function getPersonelForOyun(oyunAdi) {
-  return tumPersonel.filter(p => p.oyun === oyunAdi && DAHIL_KATEGORILER.some(k => p.kategori === k));
+  if (!oyunAdi) return [];
+  var aranan = oyunAdi.trim().toLowerCase();
+  return tumPersonel.filter(p => p.oyun && p.oyun.trim().toLowerCase() === aranan && DAHIL_KATEGORILER.some(k => p.kategori === k));
 }
 function chipClass(k) {
   if (k === 'Sanatçı') return 'chip-oyuncu';
@@ -1840,6 +1894,8 @@ async function fetchTurneler() {
       kamyonSayisi:   (r[16] || '').trim(),
       sahneKapasitesi:(r[17] || '').trim(),
       notlar:         (r[18] || '').trim(),
+      // Ekstra lojistik alanları: notlar JSON ise parse et
+      ...( (function(){ var raw=(r[18]||'').trim(); if(!raw.startsWith('{')) return {}; try{ var p=JSON.parse(raw); return { aracTur:p.aracTur||'', liftli:!!p.liftli, yuklemeSaat:p.yuklemeSaat||'', yuklemeYer:p.yuklemeYer||'', bosaltmaSaat:p.bosaltmaSaat||'', bosaltmaYer:p.bosaltmaYer||'', notlarDuz:p.not||'' }; }catch(e){ return {}; } })() ),
       grup:           '',
       duraklar:       parsedDuraklar || null,
       gidisInis:      (r[20] || '').trim(),
@@ -2046,6 +2102,16 @@ function turneCard(t) {
     ulasimParts.push(gStr);
   }
   if (t.sehirAracTur) ulasimParts.push('🚗 ' + t.sehirAracTur);
+  // Lojistik araç türünü de göster
+  var _kartAracTur = '';
+  try { if (t.notlar && t.notlar.startsWith('{')) { var _kp=JSON.parse(t.notlar); _kartAracTur=_kp.aracTur||''; } else { _kartAracTur=t.aracTur||''; } } catch(e){}
+  if (!_kartAracTur && t.aracTur) _kartAracTur = t.aracTur;
+  if (_kartAracTur || t.kamyonSayisi) {
+    var _naklStr = '';
+    if (t.kamyonSayisi) _naklStr += t.kamyonSayisi + 'x ';
+    _naklStr += (_kartAracTur || 'Kamyon');
+    ulasimParts.push('🚛 ' + _naklStr);
+  }
   const ulasimStr = ulasimParts.length ? '<div class="turne-info-row"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="m16 8 5 4-5 4V8z"/></svg>' + ulasimParts.join(' · ') + '</div>' : '';
   const toplamTemsil = durakToplamTemsil(t);
   const grupStr = t.grup ? '<span class="grup-badge"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>' + t.grup + '</span>' : '';
@@ -2150,7 +2216,8 @@ function closeKisiModal() {
 function kisiModalAnaKadroyuSec() {
   var t = turneler.find(x => x._rowIdx === kisiModalRowIdx);
   if (!t) return;
-  var anaKadro = getPersonelForOyun(t.oyun);
+  var _kmOyun = t.oyun || (t.duraklar ? [...new Set(t.duraklar.map(function(d){return d.oyun||'';}).filter(Boolean))].join(' / ') : '');
+  var anaKadro = getPersonelForOyun(_kmOyun);
   kisiModalSecili = anaKadro.map(function(p) { return { kisi: p.kisi, gorev: p.gorev || p.kategori, kategori: p.kategori }; });
   var q = document.getElementById('kisi-filter-input').value.toLowerCase();
   renderKisiModalList(t.oyun, q);
@@ -2474,7 +2541,8 @@ function updateKisiCount() {
   const el = document.getElementById('kisi-count-label');
   if (!el) return;
   var t = turneler.find(x => x._rowIdx === kisiModalRowIdx);
-  var anaKadroSayisi = t ? getPersonelForOyun(t.oyun).length : 0;
+  var _ukcOyun = t ? (t.oyun || (t.duraklar ? [...new Set(t.duraklar.map(function(d){return d.oyun||'';}).filter(Boolean))].join(' / ') : '')) : '';
+  var anaKadroSayisi = _ukcOyun ? getPersonelForOyun(_ukcOyun).length : 0;
   var turneKadroSayisi = kisiModalSecili.length;
   if (anaKadroSayisi && turneKadroSayisi !== anaKadroSayisi) {
     el.innerHTML = 'Ana Kadro: <strong>' + anaKadroSayisi + '</strong> · Seçili: <strong style="color:var(--primary)">' + turneKadroSayisi + '</strong> kişi';
@@ -3950,7 +4018,8 @@ function openModal(rowIdx) {
   if (rowIdx === undefined) {
     document.getElementById('modal-title').textContent = 'Yeni Turne Ekle';
     document.getElementById('edit-rowidx').value = '';
-    ['m-oyun','m-tarih','m-bitis','m-not','m-gidis-ulasim','m-gidis-saat','m-gidis-plaka','m-gidis-surucu','m-gidis-kisi-sayisi','m-donus-ulasim','m-donus-saat','m-donus-plaka','m-donus-surucu','m-donus-kisi-sayisi','m-sehir-arac-tur','m-sehir-arac-detay','m-sehir-kisi-sayisi','m-sehir-surucu','m-sehir-tel','m-aktarma','m-otel-adi','m-otel-adr','m-otel-tel','m-kamyon','m-kapasite','m-lojistik-not','m-grup'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    ['m-oyun','m-tarih','m-bitis','m-not','m-gidis-ulasim','m-gidis-saat','m-gidis-plaka','m-gidis-surucu','m-gidis-kisi-sayisi','m-donus-ulasim','m-donus-saat','m-donus-plaka','m-donus-surucu','m-donus-kisi-sayisi','m-sehir-arac-tur','m-sehir-arac-detay','m-sehir-kisi-sayisi','m-sehir-surucu','m-sehir-tel','m-aktarma','m-otel-adi','m-otel-adr','m-otel-tel','m-kamyon','m-kapasite','m-lojistik-not','m-grup','m-arac-tur','m-yukleme-saat','m-yukleme-yer','m-bosaltma-saat','m-bosaltma-yer'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    var liftliEl = document.getElementById('m-arac-liftli'); if (liftliEl) liftliEl.checked = false;
     ucusBacaklar = { gidis: [], donus: [] };
     ['gidis-ucak-bacaklar','gidis-kara-row','donus-ucak-bacaklar','donus-kara-row','gidis-bacak-ekle-btn','donus-bacak-ekle-btn'].forEach(id => { var el=document.getElementById(id); if(el) el.style.display='none'; });
     ['gidis-ucak-row','gidis-arac-row','donus-ucak-row','donus-arac-row'].forEach(id => { var el=document.getElementById(id); if(el) el.style.display='none'; });
@@ -4000,7 +4069,17 @@ function turneCopyala(rowIdx) {
     // Lojistik
     document.getElementById('m-kamyon').value   = t.kamyonSayisi || '';
     document.getElementById('m-kapasite').value = t.sahneKapasitesi || '';
-    document.getElementById('m-lojistik-not').value = t.notlar || '';
+    // Lojistik ekstra alanlar (notlar içinde JSON saklanıyor)
+    var _lojExtra = {};
+    try { var _lojRaw = t.notlar||''; if (_lojRaw.startsWith('{')) _lojExtra = JSON.parse(_lojRaw); } catch(e){}
+    var _lojNot = _lojExtra.not !== undefined ? _lojExtra.not : (t.notlar && !t.notlar.startsWith('{') ? t.notlar : '');
+    document.getElementById('m-lojistik-not').value = _lojNot;
+    var _atEl = document.getElementById('m-arac-tur'); if (_atEl) _atEl.value = _lojExtra.aracTur||t.aracTur||'';
+    var _liEl = document.getElementById('m-arac-liftli'); if (_liEl) _liEl.checked = !!(_lojExtra.liftli||t.liftli||false);
+    var _ysEl = document.getElementById('m-yukleme-saat'); if (_ysEl) _ysEl.value = _lojExtra.yuklemeSaat||'';
+    var _yyEl = document.getElementById('m-yukleme-yer'); if (_yyEl) _yyEl.value = _lojExtra.yuklemeYer||'';
+    var _bsEl = document.getElementById('m-bosaltma-saat'); if (_bsEl) _bsEl.value = _lojExtra.bosaltmaSaat||'';
+    var _byEl = document.getElementById('m-bosaltma-yer'); if (_byEl) _byEl.value = _lojExtra.bosaltmaYer||'';
     // Uçuş bacaklarını kopyala
     try { ucusBacaklar.gidis = t.gidisUcusBacakJSON ? JSON.parse(t.gidisUcusBacakJSON) : []; } catch(e) { ucusBacaklar.gidis = []; }
     try { ucusBacaklar.donus = t.donusUcusBacakJSON ? JSON.parse(t.donusUcusBacakJSON) : []; } catch(e) { ucusBacaklar.donus = []; }
@@ -4065,7 +4144,16 @@ function editTurne(rowIdx) {
   document.getElementById('m-otel-tel').value = t.otelTelefon || '';
   document.getElementById('m-kamyon').value   = t.kamyonSayisi    || '';
   document.getElementById('m-kapasite').value = t.sahneKapasitesi || '';
-  document.getElementById('m-lojistik-not').value = t.notlar || '';
+  var _lojExtra2 = {};
+  try { var _lojRaw2 = t.notlar||''; if (_lojRaw2.startsWith('{')) _lojExtra2 = JSON.parse(_lojRaw2); } catch(e){}
+  var _lojNot2 = _lojExtra2.not !== undefined ? _lojExtra2.not : (t.notlar && !t.notlar.startsWith('{') ? t.notlar : '');
+  document.getElementById('m-lojistik-not').value = _lojNot2;
+  var _atEl2 = document.getElementById('m-arac-tur'); if (_atEl2) _atEl2.value = _lojExtra2.aracTur||t.aracTur||'';
+  var _liEl2 = document.getElementById('m-arac-liftli'); if (_liEl2) _liEl2.checked = !!(_lojExtra2.liftli||t.liftli||false);
+  var _ysEl2 = document.getElementById('m-yukleme-saat'); if (_ysEl2) _ysEl2.value = _lojExtra2.yuklemeSaat||'';
+  var _yyEl2 = document.getElementById('m-yukleme-yer'); if (_yyEl2) _yyEl2.value = _lojExtra2.yuklemeYer||'';
+  var _bsEl2 = document.getElementById('m-bosaltma-saat'); if (_bsEl2) _bsEl2.value = _lojExtra2.bosaltmaSaat||'';
+  var _byEl2 = document.getElementById('m-bosaltma-yer'); if (_byEl2) _byEl2.value = _lojExtra2.bosaltmaYer||'';
   // Durakları yükle (eski format uyumlu)
   if (t.duraklar && t.duraklar.length) {
     duraklar = JSON.parse(JSON.stringify(t.duraklar));
@@ -4139,7 +4227,18 @@ async function saveTurne() {
   var otelTelefon = (gecerliOtelDurak.otelTel     || '').trim();
   var kamyon      = (document.getElementById('m-kamyon')||{value:''}).value.trim();
   var kapasite    = (document.getElementById('m-kapasite')||{value:''}).value.trim();
-  var lojNot      = (document.getElementById('m-lojistik-not')||{value:''}).value.trim();
+  var _lojNotDuz  = (document.getElementById('m-lojistik-not')||{value:''}).value.trim();
+  var _aracTur    = (document.getElementById('m-arac-tur')||{value:''}).value.trim();
+  var _liftli     = !!(document.getElementById('m-arac-liftli')||{checked:false}).checked;
+  var _yukSaat    = (document.getElementById('m-yukleme-saat')||{value:''}).value.trim();
+  var _yukYer     = (document.getElementById('m-yukleme-yer')||{value:''}).value.trim();
+  var _bosSaat    = (document.getElementById('m-bosaltma-saat')||{value:''}).value.trim();
+  var _bosYer     = (document.getElementById('m-bosaltma-yer')||{value:''}).value.trim();
+  // Ekstra lojistik verileri JSON olarak notlar sütununa sakla
+  var _hasExtra = _aracTur || _liftli || _yukSaat || _yukYer || _bosSaat || _bosYer;
+  var lojNot = _hasExtra
+    ? JSON.stringify({ not: _lojNotDuz, aracTur: _aracTur, liftli: _liftli, yuklemeSaat: _yukSaat, yuklemeYer: _yukYer, bosaltmaSaat: _bosSaat, bosaltmaYer: _bosYer })
+    : _lojNotDuz;
   var editIdx     = document.getElementById('edit-rowidx').value;
 
   // Kaydet anında DOM'dan durak değerlerini senkronize et (oninput bazen tetiklenmez)
@@ -4227,6 +4326,7 @@ async function saveTurne() {
     donusUcusBacakJSON, donusPlaka, donusSurucu, donusKisiSayisi,
     sehirAracTur, sehirAracDetay, sehirKisiSayisi, sehirSurucu, sehirTel,
     aktarma, kamyonSayisi: kamyon, sahneKapasitesi: kapasite, notlar: lojNot,
+    aracTur: _aracTur||'', liftli: _liftli||false, yuklemeSaat: _yukSaat||'', yuklemeYer: _yukYer||'', bosaltmaSaat: _bosSaat||'', bosaltmaYer: _bosYer||'',
     programSatirlar: JSON.parse(JSON.stringify(programSatirlar)),
     katilimcilar: editIdx !== '' ? (turneler.find(x=>x._rowIdx===parseInt(editIdx))||{}).katilimcilar : []
   };
@@ -4599,10 +4699,30 @@ function _pdfIcerik(t) {
   }
 
   var nakliyeHTML = '';
-  if (t.kamyonSayisi) {
-    nakliyeHTML = '<div style="padding:8px 14px;background:#eff6ff;border-radius:5px;border-left:3px solid #3b82f6;font-size:11px;margin-bottom:4px">'
-      + '<strong style="color:#1d4ed8">\ud83d\ude9b Nakliye:</strong> ' + t.kamyonSayisi + ' adet kamyon'
-      + (t.sahneKapasitesi ? ' \u00b7 Sahne kapasitesi: ' + t.sahneKapasitesi + ' ki\u015fi' : '') + '</div>';
+  // Lojistik JSON parse
+  var _lojP = {};
+  try { if (t.notlar && t.notlar.startsWith('{')) _lojP = JSON.parse(t.notlar); } catch(e) {}
+  var _aracTurPdf    = _lojP.aracTur    || t.aracTur    || '';
+  var _liftliPdf     = _lojP.liftli     !== undefined ? _lojP.liftli     : (t.liftli||false);
+  var _yukSaatPdf    = _lojP.yuklemeSaat|| t.yuklemeSaat|| '';
+  var _yukYerPdf     = _lojP.yuklemeYer || t.yuklemeYer || '';
+  var _bosSaatPdf    = _lojP.bosaltmaSaat||t.bosaltmaSaat||'';
+  var _bosYerPdf     = _lojP.bosaltmaYer||t.bosaltmaYer ||'';
+
+  if (t.kamyonSayisi || _aracTurPdf || _yukSaatPdf || _bosSaatPdf) {
+    var _aracStr = (_aracTurPdf || 'Kamyon') + (_liftliPdf ? ' (Liftli)' : '');
+    if (t.kamyonSayisi) _aracStr = t.kamyonSayisi + ' adet ' + _aracStr;
+    nakliyeHTML = '<table style="width:100%;border-collapse:collapse;font-size:11px">';
+    nakliyeHTML += '<thead><tr style="background:#1e3a5f"><th colspan="2" style="padding:6px 10px;color:#fff;text-align:left;border:1px solid #1a305a;font-size:10px">\ud83d\ude9b Nakliye Bilgileri</th></tr></thead><tbody>';
+    nakliyeHTML += '<tr style="background:#f0f7ff"><td style="padding:6px 10px;border:1px solid #ddd;font-weight:700;width:40%">Araç</td><td style="padding:6px 10px;border:1px solid #ddd">' + _aracStr + '</td></tr>';
+    if (t.sahneKapasitesi) nakliyeHTML += '<tr><td style="padding:6px 10px;border:1px solid #ddd;font-weight:700">Sahne Kapasitesi</td><td style="padding:6px 10px;border:1px solid #ddd">' + t.sahneKapasitesi + ' kişi</td></tr>';
+    if (_yukSaatPdf || _yukYerPdf) {
+      nakliyeHTML += '<tr style="background:#fff8e7"><td style="padding:6px 10px;border:1px solid #ddd;font-weight:700">📦 Yükleme</td><td style="padding:6px 10px;border:1px solid #ddd">' + (_yukSaatPdf ? '<strong>' + _yukSaatPdf + '</strong>' : '') + (_yukYerPdf ? (' — ' + _yukYerPdf) : '') + '</td></tr>';
+    }
+    if (_bosSaatPdf || _bosYerPdf) {
+      nakliyeHTML += '<tr style="background:#fff0f0"><td style="padding:6px 10px;border:1px solid #ddd;font-weight:700">📤 Boşaltma</td><td style="padding:6px 10px;border:1px solid #ddd">' + (_bosSaatPdf ? '<strong>' + _bosSaatPdf + '</strong>' : '') + (_bosYerPdf ? (' — ' + _bosYerPdf) : '') + '</td></tr>';
+    }
+    nakliyeHTML += '</tbody></table>';
   }
 
   var programHTML = '';
@@ -4707,12 +4827,22 @@ function gorevlendirmePdf(rowIdx) {
     + '<script>'
     + 'function wordIndir(){'
     +   'var ic=document.getElementById("rapor-icerik").innerHTML;'
-    +   'var html="<html xmlns:o=\'urn:schemas-microsoft-com:office:office\' xmlns:w=\'urn:schemas-microsoft-com:office:word\' xmlns=\'http://www.w3.org/TR/REC-html40\'><head><meta charset=\'utf-8\'><title>' + baslik.replace(/'/g,"\'") + '</title></head><body style=\'font-family:Calibri,sans-serif;font-size:11pt;margin:2cm\'>" + ic + "</body></html>";'
-    +   'var blob=new Blob([html],{type:"application/msword"});'
+    +   'var wordCss="body{font-family:Calibri,Arial,sans-serif;font-size:11pt;color:#1a1a1a;margin:0;padding:0}"'
+    +     '+"table{width:100%;border-collapse:collapse;margin-bottom:8pt;font-size:10pt}"'
+    +     '+"th{background:#5a1717;color:#fff;padding:5pt 8pt;text-align:left;border:1pt solid #4a1212}"'
+    +     '+"td{padding:5pt 8pt;border:1pt solid #ddd}"'
+    +     '+"h1,h2,h3{font-family:Calibri,Arial,sans-serif}"'
+    +     '+".sec{margin-bottom:14pt}"+".sec-title{font-size:12pt;font-weight:bold;color:#6b1b1b;border-bottom:2pt solid #6b1b1b;padding-bottom:3pt;margin-bottom:8pt}"'
+    +     '+".info-grid{display:grid;grid-template-columns:1fr 1fr;gap:6pt}"+".info-box{border:1pt solid #e5ddd5;border-radius:4pt;padding:7pt;background:#faf7f2}"'
+    +     '+".info-lbl{font-size:8pt;color:#888;text-transform:uppercase;letter-spacing:.3pt}"+".info-val{font-size:11pt;font-weight:bold;color:#1a1a1a;margin-top:2pt}"'
+    +     '+"div[style*=\\"border-left\\"]{padding:6pt 10pt;margin-bottom:4pt}";'
+    +   'var html="<html xmlns:o=\\"urn:schemas-microsoft-com:office:office\\" xmlns:w=\\"urn:schemas-microsoft-com:office:word\\" xmlns=\\"http://www.w3.org/TR/REC-html40\\"><head><meta charset=\\"utf-8\\"><title>' + baslik.replace(/"/g,'') + '</title>'
+    +     '<style>"+wordCss+"@page{margin:2cm}</style></head><body>"+ic+"</body></html>";'
+    +   'var blob=new Blob(["\\uFEFF"+html],{type:"application/msword;charset=utf-8"});'
     +   'var a=document.createElement("a");'
     +   'a.href=URL.createObjectURL(blob);'
-    +   'a.download="' + baslik.replace(/[^a-zA-Z0-9ğüşıöçĞÜŞİÖÇ\s\-]/g,'').trim() + '.doc";'
-    +   'a.click();'
+    +   'a.download="Turne_Gorevlendirme.doc";'
+    +   'document.body.appendChild(a);a.click();document.body.removeChild(a);'
     + '}'
     + '<\/script>'
     + '</body></html>';
