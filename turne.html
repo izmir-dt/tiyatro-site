@@ -4193,18 +4193,22 @@ async function saveTurne() {
     var apiBasarili = false;
     if (editIdx !== '') {
       var idx = parseInt(editIdx);
-      console.log('[saveTurne] PUT row:', idx, 'values:', values.length);
-      var putR = await fetch(API + '/' + encodeURIComponent(TURNE_SHEET) + '/row/' + idx, {
-        method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ values: values })
-      });
-      console.log('[saveTurne] PUT sonuç:', putR.status, putR.ok);
-      if (putR.ok) {
+      // /cell endpoint ile her sütunu tek tek güncelle
+      var cellHatalari = 0;
+      for (var ci = 0; ci < values.length; ci++) {
+        try {
+          var cellR = await fetch(API + '/' + encodeURIComponent(TURNE_SHEET) + '/cell', {
+            method:'PUT', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({ row: idx, col: ci, value: values[ci] })
+          });
+          if (!cellR.ok) cellHatalari++;
+        } catch(ce) { cellHatalari++; }
+      }
+      if (cellHatalari === 0) {
         apiBasarili = true;
       } else {
-        var errPut = '';
-        try { var errPutJ = await putR.json(); errPut = errPutJ.error || putR.status; } catch(ep) { errPut = putR.status; }
-        console.error('[saveTurne] PUT hata:', errPut);
-        _gosterKayitHatasi('Güncelleme kaydedilemedi (Hata: ' + errPut + ')');
+        console.error('[saveTurne] cell güncelleme hataları:', cellHatalari);
+        _gosterKayitHatasi('Güncelleme kaydedilemedi (' + cellHatalari + ' hata)');
       }
     } else {
       console.log('[saveTurne] POST values length:', values.length);
