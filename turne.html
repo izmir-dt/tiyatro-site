@@ -674,6 +674,8 @@
                 <input class="form-input" type="time" id="m-gidis-saat">
               </div>
               
+              
+            </div>
           </div>
         </div>
 
@@ -708,6 +710,8 @@
                 <input class="form-input" type="time" id="m-donus-saat">
               </div>
               
+              
+            </div>
           </div>
         </div>
 
@@ -729,7 +733,12 @@
             </div>
           </div>
           <div class="form-grid-2">
+            <div class="form-group">
+              <label class="form-label">Plaka / Firma</label>
+              <input class="form-input" type="text" id="m-sehir-arac-detay" placeholder="35 XYZ 0001 / Uyanık Nakliyat">
+            </div>
             
+          </div>
         </div>
 
         <div class="form-group">
@@ -808,9 +817,7 @@
       </div>
       <div class="kisi-modal-list" id="kisi-modal-list"></div>
       <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">
-        <div class="section-title" onclick="toggleEkstraPanel()" style="cursor:pointer;user-select:none">
-          <span id="ekstra-toggle-icon">▸</span> Kadroda Olmayan Kişi Ekle
-        </div>
+        <div class="section-title" onclick="toggleEkstraPanel()" style="cursor:pointer;user-select:none"><span id="ekstra-toggle-icon">▸</span> Kadroda Olmayan Kişi Ekle</div>
         <div id="ekstra-kisi-panel" style="display:none;margin-top:8px">
           <div class="extra-kisi-row">
             <div style="position:relative;flex:1">
@@ -2129,7 +2136,7 @@ function renderKisiModalList(oyunAdi, q) {
       + '<div class="kisi-checkbox" onclick="toggleKisiSecim(\'' + esc(p.kisi) + '\',\'' + esc(p.gorev||p.kategori||'') + '\',\'' + esc(p.kategori||'') + '\')" style="cursor:pointer;flex-shrink:0">' + (secili ? '✓' : '') + '</div>'
       + '<div class="kisi-row-info" onclick="toggleKisiSecim(\'' + esc(p.kisi) + '\',\'' + esc(p.gorev||p.kategori||'') + '\',\'' + esc(p.kategori||'') + '\')" style="cursor:pointer;min-width:0;flex:1">'
       + '<div class="kisi-row-name">' + p.kisi + '</div>'
-      + '<div class="kisi-row-sub"><span style="background:var(--muted);border-radius:3px;padding:1px 5px;font-size:10px">' + (p.kategori||'') + '</span>' + (!OYUNCU_KATS.includes(p.kategori||'') && p.gorev ? ' · ' + p.gorev : '') + '</div>'
+      + '<div class="kisi-row-sub"><span style="background:var(--muted);border-radius:3px;padding:1px 5px;font-size:10px">' + (p.kategori||'') + '</span>' + (['Oyuncu','Figüran','Koro','Solist','Dansçı','Koro/Dans Ekibi'].indexOf(p.kategori||'')<0 && p.gorev ? ' · ' + p.gorev : '') + '</div>'
       + '</div>'
       + (secili
         ? '<input type="text" value="' + esc(turneGorev) + '" placeholder="Bu turnedeki görevi" '
@@ -2182,30 +2189,14 @@ function renderSelectedPills() {
       + '</div>'
     ).join('')
     + '</div>';
-  // Drag & drop
+  // Drag & drop sıralama
   var dragList = document.getElementById('drag-list');
   var dragSrc = null;
   if (dragList) dragList.querySelectorAll('[draggable]').forEach(function(row) {
-    row.addEventListener('dragstart', function(e) {
-      dragSrc = this; this.style.opacity='0.4'; e.dataTransfer.effectAllowed='move';
-    });
-    row.addEventListener('dragend', function() {
-      if (dragList) dragList.querySelectorAll('[draggable]').forEach(function(r){ r.style.opacity='1'; r.style.borderTop=''; });
-    });
-    row.addEventListener('dragover', function(e) {
-      e.preventDefault();
-      if (dragList) dragList.querySelectorAll('[draggable]').forEach(function(r){ r.style.borderTop=''; });
-      if (this !== dragSrc) this.style.borderTop='2px solid var(--primary)';
-    });
-    row.addEventListener('drop', function(e) {
-      e.preventDefault();
-      if (this === dragSrc) return;
-      var from = parseInt(dragSrc.dataset.idx);
-      var to   = parseInt(this.dataset.idx);
-      var item = kisiModalSecili.splice(from, 1)[0];
-      kisiModalSecili.splice(to, 0, item);
-      renderSelectedPills();
-    });
+    row.addEventListener('dragstart', function(e) { dragSrc=this; this.style.opacity='0.4'; e.dataTransfer.effectAllowed='move'; });
+    row.addEventListener('dragend', function() { dragList.querySelectorAll('[draggable]').forEach(function(r){r.style.opacity='1';r.style.borderTop='';}); });
+    row.addEventListener('dragover', function(e) { e.preventDefault(); dragList.querySelectorAll('[draggable]').forEach(function(r){r.style.borderTop='';}); if(this!==dragSrc) this.style.borderTop='2px solid var(--primary)'; });
+    row.addEventListener('drop', function(e) { e.preventDefault(); if(this===dragSrc) return; var from=parseInt(dragSrc.dataset.idx); var to=parseInt(this.dataset.idx); var item=kisiModalSecili.splice(from,1)[0]; kisiModalSecili.splice(to,0,item); renderSelectedPills(); });
   });
   updateKisiCount();
 }
@@ -2215,46 +2206,51 @@ function kisiGorevGuncelle(idx, yeniGorev) {
 }
 
 function toggleEkstraPanel() {
-  var panel = document.getElementById('ekstra-kisi-panel');
-  var icon  = document.getElementById('ekstra-toggle-icon');
-  if (!panel) return;
-  if (panel.style.display === 'none') { panel.style.display = 'block'; icon.textContent = '▾'; }
-  else { panel.style.display = 'none'; icon.textContent = '▸'; }
+  var p = document.getElementById('ekstra-kisi-panel');
+  var ic = document.getElementById('ekstra-toggle-icon');
+  if (!p) return;
+  var open = p.style.display === 'none';
+  p.style.display = open ? 'block' : 'none';
+  if (ic) ic.textContent = open ? '▾' : '▸';
 }
 
 var OYUNCU_KATS = ['Oyuncu','Figüran','Koro','Solist','Dansçı','Koro/Dans Ekibi'];
+var _oneriCache = [];
 
 function ekstraOtomatikTamamla() {
   var q = (document.getElementById('extra-kisi-ad').value || '').toLowerCase().trim();
-  var oneriEl = document.getElementById('ekstra-oneri-liste');
-  if (!oneriEl) return;
-  if (q.length < 2) { oneriEl.style.display = 'none'; return; }
+  var el = document.getElementById('ekstra-oneri-liste');
+  if (!el) return;
+  if (q.length < 2) { el.style.display = 'none'; return; }
   var seen = {};
-  var sonuclar = tumPersonel.filter(function(p) {
-    var key = p.kisi;
-    if (seen[key]) return false;
-    seen[key] = true;
+  _oneriCache = tumPersonel.filter(function(p) {
+    if (seen[p.kisi]) return false;
+    seen[p.kisi] = true;
     return p.kisi.toLowerCase().includes(q) || (p.gorev||'').toLowerCase().includes(q) || (p.kategori||'').toLowerCase().includes(q);
   }).slice(0, 10);
-  if (!sonuclar.length) { oneriEl.style.display = 'none'; return; }
-  oneriEl.innerHTML = sonuclar.map(function(p) {
-    var gorevLabel = OYUNCU_KATS.includes(p.kategori) ? p.kategori : (p.gorev || p.kategori || '');
-    return '<div onclick="ekstraOneriSec('' + (p.kisi||'').replace(/'/g,"\\'") + '','' + gorevLabel.replace(/'/g,"\\'") + '')" '
-      + 'style="padding:7px 10px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--border)" '
-      + 'onmouseover="this.style.background='var(--muted)'" onmouseout="this.style.background=''">'
-      + '<b>' + p.kisi + '</b> <span style="color:var(--muted-foreground)">' + gorevLabel + '</span></div>';
+  if (!_oneriCache.length) { el.style.display = 'none'; return; }
+  el.innerHTML = _oneriCache.map(function(p, i) {
+    var gl = OYUNCU_KATS.indexOf(p.kategori||'') >= 0 ? p.kategori : (p.gorev || p.kategori || '');
+    var divEl = document.createElement('div');
+    divEl.className = '_oneri';
+    divEl.dataset.i = i;
+    divEl.style.cssText = 'padding:7px 10px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--border)';
+    divEl.innerHTML = '<b>' + p.kisi + '</b> <span style="color:var(--muted-foreground)">' + gl + '</span>';
+    divEl.onmouseover = function(){ this.style.background='var(--muted)'; };
+    divEl.onmouseout  = function(){ this.style.background=''; };
+    return divEl.outerHTML;
   }).join('');
-  oneriEl.style.display = 'block';
-}
-
-function ekstraOneriSec(kisi, gorev) {
-  var adEl = document.getElementById('extra-kisi-ad');
-  var gorevEl = document.getElementById('extra-kisi-gorev');
-  var oneriEl = document.getElementById('ekstra-oneri-liste');
-  if (adEl) adEl.value = kisi;
-  if (gorevEl) gorevEl.value = gorev;
-  if (oneriEl) oneriEl.style.display = 'none';
-  ekstraKisiEkle();
+  el.querySelectorAll('._oneri').forEach(function(div) {
+    div.addEventListener('click', function() {
+      var p = _oneriCache[parseInt(this.dataset.i)];
+      var gl = OYUNCU_KATS.indexOf(p.kategori||'') >= 0 ? p.kategori : (p.gorev || p.kategori || '');
+      document.getElementById('extra-kisi-ad').value = p.kisi;
+      document.getElementById('extra-kisi-gorev').value = gl;
+      el.style.display = 'none';
+      ekstraKisiEkle();
+    });
+  });
+  el.style.display = 'block';
 }
 
 function kisiIsimGuncelle(idx, yeniIsim) {
@@ -3822,7 +3818,7 @@ function _pdfIcerik(t) {
   var OYUNCU_KATS_PDF = ['Oyuncu','Figüran','Koro','Solist','Dansçı','Koro/Dans Ekibi'];
   var satirlar = katilimcilar.map(function(p, i) {
     var kat = (p.kategori || '');
-    var unvan = OYUNCU_KATS_PDF.includes(kat) ? kat : ((p.gorev && p.gorev !== p.kategori && p.gorev.trim()) ? p.gorev : kat);
+    var unvan = OYUNCU_KATS_PDF.indexOf(kat) >= 0 ? kat : ((p.gorev && p.gorev !== p.kategori && p.gorev.trim()) ? p.gorev : kat);
     return '<tr style="background:' + (i%2===0 ? '#f9f5f0' : '#ffffff') + '">'
       + '<td style="padding:6px 10px;border:1px solid #ddd;text-align:center;width:32px;color:#888;font-size:11px">' + (i+1) + '</td>'
       + '<td style="padding:6px 10px;border:1px solid #ddd;font-weight:700;font-size:12px">' + (p.kisi||'') + '</td>'
@@ -4356,17 +4352,15 @@ if (sessionStorage.getItem('turne_erisim') === 'true') { init(); }
 
 document.getElementById('modal-overlay').addEventListener('click', function(e) {
   if (e.target === this) {
-    if (confirm('Formu kapatmak istediğinizden emin misiniz?\nKaydedilmemiş değişiklikler kaybolacak.')) {
-      closeModal();
-    }
+    if (confirm('Formu kapatmak istediğinizden emin misiniz?\nKaydedilmemiş değişiklikler kaybolacak.')) closeModal();
   }
 });
-var _cdm = document.getElementById('card-detail-modal'); if (_cdm) _cdm.addEventListener('click', function(e) { if (e.target === this) closeCardDetail(); });
+var _cdm=document.getElementById('card-detail-modal'); if(_cdm) _cdm.addEventListener('click',function(e){if(e.target===this)closeCardDetail();});
 document.getElementById('kisi-modal-overlay').addEventListener('click', function(e) { if (e.target === this) closeKisiModal(); });
 document.addEventListener('click', function(e) {
-  var oneri = document.getElementById('ekstra-oneri-liste');
-  var input = document.getElementById('extra-kisi-ad');
-  if (oneri && input && !oneri.contains(e.target) && e.target !== input) oneri.style.display = 'none';
+  var el = document.getElementById('ekstra-oneri-liste');
+  var inp = document.getElementById('extra-kisi-ad');
+  if (el && inp && !el.contains(e.target) && e.target !== inp) el.style.display = 'none';
 });
 document.getElementById('kadro-kisi-modal').addEventListener('click', function(e) { if (e.target === this) kadroKisiModalKapat(); });
 
