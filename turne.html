@@ -1790,12 +1790,12 @@ async function fetchTurneler() {
       .map((r, realIdx) => ({ r, realIdx }))
       .filter(({ r }) => r[0] && r[0] !== 'ID' && r[0] !== 'Oyun Adı');
     turneler = safeRows.map(({ r, realIdx }) => {
-      // SABİT INDEX — values dizisiyle birebir eşleşiyor
+      // SABİT INDEX — Sheets TURNE_KAYITLARI gerçek yapısı:
       // [0]oyun [1]il [2]basTarih [3]bitTarih [4]mekan [5]sayi [6]not [7]statu
-      // [8]otelAdi [9]otelAdres [10]otelTel [11]gidisUlasim [12]gidisSaat
-      // [13]donusUlasim [14]donusSaat [15]aktarma [16]kamyon [17]kapasite
-      // [18]lojNot [19]grup [20]duraklarJSON
-      var duraklarRaw = (r[20] || '').trim();
+      // [8]otelAdi [9]otelAdres [10]otelTel [11]otelRezNo(atla) [12]gidisUlasim [13]gidisSaat
+      // [14]donusUlasim [15]donusSaat [16]aktarma [17]kamyon [18]kapasite
+      // [19]lojNot [20]grup(yok-bos) [21]duraklarJSON ...  [40]katilimcilar [41]programSatirlar
+      var duraklarRaw = (r[21] || '').trim();
       var parsedDuraklar = null;
       try { if (duraklarRaw) parsedDuraklar = JSON.parse(duraklarRaw); } catch(e) {}
       return {
@@ -1812,15 +1812,16 @@ async function fetchTurneler() {
       otelAdi:        (r[8]  || '').trim(),
       otelAdres:      (r[9]  || '').trim(),
       otelTelefon:    (r[10] || '').trim(),
-      gidisUlasim:    (r[11] || '').trim(),
-      gidisSaat:      (r[12] || '').trim(),
-      donusUlasim:    (r[13] || '').trim(),
-      donusSaat:      (r[14] || '').trim(),
-      aktarma:        (r[15] || '').trim(),
-      kamyonSayisi:   (r[16] || '').trim(),
-      sahneKapasitesi:(r[17] || '').trim(),
-      notlar:         (r[18] || '').trim(),
-      grup:           (r[19] || '').trim(),
+      // r[11] = Otel Rez No — frontend'de kullanılmıyor, atlanıyor
+      gidisUlasim:    (r[12] || '').trim(),
+      gidisSaat:      (r[13] || '').trim(),
+      donusUlasim:    (r[14] || '').trim(),
+      donusSaat:      (r[15] || '').trim(),
+      aktarma:        (r[16] || '').trim(),
+      kamyonSayisi:   (r[17] || '').trim(),
+      sahneKapasitesi:(r[18] || '').trim(),
+      notlar:         (r[19] || '').trim(),
+      grup:           '',  // Sheets'te grup sütunu yok
       duraklar:       parsedDuraklar || null,
       gidisInis:      (r[21] || '').trim(),
       gidisUcusNo:    (r[22] || '').trim(),
@@ -1839,23 +1840,18 @@ async function fetchTurneler() {
       donusSurucu:    (r[35] || '').trim(),
       donusKisiSayisi:(r[36] || '').trim(),
       sehirKisiSayisi:(r[37] || '').trim(),
-      sehirSurucu:    (() => { var i = h.findIndex(x => x.includes('şehir') && x.includes('sürücü') || x.includes('sehir') && x.includes('surucu')); return i >= 0 ? (r[i]||'').trim() : (r[38]||'').trim(); })(),
-      // sehirTel ve katilimcilar: header'dan dinamik bul, yoksa pozisyonla
-      sehirTel:       (() => { var i = h.findIndex(x => x.includes('şehir') && x.includes('tel') || x === 'şehir firma telefonu' || x === 'sehir tel'); return i >= 0 ? (r[i]||'').trim() : (r[39]||'').trim(); })(),
+      sehirSurucu:    (r[38] || '').trim(),
+      sehirTel:       (r[39] || '').trim(),
       katilimcilar:   (() => {
-        // Önce header'dan bul
-        var i = h.findIndex(x => x.includes('katıl') || x.includes('katil') || x === 'katılımcılar');
-        if (i >= 0) { try { var p = JSON.parse(r[i]||'[]'); return Array.isArray(p) ? p : []; } catch(e) { return []; } }
-        // Header yoksa: r[40] veya r[39]'dan hangisi JSON array ise onu al
-        for (var ci of [40, 39]) {
+        // r[40] = katilimcilar (Sheets index 40)
+        for (var ci of [40, 41]) {
           var raw = (r[ci]||'').trim();
           if (raw.startsWith('[')) { try { var p2 = JSON.parse(raw); if (Array.isArray(p2)) return p2; } catch(e){} }
         }
         return [];
       })(),
       programSatirlar: (() => {
-        var i = h.findIndex(x => x.includes('turne') && x.includes('program') || x === 'program' || x.includes('program'));
-        var raw = i >= 0 ? (r[i]||'') : (r[41]||'');
+        var raw = (r[41]||'');
         try { var p = JSON.parse(raw); return Array.isArray(p) ? p : []; } catch(e) { return []; }
       })(),
       };
@@ -4121,7 +4117,32 @@ async function saveTurne() {
   // katJSON VALUES'DAN ÖNCE tanımlanmalı
   var katJSON = editIdx !== '' ? JSON.stringify((turneler.find(x=>x._rowIdx===parseInt(editIdx))||{}).katilimcilar || []) : '[]';
   var programSatirlarJSON = programSatirlar.length ? JSON.stringify(programSatirlar) : '';
-  var values = [oyun, il, basTarih, bitisTarih, mekan, String(sayi), not_, statu, otelAdi, otelAdres, otelTelefon, gidisUlasim, gidisSaat, donusUlasim, donusSaat, aktarma, kamyon, kapasite, lojNot, grup, duraklarJSON, gidisInis, gidisUcusNo, gidisArac, donusInis, donusUcusNo, donusArac, sehirAracTur, sehirAracDetay, gidisUcusBacakJSON, donusUcusBacakJSON, gidisPlaka, gidisSurucu, gidisKisiSayisi, donusPlaka, donusSurucu, donusKisiSayisi, sehirKisiSayisi, sehirSurucu, sehirTel, katJSON, programSatirlarJSON];
+  // Sheets TURNE_KAYITLARI sütun sırası (42 eleman, 0-tabanlı):
+  // [0-7]  oyun,il,basTarih,bitTarih,mekan,sayi,not,statu
+  // [8-11] otelAdi,otelAdres,otelTel,otelRezNo(bos)
+  // [12-19] gidisUlasim,gidisSaat,donusUlasim,donusSaat,aktarma,kamyon,kapasite,lojNot
+  // [20] duraklarJSON | [21-23] gidisInis,gidisUcusNo,gidisArac
+  // [24-26] donusInis,donusUcusNo,donusArac | [27-28] sehirAracTur,sehirAracDetay
+  // [29-30] gidisUcusBacakJSON,donusUcusBacakJSON
+  // [31-33] gidisPlaka,gidisSurucu,gidisKisiSayisi
+  // [34-36] donusPlaka,donusSurucu,donusKisiSayisi
+  // [37-39] sehirKisiSayisi,sehirSurucu,sehirTel
+  // [40] katilimcilar | [41] programSatirlar
+  var values = [
+    oyun, il, basTarih, bitisTarih, mekan, String(sayi), not_, statu,
+    otelAdi, otelAdres, otelTelefon, ''/*otelRezNo*/,
+    gidisUlasim, gidisSaat, donusUlasim, donusSaat,
+    aktarma, kamyon, kapasite, lojNot,
+    duraklarJSON,
+    gidisInis, gidisUcusNo, gidisArac,
+    donusInis, donusUcusNo, donusArac,
+    sehirAracTur, sehirAracDetay,
+    gidisUcusBacakJSON, donusUcusBacakJSON,
+    gidisPlaka, gidisSurucu, gidisKisiSayisi,
+    donusPlaka, donusSurucu, donusKisiSayisi,
+    sehirKisiSayisi, sehirSurucu, sehirTel,
+    katJSON, programSatirlarJSON
+  ];
 
   // Yerel veriyi hemen güncelle (optimistik)
   var yeniKayit = {
