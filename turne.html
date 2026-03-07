@@ -813,7 +813,7 @@
 
 <!-- KİŞİ YÖNETİM MODALI -->
 <div class="modal-overlay" id="kisi-modal-overlay">
-  <div class="modal" style="max-width:1100px;width:96vw;max-height:92vh;display:flex;flex-direction:column;overflow:hidden">
+  <div class="modal" style="max-width:1100px;width:96vw;max-height:92vh;display:flex;flex-direction:column;overflow:hidden" onclick="event.stopPropagation()">
 
     <!-- HEADER -->
     <div class="modal-header" style="flex-shrink:0">
@@ -2321,11 +2321,76 @@ function renderSelectedPills() {
   const el = document.getElementById('selected-pills-wrap');
   if (!el) { updateKisiCount(); return; }
   if (!kisiModalSecili.length) {
-    el.innerHTML = '';
+    el.innerHTML = '<div style="padding:20px;text-align:center;font-size:12px;color:var(--muted-foreground)">Henüz katılımcı seçilmedi</div>';
     el.style.padding = '0';
     updateKisiCount();
     return;
   }
+  el.style.padding = '0';
+  var n = kisiModalSecili.length;
+  var bs = 'width:18px;height:18px;border-radius:3px;border:1px solid var(--border);background:var(--card);cursor:pointer;font-size:10px;display:flex;align-items:center;justify-content:center;color:var(--foreground);flex-shrink:0;padding:0';
+  var bsd = bs + ';opacity:.25;cursor:not-allowed';
+  el.innerHTML = '<div id="drag-list" style="display:flex;flex-direction:column;gap:2px;padding:6px">'
+    + kisiModalSecili.map(function(k, i) {
+      return '<div draggable="true" data-idx="' + i + '" style="display:flex;align-items:center;gap:5px;padding:5px 8px;background:var(--accent);border-radius:6px;border:1px solid var(--border)">'
+        + '<span style="color:var(--muted-foreground);font-size:13px;cursor:grab;flex-shrink:0;user-select:none">⠿</span>'
+        + '<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px">'
+        +   '<span style="font-size:12px;font-weight:600;color:var(--foreground);line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + (k.kisi||'') + '</span>'
+        +   '<input type="text" value="' + (k.gorev||'').replace(/"/g,'&quot;') + '" placeholder="Görev..." onclick="event.stopPropagation()" list="gorev-datalist"'
+        +   ' onchange="event.stopPropagation();kisiGorevGuncelle(' + i + ',this.value);gorevHafizayaKaydet(this.value)"'
+        +   ' style="width:100%;border:1px solid var(--border);border-radius:4px;padding:2px 5px;font-size:10px;background:var(--card);font-family:Poppins,sans-serif;color:var(--foreground)">'
+        + '</div>'
+        + '<div style="display:flex;flex-direction:column;gap:1px;flex-shrink:0">'
+        +   '<button onclick="event.stopPropagation();kisiEnUsteTasi(' + i + ')" title="En üste" style="' + (i===0?bsd:bs) + '"' + (i===0?' disabled':'') + '>⇈</button>'
+        +   '<button onclick="event.stopPropagation();kisiYukariTasi(' + i + ')" title="Bir yukarı" style="' + (i===0?bsd:bs) + '"' + (i===0?' disabled':'') + '>↑</button>'
+        +   '<button onclick="event.stopPropagation();kisiAsagiTasi(' + i + ')" title="Bir aşağı" style="' + (i===n-1?bsd:bs) + '"' + (i===n-1?' disabled':'') + '>↓</button>'
+        +   '<button onclick="event.stopPropagation();kisiEnAltaTasi(' + i + ')" title="En alta" style="' + (i===n-1?bsd:bs) + '"' + (i===n-1?' disabled':'') + '>⇊</button>'
+        + '</div>'
+        + '<button onclick="event.stopPropagation();kaldir(\'' + k.kisi.replace(/'/g,"\'") + '\')" style="width:20px;height:20px;border-radius:50%;border:none;background:rgba(220,38,38,.15);cursor:pointer;font-size:12px;line-height:1;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--destructive)">×</button>'
+        + '</div>';
+    }).join('')
+    + '</div>';
+  // Drag & drop
+  var dragList = document.getElementById('drag-list');
+  var dragSrc = null;
+  if (dragList) dragList.querySelectorAll('[draggable]').forEach(function(row) {
+    row.addEventListener('dragstart', function(e) { dragSrc=this; this.style.opacity='0.4'; e.dataTransfer.effectAllowed='move'; });
+    row.addEventListener('dragend', function() { dragList.querySelectorAll('[draggable]').forEach(function(r){r.style.opacity='1';r.style.borderTop='';}); });
+    row.addEventListener('dragover', function(e) { e.preventDefault(); dragList.querySelectorAll('[draggable]').forEach(function(r){r.style.borderTop='';}); if(this!==dragSrc) this.style.borderTop='2px solid var(--primary)'; });
+    row.addEventListener('drop', function(e) { e.preventDefault(); if(this===dragSrc) return; var from=parseInt(dragSrc.dataset.idx); var to=parseInt(this.dataset.idx); var item=kisiModalSecili.splice(from,1)[0]; kisiModalSecili.splice(to,0,item); renderSelectedPills(); });
+  });
+  updateKisiCount();
+}
+
+function kisiEnUsteTasi(idx) {
+  if (idx === 0) return;
+  var item = kisiModalSecili.splice(idx, 1)[0];
+  kisiModalSecili.unshift(item);
+  renderSelectedPills();
+  var w = document.getElementById('selected-pills-wrap'); if (w) w.scrollTop = 0;
+}
+function kisiYukariTasi(idx) {
+  if (idx === 0) return;
+  var tmp = kisiModalSecili[idx-1]; kisiModalSecili[idx-1] = kisiModalSecili[idx]; kisiModalSecili[idx] = tmp;
+  renderSelectedPills();
+  var w = document.getElementById('selected-pills-wrap');
+  if (w) { var rows = w.querySelectorAll('[data-idx]'); if (rows[idx-1]) rows[idx-1].scrollIntoView({block:'nearest'}); }
+}
+function kisiAsagiTasi(idx) {
+  if (idx >= kisiModalSecili.length - 1) return;
+  var tmp = kisiModalSecili[idx+1]; kisiModalSecili[idx+1] = kisiModalSecili[idx]; kisiModalSecili[idx] = tmp;
+  renderSelectedPills();
+  var w = document.getElementById('selected-pills-wrap');
+  if (w) { var rows = w.querySelectorAll('[data-idx]'); if (rows[idx+1]) rows[idx+1].scrollIntoView({block:'nearest'}); }
+}
+function kisiEnAltaTasi(idx) {
+  if (idx >= kisiModalSecili.length - 1) return;
+  var item = kisiModalSecili.splice(idx, 1)[0];
+  kisiModalSecili.push(item);
+  renderSelectedPills();
+  var w = document.getElementById('selected-pills-wrap'); if (w) w.scrollTop = w.scrollHeight;
+}
+
   el.style.padding = '0';
   el.innerHTML = '<div id="drag-list" style="display:flex;flex-direction:column;gap:3px;width:100%">'
     + kisiModalSecili.map((k, i) =>
@@ -4770,23 +4835,25 @@ function renderUcusBacaklar(yon) {
   var el = document.getElementById(yon + '-bacak-listesi');
   if (!el) return;
   el.innerHTML = ucusBacaklar[yon].map(function(b, i) {
+    var y = "'" + yon + "'";
     return '<div style="display:grid;grid-template-columns:1fr 1fr 80px 80px 1fr 28px;gap:4px;align-items:end;margin-bottom:5px;padding:6px 8px;background:var(--muted);border-radius:6px">'
       + '<div><div style="font-size:9px;color:var(--muted-foreground);margin-bottom:2px">NEREDEN</div>'
-      + '<input class="form-input" type="text" value="' + (b.nereden||'') + '" placeholder="İzmir" oninput="ucusBacaklar[' + yon + '][' + i + '].nereden=this.value" style="font-size:11px;padding:4px 7px"></div>'
+      + '<input class="form-input" type="text" value="' + (b.nereden||'') + '" placeholder="İzmir" oninput="ucusBacaklar[' + y + '][' + i + '].nereden=this.value" style="font-size:11px;padding:4px 7px"></div>'
       + '<div><div style="font-size:9px;color:var(--muted-foreground);margin-bottom:2px">NEREYE</div>'
-      + '<input class="form-input" type="text" value="' + (b.nereye||'') + '" placeholder="İstanbul SAW" oninput="ucusBacaklar[' + yon + '][' + i + '].nereye=this.value" style="font-size:11px;padding:4px 7px"></div>'
+      + '<input class="form-input" type="text" value="' + (b.nereye||'') + '" placeholder="İstanbul SAW" oninput="ucusBacaklar[' + y + '][' + i + '].nereye=this.value" style="font-size:11px;padding:4px 7px"></div>'
       + '<div><div style="font-size:9px;color:var(--muted-foreground);margin-bottom:2px">KALKIŞ</div>'
-      + '<input class="form-input" type="time" value="' + (b.kalkis||'') + '" oninput="ucusBacaklar[' + yon + '][' + i + '].kalkis=this.value" style="font-size:11px;padding:4px 6px"></div>'
+      + '<input class="form-input" type="time" value="' + (b.kalkis||'') + '" oninput="ucusBacaklar[' + y + '][' + i + '].kalkis=this.value" style="font-size:11px;padding:4px 6px"></div>'
       + '<div><div style="font-size:9px;color:var(--muted-foreground);margin-bottom:2px">İNİŞ</div>'
-      + '<input class="form-input" type="time" value="' + (b.inis||'') + '" oninput="ucusBacaklar[' + yon + '][' + i + '].inis=this.value" style="font-size:11px;padding:4px 6px"></div>'
+      + '<input class="form-input" type="time" value="' + (b.inis||'') + '" oninput="ucusBacaklar[' + y + '][' + i + '].inis=this.value" style="font-size:11px;padding:4px 6px"></div>'
       + '<div><div style="font-size:9px;color:var(--muted-foreground);margin-bottom:2px">UÇUŞ NO / HAVAYOLU</div>'
-      + '<input class="form-input" type="text" value="' + (b.ucusNo||'') + '" placeholder="PC1234 / Pegasus" oninput="ucusBacaklar[' + yon + '][' + i + '].ucusNo=this.value" style="font-size:11px;padding:4px 7px"></div>'
-      + '<div style="padding-bottom:2px"><button type="button" onclick="ucusBacakSil(' + yon + ',' + i + ')" '
+      + '<input class="form-input" type="text" value="' + (b.ucusNo||'') + '" placeholder="PC1234 / Pegasus" oninput="ucusBacaklar[' + y + '][' + i + '].ucusNo=this.value" style="font-size:11px;padding:4px 7px"></div>'
+      + '<div style="padding-bottom:2px"><button type="button" onclick="ucusBacakSil(' + y + ',' + i + ')" '
       + 'style="width:26px;height:28px;border-radius:5px;border:1px solid var(--border);background:transparent;cursor:pointer;color:var(--destructive);font-size:14px" '
       + 'title="Kaldır">×</button></div>'
       + '</div>';
   }).join('');
 }
+
 
 
 function durakIlStr(t) {
@@ -4974,7 +5041,7 @@ document.getElementById('modal-overlay').addEventListener('click', function(e) {
   }
 });
 var _cdm=document.getElementById('card-detail-modal'); if(_cdm) _cdm.addEventListener('click',function(e){if(e.target===this)closeCardDetail();});
-document.getElementById('kisi-modal-overlay').addEventListener('click', function(e) { if (e.target === this) closeKisiModal(); });
+document.getElementById('kisi-modal-overlay').addEventListener('click', function(e) { e.stopPropagation(); /* Panel dışına tıklayınca kapanmasın */ });
 document.addEventListener('click', function(e) {
   var el = document.getElementById('ekstra-oneri-liste');
   var inp = document.getElementById('extra-kisi-ad');
