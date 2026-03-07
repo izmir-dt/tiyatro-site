@@ -1809,7 +1809,24 @@ async function fetchTurneler() {
       donusKisiSayisi:(r[36] || '').trim(),
       sehirKisiSayisi:(r[37] || '').trim(),
       sehirSurucu:    (r[38] || '').trim(),
-      katilimcilar:   (() => { try { return JSON.parse(r[39]||'[]'); } catch(e) { return []; } })(),
+      // sehirTel ve katilimcilar: header'dan dinamik bul, yoksa pozisyonla
+      sehirTel:       (() => { var i = h.findIndex(x => x.includes('şehir') && x.includes('tel') || x === 'şehir firma telefonu' || x === 'sehir tel'); return i >= 0 ? (r[i]||'').trim() : (r[39]||'').trim(); })(),
+      katilimcilar:   (() => {
+        // Önce header'dan bul
+        var i = h.findIndex(x => x.includes('katıl') || x.includes('katil') || x === 'katılımcılar');
+        if (i >= 0) { try { var p = JSON.parse(r[i]||'[]'); return Array.isArray(p) ? p : []; } catch(e) { return []; } }
+        // Header yoksa: r[40] veya r[39]'dan hangisi JSON array ise onu al
+        for (var ci of [40, 39]) {
+          var raw = (r[ci]||'').trim();
+          if (raw.startsWith('[')) { try { var p2 = JSON.parse(raw); if (Array.isArray(p2)) return p2; } catch(e){} }
+        }
+        return [];
+      })(),
+      programSatirlar: (() => {
+        var i = h.findIndex(x => x.includes('program'));
+        var raw = i >= 0 ? (r[i]||'') : '';
+        try { var p = JSON.parse(raw); return Array.isArray(p) ? p : []; } catch(e) { return []; }
+      })(),
       };
     }).filter(r => r.oyun && r.il);
   } catch(e) { console.warn('Turne verisi çekilemedi:', e); turneler = []; }
@@ -2348,11 +2365,29 @@ async function saveKisiModal() {
   try {
     const katilimciStr = kisiModalSecili.map(k => k.kisi + (k.gorev ? ' (' + k.gorev + ')' : '')).join(', ');
     const katJSON2 = JSON.stringify(kisiModalSecili);
-    const colIdx = 39; // katilimcilar sütunu (col 39)
-    await fetch(API + '/' + encodeURIComponent(TURNE_SHEET) + '/cell', {
+    // colIdx: values dizisindeki katJSON pozisyonu (sehirTel sonrası = 40)
+    // Güvenli: tüm satırı güncelle — hücre bazlı yazma sütun kaymasına karşı güvensiz
+    // Önce mevcut satır verisini al, sadece katilimcilar'ı güncelle
+    const turneValues = [
+      t.oyun, t.il, t.baslangicTarih||'', t.bitisTarih||'', t.mekan||'',
+      String(t.sayi||1), t.not||'', t.statu||'tamamlandi',
+      t.otelAdi||'', t.otelAdres||'', t.otelTelefon||'',
+      t.gidisUlasim||'', t.gidisSaat||'', t.donusUlasim||'', t.donusSaat||'',
+      t.aktarma||'', t.kamyonSayisi||'', t.sahneKapasitesi||'', t.notlar||'', t.grup||'',
+      JSON.stringify(t.duraklar||[]),
+      t.gidisInis||'', t.gidisUcusNo||'', t.gidisArac||'',
+      t.donusInis||'', t.donusUcusNo||'', t.donusArac||'',
+      t.sehirAracTur||'', t.sehirAracDetay||'',
+      t.gidisUcusBacakJSON||'', t.donusUcusBacakJSON||'',
+      t.gidisPlaka||'', t.gidisSurucu||'', t.gidisKisiSayisi||'',
+      t.donusPlaka||'', t.donusSurucu||'', t.donusKisiSayisi||'',
+      t.sehirKisiSayisi||'', t.sehirSurucu||'', t.sehirTel||'',
+      katJSON2  // index 40 — katilimcilar HER ZAMAN SON
+    ];
+    await fetch(API + '/' + encodeURIComponent(TURNE_SHEET) + '/row/' + t._rowIdx, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ row: t._rowIdx, col: colIdx, value: katJSON2 })
+      body: JSON.stringify({ values: turneValues })
     });
   } catch(e) { console.warn('Katılımcı kaydı yazılamadı:', e); }
   closeKisiModal();
@@ -4006,11 +4041,10 @@ async function saveTurne() {
     gidisUcusBacakJSON, gidisPlaka, gidisSurucu, gidisKisiSayisi,
     donusUlasim, donusSaat, donusInis, donusUcusNo, donusArac,
     donusUcusBacakJSON, donusPlaka, donusSurucu, donusKisiSayisi,
-    sehirAracTur, sehirAracDetay, sehirKisiSayisi, sehirSurucu,
-    katilimcilar: editIdx !== '' ? (turneler.find(x=>x._rowIdx===parseInt(editIdx))||{}).katilimcilar : undefined,
+    sehirAracTur, sehirAracDetay, sehirKisiSayisi, sehirSurucu, sehirTel,
     aktarma, kamyonSayisi: kamyon, sahneKapasitesi: kapasite, notlar: lojNot,
     programSatirlar: JSON.parse(JSON.stringify(programSatirlar)),
-    katilimcilar: editIdx !== '' ? (turneler.find(x=>x._rowIdx===parseInt(editIdx))||{}).katilimcilar : undefined
+    katilimcilar: editIdx !== '' ? (turneler.find(x=>x._rowIdx===parseInt(editIdx))||{}).katilimcilar : []
   };
   if (editIdx !== '') {
     var idx2 = turneler.findIndex(x => x._rowIdx === parseInt(editIdx));
@@ -4042,7 +4076,7 @@ async function saveTurne() {
     } else {
       if (turneler.length === 1) {
         await fetch(API + '/' + encodeURIComponent(TURNE_SHEET) + '/row', { method:'POST', headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({ values:['Oyun Adı','Şehir/İl','Başlangıç Tarihi','Bitiş Tarihi','Sahne/Mekan','Temsil Sayısı','Notlar','Statü','Otel Adı','Otel Adres','Otel Telefon','Gidiş Ulaşım','Gidiş Saat','Dönüş Ulaşım','Dönüş Saat','Aktarma','Kamyon','Kapasite','Lojistik Not','Grup','Duraklar JSON','Gidiş İniş','Gidiş Uçuş No','Gidiş Araç/Plaka','Dönüş İniş','Dönüş Uçuş No','Dönüş Araç/Plaka','Şehir Araç Tür','Şehir Araç Detay','Gidiş Uçuş Bacakları','Dönüş Uçuş Bacakları','Gidiş Plaka','Gidiş Sürücü','Gidiş Kişi Sayısı','Dönüş Plaka','Dönüş Sürücü','Dönüş Kişi Sayısı','Şehir Kişi Sayısı','Şehir Sürücü','Katılımcılar'] }) });
+          body:JSON.stringify({ values:['Oyun Adı','Şehir/İl','Başlangıç Tarihi','Bitiş Tarihi','Sahne/Mekan','Temsil Sayısı','Notlar','Statü','Otel Adı','Otel Adres','Otel Telefon','Gidiş Ulaşım','Gidiş Saat','Dönüş Ulaşım','Dönüş Saat','Aktarma','Kamyon','Kapasite','Lojistik Not','Grup','Duraklar JSON','Gidiş İniş','Gidiş Uçuş No','Gidiş Araç/Plaka','Dönüş İniş','Dönüş Uçuş No','Dönüş Araç/Plaka','Şehir Araç Tür','Şehir Araç Detay','Gidiş Uçuş Bacakları','Dönüş Uçuş Bacakları','Gidiş Plaka','Gidiş Sürücü','Gidiş Kişi Sayısı','Dönüş Plaka','Dönüş Sürücü','Dönüş Kişi Sayısı','Şehir Kişi Sayısı','Şehir Sürücü','Şehir Firma Telefonu','Katılımcılar'] }) });
       }
       var r = await fetch(API + '/' + encodeURIComponent(TURNE_SHEET) + '/row', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ values:values }) });
     }
