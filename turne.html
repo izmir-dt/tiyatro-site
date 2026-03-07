@@ -1849,7 +1849,7 @@ async function fetchTurneler() {
         try { var p = JSON.parse(raw); return Array.isArray(p) ? p : []; } catch(e) { return []; }
       })(),
       };
-    }).filter(r => r.il);  // oyun artık zorunlu değil — durak bazlı seçimde boş kalabilir
+    }).filter(r => r.il || r.oyun || (r.duraklar && r.duraklar.length));  // en az bir tanımlayıcı alan olsun
   } catch(e) { console.warn('Turne verisi çekilemedi:', e); turneler = []; }
 }
 
@@ -4121,25 +4121,55 @@ async function saveTurne() {
         method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ values: values })
       });
       if (!r.ok) {
-        for (var c = 0; c < values.length; c++) {
-          await fetch(API + '/' + encodeURIComponent(TURNE_SHEET) + '/cell', { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ row:idx, col:c, value:values[c] }) });
+        // Satır bazlı PUT başarısız → hücre bazlı dene
+        var cellBasarili = true;
+        for (var ci = 0; ci < values.length; ci++) {
+          var cr = await fetch(API + '/' + encodeURIComponent(TURNE_SHEET) + '/cell', { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ row:idx, col:ci, value:values[ci] }) });
+          if (!cr.ok) { cellBasarili = false; break; }
+        }
+        if (!cellBasarili) {
+          alert('⚠️ Değişiklikler ekranda görünüyor ancak sunucuya kaydedilemedi.\nİnternet bağlantınızı kontrol edip tekrar deneyin.');
         }
       }
     } else {
+      // Sheets ilk kez kullanılıyorsa header satırı ekle
       if (turneler.length === 1) {
-        await fetch(API + '/' + encodeURIComponent(TURNE_SHEET) + '/row', { method:'POST', headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({ values:['Oyun Adı','Şehir/İl','Başlangıç Tarihi','Bitiş Tarihi','Sahne/Mekan','Temsil Sayısı','Notlar','Statü','Otel Adı','Otel Adres','Otel Telefon','Gidiş Ulaşım','Gidiş Saat','Dönüş Ulaşım','Dönüş Saat','Aktarma','Kamyon','Kapasite','Lojistik Not','Grup','Duraklar JSON','Gidiş İniş','Gidiş Uçuş No','Gidiş Araç/Plaka','Dönüş İniş','Dönüş Uçuş No','Dönüş Araç/Plaka','Şehir Araç Tür','Şehir Araç Detay','Gidiş Uçuş Bacakları','Dönüş Uçuş Bacakları','Gidiş Plaka','Gidiş Sürücü','Gidiş Kişi Sayısı','Dönüş Plaka','Dönüş Sürücü','Dönüş Kişi Sayısı','Şehir Kişi Sayısı','Şehir Sürücü','Şehir Firma Telefonu','Katılımcılar','Turne Programı'] }) });
+        try {
+          await fetch(API + '/' + encodeURIComponent(TURNE_SHEET) + '/row', { method:'POST', headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({ values:['Oyun Adı','Şehir/İl','Başlangıç Tarihi','Bitiş Tarihi','Sahne/Mekan','Temsil Sayısı','Notlar','Statü','Otel Adı','Otel Adres','Otel Telefon','Gidiş Ulaşım','Gidiş Saat','Dönüş Ulaşım','Dönüş Saat','Aktarma','Kamyon','Kapasite','Lojistik Not','Grup','Duraklar JSON','Gidiş İniş','Gidiş Uçuş No','Gidiş Araç/Plaka','Dönüş İniş','Dönüş Uçuş No','Dönüş Araç/Plaka','Şehir Araç Tür','Şehir Araç Detay','Gidiş Uçuş Bacakları','Dönüş Uçuş Bacakları','Gidiş Plaka','Gidiş Sürücü','Gidiş Kişi Sayısı','Dönüş Plaka','Dönüş Sürücü','Dönüş Kişi Sayısı','Şehir Kişi Sayısı','Şehir Sürücü','Şehir Firma Telefonu','Katılımcılar','Turne Programı'] }) });
+        } catch(e) { /* header yazılamazsa devam et */ }
       }
       var r = await fetch(API + '/' + encodeURIComponent(TURNE_SHEET) + '/row', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ values:values }) });
       if (r.ok) {
-        // Yeni kayıt sonrası gerçek rowIdx için veriyi yenile
-        setLoading(true);
-        await fetchTurneler();
-        populateFilters(); renderListe(); renderCalendar();
-        setLoading(false);
+        // Başarılı: gerçek _rowIdx için veriyi yenile — ama yeniKayit'i koru
+        var oncekiTurneler = JSON.parse(JSON.stringify(turneler));
+        try {
+          setLoading(true);
+          await fetchTurneler();
+          // fetchTurneler boş döndüyse (API geçici hata) önceki listeyi koru
+          if (turneler.length === 0 && oncekiTurneler.length > 0) {
+            turneler = oncekiTurneler;
+            console.warn('fetchTurneler boş döndü, yerel veri korundu');
+          }
+          populateFilters(); renderListe(); renderCalendar();
+          setLoading(false);
+        } catch(fe) {
+          turneler = oncekiTurneler;
+          setLoading(false);
+          populateFilters(); renderListe(); renderCalendar();
+        }
+      } else {
+        // API başarısız: yerel veri zaten güncellendi, kullanıcıya bildir
+        var errText = '';
+        try { var errJson = await r.json(); errText = errJson.error || r.status; } catch(e) { errText = r.status; }
+        alert('⚠️ Turne ekranda görünüyor ancak sunucuya kaydedilemedi (Hata: ' + errText + ').\nİnternet bağlantınızı kontrol edip tekrar deneyin.');
       }
     }
-  } catch(e) { console.warn('API kayıt hatası (yerel veri güncellendi):', e); }
+  } catch(e) {
+    console.warn('API kayıt hatası:', e);
+    // Yerel veri korundu, kullanıcıyı bilgilendir
+    alert('⚠️ Bağlantı hatası: Turne ekranda görünüyor ancak sunucuya kaydedilemedi.\n' + (e.message||''));
+  }
 }
 
 // ============================================================
