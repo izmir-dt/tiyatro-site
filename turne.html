@@ -524,7 +524,10 @@
     </div>
   </div>
 
-  <!-- TAKVİM -->
+  <!-- GÖREV DATALIST -->
+<datalist id="gorev-datalist"></datalist>
+
+<!-- TAKVİM -->
   <div class="tab-panel" id="tab-takvim">
     <div class="scroll-area" style="padding:14px 16px">
       <div class="cal-wrap">
@@ -559,6 +562,8 @@
       </div>
       <!-- POPUP -->
       <div id="cal-popup" style="display:none;position:fixed;z-index:1200;width:320px;background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.18);overflow:hidden"></div>
+      <!-- TOOLTIP -->
+      <div id="cal-tooltip" style="display:none;position:fixed;z-index:1300;background:#1e1e1e;color:#fff;padding:8px 12px;border-radius:8px;font-size:11px;pointer-events:none;max-width:240px;box-shadow:0 4px 12px rgba(0,0,0,.3)"></div>
     </div>
   </div>
 
@@ -2148,14 +2153,42 @@ function renderKisiModalList(oyunAdi, q) {
       + '</div>'
       + (secili
         ? '<input type="text" value="' + esc(turneGorev) + '" placeholder="Görevi düzenle" '
-          + 'onclick="event.stopPropagation()" '
-          + 'onchange="kisiGorevGuncelle(\'' + esc(p.kisi) + '\',this.value);renderKisiModalList(\'' + esc(oyunAdi) + '\',document.getElementById(\'kisi-filter-input\').value)" '
+          + 'onclick="event.stopPropagation()" list="gorev-datalist" '
+          + 'onchange="kisiGorevGuncelle(\'' + esc(p.kisi) + '\',this.value);gorevHafizayaKaydet(this.value);renderKisiModalList(\'' + esc(oyunAdi) + '\',document.getElementById(\'kisi-filter-input\').value)" '
           + 'style="width:150px;border:1px solid var(--border);border-radius:5px;padding:3px 7px;font-size:11px;background:var(--background);font-family:inherit;flex-shrink:0">'
         : '<span style="font-size:10px;color:var(--muted-foreground);width:150px;text-align:right;padding-right:4px;flex-shrink:0"></span>')
       + '</div>';
   }).join('');
   updateKisiCount();
 }
+
+// GÖREV HAFIZASI — kullanıcının girdiği görevleri otomatik tamamlama için sakla
+var _gorevHafiza = (function() {
+  try { return JSON.parse(localStorage.getItem('gorevHafiza_idt') || '[]'); } catch(e) { return []; }
+})();
+
+function gorevHafizayaKaydet(gorev) {
+  if (!gorev || gorev.trim().length < 2) return;
+  gorev = gorev.trim();
+  if (_gorevHafiza.indexOf(gorev) === -1) {
+    _gorevHafiza.unshift(gorev);
+    if (_gorevHafiza.length > 60) _gorevHafiza = _gorevHafiza.slice(0, 60);
+    try { localStorage.setItem('gorevHafiza_idt', JSON.stringify(_gorevHafiza)); } catch(e) {}
+  }
+  // datalist güncelle
+  var dl = document.getElementById('gorev-datalist');
+  if (dl) {
+    // Sabit kategoriler + hafıza birleştir
+    var sabitler = ['Sanatçı','Figüran','Müzisyen','Sahne Amiri','Kondüvit','Ses – Kondüvit','Mutemet','Sahne Işıkçısı','Işık Kontrol','Sahne Makinisti','Aksesuar Memuru','Dekor/Aksesuar','Sahne Terzisi','Kostüm','Perukacı','Peruk – Makyaj','Sahne Uzmanı','Turne Başkanı'];
+    var tumOneri = [...new Set([...sabitler, ..._gorevHafiza])];
+    dl.innerHTML = tumOneri.map(function(g){ return '<option value="' + g.replace(/"/g,'&quot;') + '">'; }).join('');
+  }
+}
+
+// Sayfa yüklenince datalist'i doldur
+document.addEventListener('DOMContentLoaded', function() {
+  gorevHafizayaKaydet('');
+});
 
 function kisiGorevGuncelle(kisiAdi, yeniGorev) {
   var idx = kisiModalSecili.findIndex(s => s.kisi === kisiAdi);
@@ -3091,7 +3124,8 @@ function calTooltipGoster(e, encodedData) {
   } catch(ex) {}
 }
 function calTooltipGizle() {
-  document.getElementById('cal-tooltip').style.display = 'none';
+  var tt = document.getElementById('cal-tooltip');
+  if (tt) tt.style.display = 'none';
 }
 function calTooltipTasi(e) {
   var tt = document.getElementById('cal-tooltip');
@@ -3264,11 +3298,12 @@ function _calPopupGoster(key, event) {
 
   // Konum hesapla
   popup.style.display = 'block';
-  if (event && (event.currentTarget || event.target)) {
-    var el = event.currentTarget || event.target;
-    // Tıklanan gün kutusunun konumunu bul
-    var dayEl = el.closest ? el.closest('.cal-day') : el;
-    var rect = dayEl ? dayEl.getBoundingClientRect() : el.getBoundingClientRect();
+  if (event) {
+    var el = event.target || event.currentTarget;
+    // Her zaman en yakın .cal-day'i bul
+    var dayEl = (el && el.closest) ? el.closest('.cal-day') : el;
+    if (!dayEl && event.currentTarget && event.currentTarget.classList && event.currentTarget.classList.contains('cal-day')) dayEl = event.currentTarget;
+    var rect = dayEl ? dayEl.getBoundingClientRect() : (el ? el.getBoundingClientRect() : {right:300,left:200,top:200});
     var popW = 320, popH = popup.scrollHeight || 380;
     var vw = window.innerWidth, vh = window.innerHeight;
     // Sağa sığıyorsa sağa, yoksa sola
@@ -3290,7 +3325,8 @@ function _calPopupGoster(key, event) {
 }
 
 function calPopupSuruklenebilirYap(popup) {
-  // Daha önce listener eklenmişse tekrar ekleme
+  // Her render'da yeniden bağla
+  popup._dragReady = false;
   if (popup._dragReady) return;
   popup._dragReady = true;
   var header = popup.querySelector('div'); // ilk div = başlık
@@ -4040,7 +4076,7 @@ function tumRaporlarPdf() {
 // PDF CSS + IÇERIK (tumRaporlarPdf ve gorevlendirmePdf için ortak)
 // ============================================================
 function _pdfCSS() {
-  return 'body{font-family:Arial,Helvetica,sans-serif;font-size:12px;margin:0;padding:20px 24px;color:#1a1a1a;background:#fff}'
+  return '@charset "UTF-8";body{font-family:Arial,Helvetica,sans-serif;font-size:12px;margin:0;padding:20px 24px;color:#1a1a1a;background:#fff}'
     + '.sec{margin-bottom:14px}'
     + '.sec-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:#6b1b1b;border-bottom:1px solid #e5ddd5;padding-bottom:4px;margin-bottom:8px}'
     + '.info-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}'
