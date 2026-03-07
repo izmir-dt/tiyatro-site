@@ -740,10 +740,13 @@
           </div>
           <div class="form-grid-2">
             <div class="form-group">
-              <label class="form-label">Plaka / Firma</label>
-              <input class="form-input" type="text" id="m-sehir-arac-detay" placeholder="35 XYZ 0001 / Uyanık Nakliyat">
+              <label class="form-label">Firma Adı</label>
+              <input class="form-input" type="text" id="m-sehir-arac-detay" placeholder="Örn: Uyanık Nakliyat">
             </div>
-            
+            <div class="form-group">
+              <label class="form-label">Firma Telefonu</label>
+              <input class="form-input" type="tel" id="m-sehir-tel" placeholder="0 5XX XXX XX XX">
+            </div>
           </div>
         </div>
 
@@ -1820,10 +1823,12 @@ function populateFilters() {
   ['filter-oyun','oyun-sec','kadro-oyun-sec'].forEach(id => {
     const sel = document.getElementById(id);
     if (!sel) return;
+    const savedVal = sel.value; // Seçili değeri kaydet
     const first = sel.options[0];
     sel.innerHTML = '';
     sel.appendChild(first);
     oyunlar.forEach(o => { const opt = document.createElement('option'); opt.value = o; opt.textContent = o; sel.appendChild(opt); });
+    if (savedVal) sel.value = savedVal; // Geri yükle
   });
   const fi = document.getElementById('filter-il');
   fi.innerHTML = '<option value="">Tüm İller</option>';
@@ -3765,7 +3770,7 @@ function openModal(rowIdx) {
   if (rowIdx === undefined) {
     document.getElementById('modal-title').textContent = 'Yeni Turne Ekle';
     document.getElementById('edit-rowidx').value = '';
-    ['m-oyun','m-tarih','m-bitis','m-not','m-gidis-ulasim','m-gidis-saat','m-gidis-plaka','m-gidis-surucu','m-gidis-kisi-sayisi','m-donus-ulasim','m-donus-saat','m-donus-plaka','m-donus-surucu','m-donus-kisi-sayisi','m-sehir-arac-tur','m-sehir-arac-detay','m-sehir-kisi-sayisi','m-sehir-surucu','m-aktarma','m-otel-adi','m-otel-adr','m-otel-tel','m-kamyon','m-kapasite','m-lojistik-not','m-grup'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    ['m-oyun','m-tarih','m-bitis','m-not','m-gidis-ulasim','m-gidis-saat','m-gidis-plaka','m-gidis-surucu','m-gidis-kisi-sayisi','m-donus-ulasim','m-donus-saat','m-donus-plaka','m-donus-surucu','m-donus-kisi-sayisi','m-sehir-arac-tur','m-sehir-arac-detay','m-sehir-kisi-sayisi','m-sehir-surucu','m-sehir-tel','m-aktarma','m-otel-adi','m-otel-adr','m-otel-tel','m-kamyon','m-kapasite','m-lojistik-not','m-grup'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
     ucusBacaklar = { gidis: [], donus: [] };
     ['gidis-ucak-bacaklar','gidis-kara-row','donus-ucak-bacaklar','donus-kara-row','gidis-bacak-ekle-btn','donus-bacak-ekle-btn'].forEach(id => { var el=document.getElementById(id); if(el) el.style.display='none'; });
     ['gidis-ucak-row','gidis-arac-row','donus-ucak-row','donus-arac-row'].forEach(id => { var el=document.getElementById(id); if(el) el.style.display='none'; });
@@ -3808,6 +3813,7 @@ function editTurne(rowIdx) {
   var sAd = document.getElementById('m-sehir-arac-detay'); if (sAd) sAd.value = t.sehirAracDetay || '';
   var sKs = document.getElementById('m-sehir-kisi-sayisi'); if (sKs) sKs.value = t.sehirKisiSayisi || '';
   var sSr = document.getElementById('m-sehir-surucu'); if (sSr) sSr.value = t.sehirSurucu || '';
+  var sTel = document.getElementById('m-sehir-tel'); if (sTel) sTel.value = t.sehirTel || '';
   document.getElementById('m-aktarma').value = t.aktarma || '';
   // Uçuş bacaklarını yükle
   try { ucusBacaklar.gidis = t.gidisUcusBacakJSON ? JSON.parse(t.gidisUcusBacakJSON) : []; } catch(e) { ucusBacaklar.gidis = []; }
@@ -3877,6 +3883,7 @@ async function saveTurne() {
   var donusArac   = donusPlaka;
   var sehirAracTur     = (document.getElementById('m-sehir-arac-tur')||{}).value||'';
   var sehirAracDetay   = (document.getElementById('m-sehir-arac-detay')||{}).value||'';
+  var sehirTel         = (document.getElementById('m-sehir-tel')||{}).value||'';
   var sehirKisiSayisi  = (document.getElementById('m-sehir-kisi-sayisi')||{}).value||'';
   var sehirSurucu      = (document.getElementById('m-sehir-surucu')||{}).value||'';
   var aktarma     = document.getElementById('m-aktarma').value.trim();
@@ -3915,7 +3922,7 @@ async function saveTurne() {
   var saveBtn = document.querySelector('#modal-overlay .btn-primary');
   saveBtn.disabled = true; saveBtn.textContent = 'Kaydediliyor...';
   var duraklarJSON = JSON.stringify(gecerliDuraklar);
-  var values = [oyun, il, basTarih, bitisTarih, mekan, String(sayi), not_, statu, otelAdi, otelAdres, otelTelefon, gidisUlasim, gidisSaat, donusUlasim, donusSaat, aktarma, kamyon, kapasite, lojNot, grup, duraklarJSON, gidisInis, gidisUcusNo, gidisArac, donusInis, donusUcusNo, donusArac, sehirAracTur, sehirAracDetay, gidisUcusBacakJSON, donusUcusBacakJSON, gidisPlaka, gidisSurucu, gidisKisiSayisi, donusPlaka, donusSurucu, donusKisiSayisi, sehirKisiSayisi, sehirSurucu, katJSON];
+  var values = [oyun, il, basTarih, bitisTarih, mekan, String(sayi), not_, statu, otelAdi, otelAdres, otelTelefon, gidisUlasim, gidisSaat, donusUlasim, donusSaat, aktarma, kamyon, kapasite, lojNot, grup, duraklarJSON, gidisInis, gidisUcusNo, gidisArac, donusInis, donusUcusNo, donusArac, sehirAracTur, sehirAracDetay, gidisUcusBacakJSON, donusUcusBacakJSON, gidisPlaka, gidisSurucu, gidisKisiSayisi, donusPlaka, donusSurucu, donusKisiSayisi, sehirKisiSayisi, sehirSurucu, sehirTel, katJSON];
 
   // Yerel veriyi hemen güncelle (optimistik)
   var yeniKayit = {
