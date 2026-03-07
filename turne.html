@@ -2104,18 +2104,25 @@ function openKisiModal(rowIdx) {
   const t = turneler.find(x => x._rowIdx === rowIdx);
   if (!t) return;
   kisiModalRowIdx = rowIdx;
+  // oyun adını sakla (duraktan türet gerekirse)
+  var oyunAdi = t.oyun || '';
+  if (!oyunAdi && t.duraklar) {
+    var durakOyunlar = t.duraklar.map(function(d){ return d.oyun||''; }).filter(Boolean);
+    oyunAdi = [...new Set(durakOyunlar)].join(' / ');
+  }
+  window._kisiModalOyunAdi = oyunAdi;
   // Kayıtlı katılımcılar varsa onları yükle, yoksa ana kadroyu otomatik seç
   if (t.katilimcilar && t.katilimcilar.length > 0) {
     kisiModalSecili = JSON.parse(JSON.stringify(t.katilimcilar));
   } else {
     // Ana kadroyu varsayılan olarak seç
-    var anaKadro = getPersonelForOyun(t.oyun);
+    var anaKadro = getPersonelForOyun(oyunAdi);
     kisiModalSecili = anaKadro.map(function(p) { return { kisi: p.kisi, gorev: p.gorev || p.kategori, kategori: p.kategori }; });
   }
-  document.getElementById('kisi-modal-title').textContent = t.oyun + ' – Katılımcılar';
+  document.getElementById('kisi-modal-title').textContent = (oyunAdi || t.il || 'Turne') + ' – Katılımcılar';
   document.getElementById('kisi-modal-sure').textContent = formatTarih(t.baslangicTarih || t.tarih) + ' · ' + t.il;
   document.getElementById('kisi-filter-input').value = '';
-  renderKisiModalList(t.oyun, '');
+  renderKisiModalList(oyunAdi, '');
   renderSelectedPills();
   document.getElementById('kisi-modal-overlay').classList.add('on');
 }
@@ -2288,7 +2295,13 @@ function toggleKisiSecim(kisi, gorev, kategori) {
   }
   const t = turneler.find(x => x._rowIdx === kisiModalRowIdx);
   const q = document.getElementById('kisi-filter-input').value.toLowerCase();
-  renderKisiModalList(t ? t.oyun : '', q);
+  // oyun adı boşsa duraktan türet (t.oyun bazen boş olabilir)
+  var oyunAdiKisi = window._kisiModalOyunAdi || (t ? t.oyun : '') || '';
+  if (!oyunAdiKisi && t && t.duraklar) {
+    var durakOyunlar = t.duraklar.map(function(d){ return d.oyun||''; }).filter(Boolean);
+    oyunAdiKisi = durakOyunlar[0] || '';
+  }
+  renderKisiModalList(oyunAdiKisi, q);
   renderSelectedPills();
 }
 
@@ -4203,6 +4216,17 @@ async function saveTurne() {
       console.log('[saveTurne] POST sonuç:', postR2.status, postR2.ok);
       if (postR2.ok) {
         apiBasarili = true;
+        // POST sonrası hemen fetchTurneler çağır — _rowIdx'i gerçek değere güncelle
+        // Yeni kayıt için katılımcı butonu hemen kullanılabilir olmalı
+        var eskiTurneler2 = JSON.parse(JSON.stringify(turneler));
+        await fetchTurneler();
+        if (!turneler.length && eskiTurneler2.length) {
+          turneler = eskiTurneler2;
+          console.warn('[saveTurne] POST fetchTurneler boş döndü — yerel veri geri yüklendi');
+        } else {
+          console.log('[saveTurne] POST _rowIdx senkronize edildi');
+        }
+        populateFilters(); renderListe(); renderCalendar();
       } else {
         var errText = '';
         try { var errJson = await postR2.json(); errText = errJson.error || postR2.status; } catch(e) { errText = postR2.status; }
@@ -4210,20 +4234,8 @@ async function saveTurne() {
         _gosterKayitHatasi('Turne kaydedilemedi (Hata: ' + errText + ')');
       }
     }
-    // Başarılıysa yerel veri zaten güncel — fetchTurneler çağırma (Sheets gecikir, kayıt kaybolur)
     if (apiBasarili) {
-      console.log('[saveTurne] Başarılı — yerel veri korunuyor');
-      // 3 saniye sonra arka planda _rowIdx senkronizasyonu için sessizce çek
-      setTimeout(async function() {
-        var eskiTurneler = JSON.parse(JSON.stringify(turneler));
-        await fetchTurneler();
-        // fetchTurneler boş döndürdüyse yerel veriyi geri yükle
-        if (!turneler.length && eskiTurneler.length) {
-          console.warn('[saveTurne] fetchTurneler boş döndü — yerel veri geri yüklendi');
-          turneler = eskiTurneler;
-        }
-        populateFilters(); renderListe(); renderCalendar();
-      }, 3000);
+      console.log('[saveTurne] Başarılı');
     }
   } catch(e) {
     console.warn('API kayıt hatası:', e);
