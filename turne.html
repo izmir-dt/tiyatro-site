@@ -832,11 +832,18 @@
       </div>
       <div class="kisi-modal-list" id="kisi-modal-list"></div>
       <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">
-        <div class="section-title">Kadroda Olmayan Kişi Ekle</div>
-        <div class="extra-kisi-row">
-          <input class="form-input" type="text" id="extra-kisi-ad" placeholder="Ad Soyad" style="flex:1">
-          <input class="form-input" type="text" id="extra-kisi-gorev" placeholder="Görevi (opsiyonel)" style="flex:1">
-          <button class="btn btn-primary" onclick="ekstraKisiEkle()">Ekle</button>
+        <div class="section-title" onclick="toggleEkstraPanel()" style="cursor:pointer;user-select:none">
+          <span id="ekstra-toggle-icon">▸</span> Kadroda Olmayan Kişi Ekle
+        </div>
+        <div id="ekstra-kisi-panel" style="display:none;margin-top:8px;position:relative">
+          <div class="extra-kisi-row">
+            <div style="position:relative;flex:1">
+              <input class="form-input" type="text" id="extra-kisi-ad" placeholder="Ad Soyad" style="width:100%" oninput="ekstraOtomatikTamamla()">
+              <div id="ekstra-oneri-liste" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--background);border:1px solid var(--border);border-radius:6px;z-index:999;max-height:180px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.15)"></div>
+            </div>
+            <input class="form-input" type="text" id="extra-kisi-gorev" placeholder="Görevi (opsiyonel)" style="flex:1">
+            <button class="btn btn-primary" onclick="ekstraKisiEkle()">Ekle</button>
+          </div>
         </div>
       </div>
     </div>
@@ -2144,7 +2151,7 @@ function renderKisiModalList(oyunAdi, q) {
       + '<div class="kisi-checkbox" onclick="toggleKisiSecim(\'' + esc(p.kisi) + '\',\'' + esc(p.gorev||p.kategori||'') + '\',\'' + esc(p.kategori||'') + '\')" style="cursor:pointer;flex-shrink:0">' + (secili ? '✓' : '') + '</div>'
       + '<div class="kisi-row-info" onclick="toggleKisiSecim(\'' + esc(p.kisi) + '\',\'' + esc(p.gorev||p.kategori||'') + '\',\'' + esc(p.kategori||'') + '\')" style="cursor:pointer;min-width:0;flex:1">'
       + '<div class="kisi-row-name">' + p.kisi + '</div>'
-      + '<div class="kisi-row-sub"><span style="background:var(--muted);border-radius:3px;padding:1px 5px;font-size:10px">' + (p.kategori||'') + '</span>' + (p.gorev ? ' · ' + p.gorev : '') + '</div>'
+      + '<div class="kisi-row-sub"><span style="background:var(--muted);border-radius:3px;padding:1px 5px;font-size:10px">' + (p.kategori||'') + '</span>' + (!OYUNCU_KATS.includes(p.kategori) && p.gorev ? ' · ' + p.gorev : '') + '</div>'
       + '</div>'
       + (secili
         ? '<input type="text" value="' + esc(turneGorev) + '" placeholder="Bu turnedeki görevi" '
@@ -2160,6 +2167,44 @@ function renderKisiModalList(oyunAdi, q) {
 function kisiGorevGuncelle(kisiAdi, yeniGorev) {
   var idx = kisiModalSecili.findIndex(s => s.kisi === kisiAdi);
   if (idx >= 0) kisiModalSecili[idx].gorev = yeniGorev;
+}
+
+// Kadroda olmayan panel aç/kapat
+function toggleEkstraPanel() {
+  var panel = document.getElementById('ekstra-kisi-panel');
+  var icon  = document.getElementById('ekstra-toggle-icon');
+  if (panel.style.display === 'none') { panel.style.display = 'block'; icon.textContent = '▾'; }
+  else { panel.style.display = 'none'; icon.textContent = '▸'; }
+}
+
+// Tüm kadrolardan akıllı öneri
+const OYUNCU_KATS = ['Oyuncu','Figüran','Koro','Solist','Dansçı','Koro/Dans Ekibi'];
+function ekstraOtomatikTamamla() {
+  var q = (document.getElementById('extra-kisi-ad').value || '').toLowerCase().trim();
+  var oneriEl = document.getElementById('ekstra-oneri-liste');
+  if (q.length < 2) { oneriEl.style.display = 'none'; return; }
+  var seen = {};
+  var sonuclar = tumPersonel.filter(p => {
+    var key = p.kisi + '|' + p.gorev;
+    if (seen[key]) return false;
+    seen[key] = true;
+    return p.kisi.toLowerCase().includes(q) || (p.gorev||'').toLowerCase().includes(q) || (p.kategori||'').toLowerCase().includes(q);
+  }).slice(0, 10);
+  if (!sonuclar.length) { oneriEl.style.display = 'none'; return; }
+  oneriEl.innerHTML = sonuclar.map(p => {
+    var gorevLabel = OYUNCU_KATS.includes(p.kategori) ? p.kategori : (p.gorev || p.kategori || '');
+    return '<div onclick="ekstraOneriSec(\'' + (p.kisi||'').replace(/'/g,"\\'") + '\',\'' + gorevLabel.replace(/'/g,"\\'") + '\',\'' + (p.kategori||'').replace(/'/g,"\\'") + '\')" '
+      + 'style="padding:7px 10px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--border)" '
+      + 'onmouseover="this.style.background=\'var(--muted)\'" onmouseout="this.style.background=\'\'">'
+      + '<b>' + p.kisi + '</b> <span style="color:var(--muted-foreground)">' + gorevLabel + '</span></div>';
+  }).join('');
+  oneriEl.style.display = 'block';
+}
+function ekstraOneriSec(kisi, gorev, kategori) {
+  document.getElementById('extra-kisi-ad').value = kisi;
+  document.getElementById('extra-kisi-gorev').value = gorev;
+  document.getElementById('ekstra-oneri-liste').style.display = 'none';
+  ekstraKisiEkle();
 }
 
 function toggleKisiSecim(kisi, gorev, kategori) {
@@ -4299,9 +4344,22 @@ async function init() {
 
 if (sessionStorage.getItem('turne_erisim') === 'true') { init(); }
 
-document.getElementById('modal-overlay').addEventListener('click', function(e) { if (e.target === this) closeModal(); });
+document.getElementById('modal-overlay').addEventListener('click', function(e) {
+  if (e.target === this) {
+    if (confirm('Formu kapatmak istediğinizden emin misiniz?\nKaydedilmemiş değişiklikler kaybolacak.')) {
+      closeModal();
+    }
+  }
+});
 document.getElementById('card-detail-modal').addEventListener('click', function(e) { if (e.target === this) closeCardDetail(); });
 document.getElementById('kisi-modal-overlay').addEventListener('click', function(e) { if (e.target === this) closeKisiModal(); });
+document.addEventListener('click', function(e) {
+  var oneri = document.getElementById('ekstra-oneri-liste');
+  var input = document.getElementById('extra-kisi-ad');
+  if (oneri && input && !oneri.contains(e.target) && e.target !== input) {
+    oneri.style.display = 'none';
+  }
+});
 document.getElementById('kadro-kisi-modal').addEventListener('click', function(e) { if (e.target === this) kadroKisiModalKapat(); });
 
 // ── Otomatik Doldurma ──────────────────────────────────────────
