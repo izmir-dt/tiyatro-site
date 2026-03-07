@@ -4029,7 +4029,12 @@ function closeModal() { document.getElementById('modal-overlay').classList.remov
 // ============================================================
 // KAYDET
 // ============================================================
+var _saveTurneCalisiyor = false;
 async function saveTurne() {
+  if (_saveTurneCalisiyor) { console.warn('[saveTurne] Zaten çalışıyor, ikinci çağrı engellendi'); return; }
+  _saveTurneCalisiyor = true;
+  var _saveBtn = document.getElementById('save-turne-btn');
+  if (_saveBtn) { _saveBtn.disabled = true; _saveBtn.textContent = 'Kaydediliyor...'; }
   var oyun        = document.getElementById('m-oyun').value.trim();
   var basTarih    = document.getElementById('m-tarih').value.trim();
   var bitisTarih  = document.getElementById('m-bitis').value.trim() || basTarih;
@@ -4172,7 +4177,9 @@ async function saveTurne() {
   if (sehirTel) acSave('sehirTeller', sehirTel);
   if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Kaydet'; }
   closeModal();
-  populateFilters(); renderListe(); renderCalendar();
+  populateFilters(); 
+  console.log('[saveTurne] renderListe öncesi turneler sayısı:', turneler.length, '| yeni kayıt oyun:', yeniKayit.oyun, 'il:', yeniKayit.il, 'baslangic:', yeniKayit.baslangicTarih);
+  renderListe(); renderCalendar();
 
   // Arka planda API'ye kaydet
   try {
@@ -4198,19 +4205,10 @@ async function saveTurne() {
       console.log('[saveTurne] POST sonuç:', postR2.status, postR2.ok);
       if (postR2.ok) {
         apiBasarili = true;
-        // Yerel veri zaten güncel — fetchTurneler ÇAĞIRMA (Sheets gecikiyor, yeni kart kaybolur)
-        // 5 saniye sonra arka planda _rowIdx senkronizasyonu
-        setTimeout(async function() {
-          var eskiTurneler3 = JSON.parse(JSON.stringify(turneler));
-          await fetchTurneler();
-          if (!turneler.length && eskiTurneler3.length) {
-            turneler = eskiTurneler3;
-            console.warn('[saveTurne] arka plan sync: boş döndü, yerel veri korundu');
-          } else {
-            console.log('[saveTurne] arka plan sync tamamlandı, _rowIdx güncellendi');
-            populateFilters(); renderListe(); renderCalendar();
-          }
-        }, 5000);
+        // Yerel veri zaten güncel — arka plan sync YOK
+        // Sheets geciktiği için fetchTurneler çağrılmıyor, kart kaybolmuyor
+        // Kullanıcı sayfayı yenileyince Sheets'teki gerçek veri gelir
+        console.log('[saveTurne] Yerel veri güncellendi, Sheets sync bekleniyor (sayfa yenilemede)');
       } else {
         var errText = '';
         try { var errJson = await postR2.json(); errText = errJson.error || postR2.status; } catch(e) { errText = postR2.status; }
@@ -4224,6 +4222,10 @@ async function saveTurne() {
   } catch(e) {
     console.warn('API kayıt hatası:', e);
     _gosterKayitHatasi('Bağlantı hatası: ' + (e.message||'bilinmiyor'));
+  } finally {
+    _saveTurneCalisiyor = false;
+    var _saveBtn2 = document.getElementById('save-turne-btn');
+    if (_saveBtn2) { _saveBtn2.disabled = false; _saveBtn2.textContent = 'Kaydet'; }
   }
 }
 
