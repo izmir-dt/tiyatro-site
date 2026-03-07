@@ -4198,17 +4198,19 @@ async function saveTurne() {
       console.log('[saveTurne] POST sonuç:', postR2.status, postR2.ok);
       if (postR2.ok) {
         apiBasarili = true;
-        // POST sonrası hemen fetchTurneler çağır — _rowIdx'i gerçek değere güncelle
-        // Yeni kayıt için katılımcı butonu hemen kullanılabilir olmalı
-        var eskiTurneler2 = JSON.parse(JSON.stringify(turneler));
-        await fetchTurneler();
-        if (!turneler.length && eskiTurneler2.length) {
-          turneler = eskiTurneler2;
-          console.warn('[saveTurne] POST fetchTurneler boş döndü — yerel veri geri yüklendi');
-        } else {
-          console.log('[saveTurne] POST _rowIdx senkronize edildi');
-        }
-        populateFilters(); renderListe(); renderCalendar();
+        // Yerel veri zaten güncel — fetchTurneler ÇAĞIRMA (Sheets gecikiyor, yeni kart kaybolur)
+        // 5 saniye sonra arka planda _rowIdx senkronizasyonu
+        setTimeout(async function() {
+          var eskiTurneler3 = JSON.parse(JSON.stringify(turneler));
+          await fetchTurneler();
+          if (!turneler.length && eskiTurneler3.length) {
+            turneler = eskiTurneler3;
+            console.warn('[saveTurne] arka plan sync: boş döndü, yerel veri korundu');
+          } else {
+            console.log('[saveTurne] arka plan sync tamamlandı, _rowIdx güncellendi');
+            populateFilters(); renderListe(); renderCalendar();
+          }
+        }, 5000);
       } else {
         var errText = '';
         try { var errJson = await postR2.json(); errText = errJson.error || postR2.status; } catch(e) { errText = postR2.status; }
