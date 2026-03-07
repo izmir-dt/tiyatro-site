@@ -2432,74 +2432,35 @@ function updateKisiCount() {
 }
 
 async function saveKisiModal() {
-  const saveBtn = document.getElementById('save-kisi-btn');
   const t = turneler.find(x => x._rowIdx === kisiModalRowIdx);
-  if (!t) { return; }
+  if (!t) return;
 
-  // 1. Yerel veriyi hemen güncelle (optimistik — saveTurne ile aynı yaklaşım)
+  // 1. Yerel veriyi hemen güncelle
   t.katilimcilar = JSON.parse(JSON.stringify(kisiModalSecili));
   const rowIdxKayit = t._rowIdx;
 
-  // 2. Modal'ı kapat, ekranı güncelle — kullanıcı beklemez
+  // 2. Modal'ı kapat, ekranı güncelle
   closeKisiModal();
   renderListe();
 
-  // 3. Arka planda API'ye yaz
+  // 3. Arka planda sadece katilimcilar sütununu yaz (/cell endpoint — backend'de mevcut)
   try {
     const katJSON2 = JSON.stringify(kisiModalSecili);
-    // saveTurne ile birebir aynı values yapısı — oyun/il boşsa duraktan türet
-    const gecerliDuraklar2 = (t.duraklar || []).filter(function(d){ return d.il && d.il.trim(); });
-    var oyunVal = t.oyun || '';
-    if (!oyunVal && gecerliDuraklar2.length) {
-      var durakOyunlar2 = gecerliDuraklar2.map(function(d){ return d.oyun||''; }).filter(Boolean);
-      var benzersiz2 = durakOyunlar2.filter(function(o,i,a){ return a.indexOf(o)===i; });
-      oyunVal = benzersiz2.join(' / ');
-    }
-    var ilVal = t.il || gecerliDuraklar2.map(function(d){ return d.il+(d.ilce?'/'+d.ilce:''); }).join(', ') || '';
-    var mekanVal = t.mekan || gecerliDuraklar2.map(function(d){ return d.mekan||''; }).filter(Boolean).join(', ') || '';
-    var sayiVal = t.sayi || gecerliDuraklar2.reduce(function(s,d){ return s+(d.sayi||1); }, 0) || 1;
-    const turneValues = [
-      oyunVal, ilVal, t.baslangicTarih||'', t.bitisTarih||'', mekanVal,
-      String(sayiVal), t.not||'', t.statu||'tamamlandi',
-      t.otelAdi||'', t.otelAdres||'', t.otelTelefon||'',
-      t.gidisUlasim||'', t.gidisSaat||'', t.donusUlasim||'', t.donusSaat||'',
-      t.aktarma||'', t.kamyonSayisi||'', t.sahneKapasitesi||'', t.notlar||'', t.grup||'',
-      JSON.stringify(t.duraklar||[]),
-      t.gidisInis||'', t.gidisUcusNo||'', t.gidisArac||'',
-      t.donusInis||'', t.donusUcusNo||'', t.donusArac||'',
-      t.sehirAracTur||'', t.sehirAracDetay||'',
-      t.gidisUcusBacakJSON||'', t.donusUcusBacakJSON||'',
-      t.gidisPlaka||'', t.gidisSurucu||'', t.gidisKisiSayisi||'',
-      t.donusPlaka||'', t.donusSurucu||'', t.donusKisiSayisi||'',
-      t.sehirKisiSayisi||'', t.sehirSurucu||'', t.sehirTel||'',
-      katJSON2,  // index 40 — katilimcilar
-      (t.programSatirlar && t.programSatirlar.length ? JSON.stringify(t.programSatirlar) : '')  // index 41 — turne programı
-    ];
-    console.log('[saveKisiModal] PUT row:', rowIdxKayit, 'oyun:', oyunVal, 'kat sayısı:', kisiModalSecili.length, 'values uzunluğu:', turneValues.length);
-    const putRes = await fetch(API + '/' + encodeURIComponent(TURNE_SHEET) + '/row/' + rowIdxKayit, {
+    const KAT_COL = 40; // values dizisinde index 40 = katilimcilar sütunu
+    console.log('[saveKisiModal] CELL PUT row:', rowIdxKayit, 'col:', KAT_COL, 'kat sayısı:', kisiModalSecili.length);
+    const cellRes = await fetch(API + '/' + encodeURIComponent(TURNE_SHEET) + '/cell', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ values: turneValues })
+      body: JSON.stringify({ row: rowIdxKayit, col: KAT_COL, value: katJSON2 })
     });
-    const putStatus = putRes.status;
-    console.log('[saveKisiModal] PUT sonuç:', putStatus, putRes.ok);
-    if (!putRes.ok) {
+    console.log('[saveKisiModal] CELL sonuç:', cellRes.status, cellRes.ok);
+    if (!cellRes.ok) {
       var errBody = '';
-      try { errBody = await putRes.text(); } catch(ex) { errBody = String(putStatus); }
-      console.error('[saveKisiModal] PUT hata:', errBody);
-      _gosterKayitHatasi('⚠️ Katılımcılar kaydedilemedi (Hata: ' + errBody + '). Sayfa yenilenmeden önce tekrar deneyin.');
+      try { errBody = await cellRes.text(); } catch(ex) { errBody = String(cellRes.status); }
+      console.error('[saveKisiModal] CELL hata:', errBody);
+      _gosterKayitHatasi('⚠️ Katılımcılar kaydedilemedi (Hata: ' + errBody + ')');
     } else {
-      console.log('[saveKisiModal] Başarılı — yerel veri korunuyor');
-      // Başarılı: 3 saniye sonra sessizce senkronize et (saveTurne ile aynı)
-      setTimeout(async function() {
-        var eskiTurneler = JSON.parse(JSON.stringify(turneler));
-        await fetchTurneler();
-        if (!turneler.length && eskiTurneler.length) {
-          turneler = eskiTurneler;
-          console.warn('[saveKisiModal] fetchTurneler boş döndü — yerel veri geri yüklendi');
-        }
-        renderListe();
-      }, 3000);
+      console.log('[saveKisiModal] Başarılı');
     }
   } catch(e) {
     console.error('[saveKisiModal] Beklenmeyen hata:', e);
