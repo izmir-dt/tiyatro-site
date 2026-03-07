@@ -1769,7 +1769,7 @@ async function fetchTurneler() {
     const iStat = h.findIndex(x => x.startsWith('stat'));
     const iOtel = h.findIndex(x => (x === 'otel' || x === 'otel adı' || x === 'otel adi' || x.startsWith('otel') && !x.includes('adres') && !x.includes('telefon') && !x.includes('tel.')));
     const iOAdr = h.findIndex(x => x.includes('adres'));
-    const iOTel = h.findIndex(x => (x.includes('telefon') || (x.includes('otel') && x.includes('tel') && !x.includes('adres'))));
+    const iOTel = h.findIndex(x => (x.includes('otel') && (x.includes('telefon') || x.includes('tel')) && !x.includes('adres') && !x.includes('şehir') && !x.includes('sehir')));
     const iGid  = h.findIndex(x => x.includes('gidi') && x.includes('ula'));
     const iGidS = h.findIndex(x => x.includes('gidi') && x.includes('saat'));
     const iDon  = h.findIndex(x => (x.includes('dönu') || x.includes('donu')) && !x.includes('saat'));
@@ -1828,7 +1828,7 @@ async function fetchTurneler() {
       donusSurucu:    (r[35] || '').trim(),
       donusKisiSayisi:(r[36] || '').trim(),
       sehirKisiSayisi:(r[37] || '').trim(),
-      sehirSurucu:    (r[38] || '').trim(),
+      sehirSurucu:    (() => { var i = h.findIndex(x => x.includes('şehir') && x.includes('sürücü') || x.includes('sehir') && x.includes('surucu')); return i >= 0 ? (r[i]||'').trim() : (r[38]||'').trim(); })(),
       // sehirTel ve katilimcilar: header'dan dinamik bul, yoksa pozisyonla
       sehirTel:       (() => { var i = h.findIndex(x => x.includes('şehir') && x.includes('tel') || x === 'şehir firma telefonu' || x === 'sehir tel'); return i >= 0 ? (r[i]||'').trim() : (r[39]||'').trim(); })(),
       katilimcilar:   (() => {
@@ -1843,12 +1843,12 @@ async function fetchTurneler() {
         return [];
       })(),
       programSatirlar: (() => {
-        var i = h.findIndex(x => x.includes('program'));
-        var raw = i >= 0 ? (r[i]||'') : '';
+        var i = h.findIndex(x => x.includes('turne') && x.includes('program') || x === 'program' || x.includes('program'));
+        var raw = i >= 0 ? (r[i]||'') : (r[41]||'');
         try { var p = JSON.parse(raw); return Array.isArray(p) ? p : []; } catch(e) { return []; }
       })(),
       };
-    }).filter(r => r.oyun && r.il);
+    }).filter(r => r.il);  // oyun artık zorunlu değil — durak bazlı seçimde boş kalabilir
   } catch(e) { console.warn('Turne verisi çekilemedi:', e); turneler = []; }
 }
 
@@ -2439,14 +2439,22 @@ async function saveKisiModal() {
       t.gidisPlaka||'', t.gidisSurucu||'', t.gidisKisiSayisi||'',
       t.donusPlaka||'', t.donusSurucu||'', t.donusKisiSayisi||'',
       t.sehirKisiSayisi||'', t.sehirSurucu||'', t.sehirTel||'',
-      katJSON2  // index 40 — katilimcilar HER ZAMAN SON
+      katJSON2,  // index 40 — katilimcilar
+      (t.programSatirlar && t.programSatirlar.length ? JSON.stringify(t.programSatirlar) : '')  // index 41 — turne programı
     ];
     await fetch(API + '/' + encodeURIComponent(TURNE_SHEET) + '/row/' + t._rowIdx, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ values: turneValues })
     });
-  } catch(e) { console.warn('Katılımcı kaydı yazılamadı:', e); }
+  } catch(e) {
+    console.warn('Katılımcı kaydı yazılamadı:', e);
+    // Yerel veri güncellendi ama Sheets'e yazılamadı — kullanıcıyı bilgilendir
+    closeKisiModal();
+    renderListe();
+    setTimeout(() => alert('⚠️ Katılımcılar yerel olarak güncellendi ancak sunucuya yazılamadı. İnternet bağlantınızı kontrol edin.'), 100);
+    return;
+  }
   closeKisiModal();
   renderListe();
 }
@@ -4086,7 +4094,8 @@ async function saveTurne() {
   var duraklarJSON = JSON.stringify(gecerliDuraklar);
   // katJSON VALUES'DAN ÖNCE tanımlanmalı
   var katJSON = editIdx !== '' ? JSON.stringify((turneler.find(x=>x._rowIdx===parseInt(editIdx))||{}).katilimcilar || []) : '[]';
-  var values = [oyun, il, basTarih, bitisTarih, mekan, String(sayi), not_, statu, otelAdi, otelAdres, otelTelefon, gidisUlasim, gidisSaat, donusUlasim, donusSaat, aktarma, kamyon, kapasite, lojNot, grup, duraklarJSON, gidisInis, gidisUcusNo, gidisArac, donusInis, donusUcusNo, donusArac, sehirAracTur, sehirAracDetay, gidisUcusBacakJSON, donusUcusBacakJSON, gidisPlaka, gidisSurucu, gidisKisiSayisi, donusPlaka, donusSurucu, donusKisiSayisi, sehirKisiSayisi, sehirSurucu, sehirTel, katJSON];
+  var programSatirlarJSON = programSatirlar.length ? JSON.stringify(programSatirlar) : '';
+  var values = [oyun, il, basTarih, bitisTarih, mekan, String(sayi), not_, statu, otelAdi, otelAdres, otelTelefon, gidisUlasim, gidisSaat, donusUlasim, donusSaat, aktarma, kamyon, kapasite, lojNot, grup, duraklarJSON, gidisInis, gidisUcusNo, gidisArac, donusInis, donusUcusNo, donusArac, sehirAracTur, sehirAracDetay, gidisUcusBacakJSON, donusUcusBacakJSON, gidisPlaka, gidisSurucu, gidisKisiSayisi, donusPlaka, donusSurucu, donusKisiSayisi, sehirKisiSayisi, sehirSurucu, sehirTel, katJSON, programSatirlarJSON];
 
   // Yerel veriyi hemen güncelle (optimistik)
   var yeniKayit = {
@@ -4133,9 +4142,16 @@ async function saveTurne() {
     } else {
       if (turneler.length === 1) {
         await fetch(API + '/' + encodeURIComponent(TURNE_SHEET) + '/row', { method:'POST', headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({ values:['Oyun Adı','Şehir/İl','Başlangıç Tarihi','Bitiş Tarihi','Sahne/Mekan','Temsil Sayısı','Notlar','Statü','Otel Adı','Otel Adres','Otel Telefon','Gidiş Ulaşım','Gidiş Saat','Dönüş Ulaşım','Dönüş Saat','Aktarma','Kamyon','Kapasite','Lojistik Not','Grup','Duraklar JSON','Gidiş İniş','Gidiş Uçuş No','Gidiş Araç/Plaka','Dönüş İniş','Dönüş Uçuş No','Dönüş Araç/Plaka','Şehir Araç Tür','Şehir Araç Detay','Gidiş Uçuş Bacakları','Dönüş Uçuş Bacakları','Gidiş Plaka','Gidiş Sürücü','Gidiş Kişi Sayısı','Dönüş Plaka','Dönüş Sürücü','Dönüş Kişi Sayısı','Şehir Kişi Sayısı','Şehir Sürücü','Şehir Firma Telefonu','Katılımcılar'] }) });
+          body:JSON.stringify({ values:['Oyun Adı','Şehir/İl','Başlangıç Tarihi','Bitiş Tarihi','Sahne/Mekan','Temsil Sayısı','Notlar','Statü','Otel Adı','Otel Adres','Otel Telefon','Gidiş Ulaşım','Gidiş Saat','Dönüş Ulaşım','Dönüş Saat','Aktarma','Kamyon','Kapasite','Lojistik Not','Grup','Duraklar JSON','Gidiş İniş','Gidiş Uçuş No','Gidiş Araç/Plaka','Dönüş İniş','Dönüş Uçuş No','Dönüş Araç/Plaka','Şehir Araç Tür','Şehir Araç Detay','Gidiş Uçuş Bacakları','Dönüş Uçuş Bacakları','Gidiş Plaka','Gidiş Sürücü','Gidiş Kişi Sayısı','Dönüş Plaka','Dönüş Sürücü','Dönüş Kişi Sayısı','Şehir Kişi Sayısı','Şehir Sürücü','Şehir Firma Telefonu','Katılımcılar','Turne Programı'] }) });
       }
       var r = await fetch(API + '/' + encodeURIComponent(TURNE_SHEET) + '/row', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ values:values }) });
+      if (r.ok) {
+        // Yeni kayıt sonrası gerçek rowIdx için veriyi yenile
+        setLoading(true);
+        await fetchTurneler();
+        populateFilters(); renderListe(); renderCalendar();
+        setLoading(false);
+      }
     }
   } catch(e) { console.warn('API kayıt hatası (yerel veri güncellendi):', e); }
 }
