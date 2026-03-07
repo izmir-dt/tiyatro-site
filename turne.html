@@ -1701,10 +1701,12 @@ function populateFilters() {
   fi.innerHTML = '<option value="">Tüm İller</option>';
   iller.forEach(il => { const opt = document.createElement('option'); opt.value = il; opt.textContent = il; fi.appendChild(opt); });
   const mo = document.getElementById('m-oyun');
-  const mFirst = mo.options[0];
-  mo.innerHTML = '';
-  mo.appendChild(mFirst);
-  oyunlar.forEach(o => { const opt = document.createElement('option'); opt.value = o; opt.textContent = o; mo.appendChild(opt); });
+  if (mo) {
+    const mFirst = mo.options[0];
+    mo.innerHTML = '';
+    if (mFirst) mo.appendChild(mFirst);
+    oyunlar.forEach(o => { const opt = document.createElement('option'); opt.value = o; opt.textContent = o; mo.appendChild(opt); });
+  }
 }
 
 // ============================================================
@@ -2087,10 +2089,10 @@ function renderSelectedPills() {
     el.innerHTML = '<span style="font-size:11px;color:var(--muted-foreground);padding:4px 6px">Henüz kimse seçilmedi</span>';
     updateKisiCount(); return;
   }
-  // Her kişi: düzenlenebilir isim + düzenlenebilir görev alanı + sil
-  el.innerHTML = '<div style="display:flex;flex-direction:column;gap:4px;width:100%">'
+  el.innerHTML = '<div id="drag-list" style="display:flex;flex-direction:column;gap:4px;width:100%">'
     + kisiModalSecili.map((k, i) =>
-      '<div style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:var(--accent);border-radius:7px;border:1px solid var(--border)">'
+      '<div draggable="true" data-idx="' + i + '" style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:var(--accent);border-radius:7px;border:1px solid var(--border);cursor:grab">'
+      + '<span style="color:var(--muted-foreground);font-size:14px;cursor:grab;flex-shrink:0;user-select:none">⠿</span>'
       + '<div style="flex:1;min-width:0;display:grid;grid-template-columns:1fr 1fr;gap:4px">'
       +   '<input type="text" value="' + (k.kisi||'').replace(/"/g,'&quot;') + '" placeholder="Ad Soyad"'
       +   ' onchange="kisiIsimGuncelle(' + i + ',this.value)"'
@@ -2103,6 +2105,35 @@ function renderSelectedPills() {
       + '</div>'
     ).join('')
     + '</div>';
+
+  // Drag & drop
+  var dragList = document.getElementById('drag-list');
+  var dragSrc = null;
+  dragList.querySelectorAll('[draggable]').forEach(function(row) {
+    row.addEventListener('dragstart', function(e) {
+      dragSrc = this;
+      this.style.opacity = '0.4';
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    row.addEventListener('dragend', function() {
+      dragList.querySelectorAll('[draggable]').forEach(function(r){ r.style.opacity='1'; r.style.borderTop=''; });
+    });
+    row.addEventListener('dragover', function(e) {
+      e.preventDefault();
+      dragList.querySelectorAll('[draggable]').forEach(function(r){ r.style.borderTop=''; });
+      if (this !== dragSrc) this.style.borderTop = '2px solid var(--primary)';
+      e.dataTransfer.dropEffect = 'move';
+    });
+    row.addEventListener('drop', function(e) {
+      e.preventDefault();
+      if (this === dragSrc) return;
+      var fromIdx = parseInt(dragSrc.dataset.idx);
+      var toIdx   = parseInt(this.dataset.idx);
+      var item = kisiModalSecili.splice(fromIdx, 1)[0];
+      kisiModalSecili.splice(toIdx, 0, item);
+      renderSelectedPills();
+    });
+  });
   updateKisiCount();
 }
 
@@ -3672,8 +3703,12 @@ function _pdfIcerik(t) {
 
   var sr = statuRenk(t.statu || 'tamamlandi');
 
+  var OYUNCU_KATS_PDF = ['Oyuncu','Figüran','Koro','Solist','Dansçı','Koro/Dans Ekibi'];
   var satirlar = katilimcilar.map(function(p, i) {
-    var unvan = (p.gorev && p.gorev !== p.kategori && p.gorev.trim()) ? p.gorev : (p.kategori || '');
+    var kat = (p.kategori || '');
+    var unvan = OYUNCU_KATS_PDF.includes(kat)
+      ? kat
+      : ((p.gorev && p.gorev !== p.kategori && p.gorev.trim()) ? p.gorev : kat);
     return '<tr style="background:' + (i%2===0 ? '#f9f5f0' : '#ffffff') + '">'
       + '<td style="padding:6px 10px;border:1px solid #ddd;text-align:center;width:32px;color:#888;font-size:11px">' + (i+1) + '</td>'
       + '<td style="padding:6px 10px;border:1px solid #ddd;font-weight:700;font-size:12px">' + (p.kisi||'') + '</td>'
@@ -4212,7 +4247,8 @@ document.getElementById('modal-overlay').addEventListener('click', function(e) {
     }
   }
 });
-document.getElementById('card-detail-modal').addEventListener('click', function(e) { if (e.target === this) closeCardDetail(); });
+var _cdm = document.getElementById('card-detail-modal');
+if (_cdm) _cdm.addEventListener('click', function(e) { if (e.target === this) closeCardDetail(); });
 document.getElementById('kisi-modal-overlay').addEventListener('click', function(e) { if (e.target === this) closeKisiModal(); });
 document.addEventListener('click', function(e) {
   var oneri = document.getElementById('ekstra-oneri-liste');
