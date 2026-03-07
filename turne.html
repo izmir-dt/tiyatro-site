@@ -822,7 +822,7 @@
     </div>
     <div class="modal-body" style="padding:0;display:flex;flex-direction:column;overflow:hidden;max-height:calc(90vh - 120px)">
       <!-- SEÇİLİ KİŞİLER — scroll eder -->
-      <div id="selected-pills-wrap" class="selected-pills" style="padding:10px 16px 0;flex-shrink:0;max-height:160px;overflow-y:auto;border-bottom:1px solid var(--border)"></div>
+      <div id="selected-pills-wrap" class="selected-pills" style="flex-shrink:0;max-height:150px;overflow-y:auto;transition:all .2s"></div>
       <!-- ARAMA + EKLE — sticky -->
       <div style="padding:10px 16px;display:flex;gap:6px;align-items:flex-start;flex-shrink:0;background:var(--card);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:10">
         <div style="flex:1;position:relative">
@@ -843,6 +843,7 @@
     <div class="modal-footer">
       <span id="kisi-count-label" style="font-size:12px;color:var(--muted-foreground)"></span>
       <div style="display:flex;gap:8px">
+        <button class="btn btn-outline" style="font-size:11px;padding:0 10px" onclick="kisiModalAnaKadroyuSec()" title="Ana oyun kadrosunu seçili yap">↺ Ana Kadro</button>
         <button class="btn btn-outline" onclick="closeKisiModal()">İptal</button>
         <button class="btn btn-primary" onclick="saveKisiModal()">Kaydet</button>
       </div>
@@ -2041,7 +2042,16 @@ function turneCard(t) {
     +   durakHtml
     +   '<div class="turne-info-row"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><strong>' + tarihStr + '</strong>' + gunStr + '</div>'
     +   ulasimStr + otelStr + notStr
-    +   '<div class="turne-info-row"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><strong>' + personel.length + '</strong> kişi</div>'
+    +   '<div class="turne-info-row"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>'
+    + (function(){
+        var anaKadro = getPersonelForOyun(t.oyun).length;
+        var turneKadro = t.katilimcilar && t.katilimcilar.length;
+        if (turneKadro && turneKadro !== anaKadro) {
+          return 'Ana: <strong>' + anaKadro + '</strong> · Turne: <strong style="color:var(--primary)">' + turneKadro + '</strong> kişi';
+        }
+        return '<strong>' + anaKadro + '</strong> kişi';
+      })()
+    + '</div>'
     + '</div>'
     + '<div class="turne-card-footer">'
     +   chips
@@ -2061,8 +2071,14 @@ function openKisiModal(rowIdx) {
   const t = turneler.find(x => x._rowIdx === rowIdx);
   if (!t) return;
   kisiModalRowIdx = rowIdx;
-  // Mevcut seçili kişileri yükle
-  kisiModalSecili = t.katilimcilar ? JSON.parse(JSON.stringify(t.katilimcilar)) : [];
+  // Kayıtlı katılımcılar varsa onları yükle, yoksa ana kadroyu otomatik seç
+  if (t.katilimcilar && t.katilimcilar.length > 0) {
+    kisiModalSecili = JSON.parse(JSON.stringify(t.katilimcilar));
+  } else {
+    // Ana kadroyu varsayılan olarak seç
+    var anaKadro = getPersonelForOyun(t.oyun);
+    kisiModalSecili = anaKadro.map(function(p) { return { kisi: p.kisi, gorev: p.gorev || p.kategori, kategori: p.kategori }; });
+  }
   document.getElementById('kisi-modal-title').textContent = t.oyun + ' – Katılımcılar';
   document.getElementById('kisi-modal-sure').textContent = formatTarih(t.baslangicTarih || t.tarih) + ' · ' + t.il;
   document.getElementById('kisi-filter-input').value = '';
@@ -2075,6 +2091,16 @@ function closeKisiModal() {
   document.getElementById('kisi-modal-overlay').classList.remove('on');
   kisiModalRowIdx = null;
   kisiModalSecili = [];
+}
+
+function kisiModalAnaKadroyuSec() {
+  var t = turneler.find(x => x._rowIdx === kisiModalRowIdx);
+  if (!t) return;
+  var anaKadro = getPersonelForOyun(t.oyun);
+  kisiModalSecili = anaKadro.map(function(p) { return { kisi: p.kisi, gorev: p.gorev || p.kategori, kategori: p.kategori }; });
+  var q = document.getElementById('kisi-filter-input').value.toLowerCase();
+  renderKisiModalList(t.oyun, q);
+  renderSelectedPills();
 }
 
 // ============================================================
@@ -2246,9 +2272,13 @@ function toggleKisiSecim(kisi, gorev, kategori) {
 function renderSelectedPills() {
   const el = document.getElementById('selected-pills-wrap');
   if (!kisiModalSecili.length) {
-    el.innerHTML = '<span style="font-size:11px;color:var(--muted-foreground);padding:4px 6px">Henüz kimse seçilmedi</span>';
+    el.innerHTML = '';
+    el.style.padding = '0';
+    el.style.borderBottom = 'none';
     updateKisiCount(); return;
   }
+  el.style.padding = '10px 16px 8px';
+  el.style.borderBottom = '1px solid var(--border)';
   el.innerHTML = '<div id="drag-list" style="display:flex;flex-direction:column;gap:4px;width:100%">'
     + kisiModalSecili.map((k, i) =>
       '<div draggable="true" data-idx="' + i + '" style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:var(--accent);border-radius:7px;border:1px solid var(--border)">'
@@ -2355,7 +2385,15 @@ function ekstraKisiEkle() {
 
 function updateKisiCount() {
   const el = document.getElementById('kisi-count-label');
-  if (el) el.textContent = kisiModalSecili.length + ' kişi seçili';
+  if (!el) return;
+  var t = turneler.find(x => x._rowIdx === kisiModalRowIdx);
+  var anaKadroSayisi = t ? getPersonelForOyun(t.oyun).length : 0;
+  var turneKadroSayisi = kisiModalSecili.length;
+  if (anaKadroSayisi && turneKadroSayisi !== anaKadroSayisi) {
+    el.innerHTML = 'Ana Kadro: <strong>' + anaKadroSayisi + '</strong> · Seçili: <strong style="color:var(--primary)">' + turneKadroSayisi + '</strong> kişi';
+  } else {
+    el.textContent = turneKadroSayisi + ' kişi seçili';
+  }
 }
 
 async function saveKisiModal() {
@@ -4377,7 +4415,7 @@ function _pdfIcerik(t) {
     + (konakHTML ? '<div class="sec"><div class="sec-title">Konaklama</div>' + konakHTML + '</div>' : '')
     + (nakliyeHTML ? '<div class="sec"><div class="sec-title">Lojistik</div>' + nakliyeHTML + (t.notlar?'<div style="padding:8px 14px;background:#fef3c7;border-radius:5px;border-left:3px solid #d97706;font-size:11px;margin-top:6px"><strong>📝 Lojistik Notu:</strong> '+t.notlar+'</div>':'') + '</div>' : '')
     + programHTML
-    + '<div class="sec"><div class="sec-title">Görevlendirilen Personel (' + katilimcilar.length + ' Kişi)</div>'
+    + '<div class="sec"><div class="sec-title">Görevlendirilen Personel</div>'
     + (katilimcilar.length===0
         ? '<p style="color:#777;font-style:italic;font-size:11px">Personel listesi bulunamadı.</p>'
         : '<table><thead><tr><th style="width:32px">#</th><th>Ad Soyad</th><th>Görevi / Unvanı</th></tr></thead><tbody>'+satirlar+'</tbody></table>')
