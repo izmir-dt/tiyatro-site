@@ -3099,15 +3099,19 @@ function calPopupKapat() {
 function _calPopupGoster(key, event) {
   var popup = document.getElementById('cal-popup');
   if (!popup) return;
+
+  // Konumu kaydet (yeniden render sonrası)
+  var savedLeft = popup.style.left;
+  var savedTop  = popup.style.top;
+
   var aylar = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
   var parts = key.split('-');
-  var y = parts[0], m = parts[1], d = parts[2];
-  var tarihLabel = parseInt(d) + ' ' + aylar[parseInt(m)-1] + ' ' + y;
+  var tarihLabel = parseInt(parts[2]) + ' ' + aylar[parseInt(parts[1])-1] + ' ' + parts[0];
   var gunIndex = new Date(key).getDay();
   var gunAdi = ['Pazar','Pazartesi','Salı','Çarşamba','Perşembe','Cuma','Cumartesi'][gunIndex];
   var tatilAdi = resmiTatilKontrol(key);
   var gunNotu = calNotes[key] || '';
-  var gunRengi = calColors && calColors[key] ? calColors[key] : '';
+  var gunRengi = window.calColors && window.calColors[key] ? window.calColors[key] : '';
 
   var events = turneler.filter(function(t) {
     var bas = t.baslangicTarih || t.tarih || '';
@@ -3115,75 +3119,142 @@ function _calPopupGoster(key, event) {
     return key >= bas && key <= bit;
   });
 
-  // Renk seçenekleri
+  // DOM ile oluştur - string kaçış sorunu yok
+  popup.innerHTML = '';
+
+  // BAŞLIK
+  var header = document.createElement('div');
+  header.style.cssText = 'background:var(--sidebar);padding:10px 14px;display:flex;align-items:center;justify-content:space-between';
+  var hLeft = document.createElement('div');
+  var hTitle = document.createElement('div');
+  hTitle.style.cssText = 'font-size:13px;font-weight:800;color:#fff';
+  hTitle.textContent = tarihLabel + ' — ' + gunAdi;
+  hLeft.appendChild(hTitle);
+  if (tatilAdi) {
+    var hTatil = document.createElement('div');
+    hTatil.style.cssText = 'font-size:10px;color:hsl(42,80%,70%)';
+    hTatil.textContent = '🎉 ' + tatilAdi;
+    hLeft.appendChild(hTatil);
+  }
+  var hClose = document.createElement('button');
+  hClose.style.cssText = 'background:rgba(255,255,255,.2);border:none;color:#fff;cursor:pointer;width:24px;height:24px;border-radius:50%;font-size:16px;line-height:1';
+  hClose.textContent = '×';
+  hClose.onclick = function() { calPopupKapat(); };
+  header.appendChild(hLeft);
+  header.appendChild(hClose);
+  popup.appendChild(header);
+
+  // GÖVDE
+  var body = document.createElement('div');
+  body.style.cssText = 'padding:10px 14px;display:flex;flex-direction:column;gap:10px';
+
+  // Renk bölümü
+  var renkDiv = document.createElement('div');
+  var renkTitle = document.createElement('div');
+  renkTitle.style.cssText = 'font-size:10px;font-weight:700;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px';
+  renkTitle.textContent = 'Gün Rengi';
+  renkDiv.appendChild(renkTitle);
+  var renkRow = document.createElement('div');
+  renkRow.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap';
   var renkler = [
-    {r:'', label:'✕'},
-    {r:'#fef3c7', label:'🟡'},
-    {r:'#dcfce7', label:'🟢'},
-    {r:'#fee2e2', label:'🔴'},
-    {r:'#dbeafe', label:'🔵'},
-    {r:'#f3e8ff', label:'🟣'},
-    {r:'#ffedd5', label:'🟠'},
+    {r:'', label:'✕', title:'Rengi kaldır'},
+    {r:'#fef3c7', label:'🟡', title:'Sarı'},
+    {r:'#dcfce7', label:'🟢', title:'Yeşil'},
+    {r:'#fee2e2', label:'🔴', title:'Kırmızı'},
+    {r:'#dbeafe', label:'🔵', title:'Mavi'},
+    {r:'#f3e8ff', label:'🟣', title:'Mor'},
+    {r:'#ffedd5', label:'🟠', title:'Turuncu'},
   ];
-  var renkHTML = renkler.map(function(rk) {
+  renkler.forEach(function(rk) {
+    var btn = document.createElement('button');
     var aktif = gunRengi === rk.r;
-    return '<button onclick="calRenkSec('' + key + '','' + rk.r + '')" title="' + (rk.r||'Renk kaldır') + '" '
-      + 'style="width:24px;height:24px;border-radius:50%;border:2px solid ' + (aktif?'var(--primary)':'var(--border)') + ';background:' + (rk.r||'var(--background)') + ';cursor:pointer;font-size:11px;display:flex;align-items:center;justify-content:center">'
-      + rk.label + '</button>';
-  }).join('');
+    btn.style.cssText = 'width:28px;height:28px;border-radius:50%;border:2px solid '+(aktif?'var(--primary)':'var(--border)')+';background:'+(rk.r||'var(--background)')+';cursor:pointer;font-size:12px';
+    btn.title = rk.title;
+    btn.textContent = rk.label;
+    (function(r) { btn.onclick = function(e) { e.stopPropagation(); calRenkSec(key, r); }; })(rk.r);
+    renkRow.appendChild(btn);
+  });
+  renkDiv.appendChild(renkRow);
+  body.appendChild(renkDiv);
 
-  // Turneler
-  var turneHTML = events.length ? events.map(function(t) {
-    var sr = statuRenk(t.statu||'tamamlandi');
-    return '<div onclick="editTurne('+t._rowIdx+');calPopupKapat()" style="padding:6px 10px;cursor:pointer;border-left:3px solid '+sr.headerBorder+';background:'+sr.bg+';border-radius:4px;margin-bottom:4px;font-size:12px;font-weight:600">'
-      + t.oyun + ' <span style="font-weight:400;color:var(--muted-foreground);font-size:10px">→ düzenle</span></div>';
-  }).join('') : '<div style="font-size:11px;color:var(--muted-foreground)">Bu gün için turne yok</div>';
+  // Not bölümü
+  var notDiv = document.createElement('div');
+  var notTitle = document.createElement('div');
+  notTitle.style.cssText = 'font-size:10px;font-weight:700;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px';
+  notTitle.textContent = 'Not';
+  notDiv.appendChild(notTitle);
+  var notRow = document.createElement('div');
+  notRow.style.cssText = 'display:flex;gap:6px';
+  var notTA = document.createElement('textarea');
+  notTA.id = 'cal-popup-not';
+  notTA.rows = 2;
+  notTA.placeholder = 'Not ekle…';
+  notTA.value = gunNotu;
+  notTA.style.cssText = 'flex:1;border:1px solid var(--border);border-radius:6px;padding:6px 8px;font-size:12px;background:var(--background);color:var(--foreground);font-family:inherit;resize:none';
+  notRow.appendChild(notTA);
+  var notBtns = document.createElement('div');
+  notBtns.style.cssText = 'display:flex;flex-direction:column;gap:4px';
+  var kaydetBtn = document.createElement('button');
+  kaydetBtn.textContent = 'Kaydet';
+  kaydetBtn.style.cssText = 'padding:4px 10px;background:var(--primary);color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:11px';
+  kaydetBtn.onclick = function() { calPopupNotKaydet(key); };
+  notBtns.appendChild(kaydetBtn);
+  if (gunNotu) {
+    var silBtn = document.createElement('button');
+    silBtn.textContent = 'Sil';
+    silBtn.style.cssText = 'padding:4px 10px;background:#dc2626;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:11px';
+    silBtn.onclick = function() { calPopupNotSil(key); };
+    notBtns.appendChild(silBtn);
+  }
+  notRow.appendChild(notBtns);
+  notDiv.appendChild(notRow);
+  body.appendChild(notDiv);
 
-  popup.innerHTML = ''
-    + '<div style="background:var(--sidebar);padding:10px 14px;display:flex;align-items:center;justify-content:space-between">'
-    +   '<div><div style="font-size:13px;font-weight:800;color:#fff">' + tarihLabel + ' — ' + gunAdi + '</div>'
-    +   (tatilAdi ? '<div style="font-size:10px;color:hsl(42,80%,70%)">🎉 ' + tatilAdi + '</div>' : '')
-    +   '</div>'
-    +   '<button onclick="calPopupKapat()" style="background:rgba(255,255,255,.2);border:none;color:#fff;cursor:pointer;width:24px;height:24px;border-radius:50%;font-size:14px">×</button>'
-    + '</div>'
-    + '<div style="padding:10px 14px;display:flex;flex-direction:column;gap:10px">'
-    // Renk boyama
-    +   '<div>'
-    +     '<div style="font-size:10px;font-weight:700;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Gün Rengi</div>'
-    +     '<div style="display:flex;gap:6px;flex-wrap:wrap">' + renkHTML + '</div>'
-    +   '</div>'
-    // Not
-    +   '<div>'
-    +     '<div style="font-size:10px;font-weight:700;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Not</div>'
-    +     '<div style="display:flex;gap:6px">'
-    +       '<textarea id="cal-popup-not" rows="2" placeholder="Not ekle…" style="flex:1;border:1px solid var(--border);border-radius:6px;padding:6px 8px;font-size:12px;background:var(--background);color:var(--foreground);font-family:inherit;resize:none">' + gunNotu + '</textarea>'
-    +       '<div style="display:flex;flex-direction:column;gap:4px">'
-    +         '<button onclick="calPopupNotKaydet('' + key + '')" style="padding:4px 10px;background:var(--primary);color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:11px">Kaydet</button>'
-    +         (gunNotu ? '<button onclick="calPopupNotSil('' + key + '')" style="padding:4px 10px;background:#dc2626;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:11px">Sil</button>' : '')
-    +       '</div>'
-    +     '</div>'
-    +   '</div>'
-    // Turneler
-    +   '<div>'
-    +     '<div style="font-size:10px;font-weight:700;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Turneler (' + events.length + ')</div>'
-    +     turneHTML
-    +   '</div>'
-    + '</div>';
+  // Turneler bölümü
+  var turneDiv = document.createElement('div');
+  var turneTitle = document.createElement('div');
+  turneTitle.style.cssText = 'font-size:10px;font-weight:700;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px';
+  turneTitle.textContent = 'Turneler (' + events.length + ')';
+  turneDiv.appendChild(turneTitle);
+  if (events.length) {
+    events.forEach(function(t) {
+      var sr = statuRenk(t.statu||'tamamlandi');
+      var tRow = document.createElement('div');
+      tRow.style.cssText = 'padding:6px 10px;cursor:pointer;border-left:3px solid '+sr.headerBorder+';background:'+sr.bg+';border-radius:4px;margin-bottom:4px;font-size:12px;font-weight:600';
+      tRow.textContent = t.oyun;
+      var tSub = document.createElement('span');
+      tSub.style.cssText = 'font-weight:400;color:var(--muted-foreground);font-size:10px';
+      tSub.textContent = ' → düzenle';
+      tRow.appendChild(tSub);
+      (function(idx) { tRow.onclick = function() { editTurne(idx); calPopupKapat(); }; })(t._rowIdx);
+      turneDiv.appendChild(tRow);
+    });
+  } else {
+    var noTurne = document.createElement('div');
+    noTurne.style.cssText = 'font-size:11px;color:var(--muted-foreground)';
+    noTurne.textContent = 'Bu gün için turne yok';
+    turneDiv.appendChild(noTurne);
+  }
+  body.appendChild(turneDiv);
+  popup.appendChild(body);
 
+  // Konum hesapla
   popup.style.display = 'block';
-
-  // Konumlandır - tıklanan elementin yanına
-  var rect = event ? event.currentTarget.getBoundingClientRect() : null;
-  if (!rect) rect = event ? event.target.getBoundingClientRect() : {right:200,top:200};
-  var popW = 320, popH = 380;
-  var vw = window.innerWidth, vh = window.innerHeight;
-  var left = rect.right + 8;
-  var top = rect.top;
-  if (left + popW > vw - 10) left = rect.left - popW - 8;
-  if (top + popH > vh - 10) top = vh - popH - 10;
-  if (top < 10) top = 10;
-  popup.style.left = left + 'px';
-  popup.style.top = top + 'px';
+  if (event && event.currentTarget) {
+    var rect = event.currentTarget.getBoundingClientRect();
+    var popW = 320, popH = popup.offsetHeight || 380;
+    var vw = window.innerWidth, vh = window.innerHeight;
+    var left = rect.right + 8;
+    var top = rect.top;
+    if (left + popW > vw - 10) left = rect.left - popW - 8;
+    if (top + popH > vh - 10) top = vh - popH - 10;
+    if (top < 10) top = 10;
+    popup.style.left = left + 'px';
+    popup.style.top = top + 'px';
+  } else if (savedLeft) {
+    popup.style.left = savedLeft;
+    popup.style.top = savedTop;
+  }
 }
 
 function calRenkSec(key, renk) {
@@ -3191,10 +3262,8 @@ function calRenkSec(key, renk) {
   if (renk) calColors[key] = renk;
   else delete calColors[key];
   try { localStorage.setItem('calColors_idt', JSON.stringify(calColors)); } catch(e) {}
-  _calPopupGoster(key, null);
-  var popup = document.getElementById('cal-popup');
-  if (popup) { var rect = {right: parseInt(popup.style.left)-8, left: parseInt(popup.style.left)-320-8, top: parseInt(popup.style.top)}; }
   renderCalendar();
+  _calPopupGoster(key, null);
 }
 
 function calPopupNotKaydet(key) {
@@ -3205,8 +3274,6 @@ function calPopupNotKaydet(key) {
   calNotKaydet();
   renderCalendar();
   _calPopupGoster(key, null);
-  var popup = document.getElementById('cal-popup');
-  if (popup) popup.style.left = popup.style.left; // konumu koru
 }
 
 function calPopupNotSil(key) {
