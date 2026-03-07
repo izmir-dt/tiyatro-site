@@ -618,21 +618,20 @@
       </div>
       <div class="kisi-modal-list" id="kisi-modal-list"></div>
       <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">
-        <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none" onclick="var b=document.getElementById('ekstra-body');var ic=document.getElementById('ekstra-ic');b.style.display=b.style.display==='none'?'flex':'none';ic.textContent=b.style.display==='none'?'▸':'▾'">
-          <div class="section-title" style="margin:0">➕ Kadroda Olmayan Kişi Ekle</div>
-          <span id="ekstra-ic" style="font-size:11px;color:var(--muted-foreground)">▸</span>
+        <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;padding:2px 0 6px" onclick="var b=document.getElementById('ekstra-body');b.style.display=b.style.display==='none'?'block':'none';this.querySelector('.ekstra-ic').textContent=b.style.display==='none'?'▸':'▾'">
+          <div class="section-title" style="margin:0;cursor:pointer">➕ Kadroda Olmayan Kişi Ekle</div>
+          <span class="ekstra-ic" style="font-size:11px;color:var(--muted-foreground);flex-shrink:0">▸</span>
         </div>
-        <div id="ekstra-body" style="display:none;flex-direction:column;gap:6px;margin-top:8px;position:relative">
-          <!-- Akıllı arama alanı -->
-          <div style="position:relative">
-            <input class="form-input" type="text" id="extra-kisi-ad" placeholder="İsim veya görev yaz… (öneri çıkar)" oninput="ekstraOtomatikTamamla()" autocomplete="off" style="padding-right:32px">
-            <div id="ekstra-oneri-liste" style="display:none;position:absolute;top:38px;left:0;right:0;z-index:200;background:var(--card);border:1px solid var(--border);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.15);max-height:180px;overflow-y:auto"></div>
+        <div id="ekstra-body" style="display:none">
+          <div style="position:relative;margin-bottom:6px">
+            <input class="form-input" type="text" id="extra-kisi-ad" placeholder="İsim veya görev yaz… öneri çıkar" oninput="ekstraOtomatikTamamla()" autocomplete="off">
+            <div id="ekstra-oneri-liste" style="display:none;position:absolute;top:38px;left:0;right:0;z-index:500;background:var(--card);border:1px solid var(--border);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.15);max-height:180px;overflow-y:auto"></div>
           </div>
           <div style="display:flex;gap:6px">
             <input class="form-input" type="text" id="extra-kisi-gorev" placeholder="Görevi (opsiyonel)" style="flex:1" autocomplete="off">
             <button class="btn btn-primary" onclick="ekstraKisiEkle()">Ekle</button>
           </div>
-          <div style="font-size:10px;color:var(--muted-foreground)">💡 Yazarken tüm oyun kadrolarından eşleşen kişiler önerilir</div>
+          <div style="font-size:10px;color:var(--muted-foreground);margin-top:4px">💡 Yazarken tüm oyun kadrolarından eşleşen kişiler önerilir</div>
         </div>
       </div>
     </div>
@@ -1031,21 +1030,19 @@ function filterKisiList() {
 }
 
 function renderKisiModalList(oyunAdi, q) {
-  const personel = getPersonelForOyun(oyunAdi).filter(p => !q || p.kisi.toLowerCase().includes(q) || p.gorev.toLowerCase().includes(q));
+  const personel = getPersonelForOyun(oyunAdi).filter(p => !q || p.kisi.toLowerCase().includes(q) || (p.gorev||'').toLowerCase().includes(q) || (p.kategori||'').toLowerCase().includes(q));
   const el = document.getElementById('kisi-modal-list');
   if (!personel.length) {
     el.innerHTML = '<div style="padding:14px;text-align:center;font-size:12px;color:var(--muted-foreground)">Oyun kadrosunda kişi bulunamadı</div>';
     return;
   }
+  // Oyuncu/Figüran/Koro gibi kategorilerde karakter adı (gorev) gösterilmez
+  const SAHNE_KATS = ['Oyuncu','Figüran','Koro','Solist','Dansçı','Koro/Dans Ekibi'];
   el.innerHTML = personel.map(p => {
     const secili = kisiModalSecili.some(s => s.kisi === p.kisi);
-    // Oyuncu kategorisinde rol adı (gorev) gösterilmez — sadece kategori
-    const OYUNCU_KATS = ['Oyuncu','Figüran','Koro','Solist','Dansçı','Koro/Dans Ekibi'];
-    var altBilgi = OYUNCU_KATS.includes(p.kategori)
-      ? p.kategori
-      : [p.kategori, p.gorev].filter(Boolean).join(' · ');
-    // Seçme işleminde görevi boş gönder Oyuncu için
-    var gorevParam = OYUNCU_KATS.includes(p.kategori) ? '' : p.gorev;
+    const isSahne = SAHNE_KATS.includes(p.kategori);
+    const altBilgi = isSahne ? p.kategori : [p.kategori, p.gorev].filter(Boolean).join(' · ');
+    const gorevParam = isSahne ? '' : (p.gorev || '');
     return '<div class="kisi-row' + (secili ? ' selected' : '') + '" onclick="toggleKisiSecim(\'' + p.kisi.replace(/'/g,"\\'") + '\',\'' + gorevParam.replace(/'/g,"\\'") + '\',\'' + p.kategori.replace(/'/g,"\\'") + '\')">'
       + '<div class="kisi-checkbox">' + (secili ? '✓' : '') + '</div>'
       + '<div class="kisi-row-info"><div class="kisi-row-name">' + p.kisi + '</div><div class="kisi-row-sub">' + altBilgi + '</div></div>'
@@ -1106,33 +1103,30 @@ function ekstraOtomatikTamamla() {
   var input = document.getElementById('extra-kisi-ad');
   var q = (input.value || '').trim().toLowerCase();
   var liste = document.getElementById('ekstra-oneri-liste');
+  if (!liste) return;
   if (q.length < 2) { liste.style.display = 'none'; return; }
-
-  // Tüm personelden + seçili kişilerden eşleşme bul
   var araSet = {};
   tumPersonel.forEach(function(p) {
-    var kisiL = p.kisi.toLowerCase();
-    var gorevL = (p.gorev||'').toLowerCase();
-    var katL = (p.kategori||'').toLowerCase();
-    if (kisiL.includes(q) || gorevL.includes(q) || katL.includes(q)) {
-      if (!araSet[p.kisi]) araSet[p.kisi] = { kisi: p.kisi, gorev: p.gorev||p.kategori, kategori: p.kategori };
+    if ((p.kisi||'').toLowerCase().includes(q) || (p.gorev||'').toLowerCase().includes(q) || (p.kategori||'').toLowerCase().includes(q)) {
+      if (!araSet[p.kisi]) araSet[p.kisi] = { kisi: p.kisi, gorev: p.gorev||'', kategori: p.kategori||'' };
     }
   });
-
   var sonuclar = Object.values(araSet).slice(0, 10);
   if (!sonuclar.length) { liste.style.display = 'none'; return; }
-
   liste.style.display = 'block';
+  const SAHNE_KATS = ['Oyuncu','Figüran','Koro','Solist','Dansçı','Koro/Dans Ekibi'];
   liste.innerHTML = sonuclar.map(function(p) {
     var zatenSecili = kisiModalSecili.some(function(s){ return s.kisi === p.kisi; });
-    return '<div onclick="ekstraOneriSec(\''+p.kisi.replace(/'/g,"\\'")+ '\',\''+( p.gorev||'').replace(/'/g,"\\'")+'\',\''+p.kategori.replace(/'/g,"\\'")+'\''+')" '
-      + 'style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;'+(zatenSecili?'opacity:.45;':'')+'transition:background .1s" '
+    var gorevGoster = SAHNE_KATS.includes(p.kategori) ? p.kategori : [p.kategori, p.gorev].filter(Boolean).join(' · ');
+    var gorevEkle   = SAHNE_KATS.includes(p.kategori) ? '' : p.gorev;
+    return '<div onmousedown="event.preventDefault();ekstraOneriSec(\'' + p.kisi.replace(/'/g,"\\'") + '\',\'' + gorevEkle.replace(/'/g,"\\'") + '\',\'' + p.kategori.replace(/'/g,"\\'") + '\')" '
+      + 'style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;'+(zatenSecili?'opacity:.4;':'')+'transition:background .1s" '
       + 'onmouseenter="this.style.background=\'var(--muted)\'" onmouseleave="this.style.background=\'\'">'
       + '<div style="flex:1;min-width:0">'
       +   '<div style="font-size:12px;font-weight:600;color:var(--foreground)">' + p.kisi + '</div>'
-      +   '<div style="font-size:10px;color:var(--muted-foreground)">' + p.kategori + (p.gorev && p.gorev!==p.kategori ? ' · ' + p.gorev : '') + '</div>'
+      +   '<div style="font-size:10px;color:var(--muted-foreground)">' + gorevGoster + '</div>'
       + '</div>'
-      + (zatenSecili ? '<span style="font-size:10px;color:var(--primary);font-weight:700">✓ Seçili</span>' : '')
+      + (zatenSecili ? '<span style="font-size:10px;color:var(--primary);font-weight:700">✓</span>' : '')
       + '</div>';
   }).join('');
 }
@@ -1140,10 +1134,10 @@ function ekstraOtomatikTamamla() {
 function ekstraOneriSec(kisi, gorev, kategori) {
   document.getElementById('extra-kisi-ad').value = kisi;
   document.getElementById('extra-kisi-gorev').value = gorev || '';
-  document.getElementById('ekstra-oneri-liste').style.display = 'none';
-  // Otomatik ekle
+  var liste = document.getElementById('ekstra-oneri-liste');
+  if (liste) liste.style.display = 'none';
   if (!kisiModalSecili.some(function(s){ return s.kisi === kisi; })) {
-    kisiModalSecili.push({ kisi, gorev, kategori, ekstra: true });
+    kisiModalSecili.push({ kisi: kisi, gorev: gorev, kategori: kategori, ekstra: true });
     renderSelectedPills();
     var t = turneler.find(function(x){ return x._rowIdx === kisiModalRowIdx; });
     var q = document.getElementById('kisi-filter-input').value.toLowerCase();
@@ -1157,13 +1151,13 @@ function ekstraKisiEkle() {
   const ad    = document.getElementById('extra-kisi-ad').value.trim();
   const gorev = document.getElementById('extra-kisi-gorev').value.trim();
   if (!ad) return;
-  document.getElementById('ekstra-oneri-liste').style.display = 'none';
+  var liste = document.getElementById('ekstra-oneri-liste');
+  if (liste) liste.style.display = 'none';
   if (!kisiModalSecili.some(s => s.kisi === ad)) {
-    // Personel listesinde bu isim var mı kontrol et — varsa kategori bilgisini al
     var existing = tumPersonel.find(function(p){ return p.kisi.toLowerCase() === ad.toLowerCase(); });
-    var kategori = existing ? existing.kategori : 'Ekstra';
+    var kat = existing ? existing.kategori : 'Ekstra';
     var gorevFinal = gorev || (existing ? existing.gorev : '');
-    kisiModalSecili.push({ kisi: ad, gorev: gorevFinal, kategori, ekstra: true });
+    kisiModalSecili.push({ kisi: ad, gorev: gorevFinal, kategori: kat, ekstra: true });
     renderSelectedPills();
     var t = turneler.find(function(x){ return x._rowIdx === kisiModalRowIdx; });
     var q = document.getElementById('kisi-filter-input').value.toLowerCase();
@@ -2294,22 +2288,8 @@ async function init() {
 
 if (sessionStorage.getItem('turne_erisim') === 'true') { init(); }
 
-document.getElementById('modal-overlay').addEventListener('click', function(e) {
-  if (e.target === this) {
-    if (confirm('Formu kapatmak istediğinizden emin misiniz?\nKaydedilmemiş değişiklikler kaybolacak.')) {
-      closeModal();
-    }
-  }
-});
+document.getElementById('modal-overlay').addEventListener('click', function(e) { if (e.target === this) closeModal(); });
 document.getElementById('kisi-modal-overlay').addEventListener('click', function(e) { if (e.target === this) closeKisiModal(); });
-// Öneri listesini dışarı tıklayınca kapat
-document.addEventListener('click', function(e) {
-  var oneri = document.getElementById('ekstra-oneri-liste');
-  var input = document.getElementById('extra-kisi-ad');
-  if (oneri && input && !oneri.contains(e.target) && e.target !== input) {
-    oneri.style.display = 'none';
-  }
-});
 document.getElementById('kadro-kisi-modal').addEventListener('click', function(e) { if (e.target === this) kadroKisiModalKapat(); });
 </script>
 </body>
