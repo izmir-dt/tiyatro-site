@@ -1823,7 +1823,17 @@ async function fetchPersonel() {
       var sheetRow = rowNumbers[arrayIdx] || (arrayIdx + 2);
       if (!oyun || !kisiRaw) return [];
       // Virgülle ayrılmış çoklu isim varsa her birini ayrı kayıt yap
-      var isimler = kisiRaw.split(/,(?![^(]*)/).map(function(s){ return s.trim(); }).filter(Boolean);
+      // Virgülle ayır ama parantez içindeki virgülleri atla
+      var isimler = [];
+      var depth = 0, cur = '';
+      for (var ci = 0; ci < kisiRaw.length; ci++) {
+        var ch = kisiRaw[ci];
+        if (ch === '(') { depth++; cur += ch; }
+        else if (ch === ')') { depth--; cur += ch; }
+        else if (ch === ',' && depth === 0) { if (cur.trim()) isimler.push(cur.trim()); cur = ''; }
+        else { cur += ch; }
+      }
+      if (cur.trim()) isimler.push(cur.trim());
       return isimler.map(function(kisi, ki) {
         // "Ad Soyad (Görev)" formatındaki parantezleri gorev'e ekle
         var gorevEk = '';
