@@ -992,6 +992,7 @@
 const API            = 'https://turne-backend.vercel.app/api/sheets';
 const TURNE_SHEET    = 'TURNE_KAYITLARI';
 const PERSONEL_SHEET = 'TURNE_PERSONEL';
+const NOTLAR_SHEET   = 'TAKVIM_NOTLARI';
 const SK             = 'tiyatro_sifre';
 const VARSAYILAN_SIFRE = '525327';
 
@@ -1729,16 +1730,71 @@ function resmiTatilKontrol(key) {
 function _calKullanici() {
   return localStorage.getItem('calKullanici_idt') || 'varsayilan';
 }
-function calNotYukle() {
-  var uid = _calKullanici();
-  try { calNotes = JSON.parse(localStorage.getItem('calNotes_idt_' + uid) || '{}'); } catch(e) { calNotes = {}; }
+async function calNotYukle() {
+  // Önce localStorage cache'den yükle (anlık görünüm için)
+  try { calNotes = JSON.parse(localStorage.getItem('calNotes_cache') || '{}'); } catch(e) { calNotes = {}; }
   try { window.calColors = JSON.parse(localStorage.getItem('calColors_idt') || '{}'); } catch(e) { window.calColors = {}; }
+  // Sheets'ten güncel notları çek
+  try {
+    var res = await apiFetch('/' + encodeURIComponent(NOTLAR_SHEET));
+    if (res.ok) {
+      var data = await res.json();
+      var rows = data.rows || [];
+      var h = (data.headers || []).map(function(x){ return (x||'').toLowerCase().trim(); });
+      var iTarih = h.findIndex(function(x){ return x.startsWith('tarih'); });
+      var iNot   = h.findIndex(function(x){ return x.startsWith('not'); });
+      var iAd    = h.findIndex(function(x){ return x.startsWith('ad') || x.startsWith('kullanici'); });
+      var rowNumbers = data.rowNumbers || [];
+      calNotes = {};
+      rows.forEach(function(r, i) {
+        var tarih = (r[iTarih >= 0 ? iTarih : 0] || '').trim();
+        var not   = (r[iNot   >= 0 ? iNot   : 1] || '').trim();
+        var ad    = (r[iAd    >= 0 ? iAd    : 2] || '').trim();
+        if (tarih && not) {
+          calNotes[tarih] = { not: not, ad: ad, _sheetRow: rowNumbers[i] || (i + 2) };
+        }
+      });
+      localStorage.setItem('calNotes_cache', JSON.stringify(calNotes));
+    }
+  } catch(e) { console.warn('Notlar çekilemedi, cache kullanılıyor:', e); }
 }
-function calNotKaydet() {
-  var uid = localStorage.getItem('calKullanici_idt') || 'varsayilan';
-  try { localStorage.setItem('calNotes_idt_' + uid, JSON.stringify(calNotes)); } catch(e) {}
+async function calNotKaydet(key, notMetni, ad) {
+  var mevcutNot = calNotes[key];
+  try {
+    if (notMetni) {
+      if (mevcutNot && mevcutNot._sheetRow) {
+        // Güncelle
+        await apiFetch('/' + encodeURIComponent(NOTLAR_SHEET) + '/cell', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ row: mevcutNot._sheetRow, col: 2, value: notMetni })
+        });
+        calNotes[key] = { not: notMetni, ad: ad, _sheetRow: mevcutNot._sheetRow };
+      } else {
+        // Yeni satır ekle
+        var r = await apiFetch('/' + encodeURIComponent(NOTLAR_SHEET) + '/row', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ values: [key, notMetni, ad] })
+        });
+        var rData = await r.json();
+        calNotes[key] = { not: notMetni, ad: ad, _sheetRow: rData.rowNumber || null };
+      }
+    } else if (mevcutNot && mevcutNot._sheetRow) {
+      // Sil
+      await apiFetch('/' + encodeURIComponent(NOTLAR_SHEET) + '/row/' + mevcutNot._sheetRow, { method: 'DELETE' });
+      delete calNotes[key];
+    }
+    localStorage.setItem('calNotes_cache', JSON.stringify(calNotes));
+  } catch(e) {
+    console.warn('Not kaydedilemedi:', e);
+    // Fallback: en azından cache'e yaz
+    if (notMetni) calNotes[key] = { not: notMetni, ad: ad, _sheetRow: null };
+    else delete calNotes[key];
+    localStorage.setItem('calNotes_cache', JSON.stringify(calNotes));
+  }
 }
-calNotYukle();
+// calNotYukle init() icinde cagrilir
 let zamanFiltre = 'tum';
 let statuFiltre = 'tum';
 // Kişi modalı için
@@ -3816,7 +3872,7 @@ function renderCalendar() {
     const gunIndex = g.date.getDay(); // 0=Pazar, 6=Cmt
     const isWeekend = gunIndex === 0 || gunIndex === 6;
     const tatilAdi = !g.otherMonth ? resmiTatilKontrol(key) : null;
-    const gunNotu = calNotes[key];
+    const gunNotu = calNotes[key] ? calNotes[key].not : null;
 
     const events = turneler.filter(function(t) {
       const bas = t.baslangicTarih || t.tarih || '';
@@ -3955,7 +4011,7 @@ function _calPopupGoster(key, event) {
   var gunIndex = new Date(key).getDay();
   var gunAdi = ['Pazar','Pazartesi','Salı','Çarşamba','Perşembe','Cuma','Cumartesi'][gunIndex];
   var tatilAdi = resmiTatilKontrol(key);
-  var gunNotu = calNotes[key] || '';
+  var gunNotu = calNotes[key] ? calNotes[key].not : '';
   var gunRengi = window.calColors && window.calColors[key] ? window.calColors[key] : '';
 
   var events = turneler.filter(function(t) {
@@ -4245,7 +4301,7 @@ function _calDetayGoster(key) {
     + '<div class="cal-note-area">'
     +   '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#0369a1" stroke-width="2" style="flex-shrink:0;margin-top:10px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>'
     +   '<textarea class="cal-note-input" id="cal-note-'+key+'" rows="1" placeholder="Bu güne not ekle…">'+gunNotu+'</textarea>'
-    +   '<div style="display:flex;gap:6px">' + '<button class="cal-note-save" onclick="calNotKaydetGun(\''+key+'\')">Kaydet</button>' + (calNotes[key] ? '<button class="cal-note-save" style="background:#dc2626" onclick="calNotSilGun(\''+key+'\')" title="Notu sil">Sil</button>' : '') + '</div>'
+    +   '<div style="display:flex;gap:6px">' + '<button class="cal-note-save" id="cal-not-save-btn-'+key+'" onclick="calNotKaydetGun(\''+key+'\')">Kaydet</button>' + (calNotes[key] ? '<button class="cal-note-save" style="background:#dc2626" onclick="calNotSilGun(\''+key+'\')" title="Notu sil">Sil</button>' : '') + '</div>'
     + '</div>'
     // Turneler
     + (events.length > 0
@@ -4259,23 +4315,20 @@ function _calDetayGoster(key) {
   if (noteEl) noteEl.style.height = (noteEl.scrollHeight) + 'px';
 }
 
-function calNotKaydetGun(key) {
+async function calNotKaydetGun(key) {
   var el = document.getElementById('cal-note-'+key);
   if (!el) return;
   var notMetni = el.value.trim();
-  if (notMetni) {
-    calNotes[key] = notMetni;
-  } else {
-    delete calNotes[key];
-  }
-  calNotKaydet();
+  var ad = localStorage.getItem('calKullanici_idt') || 'Kullanici';
+  var saveBtn = document.getElementById('cal-not-save-btn-'+key);
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Kaydediliyor...'; }
+  await calNotKaydet(key, notMetni, ad);
   renderCalendar();
   _calDetayGoster(key);
 }
 
-function calNotSilGun(key) {
-  delete calNotes[key];
-  calNotKaydet();
+async function calNotSilGun(key) {
+  await calNotKaydet(key, '', '');
   renderCalendar();
   document.getElementById('cal-detail-wrap').innerHTML = '';
 }
@@ -5898,8 +5951,8 @@ async function init() {
     setLoading(true);
   }
 
-  // Arka planda API'den güncelle
-  await Promise.all([fetchPersonel(), fetchTurneler()]);
+  // Arka planda API'den güncelle (notlar dahil)
+  await Promise.all([fetchPersonel(), fetchTurneler(), calNotYukle()]);
 
   // Cache güncelle
   try { localStorage.setItem('turne_cache_data', JSON.stringify(turneler)); } catch(e){}
