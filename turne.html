@@ -291,7 +291,7 @@
     .modal-tab { flex: 1; padding: 7px 6px; font-size: 11px; font-weight: 600; border: none; background: transparent; cursor: pointer; font-family: 'Poppins', sans-serif; border-bottom: 2px solid transparent; transition: all .15s; color: var(--muted-foreground); }
     .modal-tab.active { color: var(--primary); border-bottom-color: var(--primary); background: var(--card); }
     [data-theme="dark"] .modal-tab.active { background: hsl(350,25%,18%); color: var(--primary); }
-    .modal-body { padding: 14px 18px; flex: 1; overflow-y: auto; min-height: 0; }
+    .modal-body { padding: 14px 18px; flex: 1; overflow-y: auto; overflow-x: hidden; min-height: 0; }
     .modal-section { display: none; }
     .modal-section.active { display: flex; flex-direction: column; gap: 0; }
     .modal-section .form-group:not(:last-child) { margin-bottom: 8px; }
@@ -332,9 +332,9 @@
     .otel-durak-header { padding:8px 14px; background:var(--sidebar); color:var(--sidebar-foreground); font-size:11px; font-weight:700; display:flex; align-items:center; gap:6px; border-bottom:1px solid var(--border); letter-spacing:.2px; }
     .otel-durak-body { padding:10px 14px; display:grid; grid-template-columns:2fr 2fr 1fr; gap:8px; align-items:start; }
     .section-title { font-size: 10px; font-weight: 700; color: var(--primary); text-transform: uppercase; letter-spacing: .6px; margin-bottom: 8px; padding-bottom: 5px; border-bottom: 2px solid var(--primary); opacity:.85; }
-    .ulasim-box { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; }
+    .ulasim-box { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; overflow: hidden; min-width: 0; }
     [data-theme="dark"] .ulasim-box-pair { gap: 6px; }
-    .ulasim-box-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+    .ulasim-box-pair { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
     @media (max-width: 600px) { .ulasim-box-pair { grid-template-columns: 1fr; } }
     .ulasim-box-pair .ulasim-box { margin-bottom: 0; }
     [data-theme="dark"] .ulasim-box { background: hsl(222,14%,19%); }
@@ -935,11 +935,9 @@
           <div class="form-error" id="err-il"></div>
         </div>
 
-        <div class="form-grid-2" id="notlar-row">
-          <div class="form-group">
-            <label class="form-label">Notlar</label>
-            <input class="form-input" type="text" id="m-not" placeholder="Opsiyonel...">
-          </div>
+        <div class="form-group" id="notlar-row">
+          <label class="form-label">Notlar</label>
+          <input class="form-input" type="text" id="m-not" placeholder="Opsiyonel..." style="width:100%">
           <div style="display:none"><input id="m-il" type="hidden"><input id="m-mekan" type="hidden"><input id="m-sayi" type="hidden" value="1"><input id="m-grup" type="hidden"></div>
         </div>
       </div>
@@ -7147,41 +7145,49 @@ function renderDuraklar() {
     wrap.innerHTML = '<div onclick="durakEkle()" style="padding:10px 14px;border:1.5px dashed var(--border);border-radius:8px;text-align:center;font-size:11px;color:var(--muted-foreground);cursor:pointer">Henüz durak yok — tıklayarak ekleyin</div>';
     return;
   }
-  var html = duraklar.map(function(d,i) {
-    // Mevcut oyun listesi için m-oyun değeri de dahil et
+  var html = duraklar.map(function(d, i) {
     var mOyunV = document.getElementById('m-oyun') ? document.getElementById('m-oyun').value : '';
     var oyunListesi = [...new Set(tumPersonel.map(function(p){ return p.oyun; }).filter(Boolean))].sort();
     if (mOyunV && oyunListesi.indexOf(mOyunV) < 0) oyunListesi.unshift(mOyunV);
-    // Satır 1: İl (2fr) | İlçe/Semt (1.2fr)
-    // Satır 2: Mekan (2fr) | Oyun (1.4fr) | Temsil (52px) | Sil (28px)
-    return '<div class="durak-row">'
-      + '<div style="display:grid;grid-template-columns:2fr 1.2fr;gap:6px;margin-bottom:5px">'
-      + '  <div style="position:relative">'
-      + '    <input class="form-input" type="text" placeholder="İl" value="' + (d.il||'') + '" '
-      + '      oninput="duraklar['+i+'].il=this.value;syncIlFromDuraklar();durakIlDropdown(this,'+i+')" '
-      + '      onfocus="durakIlDropdown(this,'+i+')" onblur="setTimeout(()=>durakDropdownKapat('+i+'),200)" '
-      + '      style="font-size:11px;padding:5px 8px;width:100%">'
-      + '    <div id="durak-dd-'+i+'" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:600;background:var(--card);border:1px solid var(--border);border-radius:6px;max-height:160px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.15)"></div>'
-      + '  </div>'
-      + '  <input class="form-input" type="text" placeholder="İlçe / Semt" value="' + (d.ilce||'') + '" '
-      + '    oninput="duraklar['+i+'].ilce=this.value" style="font-size:11px;padding:5px 8px;width:100%">'
+    // Üst satır: İl (flex:1 ~60%) | İlçe/Semt (flex:0 0 38%)
+    // Alt satır: Mekan (flex:1 ~60%) | Oyun select (flex:0 0 28%) | Temsil (52px) | Sil (30px)
+    return '<div class="durak-row" style="overflow:hidden">'
+      // Satır 1
+      + '<div style="display:flex;gap:6px;min-width:0">'
+        + '<div style="flex:1;min-width:0;position:relative">'
+          + '<input class="form-input" type="text" placeholder="İl" value="' + (d.il||'') + '" '
+          + 'oninput="duraklar[' + i + '].il=this.value;syncIlFromDuraklar();durakIlDropdown(this,' + i + ')" '
+          + 'onfocus="durakIlDropdown(this,' + i + ')" onblur="setTimeout(()=>durakDropdownKapat(' + i + '),200)" '
+          + 'style="width:100%;font-size:12px">'
+          + '<div id="durak-dd-' + i + '" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:600;background:var(--card);border:1px solid var(--border);border-radius:6px;max-height:160px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.15)"></div>'
+        + '</div>'
+        + '<div style="flex:0 0 38%;min-width:0">'
+          + '<input class="form-input" type="text" placeholder="İlçe / Semt" value="' + (d.ilce||'') + '" '
+          + 'oninput="duraklar[' + i + '].ilce=this.value" style="width:100%;font-size:12px">'
+        + '</div>'
       + '</div>'
-      + '<div style="display:grid;grid-template-columns:2fr 1.4fr 52px 28px;gap:6px;align-items:center">'
-      + '  <input class="form-input" type="text" placeholder="Sahne / Mekan (opsiyonel)" value="' + (d.mekan||'') + '" '
-      + '    oninput="duraklar['+i+'].mekan=this.value" style="font-size:11px;padding:5px 8px;width:100%">'
-      + '  <select onchange="duraklar['+i+'].oyun=this.value" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:5px 6px;font-size:11px;background:var(--card);font-family:Poppins,sans-serif;color:var(--foreground)" title="Bu duraktaki oyun (opsiyonel)">'
-      + '    <option value="">Oyun (ops.)</option>'
-      + oyunListesi.map(function(o){ return '<option value="'+o+'"'+(d.oyun===o?' selected':'')+'>'+o+'</option>'; }).join('')
-      + '  </select>'
-      + '  <input class="form-input" type="number" placeholder="1" value="' + (d.sayi||1) + '" min="1" '
-      + '    oninput="duraklar['+i+'].sayi=parseInt(this.value)||1" style="font-size:11px;padding:5px 4px;width:100%;text-align:center">'
-      + '  <button onclick="durakSil('+i+')" title="Kaldır" style="height:32px;width:28px;border-radius:5px;border:1px solid var(--border);background:transparent;cursor:pointer;color:var(--destructive);font-size:15px;display:flex;align-items:center;justify-content:center">×</button>'
+      // Satır 2
+      + '<div style="display:flex;gap:6px;align-items:center;min-width:0">'
+        + '<div style="flex:1;min-width:0">'
+          + '<input class="form-input" type="text" placeholder="Sahne / Mekan (opsiyonel)" value="' + (d.mekan||'') + '" '
+          + 'oninput="duraklar[' + i + '].mekan=this.value" style="width:100%;font-size:12px">'
+        + '</div>'
+        + '<div style="flex:0 0 28%;min-width:0">'
+          + '<select onchange="duraklar[' + i + '].oyun=this.value" '
+          + 'style="width:100%;height:32px;border:1px solid var(--border);border-radius:7px;padding:0 6px;font-size:11px;background:var(--card);font-family:Poppins,sans-serif;color:var(--foreground)">'
+          + '<option value="">Oyun (ops.)</option>'
+          + oyunListesi.map(function(o){ return '<option value="' + o + '"' + (d.oyun===o?' selected':'') + '>' + o + '</option>'; }).join('')
+          + '</select>'
+        + '</div>'
+        + '<input class="form-input" type="number" placeholder="1" value="' + (d.sayi||1) + '" min="1" '
+          + 'oninput="duraklar[' + i + '].sayi=parseInt(this.value)||1" style="flex:0 0 50px;width:50px;font-size:12px;text-align:center;padding:0 4px">'
+        + '<button onclick="durakSil(' + i + ')" title="Kaldır" '
+          + 'style="flex-shrink:0;height:32px;width:30px;border-radius:5px;border:1px solid var(--border);background:transparent;cursor:pointer;color:var(--destructive);font-size:15px;display:flex;align-items:center;justify-content:center">×</button>'
       + '</div>'
-      + '</div>';
+    + '</div>';
   }).join('');
   wrap.innerHTML = html;
 }
-
 function durakIlDropdown(input, idx) {
   var val = input.value.toLowerCase().trim();
   var dd = document.getElementById('durak-dd-'+idx);
@@ -7257,39 +7263,39 @@ function renderUcusBacaklar(yon) {
   var toplam = ucusBacaklar[yon].length;
   el.innerHTML = ucusBacaklar[yon].map(function(b, i) {
     var y = "'" + yon + "'";
-    var lbl = 'display:block;font-size:10px;font-weight:700;color:var(--muted-foreground);margin-bottom:3px;letter-spacing:.3px;text-transform:uppercase';
+    var lbl = 'font-size:9px;font-weight:700;color:var(--muted-foreground);letter-spacing:.3px;text-transform:uppercase;margin-bottom:2px;display:block';
+    var badge = toplam > 1
+      ? '<div style="font-size:10px;font-weight:700;color:var(--primary);background:hsl(350,60%,95%);border-radius:4px;padding:1px 8px;display:inline-block;margin-bottom:5px">' + (i+1) + '. BACAK</div>'
+      : '';
     var silBtn = toplam > 1
-      ? '<button type="button" onclick="ucusBacakSil(' + y + ',' + i + ')" title="Bacağı Sil" '
-        + 'style="height:34px;width:34px;border:1px solid var(--destructive);background:transparent;'
-        + 'color:var(--destructive);border-radius:6px;cursor:pointer;font-size:16px;flex-shrink:0;'
-        + 'display:flex;align-items:center;justify-content:center;align-self:flex-end">×</button>'
+      ? '<div style="display:flex;align-items:flex-end;padding-bottom:0">'
+        + '<button type="button" onclick="ucusBacakSil(' + y + ',' + i + ')" '
+        + 'style="height:32px;width:32px;flex-shrink:0;border:1px solid var(--destructive);background:transparent;'
+        + 'color:var(--destructive);border-radius:6px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center">×</button>'
+        + '</div>'
       : '';
-    var bacakBadge = toplam > 1
-      ? '<div style="font-size:10px;font-weight:700;color:var(--primary);margin-bottom:5px;'
-        + 'background:hsl(350,60%,95%);border-radius:4px;padding:2px 8px;display:inline-block">'
-        + (i+1) + '. BACAK</div>'
-      : '';
-    // Tek satırda: Kalkış Havalimanı | → | İniş Havalimanı | Kalkış Saati | İniş Saati | Firma/Sefer | [Sil]
-    return '<div style="background:var(--card);border:1.5px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px">'
-      + bacakBadge
-      + '<div style="display:grid;grid-template-columns:2fr 16px 2fr 100px 100px 2fr' + (toplam>1?' 36px':'') + ';gap:6px;align-items:end">'
-        + '<div><label style="' + lbl + '">✈ Kalkış Havalimanı</label>'
+    // Tam genişlik, overflow hidden, 6 sütun: kalkış(3) ok(1) iniş(3) kalkış-saat(2) iniş-saat(2) sefer(3) [sil(1)]
+    var cols = toplam > 1 ? '3fr 20px 3fr 90px 90px 2.5fr 34px' : '3fr 20px 3fr 90px 90px 2.5fr';
+    return '<div style="background:var(--muted);border-radius:7px;padding:8px 10px;margin-bottom:6px;overflow:hidden;min-width:0">'
+      + badge
+      + '<div style="display:grid;grid-template-columns:' + cols + ';gap:6px;align-items:end;min-width:0">'
+        + '<div style="min-width:0"><label style="' + lbl + '">Kalkış Havalimanı</label>'
           + '<input class="form-input" type="text" value="' + (b.nereden||'') + '" placeholder="İzmir ADB" '
-          + 'oninput="ucusBacaklar[' + y + '][' + i + '].nereden=this.value" style="height:34px;width:100%"></div>'
-        + '<div style="text-align:center;color:var(--primary);font-size:16px;font-weight:700;padding-bottom:6px">›</div>'
-        + '<div><label style="' + lbl + '">🛬 İniş Havalimanı</label>'
+          + 'oninput="ucusBacaklar[' + y + '][' + i + '].nereden=this.value" style="height:32px;min-width:0;width:100%"></div>'
+        + '<div style="text-align:center;color:var(--primary);font-size:16px;font-weight:700;padding-bottom:5px">›</div>'
+        + '<div style="min-width:0"><label style="' + lbl + '">İniş Havalimanı</label>'
           + '<input class="form-input" type="text" value="' + (b.nereye||'') + '" placeholder="İstanbul SAW" '
-          + 'oninput="ucusBacaklar[' + y + '][' + i + '].nereye=this.value" style="height:34px;width:100%"></div>'
-        + '<div><label style="' + lbl + '">🕐 Kalkış</label>'
+          + 'oninput="ucusBacaklar[' + y + '][' + i + '].nereye=this.value" style="height:32px;min-width:0;width:100%"></div>'
+        + '<div style="min-width:0"><label style="' + lbl + '">Kalkış St.</label>'
           + '<input class="form-input" type="time" value="' + (b.kalkis||'') + '" '
-          + 'oninput="ucusBacaklar[' + y + '][' + i + '].kalkis=this.value" style="height:34px;width:100%"></div>'
-        + '<div><label style="' + lbl + '">🕓 İniş</label>'
+          + 'oninput="ucusBacaklar[' + y + '][' + i + '].kalkis=this.value" style="height:32px;width:100%;padding:0 4px"></div>'
+        + '<div style="min-width:0"><label style="' + lbl + '">İniş St.</label>'
           + '<input class="form-input" type="time" value="' + (b.inis||'') + '" '
-          + 'oninput="ucusBacaklar[' + y + '][' + i + '].inis=this.value" style="height:34px;width:100%"></div>'
-        + '<div><label style="' + lbl + '">✈ Firma / Sefer No</label>'
-          + '<input class="form-input" type="text" value="' + (b.ucusNo||'') + '" placeholder="PC1234 · PEGASUS" '
-          + 'oninput="ucusBacaklar[' + y + '][' + i + '].ucusNo=this.value" style="height:34px;width:100%"></div>'
-        + (toplam > 1 ? '<div>' + silBtn + '</div>' : '')
+          + 'oninput="ucusBacaklar[' + y + '][' + i + '].inis=this.value" style="height:32px;width:100%;padding:0 4px"></div>'
+        + '<div style="min-width:0"><label style="' + lbl + '">Firma / Sefer No</label>'
+          + '<input class="form-input" type="text" value="' + (b.ucusNo||'') + '" placeholder="PC1234" '
+          + 'oninput="ucusBacaklar[' + y + '][' + i + '].ucusNo=this.value" style="height:32px;min-width:0;width:100%"></div>'
+        + (toplam > 1 ? silBtn : '')
       + '</div>'
     + '</div>';
   }).join('');
