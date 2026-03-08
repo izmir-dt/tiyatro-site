@@ -504,6 +504,14 @@
   <button onclick="switchTab('istatistik')" style="padding:2px 10px;border:1px solid hsl(42,60%,70%);border-radius:5px;background:hsl(42,80%,50%);color:#fff;font-size:11px;font-weight:700;cursor:pointer;font-family:Poppins,sans-serif">← İstatistiklere Dön</button>
 </div>
 
+<!-- TURNE SİL GERİ AL BAR -->
+<div id="turne-sil-geri-bar" style="display:none;position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:9999;align-items:center;gap:10px;padding:10px 16px;background:#1e293b;border-radius:10px;font-size:12px;color:#fff;box-shadow:0 4px 20px rgba(0,0,0,.35);min-width:320px;max-width:90vw;overflow:hidden">
+  <div id="turne-sil-geri-prog" style="position:absolute;bottom:0;left:0;height:3px;background:#ef4444;width:100%;border-radius:0 0 10px 10px"></div>
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2.5" style="flex-shrink:0"><polyline points="3,6 5,6 21,6"/><path d="M19,6l-1,14a2,2,0,0,1-2,2H8a2,2,0,0,1-2-2L5,6"/></svg>
+  <span id="turne-sil-geri-ad" style="flex:1">Turne silindi</span>
+  <button id="turne-sil-geri-btn" style="padding:4px 12px;border:1.5px solid #60a5fa;border-radius:6px;background:transparent;color:#60a5fa;font-size:11px;font-weight:700;cursor:pointer;font-family:Poppins,sans-serif;white-space:nowrap">↩ Geri Al</button>
+</div>
+
 <!-- CONTENT -->
 <div class="content">
 
@@ -6016,15 +6024,77 @@ function _gosterKayitHatasi(mesaj) {
 // ============================================================
 // SİL
 // ============================================================
+// Turne sil - 5 saniyelik geri al ile
+var _silUndoTimer = null;
+var _silUndoRowIdx = null;
+
 async function deleteTurne(rowIdx) {
-  onayGoster({
-    baslik: 'Turne silinecek',
-    mesaj: 'Bu turne kaydı kalıcı olarak silinecek. Bu işlem geri alınamaz.',
-    ikon: '🎭', ikonBg: 'hsl(0,80%,96%)',
-    tamamRenk: 'hsl(0,75%,52%)', tamamYazi: 'Evet, sil',
-    onOnay: function() { _turneSilDevam(rowIdx); }
-  });
+  // Eğer zaten bekleyen bir silme varsa, onu iptal et
+  if (_silUndoTimer !== null) {
+    clearTimeout(_silUndoTimer);
+    _silUndoTimer = null;
+    _silUndoRowIdx = null;
+    _silUndoBarGizle();
+  }
+  // Turneyi bul ve adını al
+  var t = turneler.find(function(x){ return x._rowIdx === rowIdx; });
+  var turneAdi = t ? ((t.oyun || '') + (t.il ? ' – ' + t.il : '')) : 'Turne';
+
+  // Listeyi geçici olarak güncelle (optimistic)
+  _silUndoRowIdx = rowIdx;
+  var oncekiTurneler = turneler.slice();
+  turneler = turneler.filter(function(x){ return x._rowIdx !== rowIdx; });
+  renderListe();
+  renderCalendar();
+
+  // Geri al barını göster
+  _silUndoBarGoster(turneAdi, oncekiTurneler);
+
+  // 5 saniye sonra gerçekten sil
+  _silUndoTimer = setTimeout(async function() {
+    _silUndoTimer = null;
+    _silUndoRowIdx = null;
+    _silUndoBarGizle();
+    await _turneSilDevam(rowIdx);
+  }, 5000);
 }
+
+function _silUndoBarGoster(turneAdi, oncekiTurneler) {
+  var bar = document.getElementById('turne-sil-geri-bar');
+  if (!bar) return;
+  var span = document.getElementById('turne-sil-geri-ad');
+  if (span) span.textContent = '"' + (turneAdi.length > 40 ? turneAdi.substring(0,40)+'…' : turneAdi) + '" silindi';
+  bar.style.display = 'flex';
+  // Progress bar animasyonu başlat
+  var prog = document.getElementById('turne-sil-geri-prog');
+  if (prog) {
+    prog.style.transition = 'none';
+    prog.style.width = '100%';
+    setTimeout(function(){ prog.style.transition = 'width 5s linear'; prog.style.width = '0%'; }, 20);
+  }
+  // Geri al butonu
+  var btn = document.getElementById('turne-sil-geri-btn');
+  if (btn) {
+    btn.onclick = function() {
+      if (_silUndoTimer !== null) {
+        clearTimeout(_silUndoTimer);
+        _silUndoTimer = null;
+        _silUndoRowIdx = null;
+      }
+      // Listeyi geri yükle
+      turneler = oncekiTurneler;
+      renderListe();
+      renderCalendar();
+      _silUndoBarGizle();
+    };
+  }
+}
+
+function _silUndoBarGizle() {
+  var bar = document.getElementById('turne-sil-geri-bar');
+  if (bar) bar.style.display = 'none';
+}
+
 async function _turneSilDevam(rowIdx) {
   try {
     var r = await apiFetch('/' + encodeURIComponent(TURNE_SHEET) + '/row/' + (rowIdx + 2), { method:'DELETE' });
@@ -7150,6 +7220,13 @@ document.addEventListener('keydown', function(e) {
         onOnay: function() { closeModal(); }
       });
     } else { closeModal(); }
+    return;
+  }
+  // Turne sil geri al barını kapat
+  var sb = document.getElementById('turne-sil-geri-bar');
+  if (sb && sb.style.display === 'flex') {
+    if (_silUndoTimer !== null) { clearTimeout(_silUndoTimer); _silUndoTimer = null; }
+    _silUndoBarGizle();
     return;
   }
   // Takvim popup
