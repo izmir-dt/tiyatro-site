@@ -513,6 +513,10 @@
 
   <!-- HARİTA -->
   <div class="tab-panel" id="tab-harita">
+    <div id="harita-oyuna-don-bar" style="display:none;padding:6px 12px;background:hsl(38,30%,96%);border-bottom:1px solid var(--border);align-items:center;gap:8px">
+      <button onclick="sekmeOyunaDon('harita')" style="height:28px;padding:0 12px;border:1px solid var(--primary);border-radius:7px;background:transparent;cursor:pointer;font-size:11px;font-weight:700;color:var(--primary);font-family:Poppins,sans-serif;display:inline-flex;align-items:center;gap:5px">← Oyuna Dön</button>
+      <span id="harita-oyuna-don-label" style="font-size:11px;color:var(--muted-foreground)"></span>
+    </div>
     <div class="scroll-area" style="padding:14px 16px">
       <div style="display:grid;grid-template-columns:1fr 360px;gap:12px;align-items:start">
         <div class="section-wrap" style="overflow:hidden">
@@ -551,6 +555,10 @@
 
 <!-- TAKVİM -->
   <div class="tab-panel" id="tab-takvim">
+    <div id="takvim-oyuna-don-bar" style="display:none;padding:6px 12px;background:hsl(38,30%,96%);border-bottom:1px solid var(--border);align-items:center;gap:8px">
+      <button onclick="sekmeOyunaDon('takvim')" style="height:28px;padding:0 12px;border:1px solid var(--primary);border-radius:7px;background:transparent;cursor:pointer;font-size:11px;font-weight:700;color:var(--primary);font-family:Poppins,sans-serif;display:inline-flex;align-items:center;gap:5px">← Oyuna Dön</button>
+      <span id="takvim-oyuna-don-label" style="font-size:11px;color:var(--muted-foreground)"></span>
+    </div>
     <div class="scroll-area" style="padding:14px 16px">
       <div class="cal-wrap">
         <!-- HEADER -->
@@ -1762,43 +1770,40 @@ async function calNotYukle() {
     }
   } catch(e) { console.warn('Notlar çekilemedi, cache kullanılıyor:', e); }
 }
-async function calNotKaydet(key, notMetni, ad) {
+function calNotKaydet(key, notMetni, ad) {
+  // 1. ANINDA local'e yaz — UI beklemez
   var mevcutNot = calNotes[key];
-  try {
-    if (notMetni) {
-      if (mevcutNot && mevcutNot._sheetRow) {
-        // Güncelle
-        await apiFetch('/' + encodeURIComponent(NOTLAR_SHEET) + '/cell', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ row: mevcutNot._sheetRow, col: 2, value: notMetni })
-        });
-        calNotes[key] = { not: notMetni, ad: ad, _sheetRow: mevcutNot._sheetRow };
-      } else {
-        // Yeni satır ekle
-        var r = await apiFetch('/' + encodeURIComponent(NOTLAR_SHEET) + '/row', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ values: [key, notMetni, ad] })
-        });
-        var rData = await r.json();
-        calNotes[key] = { not: notMetni, ad: ad, _sheetRow: rData.rowNumber || null };
-      }
-    } else if (mevcutNot) {
-      // Sil — sheetRow varsa Sheets'ten de kaldır
-      if (mevcutNot._sheetRow) {
+  if (notMetni) {
+    calNotes[key] = { not: notMetni, ad: ad, _sheetRow: (mevcutNot && mevcutNot._sheetRow) || null };
+  } else {
+    delete calNotes[key];
+  }
+  localStorage.setItem('calNotes_cache', JSON.stringify(calNotes));
+
+  // 2. ARKA PLANDA Sheets'e gönder (beklemeden)
+  (async function() {
+    try {
+      if (notMetni) {
+        if (mevcutNot && mevcutNot._sheetRow) {
+          await apiFetch('/' + encodeURIComponent(NOTLAR_SHEET) + '/cell', {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ row: mevcutNot._sheetRow, col: 2, value: notMetni })
+          });
+        } else {
+          var r = await apiFetch('/' + encodeURIComponent(NOTLAR_SHEET) + '/row', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ values: [key, notMetni, ad] })
+          });
+          var rData = await r.json();
+          // sheetRow gelince güncelle
+          if (calNotes[key]) calNotes[key]._sheetRow = rData.rowNumber || null;
+          localStorage.setItem('calNotes_cache', JSON.stringify(calNotes));
+        }
+      } else if (mevcutNot && mevcutNot._sheetRow) {
         await apiFetch('/' + encodeURIComponent(NOTLAR_SHEET) + '/row/' + mevcutNot._sheetRow, { method: 'DELETE' });
       }
-      delete calNotes[key];
-    }
-    localStorage.setItem('calNotes_cache', JSON.stringify(calNotes));
-  } catch(e) {
-    console.warn('Not kaydedilemedi:', e);
-    // Fallback: en azından cache'e yaz
-    if (notMetni) calNotes[key] = { not: notMetni, ad: ad, _sheetRow: null };
-    else delete calNotes[key];
-    localStorage.setItem('calNotes_cache', JSON.stringify(calNotes));
-  }
+    } catch(e) { console.warn('Not Sheets sync hatası:', e); }
+  })();
 }
 // calNotYukle init() icinde cagrilir
 let zamanFiltre = 'tum';
@@ -2954,10 +2959,10 @@ function renderOyunDetay() {
   var _gotoListeTamamlandi = "window._listeOyunaDonOyun='"+_os+"';var fo=document.getElementById('filter-oyun');if(fo)fo.value='"+_os+"';var fs=document.getElementById('filter-statu');if(fs)fs.value='tamamlandi';statuFiltre='tamamlandi';switchTab('liste');renderListe&&renderListe()";
   var kpiHTML = '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:18px">'
     + _kpiKart('TURNE', oyunT.length, 'var(--primary)', '🗓', _gotoListe)
-    + _kpiKart('TOPLAM GÜN', toplamGun, '#0369a1', '📅', "switchTab('takvim')")
+    + _kpiKart('TOPLAM GÜN', toplamGun, '#0369a1', '📅', "window._sekmeOyunaDon='"+_os+"';switchTab('takvim');_gosterSekmeOyunaDon('takvim','"+_os+"')")
     + _kpiKart('TEMSİL', toplamTemsil, '#7c3aed', '🎭', _gotoListeTamamlandi)
     + _kpiKart('ANA KADRO', personel.length, '#059669', '👥', "var s=document.getElementById('oyun-det-kadro');s.style.display=s.style.display==='none'?'block':'none'")
-    + _kpiKart('ŞEHİR', iller.length, '#b45309', '📍', "switchTab('harita')")
+    + _kpiKart('ŞEHİR', iller.length, '#b45309', '📍', "window._sekmeOyunaDon='"+_os+"';switchTab('harita');_gosterSekmeOyunaDon('harita','"+_os+"')")
     + '</div>';
 
   // ── Geri butonu + başlık ───────────────────────────────────────────────────
@@ -3043,6 +3048,23 @@ function renderOyunDetay() {
     + '</div>';
 }
 
+function _gosterSekmeOyunaDon(sekme, oyun) {
+  var barId = sekme + '-oyuna-don-bar';
+  var labelId = sekme + '-oyuna-don-label';
+  var bar = document.getElementById(barId);
+  var label = document.getElementById(labelId);
+  if (bar) { bar.style.display = 'flex'; }
+  if (label) { label.textContent = oyun + ' oyunundan geliyorsunuz'; }
+}
+function sekmeOyunaDon(sekme) {
+  var oyun = window._sekmeOyunaDon || '';
+  window._sekmeOyunaDon = null;
+  var bar = document.getElementById(sekme + '-oyuna-don-bar');
+  if (bar) bar.style.display = 'none';
+  var sec = document.getElementById('oyun-sec');
+  if (sec && oyun) { sec.value = oyun; localStorage.setItem('_sonSecOyun', oyun); }
+  switchTab('oyun');
+}
 function oyunaDon() {
   var oyun = window._listeOyunaDonOyun || '';
   window._listeOyunaDonOyun = null;
@@ -4258,21 +4280,21 @@ function calRenkSec(key, renk) {
   _calPopupGoster(key, null);
 }
 
-async function calPopupNotKaydet(key) {
+function calPopupNotKaydet(key) {
   var el = document.getElementById('cal-popup-not');
   if (!el) return;
   var v = el.value.trim();
   var ad = localStorage.getItem('calKullanici_idt') || 'Kullanici';
   var btn = document.querySelector('[onclick*="calPopupNotKaydet"]');
   if (btn) { btn.disabled=true; btn.textContent='Kaydediliyor...'; }
-  await calNotKaydet(key, v, ad);
+  calNotKaydet(key, v, ad);
   renderCalendar();
   if (btn) { btn.disabled=false; btn.textContent='Kaydedildi ✓'; btn.style.background='#059669'; }
   setTimeout(function() { calPopupKapat(); }, 900);
 }
 
-async function calPopupNotSil(key) {
-  await calNotKaydet(key, '', '');
+function calPopupNotSil(key) {
+  calNotKaydet(key, '', '');
   renderCalendar();
   _calPopupGoster(key, null);
 }
@@ -4371,14 +4393,14 @@ function _calDetayGoster(key) {
   if (noteEl) noteEl.style.height = (noteEl.scrollHeight) + 'px';
 }
 
-async function calNotKaydetGun(key) {
+function calNotKaydetGun(key) {
   var el = document.getElementById('cal-note-'+key);
   if (!el) return;
   var notMetni = el.value.trim();
   var ad = localStorage.getItem('calKullanici_idt') || 'Kullanici';
   var saveBtn = document.getElementById('cal-not-save-btn-'+key);
   if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Kaydediliyor...'; }
-  await calNotKaydet(key, notMetni, ad);
+  calNotKaydet(key, notMetni, ad);
   renderCalendar();
   // "Kaydedildi ✓" göster, sonra büyük paneli kapat
   if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Kaydedildi ✓'; saveBtn.style.background='#059669'; }
@@ -4389,8 +4411,8 @@ async function calNotKaydetGun(key) {
   }, 900);
 }
 
-async function calNotSilGun(key) {
-  await calNotKaydet(key, '', '');
+function calNotSilGun(key) {
+  calNotKaydet(key, '', '');
   renderCalendar();
   document.getElementById('cal-detail-wrap').innerHTML = '';
 }
