@@ -1757,26 +1757,35 @@ async function calNotYukle() {
       var iNot   = h.findIndex(function(x){ return x.startsWith('not'); });
       var iAd    = h.findIndex(function(x){ return x.startsWith('ad') || x.startsWith('kullanici'); });
       var rowNumbers = data.rowNumbers || [];
-      calNotes = {};
+      var sheetsNotes = {};
       rows.forEach(function(r, i) {
         var tarih = (r[iTarih >= 0 ? iTarih : 0] || '').trim();
         var not   = (r[iNot   >= 0 ? iNot   : 1] || '').trim();
         var ad    = (r[iAd    >= 0 ? iAd    : 2] || '').trim();
-        if (tarih && not) {
-          calNotes[tarih] = { not: not, ad: ad, _sheetRow: rowNumbers[i] || (i + 2) };
+        if (tarih && not && !_calNotesPendingDelete[tarih]) {
+          sheetsNotes[tarih] = { not: not, ad: ad, _sheetRow: rowNumbers[i] || (i + 2) };
         }
       });
+      // Local'de bekleyen değişikliklerle merge et
+      Object.keys(calNotes).forEach(function(k) {
+        if (!sheetsNotes[k]) sheetsNotes[k] = calNotes[k]; // local'de var, sheets'te yok → koru
+      });
+      calNotes = sheetsNotes;
       localStorage.setItem('calNotes_cache', JSON.stringify(calNotes));
     }
   } catch(e) { console.warn('Notlar çekilemedi, cache kullanılıyor:', e); }
 }
+var _calNotesPendingDelete = {}; // silme devam eden key'ler
+
 function calNotKaydet(key, notMetni, ad) {
   // 1. ANINDA local'e yaz — UI beklemez
   var mevcutNot = calNotes[key];
   if (notMetni) {
     calNotes[key] = { not: notMetni, ad: ad, _sheetRow: (mevcutNot && mevcutNot._sheetRow) || null };
+    delete _calNotesPendingDelete[key]; // artık silme değil, ekleme
   } else {
     delete calNotes[key];
+    _calNotesPendingDelete[key] = true; // bu key silinecek, Sheets'ten gelirse yok say
   }
   localStorage.setItem('calNotes_cache', JSON.stringify(calNotes));
 
@@ -1795,12 +1804,14 @@ function calNotKaydet(key, notMetni, ad) {
             body: JSON.stringify({ values: [key, notMetni, ad] })
           });
           var rData = await r.json();
-          // sheetRow gelince güncelle
           if (calNotes[key]) calNotes[key]._sheetRow = rData.rowNumber || null;
           localStorage.setItem('calNotes_cache', JSON.stringify(calNotes));
         }
       } else if (mevcutNot && mevcutNot._sheetRow) {
         await apiFetch('/' + encodeURIComponent(NOTLAR_SHEET) + '/row/' + mevcutNot._sheetRow, { method: 'DELETE' });
+        delete _calNotesPendingDelete[key]; // silme tamamlandı
+      } else {
+        delete _calNotesPendingDelete[key];
       }
     } catch(e) { console.warn('Not Sheets sync hatası:', e); }
   })();
@@ -3779,19 +3790,25 @@ function renderHarita() {
     return chars.join('');
   }
 
+  // Oyuna göre filtrele (oyun sekmesinden gelinmişse)
+  var _haritaOyun = window._sekmeOyunaDon || '';
+  var _haritaTurneler = _haritaOyun
+    ? turneler.filter(function(t){ return (t.oyun||'').toLowerCase().trim() === _haritaOyun.toLowerCase().trim(); })
+    : turneler;
+
   const ilSayilar = {};
-  turneler.forEach(function(t) {
+  _haritaTurneler.forEach(function(t) {
     durakIllerListesi(t).forEach(function(il) {
       if (!il) return;
       var ilAdi = il.split('/')[0].trim();
-      // Büyük/küçük harf duyarsız — IL_LATLON'daki doğru isimle eşleştir
       var normalized = trCapitalize(ilAdi);
       var matched = Object.keys(IL_LATLON).find(function(k){ return k.toLocaleLowerCase('tr-TR') === ilAdi.toLocaleLowerCase('tr-TR'); }) || normalized;
       ilSayilar[matched] = (ilSayilar[matched]||0) + 1;
     });
   });
   const ziyaretIlSayisi = Object.keys(ilSayilar).length;
-  document.getElementById('harita-ozet').textContent = ziyaretIlSayisi + ' ilde ' + turneler.length + ' turne';
+  var _haritaBaslik = _haritaOyun ? (_haritaOyun + ' · ') : '';
+  document.getElementById('harita-ozet').textContent = _haritaBaslik + ziyaretIlSayisi + ' ilde ' + _haritaTurneler.length + ' turne';
 
   // Leaflet harita başlatma
   var mapDiv = document.getElementById('leaflet-map');
@@ -3892,7 +3909,11 @@ function haritaIlDetay(il, ilSayilar) {
   const el = document.getElementById('harita-detay');
   // Çoklu durak sisteminde bu ile giden tüm turneleri bul (büyük/küçük harf duyarsız)
   const ilLower = il.toLocaleLowerCase('tr-TR');
-  const ilT = turneler.filter(function(t){ return durakIllerListesi(t).some(function(d){ return d.split('/')[0].trim().toLocaleLowerCase('tr-TR') === ilLower; }); })
+  var _haritaOyunDet = window._sekmeOyunaDon || '';
+  var _haritaTurnelerDet = _haritaOyunDet
+    ? turneler.filter(function(t){ return (t.oyun||'').toLowerCase().trim() === _haritaOyunDet.toLowerCase().trim(); })
+    : turneler;
+  const ilT = _haritaTurnelerDet.filter(function(t){ return durakIllerListesi(t).some(function(d){ return d.split('/')[0].trim().toLocaleLowerCase('tr-TR') === ilLower; }); })
     .sort(function(a,b){ return new Date(b.baslangicTarih||b.tarih||0)-new Date(a.baslangicTarih||a.tarih||0); });
   const sayi = ilSayilar[il]||0;
   if (!ilT.length) {
