@@ -2930,12 +2930,15 @@ function renderOyunDetay() {
 
   // ── KPI bar ────────────────────────────────────────────────────────────────
   var _oyunSafe = oyun.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+  var _tog = "var s=document.getElementById('oyun-det-seferler');s.style.display=s.style.display==='none'?'block':'none'";
+  var _togK = "var s=document.getElementById('oyun-det-kadro');s.style.display=s.style.display==='none'?'block':'none'";
+  var _togI = "var s=document.getElementById('oyun-det-iller');s.style.display=s.style.display==='none'?'block':'none'";
   var kpiHTML = '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:18px">'
-    + _kpiKart('TURNE', oyunT.length, 'var(--primary)', '🗓', "document.getElementById('oyun-det-seferler').scrollIntoView({behavior:'smooth',block:'start'})")
-    + _kpiKart('TOPLAM GÜN', toplamGun, '#0369a1', '📅', "document.getElementById('oyun-det-seferler').scrollIntoView({behavior:'smooth',block:'start'})")
-    + _kpiKart('TEMSSİL', toplamTemsil, '#7c3aed', '🎭', "document.getElementById('oyun-det-seferler').scrollIntoView({behavior:'smooth',block:'start'})")
-    + _kpiKart('ANA KADRO', personel.length, '#059669', '👥', "document.getElementById('oyun-det-kadro').scrollIntoView({behavior:'smooth',block:'start'})")
-    + _kpiKart('ŞEHİR', iller.length, '#b45309', '📍', "document.getElementById('oyun-det-iller').scrollIntoView({behavior:'smooth',block:'start'})")
+    + _kpiKart('TURNE', oyunT.length, 'var(--primary)', '🗓', _tog)
+    + _kpiKart('TOPLAM GÜN', toplamGun, '#0369a1', '📅', _tog)
+    + _kpiKart('TEMSSİL', toplamTemsil, '#7c3aed', '🎭', _tog)
+    + _kpiKart('ANA KADRO', personel.length, '#059669', '👥', _togK)
+    + _kpiKart('ŞEHİR', iller.length, '#b45309', '📍', _togI)
     + '</div>';
 
   // ── Geri butonu + başlık ───────────────────────────────────────────────────
@@ -4227,9 +4230,12 @@ async function calPopupNotKaydet(key) {
   if (!el) return;
   var v = el.value.trim();
   var ad = localStorage.getItem('calKullanici_idt') || 'Kullanici';
+  var btn = document.querySelector('[onclick*="calPopupNotKaydet"]');
+  if (btn) { btn.disabled=true; btn.textContent='Kaydediliyor...'; }
   await calNotKaydet(key, v, ad);
   renderCalendar();
-  _calPopupGoster(key, null);
+  if (btn) { btn.disabled=false; btn.textContent='Kaydedildi ✓'; btn.style.background='#059669'; }
+  setTimeout(function() { calPopupKapat(); }, 900);
 }
 
 async function calPopupNotSil(key) {
@@ -4341,7 +4347,13 @@ async function calNotKaydetGun(key) {
   if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Kaydediliyor...'; }
   await calNotKaydet(key, notMetni, ad);
   renderCalendar();
-  _calDetayGoster(key);
+  // "Kaydedildi ✓" göster, sonra büyük paneli kapat
+  if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Kaydedildi ✓'; saveBtn.style.background='#059669'; }
+  setTimeout(function() {
+    document.getElementById('cal-detail-wrap').innerHTML = '';
+    calSelectedDay = null;
+    renderCalendar();
+  }, 900);
 }
 
 async function calNotSilGun(key) {
