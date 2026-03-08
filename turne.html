@@ -3773,23 +3773,26 @@ async function kisiGoruSil(idxList) {
   if (!idxList || !idxList.length) return;
   var p = tumPersonel[idxList[0]];
   if (!p) return;
-  if (!confirm(p.kisi + ' tüm kayıtları silinecek (' + idxList.length + ' kayıt). Emin misiniz?')) return;
+  onayGoster({
+    baslik: p.kisi + ' silinecek',
+    mesaj: 'Bu kişinin ' + idxList.length + ' turne kaydı kalıcı olarak silinecek. Bu işlem geri alınamaz.',
+    ikon: '👤', ikonBg: 'hsl(0,80%,96%)',
+    tamamRenk: 'hsl(0,75%,52%)', tamamYazi: 'Evet, sil',
+    onOnay: function() { _kisiSilDevam(p, idxList); }
+  });
+}
+async function _kisiSilDevam(p, idxList) {
   try {
-    // Büyükten küçüğe sırala ki satır kaymaları olmasın
-    // Büyükten küçüğe sırala ki satır kaymaları olmasın
     const sirali = idxList.slice().sort(function(a,b){ return b-a; });
     for (var i = 0; i < sirali.length; i++) {
       var idx = sirali[i];
       var sheetRow = tumPersonel[idx]._sheetRow;
       if (!sheetRow) { console.warn('_sheetRow yok, idx:', idx); tumPersonel.splice(idx, 1); continue; }
       await apiFetch('/' + encodeURIComponent(PERSONEL_SHEET) + '/row/' + sheetRow, { method: 'DELETE' });
-      // Sildikten sonra kalan satırların _sheetRow'unu güncelle (kaydılar)
       tumPersonel.splice(idx, 1);
-      tumPersonel.forEach(function(p) { if (p._sheetRow > sheetRow) p._sheetRow--; });
+      tumPersonel.forEach(function(pp) { if (pp._sheetRow > sheetRow) pp._sheetRow--; });
     }
-  } catch(e) {
-    alert('Silme hatası: ' + e.message); return;
-  }
+  } catch(e) { alert('Silme hatası: ' + e.message); return; }
   populateFilters();
   renderKisiAra();
 }
@@ -3965,7 +3968,15 @@ async function disPersonelKaydet() {
 async function disPersonelSil() {
   if (disPersonelEditIdx === null) return;
   var p = tumDisPersonel[disPersonelEditIdx];
-  if (!confirm(p.kisi + ' silinecek. Emin misiniz?')) return;
+  onayGoster({
+    baslik: p.kisi + ' silinecek',
+    mesaj: 'Dış katılımcı kaydı kalıcı olarak silinecek.',
+    ikon: '👤', ikonBg: 'hsl(0,80%,96%)',
+    tamamRenk: 'hsl(0,75%,52%)', tamamYazi: 'Evet, sil',
+    onOnay: async function() { await _disPersonelSilDevam2(p); }
+  });
+}
+async function _disPersonelSilDevam2(p) {
   try {
     await apiFetch('/' + encodeURIComponent(DIS_PERSONEL_SHEET) + '/row/' + p._sheetRow, { method: 'DELETE' });
     tumDisPersonel.splice(disPersonelEditIdx, 1);
@@ -4236,8 +4247,17 @@ async function kadroKisiKaydet() {
 async function kadroKisiSil() {
   if (kadroEditIdx === null) return;
   const p = tumPersonel[kadroEditIdx];
-  if (!confirm(p.kisi + ' silinecek. Emin misiniz?')) return;
-
+  onayGoster({
+    baslik: p.kisi + ' silinecek',
+    mesaj: 'Kadro kaydı kalıcı olarak silinecek.',
+    ikon: '👤', ikonBg: 'hsl(0,80%,96%)',
+    tamamRenk: 'hsl(0,75%,52%)', tamamYazi: 'Evet, sil',
+    onOnay: function() { _kadroKisiSilDevam(); }
+  });
+}
+async function _kadroKisiSilDevam() {
+  if (kadroEditIdx === null) return;
+  const p = tumPersonel[kadroEditIdx];
   const btnSil = document.getElementById('kadro-sil-btn');
   if (btnSil) { btnSil.disabled = true; btnSil.textContent = 'Siliniyor...'; }
 
@@ -5429,15 +5449,25 @@ function geriYukle(event) {
       var json  = JSON.parse(ev.target.result);
       var liste = json.turneler || json;
       if (!Array.isArray(liste)) throw new Error('Geçersiz format');
-      if (!confirm(liste.length + ' kayıt yüklenecek. Devam?')) return;
-      turneler = liste;
-      renderListe(); populateFilters();
-      var el = document.getElementById('yedek-mesaj');
-      if (el) { el.textContent = '✓ ' + liste.length + ' kayıt yüklendi'; setTimeout(() => { el.textContent=''; }, 3000); }
+      const _liste = liste;
+      onayGoster({
+        baslik: 'Veri geri yüklenecek',
+        mesaj: _liste.length + ' kayıt mevcut verinin üzerine yazılacak. Önce yedek aldınız mı?',
+        ikon: '📂', ikonBg: 'hsl(220,80%,96%)',
+        tamamRenk: 'hsl(220,65%,45%)', tamamYazi: 'Evet, yükle',
+        onOnay: function() { _geriYukleDevam(_liste); }
+      });
     } catch(e) { alert('Hata: ' + e.message); }
   };
   reader.readAsText(file);
   event.target.value = '';
+}
+
+function _geriYukleDevam(liste) {
+  turneler = liste;
+  renderListe(); populateFilters();
+  var el = document.getElementById('yedek-mesaj');
+  if (el) { el.textContent = '✓ ' + liste.length + ' kayıt yüklendi'; setTimeout(() => { el.textContent=''; }, 3000); }
 }
 
 // ============================================================
@@ -5699,11 +5729,12 @@ async function saveTurne() {
             (_snapObj.statu       && _chkStatu && _chkStatu !== _snapObj.statu)
           );
           if (_snapDegisti) {
-            var _devamEt = confirm(
+            // Çakışma uyarısı — native confirm kullan (async akış beklediği için)
+            var _devamEt = window.confirm(
               '⚠️ UYARI: Bu kayıt başka bir kullanıcı tarafından değiştirilmiş görünüyor!\n\n' +
               "Sheets'teki mevcut değer: " + _chkOyun + ' / ' + _chkTarih + ' / ' + _chkStatu + '\n' +
               'Sizin düzenlemeniz: ' + (document.getElementById('m-oyun').value||_snapObj.oyun) + '\n\n' +
-              'Yine de kaydetmek istiyor musunuz?\n(İptal: Formu kapat ve sayfayı yenile)'
+              'Yine de kaydetmek istiyor musunuz?'
             );
             if (!_devamEt) {
               _saveTurneCalisiyor = false;
@@ -5920,7 +5951,15 @@ function _gosterKayitHatasi(mesaj) {
 // SİL
 // ============================================================
 async function deleteTurne(rowIdx) {
-  if (!confirm('Bu turne kaydını silmek istiyor musunuz?')) return;
+  onayGoster({
+    baslik: 'Turne silinecek',
+    mesaj: 'Bu turne kaydı kalıcı olarak silinecek. Bu işlem geri alınamaz.',
+    ikon: '🎭', ikonBg: 'hsl(0,80%,96%)',
+    tamamRenk: 'hsl(0,75%,52%)', tamamYazi: 'Evet, sil',
+    onOnay: function() { _turneSilDevam(rowIdx); }
+  });
+}
+async function _turneSilDevam(rowIdx) {
   try {
     var r = await apiFetch('/' + encodeURIComponent(TURNE_SHEET) + '/row/' + (rowIdx + 2), { method:'DELETE' });
     if (!r.ok) { var err = await r.json(); throw new Error(err.error || r.status); }
@@ -5989,21 +6028,26 @@ function exportExcel() {
 // ============================================================
 function tumRaporlarPdf() {
   if (!turneler.length) { alert('Henüz turne kaydı yok.'); return; }
-  var onay = confirm(turneler.length + ' turnenin tüm raporları tek PDF\'de açılacak. Devam?');
-  if (!onay) return;
-
-  // Her turne için gorevlendirmePdf HTML içeriğini topla
+  const _pdfTurneler = turneler;
+  onayGoster({
+    baslik: 'Tüm raporlar açılacak',
+    mesaj: _pdfTurneler.length + ' turnenin raporları tek PDF'de birleştirilecek.',
+    ikon: '📋', ikonBg: 'hsl(220,80%,96%)',
+    tamamRenk: 'hsl(350,65%,50%)', tamamYazi: 'Devam et',
+    onOnay: function() { _tumRaporlarDevam(_pdfTurneler); }
+  });
+}
+function _tumRaporlarDevam(turneler) {
   var sayfalar = [];
   turneler.forEach(function(t) {
     if (!t) return;
     sayfalar.push(_pdfIcerik(t));
   });
-
   var bugun = new Date().toLocaleDateString('tr-TR', { day:'numeric', month:'long', year:'numeric' });
   var docHTML = '<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8">'
     + '<title>Tüm Turne Raporları – ' + bugun + '</title>'
     + '<style>'
-    + 'body{font-family:Arial,Helvetica,sans-serif;font-size:12px;margin:0;padding:0;color:hsl(220,20%,90%);background:var(--card)}'
+    + 'body{font-family:Arial,Helvetica,sans-serif;font-size:12px;margin:0;padding:0;}'
     + '.sayfa{padding:20px 24px;page-break-after:always}'
     + '.sayfa:last-child{page-break-after:auto}'
     + _pdfCSS()
@@ -6012,7 +6056,6 @@ function tumRaporlarPdf() {
     + sayfalar.map(function(s){ return '<div class="sayfa">' + s + '</div>'; }).join('')
     + '<script>window.onload=function(){window.print();};<\/script>'
     + '<\/body><\/html>';
-
   var win = window.open('', '_blank');
   if (!win) { alert('Lütfen pop-up engelleyiciyi kapatın.'); return; }
   win.document.write(docHTML);
@@ -6930,7 +6973,13 @@ document.addEventListener('click', function(e) {
 });
 document.getElementById('modal-overlay').addEventListener('click', function(e) {
   if (e.target === this) {
-    if (confirm('Formu kapatmak istediğinizden emin misiniz?\nKaydedilmemiş değişiklikler kaybolacak.')) closeModal();
+    onayGoster({
+      baslik: 'Formu kapat?',
+      mesaj: 'Kaydedilmemiş değişiklikler kaybolacak.',
+      ikon: '⚠️', ikonBg: 'hsl(42,90%,94%)',
+      tamamRenk: 'hsl(42,60%,38%)', tamamYazi: 'Evet, kapat',
+      onOnay: function() { closeModal(); }
+    });
   }
 });
 var _cdm=document.getElementById('card-detail-modal'); if(_cdm) _cdm.addEventListener('click',function(e){if(e.target===this)closeCardDetail();});
@@ -7008,6 +7057,68 @@ function acBind(inputId, key, extraFilter) {
   });
 }
 
+
+// ===== ESC TUŞU — TÜM MODALLARI KAPATIR =====
+document.addEventListener('keydown', function(e) {
+  if (e.key !== 'Escape') return;
+  // Onay modal açıksa kapat
+  if (document.getElementById('onay-modal').style.display === 'flex') { onayKapat(); return; }
+  // Kişi modal
+  var km = document.getElementById('kisi-modal');
+  if (km && km.style.display !== 'none' && km.style.display !== '') { closeKisiModal(); return; }
+  // Kadro kişi modal
+  var kkm = document.getElementById('kadro-kisi-modal');
+  if (kkm && kkm.classList.contains('on')) { kadroKisiModalKapat(); return; }
+  // Dış personel modal
+  var dpm = document.getElementById('dis-personel-modal');
+  if (dpm && dpm.classList.contains('on')) { disPersonelModalKapat(); return; }
+  // Turne formu modal
+  var mo = document.getElementById('modal-overlay');
+  if (mo && mo.classList.contains('on')) {
+    if (document.getElementById('m-oyun') && document.getElementById('m-oyun').value) {
+      onayGoster({
+        baslik: 'Formu kapat?',
+        mesaj: 'Kaydedilmemiş değişiklikler kaybolacak.',
+        ikon: '⚠️', ikonBg: 'hsl(42,90%,94%)',
+        tamamRenk: 'hsl(42,70%,40%)', tamamYazi: 'Evet, kapat',
+        onOnay: function() { closeModal(); }
+      });
+    } else { closeModal(); }
+    return;
+  }
+  // Takvim popup
+  var cp = document.getElementById('cal-popup');
+  if (cp && cp.style.display !== 'none') { calPopupKapat(); return; }
+  // Kart detay modal
+  var cdm = document.getElementById('card-detail-modal');
+  if (cdm && cdm.classList.contains('on')) { document.getElementById('card-detail-modal').classList.remove('on'); return; }
+});
+
+// ===== ÖZEL ONAY SİSTEMİ =====
+var _onayCallback = null;
+function onayGoster(opts) {
+  var m = document.getElementById('onay-modal');
+  document.getElementById('onay-baslik').textContent = opts.baslik || 'Emin misiniz?';
+  document.getElementById('onay-mesaj').textContent = opts.mesaj || '';
+  document.getElementById('onay-ikon').textContent = opts.ikon || '🗑️';
+  document.getElementById('onay-ikon').style.background = opts.ikonBg || 'hsl(0,80%,96%)';
+  var btn = document.getElementById('onay-tamam');
+  btn.textContent = opts.tamamYazi || 'Sil';
+  btn.style.background = opts.tamamRenk || 'hsl(0,75%,52%)';
+  _onayCallback = opts.onOnay || null;
+  btn.onclick = function() { onayKapat(); if (_onayCallback) _onayCallback(); };
+  m.style.display = 'flex';
+  setTimeout(function() { document.getElementById('onay-iptal').focus(); }, 50);
+}
+function onayKapat() {
+  document.getElementById('onay-modal').style.display = 'none';
+  _onayCallback = null;
+}
+// Dışarı tıklayınca kapat
+document.getElementById('onay-modal').addEventListener('click', function(e) {
+  if (e.target === this) onayKapat();
+});
+
 function acBindAll() {
   acBind('m-oyun', 'oyunlar');
   acBind('m-otel-adi', 'otelAdlari');
@@ -7028,6 +7139,23 @@ function acBindAll() {
 <!-- KART DETAY MODAL -->
 <div class="card-detail-modal" id="card-detail-modal">
   <div class="card-detail-box" id="card-detail-box"></div>
+</div>
+
+<!-- ÖZEL ONAY MODAL -->
+<div id="onay-modal" style="display:none;position:fixed;inset:0;z-index:9000;background:rgba(4,6,14,.72);align-items:center;justify-content:center">
+  <div style="background:var(--card);border-radius:14px;width:380px;max-width:94vw;padding:0;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.45);font-family:Poppins,sans-serif">
+    <div style="padding:18px 20px 14px;display:flex;align-items:flex-start;gap:12px">
+      <div id="onay-ikon" style="width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;background:hsl(0,80%,96%)">🗑️</div>
+      <div style="flex:1">
+        <div id="onay-baslik" style="font-size:14px;font-weight:700;color:var(--foreground);margin-bottom:5px">Silmek istiyor musunuz?</div>
+        <div id="onay-mesaj" style="font-size:12px;color:var(--muted-foreground);line-height:1.55"></div>
+      </div>
+    </div>
+    <div style="padding:12px 20px 16px;display:flex;gap:8px;justify-content:flex-end;border-top:1px solid var(--border)">
+      <button id="onay-iptal" onclick="onayKapat()" style="height:34px;padding:0 16px;font-size:12px;font-weight:600;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--muted-foreground);cursor:pointer;font-family:Poppins,sans-serif">İptal</button>
+      <button id="onay-tamam" style="height:34px;padding:0 16px;font-size:12px;font-weight:700;border-radius:8px;border:none;background:hsl(0,75%,52%);color:#fff;cursor:pointer;font-family:Poppins,sans-serif">Sil</button>
+    </div>
+  </div>
 </div>
 
 </body>
