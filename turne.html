@@ -4300,8 +4300,9 @@ function renderHarita() {
 
     var marker = L.marker(latlon, { icon: icon }).addTo(_leafletMap);
     var kmTip = '';
-    var llIlTip = IL_LATLON[il];
-    if (llIlTip) { var kmV = hesaplaKm(IZMIR_LATLON[0], IZMIR_LATLON[1], llIlTip[0], llIlTip[1]); kmTip = ' · ~' + kmV + ' km (kuş uçuşu)'; }
+    var kmTip2 = izmirenKm(il);
+    if (kmTip2 !== null) { kmTip = ' · ' + kmTip2 + ' km karayolu'; }
+    else { var llIlTip = IL_LATLON[il]; if (llIlTip) { var kmV = hesaplaKm(IZMIR_LATLON[0], IZMIR_LATLON[1], llIlTip[0], llIlTip[1]); kmTip = ' · ~' + kmV + ' km (kuş uçuşu)'; } }
     marker.bindTooltip('<strong>' + il + '</strong>' + (sayi > 0 ? ' · <span style="color:hsl(350,68%,40%);font-weight:700">' + sayi + ' turne</span>' : ' · henüz gidilmedi') + '<span style="color:#6b7280">' + kmTip + '</span>', {
       direction: 'top', offset: [0, -(r+5)], opacity: 0.95,
       className: 'harita-leaflet-tip'
@@ -4326,6 +4327,99 @@ function hesaplaKm(lat1, lon1, lat2, lon2) {
   var a = Math.sin(dLat/2)*Math.sin(dLat/2) + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)*Math.sin(dLon/2);
   return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
 }
+function izmirenKm(ilAdi) {
+  if (!ilAdi) return null;
+  // Önce tam eşleşme
+  var k = Object.keys(IZMIR_KARAYOLU_KM).find(function(k){ return k.toLocaleLowerCase('tr-TR') === ilAdi.toLocaleLowerCase('tr-TR'); });
+  if (k) return IZMIR_KARAYOLU_KM[k];
+  // İçinde geçiyorsa
+  k = Object.keys(IZMIR_KARAYOLU_KM).find(function(k){ return ilAdi.toLocaleLowerCase('tr-TR').includes(k.toLocaleLowerCase('tr-TR')) || k.toLocaleLowerCase('tr-TR').includes(ilAdi.toLocaleLowerCase('tr-TR')); });
+  return k ? IZMIR_KARAYOLU_KM[k] : null;
+}
+const IZMIR_KARAYOLU_KM = {
+  'Adana': 550,
+  'Adıyaman': 820,
+  'Afyonkarahisar': 295,
+  'Aksaray': 590,
+  'Amasya': 730,
+  'Ankara': 590,
+  'Antalya': 480,
+  'Ardahan': 1410,
+  'Artvin': 1175,
+  'Aydın': 100,
+  'Ağrı': 1310,
+  'Balıkesir': 280,
+  'Bartın': 695,
+  'Batman': 1150,
+  'Bayburt': 1135,
+  'Bilecik': 490,
+  'Bingöl': 1060,
+  'Bitlis': 1260,
+  'Bolu': 600,
+  'Burdur': 370,
+  'Bursa': 380,
+  'Denizli': 230,
+  'Diyarbakır': 1010,
+  'Düzce': 590,
+  'Edirne': 570,
+  'Elazığ': 990,
+  'Erzincan': 1040,
+  'Erzurum': 1200,
+  'Eskişehir': 440,
+  'Gaziantep': 810,
+  'Giresun': 990,
+  'Gümüşhane': 1095,
+  'Hakkari': 1530,
+  'Hatay': 720,
+  'Isparta': 355,
+  'Iğdır': 1435,
+  'Kahramanmaraş': 770,
+  'Karabük': 670,
+  'Karaman': 570,
+  'Kars': 1390,
+  'Kastamonu': 720,
+  'Kayseri': 680,
+  'Kilis': 845,
+  'Kocaeli': 530,
+  'Konya': 490,
+  'Kütahya': 370,
+  'Kırklareli': 590,
+  'Kırıkkale': 615,
+  'Kırşehir': 620,
+  'Malatya': 900,
+  'Manisa': 45,
+  'Mardin': 1110,
+  'Mersin': 610,
+  'Muğla': 260,
+  'Muş': 1185,
+  'Nevşehir': 640,
+  'Niğde': 690,
+  'Ordu': 920,
+  'Osmaniye': 620,
+  'Rize': 1110,
+  'Sakarya': 545,
+  'Samsun': 820,
+  'Siirt': 1230,
+  'Sinop': 830,
+  'Sivas': 820,
+  'Tekirdağ': 530,
+  'Tokat': 810,
+  'Trabzon': 1055,
+  'Tunceli': 1030,
+  'Uşak': 195,
+  'Van': 1390,
+  'Yalova': 450,
+  'Yozgat': 700,
+  'Zonguldak': 660,
+  'Çanakkale': 330,
+  'Çankırı': 660,
+  'Çorum': 720,
+  'İstanbul': 475,
+  'İzmir': 0,
+  'Şanlıurfa': 960,
+  'Şırnak': 1340,
+};
+
 // İzmir – Konak/Merkez (şehir merkezi)
 var IZMIR_LATLON = [38.4192, 27.1287];
 var IZMIR_IL_ADI = 'İzmir (Konak/Merkez)';
@@ -4353,10 +4447,15 @@ function haritaIlDetay(il, ilSayilar) {
   }
   const toplamGun = ilT.reduce(function(s,t){ return s+turneSuresi(t); }, 0);
   var kmStr = '';
-  var llIl = IL_LATLON[il];
-  if (llIl) {
-    var km = hesaplaKm(IZMIR_LATLON[0], IZMIR_LATLON[1], llIl[0], llIl[1]);
-    kmStr = ' · <span style="font-size:10px;color:#0369a1;font-weight:600">~' + km + ' km İzmir\'den</span><span style="font-size:9px;color:#888;white-space:nowrap"> (kuş uçuşu)</span>';
+  var kmTablo = izmirenKm(il);
+  if (kmTablo !== null) {
+    kmStr = ' · <span style="font-size:10px;color:#0369a1;font-weight:600">' + kmTablo + ' km İzmir\'den</span><span style="font-size:9px;color:#888;white-space:nowrap"> (karayolu)</span>';
+  } else {
+    var llIl = IL_LATLON[il];
+    if (llIl) {
+      var km = hesaplaKm(IZMIR_LATLON[0], IZMIR_LATLON[1], llIl[0], llIl[1]);
+      kmStr = ' · <span style="font-size:10px;color:#0369a1;font-weight:600">~' + km + ' km İzmir\'den</span><span style="font-size:9px;color:#888;white-space:nowrap"> (kuş uçuşu)</span>';
+    }
   }
   const rows = ilT.map(function(t) {
     const sr=statuRenk(t.statu); const sure=turneSuresi(t);
