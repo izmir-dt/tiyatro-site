@@ -978,11 +978,33 @@
 // ============================================================
 // CONFIG
 // ============================================================
-const API            = 'https://tiyatro-backend.vercel.app/api/sheets';
+const API            = 'https://script.google.com/macros/s/AKfycbxDpxcsDwspzAdTgcBPTXJtOxBCjPLf0cqgx-MJA8D2rgvnQMVxCAY78vMOTNSnQrrY/exec';
 const TURNE_SHEET    = 'TURNE_KAYITLARI';
 const PERSONEL_SHEET = 'BÜTÜN OYUNLAR';
 const SK             = 'tiyatro_sifre';
 const VARSAYILAN_SIFRE = '525327';
+
+// ============================================================
+// APPS SCRIPT FETCH YARDIMCISI
+// Apps Script GET parametrelerle, POST/PUT/DELETE body+method parametresiyle çalışır
+// ============================================================
+async function apiFetch(path, options) {
+  options = options || {};
+  var method = (options.method || 'GET').toUpperCase();
+  var url = API + '?path=' + encodeURIComponent(path) + '&method=' + method;
+  var fetchOptions = { method: 'POST', headers: { 'Content-Type': 'application/json' } };
+  if (options.body) {
+    fetchOptions.body = options.body;
+  } else if (method === 'GET') {
+    // GET için body yok, sadece URL parametresi yeterli
+    fetchOptions.body = JSON.stringify({});
+  } else {
+    fetchOptions.body = JSON.stringify({});
+  }
+  // Apps Script her zaman POST ile alır, method parametresiyle ayırt edilir
+  var res = await fetch(url, fetchOptions);
+  return res;
+}
 const DAHIL_KATEGORILER = ['Sanatçı','Oyuncu','Koro','Koro/Dans','Müzisyen','Orkestra','Solist','Figüran','Figüran/Müzisyen','Dansçı','Koro/Dans Ekibi','Kurumdan Emekli Sanatçı','Turne Başkanı','Sahne Amiri','Kondüvit','Ses – Kondüvit','Ses','Mutemet','Sahne Işıkçısı','Işık Kontrol','Işık – Tasarım','Sahne Makinisti','Aksesuar Memuru','Aksesuar Sorumlusu','Dekor/Aksesuar','Sahne Dekor (Sorumlu)','Sahne Terzisi','Sahne Terzisi/Kostüm','Kostüm','Perukacı','Peruk – Makyaj','Peruk Sorumlusu','Sahne Uzmanı','Dekorcu','Dekor Sorumlusu','Kostümcü','Kostüm Sorumlusu','Makyajcı','Ses Teknisyeni','Işık Teknisyeni','Sahne Görevlisi','Teknik Direktör','Sahne Yöneticisi','Reji Yardımcısı (Sahne)','Video / Görüntü'];
 
 const STATU_OPTS = [
@@ -1785,7 +1807,7 @@ function setLoading(show) {
 // ============================================================
 async function fetchPersonel() {
   try {
-    const res  = await fetch(API + '/' + encodeURIComponent(PERSONEL_SHEET));
+    const res  = await apiFetch('/' + encodeURIComponent(PERSONEL_SHEET));
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     const allRows = data.rows || [];
@@ -1820,7 +1842,7 @@ async function fetchPersonel() {
 
 async function fetchTurneler() {
   try {
-    const res  = await fetch(API + '/' + encodeURIComponent(TURNE_SHEET));
+    const res  = await apiFetch('/' + encodeURIComponent(TURNE_SHEET));
     if (!res.ok) {
       console.warn('fetchTurneler: API hata', res.status, '— mevcut veri korundu');
       return; // turneler = [] YAPMA
@@ -2664,7 +2686,7 @@ async function saveKisiModal() {
   try {
     const KAT_COL = 39; // yeni yapıda index 39 = katilimcilar sütunu
     console.log('[saveKisiModal] CELL PUT row:', rowIdxKayit + 2, 'col:', KAT_COL, 'kat sayısı:', katSayisi);
-    const cellRes = await fetch(API + '/' + encodeURIComponent(TURNE_SHEET) + '/cell', {
+    const cellRes = await apiFetch('/' + encodeURIComponent(TURNE_SHEET) + '/cell', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ row: rowIdxKayit + 2, col: KAT_COL, value: katJSON2 })
@@ -3091,7 +3113,7 @@ async function kisiGoruSil(idxList) {
       var idx = sirali[i];
       var sheetRow = tumPersonel[idx]._sheetRow;
       if (!sheetRow) { console.warn('_sheetRow yok, idx:', idx); tumPersonel.splice(idx, 1); continue; }
-      await fetch(API + '/' + encodeURIComponent(PERSONEL_SHEET) + '/row/' + sheetRow, { method: 'DELETE' });
+      await apiFetch('/' + encodeURIComponent(PERSONEL_SHEET) + '/row/' + sheetRow, { method: 'DELETE' });
       // Sildikten sonra kalan satırların _sheetRow'unu güncelle (kaydılar)
       tumPersonel.splice(idx, 1);
       tumPersonel.forEach(function(p) { if (p._sheetRow > sheetRow) p._sheetRow--; });
@@ -3322,13 +3344,12 @@ async function kadroKisiKaydet() {
       // GÜNCELLE — _sheetRow'dan gerçek Sheets satır numarasını al
       const sheetRow = tumPersonel[kadroEditIdx]._sheetRow;
       if (!sheetRow) { alert('Satır numarası bulunamadı, lütfen sayfayı yenileyin.'); return; }
-      const cols = ['A','B','C','D'];
       const vals = [oyun, kat, gorev, ad];
-      await Promise.all(cols.map((col, i) =>
-        fetch(API + '/' + encodeURIComponent(PERSONEL_SHEET) + '/cell', {
+      await Promise.all(vals.map((val, i) =>
+        apiFetch('/' + encodeURIComponent(PERSONEL_SHEET) + '/cell', {
           method: 'PUT',
           headers: {'Content-Type':'application/json'},
-          body: JSON.stringify({ row: sheetRow, col, value: vals[i] })
+          body: JSON.stringify({ row: sheetRow, col: i, value: val })
         })
       ));
       // Local güncelle
@@ -3338,7 +3359,7 @@ async function kadroKisiKaydet() {
       tumPersonel[kadroEditIdx].oyun = oyun;
     } else {
       // EKLE — yeni satır append et
-      await fetch(API + '/' + encodeURIComponent(PERSONEL_SHEET) + '/row', {
+      await apiFetch('/' + encodeURIComponent(PERSONEL_SHEET) + '/row', {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
         body: JSON.stringify({ values: [oyun, kat, gorev, ad] })
@@ -3375,7 +3396,7 @@ async function kadroKisiSil() {
     // Sheets'ten sil: _sheetRow'dan gerçek satır numarasını al
     const sheetRow = tumPersonel[kadroEditIdx]._sheetRow;
     if (!sheetRow) { alert('Satır numarası bulunamadı, lütfen sayfayı yenileyin.'); return; }
-    const res = await fetch(API + '/' + encodeURIComponent(PERSONEL_SHEET) + '/row/' + sheetRow, {
+    const res = await apiFetch('/' + encodeURIComponent(PERSONEL_SHEET) + '/row/' + sheetRow, {
       method: 'DELETE'
     });
     if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -4798,7 +4819,7 @@ async function saveTurne() {
       var cellHatalari = 0;
       for (var ci = 0; ci < values.length; ci++) {
         try {
-          var cellR = await fetch(API + '/' + encodeURIComponent(TURNE_SHEET) + '/cell', {
+          var cellR = await apiFetch('/' + encodeURIComponent(TURNE_SHEET) + '/cell', {
             method:'PUT', headers:{'Content-Type':'application/json'},
             body: JSON.stringify({ row: idx + 2, col: ci, value: values[ci] })
           });
@@ -4813,7 +4834,7 @@ async function saveTurne() {
       }
     } else {
       console.log('[saveTurne] POST values length:', values.length);
-      var postR2 = await fetch(API + '/' + encodeURIComponent(TURNE_SHEET) + '/row', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ values:values }) });
+      var postR2 = await apiFetch('/' + encodeURIComponent(TURNE_SHEET) + '/row', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ values:values }) });
       console.log('[saveTurne] POST sonuç:', postR2.status, postR2.ok);
       if (postR2.ok) {
         apiBasarili = true;
@@ -4874,7 +4895,7 @@ function _gosterKayitHatasi(mesaj) {
 async function deleteTurne(rowIdx) {
   if (!confirm('Bu turne kaydını silmek istiyor musunuz?')) return;
   try {
-    var r = await fetch(API + '/' + encodeURIComponent(TURNE_SHEET) + '/row/' + (rowIdx + 2), { method:'DELETE' });
+    var r = await apiFetch('/' + encodeURIComponent(TURNE_SHEET) + '/row/' + (rowIdx + 2), { method:'DELETE' });
     if (!r.ok) { var err = await r.json(); throw new Error(err.error || r.status); }
     setLoading(true);
     await fetchTurneler();
