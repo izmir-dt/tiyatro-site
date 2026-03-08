@@ -150,7 +150,7 @@
     .cal-tatil-label { font-size: 8.5px; font-weight: 700; color: hsl(42,70%,40%); background: hsl(42,80%,90%); padding: 1px 5px; border-radius: 3px; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .cal-event { margin-top: 0; padding: 3px 6px; border-radius: 4px; font-size: 9.5px; font-weight: 600; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; cursor: pointer; line-height: 1.5; }
     .cal-event:hover { filter: brightness(0.9); transform: translateX(1px); }
-    .cal-note-dot { position: absolute; bottom: 5px; right: 5px; width: 7px; height: 7px; border-radius: 50%; background: #0369a1; opacity: .7; }
+    .cal-note-dot { position: absolute; bottom: 4px; right: 5px; font-size: 8.5px; font-weight: 800; color: #fff; background: #d97706; border-radius: 4px; padding: 1px 5px; line-height: 1.5; letter-spacing: .2px; box-shadow: 0 1px 3px rgba(0,0,0,.25); }
     .cal-detail-panel { background: var(--card); border: 1px solid var(--border); border-radius: 10px; margin-top: 10px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,.08); }
     .cal-detail-header { padding: 12px 16px; background: var(--sidebar); display: flex; align-items: center; justify-content: space-between; }
     .cal-detail-close { background: rgba(255,255,255,.15); border: none; color: var(--sidebar-foreground); cursor: pointer; font-size: 14px; border-radius: 5px; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; }
@@ -482,7 +482,7 @@
         <option value="">-- Oyun Seçin --</option>
       </select>
       <input class="filter-input" type="text" id="kadro-search" placeholder="🔍 Kişi ara..." oninput="renderKadro()" style="width:180px">
-      <select class="filter-select" id="kadro-kat-filter" onchange="renderKadro()" style="width:160px">
+      <select class="filter-select" id="kadro-kat-filter" onchange="window._kadroGrupFiltre='';renderKadro()" style="width:160px">
         <option value="">Tüm Kategoriler</option>
       </select>
       <span id="kadro-ozet" style="font-size:11px;color:var(--muted-foreground)"></span>
@@ -3203,9 +3203,13 @@ function renderKadro() {
   function trNorm(s) { return (s||'').toLowerCase().replace(/İ/g,'i').replace(/I/g,'ı').replace(/Ğ/g,'ğ').replace(/Ü/g,'ü').replace(/Ş/g,'ş').replace(/Ö/g,'ö').replace(/Ç/g,'ç'); }
   var ara = trNorm(araRaw);
 
+  var SANATCI_KATS_GRP = ['Sanatçı','Oyuncu','Koro','Koro/Dans','Koro/Dans Ekibi','Solist','Dansçı','Figüran','Figüran/Müzisyen','Müzisyen','Orkestra','Kurumdan Emekli Sanatçı'];
+  var grupFiltre = window._kadroGrupFiltre || '';
   var kadro = tumKadro.filter(function(p) {
     if (ara && !trNorm(p.kisi).includes(ara)) return false;
     if (filKat && p.kategori !== filKat) return false;
+    if (grupFiltre === 'sanatci' && !SANATCI_KATS_GRP.some(function(k){ return p.kategori === k; })) return false;
+    if (grupFiltre === 'teknik' && SANATCI_KATS_GRP.some(function(k){ return p.kategori === k; })) return false;
     return true;
   });
 
@@ -3223,9 +3227,9 @@ function renderKadro() {
   var katCount = new Set(kadro.map(function(p){ return p.kategori; })).size;
 
   var kpiHTML = '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px">'
-    + _kpiKart2('TOPLAM', kadro.length, '#374151', '#f9fafb', '👤', "document.getElementById('kadro-kat-filter').value='';renderKadro()")
-    + _kpiKart2('SANATÇI', sanatciCount, '#7c1d1d', '#fff1f2', '🎭', "document.getElementById('kadro-kat-filter').value='Sanat\u00e7\u0131';renderKadro()")
-    + _kpiKart2('TEKNİK', teknikCount, '#1e3a8a', '#eff6ff', '⚙️', "document.getElementById('kadro-kat-filter').value='Teknik';renderKadro()")
+    + _kpiKart2('TOPLAM', kadro.length, '#374151', '#f9fafb', '👤', "window._kadroGrupFiltre='';" + "document.getElementById('kadro-kat-filter').value='';renderKadro()")
+    + _kpiKart2('SANATÇI', sanatciCount, '#7c1d1d', '#fff1f2', '🎭', "window._kadroGrupFiltre='sanatci';" + "document.getElementById('kadro-kat-filter').value='';renderKadro()")
+    + _kpiKart2('TEKNİK', teknikCount, '#1e3a8a', '#eff6ff', '⚙️', "window._kadroGrupFiltre='teknik';" + "document.getElementById('kadro-kat-filter').value='';renderKadro()")
     + _kpiKart2('KATEGORİ', katCount, '#7c3aed', '#f5f3ff', '📋', "document.getElementById('kadro-kat-filter').focus()")
     + '</div>';
 
@@ -3846,7 +3850,7 @@ function renderCalendar() {
       + '<div class="cal-day-num">'+g.date.getDate()+'</div>'
       + (tatilAdi ? '<div class="cal-tatil-label" title="'+tatilAdi+'">'+tatilAdi+'</div>' : '')
       + evHTML
-      + (gunNotu ? '<div class="cal-note-dot" title="'+gunNotu+'"></div>' : '')
+      + (gunNotu ? '<div class="cal-note-dot" title="'+gunNotu+'">📝 NOT</div>' : '')
       + '</div>';
   }).join('');
 }
