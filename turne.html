@@ -182,7 +182,8 @@
     /* MODAL */
     .modal-overlay { display: none; position: fixed; inset: 0; z-index: 1000; background: rgba(12,12,22,.72); align-items: center; justify-content: center; }
     .modal-overlay.on { display: flex; }
-    .modal { background: var(--card); border-radius: 14px; width: 520px; max-width: 96vw; max-height: 92vh; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,.3); display: flex; flex-direction: column; }
+    .modal { background: var(--card); border-radius: 14px; width: 520px; max-width: 96vw; max-height: 92vh; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,.3); display: flex; flex-direction: column; transition: width .2s; }
+    .modal.wide-program { width: 780px; }
     .modal-header { padding: 14px 18px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; background: var(--sidebar); flex-shrink: 0; }
     .modal-title { font-size: 14px; font-weight: 700; color: var(--sidebar-foreground); }
     .modal-sure { font-size: 11px; color: hsl(38,20%,65%); margin-top: 1px; }
@@ -545,9 +546,11 @@
           </div>
           <div style="display:flex;align-items:center;gap:10px">
             <div class="cal-legend">
-              <div class="cal-legend-item"><div class="cal-legend-dot" style="background:hsl(350,68%,55%)"></div>Turne</div>
+              <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#16a34a"></div>Oyun</div>
+              <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#f59e0b"></div>Yol</div>
+              <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#dc2626"></div>Dönüş</div>
+              <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#2563eb"></div>Prova</div>
               <div class="cal-legend-item"><div class="cal-legend-dot" style="background:hsl(42,85%,60%)"></div>Tatil</div>
-              <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#0369a1"></div>Not</div>
             </div>
             <button class="cal-today-btn" onclick="calToday()">Bugün</button>
           </div>
@@ -2004,6 +2007,9 @@ function switchModalTab(key, idx) {
   document.querySelectorAll('.modal-section').forEach(s => s.classList.remove('active'));
   document.getElementById('ms-' + key).classList.add('active');
   document.querySelectorAll('.modal-dot').forEach((d,i) => d.classList.toggle('active', i === idx));
+  // Program sekmesinde modal genişlesin
+  var _pgModal = document.getElementById('ms-program') && document.getElementById('ms-program').closest('.modal');
+  if (_pgModal) _pgModal.classList.toggle('wide-program', key === 'program');
   if (key === 'program') renderProgramGunler();
   if (key === 'konaklama') renderKonaklamaDuraklar();
 }
@@ -2441,9 +2447,9 @@ function renderSelectedPills(scrollToIdx) {
         + '<div style="flex:1;min-width:0">'
         +   '<div style="font-size:11px;font-weight:700;color:var(--foreground);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.3">' + (k.kisi||'') + '</div>'
         +   '<input type="text" value="' + (k.gorev||'').replace(/"/g,'&quot;') + '"'
-        +   ' placeholder="G\u00f6rev..." list="gorev-datalist"'
-        +   ' onclick="event.stopPropagation();_pillFocus(' + i + ')"'
-        +   ' oninput="kisiGorevGuncelle(' + i + ',this.value)" onchange="event.stopPropagation();kisiGorevGuncelle(' + i + ',this.value);gorevHafizayaKaydet(this.value)"'
+        +   ' placeholder="Görev..." list="gorev-datalist"'
+        +   ' onclick="event.stopPropagation()"'
+        +   ' oninput="event.stopPropagation();kisiGorevGuncelle(' + i + ',this.value)" onchange="event.stopPropagation();kisiGorevGuncelle(' + i + ',this.value);gorevHafizayaKaydet(this.value)"'
         +   ' style="width:100%;border:1px solid var(--border);border-radius:3px;padding:1px 4px;font-size:10px;background:var(--card);font-family:Poppins,sans-serif;color:var(--foreground)">'
         + '</div>'
         // \u2191 \u2193 butonlar\u0131 - b\u00fcy\u00fck, net, t\u0131klanabilir
@@ -2892,6 +2898,7 @@ function renderKisiAra() {
     + '<th style="padding:8px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.4px">OYUN(LAR)</th>'
     + '<th style="padding:8px 12px;text-align:center;font-size:10px;font-weight:700;letter-spacing:.4px">TURNE</th>'
     + '<th style="padding:8px 12px;text-align:center;font-size:10px;font-weight:700;letter-spacing:.4px">GÜN</th>'
+    + '<th style="padding:8px 12px;text-align:center;font-size:10px;font-weight:700;letter-spacing:.4px"></th>'
     + '</tr></thead><tbody>';
 
   kisiler.forEach(function(kisi, ki) {
@@ -2921,10 +2928,13 @@ function renderKisiAra() {
       + '</td>'
       + '<td style="padding:7px 12px;border-bottom:1px solid var(--border);font-weight:700;color:var(--primary);text-align:center">'+kisiT.length+'</td>'
       + '<td style="padding:7px 12px;border-bottom:1px solid var(--border);color:#0369a1;font-weight:600;text-align:center">'+(toplamGun||'—')+(toplamGun?' g':'')+'</td>'
+      + '<td style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:center" onclick="event.stopPropagation()">'
+      + (kayitlar[0] ? '<button onclick="kisiGoruKisiDuzenle(['+kayitlar.map(function(k){return tumPersonel.indexOf(k);}).join(',')+'])" style="border:1px solid var(--border);background:transparent;border-radius:5px;padding:2px 8px;font-size:10px;cursor:pointer;font-family:Poppins,sans-serif;color:var(--foreground)">✏️</button>' : '')
+      + '</td>'
       + '</tr>';
 
     // Açılır detay satırı
-    html += '<tr id="kd'+ki+'" style="display:none"><td colspan="5" style="padding:0;border-bottom:2px solid var(--primary)">'
+    html += '<tr id="kd'+ki+'" style="display:none"><td colspan="6" style="padding:0;border-bottom:2px solid var(--primary)">'
       + '<div style="padding:10px 14px 12px;background:hsl(38,40%,98%)">';
     if (kisiT.length) {
       html += '<div style="font-size:10px;font-weight:700;color:var(--muted-foreground);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">🗓 Turne Geçmişi</div>'
@@ -2957,6 +2967,14 @@ function kisiDetayToggle(id) {
   row.style.display = row.style.display === 'none' ? 'table-row' : 'none';
 }
 
+// Kişiye Göre sekmesinden kişiyi düzenle — ilk kaydı açar
+function kisiGoruKisiDuzenle(idxList) {
+  var idx = Array.isArray(idxList) ? idxList[0] : idxList;
+  if (idx === undefined || idx < 0) return;
+  // Kadro sekmesinin modal'ını kullan
+  kadroKisiDuzenleAc(idx);
+}
+
 // ============================================================
 // KADRO YÖNETİMİ
 // ============================================================
@@ -2964,7 +2982,7 @@ let kadroEditIdx = null;
 
 function renderKadro() {
   var oyun   = document.getElementById('kadro-oyun-sec').value;
-  var araRaw = (document.getElementById('kadro-search') ? document.getElementById('kadro-search').value : '').trim().toLowerCase();
+  var araRaw = (document.getElementById('kadro-search') ? document.getElementById('kadro-search').value : '').trim();
   var filKat = document.getElementById('kadro-kat-filter') ? document.getElementById('kadro-kat-filter').value : '';
   var el     = document.getElementById('kadro-content');
   var ozet   = document.getElementById('kadro-ozet');
@@ -2978,23 +2996,32 @@ function renderKadro() {
 
   var tumKadro = getPersonelForOyun(oyun);
 
-  // Kategori filtre dropdown'ı doldur
+  // Kategori filtre dropdown'ı doldur - mevcut seçimi koru
   var katSel = document.getElementById('kadro-kat-filter');
   if (katSel) {
-    var mevcutVal = katSel.value;
+    var mevcutVal = filKat; // zaten yukarıda okuduk
     var katList = [...new Set(tumKadro.map(function(p){ return p.kategori; }))].sort();
-    katSel.innerHTML = '<option value="">Tüm Kategoriler</option>';
-    katList.forEach(function(k){
-      var o = document.createElement('option');
-      o.value = k; o.textContent = k;
-      if (k === mevcutVal) o.selected = true;
-      katSel.appendChild(o);
-    });
+    // Sadece seçenekler değiştiyse güncelle
+    var mevcutOpts = Array.from(katSel.options).slice(1).map(o => o.value).join(',');
+    var yeniOpts = katList.join(',');
+    if (mevcutOpts !== yeniOpts) {
+      katSel.innerHTML = '<option value="">Tüm Kategoriler</option>';
+      katList.forEach(function(k){
+        var o = document.createElement('option');
+        o.value = k; o.textContent = k;
+        if (k === mevcutVal) o.selected = true;
+        katSel.appendChild(o);
+      });
+    }
   }
+
+  // Türkçe normalize arama
+  function trNorm(s) { return (s||'').toLowerCase().replace(/İ/g,'i').replace(/I/g,'ı').replace(/Ğ/g,'ğ').replace(/Ü/g,'ü').replace(/Ş/g,'ş').replace(/Ö/g,'ö').replace(/Ç/g,'ç'); }
+  var ara = trNorm(araRaw);
 
   // Filtrele
   var kadro = tumKadro.filter(function(p) {
-    if (araRaw && !p.kisi.toLowerCase().includes(araRaw)) return false;
+    if (ara && !trNorm(p.kisi).includes(ara)) return false;
     if (filKat && p.kategori !== filKat) return false;
     return true;
   });
@@ -3040,7 +3067,7 @@ function renderKadro() {
         sira++;
         var globalIdx = tumPersonel.findIndex(function(tp){ return tp.kisi === p.kisi && tp.oyun === p.oyun; });
         var rowBg = sira%2===0 ? 'var(--muted)' : 'var(--card)';
-        var ara_vurgu = araRaw ? p.kisi.replace(new RegExp('('+araRaw.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi'), '<mark style="background:#fef08a;border-radius:2px">$1</mark>') : p.kisi;
+        var ara_vurgu = ara ? p.kisi.replace(new RegExp('('+araRaw.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi'), '<mark style="background:#fef08a;border-radius:2px">$1</mark>') : p.kisi;
         h += '<tr style="background:'+rowBg+'">';
         h += '<td style="padding:6px 10px;color:var(--muted-foreground);font-size:11px">'+sira+'</td>';
         h += '<td style="padding:6px 10px;font-weight:600">'+ara_vurgu+'</td>';
@@ -3469,7 +3496,11 @@ function renderCalendar() {
     const events = turneler.filter(function(t) {
       const bas = t.baslangicTarih || t.tarih || '';
       const bit = t.bitisTarih || t.tarih || '';
-      return key >= bas && key <= bit;
+      // Normal tarih aralığında mı?
+      if (key >= bas && key <= bit) return true;
+      // programSatirlar'da bu tarih var mı? (yol/dönüş günleri aralık dışında olabilir)
+      if (t.programSatirlar && t.programSatirlar.some(function(s){ return s.tarih === key; })) return true;
+      return false;
     });
 
     let dayClasses = 'cal-day';
@@ -3483,19 +3514,45 @@ function renderCalendar() {
 
     const evHTML = events.map(function(t) {
       const sr = statuRenk(t.statu || 'tamamlandi');
-      const isFirst = (t.baslangicTarih || t.tarih || '') === key;
+      const bas = t.baslangicTarih || t.tarih || '';
+      const isFirst = bas === key;
       const ilStr = durakIllerListesi(t).map(function(x){return x.replace(/\/MERKEZ/gi,'');}).join(' › ');
       const temsil = durakToplamTemsil(t);
       const sure = turneSuresi(t);
+      // programSatirlar'dan bu güne ait satırı bul
+      var progSatir = null;
+      if (t.programSatirlar) progSatir = t.programSatirlar.find(function(s){ return s.tarih === key; });
+      // Etiket: program türüne göre renk ve ikon
+      var label, evBg = sr.headerBg, evFg = sr.headerFg, evBorder = sr.headerBorder;
+      if (progSatir && progSatir.program === 'Yol') {
+        label = '🚌 Yol' + (progSatir.sehir ? ' → ' + progSatir.sehir : '') ;
+        evBg = '#fef3c7'; evFg = '#92400e'; evBorder = '#f59e0b';
+      } else if (progSatir && progSatir.program === 'Dönüş') {
+        label = '↩ Dönüş';
+        evBg = '#fee2e2'; evFg = '#991b1b'; evBorder = '#ef4444';
+      } else if (progSatir && progSatir.program === 'Prova') {
+        label = '🎭 Prova – ' + (progSatir.oyun || t.oyun||'—');
+        evBg = '#dbeafe'; evFg = '#1e3a8a'; evBorder = '#3b82f6';
+      } else if (progSatir && progSatir.program === 'Dinlenme') {
+        label = '💤 Dinlenme';
+        evBg = '#f3e8ff'; evFg = '#6b21a8'; evBorder = '#a855f7';
+      } else if (progSatir && progSatir.program === 'Hazırlık') {
+        label = '🔧 Hazırlık';
+        evBg = '#e0f2fe'; evFg = '#0369a1'; evBorder = '#0891b2';
+      } else if (progSatir && progSatir.program === 'Oyun') {
+        label = '🎭 ' + (progSatir.oyun || t.oyun||'—') + (progSatir.saat ? ' ' + progSatir.saat : '');
+        evBg = '#f0fdf4'; evFg = '#166534'; evBorder = '#16a34a';
+      } else {
+        label = isFirst ? (t.oyun||'—') : '↳ ' + (t.oyun||'—');
+      }
       const encT = encodeURIComponent(JSON.stringify({
         oyun: t.oyun||'—', il: ilStr, tarih: formatTarih(t.baslangicTarih||t.tarih) + (t.bitisTarih&&t.bitisTarih!==t.baslangicTarih?' – '+formatTarih(t.bitisTarih):''),
         statu: sr.label, statuBg: sr.bg, statuFg: sr.fg,
         mekan: t.mekan||'', gidis: t.gidisUlasim||'', otel: t.otelAdi||'',
         sure: sure, temsil: temsil, rowIdx: t._rowIdx
       }));
-      const label = isFirst ? (t.oyun||'—') : '↳ ' + (t.oyun||'—');
       return '<div class="cal-event" '
-        + 'style="background:'+sr.headerBg+';color:'+sr.headerFg+';border-left:2.5px solid '+sr.headerBorder+'" '
+        + 'style="background:'+evBg+';color:'+evFg+';border-left:2.5px solid '+evBorder+'" '
         + 'onmouseenter="calTooltipGoster(event,\''+encT+'\')" '
         + 'onmouseleave="calTooltipGizle()" '
         + 'onmousemove="calTooltipTasi(event)" '
@@ -5274,7 +5331,7 @@ function renderProgramGunler() {
 
       // Ana satır: Tarih | Gün | Program | Şehir | Oyun(geniş) | ×
       var row1 = '<div style="display:grid;grid-template-columns:112px 84px 94px 110px 1fr 28px;gap:5px;padding:6px 10px;align-items:center;border-left:' + borderLeft + ';background:' + rowBg + ';' + borderT + '">'
-        + '<input type="date" value="' + (s.tarih||'') + '" onchange="programSatirlar[' + i + '].tarih=this.value;renderProgramGunler()" style="' + INP + '">'
+        + '<input type="date" value="' + (s.tarih||'') + '" onchange="var _p=programSatirlar[' + i + '];_p.tarih=this.value;var _dd=new Date(this.value);if(!isNaN(_dd.getTime())){var _gns=['Pazar','Pazartesi','Salı','Çarşamba','Perşembe','Cuma','Cumartesi'];_p.gun=_gns[_dd.getDay()];}renderProgramGunler()" style="' + INP + '">'
         + '<select onchange="programSatirlar[' + i + '].gun=this.value" style="' + SEL + '">'
         + GUNLER.map(function(g){ return '<option value="' + g + '"' + (s.gun===g?' selected':'') + '>' + g + '</option>'; }).join('')
         + '</select>'
