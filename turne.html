@@ -4884,7 +4884,7 @@ function _pdfIcerik(t) {
     +   '<div style="font-size:10px;color:#555;margin-top:5px;font-weight:500">' + tarihKisaBaslik + (toplamTemsil>1?' &nbsp;\u00b7&nbsp; '+toplamTemsil+' Temsil':'') + '</div>'
     + '</div>'
     + '<div class="sec"><div class="sec-title">Turne Bilgileri</div><div class="info-grid">'
-    + (oyunAdi?'<div class="info-box"><div class="info-lbl">Oyun Ad\u0131</div><div class="info-val">'+oyunAdi+'</div></div>':'')
+    + '<div class="info-box"><div class="info-lbl">Oyun Ad\u0131</div><div class="info-val">'+(oyunAdi||'\u2014')+'</div></div>'
     + '<div class="info-box"><div class="info-lbl">\u015eehir / Sahne</div><div class="info-val" style="font-size:11px">'+sehirSahne+'</div></div>'
     + '<div class="info-box"><div class="info-lbl">Tarih</div><div class="info-val">'+tarihStr+'</div></div>'
     + '<div class="info-box"><div class="info-lbl">Durum</div><div class="info-val"><span style="padding:2px 9px;border-radius:20px;font-size:10px;background:'+sr.bg+';color:'+sr.fg+'">'+sr.label+'</span></div></div>'
@@ -5202,46 +5202,48 @@ function renderProgramGunler() {
   var mOyun = document.getElementById('m-oyun');
   if (mOyun && mOyun.value && oyunlar.indexOf(mOyun.value) < 0) oyunlar.unshift(mOyun.value);
 
-  var INP = 'border:1px solid var(--border);border-radius:5px;padding:3px 5px;font-size:11px;background:var(--card);font-family:Poppins,sans-serif;width:100%;box-sizing:border-box';
-  var SEL = 'border:1px solid var(--border);border-radius:5px;padding:3px 4px;font-size:11px;background:var(--card);font-family:Poppins,sans-serif;width:100%;box-sizing:border-box';
+  var INP = 'border:1px solid var(--border);border-radius:5px;padding:4px 6px;font-size:11px;background:var(--card);font-family:Poppins,sans-serif;width:100%;box-sizing:border-box';
+  var SEL = 'border:1px solid var(--border);border-radius:5px;padding:4px 5px;font-size:11px;background:var(--card);font-family:Poppins,sans-serif;width:100%;box-sizing:border-box';
 
   wrap.innerHTML = '<div style="border:1px solid var(--border);border-radius:8px;overflow:hidden">'
     + programSatirlar.map(function(s, i) {
       var progRenk = PROG_RENKLER[s.program] || '#6b7280';
       var isOyun = s.program === 'Oyun';
       var rowBg = i%2===0 ? 'var(--card)' : 'hsl(38,28%,97%)';
-      var borderLeft = '3px solid ' + progRenk;
-      // Ana satır: Tarih | Gün | Şehir | Oyun | Program | ×
-      var row1 = '<div style="display:grid;grid-template-columns:110px 90px 1fr 1fr 88px 26px;gap:4px;padding:5px 8px 3px 8px;align-items:center;border-left:' + borderLeft + ';background:' + rowBg + ';' + (i>0?'border-top:1px solid var(--border)':'') + '">'
+      var borderLeft = '4px solid ' + progRenk;
+      var borderT = i>0 ? 'border-top:1px solid var(--border);' : '';
+
+      // Ana satır: Tarih | Gün | Program | Şehir | Oyun(geniş) | ×
+      var row1 = '<div style="display:grid;grid-template-columns:112px 84px 94px 110px 1fr 28px;gap:5px;padding:6px 10px;align-items:center;border-left:' + borderLeft + ';background:' + rowBg + ';' + borderT + '">'
         + '<input type="date" value="' + (s.tarih||'') + '" onchange="programSatirlar[' + i + '].tarih=this.value;renderProgramGunler()" style="' + INP + '">'
         + '<select onchange="programSatirlar[' + i + '].gun=this.value" style="' + SEL + '">'
         + GUNLER.map(function(g){ return '<option value="' + g + '"' + (s.gun===g?' selected':'') + '>' + g + '</option>'; }).join('')
+        + '</select>'
+        + '<select onchange="programSatirlar[' + i + '].program=this.value;renderProgramGunler()" style="border:2px solid ' + progRenk + ';border-radius:5px;padding:4px 5px;font-size:11px;background:' + (isOyun?'#f0fdf4':'var(--card)') + ';font-family:Poppins,sans-serif;font-weight:700;color:' + progRenk + ';width:100%;box-sizing:border-box">'
+        + PROGRAMLAR.map(function(p){ return '<option value="' + p + '"' + (s.program===p?' selected':'') + '>' + p + '</option>'; }).join('')
         + '</select>'
         + '<select onchange="programSatirlar[' + i + '].sehir=this.value" style="' + SEL + '">'
         + sehirSecenekleri.map(function(sh){ return '<option value="' + sh + '"' + ((s.sehir||'')===sh?' selected':'') + '>' + sh + '</option>'; }).join('')
         + (s.sehir && sehirSecenekleri.indexOf(s.sehir) < 0 ? '<option value="' + s.sehir + '" selected>' + s.sehir + '</option>' : '')
         + '</select>'
-        + '<select onchange="programSatirlar[' + i + '].oyun=this.value" style="' + SEL + (isOyun ? ';font-weight:700;border-color:hsl(350,68%,45%);color:hsl(350,68%,35%)' : ';opacity:.45') + '">'
-        + '<option value="">—</option>'
+        + '<select onchange="programSatirlar[' + i + '].oyun=this.value" style="' + SEL + (isOyun ? ';font-weight:700;border-color:hsl(350,68%,45%);color:hsl(350,68%,30%)' : ';color:#aaa') + '">'
+        + '<option value="">' + (isOyun ? '— Oyun seçin —' : '—') + '</option>'
         + oyunlar.map(function(o){ return '<option value="' + o + '"' + ((s.oyun||'')===o?' selected':'') + '>' + o + '</option>'; }).join('')
         + (s.oyun && oyunlar.indexOf(s.oyun) < 0 ? '<option value="' + s.oyun + '" selected>' + s.oyun + '</option>' : '')
         + '</select>'
-        + '<select onchange="programSatirlar[' + i + '].program=this.value;renderProgramGunler()" style="border:2px solid ' + progRenk + ';border-radius:5px;padding:3px 4px;font-size:11px;background:var(--card);font-family:Poppins,sans-serif;font-weight:700;color:' + progRenk + ';width:100%;box-sizing:border-box">'
-        + PROGRAMLAR.map(function(p){ return '<option value="' + p + '"' + (s.program===p?' selected':'') + '>' + p + '</option>'; }).join('')
-        + '</select>'
-        + '<button onclick="programSatirSil(' + i + ')" title="Sil" style="width:24px;height:24px;border-radius:5px;border:1px solid var(--border);background:transparent;cursor:pointer;font-size:14px;color:var(--destructive);display:flex;align-items:center;justify-content:center;flex-shrink:0">×</button>'
+        + '<button onclick="programSatirSil(' + i + ')" title="Sil" style="width:26px;height:26px;border-radius:5px;border:1px solid var(--border);background:transparent;cursor:pointer;font-size:15px;color:var(--destructive);display:flex;align-items:center;justify-content:center;flex-shrink:0">×</button>'
         + '</div>';
-      // 2. satır: saat1 + saat2 (Oyun ise renkli, değilse soluk)
-      var row2 = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:2px 8px 5px 11px;border-left:' + borderLeft + ';background:' + rowBg + ';border-bottom:' + (i < programSatirlar.length-1 ? '1px solid var(--border)':'none') + '">'
-        + '<div style="display:flex;align-items:center;gap:4px">'
-        +   '<span style="font-size:9px;font-weight:700;color:' + (isOyun ? '#16a34a' : '#aaa') + ';white-space:nowrap;min-width:36px">1. Saat</span>'
-        +   '<input type="time" value="' + (s.saat||'') + '" onchange="programSatirlar[' + i + '].saat=this.value" style="' + INP + (isOyun?';border-color:#16a34a':'') + '">'
-        + '</div>'
-        + '<div style="display:flex;align-items:center;gap:4px">'
-        +   '<span style="font-size:9px;font-weight:700;color:' + (isOyun && s.saat2 ? '#7c3aed' : '#aaa') + ';white-space:nowrap;min-width:36px">2. Saat</span>'
-        +   '<input type="time" value="' + (s.saat2||'') + '" onchange="programSatirlar[' + i + '].saat2=this.value" style="' + INP + (isOyun && s.saat2 ? ';border-color:#7c3aed;background:#faf5ff' : '') + '" title="2. Temsil Saati (opsiyonel)">'
-        + '</div>'
-        + '</div>';
+
+      // Saat satırı - SADECE Oyun seçiliyse göster
+      var row2 = isOyun
+        ? '<div style="display:flex;align-items:center;gap:10px;padding:3px 10px 6px 14px;border-left:' + borderLeft + ';background:' + rowBg + ';' + (i < programSatirlar.length-1 ? 'border-bottom:1px solid var(--border)' : '') + '">'
+          + '<span style="font-size:10px;font-weight:700;color:#16a34a;flex-shrink:0">⏰ 1. Temsil</span>'
+          + '<input type="time" value="' + (s.saat||'') + '" onchange="programSatirlar[' + i + '].saat=this.value" style="width:110px;border:1.5px solid #16a34a;border-radius:5px;padding:3px 6px;font-size:11px;background:#f0fdf4;font-family:Poppins,sans-serif;box-sizing:border-box">'
+          + '<span style="font-size:10px;font-weight:700;color:#7c3aed;flex-shrink:0;margin-left:10px">⏰ 2. Temsil <span style="font-weight:400;opacity:.6">(opsiyon)</span></span>'
+          + '<input type="time" value="' + (s.saat2||'') + '" onchange="programSatirlar[' + i + '].saat2=this.value" style="width:110px;border:1.5px solid ' + (s.saat2?'#7c3aed':'var(--border)') + ';border-radius:5px;padding:3px 6px;font-size:11px;background:' + (s.saat2?'#faf5ff':'var(--card)') + ';font-family:Poppins,sans-serif;box-sizing:border-box">'
+          + '</div>'
+        : (i < programSatirlar.length-1 ? '<div style="border-left:' + borderLeft + ';border-bottom:1px solid var(--border);background:' + rowBg + '"></div>' : '');
+
       return row1 + row2;
     }).join('')
     + '</div>';
