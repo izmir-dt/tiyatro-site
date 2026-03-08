@@ -1795,21 +1795,24 @@ async function fetchPersonel() {
     const iKat  = h.findIndex(x => x.startsWith('kategori'));
     const iGor  = h.findIndex(x => x.startsWith('görev') || x.startsWith('gorev'));
     const iKisi = h.findIndex(x => x.startsWith('kişi') || x.startsWith('kisi'));
-    tumPersonel = allRows.flatMap(r => {
+    const rowNumbers = data.rowNumbers || [];
+    tumPersonel = allRows.flatMap((r, arrayIdx) => {
       var oyun     = (r[iOyun >= 0 ? iOyun : 0] || '').trim();
       var kategori = (r[iKat  >= 0 ? iKat  : 1] || '').trim();
       var gorev    = (r[iGor  >= 0 ? iGor  : 2] || '').trim();
       var kisiRaw  = (r[iKisi >= 0 ? iKisi : 3] || '').trim();
+      // Gerçek Sheets satır numarası (boş satırlar dahil index'ten hesapla)
+      var sheetRow = rowNumbers[arrayIdx] || (arrayIdx + 2);
       if (!oyun || !kisiRaw) return [];
       // Virgülle ayrılmış çoklu isim varsa her birini ayrı kayıt yap
-      // Ama parantez içindeki "(Figüran)" gibi açıklamaları da işle
-      var isimler = kisiRaw.split(/,(?![^(]*\))/).map(function(s){ return s.trim(); }).filter(Boolean);
-      return isimler.map(function(kisi) {
+      var isimler = kisiRaw.split(/,(?![^(]*)/).map(function(s){ return s.trim(); }).filter(Boolean);
+      return isimler.map(function(kisi, ki) {
         // "Ad Soyad (Görev)" formatındaki parantezleri gorev'e ekle
         var gorevEk = '';
         var m = kisi.match(/^(.*?)\s*\(([^)]+)\)\s*$/);
         if (m) { kisi = m[1].trim(); gorevEk = m[2].trim(); }
-        return { oyun, kategori, gorev: gorevEk || gorev, kisi };
+        // _sheetRow: virgülle ayrılmış birden fazla kişi varsa hepsi aynı satırda
+        return { oyun, kategori, gorev: gorevEk || gorev, kisi, _sheetRow: sheetRow };
       });
     }).filter(r => r.oyun && r.kisi);
   } catch(e) { console.warn('Personel çekilemedi:', e); tumPersonel = [...STATIK_PERSONEL]; }
@@ -3082,12 +3085,16 @@ async function kisiGoruSil(idxList) {
   if (!confirm(p.kisi + ' tüm kayıtları silinecek (' + idxList.length + ' kayıt). Emin misiniz?')) return;
   try {
     // Büyükten küçüğe sırala ki satır kaymaları olmasın
+    // Büyükten küçüğe sırala ki satır kaymaları olmasın
     const sirali = idxList.slice().sort(function(a,b){ return b-a; });
     for (var i = 0; i < sirali.length; i++) {
       var idx = sirali[i];
-      var sheetRow = idx + 2;
+      var sheetRow = tumPersonel[idx]._sheetRow;
+      if (!sheetRow) { console.warn('_sheetRow yok, idx:', idx); tumPersonel.splice(idx, 1); continue; }
       await fetch(API + '/' + encodeURIComponent(PERSONEL_SHEET) + '/row/' + sheetRow, { method: 'DELETE' });
+      // Sildikten sonra kalan satırların _sheetRow'unu güncelle (kaydılar)
       tumPersonel.splice(idx, 1);
+      tumPersonel.forEach(function(p) { if (p._sheetRow > sheetRow) p._sheetRow--; });
     }
   } catch(e) {
     alert('Silme hatası: ' + e.message); return;
@@ -3312,10 +3319,9 @@ async function kadroKisiKaydet() {
 
   try {
     if (kadroEditIdx !== null) {
-      // GÜNCELLE — satır numarasını bul (header=1, veri=2+)
-      // tumPersonel içindeki index + 2 (1-based + header satırı)
-      const sheetRow = kadroEditIdx + 2;
-      // 4 hücreyi güncelle: A=oyun, B=kategori, C=görev, D=kişi
+      // GÜNCELLE — _sheetRow'dan gerçek Sheets satır numarasını al
+      const sheetRow = tumPersonel[kadroEditIdx]._sheetRow;
+      if (!sheetRow) { alert('Satır numarası bulunamadı, lütfen sayfayı yenileyin.'); return; }
       const cols = ['A','B','C','D'];
       const vals = [oyun, kat, gorev, ad];
       await Promise.all(cols.map((col, i) =>
@@ -3337,11 +3343,14 @@ async function kadroKisiKaydet() {
         headers: {'Content-Type':'application/json'},
         body: JSON.stringify({ values: [oyun, kat, gorev, ad] })
       });
-      // Local ekle
+      // Local ekle - _sheetRow: mevcut max + 1 (append sonunda eklendi)
+      var maxRow = tumPersonel.reduce(function(m,p){ return Math.max(m, p._sheetRow||0); }, 0);
+      var yeniSheetRow = maxRow + 1;
       var sonIdx = -1;
       tumPersonel.forEach(function(p, i){ if (p.oyun === oyun) sonIdx = i; });
-      if (sonIdx >= 0) tumPersonel.splice(sonIdx + 1, 0, { oyun, kategori: kat, gorev, kisi: ad });
-      else tumPersonel.push({ oyun, kategori: kat, gorev, kisi: ad });
+      var yeniKayit = { oyun, kategori: kat, gorev, kisi: ad, _sheetRow: yeniSheetRow };
+      if (sonIdx >= 0) tumPersonel.splice(sonIdx + 1, 0, yeniKayit);
+      else tumPersonel.push(yeniKayit);
     }
   } catch(e) {
     alert('Kayıt sırasında hata: ' + e.message);
@@ -3363,8 +3372,9 @@ async function kadroKisiSil() {
   if (btnSil) { btnSil.disabled = true; btnSil.textContent = 'Siliniyor...'; }
 
   try {
-    // Sheets'ten sil: satır numarası = index + 2 (header=1)
-    const sheetRow = kadroEditIdx + 2;
+    // Sheets'ten sil: _sheetRow'dan gerçek satır numarasını al
+    const sheetRow = tumPersonel[kadroEditIdx]._sheetRow;
+    if (!sheetRow) { alert('Satır numarası bulunamadı, lütfen sayfayı yenileyin.'); return; }
     const res = await fetch(API + '/' + encodeURIComponent(PERSONEL_SHEET) + '/row/' + sheetRow, {
       method: 'DELETE'
     });
