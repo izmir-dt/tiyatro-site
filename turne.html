@@ -7578,44 +7578,128 @@ function acBind(inputId, key, extraFilter) {
 }
 
 
-// ===== ESC TUŞU — TÜM MODALLARI KAPATIR =====
+// ===== KLAVYE KISAYOLLARI =====
 document.addEventListener('keydown', function(e) {
-  if (e.key !== 'Escape') return;
-  // Onay modal açıksa kapat
-  if (document.getElementById('onay-modal').style.display === 'flex') { onayKapat(); return; }
-  // Kişi modal
-  var km = document.getElementById('kisi-modal');
-  if (km && km.style.display !== 'none' && km.style.display !== '') { closeKisiModal(); return; }
-  // Kadro kişi modal
-  var kkm = document.getElementById('kadro-kisi-modal');
-  if (kkm && kkm.classList.contains('on')) { kadroKisiModalKapat(); return; }
-  // Dış personel modal
-  var dpm = document.getElementById('dis-personel-modal');
-  if (dpm && dpm.classList.contains('on')) { disPersonelModalKapat(); return; }
-  // Turne formu modal — ESC basınca onay sor
-  var mo = document.getElementById('modal-overlay');
-  if (mo && mo.classList.contains('on')) {
-    onayGoster({
-      baslik: 'Formu kapatılsın mı?',
-      mesaj: 'Kaydedilmemiş değişiklikler kaybolacak.',
-      ikon: '⚠️', ikonBg: 'hsl(42,90%,94%)',
-      tamamRenk: 'hsl(42,60%,38%)', tamamYazi: 'Evet, kapat',
-      onOnay: function() { closeModal(); }
-    });
+  var tag = (e.target.tagName || '').toLowerCase();
+  var editableCtx = (tag === 'input' || tag === 'textarea' || tag === 'select' || e.target.isContentEditable);
+
+  // ── ESC ──────────────────────────────────────────────
+  if (e.key === 'Escape') {
+    // Onay modal açıksa ESC ile kapat (iptal et)
+    if (document.getElementById('onay-modal').style.display === 'flex') { onayKapat(); return; }
+    // Kişi modal
+    var km = document.getElementById('kisi-modal');
+    if (km && km.style.display !== 'none' && km.style.display !== '') { closeKisiModal(); return; }
+    // Kadro kişi modal
+    var kkm = document.getElementById('kadro-kisi-modal');
+    if (kkm && kkm.classList.contains('on')) { kadroKisiModalKapat(); return; }
+    // Dış personel modal
+    var dpm = document.getElementById('dis-personel-modal');
+    if (dpm && dpm.classList.contains('on')) { disPersonelModalKapat(); return; }
+    // Turne formu modal — her zaman onay sor
+    var mo = document.getElementById('modal-overlay');
+    if (mo && mo.classList.contains('on')) {
+      onayGoster({
+        baslik: 'Formu kapatılsın mı?',
+        mesaj: _modalDirty ? 'Kaydedilmemiş değişiklikler kaybolacak.' : 'Formu kapatmak istediğinize emin misiniz?',
+        ikon: '⚠️', ikonBg: 'hsl(42,90%,94%)',
+        tamamRenk: 'hsl(42,60%,38%)', tamamYazi: 'Evet, kapat',
+        onOnay: function() { closeModal(); }
+      });
+      return;
+    }
+    // Takvim popup
+    var cp = document.getElementById('cal-popup');
+    if (cp && cp.style.display !== 'none') { calPopupKapat(); return; }
+    // Sil geri al barı
+    var sb = document.getElementById('turne-sil-geri-bar');
+    if (sb && sb.style.display === 'flex') { _silUndoBarGizle(); return; }
     return;
   }
-  // Turne sil geri al barını kapat
-  var sb = document.getElementById('turne-sil-geri-bar');
-  if (sb && sb.style.display === 'flex') {
-    if (_silUndoTimer !== null) { clearTimeout(_silUndoTimer); _silUndoTimer = null; }
-    _silUndoBarGizle();
+
+  // Aşağıdaki kısayollar input/textarea içindeyken çalışmaz
+  if (editableCtx) return;
+
+  // ── N — Yeni turne ekle ──────────────────────────────
+  if (e.key === 'n' || e.key === 'N') {
+    var mo2 = document.getElementById('modal-overlay');
+    if (mo2 && !mo2.classList.contains('on')) {
+      e.preventDefault();
+      if (typeof openModal === 'function') openModal();
+    }
     return;
   }
-  // Takvim popup
-  var cp = document.getElementById('cal-popup');
-  if (cp && cp.style.display !== 'none') { calPopupKapat(); return; }
-  // Kart detay modal — ESC ile kapanmaz, sadece × butonu ile kapanır
+
+  // ── / — Arama kutusuna odaklan ──────────────────────
+  if (e.key === '/') {
+    var searchInp = document.getElementById('filter-search');
+    if (searchInp) { e.preventDefault(); searchInp.focus(); searchInp.select(); }
+    return;
+  }
+
+  // ── L — Liste görünümüne geç ─────────────────────────
+  if (e.key === 'l' || e.key === 'L') {
+    if (typeof switchTab === 'function') switchTab('liste');
+    return;
+  }
+
+  // ── T — Takvim görünümüne geç ────────────────────────
+  if (e.key === 't' || e.key === 'T') {
+    if (typeof switchTab === 'function') switchTab('takvim');
+    return;
+  }
+
+  // ── O — Oyuna Göre görünümü ──────────────────────────
+  if (e.key === 'o' || e.key === 'O') {
+    if (typeof switchTab === 'function') switchTab('oyun');
+    return;
+  }
+
+  // ── H — Harita görünümü ──────────────────────────────
+  if (e.key === 'h' || e.key === 'H') {
+    if (typeof switchTab === 'function') switchTab('harita');
+    return;
+  }
+
+  // ── ? — Kısayol listesi göster ───────────────────────
+  if (e.key === '?') {
+    _kisayolIpucuGoster();
+    return;
+  }
 });
+
+// Kısayol ipucu popup
+function _kisayolIpucuGoster() {
+  var existing = document.getElementById('_kisayol-popup');
+  if (existing) { document.body.removeChild(existing); return; }
+  var div = document.createElement('div');
+  div.id = '_kisayol-popup';
+  div.style.cssText = 'position:fixed;bottom:60px;right:20px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px 20px;z-index:9999;box-shadow:0 8px 32px rgba(0,0,0,.18);min-width:220px;font-family:Poppins,sans-serif;font-size:12px;color:var(--foreground)';
+  div.innerHTML = '<div style="font-weight:700;margin-bottom:10px;font-size:13px">⌨️ Klavye Kısayolları</div>'
+    + _kisayolSatir('N', 'Yeni turne ekle')
+    + _kisayolSatir('/', 'Aramaya odaklan')
+    + _kisayolSatir('L', 'Liste görünümü')
+    + _kisayolSatir('T', 'Takvim görünümü')
+    + _kisayolSatir('O', 'Oyuna göre görünümü')
+    + _kisayolSatir('H', 'Harita görünümü')
+    + _kisayolSatir('ESC', 'Formu kapat (onay sor)')
+    + _kisayolSatir('?', 'Bu listeyi göster/gizle')
+    + '<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--border);font-size:10px;color:var(--muted-foreground)">Herhangi bir yere tıkla veya ? ile kapat</div>';
+  document.body.appendChild(div);
+  setTimeout(function() {
+    document.addEventListener('click', function _kClose() {
+      var p = document.getElementById('_kisayol-popup');
+      if (p) document.body.removeChild(p);
+      document.removeEventListener('click', _kClose);
+    });
+  }, 100);
+}
+function _kisayolSatir(key, aciklama) {
+  return '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:16px">'
+    + '<kbd style="background:var(--muted);border:1px solid var(--border);border-radius:4px;padding:2px 7px;font-size:11px;font-weight:700;font-family:monospace">' + key + '</kbd>'
+    + '<span style="color:var(--muted-foreground)">' + aciklama + '</span>'
+    + '</div>';
+}
 
 // ===== ÖZEL ONAY SİSTEMİ =====
 var _onayCallback = null;
