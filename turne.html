@@ -453,7 +453,7 @@
   <!-- OYUNA GÖRE -->
   <div class="tab-panel" id="tab-oyun">
     <div class="filters-bar">
-      <select class="filter-select" id="oyun-sec" onchange="renderOyunDetay()" style="width:280px">
+      <select class="filter-select" id="oyun-sec" onchange="localStorage.setItem('_sonSecOyun',this.value);renderOyunDetay()" style="width:280px">
         <option value="">-- Oyun Seçin --</option>
       </select>
       <span id="oyun-istatistik" style="font-size:11px;color:var(--muted-foreground)"></span>
@@ -477,7 +477,7 @@
   <!-- KADRO YÖNETİMİ -->
   <div class="tab-panel" id="tab-kadro">
     <div class="filters-bar" style="flex-wrap:wrap;gap:6px">
-      <select class="filter-select" id="kadro-oyun-sec" onchange="renderKadro()" style="width:220px">
+      <select class="filter-select" id="kadro-oyun-sec" onchange="localStorage.setItem('_sonSecKadroOyun',this.value);renderKadro()" style="width:220px">
         <option value="">-- Oyun Seçin --</option>
       </select>
       <input class="filter-input" type="text" id="kadro-search" placeholder="🔍 Kişi ara..." oninput="renderKadro()" style="width:180px">
@@ -1984,12 +1984,30 @@ function switchTab(tab) {
   document.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', allTabs[i] === tab));
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.getElementById('tab-' + tab).classList.add('active');
-  if (tab === 'kadro')      renderKadro();
+  if (tab === 'oyun') {
+    // Son seçilen oyunu hatırla
+    var sonOyun = localStorage.getItem('_sonSecOyun') || '';
+    var oyunSec = document.getElementById('oyun-sec');
+    if (sonOyun && oyunSec) {
+      oyunSec.value = sonOyun;
+      if (!oyunSec.value) oyunSec.selectedIndex = 0;
+    }
+    renderOyunDetay();
+  }
+  if (tab === 'kadro') {
+    // Son seçilen oyunu hatırla
+    var sonKadroOyun = localStorage.getItem('_sonSecKadroOyun') || '';
+    var kadroSec = document.getElementById('kadro-oyun-sec');
+    if (sonKadroOyun && kadroSec) {
+      kadroSec.value = sonKadroOyun;
+      if (!kadroSec.value) kadroSec.selectedIndex = 0;
+    }
+    renderKadro();
+  }
   if (tab === 'kisi')       renderKisiAra();
   if (tab === 'harita')     renderHarita();
   if (tab === 'takvim')     renderCalendar();
   if (tab === 'istatistik') renderIstatistik();
-  // İstatistik geri dön çubuğu — sadece istatistikten başka sekmeye geçince göster, geri dönünce sıfırla
   var geriBar = document.getElementById('istatistik-geri-bar');
   if (tab === 'istatistik') {
     window._istatistikGoruldu = true;
@@ -2664,10 +2682,62 @@ function renderOyunDetay() {
   var oyun = document.getElementById('oyun-sec').value;
   var el   = document.getElementById('oyun-content');
   var stat = document.getElementById('oyun-istatistik');
+
+  // Oyun seçilmemişse → tüm oyunları zengin kart grid olarak göster
   if (!oyun) {
-    el.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:220px;color:var(--muted-foreground)"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" style="opacity:.25;margin-bottom:12px"><polygon points="19,20 9,12 19,4 19,20"/><line x1="5" y1="4" x2="5" y2="20"/></svg><div style="font-size:14px;font-weight:600">Bir oyun se\u00e7in</div></div>';
-    stat.textContent = ''; return;
+    stat.textContent = '';
+    var oyunSet = new Set(tumPersonel.map(function(p){ return p.oyun; }).filter(Boolean));
+    turneler.forEach(function(t){ if(t.oyun) oyunSet.add(t.oyun); });
+    // Turne sayısına göre sırala (en çok turneye giden en başta)
+    var tumOyunlar = [...oyunSet].sort(function(a,b){
+      var aT = turneler.filter(function(t){ return t.oyun===a||(t.duraklar&&t.duraklar.some(function(d){return d.oyun===a;})); }).length;
+      var bT = turneler.filter(function(t){ return t.oyun===b||(t.duraklar&&t.duraklar.some(function(d){return d.oyun===b;})); }).length;
+      return bT - aT;
+    });
+    if (!tumOyunlar.length) {
+      el.innerHTML = '<div class="empty-state"><div class="empty-icon">🎭</div><div class="empty-text">Henüz oyun verisi yok</div></div>';
+      return;
+    }
+    var rozetler = ['🥇','🥈','🥉'];
+    var html = '<div style="padding:14px 16px">'
+      + '<div style="font-size:11px;font-weight:800;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px">'
+      + tumOyunlar.length + ' oyun — turne sayısına göre sıralı</div>'
+      + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:10px">'
+      + tumOyunlar.map(function(o, oi) {
+          var oT = turneler.filter(function(t){ return t.oyun===o||(t.duraklar&&t.duraklar.some(function(d){return d.oyun===o;})); });
+          var oP = getPersonelForOyun(o);
+          var toplamGun = oT.reduce(function(s,t){ return s+turneSuresi(t); },0);
+          var toplamTemsil = oT.reduce(function(s,t){ return s+durakToplamTemsil(t); },0);
+          var iller = [...new Set(oT.flatMap(function(t){ return durakIllerListesi(t); }))].map(function(il){ return il.replace(/\/MERKEZ/gi,''); });
+          var rozet = rozetler[oi] || '';
+          var oSafe = o.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+          return '<div onclick="var s=document.getElementById(\'oyun-sec\');s.value=\'' + oSafe + '\';localStorage.setItem(\'_sonSecOyun\',\'' + oSafe + '\');renderOyunDetay()" '
+            + 'style="background:var(--card);border:1.5px solid var(--border);border-radius:12px;padding:14px 16px;cursor:pointer;transition:all .15s" '
+            + 'onmouseenter="this.style.borderColor=\'var(--primary)\';this.style.boxShadow=\'0 4px 18px rgba(0,0,0,.09)\'" '
+            + 'onmouseleave="this.style.borderColor=\'var(--border)\';this.style.boxShadow=\'\'">'
+            + '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:10px">'
+            +   '<div style="font-size:13px;font-weight:800;color:var(--foreground);line-height:1.3">'+(rozet?rozet+' ':'')+o+'</div>'
+            +   '<div style="flex-shrink:0;text-align:right">'
+            +     '<div style="font-size:20px;font-weight:900;color:var(--primary);line-height:1">'+oT.length+'</div>'
+            +     '<div style="font-size:9px;color:var(--muted-foreground);font-weight:600">TURNE</div>'
+            +   '</div>'
+            + '</div>'
+            + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;margin-bottom:10px">'
+            +   _miniStat2('Gün', toplamGun, '#0369a1')
+            +   _miniStat2('Temsil', toplamTemsil, '#7c3aed')
+            +   _miniStat2('Kadro', oP.length, '#059669')
+            + '</div>'
+            + (iller.length ? '<div style="font-size:10px;color:var(--muted-foreground);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">📍 '
+              + iller.slice(0,6).join(', ')+(iller.length>6?' +'+(iller.length-6)+' il':'')+'</div>' : '')
+            + '</div>';
+        }).join('')
+      + '</div></div>';
+    el.innerHTML = html;
+    return;
   }
+
+  // Oyun seçiliyse → detay sayfası
+  localStorage.setItem('_sonSecOyun', oyun);
 
   var oyunT = turneler.filter(function(t) {
     if (t.oyun === oyun) return true;
@@ -2676,45 +2746,56 @@ function renderOyunDetay() {
   }).sort(function(a,b){ return new Date(b.baslangicTarih||b.tarih||0) - new Date(a.baslangicTarih||a.tarih||0); });
 
   var personel = getPersonelForOyun(oyun);
-  var toplamGun = oyunT.reduce(function(s,t){ return s + turneSuresi(t); }, 0);
-  var toplamTemsil = oyunT.reduce(function(s,t){ return s + durakToplamTemsil(t); }, 0);
-  var iller = [...new Set(oyunT.flatMap(function(t){ return durakIllerListesi(t); }))];
-  stat.textContent = oyunT.length + ' turne \u00b7 ' + toplamGun + ' g\u00fcn \u00b7 ' + iller.length + ' il';
+  var toplamGun = oyunT.reduce(function(s,t){ return s+turneSuresi(t); },0);
+  var toplamTemsil = oyunT.reduce(function(s,t){ return s+durakToplamTemsil(t); },0);
+  var iller = [...new Set(oyunT.flatMap(function(t){ return durakIllerListesi(t); }))].map(function(il){ return il.replace(/\/MERKEZ/gi,''); });
+  stat.textContent = oyunT.length+' turne · '+toplamGun+' gün · '+iller.length+' il';
 
-  // KPI kartlar\u0131
-  var kpiHTML = '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px">'
-    + _kpiKart('TURNE', oyunT.length, 'var(--primary)', '\ud83d\uddd3')
-    + _kpiKart('TOPLAM G\u00dcN', toplamGun, '#0369a1', '\u2601\ufe0f')
-    + _kpiKart('TEMS\u0130L', toplamTemsil, '#7c3aed', '\ud83c\udfad')
-    + _kpiKart('KADRO', personel.length, '#059669', '\ud83d\udc65')
+  // KPI bar
+  var kpiHTML = '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:18px">'
+    + _kpiKart('TURNE', oyunT.length, 'var(--primary)', '🗓')
+    + _kpiKart('TOPLAM GÜN', toplamGun, '#0369a1', '📅')
+    + _kpiKart('TEMSİL', toplamTemsil, '#7c3aed', '🎭')
+    + _kpiKart('KADRO', personel.length, '#059669', '👥')
+    + _kpiKart('ŞEHİR', iller.length, '#b45309', '📍')
     + '</div>';
 
-  // Turne kart listesi
-  var turneHTML = '<div style="margin-bottom:16px">'
-    + '<div style="font-size:11px;font-weight:800;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px">Turne Seferleri</div>';
+  // Geri butonu + başlık
+  var baslikHTML = '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">'
+    + '<button onclick="var s=document.getElementById(\'oyun-sec\');s.value=\'\';localStorage.setItem(\'_sonSecOyun\',\'\');renderOyunDetay()" '
+    + 'style="height:28px;padding:0 12px;border:1px solid var(--border);border-radius:7px;background:transparent;cursor:pointer;font-size:11px;font-weight:600;color:var(--muted-foreground);font-family:Poppins,sans-serif">← Tüm Oyunlar</button>'
+    + '<div style="font-size:15px;font-weight:900;color:var(--foreground)">'+oyun+'</div>'
+    + '</div>';
+
+  // Turne seferleri
+  var turneHTML = '<div style="margin-bottom:20px">'
+    + '<div style="font-size:11px;font-weight:800;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px">Turne Seferleri</div>';
 
   if (!oyunT.length) {
-    turneHTML += '<div style="padding:20px;text-align:center;background:var(--muted);border-radius:10px;font-size:12px;color:var(--muted-foreground)">Bu oyun i\u00e7in hen\u00fcz turne kayd\u0131 yok</div>';
+    turneHTML += '<div style="padding:20px;text-align:center;background:var(--muted);border-radius:10px;font-size:12px;color:var(--muted-foreground)">Bu oyun için henüz turne kaydı yok</div>';
   } else {
     turneHTML += '<div style="display:flex;flex-direction:column;gap:8px">'
       + oyunT.map(function(t) {
           var sr = statuRenk(t.statu);
           var sure = turneSuresi(t);
           var ilList = durakIllerListesi(t).map(function(il){ return il.replace(/\/MERKEZ/gi,''); });
-          var tarihStr = formatTarih(t.baslangicTarih||t.tarih) + (t.bitisTarih&&t.bitisTarih!==(t.baslangicTarih||t.tarih) ? ' \u2013 '+formatTarih(t.bitisTarih) : '');
-          return '<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 14px;display:flex;align-items:center;gap:10px">'
-            + '<div style="flex:1;min-width:0">'
-            +   '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">'
-            +     '<span style="font-size:12px;font-weight:800;color:var(--foreground)">' + ilList.join(' \u203a ') + '</span>'
-            +     '<span style="font-size:10px;padding:2px 8px;border-radius:20px;font-weight:700;background:'+sr.bg+';color:'+sr.fg+'">'+sr.label+'</span>'
-            +   '</div>'
-            +   '<div style="font-size:11px;color:var(--muted-foreground)">'
-            +     tarihStr + ' &nbsp;\u00b7&nbsp; ' + sure + ' g\u00fcn &nbsp;\u00b7&nbsp; ' + durakToplamTemsil(t) + ' temsil'
-            +   '</div>'
+          var tarihStr = formatTarih(t.baslangicTarih||t.tarih) + (t.bitisTarih&&t.bitisTarih!==(t.baslangicTarih||t.tarih)?' – '+formatTarih(t.bitisTarih):'');
+          var temsil = durakToplamTemsil(t);
+          return '<div style="background:var(--card);border:1px solid var(--border);border-left:4px solid '+sr.fg+';border-radius:10px;padding:12px 14px">'
+            + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap">'
+            +   '<span style="font-size:13px;font-weight:800;color:var(--foreground)">'+ilList.join(' › ')+'</span>'
+            +   '<span style="font-size:10px;padding:2px 9px;border-radius:20px;font-weight:700;background:'+sr.bg+';color:'+sr.fg+'">'+sr.label+'</span>'
             + '</div>'
-            + '<div style="display:flex;gap:5px;flex-shrink:0">'
-            +   '<button onclick="editTurne('+t._rowIdx+')" style="height:28px;padding:0 10px;border-radius:6px;border:1px solid var(--border);background:var(--card);cursor:pointer;font-size:11px;font-weight:600;color:var(--foreground)">D\u00fczenle</button>'
-            +   '<button onclick="gorevlendirmePdf('+t._rowIdx+')" style="height:28px;padding:0 10px;border-radius:6px;border:1px solid var(--border);background:var(--card);cursor:pointer;font-size:11px;font-weight:600;color:var(--foreground)">\ud83d\udcc4 PDF</button>'
+            + '<div style="display:flex;gap:14px;margin-bottom:8px;flex-wrap:wrap">'
+            +   '<span style="font-size:11px;color:var(--muted-foreground)">📅 '+tarihStr+'</span>'
+            +   '<span style="font-size:11px;color:var(--muted-foreground)">⏱ '+sure+' gün</span>'
+            +   '<span style="font-size:11px;color:var(--muted-foreground)">🎭 '+temsil+' temsil</span>'
+            +   (t.mekan?'<span style="font-size:11px;color:var(--muted-foreground)">🏛 '+t.mekan+'</span>':'')
+            +   (t.otelAdi?'<span style="font-size:11px;color:var(--muted-foreground)">🏨 '+t.otelAdi+'</span>':'')
+            + '</div>'
+            + '<div style="display:flex;gap:6px">'
+            +   '<button onclick="editTurne('+t._rowIdx+')" style="height:26px;padding:0 10px;border-radius:6px;border:1px solid var(--border);background:var(--muted);cursor:pointer;font-size:11px;font-weight:600;color:var(--foreground);font-family:Poppins,sans-serif">✏️ Düzenle</button>'
+            +   '<button onclick="gorevlendirmePdf('+t._rowIdx+')" style="height:26px;padding:0 10px;border-radius:6px;border:1px solid var(--border);background:var(--muted);cursor:pointer;font-size:11px;font-weight:600;color:var(--foreground);font-family:Poppins,sans-serif">📄 PDF</button>'
             + '</div>'
             + '</div>';
         }).join('')
@@ -2722,49 +2803,45 @@ function renderOyunDetay() {
   }
   turneHTML += '</div>';
 
-  // Kadro - kategori gruplar\u0131
+  // Kadro — kategori bazlı grid
   var gruplar = {};
   personel.forEach(function(p) {
-    var kat = p.kategori || 'Di\u011fer';
+    var kat = p.kategori || 'Diğer';
     if (!gruplar[kat]) gruplar[kat] = [];
     gruplar[kat].push(p);
   });
-
-  var GRUP_SIRASI = ['Sanat\u00e7\u0131','Oyuncu','Fig\u00fcran','M\u00fczisyen','Koro','Dans\u00e7\u0131','Tasarım','I\u015f\u0131k \u2013 Tasarım','Sahne Amiri','Kondüvit','Ses \u2013 Kondüvit','Mutemet','Sahne Makinisti','Aksesuar Memuru','Sahne Terzisi','Perukac\u0131'];
+  var GRUP_SIRASI = ['Sanatçı','Oyuncu','Figüran','Müzisyen','Koro','Dansçı','Tasarım','Işık – Tasarım','Sahne Amiri','Kondüvit','Ses – Kondüvit','Mutemet','Sahne Makinisti','Aksesuar Memuru','Sahne Terzisi','Perukacı'];
   var siralanmisGruplar = Object.keys(gruplar).sort(function(a,b){
-    var ai = GRUP_SIRASI.indexOf(a), bi = GRUP_SIRASI.indexOf(b);
-    if (ai < 0) ai = 999; if (bi < 0) bi = 999;
-    return ai - bi;
+    var ai=GRUP_SIRASI.indexOf(a),bi=GRUP_SIRASI.indexOf(b);
+    if(ai<0)ai=999;if(bi<0)bi=999;return ai-bi;
   });
 
-  var kadroHTML = '<div style="margin-bottom:8px">'
-    + '<div style="font-size:11px;font-weight:800;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px">Turne Kadrosu <span style="font-weight:400">(' + personel.length + ' ki\u015fi)</span></div>';
+  var kadroHTML = '<div>'
+    + '<div style="font-size:11px;font-weight:800;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px">Turne Kadrosu <span style="font-weight:400;text-transform:none">('+personel.length+' kişi)</span></div>';
 
   if (!personel.length) {
-    kadroHTML += '<div style="padding:20px;text-align:center;background:var(--muted);border-radius:10px;font-size:12px;color:var(--muted-foreground)">Personel verisi y\u00fcklenemedi</div>';
+    kadroHTML += '<div style="padding:20px;text-align:center;background:var(--muted);border-radius:10px;font-size:12px;color:var(--muted-foreground)">Kadro verisi bulunamadı</div>';
   } else {
-    kadroHTML += '<div style="display:flex;flex-direction:column;gap:6px">'
+    var katRengi = function(kat) {
+      if (['Sanatçı','Oyuncu','Solist'].some(function(k){ return kat.includes(k); })) return {bg:'#fff1f2',fg:'#9f1239',border:'#fecdd3'};
+      if (kat.includes('Figüran')) return {bg:'#fffbeb',fg:'#92400e',border:'#fde68a'};
+      if (kat.includes('Müzisyen')||kat.includes('Koro')||kat.includes('Dansçı')) return {bg:'#eff6ff',fg:'#1e40af',border:'#bfdbfe'};
+      return {bg:'#f0fdf4',fg:'#166534',border:'#bbf7d0'};
+    };
+    kadroHTML += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px">'
       + siralanmisGruplar.map(function(kat) {
           var kisiler = gruplar[kat];
-          // Kategori rengi
-          var katRenk = kat === 'Sanat\u00e7\u0131' || kat === 'Oyuncu' ? '#7c1d1d' :
-                        kat.includes('Figüran') ? '#92400e' :
-                        kat.includes('Müzisyen')||kat.includes('Koro')||kat.includes('Dansçı') ? '#1e40af' :
-                        kat.includes('Tasarım')||kat.includes('Işık') ? '#0f766e' : '#374151';
-          var katBg = kat === 'Sanat\u00e7\u0131' || kat === 'Oyuncu' ? '#fff1f2' :
-                      kat.includes('Figüran') ? '#fffbeb' :
-                      kat.includes('Müzisyen')||kat.includes('Koro')||kat.includes('Dansçı') ? '#eff6ff' :
-                      kat.includes('Tasarım')||kat.includes('Işık') ? '#f0fdfa' : '#f9fafb';
-          return '<div style="background:var(--card);border:1px solid var(--border);border-radius:8px;overflow:hidden">'
-            + '<div style="padding:7px 12px;background:'+katBg+';border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">'
-            +   '<span style="font-size:11px;font-weight:800;color:'+katRenk+'">' + kat + '</span>'
-            +   '<span style="font-size:10px;font-weight:600;color:'+katRenk+';opacity:.7">'+kisiler.length+' kişi</span>'
+          var kr = katRengi(kat);
+          return '<div style="background:var(--card);border:1px solid '+kr.border+';border-radius:10px;overflow:hidden">'
+            + '<div style="padding:8px 12px;background:'+kr.bg+';display:flex;align-items:center;justify-content:space-between">'
+            +   '<span style="font-size:11px;font-weight:800;color:'+kr.fg+'">'+kat+'</span>'
+            +   '<span style="font-size:11px;font-weight:700;color:'+kr.fg+';background:'+kr.border+';padding:1px 8px;border-radius:20px">'+kisiler.length+'</span>'
             + '</div>'
-            + '<div style="padding:8px 12px;display:flex;flex-wrap:wrap;gap:5px">'
-            + kisiler.map(function(k) {
-                return '<div style="display:inline-flex;align-items:center;gap:4px;padding:3px 9px;background:var(--muted);border-radius:20px;border:1px solid var(--border)">'
-                  + '<span style="font-size:11px;font-weight:600;color:var(--foreground)">' + k.kisi + '</span>'
-                  + (k.gorev && k.gorev !== kat ? '<span style="font-size:10px;color:var(--muted-foreground)"> \u00b7 ' + k.gorev + '</span>' : '')
+            + '<div style="padding:6px 12px">'
+            + kisiler.map(function(k){
+                return '<div style="padding:4px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:4px">'
+                  + '<span style="font-size:11px;font-weight:600;color:var(--foreground)">'+k.kisi+'</span>'
+                  + (k.gorev&&k.gorev!==kat?'<span style="font-size:10px;color:var(--muted-foreground);text-align:right;flex-shrink:0">'+k.gorev+'</span>':'')
                   + '</div>';
               }).join('')
             + '</div></div>';
@@ -2773,15 +2850,32 @@ function renderOyunDetay() {
   }
   kadroHTML += '</div>';
 
-  el.innerHTML = '<div style="max-width:820px;margin:0 auto;padding:4px 0">'
-    + kpiHTML + turneHTML + kadroHTML
+  el.innerHTML = '<div style="max-width:920px;margin:0 auto;padding:14px 16px">'
+    + baslikHTML + kpiHTML + turneHTML + kadroHTML
+    + '</div>';
+}
+
+function _miniStat2(label, val, renk) {
+  return '<div style="background:var(--muted);border-radius:7px;padding:5px 6px;text-align:center">'
+    + '<div style="font-size:15px;font-weight:900;color:'+renk+';line-height:1">'+val+'</div>'
+    + '<div style="font-size:9px;color:var(--muted-foreground);font-weight:600;margin-top:1px">'+label+'</div>'
     + '</div>';
 }
 
 function _kpiKart(baslik, deger, renk, ikon) {
-  return '<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px 16px">'
-    + '<div style="font-size:9px;font-weight:800;color:'+renk+';text-transform:uppercase;letter-spacing:.7px;margin-bottom:4px">' + baslik + '</div>'
-    + '<div style="font-size:26px;font-weight:900;color:'+renk+';line-height:1">' + deger + '</div>'
+  return '<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 14px;text-align:center">'
+    + '<div style="font-size:18px;margin-bottom:2px">'+ikon+'</div>'
+    + '<div style="font-size:22px;font-weight:900;color:'+renk+';line-height:1">'+deger+'</div>'
+    + '<div style="font-size:9px;font-weight:700;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.5px;margin-top:3px">'+baslik+'</div>'
+    + '</div>';
+}
+function _kpiKart2(baslik, deger, fg, bg, ikon) {
+  return '<div style="background:'+bg+';border:1px solid var(--border);border-radius:12px;padding:16px 18px;display:flex;flex-direction:column;gap:6px">'
+    + '<div style="display:flex;align-items:center;justify-content:space-between">'
+    +   '<span style="font-size:18px">'+ikon+'</span>'
+    +   '<span style="font-size:9px;font-weight:800;color:'+fg+';text-transform:uppercase;letter-spacing:.8px">'+baslik+'</span>'
+    + '</div>'
+    + '<div style="font-size:28px;font-weight:900;color:'+fg+';line-height:1">' + deger + '</div>'
     + '</div>';
 }
 
@@ -2982,6 +3076,7 @@ let kadroEditIdx = null;
 
 function renderKadro() {
   var oyun   = document.getElementById('kadro-oyun-sec').value;
+  localStorage.setItem('_sonSecKadroOyun', oyun);
   var araRaw = (document.getElementById('kadro-search') ? document.getElementById('kadro-search').value : '').trim();
   var filKat = document.getElementById('kadro-kat-filter') ? document.getElementById('kadro-kat-filter').value : '';
   var el     = document.getElementById('kadro-content');
@@ -2990,19 +3085,18 @@ function renderKadro() {
   document.getElementById('kadro-excel-btn').style.display = oyun ? '' : 'none';
 
   if (!oyun) {
-    el.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-text">Oyun seçin</div><div class="empty-sub">Kadroyu görmek ve düzenlemek için oyun seçiniz</div></div>';
+    el.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:260px;color:var(--muted-foreground)"><svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" style="opacity:.2;margin-bottom:14px"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><div style="font-size:14px;font-weight:700">Oyun Seçin</div><div style="font-size:12px;margin-top:4px;opacity:.6">Kadro listesi ve düzenleme araçları görüntülenir</div></div>';
     ozet.textContent = ''; return;
   }
 
   var tumKadro = getPersonelForOyun(oyun);
 
-  // Kategori filtre dropdown'ı doldur - mevcut seçimi koru
+  // Kategori filtre dropdown
   var katSel = document.getElementById('kadro-kat-filter');
   if (katSel) {
-    var mevcutVal = filKat; // zaten yukarıda okuduk
+    var mevcutVal = filKat;
     var katList = [...new Set(tumKadro.map(function(p){ return p.kategori; }))].sort();
-    // Sadece seçenekler değiştiyse güncelle
-    var mevcutOpts = Array.from(katSel.options).slice(1).map(o => o.value).join(',');
+    var mevcutOpts = Array.from(katSel.options).slice(1).map(function(o){ return o.value; }).join(',');
     var yeniOpts = katList.join(',');
     if (mevcutOpts !== yeniOpts) {
       katSel.innerHTML = '<option value="">Tüm Kategoriler</option>';
@@ -3015,81 +3109,120 @@ function renderKadro() {
     }
   }
 
-  // Türkçe normalize arama
   function trNorm(s) { return (s||'').toLowerCase().replace(/İ/g,'i').replace(/I/g,'ı').replace(/Ğ/g,'ğ').replace(/Ü/g,'ü').replace(/Ş/g,'ş').replace(/Ö/g,'ö').replace(/Ç/g,'ç'); }
   var ara = trNorm(araRaw);
 
-  // Filtrele
   var kadro = tumKadro.filter(function(p) {
     if (ara && !trNorm(p.kisi).includes(ara)) return false;
     if (filKat && p.kategori !== filKat) return false;
     return true;
   });
 
-  var tumKategoriler = [...new Set(kadro.map(function(p){ return p.kategori; }))].sort();
   ozet.textContent = kadro.length + ' / ' + tumKadro.length + ' kişi';
 
   if (!kadro.length) {
-    el.innerHTML = '<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-text">' + (araRaw || filKat ? 'Sonuç bulunamadı' : 'Bu oyuna ait kadro yok') + '</div></div>';
+    el.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:200px;color:var(--muted-foreground)"><div style="font-size:32px;margin-bottom:10px">🔍</div><div style="font-size:13px;font-weight:600">' + (araRaw || filKat ? 'Sonuç bulunamadı' : 'Bu oyuna ait kadro yok') + '</div></div>';
     return;
   }
 
+  // --- KPI ---
   var SANATCI_KATS = ['Sanatçı','Oyuncu','Koro','Koro/Dans','Koro/Dans Ekibi','Solist','Dansçı','Figüran','Figüran/Müzisyen','Müzisyen','Orkestra','Kurumdan Emekli Sanatçı'];
-  var TEKNIK_KATS  = ['Sahne Amiri','Kondüvit','Ses – Kondüvit','Ses','Mutemet','Sahne Işıkçısı','Işık Kontrol','Işık – Tasarım','Sahne Makinisti','Aksesuar Memuru','Aksesuar Sorumlusu','Dekor/Aksesuar','Sahne Dekor (Sorumlu)','Sahne Terzisi','Sahne Terzisi/Kostüm','Kostüm','Perukacı','Peruk – Makyaj','Peruk Sorumlusu','Sahne Uzmanı','Dekorcu','Dekor Sorumlusu','Kostümcü','Kostüm Sorumlusu','Makyajcı','Ses Teknisyeni','Işık Teknisyeni','Sahne Görevlisi','Teknik Direktör','Sahne Yöneticisi','Reji Yardımcısı (Sahne)','Turne Başkanı','Video / Görüntü'];
+  var sanatciCount = kadro.filter(function(p){ return SANATCI_KATS.some(function(k){ return p.kategori===k; }); }).length;
+  var teknikCount = kadro.length - sanatciCount;
+  var katCount = new Set(kadro.map(function(p){ return p.kategori; })).size;
 
-  function grupTablo(filtreKats, baslik, renk, ikon) {
+  var kpiHTML = '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px">'
+    + _kpiKart2('TOPLAM', kadro.length, '#374151', '#f9fafb', '👤')
+    + _kpiKart2('SANATÇI', sanatciCount, '#7c1d1d', '#fff1f2', '🎭')
+    + _kpiKart2('TEKNİK', teknikCount, '#1e3a8a', '#eff6ff', '⚙️')
+    + _kpiKart2('KATEGORİ', katCount, '#7c3aed', '#f5f3ff', '📋')
+    + '</div>';
+
+  // --- Kategori pasta bar ---
+  var katSayac = {};
+  kadro.forEach(function(p){ katSayac[p.kategori] = (katSayac[p.kategori]||0)+1; });
+  var katSirali = Object.entries(katSayac).sort(function(a,b){ return b[1]-a[1]; });
+  var RENKLER = ['#7c1d1d','#1e3a8a','#7c3aed','#0f766e','#0369a1','#92400e','#166534','#6b21a8','#9f1239','#0c4a6e'];
+
+  var barHTML = '<div style="margin-bottom:20px;background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden">'
+    + '<div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px">'
+    + '<span style="font-size:13px">📊</span>'
+    + '<span style="font-size:12px;font-weight:800;color:var(--foreground)">Kategori Dağılımı</span>'
+    + '</div>'
+    + '<div style="padding:14px 16px;display:flex;flex-direction:column;gap:7px">'
+    + katSirali.map(function(entry, i) {
+        var pct = Math.round((entry[1] / kadro.length) * 100);
+        var renk = RENKLER[i % RENKLER.length];
+        var isAra = ara && entry[0].toLowerCase().includes(ara);
+        return '<div style="display:flex;align-items:center;gap:10px">'
+          + '<div style="width:110px;font-size:11px;font-weight:600;color:var(--foreground);white-space:nowrap;overflow:hidden;text-overflow:ellipsis'+(isAra?';background:#fef08a;border-radius:3px;padding:0 2px':'')+'">' + entry[0] + '</div>'
+          + '<div style="flex:1;background:var(--muted);border-radius:4px;height:16px;overflow:hidden">'
+          +   '<div style="height:100%;width:'+pct+'%;background:'+renk+';border-radius:4px;display:flex;align-items:center;padding-left:6px">'
+          +   (pct > 15 ? '<span style="font-size:10px;font-weight:700;color:#fff">'+entry[1]+'</span>' : '')
+          +   '</div>'
+          + '</div>'
+          + '<span style="font-size:10px;font-weight:700;color:var(--muted-foreground);width:30px;text-align:right">%'+pct+'</span>'
+          + '</div>';
+      }).join('')
+    + '</div></div>';
+
+  // --- Kişi tablosu gruplu ---
+  var SANATCI_KATS2 = ['Sanatçı','Oyuncu','Koro','Koro/Dans','Koro/Dans Ekibi','Solist','Dansçı','Figüran','Figüran/Müzisyen','Müzisyen','Orkestra','Kurumdan Emekli Sanatçı'];
+  var TEKNIK_KATS2  = ['Sahne Amiri','Kondüvit','Ses – Kondüvit','Ses','Mutemet','Sahne Işıkçısı','Işık Kontrol','Işık – Tasarım','Sahne Makinisti','Aksesuar Memuru','Aksesuar Sorumlusu','Dekor/Aksesuar','Sahne Dekor (Sorumlu)','Sahne Terzisi','Sahne Terzisi/Kostüm','Kostüm','Perukacı','Peruk – Makyaj','Peruk Sorumlusu','Sahne Uzmanı','Dekorcu','Dekor Sorumlusu','Kostümcü','Kostüm Sorumlusu','Makyajcı','Ses Teknisyeni','Işık Teknisyeni','Sahne Görevlisi','Teknik Direktör','Sahne Yöneticisi','Reji Yardımcısı (Sahne)','Turne Başkanı','Video / Görüntü'];
+  var tumKategoriler = [...new Set(kadro.map(function(p){ return p.kategori; }))].sort();
+
+  function grupTablo(filtreKats, baslik, headBg, headFg, ikon) {
     var grup = kadro.filter(function(p){ return filtreKats.some(function(k){ return p.kategori === k; }); });
     if (!grup.length) return '';
     var katGruplari = {};
-    grup.forEach(function(p){
-      if (!katGruplari[p.kategori]) katGruplari[p.kategori] = [];
-      katGruplari[p.kategori].push(p);
-    });
-    var h = '<div style="margin-bottom:12px;border:1px solid var(--border);border-radius:10px;overflow:hidden">';
-    h += '<div style="display:flex;align-items:center;gap:8px;padding:8px 14px;background:'+renk+';border-bottom:1px solid var(--border)">';
-    h += '<span style="font-size:13px">'+ikon+'</span>';
-    h += '<span style="font-size:12px;font-weight:800">'+baslik+'</span>';
-    h += '<span style="font-size:11px;color:var(--muted-foreground);margin-left:2px">'+grup.length+' kişi</span></div>';
-
-    // Compact tablo
+    grup.forEach(function(p){ if (!katGruplari[p.kategori]) katGruplari[p.kategori]=[]; katGruplari[p.kategori].push(p); });
+    var h = '<div style="margin-bottom:12px;border:1px solid var(--border);border-radius:12px;overflow:hidden">';
+    h += '<div style="display:flex;align-items:center;gap:8px;padding:10px 16px;background:'+headBg+';border-bottom:1px solid var(--border)">';
+    h += '<span style="font-size:14px">'+ikon+'</span>';
+    h += '<span style="font-size:12px;font-weight:800;color:'+headFg+'">'+baslik+'</span>';
+    h += '<span style="font-size:11px;color:'+headFg+';opacity:.6;margin-left:2px">'+grup.length+' kişi</span></div>';
     h += '<table style="width:100%;border-collapse:collapse;font-size:12px">';
-    h += '<thead><tr style="background:var(--muted);font-size:10px">';
-    h += '<th style="padding:5px 10px;text-align:left;font-weight:700;width:30px">#</th>';
-    h += '<th style="padding:5px 10px;text-align:left;font-weight:700">AD SOYAD</th>';
-    h += '<th style="padding:5px 10px;text-align:left;font-weight:700">KATEGORİ</th>';
-    h += '<th style="padding:5px 10px;text-align:left;font-weight:700">GÖREV</th>';
-    h += '<th style="padding:5px 10px;text-align:right;font-weight:700;width:80px"></th>';
+    h += '<thead><tr style="background:var(--muted)">';
+    h += '<th style="padding:6px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--muted-foreground);width:32px">#</th>';
+    h += '<th style="padding:6px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--muted-foreground)">AD SOYAD</th>';
+    h += '<th style="padding:6px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--muted-foreground)">KATEGORİ</th>';
+    h += '<th style="padding:6px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--muted-foreground)">GÖREV</th>';
+    h += '<th style="padding:6px 10px;text-align:right;width:70px"></th>';
     h += '</tr></thead><tbody>';
-
     var sira = 0;
     Object.keys(katGruplari).sort().forEach(function(kat) {
       katGruplari[kat].forEach(function(p) {
         sira++;
         var globalIdx = tumPersonel.findIndex(function(tp){ return tp.kisi === p.kisi && tp.oyun === p.oyun; });
         var rowBg = sira%2===0 ? 'var(--muted)' : 'var(--card)';
-        var ara_vurgu = ara ? p.kisi.replace(new RegExp('('+araRaw.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi'), '<mark style="background:#fef08a;border-radius:2px">$1</mark>') : p.kisi;
-        h += '<tr style="background:'+rowBg+'">';
-        h += '<td style="padding:6px 10px;color:var(--muted-foreground);font-size:11px">'+sira+'</td>';
-        h += '<td style="padding:6px 10px;font-weight:600">'+ara_vurgu+'</td>';
-        h += '<td style="padding:6px 10px;font-size:11px;color:var(--muted-foreground)">'+kat+'</td>';
-        h += '<td style="padding:6px 10px;font-size:11px">'+(p.gorev||'—')+'</td>';
-        h += '<td style="padding:6px 10px;text-align:right">';
-        if (globalIdx >= 0) h += '<button onclick="kadroKisiDuzenleAc('+globalIdx+')" style="border:1px solid var(--border);background:transparent;border-radius:5px;padding:2px 8px;font-size:10px;cursor:pointer;font-family:Poppins,sans-serif;color:var(--foreground)">✏️</button>';
+        var isimHtml = ara
+          ? p.kisi.replace(new RegExp('('+araRaw.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi'), '<mark style="background:#fef08a;border-radius:2px;padding:0 1px">$1</mark>')
+          : p.kisi;
+        h += '<tr style="background:'+rowBg+';border-top:1px solid var(--border)">';
+        h += '<td style="padding:7px 10px;color:var(--muted-foreground);font-size:10px">'+sira+'</td>';
+        h += '<td style="padding:7px 10px;font-weight:700">'+isimHtml+'</td>';
+        h += '<td style="padding:7px 10px;font-size:11px;color:var(--muted-foreground)">'+kat+'</td>';
+        h += '<td style="padding:7px 10px;font-size:11px">'+(p.gorev||'—')+'</td>';
+        h += '<td style="padding:7px 10px;text-align:right">';
+        if (globalIdx >= 0) h += '<button onclick="kadroKisiDuzenleAc('+globalIdx+')" style="border:1px solid var(--border);background:transparent;border-radius:6px;padding:3px 9px;font-size:10px;cursor:pointer;font-family:Poppins,sans-serif;color:var(--foreground)">✏️</button>';
         h += '</td></tr>';
       });
     });
-
     h += '</tbody></table></div>';
     return h;
   }
 
-  var digerKats = tumKategoriler.filter(function(k){ return !SANATCI_KATS.some(function(s){ return s===k; }) && !TEKNIK_KATS.some(function(t){ return t===k; }); });
-  var html = '';
-  html += grupTablo(SANATCI_KATS, 'Sanatçı Kadrosu', 'hsl(350,40%,95%)', '🎭');
-  html += grupTablo(TEKNIK_KATS,  'Teknik Kadro',   'hsl(220,40%,95%)', '⚙️');
-  if (digerKats.length) html += grupTablo(digerKats, 'Diğer', 'var(--muted)', '📋');
-  el.innerHTML = html;
+  var digerKats = tumKategoriler.filter(function(k){ return !SANATCI_KATS2.some(function(s){ return s===k; }) && !TEKNIK_KATS2.some(function(t){ return t===k; }); });
+  var tabloHTML = '';
+  tabloHTML += grupTablo(SANATCI_KATS2, 'Sanatçı Kadrosu', 'hsl(350,40%,93%)', '#7c1d1d', '🎭');
+  tabloHTML += grupTablo(TEKNIK_KATS2,  'Teknik Kadro',    'hsl(220,40%,93%)', '#1e3a8a', '⚙️');
+  if (digerKats.length) tabloHTML += grupTablo(digerKats, 'Diğer', 'var(--muted)', 'var(--foreground)', '📋');
+
+  el.innerHTML = '<div style="max-width:900px;margin:0 auto;padding:6px 0">'
+    + kpiHTML + barHTML + tabloHTML
+    + '</div>';
 }
+
 
 function kadroKisiEkleAc() {
   const oyun = document.getElementById('kadro-oyun-sec').value;
@@ -3496,10 +3629,12 @@ function renderCalendar() {
     const events = turneler.filter(function(t) {
       const bas = t.baslangicTarih || t.tarih || '';
       const bit = t.bitisTarih || t.tarih || '';
-      // Normal tarih aralığında mı?
-      if (key >= bas && key <= bit) return true;
-      // programSatirlar'da bu tarih var mı? (yol/dönüş günleri aralık dışında olabilir)
-      if (t.programSatirlar && t.programSatirlar.some(function(s){ return s.tarih === key; })) return true;
+      // programSatirlar varsa sadece oradaki tarihleri kullan (bitiş sonrası görünmesin)
+      if (t.programSatirlar && t.programSatirlar.length > 0) {
+        return t.programSatirlar.some(function(s){ return s.tarih === key; });
+      }
+      // programSatirlar yoksa normal tarih aralığına bak
+      if (bas && bit) return key >= bas && key <= bit;
       return false;
     });
 
