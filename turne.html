@@ -2954,8 +2954,13 @@ function renderOyunDetay() {
     var k = t.katilimcilar && t.katilimcilar.length ? t.katilimcilar.length : 0;
     return k > max ? k : max;
   }, 0);
-  var _kpiCols = turneKadroSayisi > 0 ? 6 : 5;
-  var kpiHTML = '<div style="display:grid;grid-template-columns:repeat(' + _kpiCols + ',1fr);gap:8px;margin-bottom:18px">'    + _kpiKart('TURNE', oyunT.length, 'var(--primary)', '🗓', _gotoListe)    + _kpiKart('TOPLAM GÜN', toplamGun, '#0369a1', '📅', "window._sekmeOyunaDon='"+_os+"';switchTab('takvim');_gosterSekmeOyunaDon('takvim','"+_os+"')")    + _kpiKart('TEMSİL', toplamTemsil, '#7c3aed', '🎭', _gotoListeTamamlandi)    + _kpiKart('OYUN KADROSU', personel.length, '#059669', '👥', "var s=document.getElementById('oyun-det-kadro');s.style.display=s.style.display==='none'?'block':'none'")    + (turneKadroSayisi > 0 ? _kpiKart('TURNE KADROSU', turneKadroSayisi, '#0f766e', '🎒', "var s=document.getElementById('oyun-det-kadro');s.style.display=s.style.display==='none'?'block':'none'") : '')    + _kpiKart('ŞEHİR', iller.length, '#b45309', '📍', "window._sekmeOyunaDon='"+_os+"';window._haritaAktifOyun='"+_os+"';seciliIl="+(iller.length>0?"'"+iller[0]+"'":"null")+";switchTab('harita');_gosterSekmeOyunaDon('harita','"+_os+"')")    + '</div>';
+  var kpiHTML = '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:18px">'
+    + _kpiKart('TURNE', oyunT.length, 'var(--primary)', '🗓', _gotoListe)
+    + _kpiKart('TOPLAM GÜN', toplamGun, '#0369a1', '📅', "window._sekmeOyunaDon='"+_os+"';switchTab('takvim');_gosterSekmeOyunaDon('takvim','"+_os+"')")
+    + _kpiKart('TEMSİL', toplamTemsil, '#7c3aed', '🎭', _gotoListeTamamlandi)
+    + _kpiKart('OYUN KADROSU', personel.length, '#059669', '👥', "var s=document.getElementById('oyun-det-kadro');s.style.display=s.style.display==='none'?'block':'none'")
+    + _kpiKart('ŞEHİR', iller.length, '#b45309', '📍', "window._sekmeOyunaDon='"+_os+"';window._haritaAktifOyun='"+_os+"';seciliIl="+(iller.length>0?"'"+iller[0]+"'":"null")+";switchTab('harita');_gosterSekmeOyunaDon('harita','"+_os+"')")
+    + '</div>';
 
   // ── Geri butonu + başlık ───────────────────────────────────────────────────
   var baslikHTML = '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">'
@@ -2978,9 +2983,13 @@ function renderOyunDetay() {
           var ilList = durakIllerListesi(t).map(function(il){ return il.replace(/\/MERKEZ/gi,''); });
           var tarihStr = formatTarih(t.baslangicTarih||t.tarih) + (t.bitisTarih&&t.bitisTarih!==(t.baslangicTarih||t.tarih)?' – '+formatTarih(t.bitisTarih):'');
           var temsil = durakToplamTemsil(t);
-          // Bu turneye özel kadro
-          var turneKadro = getPersonelForOyun(t.oyun||oyun);
+          // Bu turneye özel kadro: katılımcılar atanmışsa onları göster, yoksa oyun kadrosu
+          var _katilimcilar = t.katilimcilar && t.katilimcilar.length ? t.katilimcilar : null;
+          var turneKadro = _katilimcilar
+            ? _katilimcilar.map(function(k){ return { kisi:k.kisi, gorev:k.gorev||k.kategori, kategori:k.kategori }; })
+            : getPersonelForOyun(t.oyun||oyun);
           var turneKadroHTML = _kadroGrid(turneKadro);
+          var _turneKadroEtiket = _katilimcilar ? 'Turne Kadrosu' : 'Oyun Kadrosu';
           var tId = 'turne-kadro-'+ti;
           return '<div style="background:var(--card);border:1px solid var(--border);border-left:4px solid '+sr.fg+';border-radius:10px;overflow:hidden">'
             // ── Kart başlığı — tıklanınca kadro aç/kapat
@@ -3005,11 +3014,11 @@ function renderOyunDetay() {
             + '<div style="padding:0 14px 10px;display:flex;gap:6px">'
             +   '<button onclick="event.stopPropagation();editTurne('+t._rowIdx+')" style="height:26px;padding:0 10px;border-radius:6px;border:1px solid var(--border);background:var(--muted);cursor:pointer;font-size:11px;font-weight:600;color:var(--foreground);font-family:Poppins,sans-serif">✏️ Düzenle</button>'
             +   '<button onclick="event.stopPropagation();gorevlendirmePdf('+t._rowIdx+')" style="height:26px;padding:0 10px;border-radius:6px;border:1px solid var(--border);background:var(--muted);cursor:pointer;font-size:11px;font-weight:600;color:var(--foreground);font-family:Poppins,sans-serif">📄 PDF</button>'
-            +   '<span style="margin-left:auto;font-size:11px;color:var(--muted-foreground);line-height:26px">👥 '+turneKadro.length+' kişi — kadroya görmek için tıkla</span>'
+            +   '<span style="margin-left:auto;font-size:11px;color:var(--muted-foreground);line-height:26px">👥 '+turneKadro.length+' kişi ('+_turneKadroEtiket.toLowerCase()+') — görmek için tıkla</span>'
             + '</div>'
             // ── Kadro paneli (varsayılan kapalı)
             + '<div id="'+tId+'" style="display:none;border-top:1px solid var(--border);padding:12px 14px;background:var(--muted)">'
-            +   '<div style="font-size:10px;font-weight:700;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px">'+ilList.join(' › ')+' · Turne Kadrosu</div>'
+            +   '<div style="font-size:10px;font-weight:700;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px">'+ilList.join(' › ')+' · '+_turneKadroEtiket+'</div>'
             +   turneKadroHTML
             + '</div>'
             + '</div>';
