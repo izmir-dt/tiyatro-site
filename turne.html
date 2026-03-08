@@ -3381,14 +3381,39 @@ function renderKisiAra() {
   var el      = document.getElementById('kisi-content');
   var stat    = document.getElementById('kisi-sonuc');
 
+  function _trNorm(s){ return (s||'').toLowerCase().replace(/İ/g,'i').replace(/I/g,'ı').replace(/Ğ/g,'ğ').replace(/Ü/g,'ü').replace(/Ş/g,'ş').replace(/Ö/g,'ö').replace(/Ç/g,'ç'); }
+
+  // Dış katılımcıları turnelerden topla (dis:true)
+  var disKatilimciMap = {}; // kisi adı → {kisi, gorev, kategori, oyun, _turneCount}
+  turneler.forEach(function(t) {
+    if (!t.katilimcilar) return;
+    t.katilimcilar.forEach(function(k) {
+      if (!k.dis && !k.ekstra) return; // sadece dis veya ekstra=true olanlar (dis flag'ı yok ama dış bölümden eklenmiş)
+      if (!k.kisi) return;
+      if (!disKatilimciMap[k.kisi]) {
+        disKatilimciMap[k.kisi] = { kisi: k.kisi, gorev: k.gorev||'', kategori: k.kategori||'Diğer', oyun: t.oyun||'', _dis: true, _turneCount: 0 };
+      }
+      disKatilimciMap[k.kisi]._turneCount = (disKatilimciMap[k.kisi]._turneCount||0) + 1;
+    });
+  });
+  var disKatilimciList = Object.values(disKatilimciMap);
+
   var eslesen = tumPersonel.filter(function(p) {
     if (!p.kisi) return false;
     if (!DAHIL_KATEGORILER.some(function(k){ return p.kategori === k; })) return false;
-    function _trNorm(s){ return (s||'').toLowerCase().replace(/İ/g,'i').replace(/I/g,'ı').replace(/Ğ/g,'ğ').replace(/Ü/g,'ü').replace(/Ş/g,'ş').replace(/Ö/g,'ö').replace(/Ç/g,'ç'); }
     if (ara.length >= 1 && !_trNorm(p.kisi).includes(_trNorm(ara))) return false;
     if (filOyun && p.oyun !== filOyun) return false;
     if (filKat  && p.kategori !== filKat && !(p.kategori === 'Oyuncu' && filKat === 'Sanatçı')) return false;
     return true;
+  });
+
+  // Dış katılımcıları filtrele ve eslesen'e ekle (tumPersonel'de yoksa)
+  var tumPersonelKisiAdlari = new Set(tumPersonel.map(function(p){ return p.kisi; }));
+  disKatilimciList.forEach(function(dk) {
+    if (tumPersonelKisiAdlari.has(dk.kisi)) return; // zaten var
+    if (ara.length >= 1 && !_trNorm(dk.kisi).includes(_trNorm(ara))) return;
+    if (filKat && dk.kategori !== filKat) return;
+    eslesen.push(dk);
   });
 
   var kisiler = [...new Set(eslesen.map(function(p){ return p.kisi; }))].sort(function(a,b){ return a.localeCompare(b,'tr'); });
@@ -3534,6 +3559,25 @@ function renderKadro() {
 
   var tumKadro = oyun ? getPersonelForOyun(oyun) : tumPersonel.filter(function(p){ return p.kisi && p.oyun; });
 
+  // Secili oyun icin turnelerdeki dis/ekstra katilimcilari da ekle
+  if (oyun) {
+    var tumKadroAdiSet = new Set(tumKadro.map(function(p){ return p.kisi; }));
+    var disEkstraMap = {};
+    turneler.forEach(function(t) {
+      if ((t.oyun||'').trim().toLowerCase() !== oyun.trim().toLowerCase()) return;
+      if (!t.katilimcilar) return;
+      t.katilimcilar.forEach(function(k) {
+        if (!k.kisi) return;
+        if (tumKadroAdiSet.has(k.kisi)) return;
+        if (!k.dis && !k.ekstra) return;
+        if (!disEkstraMap[k.kisi]) {
+          disEkstraMap[k.kisi] = { kisi: k.kisi, gorev: k.gorev||'', kategori: k.kategori||'Diger', oyun: oyun, _dis: true };
+        }
+      });
+    });
+    Object.values(disEkstraMap).forEach(function(dk){ tumKadro.push(dk); });
+  }
+
   // Kategori filtre dropdown
   var katSel = document.getElementById('kadro-kat-filter');
   if (katSel) {
@@ -3664,6 +3708,30 @@ function renderKadro() {
   tabloHTML += grupTablo(SANATCI_KATS2, 'Sanatçı Kadrosu', 'hsl(350,40%,93%)', '#7c1d1d', '🎭');
   tabloHTML += grupTablo(TEKNIK_KATS2,  'Teknik Kadro',    'hsl(220,40%,93%)', '#1e3a8a', '⚙️');
   if (digerKats.length) tabloHTML += grupTablo(digerKats, 'Diğer', 'var(--muted)', 'var(--foreground)', '📋');
+
+  // Dış katılımcılar bloğu
+  var disKadro = kadro.filter(function(p){ return p._dis; });
+  if (disKadro.length) {
+    var disH = '<div style="margin-bottom:12px;border:1px solid #93c5fd;border-radius:12px;overflow:hidden">';
+    disH += '<div style="display:flex;align-items:center;gap:8px;padding:10px 16px;background:#eff6ff;border-bottom:1px solid #bfdbfe">';
+    disH += '<span style="font-size:14px">🔗</span>';
+    disH += '<span style="font-size:12px;font-weight:800;color:#1d4ed8">Dış Katılımcılar</span>';
+    disH += '<span style="font-size:11px;color:#3b82f6;opacity:.8;margin-left:2px">'+disKadro.length+' kişi</span></div>';
+    disH += '<table style="width:100%;border-collapse:collapse;font-size:12px">';
+    disH += '<thead><tr style="background:#f0f9ff"><th style="padding:6px 10px;text-align:left;font-size:10px;font-weight:700;color:#1d4ed8;width:32px">No</th><th style="padding:6px 10px;text-align:left;font-size:10px;font-weight:700;color:#1d4ed8">AD SOYAD</th><th style="padding:6px 10px;text-align:left;font-size:10px;font-weight:700;color:#1d4ed8">KATEGORİ</th><th style="padding:6px 10px;text-align:left;font-size:10px;font-weight:700;color:#1d4ed8">GÖREV</th></tr></thead><tbody>';
+    disKadro.forEach(function(p, i) {
+      var rowBg = i%2===0 ? 'var(--card)' : '#f0f9ff';
+      var isimHtml = ara ? p.kisi.replace(new RegExp('('+araRaw.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi'),'<mark style="background:#fef08a;border-radius:2px;padding:0 1px">$1</mark>') : p.kisi;
+      disH += '<tr style="background:'+rowBg+';border-top:1px solid #dbeafe">';
+      disH += '<td style="padding:7px 10px;color:#60a5fa;font-size:10px">'+(i+1)+'</td>';
+      disH += '<td style="padding:7px 10px;font-weight:700">'+isimHtml+'</td>';
+      disH += '<td style="padding:7px 10px;font-size:11px;color:#2563eb">'+p.kategori+'</td>';
+      disH += '<td style="padding:7px 10px;font-size:11px">'+(p.gorev||'—')+'</td>';
+      disH += '</tr>';
+    });
+    disH += '</tbody></table></div>';
+    tabloHTML += disH;
+  }
 
   el.innerHTML = '<div style="max-width:900px;margin:0 auto;padding:6px 0">'
     + kpiHTML + barHTML + tabloHTML
