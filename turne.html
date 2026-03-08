@@ -2533,8 +2533,8 @@ function renderKisiModalList(oyunAdi, q) {
   const el = document.getElementById('kisi-modal-list');
   if (!personel.length) {
     el.innerHTML = '<div style="padding:14px;text-align:center;font-size:12px;color:var(--muted-foreground)">Oyun kadrosunda kişi bulunamadı — aşağıdan manuel ekleyin</div>';
-    return;
-  }
+    // Dış katılımcıları yine de göster (aşağıda) — return yok
+  } else {
   el.innerHTML = personel.map(p => {
     const OYUNCU_K = ['Sanatçı','Oyuncu','Figüran','Figüran/Müzisyen','Koro','Koro/Dans','Koro/Dans Ekibi','Solist','Dansçı','Müzisyen','Orkestra','Kurumdan Emekli Sanatçı'];
     // Görüntülemede Oyuncu → Sanatçı
@@ -2547,18 +2547,42 @@ function renderKisiModalList(oyunAdi, q) {
     const esc = v => (v||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');
     return '<div class="kisi-row' + (secili ? ' selected' : '') + '" onclick="toggleKisiSecim(\'' + esc(p.kisi) + '\',\'' + esc(p.kategori||'') + '\',\'' + esc(p.kategori||'') + '\')">'      + '<div class="kisi-checkbox">' + (secili ? '✓' : '') + '</div>'      + '<div class="kisi-row-info">'        + '<div class="kisi-row-name">' + p.kisi + '</div>'        + '<span class="kisi-kat-chip">' + _katGoster + '</span>'      + '</div>'      + (secili        ? '<input type="text" value="' + esc(turneGorev) + '" placeholder="Görevi" '          + 'onclick="event.stopPropagation()" list="gorev-datalist" '          + 'oninput="event.stopPropagation();kisiGorevGuncelle(\'' + esc(p.kisi) + '\',this.value)" onchange="event.stopPropagation();kisiGorevGuncelle(\'' + esc(p.kisi) + '\',this.value);gorevHafizayaKaydet(this.value)" '          + 'style="width:120px;border:1.5px solid var(--primary);border-radius:5px;padding:4px 7px;font-size:11px;background:var(--background);font-family:inherit;flex-shrink:0;color:var(--primary);font-weight:600">'        : '')      + '</div>';
   }).join('');
-  // Dış katılımcıları listenin altına ekle
+  } // end else personel.length > 0
+  // Dış katılımcıları listenin altına ekle (DOM API — tırnak sorunu yok)
   var disler = kisiModalSecili.filter(function(s){ return s.dis; });
   if (disler.length) {
-    el.innerHTML += '<div style="padding:6px 10px 4px;font-size:10px;font-weight:700;color:var(--muted-foreground);background:var(--muted);border-top:1px solid var(--border);text-transform:uppercase;letter-spacing:.5px">🔗 Dış Katılımcılar</div>';
+    var header = document.createElement('div');
+    header.style.cssText = 'padding:6px 10px 4px;font-size:10px;font-weight:700;color:var(--muted-foreground);background:var(--muted);border-top:1px solid var(--border);text-transform:uppercase;letter-spacing:.5px';
+    header.textContent = '🔗 Dış Katılımcılar';
+    el.appendChild(header);
     disler.forEach(function(s) {
       var chip = s.gorev || s.kategori || 'Dış';
-      el.innerHTML += '<div class="kisi-row selected" style="background:#eff6ff;border-left:3px solid #3b82f6">'
-        + '<div class="kisi-checkbox">✓</div>'
-        + '<div class="kisi-row-info"><div class="kisi-row-name">' + (s.kisi||'') + '</div>'
-        + '<span class="kisi-kat-chip" style="background:#dbeafe;color:#1d4ed8">' + chip + '</span></div>'
-        + '<button onclick="event.stopPropagation();disKisiKaldir(\'' + (s.kisi||'').replace(/'/g,"\'") + '\')" style="margin-left:auto;border:none;background:transparent;color:#ef4444;cursor:pointer;font-size:13px;padding:0 4px" title="Kaldır">✕</button>'
-        + '</div>';
+      var row = document.createElement('div');
+      row.className = 'kisi-row selected';
+      row.style.cssText = 'background:#eff6ff;border-left:3px solid #3b82f6';
+      var chk = document.createElement('div');
+      chk.className = 'kisi-checkbox';
+      chk.textContent = '✓';
+      var info = document.createElement('div');
+      info.className = 'kisi-row-info';
+      var nm = document.createElement('div');
+      nm.className = 'kisi-row-name';
+      nm.textContent = s.kisi || '';
+      var sp = document.createElement('span');
+      sp.className = 'kisi-kat-chip';
+      sp.style.cssText = 'background:#dbeafe;color:#1d4ed8';
+      sp.textContent = chip;
+      info.appendChild(nm);
+      info.appendChild(sp);
+      var btn = document.createElement('button');
+      btn.textContent = '✕';
+      btn.title = 'Kaldır';
+      btn.style.cssText = 'margin-left:auto;border:none;background:transparent;color:#ef4444;cursor:pointer;font-size:13px;padding:0 4px';
+      btn.onclick = (function(kisiAdi){ return function(e){ e.stopPropagation(); disKisiKaldir(kisiAdi); }; })(s.kisi);
+      row.appendChild(chk);
+      row.appendChild(info);
+      row.appendChild(btn);
+      el.appendChild(row);
     });
   }
   updateKisiCount();
@@ -2930,7 +2954,10 @@ function renderDisKisiListesi() {
 // ── DIŞ KATILIMCİ KALDIR ──────────────────────────────────
 function disKisiKaldir(kisi) {
   kisiModalSecili = kisiModalSecili.filter(function(s){ return s.kisi !== kisi; });
-  renderDisKisiListesi();
+  var t = turneler.find(function(x){ return x._rowIdx === kisiModalRowIdx; });
+  var oyunAdiKisi = window._kisiModalOyunAdi || (t ? t.oyun : '') || '';
+  var q = document.getElementById('kisi-filter-input') ? document.getElementById('kisi-filter-input').value.toLowerCase() : '';
+  renderKisiModalList(oyunAdiKisi, q);
   renderSelectedPills();
   updateKisiCount();
 }
