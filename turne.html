@@ -6539,6 +6539,8 @@ function _pdfIcerik(t) {
 }
 
 
+
+
 // ── PDF MOD SEÇİM DIALOG ─────────────────────────────────────
 function _pdfModSec(rowIdx) {
   var overlay = document.createElement('div');
@@ -6832,7 +6834,6 @@ function gorevlendirmePdf(rowIdx, mod) {
   var ilStr = _temizleIlPdf(durakIlStr(t));
   var baslik = (oyunAdi !== 'Rapor' ? oyunAdi + ' – ' : '') + ilStr + ' Turnesi';
 
-  window._wordCurrentTurne = t;
   var icerik = mod === 'personel' ? _pdfPersonelIcerik(t) : _pdfIcerik(t);
   var docHTML = '<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8">'
     + '<title>Turne Görevlendirme – ' + baslik + '</title>'
@@ -6846,20 +6847,37 @@ function gorevlendirmePdf(rowIdx, mod) {
     + '<script>'
     + 'function filtreUygula(kat){var tbody=document.getElementById(\'per-tbody\');if(!tbody)return;var g=0;Array.from(tbody.querySelectorAll(\'tr\')).forEach(function(tr){var vis=kat===\'T\u00fcm\u00fc\'||tr.dataset.kat===kat;tr.style.display=vis?\'\':\'none\';if(vis){tr.cells[0].textContent=++g;tr.style.background=g%2===0?\'#fff\':\'#f9f5f0\';}});var s=document.getElementById(\'per-sayac\');if(s)s.textContent=\'Toplam \'+g+\' ki\u015fi g\u00f6steriliyor\';document.querySelectorAll(\'.flt-btn\').forEach(function(b){var a=b.id===\'flt-\'+kat;b.style.background=a?\'#6b1b1b\':\'#f3f4f6\';b.style.color=a?\'#fff\':\'#333\';});}'
     + 'function wordIndir(){'
-    +   'try {'
-    +     'var t = window.opener && window.opener._wordCurrentTurne;'
-    +     'var ic = (t && window.opener._wordIcerik) ? window.opener._wordIcerik(t) : document.getElementById("rapor-icerik").innerHTML;'
-    +   '} catch(e) {'
-    +     'var ic = document.getElementById("rapor-icerik").innerHTML;'
-    +   '}'
-    +   'var wordCss="body{font-family:Calibri,Arial,sans-serif;font-size:12pt;color:#1a1a2e;margin:0;padding:20pt 24pt}"'
-    +     '+"table{border-collapse:collapse;margin-bottom:10pt}"'
-    +     '+"td,th{font-family:Calibri,Arial,sans-serif;font-size:11pt}"'
-    +     '+".sec{margin-bottom:16pt}"'
-    +     '+".sec-title{font-size:11pt;font-weight:bold;color:#6b1b1b;border-bottom:2pt solid #6b1b1b;padding-bottom:4pt;margin-bottom:10pt;text-transform:uppercase}"'
-    +     '+".no-print{display:none}";'
+    +   'var ic=document.getElementById("rapor-icerik").innerHTML;'
+    +   'var tmp=document.createElement("div");tmp.innerHTML=ic;'
+    +   'tmp.querySelectorAll(".info-grid").forEach(function(grid){'
+    +     'var boxes=Array.from(grid.querySelectorAll(".info-box"));'
+    +     'var tbl=document.createElement("table");tbl.setAttribute("width","100%");tbl.setAttribute("cellspacing","6");tbl.style.cssText="border-collapse:separate;margin-bottom:10pt";'
+    +     'for(var i=0;i<boxes.length;i+=2){'
+    +       'var tr=document.createElement("tr");'
+    +       'var td1=document.createElement("td");td1.setAttribute("width","50%");td1.setAttribute("valign","top");td1.style.cssText="border:1pt solid #e5ddd5;padding:8pt;background:#fafaf9";td1.innerHTML=boxes[i].innerHTML;'
+    +       'var td2=document.createElement("td");td2.setAttribute("width","50%");td2.setAttribute("valign","top");td2.style.cssText="border:1pt solid #e5ddd5;padding:8pt;background:#fafaf9";if(boxes[i+1])td2.innerHTML=boxes[i+1].innerHTML;'
+    +       'tr.appendChild(td1);tr.appendChild(td2);tbl.appendChild(tr);'
+    +     '}'
+    +     'grid.parentNode.replaceChild(tbl,grid);'
+    +   '});'
+    +   'tmp.querySelectorAll("div[style*=\'display:flex\']").forEach(function(d){'
+    +     'var s=d.style.cssText;'
+    +     'if(s.indexOf("justify-content:space-between")>=0||s.indexOf("align-items:center")>=0){'
+    +       'd.style.display="block";'
+    +     '}'
+    +   '});'
+    +   'ic=tmp.innerHTML;'
+    +   'var wordCss="@charset \\"UTF-8\\";body{font-family:Arial,Helvetica,sans-serif;font-size:11pt;color:#1a1a1a;margin:0;padding:16pt 20pt;background:#fff}"'
+    +     '+".sec{margin-bottom:14pt}"'
+    +     '+".sec-title{font-size:10pt;font-weight:700;text-transform:uppercase;letter-spacing:.5pt;color:#6b1b1b;border-bottom:1pt solid #e5ddd5;padding-bottom:4pt;margin-bottom:8pt}"'
+    +     '+".info-lbl{font-size:9pt;color:#888;text-transform:uppercase;letter-spacing:.5pt;margin-bottom:2pt;display:block}"'
+    +     '+".info-val{font-weight:800;font-size:12pt;color:#1a1a1a;display:block}"'
+    +     '+"table{width:100%;border-collapse:collapse;margin-bottom:6pt}"'
+    +     '+"th{background:#6b1b1b;color:#fff;padding:5pt 8pt;text-align:left;font-size:9pt;border:1pt solid #5a1717}"'
+    +     '+"td{padding:5pt 8pt;border:1pt solid #ddd;font-size:10pt}"'
+    +     '+".page-foot{text-align:center;font-size:8pt;color:#bbb;margin-top:16pt;padding-top:8pt;border-top:1pt solid #f0ebe4}";'
     +   'var html="<html xmlns:o=\\"urn:schemas-microsoft-com:office:office\\" xmlns:w=\\"urn:schemas-microsoft-com:office:word\\" xmlns=\\"http://www.w3.org/TR/REC-html40\\"><head><meta charset=\\"utf-8\\"><title>' + baslik.replace(/"/g,'') + '</title>'
-    +     '<style>"+wordCss+"@page{margin:2cm}</style></head><body>"+ic+"</body></html>";'
+    +     '<style>"+wordCss+"@page{margin:2cm}.no-print{display:none}</style></head><body>"+ic+"</body></html>";'
     +   'var blob=new Blob(["\\uFEFF"+html],{type:"application/msword;charset=utf-8"});'
     +   'var a=document.createElement("a");'
     +   'a.href=URL.createObjectURL(blob);'
