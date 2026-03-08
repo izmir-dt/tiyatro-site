@@ -354,6 +354,7 @@
   </div>
   <div class="nav-right">
     <span id="yedek-mesaj" style="font-size:11px;color:#16a34a;font-weight:600"></span>
+    <span id="_polling-indicator" title="Veriler yenileniyor..." style="opacity:0;transition:opacity .4s;font-size:11px;color:var(--muted-foreground);display:inline-flex;align-items:center;gap:4px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="animation:spin 1s linear infinite"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> güncelleniyor</span>
     <div style="position:relative;display:inline-flex;align-items:center;gap:6px">
       <button id="rehber-btn" onclick="event.stopPropagation();var p=document.getElementById('yedek-bilgi');p.style.display=p.style.display==='block'?'none':'block'" class="btn btn-outline" style="font-size:11px;display:inline-flex;align-items:center;gap:5px;height:30px;padding:0 12px;font-weight:700" title="Kullanım rehberi"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Rehber</button>
       <button class="btn btn-outline" onclick="yedekAl()" style="font-size:11px;display:inline-flex;align-items:center;gap:5px;height:30px;padding:0 12px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17,21 17,13 7,13 7,21"/><polyline points="7,3 7,8 15,8"/></svg> Yedek Al</button>
@@ -3386,12 +3387,12 @@ function renderKadro() {
 
   // --- KPI ---
   var SANATCI_KATS = ['Sanatçı','Oyuncu','Koro','Koro/Dans','Koro/Dans Ekibi','Solist','Dansçı','Figüran','Figüran/Müzisyen','Müzisyen','Orkestra','Kurumdan Emekli Sanatçı'];
-  var sanatciCount = kadro.filter(function(p){ return SANATCI_KATS.some(function(k){ return p.kategori===k; }); }).length;
-  var teknikCount = kadro.length - sanatciCount;
-  var katCount = new Set(kadro.map(function(p){ return p.kategori; })).size;
+  var sanatciCount = tumKadro.filter(function(p){ return SANATCI_KATS.some(function(k){ return p.kategori===k; }); }).length;
+  var teknikCount = tumKadro.length - sanatciCount;
+  var katCount = new Set(tumKadro.map(function(p){ return p.kategori; })).size;
 
   var kpiHTML = '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px">'
-    + _kpiKart2('TOPLAM', kadro.length, '#374151', '#f9fafb', '👤', "window._kadroGrupFiltre='';" + "document.getElementById('kadro-kat-filter').value='';renderKadro()")
+    + _kpiKart2('TOPLAM', tumKadro.length, '#374151', '#f9fafb', '👤', "window._kadroGrupFiltre='';" + "document.getElementById('kadro-kat-filter').value='';renderKadro()")
     + _kpiKart2('SANATÇI', sanatciCount, '#7c1d1d', '#fff1f2', '🎭', "window._kadroGrupFiltre='sanatci';" + "document.getElementById('kadro-kat-filter').value='';renderKadro()")
     + _kpiKart2('TEKNİK', teknikCount, '#1e3a8a', '#eff6ff', '⚙️', "window._kadroGrupFiltre='teknik';" + "document.getElementById('kadro-kat-filter').value='';renderKadro()")
     + _kpiKart2('KATEGORİ', katCount, '#7c3aed', '#f5f3ff', '📋', "window._kadroGrupFiltre='';document.getElementById('kadro-kat-filter').value='';renderKadro()")
@@ -4852,6 +4853,9 @@ function editTurne(rowIdx) {
   document.getElementById('modal-overlay').classList.add('on');
   switchModalTab('genel', 0);
   hesaplaSure();
+  // Çakışma koruması: modal açılırken o anki Sheets snapshot'ını sakla
+  window._editSnapshot = JSON.stringify(t);
+  window._editAcilanZaman = Date.now();
 }
 function closeModal() { document.getElementById('modal-overlay').classList.remove('on'); }
 
@@ -4917,6 +4921,52 @@ async function saveTurne() {
     ? JSON.stringify({ not: _lojNotDuz, aracTur: _aracTur, liftli: _liftli, yuklemeSaat: _yukSaat, yuklemeYer: _yukYer, bosaltmaSaat: _bosSaat, bosaltmaYer: _bosYer })
     : _lojNotDuz;
   var editIdx     = document.getElementById('edit-rowidx').value;
+
+  // ── Çakışma Kontrolü ──────────────────────────────────────
+  // Düzenleme modunda ve modal 10 saniyeden uzun süredir açıksa Sheets'i kontrol et
+  if (editIdx !== '' && window._editSnapshot && (Date.now() - (window._editAcilanZaman||0)) > 10000) {
+    try {
+      var _chkRes = await apiFetch('/' + encodeURIComponent(TURNE_SHEET));
+      if (_chkRes.ok) {
+        var _chkData = await _chkRes.json();
+        var _chkRows = _chkData.rows || [];
+        var _chkNums = _chkData.rowNumbers || [];
+        var _editRowNum = parseInt(editIdx) + 2; // Sheets satır numarası
+        var _chkIdx = _chkNums.indexOf(_editRowNum);
+        if (_chkIdx >= 0 && _chkRows[_chkIdx]) {
+          var _chkRow = _chkRows[_chkIdx];
+          var _snapObj = JSON.parse(window._editSnapshot || '{}');
+          // Kritik alanları karşılaştır: oyun, tarih, durum
+          var _chkOyun  = (_chkRow[0]||'').trim();
+          var _chkTarih = (_chkRow[2]||'').trim();
+          var _chkStatu = (_chkRow[7]||'').trim();
+          var _snapDegisti = (
+            (_snapObj.oyun        && _chkOyun  && _chkOyun  !== _snapObj.oyun) ||
+            (_snapObj.baslangicTarih && _chkTarih && _chkTarih !== _snapObj.baslangicTarih) ||
+            (_snapObj.statu       && _chkStatu && _chkStatu !== _snapObj.statu)
+          );
+          if (_snapDegisti) {
+            var _devamEt = confirm(
+              '⚠️ UYARI: Bu kayıt başka bir kullanıcı tarafından değiştirilmiş görünüyor!\n\n' +
+              'Sheets\'teki mevcut değer: ' + _chkOyun + ' / ' + _chkTarih + ' / ' + _chkStatu + '\n' +
+              'Sizin düzenlemeniz: ' + (document.getElementById(\'m-oyun\').value||_snapObj.oyun) + '\n\n' +
+              'Yine de kaydetmek istiyor musunuz?\n(İptal: Formu kapat ve sayfayı yenile)'
+            );
+            if (!_devamEt) {
+              _saveTurneCalisiyor = false;
+              var _sb = document.getElementById(\'save-turne-btn\');
+              if (_sb) { _sb.disabled = false; _sb.textContent = \'Kaydet\'; }
+              closeModal();
+              await fetchTurneler();
+              populateFilters(); renderListe(); renderCalendar();
+              return;
+            }
+          }
+        }
+      }
+    } catch(_chkE) { /* kontrol yapılamadıysa sessizce devam et */ }
+  }
+  // ── Çakışma Kontrolü Sonu ─────────────────────────────────
 
   // Kaydet anında DOM'dan durak değerlerini senkronize et (oninput bazen tetiklenmez)
   var durakWrap = document.getElementById('durak-listesi');
@@ -5029,22 +5079,32 @@ async function saveTurne() {
     var apiBasarili = false;
     if (editIdx !== '') {
       var idx = parseInt(editIdx);
-      // /cell endpoint ile her sütunu tek tek güncelle
-      var cellHatalari = 0;
-      for (var ci = 0; ci < values.length; ci++) {
-        try {
-          var cellR = await apiFetch('/' + encodeURIComponent(TURNE_SHEET) + '/cell', {
+      // Önce tek seferlik row PUT dene; başarısız olursa cell-by-cell paralel yedekle
+      var rowPutBasarili = false;
+      try {
+        var rowPutR = await apiFetch('/' + encodeURIComponent(TURNE_SHEET) + '/row/' + (idx + 2), {
+          method:'PUT', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ values: values })
+        });
+        if (rowPutR.ok) { rowPutBasarili = true; apiBasarili = true; }
+      } catch(rpe) { /* row PUT desteklenmiyorsa cell yoluna geç */ }
+
+      if (!rowPutBasarili) {
+        // Yedek: tüm cell isteklerini paralel gönder (41 sıralı istek yerine tek tur)
+        var cellPromises = values.map(function(val, ci) {
+          return apiFetch('/' + encodeURIComponent(TURNE_SHEET) + '/cell', {
             method:'PUT', headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({ row: idx + 2, col: ci, value: values[ci] })
-          });
-          if (!cellR.ok) cellHatalari++;
-        } catch(ce) { cellHatalari++; }
-      }
-      if (cellHatalari === 0) {
-        apiBasarili = true;
-      } else {
-        console.error('[saveTurne] cell güncelleme hataları:', cellHatalari);
-        _gosterKayitHatasi('Güncelleme kaydedilemedi (' + cellHatalari + ' hata)');
+            body: JSON.stringify({ row: idx + 2, col: ci, value: val })
+          }).then(function(r){ return r.ok ? 0 : 1; }).catch(function(){ return 1; });
+        });
+        var sonuclar = await Promise.all(cellPromises);
+        var cellHatalari = sonuclar.reduce(function(s, v){ return s + v; }, 0);
+        if (cellHatalari === 0) {
+          apiBasarili = true;
+        } else {
+          console.error('[saveTurne] cell güncelleme hataları:', cellHatalari);
+          _gosterKayitHatasi('Güncelleme kaydedilemedi (' + cellHatalari + ' hata)');
+        }
       }
     } else {
       console.log('[saveTurne] POST values length:', values.length);
@@ -5630,7 +5690,9 @@ function gorevlendirmePdf(rowIdx, mod) {
     +     '+".info-lbl{font-size:8pt;color:#888;text-transform:uppercase;letter-spacing:.3pt}"+".info-val{font-size:11pt;font-weight:bold;color:#1a1a1a;margin-top:2pt}"'
     +     '+"div[style*=\\"border-left\\"]{padding:6pt 10pt;margin-bottom:4pt}";'
     +   'var html="<html xmlns:o=\\"urn:schemas-microsoft-com:office:office\\" xmlns:w=\\"urn:schemas-microsoft-com:office:word\\" xmlns=\\"http://www.w3.org/TR/REC-html40\\"><head><meta charset=\\"utf-8\\"><title>' + baslik.replace(/"/g,'') + '</title>'
-    +     '<style>"+wordCss+"@page{margin:2cm}</style></head><body>"+ic+"</body></html>";'
+    +     '<style>"+wordCss+"@page{margin:2cm}
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+</style></head><body>"+ic+"</body></html>";'
     +   'var blob=new Blob(["\\uFEFF"+html],{type:"application/msword;charset=utf-8"});'
     +   'var a=document.createElement("a");'
     +   'a.href=URL.createObjectURL(blob);'
@@ -6062,6 +6124,51 @@ async function init() {
 }
 
 if (sessionStorage.getItem('turne_erisim') === 'true') { init(); }
+
+// ── Otomatik Polling ─────────────────────────────────────────
+// Modal açıkken güncelleme yapılmaz; kullanıcı aktifken her 2 dakikada yenile
+var _pollingTimer = null;
+var _sonPollingZamani = Date.now();
+
+function _pollingYap() {
+  // Modal açıksa atla
+  var overlay = document.getElementById('modal-overlay');
+  var modalAcik = overlay && overlay.classList.contains('on');
+  var kisiModalAcik = document.getElementById('kisi-modal-overlay') &&
+    document.getElementById('kisi-modal-overlay').style.display !== '' &&
+    document.getElementById('kisi-modal-overlay').style.display !== 'none';
+  if (modalAcik || kisiModalAcik) return;
+
+  // Yenileme göstergesi (başlık çubuğunda subtle blink)
+  var _syncEl = document.getElementById('_polling-indicator');
+  if (_syncEl) _syncEl.style.opacity = '1';
+
+  Promise.all([fetchTurneler(), fetchPersonel(), calNotYukle()])
+    .then(function() {
+      populateFilters(); renderListe(); renderCalendar();
+      _sonPollingZamani = Date.now();
+      if (_syncEl) setTimeout(function(){ _syncEl.style.opacity = '0'; }, 1200);
+    })
+    .catch(function() {
+      if (_syncEl) _syncEl.style.opacity = '0';
+    });
+}
+
+// Sekme görünür hale gelince de güncelle (başka sekmeden dönerken)
+document.addEventListener('visibilitychange', function() {
+  if (!document.hidden && sessionStorage.getItem('turne_erisim') === 'true') {
+    var gecen = Date.now() - _sonPollingZamani;
+    if (gecen > 60000) { // 1 dakikadan uzun süre gizli kaldıysa hemen güncelle
+      _pollingYap();
+    }
+  }
+});
+
+// Her 2 dakikada bir otomatik güncelle
+if (sessionStorage.getItem('turne_erisim') === 'true') {
+  _pollingTimer = setInterval(_pollingYap, 2 * 60 * 1000);
+}
+// ── Otomatik Polling Sonu ──────────────────────────────────
 
 // Rehber paneli dışına tıklayınca kapat
 document.addEventListener('click', function(e) {
