@@ -909,7 +909,7 @@
       <div class="modal-section active" id="ms-genel">
 
         <!-- Satır 1: Oyun Adı + Statü -->
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;align-items:start">
           <div class="form-group" style="margin:0">
             <label class="form-label">Oyun Adı <span style="font-size:9px;font-weight:400;opacity:.7">(her durağa ayrı)</span></label>
             <select class="form-select" id="m-oyun"><option value="">— Durak bazlı / Seçilmedi —</option></select>
@@ -924,11 +924,12 @@
               <option value="tamamlandi">🏁 Tamamlandı</option>
               <option value="iptal">❌ İptal</option>
             </select>
+            <div class="form-error"></div>
           </div>
         </div>
 
         <!-- Satır 2: Başlangıç + Bitiş -->
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;align-items:start">
           <div class="form-group" style="margin:0">
             <label class="form-label required">Başlangıç Tarihi</label>
             <input class="form-input" type="date" id="m-tarih" onchange="hesaplaSure()">
@@ -7171,40 +7172,41 @@ function renderDuraklar() {
     var mOyunV = document.getElementById('m-oyun') ? document.getElementById('m-oyun').value : '';
     var oyunListesi = [...new Set(tumPersonel.map(function(p){ return p.oyun; }).filter(Boolean))].sort();
     if (mOyunV && oyunListesi.indexOf(mOyunV) < 0) oyunListesi.unshift(mOyunV);
-    // Üst satır: İl (flex:1 ~60%) | İlçe/Semt (flex:0 0 38%)
-    // Alt satır: Mekan (flex:1 ~60%) | Oyun select (flex:0 0 28%) | Temsil (52px) | Sil (30px)
     return '<div class="durak-row" style="overflow:hidden">'
-      // Satır 1
-      + '<div style="display:flex;gap:6px;min-width:0">'
-        + '<div style="flex:1;min-width:0;position:relative">'
-          + '<input class="form-input" type="text" placeholder="İl" value="' + (d.il||'') + '" '
+      // Satır 1: İl (1fr) | İlçe/Semt (1fr) — eşit genişlik
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;min-width:0">'
+        + '<div style="position:relative">'
+          + '<input class="form-input" type="text" placeholder="İl..." value="' + (d.il||'') + '" '
           + 'oninput="duraklar[' + i + '].il=this.value;syncIlFromDuraklar();durakIlDropdown(this,' + i + ')" '
           + 'onfocus="durakIlDropdown(this,' + i + ')" onblur="setTimeout(()=>durakDropdownKapat(' + i + '),200)" '
           + 'style="width:100%;font-size:13px">'
           + '<div id="durak-dd-' + i + '" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:600;background:var(--card);border:1px solid var(--border);border-radius:6px;max-height:160px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.15)"></div>'
         + '</div>'
-        + '<div style="flex:0 0 38%;min-width:0">'
+        + '<div>'
           + '<input class="form-input" type="text" placeholder="İlçe / Semt" value="' + (d.ilce||'') + '" '
           + 'oninput="duraklar[' + i + '].ilce=this.value" style="width:100%;font-size:13px">'
         + '</div>'
       + '</div>'
-      // Satır 2
-      + '<div style="display:flex;gap:6px;align-items:center;min-width:0">'
-        + '<div style="flex:1;min-width:0">'
+      // Satır 2: Mekan (1fr) | Oyun (1fr) | Temsil Sayısı (72px) | Sil (30px) — hepsi sabit grid
+      + '<div style="display:grid;grid-template-columns:1fr 1fr 72px 30px;gap:6px;align-items:center;min-width:0">'
+        + '<div>'
           + '<input class="form-input" type="text" placeholder="Sahne / Mekan (opsiyonel)" value="' + (d.mekan||'') + '" '
           + 'oninput="duraklar[' + i + '].mekan=this.value" style="width:100%;font-size:13px">'
         + '</div>'
-        + '<div style="flex:0 0 28%;min-width:0">'
+        + '<div>'
           + '<select onchange="duraklar[' + i + '].oyun=this.value" '
-          + 'style="width:100%;height:34px;border:1px solid var(--border);border-radius:7px;padding:0 6px;font-size:11px;background:var(--card);font-family:Poppins,sans-serif;color:var(--foreground)">'
+          + 'style="width:100%;height:34px;border:1.5px solid var(--border);border-radius:7px;padding:0 6px;font-size:11px;background:var(--card);font-family:Poppins,sans-serif;color:var(--foreground)">'
           + '<option value="">Oyun (ops.)</option>'
           + oyunListesi.map(function(o){ return '<option value="' + o + '"' + (d.oyun===o?' selected':'') + '>' + o + '</option>'; }).join('')
           + '</select>'
         + '</div>'
-        + '<input class="form-input" type="number" placeholder="1" value="' + (d.sayi||1) + '" min="1" '
-          + 'oninput="duraklar[' + i + '].sayi=parseInt(this.value)||1" style="flex:0 0 50px;width:50px;font-size:13px;text-align:center;padding:0 4px">'
+        + '<div style="position:relative">'
+          + '<input class="form-input" type="number" value="' + (d.sayi||1) + '" min="1" title="Temsil sayısı" '
+          + 'oninput="duraklar[' + i + '].sayi=parseInt(this.value)||1" style="width:100%;font-size:12px;text-align:center;padding:0 4px">'
+          + '<span style="position:absolute;top:-8px;left:50%;transform:translateX(-50%);font-size:8px;font-weight:700;color:var(--muted-foreground);white-space:nowrap;letter-spacing:.3px;text-transform:uppercase">Temsil</span>'
+        + '</div>'
         + '<button onclick="durakSil(' + i + ')" title="Kaldır" '
-          + 'style="flex-shrink:0;height:34px;width:30px;border-radius:5px;border:1px solid var(--border);background:transparent;cursor:pointer;color:var(--destructive);font-size:15px;display:flex;align-items:center;justify-content:center">×</button>'
+          + 'style="height:34px;width:30px;border-radius:5px;border:1px solid var(--border);background:transparent;cursor:pointer;color:var(--destructive);font-size:15px;display:flex;align-items:center;justify-content:center">×</button>'
       + '</div>'
     + '</div>';
   }).join('');
