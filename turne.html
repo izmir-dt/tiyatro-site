@@ -2049,11 +2049,21 @@ function switchTab(tab) {
   if (tab === 'takvim')     renderCalendar();
   if (tab === 'istatistik') renderIstatistik();
   var geriBar = document.getElementById('istatistik-geri-bar');
-  if (tab === 'istatistik') {
-    window._istatistikGoruldu = true;
-    if (geriBar) geriBar.style.display = 'none';
-  } else {
-    if (geriBar) geriBar.style.display = window._istatistikGoruldu ? 'flex' : 'none';
+  if (geriBar) {
+    if (tab === 'istatistik') {
+      window._istatistikGoruldu = true;
+      geriBar.style.display = 'none';
+      clearTimeout(window._geriBarTimer);
+    } else if (tab === 'liste' && window._istatistikGoruldu) {
+      geriBar.style.display = 'flex';
+      clearTimeout(window._geriBarTimer);
+      window._geriBarTimer = setTimeout(function(){
+        geriBar.style.display = 'none';
+        window._istatistikGoruldu = false;
+      }, 4000);
+    } else {
+      geriBar.style.display = 'none';
+    }
   }
 }
 
@@ -3708,7 +3718,7 @@ function haritaIlDetay(il, ilSayilar) {
   var llIl = IL_LATLON[il];
   if (llIl) {
     var km = hesaplaKm(IZMIR_LATLON[0], IZMIR_LATLON[1], llIl[0], llIl[1]);
-    kmStr = ' · <span style="font-size:10px;color:#0369a1;font-weight:600">~' + km + ' km İzmir\'den</span><span style="font-size:9px;color:#888"> (tahmini yol mesafesi)</span>';
+    kmStr = ' · <span style="font-size:10px;color:#0369a1;font-weight:600">~' + km + ' km İzmir\'den</span><span style="font-size:9px;color:#888;white-space:nowrap"> (tahmini yol mesafesi)</span>';
   }
   const rows = ilT.map(function(t) {
     const sr=statuRenk(t.statu); const sure=turneSuresi(t);
@@ -5031,9 +5041,10 @@ function _pdfIcerik(t) {
   var oyunAdi = t.oyun || (t.duraklar ? [...new Set(t.duraklar.map(function(d){return d.oyun||'';}).filter(Boolean))].join(' / ') : '');
 
   var personel = getPersonelForOyun(oyunAdi);
+  // Sadece bu turneye görevlendirilenleri al; atama yoksa boş
   var baseList = (t.katilimcilar && t.katilimcilar.length)
     ? t.katilimcilar
-    : personel.map(function(p){ return { kisi:p.kisi, gorev:p.gorev||p.kategori, kategori:p.kategori }; });
+    : [];
   var seen = {};
   var katilimcilar = baseList.filter(function(p) {
     var k = (p.kisi||'').trim().toLowerCase();
@@ -5153,18 +5164,34 @@ function _pdfIcerik(t) {
   var konakHTML = '';
   var durakListeK = (t.duraklar && t.duraklar.length) ? t.duraklar : (t.il ? [{ il:t.il, otelAdi:t.otelAdi, otelAdres:t.otelAdres, otelTel:t.otelTelefon }] : []);
   var otelBulunan = durakListeK.filter(function(d){ return d.otelAdi && d.otelAdi.trim(); });
+  var _otelRows = '';
   if (otelBulunan.length > 0) {
-    otelBulunan.forEach(function(d) {
-      konakHTML += '<div style="padding:8px 14px;background:#f0fdf4;border-radius:5px;border-left:3px solid #16a34a;font-size:11px;margin-bottom:4px">'
-        + '<strong style="color:#15803d">\ud83c\udfe8 ' + (d.il ? _temizleIlPdf(d.il) + ': ' : '') + d.otelAdi + '</strong>'
-        + (d.otelAdres ? ' \u00b7 ' + d.otelAdres : '')
-        + ((d.otelTel||d.otelTelefon) ? ' \u00b7 Tel: ' + (d.otelTel||d.otelTelefon) : '')
-        + '</div>';
+    otelBulunan.forEach(function(d, ki) {
+      var bg = ki%2===0 ? '#f0fdf4' : '#ffffff';
+      _otelRows += '<tr style="background:'+bg+'">'
+        + '<td style="padding:6px 10px;border:1px solid #ddd;font-weight:700;font-size:11px;color:#15803d">'
+        + (d.il ? '\ud83c\udfe8 '+_temizleIlPdf(d.il) : '\ud83c\udfe8') + '</td>'
+        + '<td style="padding:6px 10px;border:1px solid #ddd;font-size:11px;font-weight:600;color:#1a1a1a">'+(d.otelAdi||'')+'</td>'
+        + '<td style="padding:6px 10px;border:1px solid #ddd;font-size:11px;color:#555">'+(d.otelAdres||'\u2014')+'</td>'
+        + '<td style="padding:6px 10px;border:1px solid #ddd;font-size:11px;color:#1d4ed8">'+(d.otelTel||d.otelTelefon||'\u2014')+'</td>'
+        + '</tr>';
     });
   } else if (t.otelAdi) {
-    konakHTML = '<div style="padding:8px 14px;background:#f0fdf4;border-radius:5px;border-left:3px solid #16a34a;font-size:11px;margin-bottom:4px">'
-      + '<strong style="color:#15803d">\ud83c\udfe8 ' + t.otelAdi + '</strong>'
-      + (t.otelAdres ? ' \u00b7 ' + t.otelAdres : '') + (t.otelTelefon ? ' \u00b7 Tel: ' + t.otelTelefon : '') + '</div>';
+    _otelRows = '<tr style="background:#f0fdf4">'
+      + '<td style="padding:6px 10px;border:1px solid #ddd;font-weight:700;font-size:11px;color:#15803d">\ud83c\udfe8</td>'
+      + '<td style="padding:6px 10px;border:1px solid #ddd;font-size:11px;font-weight:600;color:#1a1a1a">'+(t.otelAdi||'')+'</td>'
+      + '<td style="padding:6px 10px;border:1px solid #ddd;font-size:11px;color:#555">'+(t.otelAdres||'\u2014')+'</td>'
+      + '<td style="padding:6px 10px;border:1px solid #ddd;font-size:11px;color:#1d4ed8">'+(t.otelTelefon||'\u2014')+'</td>'
+      + '</tr>';
+  }
+  if (_otelRows) {
+    konakHTML = '<table style="width:100%;border-collapse:collapse;margin-bottom:4px">'
+      + '<thead><tr style="background:#15803d">'
+      + '<th style="padding:6px 10px;color:#fff;text-align:left;border:1px solid #166534;font-size:10px">\u015eehir</th>'
+      + '<th style="padding:6px 10px;color:#fff;text-align:left;border:1px solid #166534;font-size:10px">Otel Ad\u0131</th>'
+      + '<th style="padding:6px 10px;color:#fff;text-align:left;border:1px solid #166534;font-size:10px">Adres</th>'
+      + '<th style="padding:6px 10px;color:#fff;text-align:left;border:1px solid #166534;font-size:10px">Telefon</th>'
+      + '</tr></thead><tbody>'+_otelRows+'</tbody></table>';
   }
 
   var nakliyeHTML = '';
