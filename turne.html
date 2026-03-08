@@ -3075,15 +3075,23 @@ function kisiDetayToggle(id) {
 }
 
 // Kişiye Göre sekmesinden kişiyi sil
-function kisiGoruSil(idxList) {
+async function kisiGoruSil(idxList) {
   if (!idxList || !idxList.length) return;
   var p = tumPersonel[idxList[0]];
   if (!p) return;
   if (!confirm(p.kisi + ' tüm kayıtları silinecek (' + idxList.length + ' kayıt). Emin misiniz?')) return;
-  // Büyükten küçüğe sırala ki index kaymaları olmasın
-  idxList.slice().sort(function(a,b){ return b-a; }).forEach(function(idx){
-    if (idx >= 0 && idx < tumPersonel.length) tumPersonel.splice(idx, 1);
-  });
+  try {
+    // Büyükten küçüğe sırala ki satır kaymaları olmasın
+    const sirali = idxList.slice().sort(function(a,b){ return b-a; });
+    for (var i = 0; i < sirali.length; i++) {
+      var idx = sirali[i];
+      var sheetRow = idx + 2;
+      await fetch(API + '/' + encodeURIComponent(PERSONEL_SHEET) + '/row/' + sheetRow, { method: 'DELETE' });
+      tumPersonel.splice(idx, 1);
+    }
+  } catch(e) {
+    alert('Silme hatası: ' + e.message); return;
+  }
   populateFilters();
   renderKisiAra();
 }
@@ -3111,12 +3119,13 @@ function renderKadro() {
   document.getElementById('kadro-ekle-btn').style.display  = oyun ? '' : 'none';
   document.getElementById('kadro-excel-btn').style.display = oyun ? '' : 'none';
 
-  if (!oyun) {
+  // Oyun seçili değilken ama arama varsa - tüm personelde ara
+  if (!oyun && !araRaw) {
     el.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:260px;color:var(--muted-foreground)"><svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" style="opacity:.2;margin-bottom:14px"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><div style="font-size:14px;font-weight:700">Oyun Seçin</div><div style="font-size:12px;margin-top:4px;opacity:.6">Kadro listesi ve düzenleme araçları görüntülenir</div></div>';
     ozet.textContent = ''; return;
   }
 
-  var tumKadro = getPersonelForOyun(oyun);
+  var tumKadro = oyun ? getPersonelForOyun(oyun) : tumPersonel.filter(function(p){ return p.kisi && p.oyun; });
 
   // Kategori filtre dropdown
   var katSel = document.getElementById('kadro-kat-filter');
@@ -3292,24 +3301,54 @@ async function kadroKisiKaydet() {
   const ad    = document.getElementById('kadro-kisi-ad').value.trim();
   const kat   = document.getElementById('kadro-kisi-kat').value;
   const gorev = document.getElementById('kadro-kisi-gorev').value.trim();
-  const oyun  = document.getElementById('kadro-oyun-sec').value;
+  const oyun  = document.getElementById('kadro-oyun-sec').value || document.getElementById('kadro-kisi-modal-sure').textContent;
   let hata = false;
   if (!ad)  { document.getElementById('kadro-kisi-ad-err').textContent = 'Ad Soyad gerekli'; hata=true; } else { document.getElementById('kadro-kisi-ad-err').textContent = ''; }
   if (!kat) { document.getElementById('kadro-kisi-kat-err').textContent = 'Kategori seçilmeli'; hata=true; } else { document.getElementById('kadro-kisi-kat-err').textContent = ''; }
   if (hata) return;
-  // Güncelle veya ekle
-  if (kadroEditIdx !== null) {
-    // Mevcut kaydı in-place güncelle (sırayı bozmaz)
-    tumPersonel[kadroEditIdx].kisi = ad;
-    tumPersonel[kadroEditIdx].kategori = kat;
-    tumPersonel[kadroEditIdx].gorev = gorev;
-  } else {
-    // Yeni kişiyi aynı oyunun son satırından sonraya ekle
-    var sonIdx = -1;
-    tumPersonel.forEach(function(p, i){ if (p.oyun === oyun) sonIdx = i; });
-    if (sonIdx >= 0) tumPersonel.splice(sonIdx + 1, 0, { oyun, kategori: kat, gorev, kisi: ad });
-    else tumPersonel.push({ oyun, kategori: kat, gorev, kisi: ad });
+
+  const btnKaydet = document.querySelector('#kadro-kisi-modal .btn-primary');
+  if (btnKaydet) { btnKaydet.disabled = true; btnKaydet.textContent = 'Kaydediliyor...'; }
+
+  try {
+    if (kadroEditIdx !== null) {
+      // GÜNCELLE — satır numarasını bul (header=1, veri=2+)
+      // tumPersonel içindeki index + 2 (1-based + header satırı)
+      const sheetRow = kadroEditIdx + 2;
+      // 4 hücreyi güncelle: A=oyun, B=kategori, C=görev, D=kişi
+      const cols = ['A','B','C','D'];
+      const vals = [oyun, kat, gorev, ad];
+      await Promise.all(cols.map((col, i) =>
+        fetch(API + '/' + encodeURIComponent(PERSONEL_SHEET) + '/cell', {
+          method: 'PUT',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ row: sheetRow, col, value: vals[i] })
+        })
+      ));
+      // Local güncelle
+      tumPersonel[kadroEditIdx].kisi = ad;
+      tumPersonel[kadroEditIdx].kategori = kat;
+      tumPersonel[kadroEditIdx].gorev = gorev;
+      tumPersonel[kadroEditIdx].oyun = oyun;
+    } else {
+      // EKLE — yeni satır append et
+      await fetch(API + '/' + encodeURIComponent(PERSONEL_SHEET) + '/row', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ values: [oyun, kat, gorev, ad] })
+      });
+      // Local ekle
+      var sonIdx = -1;
+      tumPersonel.forEach(function(p, i){ if (p.oyun === oyun) sonIdx = i; });
+      if (sonIdx >= 0) tumPersonel.splice(sonIdx + 1, 0, { oyun, kategori: kat, gorev, kisi: ad });
+      else tumPersonel.push({ oyun, kategori: kat, gorev, kisi: ad });
+    }
+  } catch(e) {
+    alert('Kayıt sırasında hata: ' + e.message);
+  } finally {
+    if (btnKaydet) { btnKaydet.disabled = false; btnKaydet.textContent = 'Kaydet'; }
   }
+
   populateFilters();
   kadroKisiModalKapat();
   renderKadro();
@@ -3319,8 +3358,25 @@ async function kadroKisiSil() {
   if (kadroEditIdx === null) return;
   const p = tumPersonel[kadroEditIdx];
   if (!confirm(p.kisi + ' silinecek. Emin misiniz?')) return;
-  tumPersonel.splice(kadroEditIdx, 1);
-  // NOT: Ana siteye (PERSONEL_SHEET) YAZMİYORUZ - sadece local silme
+
+  const btnSil = document.getElementById('kadro-sil-btn');
+  if (btnSil) { btnSil.disabled = true; btnSil.textContent = 'Siliniyor...'; }
+
+  try {
+    // Sheets'ten sil: satır numarası = index + 2 (header=1)
+    const sheetRow = kadroEditIdx + 2;
+    const res = await fetch(API + '/' + encodeURIComponent(PERSONEL_SHEET) + '/row/' + sheetRow, {
+      method: 'DELETE'
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    // Local sil
+    tumPersonel.splice(kadroEditIdx, 1);
+  } catch(e) {
+    alert('Silme sırasında hata: ' + e.message);
+    if (btnSil) { btnSil.disabled = false; btnSil.textContent = '🗑 Sil'; }
+    return;
+  }
+
   populateFilters();
   kadroKisiModalKapat();
   renderKadro();
