@@ -475,9 +475,13 @@
 
   <!-- KADRO YÖNETİMİ -->
   <div class="tab-panel" id="tab-kadro">
-    <div class="filters-bar">
-      <select class="filter-select" id="kadro-oyun-sec" onchange="renderKadro()" style="width:280px">
+    <div class="filters-bar" style="flex-wrap:wrap;gap:6px">
+      <select class="filter-select" id="kadro-oyun-sec" onchange="renderKadro()" style="width:220px">
         <option value="">-- Oyun Seçin --</option>
+      </select>
+      <input class="filter-input" type="text" id="kadro-search" placeholder="🔍 Kişi ara..." oninput="renderKadro()" style="width:180px">
+      <select class="filter-select" id="kadro-kat-filter" onchange="renderKadro()" style="width:160px">
+        <option value="">Tüm Kategoriler</option>
       </select>
       <span id="kadro-ozet" style="font-size:11px;color:var(--muted-foreground)"></span>
       <div class="ml-auto" style="display:flex;gap:6px">
@@ -1947,7 +1951,7 @@ function populateFilters() {
   });
   const oyunlar = [...oyunSet].sort();
   const iller   = [...new Set(turneler.map(t => t.il))].filter(Boolean).sort();
-  ['filter-oyun','oyun-sec','kadro-oyun-sec'].forEach(id => {
+  ['filter-oyun','oyun-sec','kadro-oyun-sec','kisi-filter-oyun'].forEach(id => {
     const sel = document.getElementById(id);
     if (!sel) return;
     const savedVal = sel.value; // Seçili değeri kaydet
@@ -1978,6 +1982,7 @@ function switchTab(tab) {
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.getElementById('tab-' + tab).classList.add('active');
   if (tab === 'kadro')      renderKadro();
+  if (tab === 'kisi')       renderKisiAra();
   if (tab === 'harita')     renderHarita();
   if (tab === 'takvim')     renderCalendar();
   if (tab === 'istatistik') renderIstatistik();
@@ -2856,84 +2861,100 @@ function oyunDetayPanelAc(tip, oyunEnc) {
 // KİŞİYE GÖRE
 // ============================================================
 function renderKisiAra() {
-  const ara  = document.getElementById('kisi-search').value.trim().toLowerCase();
-  const el   = document.getElementById('kisi-content');
-  const stat = document.getElementById('kisi-sonuc');
-  if (ara.length < 2) {
-    el.innerHTML = '<div class="empty-state"><div class="empty-icon">👤</div><div class="empty-text">En az 2 karakter girin</div></div>';
-    stat.textContent = ''; return;
-  }
-  const eslesen = tumPersonel.filter(p => p.kisi.toLowerCase().includes(ara) && DAHIL_KATEGORILER.some(k => p.kategori.includes(k) || p.kategori === k));
-  if (!eslesen.length) {
-    el.innerHTML = '<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-text">Kişi bulunamadı</div></div>';
-    stat.textContent = ''; return;
-  }
-  const kisiler = [...new Set(eslesen.map(p => p.kisi))];
-  stat.textContent = kisiler.length + ' kişi bulundu';
-  const html = kisiler.map(kisi => {
-    const oyunlar = [...new Set(eslesen.filter(p => p.kisi === kisi).map(p => p.oyun))];
-    const kisiT   = turneler.filter(t => {
-      // Hem oyun kadrosundan hem kayıtlı katılımcılardan kontrol
-      if (t.katilimcilar && t.katilimcilar.length) {
-        return t.katilimcilar.some(k => k.kisi === kisi);
-      }
-      return oyunlar.includes(t.oyun);
-    }).sort((a,b) => new Date(b.baslangicTarih||b.tarih||0) - new Date(a.baslangicTarih||a.tarih||0));
-    const toplamGun  = kisiT.reduce((s,t) => s + turneSuresi(t), 0);
-    const toplamTemsil = kisiT.reduce((s,t) => s + durakToplamTemsil(t), 0);
-    const kategori = eslesen.find(p => p.kisi === kisi)?.kategori || '';
+  var ara     = (document.getElementById('kisi-search') ? document.getElementById('kisi-search').value : '').trim().toLowerCase();
+  var filOyun = document.getElementById('kisi-filter-oyun') ? document.getElementById('kisi-filter-oyun').value : '';
+  var filKat  = document.getElementById('kisi-filter-kat')  ? document.getElementById('kisi-filter-kat').value  : '';
+  var el      = document.getElementById('kisi-content');
+  var stat    = document.getElementById('kisi-sonuc');
 
-    // İnisiyaller için avatar rengi
-    var initials = kisi.split(' ').filter(Boolean).map(w=>w[0]).join('').slice(0,2).toUpperCase();
-    var avatarRenk = ['#6b1b1b','#0369a1','#7c3aed','#059669','#d97706','#dc2626','#0891b2'][kisi.charCodeAt(0) % 7];
+  var eslesen = tumPersonel.filter(function(p) {
+    if (!p.kisi) return false;
+    if (!DAHIL_KATEGORILER.some(function(k){ return p.kategori === k; })) return false;
+    if (ara.length >= 1 && !p.kisi.toLowerCase().includes(ara)) return false;
+    if (filOyun && p.oyun !== filOyun) return false;
+    if (filKat  && p.kategori !== filKat && !(p.kategori === 'Oyuncu' && filKat === 'Sanatçı')) return false;
+    return true;
+  });
 
-    return '<div class="section-wrap" style="margin-bottom:10px">'
-      // Header
-      + '<div class="section-header" style="gap:10px">'
-      +   '<div style="width:38px;height:38px;border-radius:50%;background:'+avatarRenk+';color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0">'+initials+'</div>'
-      +   '<div style="flex:1">'
-      +     '<div style="font-size:13px;font-weight:700">' + kisi + '</div>'
-      +     '<div style="font-size:10px;color:var(--muted-foreground)">' + kategori + (toplamGun ? ' · ' + toplamGun + ' gün · ' + toplamTemsil + ' temsil' : '') + '</div>'
+  var kisiler = [...new Set(eslesen.map(function(p){ return p.kisi; }))].sort(function(a,b){ return a.localeCompare(b,'tr'); });
+  stat.textContent = kisiler.length ? kisiler.length + ' kişi' : '';
+
+  if (!kisiler.length) {
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-text">' + (ara||filOyun||filKat ? 'Sonuç bulunamadı' : 'Yükleniyor...') + '</div></div>';
+    return;
+  }
+
+  var html = '<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;overflow:hidden">'
+    + '<table style="width:100%;font-size:12px;border-collapse:collapse">'
+    + '<thead><tr style="background:var(--sidebar);color:var(--sidebar-foreground)">'
+    + '<th style="padding:8px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.4px">KİŞİ</th>'
+    + '<th style="padding:8px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.4px">KATEGORİ</th>'
+    + '<th style="padding:8px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.4px">OYUN(LAR)</th>'
+    + '<th style="padding:8px 12px;text-align:center;font-size:10px;font-weight:700;letter-spacing:.4px">TURNE</th>'
+    + '<th style="padding:8px 12px;text-align:center;font-size:10px;font-weight:700;letter-spacing:.4px">GÜN</th>'
+    + '</tr></thead><tbody>';
+
+  kisiler.forEach(function(kisi, ki) {
+    var kayitlar = eslesen.filter(function(p){ return p.kisi === kisi; });
+    var oyunlar  = [...new Set(kayitlar.map(function(p){ return p.oyun; }).filter(Boolean))];
+    var kat      = kayitlar[0] ? (kayitlar[0].kategori === 'Oyuncu' ? 'Sanatçı' : kayitlar[0].kategori) : '';
+    var kisiT    = turneler.filter(function(t) {
+      if (t.katilimcilar && t.katilimcilar.length) return t.katilimcilar.some(function(k){ return k.kisi === kisi; });
+      return oyunlar.some(function(o){ return t.oyun === o; });
+    });
+    var toplamGun = kisiT.reduce(function(s,t){ return s+turneSuresi(t); }, 0);
+    var rowBg = ki%2===0 ? 'var(--card)' : 'var(--muted)';
+    var initials = kisi.split(' ').filter(Boolean).map(function(w){ return w[0]; }).join('').slice(0,2).toUpperCase();
+    var ac = ['#6b1b1b','#0369a1','#7c3aed','#059669','#d97706','#0891b2'][kisi.charCodeAt(0)%6];
+    var araVurgu = ara ? kisi.replace(new RegExp('('+ara.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi'),'<mark style="background:#fef08a;border-radius:2px">$1</mark>') : kisi;
+
+    html += '<tr style="background:'+rowBg+';cursor:pointer" onclick="kisiDetayToggle(\'kd'+ki+'\')">'
+      + '<td style="padding:7px 12px;border-bottom:1px solid var(--border)">'
+      +   '<div style="display:flex;align-items:center;gap:8px">'
+      +     '<div style="width:28px;height:28px;border-radius:50%;background:'+ac+';color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0">'+initials+'</div>'
+      +     '<span style="font-weight:600">'+araVurgu+'</span>'
       +   '</div>'
-      +   '<div style="text-align:right;font-size:11px;color:var(--primary);font-weight:700">' + kisiT.length + ' turne</div>'
-      + '</div>'
-      // İçerik
-      + '<div style="padding:10px 14px">'
-      // Oyunlar
-      + '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px">' + oyunlar.map(o => '<span class="kisi-chip">🎭 ' + o + '</span>').join('') + '</div>'
-      // Turne tablosu
-      + (kisiT.length
-          ? '<table style="width:100%;font-size:11px;border-collapse:collapse"><thead><tr style="background:var(--muted)">'
-            + '<th style="padding:5px 8px;text-align:left">Oyun</th>'
-            + '<th style="padding:5px 8px;text-align:left">Şehir</th>'
-            + '<th style="padding:5px 8px;text-align:left">Tarih</th>'
-            + '<th style="padding:5px 8px;text-align:left">Gün</th>'
-            + '<th style="padding:5px 8px;text-align:left">Statü</th>'
-            + '</tr></thead><tbody>'
-            + kisiT.map(t => {
-                const sr = statuRenk(t.statu);
-                const iller = durakIllerListesi(t).map(il => il.replace(/\/MERKEZ/gi,'')).join(' › ');
-                var kmS = '';
-                var ilList = durakIllerListesi(t);
-                if (ilList.length) {
-                  var matched = Object.keys(IL_LATLON||{}).find(k => k.toLocaleLowerCase('tr-TR') === ilList[0].toLocaleLowerCase('tr-TR'));
-                  if (matched && IL_LATLON[matched]) {
-                    kmS = ' <span style="color:#0369a1">~'+hesaplaKm(IZMIR_LATLON[0],IZMIR_LATLON[1],IL_LATLON[matched][0],IL_LATLON[matched][1])+' km</span>';
-                  }
-                }
-                return '<tr>'
-                  + '<td style="padding:5px 8px;border-bottom:1px solid var(--border);font-weight:600">' + (t.oyun||'—') + '</td>'
-                  + '<td style="padding:5px 8px;border-bottom:1px solid var(--border)">' + iller + kmS + '</td>'
-                  + '<td style="padding:5px 8px;border-bottom:1px solid var(--border)">' + formatTarih(t.baslangicTarih||t.tarih) + '</td>'
-                  + '<td style="padding:5px 8px;border-bottom:1px solid var(--border)">' + turneSuresi(t) + '</td>'
-                  + '<td style="padding:5px 8px;border-bottom:1px solid var(--border)"><span style="padding:1px 7px;border-radius:10px;font-size:10px;background:'+sr.bg+';color:'+sr.fg+'">'+sr.label+'</span></td>'
-                  + '</tr>';
-              }).join('')
-            + '</tbody></table>'
-          : '<div style="font-size:11px;color:var(--muted-foreground)">Henüz turne kaydı yok</div>')
-      + '</div></div>';
-  }).join('');
+      + '</td>'
+      + '<td style="padding:7px 12px;border-bottom:1px solid var(--border);font-size:11px;color:var(--muted-foreground)">'+kat+'</td>'
+      + '<td style="padding:7px 12px;border-bottom:1px solid var(--border);font-size:11px">'
+      +   oyunlar.map(function(o){ return '<span style="background:var(--accent);border:1px solid var(--border);border-radius:10px;padding:1px 8px;font-size:10px;font-weight:600;white-space:nowrap">'+o+'</span>'; }).join(' ')
+      + '</td>'
+      + '<td style="padding:7px 12px;border-bottom:1px solid var(--border);font-weight:700;color:var(--primary);text-align:center">'+kisiT.length+'</td>'
+      + '<td style="padding:7px 12px;border-bottom:1px solid var(--border);color:#0369a1;font-weight:600;text-align:center">'+(toplamGun||'—')+(toplamGun?' g':'')+'</td>'
+      + '</tr>';
+
+    // Açılır detay satırı
+    html += '<tr id="kd'+ki+'" style="display:none"><td colspan="5" style="padding:0;border-bottom:2px solid var(--primary)">'
+      + '<div style="padding:10px 14px 12px;background:hsl(38,40%,98%)">';
+    if (kisiT.length) {
+      html += '<div style="font-size:10px;font-weight:700;color:var(--muted-foreground);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">🗓 Turne Geçmişi</div>'
+        + '<div style="display:flex;flex-wrap:wrap;gap:6px">'
+        + kisiT.map(function(t){
+            var sr = statuRenk(t.statu);
+            var iller = durakIllerListesi(t).map(function(il){ return il.replace(/\/MERKEZ/gi,''); }).join(' › ');
+            return '<div style="background:var(--card);border:1px solid var(--border);border-radius:7px;padding:6px 10px;font-size:11px;min-width:140px">'
+              + '<div style="font-weight:700;margin-bottom:2px">'+(t.oyun||'—')+'</div>'
+              + '<div style="color:var(--muted-foreground);font-size:10px">'+(iller||t.il||'?')+' · '+formatTarih(t.baslangicTarih||t.tarih)+'</div>'
+              + '<div style="margin-top:4px"><span style="padding:1px 7px;border-radius:10px;font-size:10px;background:'+sr.bg+';color:'+sr.fg+'">'+sr.label+'</span></div>'
+              + '</div>';
+          }).join('')
+        + '</div>';
+    } else {
+      html += '<div style="font-size:11px;color:var(--muted-foreground)">Henüz turne kaydı yok.</div>';
+    }
+    html += '</div></td></tr>';
+  });
+
+  html += '</tbody></table></div>';
   el.innerHTML = html;
+}
+
+function kisiDetayToggle(id) {
+  var row = document.getElementById(id);
+  if (!row) return;
+  // Önceki açık olanı kapat
+  document.querySelectorAll('[id^="kd"]').forEach(function(r){ if (r.id !== id) r.style.display='none'; });
+  row.style.display = row.style.display === 'none' ? 'table-row' : 'none';
 }
 
 // ============================================================
@@ -2942,57 +2963,104 @@ function renderKisiAra() {
 let kadroEditIdx = null;
 
 function renderKadro() {
-  const oyun = document.getElementById('kadro-oyun-sec').value;
-  const el   = document.getElementById('kadro-content');
-  const ozet = document.getElementById('kadro-ozet');
+  var oyun   = document.getElementById('kadro-oyun-sec').value;
+  var araRaw = (document.getElementById('kadro-search') ? document.getElementById('kadro-search').value : '').trim().toLowerCase();
+  var filKat = document.getElementById('kadro-kat-filter') ? document.getElementById('kadro-kat-filter').value : '';
+  var el     = document.getElementById('kadro-content');
+  var ozet   = document.getElementById('kadro-ozet');
   document.getElementById('kadro-ekle-btn').style.display  = oyun ? '' : 'none';
   document.getElementById('kadro-excel-btn').style.display = oyun ? '' : 'none';
+
   if (!oyun) {
     el.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-text">Oyun seçin</div><div class="empty-sub">Kadroyu görmek ve düzenlemek için oyun seçiniz</div></div>';
     ozet.textContent = ''; return;
   }
-  const kadro = getPersonelForOyun(oyun);
-  const tumKategoriler = [...new Set(kadro.map(p => p.kategori))].sort();
-  ozet.textContent = kadro.length + ' kişi · ' + tumKategoriler.length + ' kategori';
+
+  var tumKadro = getPersonelForOyun(oyun);
+
+  // Kategori filtre dropdown'ı doldur
+  var katSel = document.getElementById('kadro-kat-filter');
+  if (katSel) {
+    var mevcutVal = katSel.value;
+    var katList = [...new Set(tumKadro.map(function(p){ return p.kategori; }))].sort();
+    katSel.innerHTML = '<option value="">Tüm Kategoriler</option>';
+    katList.forEach(function(k){
+      var o = document.createElement('option');
+      o.value = k; o.textContent = k;
+      if (k === mevcutVal) o.selected = true;
+      katSel.appendChild(o);
+    });
+  }
+
+  // Filtrele
+  var kadro = tumKadro.filter(function(p) {
+    if (araRaw && !p.kisi.toLowerCase().includes(araRaw)) return false;
+    if (filKat && p.kategori !== filKat) return false;
+    return true;
+  });
+
+  var tumKategoriler = [...new Set(kadro.map(function(p){ return p.kategori; }))].sort();
+  ozet.textContent = kadro.length + ' / ' + tumKadro.length + ' kişi';
+
   if (!kadro.length) {
-    el.innerHTML = '<div class="empty-state"><div class="empty-icon">👥</div><div class="empty-text">Bu oyuna ait kadro yok</div><div class="empty-sub">Sağ üstten kişi ekleyebilirsiniz</div></div>';
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-text">' + (araRaw || filKat ? 'Sonuç bulunamadı' : 'Bu oyuna ait kadro yok') + '</div></div>';
     return;
   }
-  // Sanatçı ve teknik kategorileri ayır
-  const SANATCI_KATS = ['Sanatçı','Oyuncu','Koro','Koro/Dans','Koro/Dans Ekibi','Solist','Dansçı','Figüran','Figüran/Müzisyen','Müzisyen','Orkestra','Kurumdan Emekli Sanatçı'];
-  const TEKNIK_KATS  = ['Sahne Amiri','Kondüvit','Ses – Kondüvit','Ses','Mutemet','Sahne Işıkçısı','Işık Kontrol','Işık – Tasarım','Sahne Makinisti','Aksesuar Memuru','Aksesuar Sorumlusu','Dekor/Aksesuar','Sahne Dekor (Sorumlu)','Sahne Terzisi','Sahne Terzisi/Kostüm','Kostüm','Perukacı','Peruk – Makyaj','Peruk Sorumlusu','Sahne Uzmanı','Dekorcu','Dekor Sorumlusu','Kostümcü','Kostüm Sorumlusu','Makyajcı','Ses Teknisyeni','Işık Teknisyeni','Sahne Görevlisi','Teknik Direktör','Sahne Yöneticisi','Reji Yardımcısı (Sahne)','Turne Başkanı','Video / Görüntü'];
 
-  function kadroGrupHtml(filtreKats, baslik, renkBg) {
-    const grubKisiler = kadro.filter(p => filtreKats.some(k => p.kategori === k || p.kategori.startsWith(k)));
-    if (!grubKisiler.length) return '';
-    const grubKats = [...new Set(grubKisiler.map(p => p.kategori))].sort();
-    let h = '<div style="margin-bottom:16px">';
-    h += '<div style="display:flex;align-items:center;gap:8px;padding:9px 14px;background:' + renkBg + ';border-radius:8px 8px 0 0;border-bottom:2px solid var(--border)">';
-    h += '<span style="font-size:13px;font-weight:800">' + baslik + '</span>';
-    h += '<span style="font-size:11px;color:var(--muted-foreground);margin-left:4px">' + grubKisiler.length + ' kişi</span></div>';
-    grubKats.forEach(function(kat) {
-      const kisiler = grubKisiler.filter(p => p.kategori === kat);
-      h += '<div class="section-wrap" style="margin-bottom:0;border-radius:0"><div class="section-header" style="border-radius:0"><span>' + kat + '</span><span style="font-size:11px;font-weight:500;color:var(--muted-foreground)">' + kisiler.length + ' kişi</span></div><div style="padding:0">';
-      kisiler.forEach(function(p, i) {
-        // indexOf çalışmaz - getPersonelForOyun yeni obj döndürüyor, kisi adıyla bul
-        const globalIdx = tumPersonel.findIndex(function(tp){ return tp.kisi === p.kisi && tp.oyun === p.oyun; });
-        h += '<div class="kadro-kisi-row" style="display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px solid var(--border)">'
-          + '<div style="width:26px;height:26px;border-radius:50%;background:var(--muted);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--muted-foreground);flex-shrink:0">' + (i+1) + '</div>'
-          + '<div style="flex:1"><div style="font-size:13px;font-weight:600">' + p.kisi + '</div>' + (p.gorev ? '<div style="font-size:11px;color:var(--muted-foreground)">' + p.gorev + '</div>' : '') + '</div>'
-          + (globalIdx >= 0 ? '<button class="btn btn-outline" style="height:26px;font-size:11px;padding:0 10px" onclick="kadroKisiDuzenleAc(' + globalIdx + ')">✏️ Düzenle</button>' : '')
-          + '</div>';
-      });
-      h += '</div></div>';
+  var SANATCI_KATS = ['Sanatçı','Oyuncu','Koro','Koro/Dans','Koro/Dans Ekibi','Solist','Dansçı','Figüran','Figüran/Müzisyen','Müzisyen','Orkestra','Kurumdan Emekli Sanatçı'];
+  var TEKNIK_KATS  = ['Sahne Amiri','Kondüvit','Ses – Kondüvit','Ses','Mutemet','Sahne Işıkçısı','Işık Kontrol','Işık – Tasarım','Sahne Makinisti','Aksesuar Memuru','Aksesuar Sorumlusu','Dekor/Aksesuar','Sahne Dekor (Sorumlu)','Sahne Terzisi','Sahne Terzisi/Kostüm','Kostüm','Perukacı','Peruk – Makyaj','Peruk Sorumlusu','Sahne Uzmanı','Dekorcu','Dekor Sorumlusu','Kostümcü','Kostüm Sorumlusu','Makyajcı','Ses Teknisyeni','Işık Teknisyeni','Sahne Görevlisi','Teknik Direktör','Sahne Yöneticisi','Reji Yardımcısı (Sahne)','Turne Başkanı','Video / Görüntü'];
+
+  function grupTablo(filtreKats, baslik, renk, ikon) {
+    var grup = kadro.filter(function(p){ return filtreKats.some(function(k){ return p.kategori === k; }); });
+    if (!grup.length) return '';
+    var katGruplari = {};
+    grup.forEach(function(p){
+      if (!katGruplari[p.kategori]) katGruplari[p.kategori] = [];
+      katGruplari[p.kategori].push(p);
     });
-    h += '</div>';
+    var h = '<div style="margin-bottom:12px;border:1px solid var(--border);border-radius:10px;overflow:hidden">';
+    h += '<div style="display:flex;align-items:center;gap:8px;padding:8px 14px;background:'+renk+';border-bottom:1px solid var(--border)">';
+    h += '<span style="font-size:13px">'+ikon+'</span>';
+    h += '<span style="font-size:12px;font-weight:800">'+baslik+'</span>';
+    h += '<span style="font-size:11px;color:var(--muted-foreground);margin-left:2px">'+grup.length+' kişi</span></div>';
+
+    // Compact tablo
+    h += '<table style="width:100%;border-collapse:collapse;font-size:12px">';
+    h += '<thead><tr style="background:var(--muted);font-size:10px">';
+    h += '<th style="padding:5px 10px;text-align:left;font-weight:700;width:30px">#</th>';
+    h += '<th style="padding:5px 10px;text-align:left;font-weight:700">AD SOYAD</th>';
+    h += '<th style="padding:5px 10px;text-align:left;font-weight:700">KATEGORİ</th>';
+    h += '<th style="padding:5px 10px;text-align:left;font-weight:700">GÖREV</th>';
+    h += '<th style="padding:5px 10px;text-align:right;font-weight:700;width:80px"></th>';
+    h += '</tr></thead><tbody>';
+
+    var sira = 0;
+    Object.keys(katGruplari).sort().forEach(function(kat) {
+      katGruplari[kat].forEach(function(p) {
+        sira++;
+        var globalIdx = tumPersonel.findIndex(function(tp){ return tp.kisi === p.kisi && tp.oyun === p.oyun; });
+        var rowBg = sira%2===0 ? 'var(--muted)' : 'var(--card)';
+        var ara_vurgu = araRaw ? p.kisi.replace(new RegExp('('+araRaw.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi'), '<mark style="background:#fef08a;border-radius:2px">$1</mark>') : p.kisi;
+        h += '<tr style="background:'+rowBg+'">';
+        h += '<td style="padding:6px 10px;color:var(--muted-foreground);font-size:11px">'+sira+'</td>';
+        h += '<td style="padding:6px 10px;font-weight:600">'+ara_vurgu+'</td>';
+        h += '<td style="padding:6px 10px;font-size:11px;color:var(--muted-foreground)">'+kat+'</td>';
+        h += '<td style="padding:6px 10px;font-size:11px">'+(p.gorev||'—')+'</td>';
+        h += '<td style="padding:6px 10px;text-align:right">';
+        if (globalIdx >= 0) h += '<button onclick="kadroKisiDuzenleAc('+globalIdx+')" style="border:1px solid var(--border);background:transparent;border-radius:5px;padding:2px 8px;font-size:10px;cursor:pointer;font-family:Poppins,sans-serif;color:var(--foreground)">✏️</button>';
+        h += '</td></tr>';
+      });
+    });
+
+    h += '</tbody></table></div>';
     return h;
   }
 
-  const digerKats = tumKategoriler.filter(k => !SANATCI_KATS.some(s => s === k) && !TEKNIK_KATS.some(t => t === k));
-  let html = '';
-  html += kadroGrupHtml(SANATCI_KATS, '🎭 Sanatçı Kadrosu', 'hsl(350,40%,95%)');
-  html += kadroGrupHtml(TEKNIK_KATS,  '⚙️ Teknik Kadro',   'hsl(220,40%,95%)');
-  if (digerKats.length) html += kadroGrupHtml(digerKats, '📋 Diğer', 'var(--muted)');
+  var digerKats = tumKategoriler.filter(function(k){ return !SANATCI_KATS.some(function(s){ return s===k; }) && !TEKNIK_KATS.some(function(t){ return t===k; }); });
+  var html = '';
+  html += grupTablo(SANATCI_KATS, 'Sanatçı Kadrosu', 'hsl(350,40%,95%)', '🎭');
+  html += grupTablo(TEKNIK_KATS,  'Teknik Kadro',   'hsl(220,40%,95%)', '⚙️');
+  if (digerKats.length) html += grupTablo(digerKats, 'Diğer', 'var(--muted)', '📋');
   el.innerHTML = html;
 }
 
@@ -3042,24 +3110,15 @@ async function kadroKisiKaydet() {
   if (!ad)  { document.getElementById('kadro-kisi-ad-err').textContent = 'Ad Soyad gerekli'; hata=true; } else { document.getElementById('kadro-kisi-ad-err').textContent = ''; }
   if (!kat) { document.getElementById('kadro-kisi-kat-err').textContent = 'Kategori seçilmeli'; hata=true; } else { document.getElementById('kadro-kisi-kat-err').textContent = ''; }
   if (hata) return;
-  const saveBtn = document.getElementById('save-kisi-btn');
-  if (!saveBtn) { console.error('save-kisi-btn bulunamadı!'); return; }
-  saveBtn.disabled = true; saveBtn.textContent = 'Kaydediliyor...';
-  try {
-    if (kadroEditIdx !== null) {
-      tumPersonel[kadroEditIdx] = { oyun, kategori: kat, gorev, kisi: ad };
-      // NOT: Ana siteye (PERSONEL_SHEET) YAZMİYORUZ - sadece local güncelleme
-    } else {
-      tumPersonel.push({ oyun, kategori: kat, gorev, kisi: ad });
-      // NOT: Ana siteye (PERSONEL_SHEET) YAZMİYORUZ - sadece local güncelleme
-    }
-  } catch(e) {
-    if (kadroEditIdx === null) tumPersonel.push({ oyun, kategori: kat, gorev, kisi: ad });
+  // Güncelle veya ekle
+  if (kadroEditIdx !== null) {
+    tumPersonel[kadroEditIdx] = { oyun, kategori: kat, gorev, kisi: ad };
+  } else {
+    tumPersonel.push({ oyun, kategori: kat, gorev, kisi: ad });
   }
   populateFilters();
   kadroKisiModalKapat();
   renderKadro();
-  saveBtn.disabled = false; saveBtn.textContent = 'Kaydet';
 }
 
 async function kadroKisiSil() {
@@ -5234,15 +5293,16 @@ function renderProgramGunler() {
         + '<button onclick="programSatirSil(' + i + ')" title="Sil" style="width:26px;height:26px;border-radius:5px;border:1px solid var(--border);background:transparent;cursor:pointer;font-size:15px;color:var(--destructive);display:flex;align-items:center;justify-content:center;flex-shrink:0">×</button>'
         + '</div>';
 
-      // Saat satırı - SADECE Oyun seçiliyse göster
-      var row2 = isOyun
-        ? '<div style="display:flex;align-items:center;gap:10px;padding:3px 10px 6px 14px;border-left:' + borderLeft + ';background:' + rowBg + ';' + (i < programSatirlar.length-1 ? 'border-bottom:1px solid var(--border)' : '') + '">'
-          + '<span style="font-size:10px;font-weight:700;color:#16a34a;flex-shrink:0">⏰ 1. Temsil</span>'
-          + '<input type="time" value="' + (s.saat||'') + '" onchange="programSatirlar[' + i + '].saat=this.value" style="width:110px;border:1.5px solid #16a34a;border-radius:5px;padding:3px 6px;font-size:11px;background:#f0fdf4;font-family:Poppins,sans-serif;box-sizing:border-box">'
-          + '<span style="font-size:10px;font-weight:700;color:#7c3aed;flex-shrink:0;margin-left:10px">⏰ 2. Temsil <span style="font-weight:400;opacity:.6">(opsiyon)</span></span>'
-          + '<input type="time" value="' + (s.saat2||'') + '" onchange="programSatirlar[' + i + '].saat2=this.value" style="width:110px;border:1.5px solid ' + (s.saat2?'#7c3aed':'var(--border)') + ';border-radius:5px;padding:3px 6px;font-size:11px;background:' + (s.saat2?'#faf5ff':'var(--card)') + ';font-family:Poppins,sans-serif;box-sizing:border-box">'
+      // Saat satırı - SADECE Oyun VE oyun ismi dolu ise göster
+      var hasOyunIsmi = isOyun && s.oyun;
+      var row2 = hasOyunIsmi
+        ? '<div style="display:flex;align-items:center;gap:12px;padding:4px 10px 6px 16px;border-left:' + borderLeft + ';background:' + (rowBg) + ';' + (i < programSatirlar.length-1 ? 'border-bottom:1px solid var(--border)' : '') + '">'
+          + '<span style="font-size:10px;font-weight:700;color:#16a34a;flex-shrink:0;min-width:60px">⏰ 1. Temsil</span>'
+          + '<input type="time" value="' + (s.saat||'') + '" onchange="programSatirlar[' + i + '].saat=this.value" style="width:120px;border:1.5px solid #16a34a;border-radius:5px;padding:4px 8px;font-size:12px;background:#f0fdf4;font-family:Poppins,sans-serif;box-sizing:border-box">'
+          + '<span style="font-size:10px;font-weight:700;color:#7c3aed;flex-shrink:0;margin-left:8px;min-width:90px">⏰ 2. Temsil <span style="font-weight:400;opacity:.55">(opsiyon)</span></span>'
+          + '<input type="time" value="' + (s.saat2||'') + '" onchange="programSatirlar[' + i + '].saat2=this.value" style="width:120px;border:1.5px solid ' + (s.saat2?'#7c3aed':'#d1d5db') + ';border-radius:5px;padding:4px 8px;font-size:12px;background:' + (s.saat2?'#faf5ff':'var(--card)') + ';font-family:Poppins,sans-serif;box-sizing:border-box">'
           + '</div>'
-        : (i < programSatirlar.length-1 ? '<div style="border-left:' + borderLeft + ';border-bottom:1px solid var(--border);background:' + rowBg + '"></div>' : '');
+        : (i < programSatirlar.length-1 ? '<div style="border-left:' + borderLeft + ';border-bottom:1px solid var(--border);background:' + rowBg + ';height:1px"></div>' : '');
 
       return row1 + row2;
     }).join('')
