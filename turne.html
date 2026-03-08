@@ -773,7 +773,7 @@
         <div class="modal-title" id="modal-title">Turne Ekle</div>
         <div class="modal-sure" id="modal-sure"></div>
       </div>
-      <button class="modal-close" onclick="closeModal()">×</button>
+      <button class="modal-close" onclick="_modalDirty ? onayGoster({baslik:'Formu kapat?',mesaj:'Kaydedilmemiş değişiklikler kaybolacak.',ikon:'⚠️',ikonBg:'hsl(42,90%,94%)',tamamRenk:'hsl(42,60%,38%)',tamamYazi:'Evet, kapat',onOnay:function(){closeModal();}}) : closeModal()">×</button>
     </div>
     <div class="modal-tabs">
       <button class="modal-tab active" onclick="switchModalTab('genel',0)">Genel</button>
@@ -5557,10 +5557,14 @@ function _geriYukleDevam(liste) {
 // ============================================================
 // MODAL (TURNE FORMU)
 // ============================================================
+// ── Modal Dirty State ─────────────────────────────
+var _modalDirty = false;
+
 function openModal(rowIdx) {
   // Taslak modu: 'taslak' string geçilince hızlı form
   var _taslakModu = (rowIdx === 'taslak');
   if (_taslakModu) rowIdx = undefined;
+  _modalDirty = false;
   document.getElementById('modal-overlay').classList.add('on');
   switchModalTab('genel', 0);
   // Taslak modu UI
@@ -5741,7 +5745,7 @@ function editTurne(rowIdx) {
   window._editSnapshot = JSON.stringify(t);
   window._editAcilanZaman = Date.now();
 }
-function closeModal() { document.getElementById('modal-overlay').classList.remove('on'); }
+function closeModal() { document.getElementById('modal-overlay').classList.remove('on'); _modalDirty = false; }
 
 // ============================================================
 // KAYDET
@@ -5749,6 +5753,7 @@ function closeModal() { document.getElementById('modal-overlay').classList.remov
 var _saveTurneCalisiyor = false;
 async function saveTurne() {
   if (_saveTurneCalisiyor) { console.warn('[saveTurne] Zaten çalışıyor, ikinci çağrı engellendi'); return; }
+  _modalDirty = false; // Kaydet'e basıldı, artık uyarı gösterme
   _saveTurneCalisiyor = true;
   var _saveBtn = document.getElementById('save-turne-btn');
   if (_saveBtn) { _saveBtn.disabled = true; _saveBtn.textContent = 'Kaydediliyor...'; }
@@ -6795,16 +6800,18 @@ function gorevlendirmePdf(rowIdx, mod) {
     + '<script>'
     + 'function filtreUygula(kat){var tbody=document.getElementById(\'per-tbody\');if(!tbody)return;var g=0;Array.from(tbody.querySelectorAll(\'tr\')).forEach(function(tr){var vis=kat===\'T\u00fcm\u00fc\'||tr.dataset.kat===kat;tr.style.display=vis?\'\':\'none\';if(vis){tr.cells[0].textContent=++g;tr.style.background=g%2===0?\'#fff\':\'#f9f5f0\';}});var s=document.getElementById(\'per-sayac\');if(s)s.textContent=\'Toplam \'+g+\' ki\u015fi g\u00f6steriliyor\';document.querySelectorAll(\'.flt-btn\').forEach(function(b){var a=b.id===\'flt-\'+kat;b.style.background=a?\'#6b1b1b\':\'#f3f4f6\';b.style.color=a?\'#fff\':\'#333\';});}'
     + 'function wordIndir(){'
-    +   'var ic=document.getElementById("rapor-icerik").innerHTML;'
-    +   'var wordCss="body{font-family:Calibri,Arial,sans-serif;font-size:11pt;color:#1a1a1a;margin:0;padding:0}"'
-    +     '+"table{width:100%;border-collapse:collapse;margin-bottom:8pt;font-size:10pt}"'
-    +     '+"th{background:#5a1717;color:#fff;padding:5pt 8pt;text-align:left;border:1pt solid #4a1212}"'
-    +     '+"td{padding:5pt 8pt;border:1pt solid #ddd}"'
-    +     '+"h1,h2,h3{font-family:Calibri,Arial,sans-serif}"'
-    +     '+".sec{margin-bottom:14pt}"+".sec-title{font-size:12pt;font-weight:bold;color:#6b1b1b;border-bottom:2pt solid #6b1b1b;padding-bottom:3pt;margin-bottom:8pt}"'
-    +     '+".info-grid{display:grid;grid-template-columns:1fr 1fr;gap:6pt}"+".info-box{border:1pt solid #e5ddd5;border-radius:4pt;padding:7pt;background:#faf7f2}"'
-    +     '+".info-lbl{font-size:8pt;color:#888;text-transform:uppercase;letter-spacing:.3pt}"+".info-val{font-size:11pt;font-weight:bold;color:#1a1a1a;margin-top:2pt}"'
-    +     '+"div[style*=\\"border-left\\"]{padding:6pt 10pt;margin-bottom:4pt}";'
+    +   'try {'
+    +     'var t = window.opener && window.opener._wordCurrentTurne;'
+    +     'var ic = (t && window.opener._wordIcerik) ? window.opener._wordIcerik(t) : document.getElementById("rapor-icerik").innerHTML;'
+    +   '} catch(e) {'
+    +     'var ic = document.getElementById("rapor-icerik").innerHTML;'
+    +   '}'
+    +   'var wordCss="body{font-family:Calibri,Arial,sans-serif;font-size:12pt;color:#1a1a2e;margin:0;padding:20pt 24pt}"'
+    +     '+"table{border-collapse:collapse;margin-bottom:10pt}"'
+    +     '+"td,th{font-family:Calibri,Arial,sans-serif;font-size:11pt}"'
+    +     '+".sec{margin-bottom:16pt}"'
+    +     '+".sec-title{font-size:11pt;font-weight:bold;color:#6b1b1b;border-bottom:2pt solid #6b1b1b;padding-bottom:4pt;margin-bottom:10pt;text-transform:uppercase}"'
+    +     '+".no-print{display:none}";'
     +   'var html="<html xmlns:o=\\"urn:schemas-microsoft-com:office:office\\" xmlns:w=\\"urn:schemas-microsoft-com:office:word\\" xmlns=\\"http://www.w3.org/TR/REC-html40\\"><head><meta charset=\\"utf-8\\"><title>' + baslik.replace(/"/g,'') + '</title>'
     +     '<style>"+wordCss+"@page{margin:2cm}</style></head><body>"+ic+"</body></html>";'
     +   'var blob=new Blob(["\\uFEFF"+html],{type:"application/msword;charset=utf-8"});'
@@ -7293,13 +7300,15 @@ document.addEventListener('click', function(e) {
 });
 document.getElementById('modal-overlay').addEventListener('click', function(e) {
   if (e.target === this) {
-    onayGoster({
-      baslik: 'Formu kapat?',
-      mesaj: 'Kaydedilmemiş değişiklikler kaybolacak.',
-      ikon: '⚠️', ikonBg: 'hsl(42,90%,94%)',
-      tamamRenk: 'hsl(42,60%,38%)', tamamYazi: 'Evet, kapat',
-      onOnay: function() { closeModal(); }
-    });
+    if (_modalDirty) {
+      onayGoster({
+        baslik: 'Formu kapat?',
+        mesaj: 'Kaydedilmemiş değişiklikler kaybolacak.',
+        ikon: '⚠️', ikonBg: 'hsl(42,90%,94%)',
+        tamamRenk: 'hsl(42,60%,38%)', tamamYazi: 'Evet, kapat',
+        onOnay: function() { closeModal(); }
+      });
+    } else { closeModal(); }
   }
 });
 var _cdm=document.getElementById('card-detail-modal'); if(_cdm) _cdm.addEventListener('click',function(e){if(e.target===this)closeCardDetail();});
@@ -7317,6 +7326,20 @@ document.addEventListener('click', function(e) {
   }
 });
 document.getElementById('kadro-kisi-modal').addEventListener('click', function(e) { if (e.target === this) kadroKisiModalKapat(); });
+
+// ── Modal Dirty Tracking (form değişince _modalDirty = true) ──
+(function() {
+  var mo = document.getElementById('modal-overlay');
+  if (!mo) return;
+  // Input, change, textarea değişimlerini dinle
+  ['input','change'].forEach(function(evName) {
+    mo.addEventListener(evName, function(e) {
+      if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA')) {
+        _modalDirty = true;
+      }
+    });
+  });
+})();
 
 // ── Otomatik Doldurma ──────────────────────────────────────────
 var AC_KEYS = ['oyunlar','mekanlar','otelAdlari','firmalar'];
@@ -7395,7 +7418,7 @@ document.addEventListener('keydown', function(e) {
   // Turne formu modal
   var mo = document.getElementById('modal-overlay');
   if (mo && mo.classList.contains('on')) {
-    if (document.getElementById('m-oyun') && document.getElementById('m-oyun').value) {
+    if (_modalDirty) {
       onayGoster({
         baslik: 'Formu kapat?',
         mesaj: 'Kaydedilmemiş değişiklikler kaybolacak.',
