@@ -2516,7 +2516,6 @@ function renderSelectedPills(scrollToIdx) {
         // \u0130sim + g\u00f6rev input
         + '<div style="flex:1;min-width:0">'
         +   '<div style="font-size:11px;font-weight:700;color:var(--foreground);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.3">' + (k.kisi||'') + '</div>'
-        +   (k.kategori ? '<span style="display:inline-block;font-size:9px;font-weight:600;color:#15803d;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:0 5px;line-height:1.6;margin-bottom:2px">' + k.kategori + '</span>' : '')
         +   '<input type="text" value="' + (k.gorev||'').replace(/"/g,'&quot;') + '"'
         +   ' placeholder="Görev..." list="gorev-datalist"'
         +   ' onclick="event.stopPropagation()"'
@@ -5266,14 +5265,24 @@ function _pdfIcerik(t) {
   var toplamTemsil = durakToplamTemsil(t);
 
   var sehirSahne = (function(){
-    if (t.duraklar && t.duraklar.length && t.duraklar.some(function(d){return d.il;})) {
-      return t.duraklar.filter(function(d){return d.il;}).map(function(d){
-        return _temizleIlPdf(d.il+(d.ilce&&d.ilce.toLowerCase()!=='merkez'?'/'+d.ilce:'')) + (d.mekan?' \u2014 '+d.mekan:'');
-      }).join('<br>');
-    }
-    return _temizleIlPdf(t.il||'') + (t.mekan?' \u2014 '+t.mekan:'');
+    var durakListeSS = (t.duraklar && t.duraklar.length && t.duraklar.some(function(d){return d.il;}))
+      ? t.duraklar.filter(function(d){return d.il;})
+      : (t.il ? [{il:t.il, ilce:'', mekan:t.mekan}] : []);
+    if (!durakListeSS.length) return '—';
+    var satirlar = durakListeSS.map(function(d, ki){
+      var bg = ki%2===0 ? '#f8f6f2' : '#ffffff';
+      var ilTxt = _temizleIlPdf(d.il+(d.ilce&&d.ilce.toLowerCase()!=='merkez'?' / '+d.ilce:'')).toUpperCase();
+      return '<tr style="background:'+bg+'">'
+        + '<td style="padding:5px 8px;border:1px solid #ddd;font-weight:800;font-size:11px;color:#6b1b1b;white-space:nowrap;width:80px">'+ilTxt+'</td>'
+        + '<td style="padding:5px 8px;border:1px solid #ddd;font-size:10px;color:#333">'+(d.mekan||'—')+'</td>'
+        + '</tr>';
+    }).join('');
+    return '<table style="border-collapse:collapse;width:100%;margin:0">'
+      + '<thead><tr style="background:#6b1b1b">'
+      + '<th style="padding:4px 8px;color:#fff;font-size:9px;text-align:left;border:1px solid #5a1717;width:80px">Şehir</th>'
+      + '<th style="padding:4px 8px;color:#fff;font-size:9px;text-align:left;border:1px solid #5a1717">Sahne / Mekan</th>'
+      + '</tr></thead><tbody>'+satirlar+'</tbody></table>';
   })();
-
   return ''
     + '<div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:6px;border-bottom:2px solid #6b1b1b;margin-bottom:14px">'
     +   '<div style="display:flex;align-items:center;gap:8px">'
