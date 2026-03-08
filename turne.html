@@ -929,7 +929,10 @@
             <button class="btn btn-outline" onclick="disKisiEkle()" style="white-space:nowrap;flex-shrink:0;padding:0 12px;font-size:11px">+ Dış Ekle</button>
           </div>
         </div>
-        <div class="kisi-modal-list" id="kisi-modal-list" style="flex:1;overflow-y:auto;border:none;border-radius:0;min-height:0"></div>
+        <div style="flex:1;overflow-y:auto;border:none;border-radius:0;min-height:0;display:flex;flex-direction:column">
+          <div class="kisi-modal-list" id="kisi-modal-list" style="border:none;border-radius:0;"></div>
+          <div id="dis-katilimci-bolumu" style="border-top:2px dashed #bfdbfe;margin-top:4px"></div>
+        </div>
       </div>
 
       <!-- SAĞ: Seçili katılımcılar -->
@@ -2424,8 +2427,8 @@ function openKisiModal(rowIdx) {
   document.getElementById('kisi-modal-title').textContent = (oyunAdi || t.il || 'Turne') + ' – Katılımcılar';
   document.getElementById('kisi-modal-sure').textContent = formatTarih(t.baslangicTarih || t.tarih) + ' · ' + t.il;
   document.getElementById('kisi-filter-input').value = '';
-  kmSekmeAc('oyun');
   renderKisiModalList(oyunAdi, '');
+  renderDisKisilerBolumu();
   renderSelectedPills();
   document.getElementById('kisi-modal-overlay').classList.add('on');
 }
@@ -2548,48 +2551,8 @@ function renderKisiModalList(oyunAdi, q) {
     return '<div class="kisi-row' + (secili ? ' selected' : '') + '" onclick="toggleKisiSecim(\'' + esc(p.kisi) + '\',\'' + esc(p.kategori||'') + '\',\'' + esc(p.kategori||'') + '\')">'      + '<div class="kisi-checkbox">' + (secili ? '✓' : '') + '</div>'      + '<div class="kisi-row-info">'        + '<div class="kisi-row-name">' + p.kisi + '</div>'        + '<span class="kisi-kat-chip">' + _katGoster + '</span>'      + '</div>'      + (secili        ? '<input type="text" value="' + esc(turneGorev) + '" placeholder="Görevi" '          + 'onclick="event.stopPropagation()" list="gorev-datalist" '          + 'oninput="event.stopPropagation();kisiGorevGuncelle(\'' + esc(p.kisi) + '\',this.value)" onchange="event.stopPropagation();kisiGorevGuncelle(\'' + esc(p.kisi) + '\',this.value);gorevHafizayaKaydet(this.value)" '          + 'style="width:120px;border:1.5px solid var(--primary);border-radius:5px;padding:4px 7px;font-size:11px;background:var(--background);font-family:inherit;flex-shrink:0;color:var(--primary);font-weight:600">'        : '')      + '</div>';
   }).join('');
   } // end else personel.length > 0
-  // Dış katılımcıları listenin altına ekle (DOM API — tırnak sorunu yok)
-  // dis:true flag'ı VEYA ekstra+kategori ile işaretlenmiş dış katılımcılar
-  var DIS_KATS = ['Mutemet','Teşrifat','Turne Başkanı','İdari Personel','Güvenlik','Sağlık Personeli'];
-  var disler = kisiModalSecili.filter(function(s){
-    return s.dis || (s.ekstra && DIS_KATS.indexOf(s.kategori) >= 0);
-  });
-  if (disler.length) {
-    var header = document.createElement('div');
-    header.style.cssText = 'padding:6px 10px 4px;font-size:10px;font-weight:700;color:var(--muted-foreground);background:var(--muted);border-top:1px solid var(--border);text-transform:uppercase;letter-spacing:.5px';
-    header.textContent = '🔗 Dış Katılımcılar';
-    el.appendChild(header);
-    disler.forEach(function(s) {
-      var chip = s.gorev || s.kategori || 'Dış';
-      var row = document.createElement('div');
-      row.className = 'kisi-row selected';
-      row.style.cssText = 'background:#eff6ff;border-left:3px solid #3b82f6';
-      var chk = document.createElement('div');
-      chk.className = 'kisi-checkbox';
-      chk.textContent = '✓';
-      var info = document.createElement('div');
-      info.className = 'kisi-row-info';
-      var nm = document.createElement('div');
-      nm.className = 'kisi-row-name';
-      nm.textContent = s.kisi || '';
-      var sp = document.createElement('span');
-      sp.className = 'kisi-kat-chip';
-      sp.style.cssText = 'background:#dbeafe;color:#1d4ed8';
-      sp.textContent = chip;
-      info.appendChild(nm);
-      info.appendChild(sp);
-      var btn = document.createElement('button');
-      btn.textContent = '✕';
-      btn.title = 'Kaldır';
-      btn.style.cssText = 'margin-left:auto;border:none;background:transparent;color:#ef4444;cursor:pointer;font-size:13px;padding:0 4px';
-      btn.onclick = (function(kisiAdi){ return function(e){ e.stopPropagation(); disKisiKaldir(kisiAdi); }; })(s.kisi);
-      row.appendChild(chk);
-      row.appendChild(info);
-      row.appendChild(btn);
-      el.appendChild(row);
-    });
-  }
   updateKisiCount();
+  renderDisKisilerBolumu();
 }
 
 // GÖREV HAFIZASI — kullanıcının girdiği görevleri otomatik tamamlama için sakla
@@ -2909,6 +2872,36 @@ function disKisiAra() {
   el.style.display = 'block';
 }
 
+// ── DIŞ KATILIMCİ LİSTESİ (ayrı div, innerHTML ile temiz) ─
+var DIS_KATS = ['Mutemet','Teşrifat','Turne Başkanı','İdari Personel','Güvenlik','Sağlık Personeli'];
+function renderDisKisilerBolumu() {
+  var el = document.getElementById('dis-katilimci-bolumu');
+  if (!el) return;
+  var disler = kisiModalSecili.filter(function(s){
+    return s.dis || (s.ekstra && DIS_KATS.indexOf(s.kategori) >= 0);
+  });
+  if (!disler.length) {
+    el.innerHTML = '';
+    return;
+  }
+  var html = '<div style="padding:6px 10px 4px;font-size:10px;font-weight:700;color:#1d4ed8;background:#eff6ff;text-transform:uppercase;letter-spacing:.5px">🔗 Dış Katılımcılar (' + disler.length + ')</div>';
+  disler.forEach(function(s) {
+    var chip = s.gorev || s.kategori || 'Dış';
+    // kisiEnc artık kullanılmıyor — data-kisi attribute ile
+    html += '<div class="kisi-row selected" style="background:#eff6ff;border-left:3px solid #3b82f6">'
+      + '<div class="kisi-checkbox">✓</div>'
+      + '<div class="kisi-row-info">'
+      + '<div class="kisi-row-name">' + (s.kisi||'') + '</div>'
+      + '<span class="kisi-kat-chip" style="background:#dbeafe;color:#1d4ed8">' + chip + '</span>'
+      + '</div>'
+      + '<button data-kisi="' + (s.kisi||'').replace(/"/g,'&quot;') + '" '
+      + 'onclick="event.stopPropagation();disKisiKaldir(this.dataset.kisi)" '
+      + 'style="margin-left:auto;border:none;background:transparent;color:#ef4444;cursor:pointer;font-size:13px;padding:0 6px" title="Kaldır">✕</button>'
+      + '</div>';
+  });
+  el.innerHTML = html;
+}
+
 // ── DIŞ KATILIMCİ EKLE ─────────────────────────────────────
 function disKisiEkle() {
   var ad  = (document.getElementById('dis-kisi-ad').value || '').trim();
@@ -2924,19 +2917,15 @@ function disKisiEkle() {
     updateKisiCount();
   }
   document.getElementById('dis-kisi-ad').value = '';
-  var el = document.getElementById('dis-oneri-liste');
-  if (el) el.style.display = 'none';
+  var el2 = document.getElementById('dis-oneri-liste');
+  if (el2) el2.style.display = 'none';
 }
 
 // ── DIŞ KATILIMCİ LİSTESİ RENDER ──────────────────────────
 function renderDisKisiListesi() {
   var el = document.getElementById('dis-kisi-liste');
   if (!el) return;
-  // dis:true flag'ı VEYA ekstra+kategori ile işaretlenmiş dış katılımcılar
-  var DIS_KATS = ['Mutemet','Teşrifat','Turne Başkanı','İdari Personel','Güvenlik','Sağlık Personeli'];
-  var disler = kisiModalSecili.filter(function(s){
-    return s.dis || (s.ekstra && DIS_KATS.indexOf(s.kategori) >= 0);
-  });
+
   if (!disler.length) {
     el.innerHTML = '<div style="padding:20px;text-align:center;font-size:12px;color:var(--muted-foreground)">Henüz dış katılımcı eklenmedi</div>';
     return;
@@ -2968,6 +2957,7 @@ function disKisiKaldir(kisi) {
   renderKisiModalList(oyunAdiKisi, q);
   renderSelectedPills();
   updateKisiCount();
+  renderDisKisilerBolumu();
 }
 
 function updateKisiCount() {
