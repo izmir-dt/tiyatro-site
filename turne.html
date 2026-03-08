@@ -1885,20 +1885,10 @@ function setLoading(show) {
     // Adım 1: şifre kontrolü
     if (adimAd.style.display === 'none') {
       if (inp.value === getSifre()) {
-        // Şifre doğru — kullanıcı adı zaten varsa direkt gir
-        if (localStorage.getItem('calKullanici_idt')) {
-          sessionStorage.setItem('turne_erisim','true');
-          overlay.classList.remove('on');
-          init();
-        } else {
-          // Kullanıcı adı sor
-          adimSifre.style.display = 'none';
-          adimAd.style.display = '';
-          document.getElementById('sp-sub').textContent = 'Bir adım kaldı — adınızı girin';
-          btn.textContent = 'Devam Et';
-          errmsg.textContent = '';
-          setTimeout(() => adInp.focus(), 100);
-        }
+        // Şifre doğru — direkt gir, ad sorma
+        sessionStorage.setItem('turne_erisim','true');
+        overlay.classList.remove('on');
+        init();
       } else {
         inp.classList.add('err');
         errmsg.textContent = 'Hatalı şifre!';
@@ -2005,19 +1995,22 @@ async function fetchTurneler() {
     // safeRows: her satıra allRows içindeki gerçek indeksi (rowIdx) ekle
     // ÖNEMLİ: map önce yapılır, filter SONRA — böylece realIdx her zaman allRows'daki gerçek index'i gösterir
     // Boş satırlar atlanır ama realIdx kayması olmaz (Sheets'teki sütun konumu korunur)
+    const _turneRowNumbers = data.rowNumbers || [];
     const safeRows = allRows
-      .map((r, realIdx) => ({ r, realIdx }))
+      .map((r, realIdx) => ({
+        r, realIdx,
+        // Backend rowNumbers varsa kullan (boş satır güvenli), yoksa realIdx+1 (header=0 → data başlar 1'den, Sheets'te +2)
+        sheetRowIdx: _turneRowNumbers[realIdx] != null ? (_turneRowNumbers[realIdx] - 2) : realIdx
+      }))
       .filter(({ r }) => {
         if (!r || !Array.isArray(r)) return false;
         var oyun = (r[0]||'').trim();
         var il   = (r[1]||'').trim();
         var tar  = (r[2]||'').trim();
-        // Başlık satırını atla
         if (oyun === 'ID' || oyun === 'Oyun Adı' || oyun === 'oyun adı') return false;
-        // En az biri dolu olmalı
         return oyun || il || tar;
       });
-    turneler = safeRows.map(({ r, realIdx }) => {
+    turneler = safeRows.map(({ r, realIdx, sheetRowIdx }) => {
       // SABİT INDEX — YENİ Sheets TURNE_KAYITLARI (Otel Rez No YOK):
       // [0]oyun [1]il [2]basTarih [3]bitTarih [4]mekan [5]sayi [6]not [7]statu
       // [8]otelAdi [9]otelAdres [10]otelTel
@@ -2036,7 +2029,7 @@ async function fetchTurneler() {
       var parsedDuraklar = null;
       try { if (duraklarRaw) parsedDuraklar = JSON.parse(duraklarRaw); } catch(e) {}
       return {
-      _rowIdx:        realIdx,
+      _rowIdx:        sheetRowIdx,
       oyun:           (r[0]  || '').trim(),
       il:             (r[1]  || '').trim(),
       baslangicTarih: (r[2]  || '').trim(),
@@ -2132,6 +2125,7 @@ function populateFilters() {
 // TAB
 // ============================================================
 function switchTab(tab) {
+  localStorage.setItem('_sonSekme', tab);
   const allTabs = ['liste','oyun','kisi','kadro','harita','takvim','istatistik'];
   document.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', allTabs[i] === tab));
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
@@ -2973,7 +2967,7 @@ function renderOyunDetay() {
     + _kpiKart('TOPLAM GÜN', toplamGun, '#0369a1', '📅', "window._sekmeOyunaDon='"+_os+"';switchTab('takvim');_gosterSekmeOyunaDon('takvim','"+_os+"')")
     + _kpiKart('TEMSİL', toplamTemsil, '#7c3aed', '🎭', _gotoListeTamamlandi)
     + _kpiKart('ANA KADRO', personel.length, '#059669', '👥', "var s=document.getElementById('oyun-det-kadro');s.style.display=s.style.display==='none'?'block':'none'")
-    + _kpiKart('ŞEHİR', iller.length, '#b45309', '📍', "window._sekmeOyunaDon='"+_os+"';switchTab('harita');_gosterSekmeOyunaDon('harita','"+_os+"')")
+    + _kpiKart('ŞEHİR', iller.length, '#b45309', '📍', "window._sekmeOyunaDon='"+_os+"';window._haritaAktifOyun='"+_os+"';switchTab('harita');_gosterSekmeOyunaDon('harita','"+_os+"')")
     + '</div>';
 
   // ── Geri butonu + başlık ───────────────────────────────────────────────────
@@ -3068,8 +3062,9 @@ function _gosterSekmeOyunaDon(sekme, oyun) {
   if (label) { label.textContent = oyun + ' oyunundan geliyorsunuz'; }
 }
 function sekmeOyunaDon(sekme) {
-  var oyun = window._sekmeOyunaDon || '';
+  var oyun = window._sekmeOyunaDon || window._haritaAktifOyun || '';
   window._sekmeOyunaDon = null;
+  window._haritaAktifOyun = null; // harita filtresi temizle
   var bar = document.getElementById(sekme + '-oyuna-don-bar');
   if (bar) bar.style.display = 'none';
   var sec = document.getElementById('oyun-sec');
@@ -3791,7 +3786,7 @@ function renderHarita() {
   }
 
   // Oyuna göre filtrele (oyun sekmesinden gelinmişse)
-  var _haritaOyun = window._sekmeOyunaDon || '';
+  var _haritaOyun = window._haritaAktifOyun || '';
   var _haritaTurneler = _haritaOyun
     ? turneler.filter(function(t){ return (t.oyun||'').toLowerCase().trim() === _haritaOyun.toLowerCase().trim(); })
     : turneler;
@@ -3809,6 +3804,11 @@ function renderHarita() {
   const ziyaretIlSayisi = Object.keys(ilSayilar).length;
   var _haritaBaslik = _haritaOyun ? (_haritaOyun + ' · ') : '';
   document.getElementById('harita-ozet').textContent = _haritaBaslik + ziyaretIlSayisi + ' ilde ' + _haritaTurneler.length + ' turne';
+  // Oyuna Dön barını güncel tut
+  var _hBar = document.getElementById('harita-oyuna-don-bar');
+  var _hLabel = document.getElementById('harita-oyuna-don-label');
+  if (_hBar) _hBar.style.display = _haritaOyun ? 'flex' : 'none';
+  if (_hLabel && _haritaOyun) _hLabel.textContent = _haritaOyun + ' oyunundan geliyorsunuz';
 
   // Leaflet harita başlatma
   var mapDiv = document.getElementById('leaflet-map');
@@ -3909,7 +3909,7 @@ function haritaIlDetay(il, ilSayilar) {
   const el = document.getElementById('harita-detay');
   // Çoklu durak sisteminde bu ile giden tüm turneleri bul (büyük/küçük harf duyarsız)
   const ilLower = il.toLocaleLowerCase('tr-TR');
-  var _haritaOyunDet = window._sekmeOyunaDon || '';
+  var _haritaOyunDet = window._haritaAktifOyun || '';
   var _haritaTurnelerDet = _haritaOyunDet
     ? turneler.filter(function(t){ return (t.oyun||'').toLowerCase().trim() === _haritaOyunDet.toLowerCase().trim(); })
     : turneler;
@@ -4316,8 +4316,7 @@ function calPopupNotKaydet(key) {
 
 function calPopupNotSil(key) {
   calNotKaydet(key, '', '');
-  renderCalendar();
-  _calPopupGoster(key, null);
+  calPopupKapat(); // popup kapat + renderCalendar içeride çağrılır
 }
 
 function _calDetayGoster(key) {
@@ -6067,6 +6066,13 @@ async function init() {
   renderListe();
   renderCalendar();
   setLoading(false);
+
+  // Son sekmeyi geri yükle
+  var _sonSekme = localStorage.getItem('_sonSekme') || 'liste';
+  var _gecerliSekmeler = ['liste','oyun','kisi','kadro','harita','takvim','istatistik'];
+  if (_gecerliSekmeler.includes(_sonSekme) && _sonSekme !== 'liste') {
+    switchTab(_sonSekme);
+  }
 }
 
 if (sessionStorage.getItem('turne_erisim') === 'true') { init(); }
