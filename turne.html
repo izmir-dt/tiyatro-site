@@ -1780,9 +1780,11 @@ async function calNotKaydet(key, notMetni, ad) {
         var rData = await r.json();
         calNotes[key] = { not: notMetni, ad: ad, _sheetRow: rData.rowNumber || null };
       }
-    } else if (mevcutNot && mevcutNot._sheetRow) {
-      // Sil
-      await apiFetch('/' + encodeURIComponent(NOTLAR_SHEET) + '/row/' + mevcutNot._sheetRow, { method: 'DELETE' });
+    } else if (mevcutNot) {
+      // Sil — sheetRow varsa Sheets'ten de kaldır
+      if (mevcutNot._sheetRow) {
+        await apiFetch('/' + encodeURIComponent(NOTLAR_SHEET) + '/row/' + mevcutNot._sheetRow, { method: 'DELETE' });
+      }
       delete calNotes[key];
     }
     localStorage.setItem('calNotes_cache', JSON.stringify(calNotes));
@@ -2930,15 +2932,13 @@ function renderOyunDetay() {
 
   // ── KPI bar ────────────────────────────────────────────────────────────────
   var _oyunSafe = oyun.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-  var _tog = "var s=document.getElementById('oyun-det-seferler');s.style.display=s.style.display==='none'?'block':'none'";
-  var _togK = "var s=document.getElementById('oyun-det-kadro');s.style.display=s.style.display==='none'?'block':'none'";
-  var _togI = "var s=document.getElementById('oyun-det-iller');s.style.display=s.style.display==='none'?'block':'none'";
+  var _oyunSafe = oyun.replace(/'/g,"\'");
   var kpiHTML = '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:18px">'
-    + _kpiKart('TURNE', oyunT.length, 'var(--primary)', '🗓', _tog)
-    + _kpiKart('TOPLAM GÜN', toplamGun, '#0369a1', '📅', _tog)
-    + _kpiKart('TEMSSİL', toplamTemsil, '#7c3aed', '🎭', _tog)
-    + _kpiKart('ANA KADRO', personel.length, '#059669', '👥', _togK)
-    + _kpiKart('ŞEHİR', iller.length, '#b45309', '📍', _togI)
+    + _kpiKart('TURNE', oyunT.length, 'var(--primary)', '🗓', "var s=document.getElementById('oyun-det-seferler');s.style.display=s.style.display==='none'?'block':'none'")
+    + _kpiKart('TOPLAM GÜN', toplamGun, '#0369a1', '📅', "switchTab('takvim')")
+    + _kpiKart('TEMSİL', toplamTemsil, '#7c3aed', '🎭', "var s=document.getElementById('oyun-det-seferler');s.style.display=s.style.display==='none'?'block':'none'")
+    + _kpiKart('ANA KADRO', personel.length, '#059669', '👥', "var s=document.getElementById('oyun-det-kadro');s.style.display=s.style.display==='none'?'block':'none'")
+    + _kpiKart('ŞEHİR', iller.length, '#b45309', '📍', "switchTab('harita')")
     + '</div>';
 
   // ── Geri butonu + başlık ───────────────────────────────────────────────────
