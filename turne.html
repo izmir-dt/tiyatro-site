@@ -270,7 +270,7 @@
     .modal.wide-program { width: 780px; }
     .modal-header { padding: 14px 18px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; background: var(--sidebar); flex-shrink: 0; }
     .modal-title { font-size: 14px; font-weight: 700; color: var(--sidebar-foreground); }
-    .modal-sure { font-size: 11px; color: var(--muted-foreground); margin-top: 1px; }
+    .modal-sure { font-size: 11px; color: var(--sidebar-foreground); opacity: 0.7; margin-top: 1px; }
     .modal-close { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--sidebar-foreground); opacity: .6; line-height: 1; padding: 2px 5px; }
     .modal-close:hover { opacity: 1; }
     .modal-tabs { display: flex; border-bottom: 1px solid var(--border); flex-shrink: 0; background: var(--background); }
@@ -5740,7 +5740,13 @@ function editTurne(rowIdx) {
   window._editSnapshot = JSON.stringify(t);
   window._editAcilanZaman = Date.now();
 }
-function closeModal() { document.getElementById('modal-overlay').classList.remove('on'); }
+function closeModal() {
+  var mo = document.getElementById('modal-overlay');
+  if (mo) { mo.classList.remove('on'); }
+  // Onay modal da açık kalmışsa kapat
+  var om = document.getElementById('onay-modal');
+  if (om && om.style.display === 'flex') { onayKapat(); }
+}
 
 // ============================================================
 // KAYDET
@@ -7210,7 +7216,8 @@ function acBind(inputId, key, extraFilter) {
 document.addEventListener('keydown', function(e) {
   if (e.key !== 'Escape') return;
   // Onay modal açıksa kapat
-  if (document.getElementById('onay-modal').style.display === 'flex') { onayKapat(); return; }
+  var _om = document.getElementById('onay-modal');
+  if (_om && _om.style.display === 'flex') { onayKapat(); return; }
   // Kişi modal
   var km = document.getElementById('kisi-modal');
   if (km && km.style.display !== 'none' && km.style.display !== '') { closeKisiModal(); return; }
@@ -7262,10 +7269,16 @@ function onayKapat() {
   document.getElementById('onay-modal').style.display = 'none';
   _onayCallback = null;
 }
-// Dışarı tıklayınca kapat
-document.getElementById('onay-modal').addEventListener('click', function(e) {
-  if (e.target === this) onayKapat();
-});
+// Dışarı tıklayınca kapat (deferred - element after script)
+function _initOnayModal() {
+  var el = document.getElementById('onay-modal');
+  if (el) el.addEventListener('click', function(e) { if (e.target === this) onayKapat(); });
+}
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', _initOnayModal);
+} else {
+  _initOnayModal();
+}
 
 function acBindAll() {
   acBind('m-oyun', 'oyunlar');
