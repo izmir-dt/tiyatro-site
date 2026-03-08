@@ -719,12 +719,14 @@
           </div>
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
             <div style="display:flex;gap:3px;flex-wrap:wrap">
-              <button onclick="calStatuFiltre='';renderCalendar()" style="height:22px;padding:0 8px;font-size:10px;font-weight:700;border-radius:11px;border:1.5px solid rgba(255,255,255,.4);background:rgba(255,255,255,.18);color:#fff;cursor:pointer;font-family:Poppins,sans-serif">Tümü</button>
-              <button onclick="calStatuFiltre='taslak';renderCalendar()" style="height:22px;padding:0 8px;font-size:10px;font-weight:700;border-radius:11px;border:1.5px solid #9ca3af;background:#e5e7eb;color:#374151;cursor:pointer;font-family:Poppins,sans-serif">Taslak</button>
-              <button onclick="calStatuFiltre='onay-bekliyor';renderCalendar()" style="height:22px;padding:0 8px;font-size:10px;font-weight:700;border-radius:11px;border:1.5px solid #d97706;background:#fef3c7;color:#92400e;cursor:pointer;font-family:Poppins,sans-serif">⏳ Onay</button>
-              <button onclick="calStatuFiltre='onaylandi';renderCalendar()" style="height:22px;padding:0 8px;font-size:10px;font-weight:700;border-radius:11px;border:1.5px solid #16a34a;background:#dcfce7;color:#15803d;cursor:pointer;font-family:Poppins,sans-serif">✓ Onaylandı</button>
-              <button onclick="calStatuFiltre='tamamlandi';renderCalendar()" style="height:22px;padding:0 8px;font-size:10px;font-weight:700;border-radius:11px;border:1.5px solid #0369a1;background:#e0f2fe;color:#075985;cursor:pointer;font-family:Poppins,sans-serif">✔ Tamamlandı</button>
-              <button onclick="calStatuFiltre='iptal';renderCalendar()" style="height:22px;padding:0 8px;font-size:10px;font-weight:700;border-radius:11px;border:1.5px solid #dc2626;background:#fee2e2;color:#991b1b;cursor:pointer;font-family:Poppins,sans-serif">✕ İptal</button>
+              <div id="cal-statu-filtre-row" style="display:flex;gap:4px;flex-wrap:wrap;align-items:center">
+              <button data-filtre="" onclick="calStatuFiltre='';renderCalendar()" style="height:22px;padding:0 8px;font-size:10px;font-weight:700;border-radius:11px;border:1.5px solid rgba(255,255,255,.4);background:rgba(255,255,255,.18);color:#fff;cursor:pointer;font-family:Poppins,sans-serif">Tümü</button>
+              <button data-filtre="taslak" onclick="calStatuFiltre='taslak';renderCalendar()" style="height:22px;padding:0 8px;font-size:10px;font-weight:700;border-radius:11px;border:1.5px solid #9ca3af;background:#e5e7eb;color:#374151;cursor:pointer;font-family:Poppins,sans-serif">Taslak</button>
+              <button data-filtre="onay-bekliyor" onclick="calStatuFiltre='onay-bekliyor';renderCalendar()" style="height:22px;padding:0 8px;font-size:10px;font-weight:700;border-radius:11px;border:1.5px solid #d97706;background:#fef3c7;color:#92400e;cursor:pointer;font-family:Poppins,sans-serif">⏳ Onay</button>
+              <button data-filtre="onaylandi" onclick="calStatuFiltre='onaylandi';renderCalendar()" style="height:22px;padding:0 8px;font-size:10px;font-weight:700;border-radius:11px;border:1.5px solid #16a34a;background:#dcfce7;color:#15803d;cursor:pointer;font-family:Poppins,sans-serif">✓ Onaylandı</button>
+              <button data-filtre="tamamlandi" onclick="calStatuFiltre='tamamlandi';renderCalendar()" style="height:22px;padding:0 8px;font-size:10px;font-weight:700;border-radius:11px;border:1.5px solid #0369a1;background:#e0f2fe;color:#075985;cursor:pointer;font-family:Poppins,sans-serif">✔ Tamamlandı</button>
+              <button data-filtre="iptal" onclick="calStatuFiltre='iptal';renderCalendar()" style="height:22px;padding:0 8px;font-size:10px;font-weight:700;border-radius:11px;border:1.5px solid #dc2626;background:#fee2e2;color:#991b1b;cursor:pointer;font-family:Poppins,sans-serif">✕ İptal</button>
+              </div>
             </div>
             <div class="cal-legend">
               <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#16a34a"></div>Oyun</div>
@@ -1954,6 +1956,7 @@ let tumPersonel = [];
 let turneler    = [];
 let calYear, calMonth, calSelectedDay = null;
 var calNotes = {}; // key: 'YYYY-MM-DD' → not metni (localStorage'dan yüklenir)
+var calStatuFiltre = ''; // takvim statü filtresi
 
 // Türkiye Resmi Tatilleri (sabit tarihler)
 var SABIT_TATILLER = {
@@ -2009,10 +2012,18 @@ async function calNotYukle() {
         }
       });
       // Local'de bekleyen değişikliklerle merge et
+      // Silme bekleyenler hariç: local'de var ama sheets'te yok olanları koru
       Object.keys(calNotes).forEach(function(k) {
-        if (!sheetsNotes[k]) sheetsNotes[k] = calNotes[k]; // local'de var, sheets'te yok → koru
+        if (!sheetsNotes[k] && !_calNotesPendingDelete[k]) {
+          sheetsNotes[k] = calNotes[k]; // silme beklenmiyor, local'dekini koru
+        }
+        // _calNotesPendingDelete[k] varsa: sheets'te henüz silinmemiş, YAZMA
       });
       calNotes = sheetsNotes;
+      // Silinmesi beklenen key'leri cache'den de temizle
+      Object.keys(_calNotesPendingDelete).forEach(function(k) {
+        delete calNotes[k];
+      });
       localStorage.setItem('calNotes_cache', JSON.stringify(calNotes));
     }
   } catch(e) { console.warn('Notlar çekilemedi, cache kullanılıyor:', e); }
@@ -4769,6 +4780,16 @@ function haritaIlDetay(il, ilSayilar) {
 // TAKVİM (tıklanabilir, detay gösterir)
 // ============================================================
 function renderCalendar() {
+  // Aktif filtre butonunu vurgula
+  var calFilterBtns = document.querySelectorAll('#cal-statu-filtre-row button');
+  if (calFilterBtns.length) {
+    calFilterBtns.forEach(function(btn) {
+      var isActive = (calStatuFiltre === '' && btn.dataset.filtre === '') || btn.dataset.filtre === calStatuFiltre;
+      btn.style.opacity = isActive ? '1' : '0.55';
+      btn.style.transform = isActive ? 'scale(1.08)' : 'scale(1)';
+      btn.style.boxShadow = isActive ? '0 0 0 2px #fff8' : 'none';
+    });
+  }
   const aylar = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
   document.getElementById('cal-title').textContent = aylar[calMonth] + ' ' + calYear;
   const bugun = new Date();
@@ -4793,6 +4814,8 @@ function renderCalendar() {
     const gunNotu = calNotes[key] ? calNotes[key].not : null;
 
     const events = turneler.filter(function(t) {
+      // Statü filtresi
+      if (calStatuFiltre && t.statu !== calStatuFiltre) return false;
       const bas = t.baslangicTarih || t.tarih || '';
       const bit = t.bitisTarih || t.tarih || '';
       // programSatirlar varsa sadece oradaki tarihleri kullan (bitiş sonrası görünmesin)
