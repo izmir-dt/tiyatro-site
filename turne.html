@@ -1728,7 +1728,11 @@ function formatTarih(tarih) {
 function getPersonelForOyun(oyunAdi) {
   if (!oyunAdi) return [];
   var aranan = oyunAdi.trim().toLowerCase();
-  return tumPersonel.filter(p => p.oyun && p.oyun.trim().toLowerCase() === aranan && DAHIL_KATEGORILER.some(k => p.kategori === k));
+  return tumPersonel.filter(p => p.oyun && p.oyun.trim().toLowerCase() === aranan && DAHIL_KATEGORILER.some(k => p.kategori === k))
+    .map(function(p) {
+      // Oyuncu → Sanatçı otomatik dönüşüm
+      return p.kategori === 'Oyuncu' ? Object.assign({}, p, { kategori: 'Sanatçı', gorev: p.gorev||'Sanatçı' }) : p;
+    });
 }
 function chipClass(k) {
   if (k === 'Sanatçı') return 'chip-oyuncu';
@@ -2314,13 +2318,15 @@ function renderKisiModalList(oyunAdi, q) {
   }
   el.innerHTML = personel.map(p => {
     const OYUNCU_K = ['Sanatçı','Oyuncu','Figüran','Figüran/Müzisyen','Koro','Koro/Dans','Koro/Dans Ekibi','Solist','Dansçı','Müzisyen','Orkestra','Kurumdan Emekli Sanatçı'];
+    // Görüntülemede Oyuncu → Sanatçı
+    var _katGoster = p.kategori === 'Oyuncu' ? 'Sanatçı' : (p.kategori||'');
     const gorevGoster = OYUNCU_K.indexOf(p.kategori||'') < 0 ? (p.gorev || '') : '';
     const secili = kisiModalSecili.some(s => s.kisi === p.kisi);
     const seciliKisi = secili ? kisiModalSecili.find(s => s.kisi === p.kisi) : null;
     // Seçiliyken input değeri: kullanıcının daha önce yazdığı varsa onu kullan, yoksa kategori
     const turneGorev = seciliKisi ? seciliKisi.gorev : (p.kategori || '');
     const esc = v => (v||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');
-    return '<div class="kisi-row' + (secili ? ' selected' : '') + '" onclick="toggleKisiSecim(\'' + esc(p.kisi) + '\',\'' + esc(p.kategori||'') + '\',\'' + esc(p.kategori||'') + '\')">'      + '<div class="kisi-checkbox">' + (secili ? '✓' : '') + '</div>'      + '<div class="kisi-row-info">'        + '<div class="kisi-row-name">' + p.kisi + '</div>'        + '<span class="kisi-kat-chip">' + (p.kategori||'') + '</span>'      + '</div>'      + (secili        ? '<input type="text" value="' + esc(turneGorev) + '" placeholder="Görevi" '          + 'onclick="event.stopPropagation()" list="gorev-datalist" '          + 'onchange="event.stopPropagation();kisiGorevGuncelle(\'' + esc(p.kisi) + '\',this.value);gorevHafizayaKaydet(this.value)" '          + 'style="width:120px;border:1.5px solid var(--primary);border-radius:5px;padding:4px 7px;font-size:11px;background:var(--background);font-family:inherit;flex-shrink:0;color:var(--primary);font-weight:600">'        : '')      + '</div>';
+    return '<div class="kisi-row' + (secili ? ' selected' : '') + '" onclick="toggleKisiSecim(\'' + esc(p.kisi) + '\',\'' + esc(p.kategori||'') + '\',\'' + esc(p.kategori||'') + '\')">'      + '<div class="kisi-checkbox">' + (secili ? '✓' : '') + '</div>'      + '<div class="kisi-row-info">'        + '<div class="kisi-row-name">' + p.kisi + '</div>'        + '<span class="kisi-kat-chip">' + _katGoster + '</span>'      + '</div>'      + (secili        ? '<input type="text" value="' + esc(turneGorev) + '" placeholder="Görevi" '          + 'onclick="event.stopPropagation()" list="gorev-datalist" '          + 'onchange="event.stopPropagation();kisiGorevGuncelle(\'' + esc(p.kisi) + '\',this.value);gorevHafizayaKaydet(this.value)" '          + 'style="width:120px;border:1.5px solid var(--primary);border-radius:5px;padding:4px 7px;font-size:11px;background:var(--background);font-family:inherit;flex-shrink:0;color:var(--primary);font-weight:600">'        : '')      + '</div>';
   }).join('');
   updateKisiCount();
 }
@@ -2362,9 +2368,14 @@ function gorevDatalistGuncelle() {
 }
 setTimeout(gorevDatalistGuncelle, 500);
 
-function kisiGorevGuncelle(kisiAdi, yeniGorev) {
-  var idx = kisiModalSecili.findIndex(s => s.kisi === kisiAdi);
-  if (idx >= 0) kisiModalSecili[idx].gorev = yeniGorev;
+function kisiGorevGuncelle(kisiAdiVeyaIdx, yeniGorev) {
+  // Sayı geçilmişse idx olarak, string geçilmişse isim olarak kullan
+  if (typeof kisiAdiVeyaIdx === 'number') {
+    if (kisiModalSecili[kisiAdiVeyaIdx]) kisiModalSecili[kisiAdiVeyaIdx].gorev = yeniGorev;
+  } else {
+    var idx = kisiModalSecili.findIndex(s => s.kisi === kisiAdiVeyaIdx);
+    if (idx >= 0) kisiModalSecili[idx].gorev = yeniGorev;
+  }
 }
 
 function toggleKisiSecim(kisi, gorev, kategori) {
@@ -2386,84 +2397,118 @@ function toggleKisiSecim(kisi, gorev, kategori) {
   renderSelectedPills();
 }
 
-function renderSelectedPills() {
-  const el = document.getElementById('selected-pills-wrap');
+var _aktifPillIdx = -1;
+
+function renderSelectedPills(scrollToIdx) {
+  var el = document.getElementById('selected-pills-wrap');
   if (!el) { updateKisiCount(); return; }
   if (!kisiModalSecili.length) {
-    el.innerHTML = '<div style="padding:20px;text-align:center;font-size:12px;color:var(--muted-foreground)">Henüz katılımcı seçilmedi</div>';
-    el.style.padding = '0';
-    updateKisiCount();
-    return;
+    _aktifPillIdx = -1;
+    el.innerHTML = '<div style="padding:20px;text-align:center;font-size:12px;color:var(--muted-foreground)">Hen\u00fcz kat\u0131l\u0131mc\u0131 se\u00e7ilmedi</div>';
+    updateKisiCount(); return;
   }
-  el.style.padding = '0';
   var n = kisiModalSecili.length;
-  var bs = 'width:18px;height:18px;border-radius:3px;border:1px solid var(--border);background:var(--card);cursor:pointer;font-size:10px;display:flex;align-items:center;justify-content:center;color:var(--foreground);flex-shrink:0;padding:0';
-  var bsd = bs + ';opacity:.25;cursor:not-allowed';
-  el.innerHTML = '<div id="drag-list" style="display:flex;flex-direction:column;gap:2px;padding:6px">'
+  if (_aktifPillIdx >= n) _aktifPillIdx = n-1;
+
+  // Scroll pozisyonunu koru
+  var prevScroll = el.scrollTop;
+
+  el.innerHTML = '<div id="drag-list" style="display:flex;flex-direction:column;padding:3px 4px;gap:1px">'
     + kisiModalSecili.map(function(k, i) {
-      return '<div draggable="true" data-idx="' + i + '" style="display:flex;align-items:center;gap:5px;padding:5px 8px;background:var(--accent);border-radius:6px;border:1px solid var(--border)">'
-        + '<span style="color:var(--muted-foreground);font-size:13px;cursor:grab;flex-shrink:0;user-select:none">⠿</span>'
-        + '<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px">'
-        +   '<span style="font-size:12px;font-weight:600;color:var(--foreground);line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + (k.kisi||'') + '</span>'
-        +   '<input type="text" value="' + (k.gorev||'').replace(/"/g,'&quot;') + '" placeholder="Görev..." onclick="event.stopPropagation()" list="gorev-datalist"'
+      var akt = (i === _aktifPillIdx);
+      return '<div draggable="true" data-idx="' + i + '"'
+        + ' onclick="event.stopPropagation();_pillFocus(' + i + ')"'
+        + ' style="display:flex;align-items:center;gap:4px;padding:3px 5px;border-radius:5px;border:1.5px solid '
+        + (akt ? '#3b82f6;background:#eff6ff;box-shadow:0 0 0 2px #93c5fd40' : 'var(--border);background:var(--accent)')
+        + ';cursor:pointer;transition:border-color .1s">'
+        // Sıra no
+        + '<span style="font-size:10px;color:#bbb;width:14px;text-align:right;flex-shrink:0;font-weight:700;user-select:none">' + (i+1) + '</span>'
+        // Drag handle
+        + '<span style="font-size:11px;color:#ccc;cursor:grab;flex-shrink:0;user-select:none;line-height:1">\u2807</span>'
+        // \u0130sim + g\u00f6rev input
+        + '<div style="flex:1;min-width:0">'
+        +   '<div style="font-size:11px;font-weight:700;color:var(--foreground);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.3">' + (k.kisi||'') + '</div>'
+        +   '<input type="text" value="' + (k.gorev||'').replace(/"/g,'&quot;') + '"'
+        +   ' placeholder="G\u00f6rev..." list="gorev-datalist"'
+        +   ' onclick="event.stopPropagation();_pillFocus(' + i + ')"'
         +   ' onchange="event.stopPropagation();kisiGorevGuncelle(' + i + ',this.value);gorevHafizayaKaydet(this.value)"'
-        +   ' style="width:100%;border:1px solid var(--border);border-radius:4px;padding:2px 5px;font-size:10px;background:var(--card);font-family:Poppins,sans-serif;color:var(--foreground)">'
+        +   ' style="width:100%;border:1px solid var(--border);border-radius:3px;padding:1px 4px;font-size:10px;background:var(--card);font-family:Poppins,sans-serif;color:var(--foreground)">'
         + '</div>'
-        + '<div style="display:flex;flex-direction:column;gap:1px;flex-shrink:0">'
-        +   '<button onclick="event.stopPropagation();kisiEnUsteTasi(' + i + ')" title="En üste" style="' + (i===0?bsd:bs) + '"' + (i===0?' disabled':'') + '>⇈</button>'
-        +   '<button onclick="event.stopPropagation();kisiYukariTasi(' + i + ')" title="Bir yukarı" style="' + (i===0?bsd:bs) + '"' + (i===0?' disabled':'') + '>↑</button>'
-        +   '<button onclick="event.stopPropagation();kisiAsagiTasi(' + i + ')" title="Bir aşağı" style="' + (i===n-1?bsd:bs) + '"' + (i===n-1?' disabled':'') + '>↓</button>'
-        +   '<button onclick="event.stopPropagation();kisiEnAltaTasi(' + i + ')" title="En alta" style="' + (i===n-1?bsd:bs) + '"' + (i===n-1?' disabled':'') + '>⇊</button>'
+        // \u2191 \u2193 butonlar\u0131 - b\u00fcy\u00fck, net, t\u0131klanabilir
+        + '<div style="display:flex;gap:2px;flex-shrink:0">'
+        + (i > 0   ? '<button onclick="event.stopPropagation();_pillMove(' + i + ',-1)" title="Yukar\u0131 ta\u015f\u0131 (\u2191)" style="width:26px;height:26px;border-radius:4px;border:1px solid var(--border);background:var(--card);cursor:pointer;font-size:14px;line-height:1;color:var(--foreground);display:flex;align-items:center;justify-content:center">\u2191</button>'
+          : '<span style="width:26px;height:26px;display:inline-block"></span>')
+        + (i<n-1  ? '<button onclick="event.stopPropagation();_pillMove(' + i + ',1)" title="A\u015fa\u011f\u0131 ta\u015f\u0131 (\u2193)" style="width:26px;height:26px;border-radius:4px;border:1px solid var(--border);background:var(--card);cursor:pointer;font-size:14px;line-height:1;color:var(--foreground);display:flex;align-items:center;justify-content:center">\u2193</button>'
+          : '<span style="width:26px;height:26px;display:inline-block"></span>')
         + '</div>'
-        + '<button onclick="event.stopPropagation();kaldir(\'' + k.kisi.replace(/'/g,"\'") + '\')" style="width:20px;height:20px;border-radius:50%;border:none;background:rgba(220,38,38,.15);cursor:pointer;font-size:12px;line-height:1;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--destructive)">×</button>'
+        // Sil
+        + '<button onclick="event.stopPropagation();kaldir(\\'' + k.kisi.replace(/\\/g,'\\\\').replace(/'/g,"\\'") + '\\')" title="\u00c7\u0131kar" style="width:22px;height:22px;border-radius:50%;border:none;background:rgba(220,38,38,.12);cursor:pointer;font-size:13px;line-height:1;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--destructive)">\u00d7</button>'
         + '</div>';
     }).join('')
     + '</div>';
+
   // Drag & drop
-  var dragList = document.getElementById('drag-list');
-  var dragSrc = null;
-  if (dragList) dragList.querySelectorAll('[draggable]').forEach(function(row) {
-    row.addEventListener('dragstart', function(e) { dragSrc=this; this.style.opacity='0.4'; e.dataTransfer.effectAllowed='move'; });
-    row.addEventListener('dragend', function() { dragList.querySelectorAll('[draggable]').forEach(function(r){r.style.opacity='1';r.style.borderTop='';}); });
-    row.addEventListener('dragover', function(e) { e.preventDefault(); dragList.querySelectorAll('[draggable]').forEach(function(r){r.style.borderTop='';}); if(this!==dragSrc) this.style.borderTop='2px solid var(--primary)'; });
-    row.addEventListener('drop', function(e) { e.preventDefault(); if(this===dragSrc) return; var from=parseInt(dragSrc.dataset.idx); var to=parseInt(this.dataset.idx); var item=kisiModalSecili.splice(from,1)[0]; kisiModalSecili.splice(to,0,item); renderSelectedPills(); });
+  var dl = document.getElementById('drag-list');
+  var dSrc = null;
+  if (dl) dl.querySelectorAll('[draggable]').forEach(function(row) {
+    row.addEventListener('dragstart', function(e) { dSrc=this; this.style.opacity='.4'; e.dataTransfer.effectAllowed='move'; });
+    row.addEventListener('dragend',   function()  { dl.querySelectorAll('[draggable]').forEach(function(r){r.style.opacity='1';r.style.boxShadow='';}); });
+    row.addEventListener('dragover',  function(e) { e.preventDefault(); dl.querySelectorAll('[draggable]').forEach(function(r){r.style.boxShadow='';}); if(this!==dSrc) this.style.boxShadow='inset 0 2px 0 #3b82f6'; });
+    row.addEventListener('drop',      function(e) { e.preventDefault(); if(this===dSrc) return; var f=parseInt(dSrc.dataset.idx),t=parseInt(this.dataset.idx),item=kisiModalSecili.splice(f,1)[0]; kisiModalSecili.splice(t,0,item); _aktifPillIdx=t; renderSelectedPills(t); });
   });
+
+  // Scroll koru veya yeni elemana git
+  if (scrollToIdx !== undefined) {
+    var rows = el.querySelectorAll('[data-idx]');
+    if (rows[scrollToIdx]) rows[scrollToIdx].scrollIntoView({block:'nearest',behavior:'smooth'});
+  } else {
+    el.scrollTop = prevScroll;
+  }
+
+  // Klavye deste\u011fi - bir kez ekle
+  if (!el._kb) {
+    el._kb = true;
+    el.tabIndex = 0;
+    el.style.outline = 'none';
+    el.addEventListener('keydown', function(e) {
+      var n2 = kisiModalSecili.length;
+      if (!n2) return;
+      if (_aktifPillIdx < 0) { _aktifPillIdx = 0; renderSelectedPills(0); return; }
+      if (e.key === 'ArrowUp')   { e.preventDefault(); _pillMove(_aktifPillIdx, -1); }
+      if (e.key === 'ArrowDown') { e.preventDefault(); _pillMove(_aktifPillIdx,  1); }
+      if ((e.key==='Delete'||e.key==='Backspace') && !e.target.matches('input')) {
+        e.preventDefault();
+        var k = kisiModalSecili[_aktifPillIdx];
+        if (k) kaldir(k.kisi);
+      }
+    });
+  }
+
   updateKisiCount();
 }
 
-function kisiEnUsteTasi(idx) {
-  if (idx === 0) return;
-  var item = kisiModalSecili.splice(idx, 1)[0];
-  kisiModalSecili.unshift(item);
+function _pillFocus(idx) {
+  _aktifPillIdx = idx;
   renderSelectedPills();
-  var w = document.getElementById('selected-pills-wrap'); if (w) w.scrollTop = 0;
-}
-function kisiYukariTasi(idx) {
-  if (idx === 0) return;
-  var tmp = kisiModalSecili[idx-1]; kisiModalSecili[idx-1] = kisiModalSecili[idx]; kisiModalSecili[idx] = tmp;
-  renderSelectedPills();
-  var w = document.getElementById('selected-pills-wrap');
-  if (w) { var rows = w.querySelectorAll('[data-idx]'); if (rows[idx-1]) rows[idx-1].scrollIntoView({block:'nearest'}); }
-}
-function kisiAsagiTasi(idx) {
-  if (idx >= kisiModalSecili.length - 1) return;
-  var tmp = kisiModalSecili[idx+1]; kisiModalSecili[idx+1] = kisiModalSecili[idx]; kisiModalSecili[idx] = tmp;
-  renderSelectedPills();
-  var w = document.getElementById('selected-pills-wrap');
-  if (w) { var rows = w.querySelectorAll('[data-idx]'); if (rows[idx+1]) rows[idx+1].scrollIntoView({block:'nearest'}); }
-}
-function kisiEnAltaTasi(idx) {
-  if (idx >= kisiModalSecili.length - 1) return;
-  var item = kisiModalSecili.splice(idx, 1)[0];
-  kisiModalSecili.push(item);
-  renderSelectedPills();
-  var w = document.getElementById('selected-pills-wrap'); if (w) w.scrollTop = w.scrollHeight;
+  var el = document.getElementById('selected-pills-wrap');
+  if (el) el.focus();
 }
 
-
-function kisiGorevGuncelle(idx, yeniGorev) {
-  if (kisiModalSecili[idx]) kisiModalSecili[idx].gorev = yeniGorev;
+function _pillMove(idx, yon) {
+  var hedef = idx + yon;
+  if (hedef < 0 || hedef >= kisiModalSecili.length) return;
+  var tmp = kisiModalSecili[hedef];
+  kisiModalSecili[hedef] = kisiModalSecili[idx];
+  kisiModalSecili[idx] = tmp;
+  _aktifPillIdx = hedef;
+  renderSelectedPills(hedef);
 }
+
+// Eski isimler - geriye d\u00f6n\u00fck
+function kisiEnUsteTasi(idx) { var item=kisiModalSecili.splice(idx,1)[0]; kisiModalSecili.unshift(item); _aktifPillIdx=0; renderSelectedPills(0); }
+function kisiYukariTasi(idx) { _pillMove(idx,-1); }
+function kisiAsagiTasi(idx)  { _pillMove(idx, 1); }
+function kisiEnAltaTasi(idx) { var item=kisiModalSecili.splice(idx,1)[0]; kisiModalSecili.push(item); _aktifPillIdx=kisiModalSecili.length-1; renderSelectedPills(kisiModalSecili.length-1); }
 
 function toggleEkstraPanel() {
   var p = document.getElementById('ekstra-kisi-panel');
@@ -4737,7 +4782,7 @@ function _pdfIcerik(t) {
         + '<td style="padding:6px 10px;border:1px solid #e5ddd5;font-size:11px">'+(s.gun||'—')+'</td>'
         + '<td style="padding:6px 10px;border:1px solid #e5ddd5;font-size:11px;font-weight:600">'+(s.sehir||'—')+'</td>'
         + '<td style="padding:6px 10px;border:1px solid #e5ddd5;font-size:11px;font-weight:700;color:'+bc+'">'+(s.program||'—')+(s.oyun&&s.program==='Oyun'?'<span style="color:#374151;font-weight:500"> \u00b7 '+s.oyun+'</span>':'')+'</td>'
-        + '<td style="padding:6px 10px;border:1px solid #e5ddd5;font-size:11px">'+(s.saat||'—')+'</td></tr>';
+        + '<td style="padding:6px 10px;border:1px solid #e5ddd5;font-size:11px">'+(s.saat||'—')+(s.saat2?'<br><span style="font-size:10px;color:#16a34a;font-weight:600">&#9654; '+s.saat2+'</span>':'')+'</td></tr>';
     }).join('');
     if (progRows) {
       programHTML = '<div class="sec"><div class="sec-title">Turne Program\u0131</div>'
@@ -4746,7 +4791,7 @@ function _pdfIcerik(t) {
         + '<th style="padding:6px 10px;font-size:10px;border:1px solid #5a1717">G\u00fcn</th>'
         + '<th style="padding:6px 10px;font-size:10px;border:1px solid #5a1717">\u015eehir</th>'
         + '<th style="padding:6px 10px;font-size:10px;border:1px solid #5a1717">Program / Oyun</th>'
-        + '<th style="padding:6px 10px;font-size:10px;border:1px solid #5a1717">Saat</th>'
+        + '<th style="padding:6px 10px;font-size:10px;border:1px solid #5a1717">Saat (1. / 2. Temsil)</th>'
         + '</tr></thead><tbody>' + progRows + '</tbody></table></div>';
     }
   }
@@ -5055,10 +5100,18 @@ function durakIllerListesi(t) {
 }
 
 function durakToplamTemsil(t) {
-  if (t.duraklar && t.duraklar.length) {
-    return t.duraklar.reduce(function(s,d){ return s+(d.sayi||1); },0);
+  // programSatirlar'daki saat2 olan oyun satırları varsa ekstra temsil
+  var extraTemsil = 0;
+  if (t.programSatirlar && t.programSatirlar.length) {
+    extraTemsil = t.programSatirlar.filter(function(s){ return s.program === 'Oyun' && s.saat2; }).length;
   }
-  return t.sayi || 1;
+  var base = 0;
+  if (t.duraklar && t.duraklar.length) {
+    base = t.duraklar.reduce(function(s,d){ return s+(d.sayi||1); },0);
+  } else {
+    base = t.sayi || 1;
+  }
+  return base + extraTemsil;
 }
 
 // ============================================================
@@ -5066,8 +5119,8 @@ function durakToplamTemsil(t) {
 // ============================================================
 var programSatirlar = [];
 
-function programSatirEkle(tarih, gun, program, saat) {
-  programSatirlar.push({ tarih: tarih||'', gun: gun||'', program: program||'Yol', saat: saat||'' });
+function programSatirEkle(tarih, gun, program, saat, saat2) {
+  programSatirlar.push({ tarih: tarih||'', gun: gun||'', program: program||'Yol', saat: saat||'', saat2: saat2||'' });
   renderProgramGunler();
 }
 
@@ -5101,20 +5154,21 @@ function renderProgramGunler() {
   if (mOyun && mOyun.value && oyunlar.indexOf(mOyun.value) < 0) oyunlar.unshift(mOyun.value);
 
   wrap.innerHTML = '<div style="border:1px solid var(--border);border-radius:8px;overflow:hidden">'
-    + '<div style="display:grid;grid-template-columns:115px 78px 88px 130px 88px 66px 26px;gap:0;background:var(--muted);padding:5px 8px">'
+    + '<div style="display:grid;grid-template-columns:108px 72px 82px 120px 82px 58px 58px 26px;gap:0;background:var(--muted);padding:5px 8px">'
     +   '<span style="font-size:10px;font-weight:700;color:var(--muted-foreground)">Tarih</span>'
     +   '<span style="font-size:10px;font-weight:700;color:var(--muted-foreground)">Gün</span>'
     +   '<span style="font-size:10px;font-weight:700;color:var(--muted-foreground)">Şehir</span>'
     +   '<span style="font-size:10px;font-weight:700;color:var(--muted-foreground)">Oyun</span>'
     +   '<span style="font-size:10px;font-weight:700;color:var(--muted-foreground)">Program</span>'
-    +   '<span style="font-size:10px;font-weight:700;color:var(--muted-foreground)">Saat</span>'
+    +   '<span style="font-size:10px;font-weight:700;color:var(--muted-foreground)">1. Saat</span>'
+    +   '<span style="font-size:10px;font-weight:700;color:var(--muted-foreground)">2. Saat</span>'
     +   '<span></span>'
     + '</div>'
     + programSatirlar.map(function(s, i) {
       var progRenk = PROG_RENKLER[s.program] || '#6b7280';
       var rowBg = i%2===0 ? 'var(--card)' : 'hsl(38,28%,98%)';
       var isOyun = s.program === 'Oyun';
-      return '<div style="display:grid;grid-template-columns:115px 78px 88px 130px 88px 66px 26px;gap:3px;padding:4px 8px;border-top:1px solid var(--border);align-items:center;background:' + rowBg + '">'
+      return '<div style="display:grid;grid-template-columns:108px 72px 82px 120px 82px 58px 58px 26px;gap:3px;padding:4px 8px;border-top:1px solid var(--border);align-items:center;background:' + rowBg + '">'
         + '<input type="date" value="' + (s.tarih||'') + '" onchange="programSatirlar[' + i + '].tarih=this.value;renderProgramGunler()" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:3px 4px;font-size:10px;background:var(--card);font-family:Poppins,sans-serif">'
         + '<select onchange="programSatirlar[' + i + '].gun=this.value" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:3px 2px;font-size:10px;background:var(--card);font-family:Poppins,sans-serif">'
         + GUNLER.map(function(g){ return '<option value="' + g + '"' + (s.gun===g?' selected':'') + '>' + g + '</option>'; }).join('')
@@ -5132,6 +5186,7 @@ function renderProgramGunler() {
         + PROGRAMLAR.map(function(p){ return '<option value="' + p + '"' + (s.program===p?' selected':'') + '>' + p + '</option>'; }).join('')
         + '</select>'
         + '<input type="time" value="' + (s.saat||'') + '" onchange="programSatirlar[' + i + '].saat=this.value" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:3px 4px;font-size:10px;background:var(--card);font-family:Poppins,sans-serif">'
+        + '<input type="time" value="' + (s.saat2||'') + '" onchange="programSatirlar[' + i + '].saat2=this.value" title="2. Temsil Saati" style="width:100%;border:1px solid ' + (s.saat2 ? '#16a34a' : 'var(--border)') + ';border-radius:4px;padding:3px 4px;font-size:10px;background:' + (s.saat2 ? '#f0fdf4' : 'var(--card)') + ';font-family:Poppins,sans-serif">'
         + '<button onclick="programSatirSil(' + i + ')" style="width:24px;height:24px;border-radius:5px;border:1px solid var(--border);background:transparent;cursor:pointer;font-size:14px;color:var(--destructive)">×</button>'
         + '</div>';
     }).join('')
