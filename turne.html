@@ -429,6 +429,10 @@
 
   <!-- LİSTE -->
   <div class="tab-panel active" id="tab-liste">
+    <div id="oyuna-don-bar" style="display:none;padding:6px 12px;background:hsl(38,30%,96%);border-bottom:1px solid var(--border);display:none;align-items:center;gap:8px">
+      <button onclick="oyunaDon()" style="height:28px;padding:0 12px;border:1px solid var(--primary);border-radius:7px;background:transparent;cursor:pointer;font-size:11px;font-weight:700;color:var(--primary);font-family:Poppins,sans-serif;display:inline-flex;align-items:center;gap:5px">← Oyuna Dön</button>
+      <span id="oyuna-don-label" style="font-size:11px;color:var(--muted-foreground)"></span>
+    </div>
     <div class="filters-bar">
       <input class="filter-input" type="text" id="filter-search" placeholder="🔍 Oyun, şehir, mekan ara..." oninput="renderListe()" style="width:190px">
       <select class="filter-select" id="filter-oyun" onchange="renderListe()">
@@ -2206,6 +2210,18 @@ function grupToggle(enc) {
 }
 
 function renderListe() {
+  // ← Oyuna Dön barını güncelle
+  var _donBar = document.getElementById('oyuna-don-bar');
+  var _donLabel = document.getElementById('oyuna-don-label');
+  var _fOyunEl = document.getElementById('filter-oyun');
+  if (_donBar && _fOyunEl) {
+    if (_fOyunEl.value && window._listeOyunaDonOyun) {
+      _donBar.style.display = 'flex';
+      if (_donLabel) _donLabel.textContent = _fOyunEl.value + ' · oyunu filtreleniyor';
+    } else {
+      _donBar.style.display = 'none';
+    }
+  }
   const _searchRaw = document.getElementById('filter-search').value;
   function _trNorm(s){ return (s||'').toLowerCase().replace(/İ/g,'i').replace(/I/g,'ı').replace(/Ğ/g,'ğ').replace(/Ü/g,'ü').replace(/Ş/g,'ş').replace(/Ö/g,'ö').replace(/Ç/g,'ç'); }
   const search = _trNorm(_searchRaw);
@@ -2933,10 +2949,13 @@ function renderOyunDetay() {
   // ── KPI bar ────────────────────────────────────────────────────────────────
   var _oyunSafe = oyun.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
   var _oyunSafe = oyun.replace(/'/g,"\'");
+  var _os = oyun.replace(/'/g,"\'");
+  var _gotoListe = "window._listeOyunaDonOyun='"+_os+"';var fo=document.getElementById('filter-oyun');if(fo)fo.value='"+_os+"';var fs=document.getElementById('filter-statu');if(fs)fs.value='tum';statuFiltre='tum';switchTab('liste');renderListe&&renderListe()";
+  var _gotoListeTamamlandi = "window._listeOyunaDonOyun='"+_os+"';var fo=document.getElementById('filter-oyun');if(fo)fo.value='"+_os+"';var fs=document.getElementById('filter-statu');if(fs)fs.value='tamamlandi';statuFiltre='tamamlandi';switchTab('liste');renderListe&&renderListe()";
   var kpiHTML = '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:18px">'
-    + _kpiKart('TURNE', oyunT.length, 'var(--primary)', '🗓', "var s=document.getElementById('oyun-det-seferler');s.style.display=s.style.display==='none'?'block':'none'")
+    + _kpiKart('TURNE', oyunT.length, 'var(--primary)', '🗓', _gotoListe)
     + _kpiKart('TOPLAM GÜN', toplamGun, '#0369a1', '📅', "switchTab('takvim')")
-    + _kpiKart('TEMSİL', toplamTemsil, '#7c3aed', '🎭', "var s=document.getElementById('oyun-det-seferler');s.style.display=s.style.display==='none'?'block':'none'")
+    + _kpiKart('TEMSİL', toplamTemsil, '#7c3aed', '🎭', _gotoListeTamamlandi)
     + _kpiKart('ANA KADRO', personel.length, '#059669', '👥', "var s=document.getElementById('oyun-det-kadro');s.style.display=s.style.display==='none'?'block':'none'")
     + _kpiKart('ŞEHİR', iller.length, '#b45309', '📍', "switchTab('harita')")
     + '</div>';
@@ -3022,6 +3041,20 @@ function renderOyunDetay() {
   el.innerHTML = '<div style="max-width:920px;margin:0 auto;padding:14px 16px">'
     + baslikHTML + kpiHTML + turneHTML + kadroHTML + illerHTML
     + '</div>';
+}
+
+function oyunaDon() {
+  var oyun = window._listeOyunaDonOyun || '';
+  window._listeOyunaDonOyun = null;
+  // Oyun filtresini temizle
+  var fo = document.getElementById('filter-oyun'); if (fo) fo.value = '';
+  var fs = document.getElementById('filter-statu'); if (fs) fs.value = 'tum';
+  statuFiltre = 'tum';
+  document.getElementById('oyuna-don-bar').style.display = 'none';
+  // Oyuna Göre sekmesine dön + oyunu seç
+  var sec = document.getElementById('oyun-sec');
+  if (sec && oyun) { sec.value = oyun; localStorage.setItem('_sonSecOyun', oyun); }
+  switchTab('oyun');
 }
 
 function _miniStat2(label, val, renk) {
