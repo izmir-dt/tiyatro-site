@@ -312,6 +312,7 @@
     <input class="sp-inp" type="password" id="sp-inp" placeholder="Şifrenizi girin" maxlength="30" autocomplete="off" />
     <div id="sp-errmsg"></div>
     <button id="sp-login-btn">Giriş Yap</button>
+    <a href="index.html" style="display:block;margin-top:10px;font-size:12px;color:#999;text-decoration:none;text-align:center">← Ana Sayfaya Dön</a>
   </div>
 </div>
 
@@ -1985,22 +1986,30 @@ function switchTab(tab) {
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.getElementById('tab-' + tab).classList.add('active');
   if (tab === 'oyun') {
-    // Son seçilen oyunu hatırla
     var sonOyun = localStorage.getItem('_sonSecOyun') || '';
     var oyunSec = document.getElementById('oyun-sec');
-    if (sonOyun && oyunSec) {
-      oyunSec.value = sonOyun;
-      if (!oyunSec.value) oyunSec.selectedIndex = 0;
+    if (oyunSec) {
+      if (sonOyun) {
+        oyunSec.value = sonOyun;
+        if (!oyunSec.value && oyunSec.options.length > 1) oyunSec.selectedIndex = 1;
+      } else if (oyunSec.options.length > 1) {
+        oyunSec.selectedIndex = 1;
+      }
     }
     renderOyunDetay();
   }
   if (tab === 'kadro') {
-    // Son seçilen oyunu hatırla
     var sonKadroOyun = localStorage.getItem('_sonSecKadroOyun') || '';
     var kadroSec = document.getElementById('kadro-oyun-sec');
-    if (sonKadroOyun && kadroSec) {
-      kadroSec.value = sonKadroOyun;
-      if (!kadroSec.value) kadroSec.selectedIndex = 0;
+    if (kadroSec) {
+      if (sonKadroOyun) {
+        kadroSec.value = sonKadroOyun;
+        // Değer bulunamazsa (oyun silinmiş vs) ilk seçeneğe geç
+        if (!kadroSec.value && kadroSec.options.length > 1) kadroSec.selectedIndex = 1;
+      } else if (kadroSec.options.length > 1) {
+        // İlk açılışta: localStorage boşsa ilk oyunu otomatik seç
+        kadroSec.selectedIndex = 1;
+      }
     }
     renderKadro();
   }
@@ -2059,7 +2068,9 @@ function grupToggle(enc) {
 }
 
 function renderListe() {
-  const search = document.getElementById('filter-search').value.toLowerCase();
+  const _searchRaw = document.getElementById('filter-search').value;
+  function _trNorm(s){ return (s||'').toLowerCase().replace(/İ/g,'i').replace(/I/g,'ı').replace(/Ğ/g,'ğ').replace(/Ü/g,'ü').replace(/Ş/g,'ş').replace(/Ö/g,'ö').replace(/Ç/g,'ç'); }
+  const search = _trNorm(_searchRaw);
   const fOyun  = document.getElementById('filter-oyun').value;
   const fIl    = document.getElementById('filter-il').value;
   const bugun  = new Date().toISOString().slice(0,10);
@@ -2073,7 +2084,7 @@ function renderListe() {
     if (zamanFiltre === 'gecmis'  && tBit  >= bugun) return false;
     if (zamanFiltre === 'aktif'   && !(tBas <= bugun && tBit >= bugun)) return false;
     const ilStr2 = durakIllerListesi(t).join(' ');
-    if (search && !(t.oyun + ' ' + t.il + ' ' + ilStr2 + ' ' + (t.mekan||'') + ' ' + (t.grup||'')).toLowerCase().includes(search)) return false;
+    if (search && !_trNorm((t.oyun||'') + ' ' + (t.il||'') + ' ' + ilStr2 + ' ' + (t.mekan||'') + ' ' + (t.grup||'')).includes(search)) return false;
     return true;
   });
   filtered.sort((a,b) => new Date(b.baslangicTarih||b.tarih||0) - new Date(a.baslangicTarih||a.tarih||0));
@@ -2970,7 +2981,8 @@ function renderKisiAra() {
   var eslesen = tumPersonel.filter(function(p) {
     if (!p.kisi) return false;
     if (!DAHIL_KATEGORILER.some(function(k){ return p.kategori === k; })) return false;
-    if (ara.length >= 1 && !p.kisi.toLowerCase().includes(ara)) return false;
+    function _trNorm(s){ return (s||'').toLowerCase().replace(/İ/g,'i').replace(/I/g,'ı').replace(/Ğ/g,'ğ').replace(/Ü/g,'ü').replace(/Ş/g,'ş').replace(/Ö/g,'ö').replace(/Ç/g,'ç'); }
+    if (ara.length >= 1 && !_trNorm(p.kisi).includes(_trNorm(ara))) return false;
     if (filOyun && p.oyun !== filOyun) return false;
     if (filKat  && p.kategori !== filKat && !(p.kategori === 'Oyuncu' && filKat === 'Sanatçı')) return false;
     return true;
@@ -3023,7 +3035,8 @@ function renderKisiAra() {
       + '<td style="padding:7px 12px;border-bottom:1px solid var(--border);font-weight:700;color:var(--primary);text-align:center">'+kisiT.length+'</td>'
       + '<td style="padding:7px 12px;border-bottom:1px solid var(--border);color:#0369a1;font-weight:600;text-align:center">'+(toplamGun||'—')+(toplamGun?' g':'')+'</td>'
       + '<td style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:center" onclick="event.stopPropagation()">'
-      + (kayitlar[0] ? '<button onclick="kisiGoruKisiDuzenle(['+kayitlar.map(function(k){return tumPersonel.indexOf(k);}).join(',')+'])" style="border:1px solid var(--border);background:transparent;border-radius:5px;padding:2px 8px;font-size:10px;cursor:pointer;font-family:Poppins,sans-serif;color:var(--foreground)">✏️</button>' : '')
+      + (kayitlar[0] ? '<button onclick="kisiGoruKisiDuzenle(['+kayitlar.map(function(k){return tumPersonel.indexOf(k);}).join(',')+'])" style="border:1px solid var(--border);background:transparent;border-radius:5px;padding:2px 8px;font-size:10px;cursor:pointer;font-family:Poppins,sans-serif;color:var(--foreground);margin-right:3px">✏️</button>' : '')
+      + (kayitlar[0] ? '<button data-idxlist="'+kayitlar.map(function(k){return tumPersonel.indexOf(k);}).join('|')+'" onclick="event.stopPropagation();var idxs=this.getAttribute(\'data-idxlist\').split(\'|\').map(Number);kisiGoruSil(idxs)" style="border:1px solid #fca5a5;background:transparent;border-radius:5px;padding:2px 8px;font-size:10px;cursor:pointer;font-family:Poppins,sans-serif;color:#b91c1c">🗑</button>' : '')
       + '</td>'
       + '</tr>';
 
@@ -3059,6 +3072,20 @@ function kisiDetayToggle(id) {
   // Önceki açık olanı kapat
   document.querySelectorAll('[id^="kd"]').forEach(function(r){ if (r.id !== id) r.style.display='none'; });
   row.style.display = row.style.display === 'none' ? 'table-row' : 'none';
+}
+
+// Kişiye Göre sekmesinden kişiyi sil
+function kisiGoruSil(idxList) {
+  if (!idxList || !idxList.length) return;
+  var p = tumPersonel[idxList[0]];
+  if (!p) return;
+  if (!confirm(p.kisi + ' tüm kayıtları silinecek (' + idxList.length + ' kayıt). Emin misiniz?')) return;
+  // Büyükten küçüğe sırala ki index kaymaları olmasın
+  idxList.slice().sort(function(a,b){ return b-a; }).forEach(function(idx){
+    if (idx >= 0 && idx < tumPersonel.length) tumPersonel.splice(idx, 1);
+  });
+  populateFilters();
+  renderKisiAra();
 }
 
 // Kişiye Göre sekmesinden kişiyi düzenle — ilk kaydı açar
@@ -3272,9 +3299,16 @@ async function kadroKisiKaydet() {
   if (hata) return;
   // Güncelle veya ekle
   if (kadroEditIdx !== null) {
-    tumPersonel[kadroEditIdx] = { oyun, kategori: kat, gorev, kisi: ad };
+    // Mevcut kaydı in-place güncelle (sırayı bozmaz)
+    tumPersonel[kadroEditIdx].kisi = ad;
+    tumPersonel[kadroEditIdx].kategori = kat;
+    tumPersonel[kadroEditIdx].gorev = gorev;
   } else {
-    tumPersonel.push({ oyun, kategori: kat, gorev, kisi: ad });
+    // Yeni kişiyi aynı oyunun son satırından sonraya ekle
+    var sonIdx = -1;
+    tumPersonel.forEach(function(p, i){ if (p.oyun === oyun) sonIdx = i; });
+    if (sonIdx >= 0) tumPersonel.splice(sonIdx + 1, 0, { oyun, kategori: kat, gorev, kisi: ad });
+    else tumPersonel.push({ oyun, kategori: kat, gorev, kisi: ad });
   }
   populateFilters();
   kadroKisiModalKapat();
