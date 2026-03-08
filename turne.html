@@ -2333,7 +2333,7 @@ function renderKisiModalList(oyunAdi, q) {
     // Seçiliyken input değeri: kullanıcının daha önce yazdığı varsa onu kullan, yoksa kategori
     const turneGorev = seciliKisi ? seciliKisi.gorev : (p.kategori || '');
     const esc = v => (v||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');
-    return '<div class="kisi-row' + (secili ? ' selected' : '') + '" onclick="toggleKisiSecim(\'' + esc(p.kisi) + '\',\'' + esc(p.kategori||'') + '\',\'' + esc(p.kategori||'') + '\')">'      + '<div class="kisi-checkbox">' + (secili ? '✓' : '') + '</div>'      + '<div class="kisi-row-info">'        + '<div class="kisi-row-name">' + p.kisi + '</div>'        + '<span class="kisi-kat-chip">' + _katGoster + '</span>'      + '</div>'      + (secili        ? '<input type="text" value="' + esc(turneGorev) + '" placeholder="Görevi" '          + 'onclick="event.stopPropagation()" list="gorev-datalist" '          + 'onchange="event.stopPropagation();kisiGorevGuncelle(\'' + esc(p.kisi) + '\',this.value);gorevHafizayaKaydet(this.value)" '          + 'style="width:120px;border:1.5px solid var(--primary);border-radius:5px;padding:4px 7px;font-size:11px;background:var(--background);font-family:inherit;flex-shrink:0;color:var(--primary);font-weight:600">'        : '')      + '</div>';
+    return '<div class="kisi-row' + (secili ? ' selected' : '') + '" onclick="toggleKisiSecim(\'' + esc(p.kisi) + '\',\'' + esc(p.kategori||'') + '\',\'' + esc(p.kategori||'') + '\')">'      + '<div class="kisi-checkbox">' + (secili ? '✓' : '') + '</div>'      + '<div class="kisi-row-info">'        + '<div class="kisi-row-name">' + p.kisi + '</div>'        + '<span class="kisi-kat-chip">' + _katGoster + '</span>'      + '</div>'      + (secili        ? '<input type="text" value="' + esc(turneGorev) + '" placeholder="Görevi" '          + 'onclick="event.stopPropagation()" list="gorev-datalist" '          + 'oninput="event.stopPropagation();kisiGorevGuncelle(\'' + esc(p.kisi) + '\',this.value)" onchange="event.stopPropagation();kisiGorevGuncelle(\'' + esc(p.kisi) + '\',this.value);gorevHafizayaKaydet(this.value)" '          + 'style="width:120px;border:1.5px solid var(--primary);border-radius:5px;padding:4px 7px;font-size:11px;background:var(--background);font-family:inherit;flex-shrink:0;color:var(--primary);font-weight:600">'        : '')      + '</div>';
   }).join('');
   updateKisiCount();
 }
@@ -2438,7 +2438,7 @@ function renderSelectedPills(scrollToIdx) {
         +   '<input type="text" value="' + (k.gorev||'').replace(/"/g,'&quot;') + '"'
         +   ' placeholder="G\u00f6rev..." list="gorev-datalist"'
         +   ' onclick="event.stopPropagation();_pillFocus(' + i + ')"'
-        +   ' onchange="event.stopPropagation();kisiGorevGuncelle(' + i + ',this.value);gorevHafizayaKaydet(this.value)"'
+        +   ' oninput="kisiGorevGuncelle(' + i + ',this.value)" onchange="event.stopPropagation();kisiGorevGuncelle(' + i + ',this.value);gorevHafizayaKaydet(this.value)"'
         +   ' style="width:100%;border:1px solid var(--border);border-radius:3px;padding:1px 4px;font-size:10px;background:var(--card);font-family:Poppins,sans-serif;color:var(--foreground)">'
         + '</div>'
         // \u2191 \u2193 butonlar\u0131 - b\u00fcy\u00fck, net, t\u0131klanabilir
@@ -2974,11 +2974,12 @@ function renderKadro() {
       const kisiler = grubKisiler.filter(p => p.kategori === kat);
       h += '<div class="section-wrap" style="margin-bottom:0;border-radius:0"><div class="section-header" style="border-radius:0"><span>' + kat + '</span><span style="font-size:11px;font-weight:500;color:var(--muted-foreground)">' + kisiler.length + ' kişi</span></div><div style="padding:0">';
       kisiler.forEach(function(p, i) {
-        const globalIdx = tumPersonel.indexOf(p);
+        // indexOf çalışmaz - getPersonelForOyun yeni obj döndürüyor, kisi adıyla bul
+        const globalIdx = tumPersonel.findIndex(function(tp){ return tp.kisi === p.kisi && tp.oyun === p.oyun; });
         h += '<div class="kadro-kisi-row" style="display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px solid var(--border)">'
           + '<div style="width:26px;height:26px;border-radius:50%;background:var(--muted);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--muted-foreground);flex-shrink:0">' + (i+1) + '</div>'
           + '<div style="flex:1"><div style="font-size:13px;font-weight:600">' + p.kisi + '</div>' + (p.gorev ? '<div style="font-size:11px;color:var(--muted-foreground)">' + p.gorev + '</div>' : '') + '</div>'
-          + '<button class="btn btn-outline" style="height:26px;font-size:11px;padding:0 10px" onclick="kadroKisiDuzenleAc(' + globalIdx + ')">✏️ Düzenle</button>'
+          + (globalIdx >= 0 ? '<button class="btn btn-outline" style="height:26px;font-size:11px;padding:0 10px" onclick="kadroKisiDuzenleAc(' + globalIdx + ')">✏️ Düzenle</button>' : '')
           + '</div>';
       });
       h += '</div></div>';
@@ -4841,8 +4842,11 @@ function _pdfIcerik(t) {
     }
   }
 
-  var notHTML = (t.not||t.notlar)
-    ? '<div style="padding:9px 14px;background:#fef3c7;border-radius:5px;border-left:3px solid #d97706;font-size:11px;margin-top:12px"><strong>\ud83d\udcdd Not:</strong> '+(t.not||t.notlar)+'</div>'
+  var _notRaw = t.not || t.notlar || '';
+  var _notGoster = _notRaw;
+  if (_notRaw.startsWith('{')) { try { var _np=JSON.parse(_notRaw); _notGoster=_np.not||''; } catch(e) { _notGoster=''; } }
+  var notHTML = _notGoster
+    ? '<div style="padding:9px 14px;background:#fef3c7;border-radius:5px;border-left:3px solid #d97706;font-size:11px;margin-top:12px"><strong>\ud83d\udcdd Not:</strong> '+_notGoster+'</div>'
     : '';
 
   var ilAdiBaslik = _temizleIlPdf(durakIlStr(t)).toUpperCase();
@@ -4887,7 +4891,7 @@ function _pdfIcerik(t) {
     + '</div></div>'
     + (ucusHTML ? '<div class="sec"><div class="sec-title">Ula\u015f\u0131m Bilgileri</div>' + ucusHTML + '</div>' : '')
     + (konakHTML ? '<div class="sec"><div class="sec-title">Konaklama</div>' + konakHTML + '</div>' : '')
-    + (nakliyeHTML ? '<div class="sec"><div class="sec-title">Lojistik</div>' + nakliyeHTML + (t.notlar?'<div style="padding:8px 14px;background:#fef3c7;border-radius:5px;border-left:3px solid #d97706;font-size:11px;margin-top:6px"><strong>\ud83d\udcdd Lojistik Notu:</strong> '+t.notlar+'</div>':'') + '</div>' : '')
+    + (nakliyeHTML ? '<div class="sec"><div class="sec-title">Lojistik</div>' + nakliyeHTML + (function(){ var _n=t.notlar||''; if(!_n) return ''; var _nd=_n; try{ if(_n.startsWith('{')){ var _p=JSON.parse(_n); _nd=_p.not||''; } }catch(e){} return _nd ? '<div style="padding:8px 14px;background:#fef3c7;border-radius:5px;border-left:3px solid #d97706;font-size:11px;margin-top:6px"><strong>\ud83d\udcdd Lojistik Notu:</strong> '+_nd+'</div>' : ''; })() + '</div>' : '')
     + programHTML
     + '<div class="sec"><div class="sec-title">G\u00f6revlendirilen Personel</div>'
     + (katilimcilar.length===0
@@ -5231,11 +5235,11 @@ function renderProgramGunler() {
       var row2 = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:2px 8px 5px 11px;border-left:' + borderLeft + ';background:' + rowBg + ';border-bottom:' + (i < programSatirlar.length-1 ? '1px solid var(--border)':'none') + '">'
         + '<div style="display:flex;align-items:center;gap:4px">'
         +   '<span style="font-size:9px;font-weight:700;color:' + (isOyun ? '#16a34a' : '#aaa') + ';white-space:nowrap;min-width:36px">1. Saat</span>'
-        +   '<input type="time" value="' + (s.saat||'') + '" onchange="programSatirlar[' + i + '].saat=this.value" ' + (!isOyun?'disabled ':'') + 'style="' + INP + (isOyun?';border-color:#16a34a':';opacity:.4;background:var(--muted)') + '">'
+        +   '<input type="time" value="' + (s.saat||'') + '" onchange="programSatirlar[' + i + '].saat=this.value" style="' + INP + (isOyun?';border-color:#16a34a':'') + '">'
         + '</div>'
         + '<div style="display:flex;align-items:center;gap:4px">'
         +   '<span style="font-size:9px;font-weight:700;color:' + (isOyun && s.saat2 ? '#7c3aed' : '#aaa') + ';white-space:nowrap;min-width:36px">2. Saat</span>'
-        +   '<input type="time" value="' + (s.saat2||'') + '" onchange="programSatirlar[' + i + '].saat2=this.value" ' + (!isOyun?'disabled ':'') + 'style="' + INP + (isOyun && s.saat2 ? ';border-color:#7c3aed;background:#faf5ff' : isOyun ? '' : ';opacity:.4;background:var(--muted)') + '" title="2. Temsil Saati (opsiyonel)">'
+        +   '<input type="time" value="' + (s.saat2||'') + '" onchange="programSatirlar[' + i + '].saat2=this.value" style="' + INP + (isOyun && s.saat2 ? ';border-color:#7c3aed;background:#faf5ff' : '') + '" title="2. Temsil Saati (opsiyonel)">'
         + '</div>'
         + '</div>';
       return row1 + row2;
