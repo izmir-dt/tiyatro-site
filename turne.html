@@ -727,8 +727,8 @@ height:20px !important;
       <span id="oyuna-don-label" style="font-size:11px;color:var(--muted-foreground)"></span>
     </div>
     <!-- SEZON HIZLI SEÇİCİ -->
-    <div id="sezon-bar" style="background:var(--sidebar);border-bottom:1px solid var(--sidebar-border);padding:0 14px;display:flex;align-items:center;gap:6px;overflow-x:auto;flex-shrink:0;scrollbar-width:none;min-height:50px">
-      <span style="font-size:10px;font-weight:700;color:var(--sidebar-foreground);opacity:.7;white-space:nowrap;letter-spacing:.5px;text-transform:uppercase;margin-right:4px">Sezon</span>
+    <div id="sezon-bar" style="background:hsl(350,55%,22%);border-bottom:1px solid hsl(350,45%,30%);padding:0 14px;display:flex;align-items:center;gap:6px;overflow-x:auto;flex-shrink:0;scrollbar-width:none;min-height:50px">
+      <span style="font-size:10px;font-weight:700;color:rgba(255,255,255,.65);white-space:nowrap;letter-spacing:.5px;text-transform:uppercase;margin-right:4px">Sezon</span>
       <div id="sezon-btn-wrap" style="display:flex;gap:4px;padding:7px 0"></div>
       <div style="margin-left:auto;display:flex;gap:4px;padding:7px 0;flex-shrink:0">
         <button class="btn btn-primary" onclick="openModal()" style="height:38px;display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:800;padding:0 20px;border-radius:7px 0 0 7px;letter-spacing:-.2px;box-shadow:0 2px 8px rgba(180,30,50,.35)">
@@ -3379,17 +3379,21 @@ function turneCard(t) {
   var pills = '';
   if (toplamTemsil > 0) pills += '<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:var(--muted);color:var(--muted-foreground);font-weight:600">' + toplamTemsil + ' gösteri</span>';
   if (ulasim)           pills += '<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:var(--muted);color:var(--muted-foreground);font-weight:600">' + ulasim + '</span>';
+
+  // Otel pill'i ayrı — kısaltılmış (max 1-2 otel göster)
+  var otelPillHtml = '';
   if (otel) {
-    // "Niğde: Grand Niğde Hotel, Nevşehir: Crowne Plaza" formatında göster
-    var otelPill = '';
+    var otelKisa = '';
     if (t.duraklar && t.duraklar.some(function(d){ return d.otelAdi; })) {
-      otelPill = t.duraklar.filter(function(d){ return d.otelAdi; })
-        .map(function(d){ return (d.il||'').replace(/\/MERKEZ/gi,'').trim() + ': ' + d.otelAdi; })
-        .join(' · ');
+      var otelDuraklar2 = t.duraklar.filter(function(d){ return d.otelAdi; });
+      otelKisa = otelDuraklar2.slice(0,2).map(function(d){
+        var il = (d.il||'').replace(/\/MERKEZ/gi,'').trim();
+        return il ? il.split(' ')[0] + ': ' + d.otelAdi : d.otelAdi;
+      }).join(' · ') + (otelDuraklar2.length > 2 ? ' +' + (otelDuraklar2.length-2) : '');
     } else {
-      otelPill = otel;
+      otelKisa = otel;
     }
-    pills += '<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:var(--muted);color:var(--muted-foreground);font-weight:600">🏨 ' + otelPill + '</span>';
+    otelPillHtml = '<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:hsl(42,50%,92%);color:hsl(42,60%,28%);font-weight:600;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block" title="' + otelKisa.replace(/"/g,'&quot;') + '">🏨 ' + otelKisa + '</span>';
   }
 
   var notHtml = t.not ? '<div style="font-size:10px;color:var(--muted-foreground);margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%">📝 ' + t.not + '</div>' : '';
@@ -3413,23 +3417,24 @@ function turneCard(t) {
     + '</div>'
     // — BİLGİLER
     + '<div style="padding:9px 13px 7px">'
-    // Tarih
+    // Tarih satırı
     +   '<div style="display:flex;align-items:center;gap:6px;font-size:11px;margin-bottom:5px">'
     +     '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--muted-foreground);flex-shrink:0"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/></svg>'
     +     '<strong>' + tarihStr + '</strong>'
-    +     (gunStr ? ' <span style="color:var(--muted-foreground);font-size:10px">· ' + gunStr + '</span>' : '')
+    +     (gunStr ? '<span style="color:var(--muted-foreground);font-size:10px">· ' + gunStr + '</span>' : '')
     +   '</div>'
-    // Şehir
+    // Şehir satırı — sadece il isimleri kalın, mekan gri ve kırpılır
     +   '<div style="display:flex;align-items:flex-start;gap:6px;font-size:11px;margin-bottom:6px">'
-    +     '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--primary);flex-shrink:0;margin-top:1px"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>'
-    +     '<span style="font-weight:700;letter-spacing:.3px">' + sehirler
-    +       (mekan ? ' <span style="font-weight:400;color:var(--muted-foreground)">· ' + mekan + '</span>' : '')
-    +     '</span>'
+    +     '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--primary);flex-shrink:0;margin-top:2px"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>'
+    +     '<div style="min-width:0;flex:1">'
+    +       '<div style="font-weight:800;letter-spacing:.3px;color:var(--foreground)">' + sehirler + '</div>'
+    +       (mekan ? '<div style="font-size:10px;color:var(--muted-foreground);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="' + mekan.replace(/"/g,"&quot;") + '">' + mekan + '</div>' : '')
+    +     '</div>'
     +   '</div>'
     // Kadro chip'leri (Ana / Turne ayrımı)
     +   kadroChip
-    // Diğer pill'ler
-    +   (pills ? '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:5px">' + pills + '</div>' : '')
+    // Diğer pill'ler — gösteri + ulaşım tek satırda
+    +   (pills || otelPillHtml ? '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:5px">' + pills + otelPillHtml + '</div>' : '')
     +   notHtml
     + '</div>'
     // — ALT BAR
@@ -5272,29 +5277,61 @@ function kadroPdfIndir() {
 
 // Oyun adını yeniden adlandır
 function _oyunYendenAdlandir(eskiAd) {
-  var yeniAd = prompt('Oyun adını düzenleyin:', eskiAd);
-  if (!yeniAd || !yeniAd.trim() || yeniAd.trim() === eskiAd) return;
-  yeniAd = yeniAd.trim();
-  // Zaten var mı kontrol
-  var mevcutOyunlar = Array.from(new Set(tumPersonel.map(function(p){ return (p.oyun||'').trim(); })
-    .concat(turneler.map(function(t){ return (t.oyun||'').trim(); }))));
-  if (mevcutOyunlar.includes(yeniAd)) { alert('"' + yeniAd + '" adında bir oyun zaten var.'); return; }
-  // Personel kaydında güncelle
-  tumPersonel.forEach(function(p){ if (p.oyun === eskiAd) p.oyun = yeniAd; });
-  // Turnelerde güncelle
-  turneler.forEach(function(t){
-    if (t.oyun === eskiAd) t.oyun = yeniAd;
-    if (t.duraklar) t.duraklar.forEach(function(d){ if (d.oyun === eskiAd) d.oyun = yeniAd; });
-    if (t.katilimcilar) t.katilimcilar.forEach(function(k){ if (k.oyun === eskiAd) k.oyun = yeniAd; });
-  });
-  populateFilters();
-  renderOyunMgmt();
-  renderListe();
-  var toast = document.createElement('div');
-  toast.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1e293b;color:#fff;padding:10px 18px;border-radius:8px;font-size:12px;font-weight:600;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.3);font-family:Poppins,sans-serif';
-  toast.textContent = '✓ "' + eskiAd + '" → "' + yeniAd + '" olarak güncellendi';
-  document.body.appendChild(toast);
-  setTimeout(function(){ toast.remove(); }, 3000);
+  // Güzel modal ile prompt yerine
+  var overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px';
+  overlay.innerHTML = '<div style="background:var(--card);border:1.5px solid var(--border);border-radius:14px;padding:24px;width:100%;max-width:420px;box-shadow:0 20px 60px rgba(0,0,0,.25);font-family:Poppins,sans-serif">'
+    + '<div style="font-size:15px;font-weight:800;color:var(--foreground);margin-bottom:4px">Oyun Adını Düzenle</div>'
+    + '<div style="font-size:11px;color:var(--muted-foreground);margin-bottom:16px">Tüm turne ve kadro kayıtlarında güncellenir</div>'
+    + '<label style="font-size:10px;font-weight:700;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:6px">Oyun Adı</label>'
+    + '<input id="_rename-input" type="text" value="' + eskiAd.replace(/"/g,'&quot;') + '" '
+    + 'style="width:100%;height:40px;padding:0 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-weight:600;font-family:Poppins,sans-serif;background:var(--card);color:var(--foreground);outline:none" '
+    + 'onfocus="this.style.borderColor=\'var(--primary)\'" onblur="this.style.borderColor=\'var(--border)\'">'
+    + '<div id="_rename-err" style="font-size:11px;color:hsl(0,70%,45%);margin-top:5px;min-height:16px"></div>'
+    + '<div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end">'
+    + '<button onclick="this.closest(\'[data-rename-overlay]\').remove()" style="height:36px;padding:0 16px;border:1.5px solid var(--border);border-radius:8px;background:transparent;cursor:pointer;font-size:12px;font-weight:600;color:var(--muted-foreground);font-family:Poppins,sans-serif">İptal</button>'
+    + '<button id="_rename-ok" style="height:36px;padding:0 20px;border:none;border-radius:8px;background:var(--primary);color:#fff;cursor:pointer;font-size:12px;font-weight:700;font-family:Poppins,sans-serif">Kaydet</button>'
+    + '</div></div>';
+  overlay.setAttribute('data-rename-overlay','1');
+  // ESC ile kapat
+  overlay.addEventListener('keydown', function(e){ if(e.key==='Escape') overlay.remove(); });
+  // Overlay dışına tıklayınca kapat
+  overlay.addEventListener('click', function(e){ if(e.target===overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+
+  var inp = document.getElementById('_rename-input');
+  var err = document.getElementById('_rename-err');
+  var okBtn = document.getElementById('_rename-ok');
+  inp.focus(); inp.select();
+
+  function doRename() {
+    var yeniAd = inp.value.trim();
+    if (!yeniAd) { err.textContent = 'Oyun adı boş bırakılamaz.'; inp.focus(); return; }
+    if (yeniAd === eskiAd) { overlay.remove(); return; }
+    var mevcutOyunlar = Array.from(new Set(
+      tumPersonel.map(function(p){ return (p.oyun||'').trim(); })
+        .concat(turneler.map(function(t){ return (t.oyun||'').trim(); }))
+    ));
+    if (mevcutOyunlar.includes(yeniAd)) { err.textContent = '"' + yeniAd + '" adında bir oyun zaten var.'; inp.focus(); return; }
+    // Güncelle
+    tumPersonel.forEach(function(p){ if (p.oyun === eskiAd) p.oyun = yeniAd; });
+    turneler.forEach(function(t){
+      if (t.oyun === eskiAd) t.oyun = yeniAd;
+      if (t.duraklar) t.duraklar.forEach(function(d){ if (d.oyun === eskiAd) d.oyun = yeniAd; });
+      if (t.katilimcilar) t.katilimcilar.forEach(function(k){ if (k.oyun === eskiAd) k.oyun = yeniAd; });
+    });
+    overlay.remove();
+    populateFilters();
+    renderOyunMgmt();
+    renderListe();
+    var toast = document.createElement('div');
+    toast.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1e293b;color:#fff;padding:11px 20px;border-radius:9px;font-size:12px;font-weight:600;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.3);font-family:Poppins,sans-serif;display:flex;align-items:center;gap:8px';
+    toast.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg> "' + eskiAd + '" → "' + yeniAd + '"';
+    document.body.appendChild(toast);
+    setTimeout(function(){ toast.style.opacity='0'; toast.style.transition='opacity .4s'; setTimeout(function(){ toast.remove(); },400); }, 3000);
+  }
+  okBtn.addEventListener('click', doRename);
+  inp.addEventListener('keydown', function(e){ if(e.key==='Enter') doRename(); });
 }
 var _kadroView = localStorage.getItem('_kadroView') || 'liste';
 function kadroViewSec(tip) {
@@ -5308,6 +5345,20 @@ function kadroViewSec(tip) {
   renderKadro();
 }
 function kadroGrupFiltreSec(grup) {
+  // 'kategori' özel durum: kategori dropdown'ını aç/odakla
+  if (grup === 'kategori') {
+    var katSel = document.getElementById('kadro-kat-filter');
+    if (katSel) {
+      katSel.focus();
+      // Dropdown'u görünür bölgeye kaydır
+      katSel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      // Hafifçe vurgula
+      katSel.style.outline = '2px solid hsl(265,55%,48%)';
+      katSel.style.borderColor = 'hsl(265,55%,48%)';
+      setTimeout(function(){ katSel.style.outline = ''; katSel.style.borderColor = ''; }, 1800);
+    }
+    return;
+  }
   window._kadroGrupFiltre = grup;
   // Buton highlight
   ['hepsi','sanatci','teknik'].forEach(function(g) {
@@ -5426,7 +5477,7 @@ function renderKadro() {
   kpiHTML += _kpiKadro('Toplam',  tumKadro.length, 'hsl(220,50%,40%)', !aktifGrup && !filKat, '');
   kpiHTML += _kpiKadro('Sanatçı', sanatciCount,    'hsl(350,62%,36%)', aktifGrup==='sanatci',  'sanatci');
   kpiHTML += _kpiKadro('Teknik',  teknikCount,     'hsl(220,60%,40%)', aktifGrup==='teknik',   'teknik');
-  kpiHTML += _kpiKadro('Kategori',katCount,        'hsl(265,55%,48%)', false,                  null);
+  kpiHTML += _kpiKadro('Kategori',katCount,        'hsl(265,55%,48%)', !!filKat,               'kategori');
   kpiHTML += '</div>';
 
   // ── GÖRÜNÜM SEÇİMİ ────────────────────────────────────────
