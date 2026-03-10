@@ -12024,7 +12024,19 @@ async function pdfDosyaKaydet() {
     openModal();
     await new Promise(function(r){setTimeout(r,300);});
     var sv=function(id,val){var el=document.getElementById(id);if(el&&val!==undefined&&val!=='')el.value=val;};
-    sv('m-oyun',data.oyun);
+    // Oyun adını select'e ekle (yoksa yeni option olarak)
+    if(data.oyun) {
+      var oyunSel = document.getElementById('m-oyun');
+      if(oyunSel) {
+        var mevcutMu = Array.from(oyunSel.options).some(function(o){ return o.value===data.oyun; });
+        if(!mevcutMu) {
+          var yeniOpt = document.createElement('option');
+          yeniOpt.value = data.oyun; yeniOpt.textContent = data.oyun;
+          oyunSel.appendChild(yeniOpt);
+        }
+        oyunSel.value = data.oyun;
+      }
+    }
     sv('m-tarih',data.baslangicTarih);
     sv('m-bitis',data.bitisTarih);
     // Durakları doldur
@@ -12034,17 +12046,15 @@ async function pdfDosyaKaydet() {
     duraklar[0].il = data.sehirler[0];
     if(typeof renderDuraklar==='function') renderDuraklar();
     await new Promise(function(r){setTimeout(r,100);});
-    var ilEl0=document.querySelector('[id^="durak-il-"]');
-    if(ilEl0) ilEl0.value=data.sehirler[0];
     // Ek duraklar
     for(var di=1;di<data.sehirler.length;di++){
       if(typeof durakEkle==='function') durakEkle();
-      await new Promise(function(r){setTimeout(r,80);});
-      var tumIlInputlari=document.querySelectorAll('[id^="durak-il-"]');
-      if(tumIlInputlari[di]) tumIlInputlari[di].value=data.sehirler[di];
-      if(typeof duraklar!=='undefined'&&duraklar[di]){
+      await new Promise(function(r){setTimeout(r,100);});
+      if(typeof duraklar!=='undefined'){
+        if(!duraklar[di]) duraklar[di]={};
         duraklar[di].il=data.sehirler[di];
       }
+      if(typeof renderDuraklar==='function') renderDuraklar();
     }
     }
     if(typeof mStatuDdSec==='function') mStatuDdSec('taslak');
