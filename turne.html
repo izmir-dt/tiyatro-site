@@ -9084,7 +9084,7 @@ async function saveTurne() {
   } finally {
     _saveTurneCalisiyor = false;
     var _saveBtn2 = document.getElementById('save-turne-btn');
-    if (_saveBtn2) { _saveBtn2.disabled = false; _saveBtn2.textContent = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-2px;margin-right:5px"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>Kaydet'; }
+    if (_saveBtn2) { _saveBtn2.disabled = false; _saveBtn2.textContent = 'Kaydet'; }
   }
 }
 
@@ -12015,43 +12015,55 @@ async function pdfDosyaKaydet() {
       if(u.indexOf('figüran')!==-1) return 'Sanatçı';
       return 'Diğer';
     }
-    var sehirler=data.sehirler.length>0?data.sehirler:[''];
     var basarili=0;
-    window._pdfKayitDevam = true; // saveTurne'nin ara fetch yapmasını engelle
-    for(var si=0;si<sehirler.length;si++) {
-      var sehir=sehirler[si];
-      openModal();
-      await new Promise(function(r){setTimeout(r,250);});
-      var sv=function(id,val){var el=document.getElementById(id);if(el&&val)el.value=val;};
-      sv('m-oyun',data.oyun); sv('m-tarih',data.baslangicTarih); sv('m-bitis',data.bitisTarih);
-      if(typeof duraklar!=='undefined'){
-        if(!duraklar[0])duraklar[0]={};
-        duraklar[0].il=sehir;
-        if(typeof renderDuraklar==='function')renderDuraklar();
-        await new Promise(function(r){setTimeout(r,80);});
-        var ilEl=document.querySelector('[id^="durak-il-"]');
-        if(ilEl&&sehir)ilEl.value=sehir;
-      }
-      if(typeof mStatuDdSec==='function')mStatuDdSec('taslak');
-      if(data.gidisUlasim){
-        sv('m-gidis-ulasim',data.gidisUlasim);
-        if(typeof ulasimTuruDegisti==='function')ulasimTuruDegisti('gidis');
-        await new Promise(function(r){setTimeout(r,50);});
-        sv('m-gidis-saat',data.gidisSaat); sv('m-gidis-plaka',data.gidisPlaka);
-        if(data.kisiSayisi)sv('m-gidis-kisi-sayisi',String(data.kisiSayisi));
-      }
-      if(data.donusUlasim){
-        sv('m-donus-ulasim',data.donusUlasim);
-        if(typeof ulasimTuruDegisti==='function')ulasimTuruDegisti('donus');
-        await new Promise(function(r){setTimeout(r,50);});
-        sv('m-donus-saat',data.donusSaat); sv('m-donus-plaka',data.donusPlaka);
-        if(data.kisiSayisi)sv('m-donus-kisi-sayisi',String(data.kisiSayisi));
-      }
-      if(data.otelAdi){var oe=document.getElementById('m-otel-adi');if(oe)oe.value=data.otelAdi;}
-      if(data.kamyon)sv('m-kamyon','1');
-      await saveTurne(); basarili++;
+    window._pdfKayitDevam = true;
+    // Tüm şehirler TEK turnenin durakları — ayrı turne değil
+    openModal();
+    await new Promise(function(r){setTimeout(r,300);});
+    var sv=function(id,val){var el=document.getElementById(id);if(el&&val!==undefined&&val!=='')el.value=val;};
+    sv('m-oyun',data.oyun);
+    sv('m-tarih',data.baslangicTarih);
+    sv('m-bitis',data.bitisTarih);
+    // Durakları doldur
+    if(typeof duraklar!=='undefined' && data.sehirler && data.sehirler.length>0) {
+      // İlk duraği ayarla
+      if(!duraklar[0]) duraklar[0]={};
+      duraklar[0].il = data.sehirler[0];
+      if(typeof renderDuraklar==='function') renderDuraklar();
       await new Promise(function(r){setTimeout(r,100);});
+      var ilEl0=document.querySelector('[id^="durak-il-"]');
+      if(ilEl0) ilEl0.value=data.sehirler[0];
+      // Ek duraklar
+      for(var di=1;di<data.sehirler.length;di++){
+        if(typeof durakEkle==='function') durakEkle();
+        await new Promise(function(r){setTimeout(r,80);});
+        var tumIlInputlari=document.querySelectorAll('[id^="durak-il-"]');
+        if(tumIlInputlari[di]) tumIlInputlari[di].value=data.sehirler[di];
+        if(typeof duraklar!=='undefined'&&duraklar[di]){
+          duraklar[di].il=data.sehirler[di];
+        }
+      }
     }
+    if(typeof mStatuDdSec==='function') mStatuDdSec('taslak');
+    if(data.gidisUlasim){
+      sv('m-gidis-ulasim',data.gidisUlasim);
+      if(typeof ulasimTuruDegisti==='function') ulasimTuruDegisti('gidis');
+      await new Promise(function(r){setTimeout(r,60);});
+      sv('m-gidis-saat',data.gidisSaat);
+      sv('m-gidis-plaka',data.gidisPlaka);
+      if(data.kisiSayisi) sv('m-gidis-kisi-sayisi',String(data.kisiSayisi));
+    }
+    if(data.donusUlasim){
+      sv('m-donus-ulasim',data.donusUlasim);
+      if(typeof ulasimTuruDegisti==='function') ulasimTuruDegisti('donus');
+      await new Promise(function(r){setTimeout(r,60);});
+      sv('m-donus-saat',data.donusSaat);
+      sv('m-donus-plaka',data.donusPlaka);
+      if(data.kisiSayisi) sv('m-donus-kisi-sayisi',String(data.kisiSayisi));
+    }
+    if(data.otelAdi){var oe=document.getElementById('m-otel-adi');if(oe)oe.value=data.otelAdi;}
+    if(data.kamyon) sv('m-kamyon','1');
+    await saveTurne(); basarili=1;
     var ov=document.getElementById('modal-overlay');if(ov)ov.classList.remove('on');
     window._pdfKayitDevam = false;
     // Tüm turneler eklendi — şimdi tek seferde Sheets'ten çek, _rowIdx'ler doğru olsun
@@ -12325,4 +12337,3 @@ document.addEventListener('DOMContentLoaded', function() {
 
 </body>
 </html>
-
