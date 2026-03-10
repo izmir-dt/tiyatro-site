@@ -11422,6 +11422,7 @@ function oyunAdCikar(metin, sehir) {
 }
 
 async function pdfMetinCikar(arrayBuffer) {
+  // PDF.js ile tablo verisi çıkar — her hücreyi x/y koordinatıyla sakla
   var pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
   var allItems = [];
   for (var p = 1; p <= pdf.numPages; p++) {
@@ -11431,77 +11432,155 @@ async function pdfMetinCikar(arrayBuffer) {
     tc.items.forEach(function(item) {
       var s = item.str.trim();
       if (!s) return;
-      allItems.push({
-        str: s,
-        x: Math.round(item.transform[4]),
-        y: Math.round(pgH - item.transform[5])
-      });
+      allItems.push({ str: s, x: Math.round(item.transform[4]), y: Math.round(pgH - item.transform[5]) });
     });
   }
   return allItems;
 }
 
+// Türkiye il listesi (büyük harf, Türkçe)
+var PDF_IL_LISTESI = ['GAZİANTEP','NEVŞEHİR','KAHRAMANMARAŞ','AFYONKARAHİSAR','ESKİŞEHİR',
+  'DİYARBAKIR','ŞANLIURFA','KIRKLARELİ','KIRŞEHİR','KIRIKKALE','KAYSERİ','KASTAMONU',
+  'KOCAELİ','KARABÜK','KARAMAN','MALATYA','MANİSA','MARDİN','SAKARYA','TRABZON',
+  'ADANA','ADIYAMAN','AĞRI','AKSARAY','AMASYA','ANKARA','ANTALYA','ARDAHAN','ARTVİN',
+  'AYDIN','BALIKESİR','BARTIN','BATMAN','BAYBURT','BİLECİK','BİNGÖL','BİTLİS','BOLU',
+  'BURDUR','BURSA','ÇANAKKALE','ÇANKIRI','ÇORUM','DENİZLİ','DÜZCE','EDİRNE','ELAZIĞ',
+  'ERZİNCAN','ERZURUM','GİRESUN','GÜMÜŞHANE','HAKKARİ','HATAY','IĞDIR','ISPARTA',
+  'İSTANBUL','KARS','KİLİS','KONYA','KÜTAHYA','MERSİN','MUĞLA','MUŞ','NİĞDE','ORDU',
+  'OSMANİYE','RİZE','SAMSUN','SİİRT','SİNOP','SİVAS','ŞIRNAK','TEKİRDAĞ','TOKAT',
+  'TUNCELİ','UŞAK','VAN','YALOVA','YOZGAT','ZONGULDAK','URLA'
+];
+
+var PDF_ATLA = new Set(['TURNE','URLA AKM SAHNESİ','URLA AKM','GÖÇ HAYALLER KUMPANYASI',
+  'KAÇAKLAR','GÜMÜŞ PATENLER','OTOBÜS DURAĞINDA ÜÇ BENCİL','OTOBÜS DURAĞINDA']);
+
+var PDF_AY_MAP = {
+  'Ocak':'01','Şubat':'02','Mart':'03','Nisan':'04','Mayıs':'05','Haziran':'06',
+  'Temmuz':'07','Ağustos':'08','Eylül':'09','Ekim':'10','Kasım':'11','Aralık':'12'
+};
+
+function pdfTarihParse(s) {
+  var m = (s||'').match(/(\d{1,2})\s+(Ocak|Şubat|Mart|Nisan|Mayıs|Haziran|Temmuz|Ağustos|Eylül|Ekim|Kasım|Aralık)\s+(\d{4})/);
+  if (!m) return null;
+  var ay = PDF_AY_MAP[m[2]];
+  return ay ? (m[3]+'-'+ay+'-'+m[1].padStart(2,'0')) : null;
+}
+
+function pdfTemizle(h) {
+  if (!h) return '';
+  return h.replace(/\(\s*\d{1,2}[.:]\d{2}[^)]*\)/g, '').trim();
+}
+
+function pdfIlBul(metin) {
+  var ust = metin.toUpperCase();
+  for (var i = 0; i < PDF_IL_LISTESI.length; i++) {
+    var il = PDF_IL_LISTESI[i];
+    var idx = ust.indexOf(il);
+    if (idx !== -1) {
+      var once = metin.substring(0, idx).replace(/^[\s\-–]+|[\s\-–]+$/g,'');
+      var sonra = metin.substring(idx+il.length).replace(/^[\s\-–]+|[\s\-–]+$/g,'');
+      return { il: il, sahne: sonra, oyunOnce: once };
+    }
+  }
+  return null;
+}
+
 function turneKayitlariniCikar(items) {
-  // 1. Y toleransı 3px ile satırlara grupla
+  // 1. Y koordinatına göre satırlara grupla (±3px tolerans)
   var satirlar = [];
   items.forEach(function(item) {
-    var eklendi = false;
+    var bulundu = false;
     for (var i = 0; i < satirlar.length; i++) {
       if (Math.abs(satirlar[i].y - item.y) <= 3) {
-        satirlar[i].items.push(item);
-        eklendi = true; break;
+        satirlar[i].items.push(item); bulundu = true; break;
       }
     }
-    if (!eklendi) satirlar.push({ y: item.y, items: [item] });
+    if (!bulundu) satirlar.push({ y: item.y, items: [item] });
   });
   satirlar.sort(function(a,b){ return a.y - b.y; });
 
-  // 2. Başlık satırındaki "TURNE" kelimesinin X konumunu bul
-  var turneMinX = null;
+  // 2. TURNE sütunlarının X sınırını bul (başlık satırından)
+  var turneXler = [];
   for (var i = 0; i < satirlar.length; i++) {
-    var strs = satirlar[i].items.map(function(it){ return it.str; });
-    var ti = strs.indexOf('TURNE');
-    if (ti !== -1) {
-      turneMinX = satirlar[i].items[ti].x - 10;
-      break;
-    }
+    satirlar[i].items.forEach(function(it) {
+      if (it.str === 'TURNE') turneXler.push(it.x);
+    });
   }
-  if (turneMinX === null) turneMinX = 400;
+  var turneMinX = turneXler.length ? (Math.min.apply(null, turneXler) - 15) : 350;
 
-  // 3. Her satırı işle
+  // 3. Her satırı işle — "sanal sütun" = x aralığına göre sütun index'i hesapla
+  function xToCol(x, pageW) {
+    // Yaklaşık sütun genişliği, 4 TURNE sütunu sayfanın sağ yarısında
+    var normalized = (x - turneMinX) / Math.max(pageW - turneMinX, 1);
+    return Math.min(3, Math.max(0, Math.floor(normalized * 4)));
+  }
+
+  var aktifSutun = {};  // {colIdx: {il, sahne, baslamaTarih}}
   var kayitlar = [];
   var guncelTarih = null;
+  var sayfaGenisligi = items.length ? Math.max.apply(null, items.map(function(i){return i.x;})) : 600;
+
   satirlar.forEach(function(satir) {
-    var solItems = satir.items.filter(function(it){ return it.x < turneMinX; });
+    var solMetin = satir.items.filter(function(it){ return it.x < turneMinX; })
+                              .map(function(it){ return it.str; }).join(' ');
+    var t = pdfTarihParse(solMetin);
+    if (t) guncelTarih = t;
+    if (!guncelTarih) return;
+
+    // TURNE sütunundaki item'lar
     var sagItems = satir.items.filter(function(it){ return it.x >= turneMinX; });
-    // Sol: tarih bul
-    var solStr = solItems.map(function(it){ return it.str; }).join(' ');
-    var tarihM = solStr.match(/(\d{1,2})\s+(Ocak|\u015eubat|Mart|Nisan|May\u0131s|Haziran|Temmuz|A\u011fustos|Eyl\u00fcl|Ekim|Kas\u0131m|Aral\u0131k)\s+(\d{4})/);
-    if (tarihM) { var t = tarihParse(tarihM[0]); if (t) guncelTarih = t; }
-    if (!guncelTarih || sagItems.length === 0) return;
-    // Sağ: TURNE sütunu — tüm item metinlerini birleştir
-    var sagStr = sagItems.sort(function(a,b){return a.x-b.x;}).map(function(it){ return it.str; }).join(' ').trim();
-    if (!sagStr) return;
-    IL_LISTESI.forEach(function(il) {
-      if (sagStr.toUpperCase().indexOf(il) !== -1 && il !== '\u0130ZM\u0130R') {
-        var oyun = sagStr
-          .replace(new RegExp(il + '[\\-A-Z\u00c7\u011e\u0049\u0130\u00d6\u015e\u00dca-z\u00e7\u011f\u0131\u015f\u00f6\u00fc\\s]*(?:BELED\u0130YES\u0130|AKM|CSO|SALON|DT|SAHNES\u0130)?', 'gi'), ' ')
-          .replace(/\(\d+\.\d+[^)]*\)/g, '')
-          .replace(/\s+/g, ' ').trim()
-          .replace(/^[-\u2013\s]+|[-\u2013\s]+$/g, '').trim();
-        kayitlar.push({ sehir: il, oyun: oyun, tarih: guncelTarih });
+    if (!sagItems.length) return;
+
+    // Satırdaki tüm metni birleştir (x'e göre sıralı)
+    sagItems.sort(function(a,b){ return a.x - b.x; });
+    var birlesik = sagItems.map(function(it){ return it.str; }).join(' ').trim();
+    birlesik = pdfTemizle(birlesik);
+    if (!birlesik || PDF_ATLA.has(birlesik)) return;
+
+    // İl var mı?
+    var ilSonuc = pdfIlBul(birlesik);
+    if (ilSonuc && ilSonuc.il !== 'İZMİR') {
+      // Yeni şehir — sanal sütun hesapla
+      var colIdx = xToCol(sagItems[0].x, sayfaGenisligi);
+      aktifSutun[colIdx] = { il: ilSonuc.il, sahne: ilSonuc.sahne, tarih: guncelTarih };
+      kayitlar.push({ tarih: guncelTarih, il: ilSonuc.il, sahne: ilSonuc.sahne, oyun: ilSonuc.oyunOnce });
+    } else if (!ilSonuc) {
+      // Şehirsiz — en son başlayan aktif şehre ata
+      var enYeni = null;
+      var anahtarlar = Object.keys(aktifSutun);
+      for (var k = 0; k < anahtarlar.length; k++) {
+        var v = aktifSutun[anahtarlar[k]];
+        if (!enYeni || v.tarih > enYeni.tarih) enYeni = v;
       }
-    });
+      if (enYeni) {
+        // Bu gün zaten o şehir için kayıt var mı?
+        var mevcut = null;
+        for (var m = kayitlar.length - 1; m >= 0; m--) {
+          if (kayitlar[m].il === enYeni.il && kayitlar[m].tarih === guncelTarih) {
+            mevcut = kayitlar[m]; break;
+          }
+        }
+        if (mevcut && !mevcut.oyun) {
+          mevcut.oyun = birlesik;
+        } else {
+          kayitlar.push({ tarih: guncelTarih, il: enYeni.il, sahne: enYeni.sahne, oyun: birlesik });
+        }
+      }
+    }
   });
 
-  // 4. Ardışık aynı şehir+oyun → birleştir
+  // 4. Ardışık aynı il+oyun → birleştir
+  kayitlar.sort(function(a,b){ return a.tarih < b.tarih ? -1 : a.tarih > b.tarih ? 1 : 0; });
   var sonuc = [];
   kayitlar.forEach(function(k) {
-    var son = sonuc[sonuc.length - 1];
-    if (son && son.il === k.sehir && son.oyun === k.oyun) {
+    var son = null;
+    for (var i = sonuc.length - 1; i >= 0; i--) {
+      if (sonuc[i].il === k.il && sonuc[i].oyun === k.oyun) { son = sonuc[i]; break; }
+    }
+    if (son) {
       son.bitisTarih = k.tarih;
     } else {
-      sonuc.push({ oyun: k.oyun, il: k.sehir, baslangicTarih: k.tarih, bitisTarih: k.tarih });
+      sonuc.push({ oyun: k.oyun, il: k.il, sahne: k.sahne, baslangicTarih: k.tarih, bitisTarih: k.tarih });
     }
   });
   return sonuc;
