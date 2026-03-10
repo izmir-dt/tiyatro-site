@@ -3443,6 +3443,9 @@ function turneCard(t) {
     sehirler = temizIl(durakIlStr(t)).toUpperCase() || '—';
   }
   var mekan = (t.duraklar && t.duraklar.length===1 && t.duraklar[0].mekan) ? t.duraklar[0].mekan : (t.mekan||'');
+  var durakListeSS = (t.duraklar && t.duraklar.length && t.duraklar.some(function(d){ return d.il; }))
+    ? t.duraklar.filter(function(d){ return d.il; })
+    : (t.il ? [{il:t.il, ilce:t.ilce||'', mekan:t.mekan, temsil:t.sayi||1}] : []);
 
   // Kadro sayısı — Ana Kadro / Turne Kadrosu ayrımı net göster
   var turneKadroSay = (t.katilimcilar && t.katilimcilar.length) ? t.katilimcilar.length : 0;
@@ -3557,7 +3560,32 @@ function turneCard(t) {
     +       '<div style="display:flex;align-items:center;gap:5px;margin-top:4px;flex-wrap:wrap">'
     +         '<span style="font-size:11px;font-weight:700;color:var(--foreground)">' + tarihStr + '</span>'
     +         (gunStr ? '<span style="font-size:10px;color:var(--muted-foreground);background:var(--muted);padding:1px 5px;border-radius:8px">' + gunStr + '</span>' : '')
-    +         '<span style="font-size:11px;font-weight:800;color:var(--primary);margin-left:2px">' + sehirler + '</span>'
+    +         (function(){
+            // Çok durak varsa her durak için şehir + sahne + temsil göster
+            if (durakListeSS && durakListeSS.length > 1) {
+              return '<div style="display:flex;flex-wrap:wrap;gap:3px;align-items:center;margin-top:2px">' +
+                durakListeSS.map(function(d, di){
+                  var ilTxt = temizIl(d.il||'—').toUpperCase();
+                  var mekanTxt = d.mekan ? '<span style="font-size:9.5px;color:var(--muted-foreground);font-weight:500"> · ' + d.mekan + '</span>' : '';
+                  var temsilSay = parseInt(d.temsil||d.temsilSayisi||1);
+                  var temsilBadge = '<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:10px;background:hsl(220,40%,92%);color:hsl(220,55%,32%)">' + temsilSay + 'T</span>';
+                  var sep = di > 0 ? '<span style="font-size:11px;color:var(--muted-foreground);font-weight:400;margin:0 2px">›</span>' : '';
+                  return sep + '<span style="display:inline-flex;align-items:center;gap:3px">' +
+                    '<span style="font-size:11px;font-weight:800;color:var(--primary)">' + ilTxt + '</span>' +
+                    mekanTxt + temsilBadge + '</span>';
+                }).join('') + '</div>';
+            } else {
+              // tek durak — eski davranış ama sahneyi de ekle
+              var d0 = (durakListeSS && durakListeSS[0]) || {};
+              var ilTxt = temizIl(d0.il || durakIlStr(t) || '—').toUpperCase();
+              var mekanTxt = (d0.mekan || mekan) ? '<span style="font-size:9.5px;color:var(--muted-foreground);font-weight:500"> · ' + (d0.mekan||mekan) + '</span>' : '';
+              var temsilSay = parseInt(d0.temsil||d0.temsilSayisi||t.sayi||1);
+              var temsilBadge = temsilSay > 1 ? '<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:10px;background:hsl(220,40%,92%);color:hsl(220,55%,32%)">' + temsilSay + 'T</span>' : '';
+              return '<span style="display:inline-flex;align-items:center;gap:3px">' +
+                '<span style="font-size:11px;font-weight:800;color:var(--primary)">' + ilTxt + '</span>' +
+                mekanTxt + temsilBadge + '</span>';
+            }
+          })()
     +       '</div>'
     +     '</div>'
     +     '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0">'
