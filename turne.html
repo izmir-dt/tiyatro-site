@@ -113,8 +113,7 @@
     .toast-progress { position:absolute; bottom:0; left:0; height:3px; border-radius:0 0 10px 10px; transition:width linear; }
 
     /* ── KLAVYE KISAYOL FLOATİNG HİNT ── */
-    #kb-hint { position:fixed; bottom:20px; left:20px; z-index:9000; background:hsl(220,20%,16%); color:rgba(255,255,255,.75); padding:7px 12px; border-radius:8px; font-size:10px; font-family:'Poppins',sans-serif; display:flex; align-items:center; gap:7px; opacity:0; transition:opacity .3s; pointer-events:none; box-shadow:0 2px 12px rgba(0,0,0,.3); border:1px solid rgba(255,255,255,.1); }
-    #kb-hint.visible { opacity:1; pointer-events:all; cursor:pointer; }
+    #kb-hint { display: none !important; }
     .kb-key { display:inline-flex; align-items:center; justify-content:center; min-width:20px; height:18px; padding:0 4px; background:rgba(255,255,255,.12); border-radius:4px; font-weight:700; font-size:9px; border:1px solid rgba(255,255,255,.2); }
 
     /* ── BAĞLAMSAL YARDIM (i butonu) ── */
@@ -7704,7 +7703,26 @@ function kisiModalTopluSec(tip) {
 // ════════════════════════════════════════════════════════════
 function iCalIndir() {
   var lines=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//İDT//TR','CALSCALE:GREGORIAN','X-WR-CALNAME:İDT Turne Takvimi'];
-  function icsDate(d){return d?d.replace(/-/g,''):'';}
+  function icsDate(d){return d?d.replace(/-/g,''):'';} 
+  turneler.forEach(function(t){
+    var bas = icsDate(t.baslangicTarih||t.tarih||'');
+    var bit = icsDate(t.bitisTarih||t.baslangicTarih||t.tarih||'');
+    if (!bas) return;
+    lines.push('BEGIN:VEVENT');
+    lines.push('DTSTART;VALUE=DATE:' + bas);
+    lines.push('DTEND;VALUE=DATE:' + (bit||bas));
+    lines.push('SUMMARY:' + (t.oyun||'Turne').replace(/,/g,'\\,'));
+    var il = (t.duraklar&&t.duraklar[0]&&t.duraklar[0].il)||t.il||'';
+    if (il) lines.push('LOCATION:' + il.replace(/,/g,'\\,'));
+    lines.push('END:VEVENT');
+  });
+  lines.push('END:VCALENDAR');
+  var blob = new Blob([lines.join('\r\n')], {type:'text/calendar;charset=utf-8'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'idt-turneler.ics';
+  a.click();
+}
 function renderIstatistikGrafikleri(kaynakTurneler, ayKeys, ayLabels, ayData) {
   if (typeof Chart === 'undefined') return;
   var PALETTE = ['#b5730a','#7c3a0e','#0f766e','#1d4ed8','#7e22ce','#166534','#9f1239','#0369a1'];
