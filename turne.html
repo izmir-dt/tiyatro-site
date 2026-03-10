@@ -11655,18 +11655,22 @@ function pdfItemTemizle(str) {
 }
 
 // PDF.js item listesini okunabilir metne çevir
-// hasEOL=true olan item'lardan sonra newline ekle
 function pdfItemleriBirlestir(items) {
   if (!items || !items.length) return '';
   var parcalar = [];
   for (var i = 0; i < items.length; i++) {
     var it = items[i];
     var s = pdfItemTemizle(it.str || '');
-    if (!s && !it.hasEOL) continue;
-    parcalar.push(s);
+    if (s) parcalar.push(s);
     if (it.hasEOL) parcalar.push('\n');
   }
-  return parcalar.join(' ').replace(/ \n /g, '\n').replace(/\n +/g, '\n').replace(/ +/g, ' ').trim();
+  // Boşluk ve satır sonlarını düzenle
+  return parcalar.join(' ')
+    .replace(/ \n /g, '\n')
+    .replace(/ \n/g, '\n')
+    .replace(/\n /g, '\n')
+    .replace(/ {2,}/g, ' ')
+    .trim();
 }
 
 function pdfTurneDosyasimidir(sayfaMetinleri) {
@@ -11713,9 +11717,10 @@ async function pdfTurneDosyasiParse(arrayBuffer) {
     r.bitisTarih     = tarihM[4] + '-' + ay2 + '-' + tarihM[2].padStart(2,'0');
   }
 
-  // ── Şehirler — sadece başlık sayfasından al ────────────────
-  var baslıkMetin = (sayfalar[0] + ' ' + (sayfalar[1]||'')).toUpperCase();
-  ['NİĞDE','NEVŞEHİR','ANKARA','BURSA','ORDU','GAZİANTEP','ADANA','ANTALYA',
+  // ── Şehirler — SADECE turne başlığından al ─────────────────
+  // "MÜNASEBETSİZ NİĞDE-NEVŞEHİR TURNESİ" veya "NİĞDE/NEVŞEHİR TURNESİ"
+  // Uçuş rotasındaki şehirleri (KAYSERİ, İSTANBUL vb.) ALMA
+  var sehirListesi = ['NİĞDE','NEVŞEHİR','ANKARA','BURSA','ORDU','GAZİANTEP','ADANA','ANTALYA',
    'TRABZON','SAMSUN','KAYSERİ','ESKİŞEHİR','KOCAELİ','KONYA','MERSİN',
    'DENİZLİ','MALATYA','DİYARBAKIR','ERZURUM','ÇORUM','AMASYA','SIVAS',
    'KAHRAMANMARAŞ','HATAY','MUĞLA','AYDIN','MANİSA','BALIKESİR','ÇANAKKALE',
@@ -11724,9 +11729,16 @@ async function pdfTurneDosyasiParse(arrayBuffer) {
    'ŞANLIURFA','ADIYAMAN','KILIS','OSMANİYE','KARABÜK','BARTIN','YALOVA',
    'BİLECİK','KÜTAHYA','AFYONKARAHİSAR','UŞAK','ISPARTA','BURDUR','KARAMAN',
    'AKSARAY','KIRŞEHİR','YOZGAT','ÇANKIRI','KIRIKKALE','ERZİNCAN','ELAZIĞ',
-   'GÜMÜŞHANE','BAYBURT','BİNGÖL','TUNCELİ'
-  ].forEach(function(s) {
-    if (baslıkMetin.indexOf(s) !== -1 && r.sehirler.indexOf(s) === -1) r.sehirler.push(s);
+   'GÜMÜŞHANE','BAYBURT','BİNGÖL','TUNCELİ'];
+
+  // SADECE sayfa 1'deki TURNESİ başlığından şehir al
+  // Örn: "MÜNASEBETSİZ NİĞDE-NEVŞEHİR TURNESİ" → TURNESİ öncesi = "NİĞDE-NEVŞEHİR"
+  // Sayfa 2'deki transit şehirler (KAYSERİ, İSTANBUL) kesinlikle alınmamalı
+  var s1Upper = (sayfalar[0] || '').toUpperCase();
+  var turnePos = s1Upper.indexOf('TURNES');
+  var baslikKismi = turnePos > 0 ? s1Upper.substring(0, turnePos) : s1Upper.substring(0, 100);
+  sehirListesi.forEach(function(s) {
+    if (baslikKismi.indexOf(s) !== -1 && r.sehirler.indexOf(s) === -1) r.sehirler.push(s);
   });
 
   // ── Kamyon ────────────────────────────────────────────────
