@@ -7736,26 +7736,117 @@ function kisiModalTopluSec(tip) {
 // iCAL EXPORT
 // ════════════════════════════════════════════════════════════
 function iCalIndir() {
-  var lines=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//İDT//TR','CALSCALE:GREGORIAN','X-WR-CALNAME:İDT Turne Takvimi'];
-  function icsDate(d){return d?d.replace(/-/g,''):'';} 
-  turneler.forEach(function(t){
-    var bas = icsDate(t.baslangicTarih||t.tarih||'');
-    var bit = icsDate(t.bitisTarih||t.baslangicTarih||t.tarih||'');
-    if (!bas) return;
-    lines.push('BEGIN:VEVENT');
-    lines.push('DTSTART;VALUE=DATE:' + bas);
-    lines.push('DTEND;VALUE=DATE:' + (bit||bas));
-    lines.push('SUMMARY:' + (t.oyun||'Turne').replace(/,/g,'\\,'));
-    var il = (t.duraklar&&t.duraklar[0]&&t.duraklar[0].il)||t.il||'';
-    if (il) lines.push('LOCATION:' + il.replace(/,/g,'\\,'));
-    lines.push('END:VEVENT');
+  // Özet istatistik hesapla
+  var aktif = turneler.filter(function(t){ return t.statu && t.statu !== 'iptal'; });
+  var etkinlikSayisi = aktif.filter(function(t){ return t.baslangicTarih || t.tarih; }).length;
+
+  // Takvim uygulamaları bilgisi
+  var uygulamalar = [
+    { ikon: '📅', ad: 'Google Takvim', adim: 'Ayarlar → Diğer takvimler → URL ile içe aktar veya .ics dosyasını sürükle bırak' },
+    { ikon: '🍎', ad: 'Apple Takvim (iPhone / Mac)', adim: 'Dosyaya çift tıkla → Takvim uygulaması otomatik açılır ve tüm etkinlikleri ekler' },
+    { ikon: '📧', ad: 'Outlook', adim: 'Dosya → Aç ve Dışa Aktar → İçe Aktar/Dışa Aktar → iCalendar dosyası içe aktar' },
+  ];
+
+  var uygulamaHtml = uygulamalar.map(function(u){
+    return '<div style="display:flex;align-items:flex-start;gap:10px;padding:9px 0;border-bottom:1px solid hsl(220,20%,92%)">'
+      + '<span style="font-size:18px;flex-shrink:0;line-height:1.3">' + u.ikon + '</span>'
+      + '<div>'
+      +   '<div style="font-size:12px;font-weight:700;color:#1a1a2e;margin-bottom:2px">' + u.ad + '</div>'
+      +   '<div style="font-size:11px;color:#64748b;line-height:1.5">' + u.adim + '</div>'
+      + '</div>'
+      + '</div>';
+  }).join('');
+
+  var overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+  overlay.innerHTML =
+    '<div style="background:#fff;border-radius:16px;width:100%;max-width:480px;max-height:92vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.25);font-family:Poppins,sans-serif">'
+
+    // Başlık
+    + '<div style="padding:18px 20px 14px;border-bottom:1px solid hsl(220,20%,92%);display:flex;align-items:center;gap:10px">'
+    +   '<div style="width:36px;height:36px;border-radius:9px;background:hsl(220,70%,95%);display:flex;align-items:center;justify-content:center;flex-shrink:0">'
+    +     '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="hsl(220,65%,45%)" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>'
+    +   '</div>'
+    +   '<div>'
+    +     '<div style="font-size:14px;font-weight:800;color:#1a1a2e">Takvim Dosyası İndir (iCal)</div>'
+    +     '<div style="font-size:11px;color:#64748b;margin-top:1px">Google, Apple ve Outlook takvimlerine aktarın</div>'
+    +   '</div>'
+    +   '<button onclick="this.closest(\'[style*=fixed]\').remove()" style="margin-left:auto;background:none;border:none;font-size:22px;color:#94a3b8;cursor:pointer;line-height:1;padding:2px 6px;flex-shrink:0">×</button>'
+    + '</div>'
+
+    // İçerik
+    + '<div style="padding:16px 20px">'
+
+    // Ne içerir kutusu
+    +   '<div style="background:hsl(220,60%,97%);border:1px solid hsl(220,50%,88%);border-radius:10px;padding:12px 14px;margin-bottom:14px">'
+    +     '<div style="font-size:10px;font-weight:700;color:hsl(220,65%,40%);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">📦 Dosya İçeriği</div>'
+    +     '<div style="font-size:12px;color:#334155;line-height:1.7">'
+    +       '• <strong>' + etkinlikSayisi + ' turne etkinliği</strong> (iptal edilenler dahil değil)<br>'
+    +       '• Her etkinlikte <strong>oyun adı</strong>, <strong>tarih aralığı</strong> ve <strong>şehir bilgisi</strong> bulunur<br>'
+    +       '• Dosya adı: <code style="background:#e2e8f0;border-radius:4px;padding:1px 5px;font-size:11px">idt-turneler.ics</code>'
+    +     '</div>'
+    +   '</div>'
+
+    // Nasıl kullanılır
+    +   '<div style="font-size:10px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">📲 Takvim Uygulamasına Nasıl Eklenir?</div>'
+    +   '<div style="border:1px solid hsl(220,20%,92%);border-radius:10px;overflow:hidden;margin-bottom:14px">'
+    +     '<div style="padding:0 12px">' + uygulamaHtml.replace(/<div[^>]*border-bottom[^>]*>(?!.*<div[^>]*border-bottom)/, function(m){ return m.replace('border-bottom:1px solid hsl(220,20%,92%)', 'border-bottom:none'); }) + '</div>'
+    +   '</div>'
+
+    // Uyarı notu
+    +   '<div style="background:hsl(38,80%,96%);border:1px solid hsl(38,65%,82%);border-radius:8px;padding:10px 12px;margin-bottom:16px;display:flex;gap:8px;align-items:flex-start">'
+    +     '<span style="font-size:15px;flex-shrink:0">⚠️</span>'
+    +     '<div style="font-size:11px;color:#92400e;line-height:1.6"><strong>Dikkat:</strong> Bu dosya anlık bir snapshot\'tır. Turneler üzerinde güncelleme yaptıkça dosyayı yeniden indirip tekrar import etmeniz gerekir. Takvimde otomatik güncelleme olmaz.</div>'
+    +   '</div>'
+
+    // Butonlar
+    +   '<div style="display:flex;gap:8px;justify-content:flex-end">'
+    +     '<button onclick="this.closest(\'[style*=fixed]\').remove()" style="height:36px;padding:0 16px;border-radius:8px;border:1.5px solid #cbd5e1;background:#fff;color:#475569;font-size:12px;font-weight:600;cursor:pointer;font-family:Poppins,sans-serif">İptal</button>'
+    +     '<button id="ical-indir-btn" style="height:36px;padding:0 18px;border-radius:8px;border:none;background:hsl(220,65%,45%);color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:Poppins,sans-serif;display:inline-flex;align-items:center;gap:6px">'
+    +       '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>'
+    +       '.ics Dosyasını İndir'
+    +     '</button>'
+    +   '</div>'
+    + '</div>'
+    + '</div>';
+
+  document.body.appendChild(overlay);
+
+  // Overlay dışına tıkla kapat
+  overlay.addEventListener('click', function(e){ if (e.target === overlay) overlay.remove(); });
+
+  // İndir butonu
+  document.getElementById('ical-indir-btn').addEventListener('click', function() {
+    var lines = ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//İDT//TR','CALSCALE:GREGORIAN','X-WR-CALNAME:İDT Turne Takvimi'];
+    function icsDate(d){ return d ? d.replace(/-/g,'') : ''; }
+    aktif.forEach(function(t){
+      var bas = icsDate(t.baslangicTarih||t.tarih||'');
+      var bit = icsDate(t.bitisTarih||t.baslangicTarih||t.tarih||'');
+      if (!bas) return;
+      // DTEND iCal standardında bitiş günü +1 olmalı (exclusive)
+      var bitDate = new Date(t.bitisTarih||t.baslangicTarih||t.tarih||'');
+      bitDate.setDate(bitDate.getDate() + 1);
+      var bitPlus = bitDate.getFullYear()
+        + ('0'+(bitDate.getMonth()+1)).slice(-2)
+        + ('0'+bitDate.getDate()).slice(-2);
+      lines.push('BEGIN:VEVENT');
+      lines.push('DTSTART;VALUE=DATE:' + bas);
+      lines.push('DTEND;VALUE=DATE:' + bitPlus);
+      lines.push('SUMMARY:' + (t.oyun||'Turne').replace(/[,;\\]/g, function(c){ return '\\'+c; }));
+      var il = (t.duraklar&&t.duraklar[0]&&t.duraklar[0].il)||t.il||'';
+      if (il) lines.push('LOCATION:' + il.replace(/[,;\\]/g, function(c){ return '\\'+c; }));
+      if (t.not) lines.push('DESCRIPTION:' + (t.not||'').replace(/\n/g,'\\n').replace(/[,;\\]/g, function(c){ return '\\'+c; }));
+      lines.push('STATUS:' + (t.statu==='onaylandi'?'CONFIRMED':t.statu==='taslak'?'TENTATIVE':'CONFIRMED'));
+      lines.push('END:VEVENT');
+    });
+    lines.push('END:VCALENDAR');
+    var blob = new Blob([lines.join('\r\n')], {type:'text/calendar;charset=utf-8'});
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'idt-turneler.ics';
+    a.click();
+    overlay.remove();
   });
-  lines.push('END:VCALENDAR');
-  var blob = new Blob([lines.join('\r\n')], {type:'text/calendar;charset=utf-8'});
-  var a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'idt-turneler.ics';
-  a.click();
 }
 
 // Chart.js için yardımcı: varsa eski chart'ı destroy et, yenisini oluştur
