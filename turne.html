@@ -10022,6 +10022,58 @@ function _wordIcerik(t) {
 }
 
 
+// ============================================================
+// WORD — SADECE PERSONEL LİSTESİ
+// ============================================================
+function _wordPersonelIcerik(t) {
+  var bugun = new Date().toLocaleDateString('tr-TR', { day:'numeric', month:'long', year:'numeric' });
+  var sure = turneSuresi(t);
+  var tarihStr = sure > 1
+    ? formatTarih(t.baslangicTarih) + ' \u2013 ' + formatTarih(t.bitisTarih) + ' (' + sure + ' g\u00fcn)'
+    : formatTarih(t.baslangicTarih || t.tarih);
+  var oyunAdi = t.oyun || (t.duraklar ? [...new Set(t.duraklar.map(function(d){return d.oyun||'';}).filter(Boolean))].join(' / ') : '');
+  var ilStr = _temizleIlPdf(durakIlStr(t));
+  var seen = {};
+  var tumListe = (t.katilimcilar||[]).filter(function(p){
+    var k=(p.kisi||'').trim().toLowerCase(); if(!k||seen[k])return false; seen[k]=true; return true;
+  });
+  var OYUNCU_KATS = ['Sanat\u00e7\u0131','Fig\u00fcran','Koro','Solist','Dans\u00e7\u0131','Koro/Dans Ekibi'];
+  var satirlar = tumListe.map(function(p,i){
+    var kat=p.kategori||'';
+    var unvan=OYUNCU_KATS.indexOf(kat)>=0?kat:((p.gorev&&p.gorev!==p.kategori&&p.gorev.trim())?p.gorev:kat);
+    return '<tr bgcolor="'+(i%2===0?'#f9f5f0':'#ffffff')+'">'
+      +'<td width="32" align="center" style="padding:5pt 8pt;border:1pt solid #dddddd;font-size:10pt;color:#888888">'+(i+1)+'</td>'
+      +'<td style="padding:5pt 8pt;border:1pt solid #dddddd;font-weight:bold;font-size:11pt;color:#1a1a1a">'+(p.kisi||'')+'</td>'
+      +'<td style="padding:5pt 8pt;border:1pt solid #dddddd;font-size:11pt;color:#444444">'+unvan+'</td>'
+      +'</tr>';
+  }).join('');
+  var html = '';
+  // Üst başlık — tek tablo satırında iki hücre
+  html += '<table width="100%" cellpadding="0" cellspacing="0" style="border-bottom:2pt solid #6b1b1b;margin-bottom:10pt"><tr>'
+    +'<td style="padding:4pt 0;font-size:10pt;font-weight:bold;color:#1a1a1a">'
+    +'<span style="background:#6b1b1b;color:#e8c84a;font-weight:900;font-size:9pt;padding:2pt 6pt">\u0130DT</span>'
+    +' \u0130zmir Devlet Tiyatrosu</td>'
+    +'<td align="right" style="font-size:9pt;color:#888888">Personel Listesi &nbsp;&middot;&nbsp; <b style="color:#6b1b1b">'+bugun+'</b></td>'
+    +'</tr></table>';
+  // Başlık
+  html += '<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:12pt"><tr><td align="center">'
+    +(oyunAdi?'<p style="font-size:16pt;font-weight:900;color:#1a1a1a;margin:0 0 2pt 0">'+oyunAdi.toUpperCase()+'</p>':'')
+    +'<p style="font-size:13pt;font-weight:bold;color:#6b1b1b;margin:0 0 3pt 0">'+ilStr.toUpperCase()+' TURNES\u0130</p>'
+    +'<p style="font-size:10pt;color:#555555;margin:0">'+tarihStr+' &nbsp;&middot;&nbsp; Toplam: <b>'+tumListe.length+' ki\u015fi</b></p>'
+    +'</td></tr></table>';
+  // Tablo
+  html += '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">'
+    +'<tr bgcolor="#6b1b1b">'
+    +'<th width="32" align="center" style="padding:5pt 8pt;color:#ffffff;font-size:9pt;border:1pt solid #5a1717">No</th>'
+    +'<th align="left" style="padding:5pt 8pt;color:#ffffff;font-size:9pt;border:1pt solid #5a1717">Ad Soyad</th>'
+    +'<th align="left" style="padding:5pt 8pt;color:#ffffff;font-size:9pt;border:1pt solid #5a1717">G\u00f6rev / Unvan</th>'
+    +'</tr>'
+    +satirlar
+    +'<tr bgcolor="#f5f0eb"><td colspan="3" align="right" style="padding:5pt 9pt;border:1pt solid #dddddd;font-size:10pt;color:#888888">Toplam <b>'+tumListe.length+'</b> ki\u015fi</td></tr>'
+    +'</table>';
+  return html;
+}
+
 function gorevlendirmePdf(rowIdx, mod) {
   var t = turneler.find(x => x._rowIdx === rowIdx);
   if (!t) return;
@@ -10032,6 +10084,8 @@ function gorevlendirmePdf(rowIdx, mod) {
   var baslik = (oyunAdi !== 'Rapor' ? oyunAdi + ' – ' : '') + ilStr + ' Turnesi';
 
   var icerik = mod === 'personel' ? _pdfPersonelIcerik(t) : _pdfIcerik(t);
+  // Word indirme için ayrı temiz içerik hazırla (PDF div'leri değil tablo tabanlı)
+  var wordIcerikStr = mod === 'personel' ? _wordPersonelIcerik(t) : _wordIcerik(t);
   var docHTML = '<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8">'
     + '<title>Turne Görevlendirme – ' + baslik + '</title>'
     + '<style>' + _pdfCSS() + '@media print{body{padding:10px 14px}@page{margin:12mm}.no-print{display:none!important}}</style>'
@@ -10042,35 +10096,24 @@ function gorevlendirmePdf(rowIdx, mod) {
     + '</div>'
     + '<div id="rapor-icerik">' + icerik + '</div>'
     + '<script>'
+    + 'window._wordIcerikStr = ' + JSON.stringify(wordIcerikStr) + ';'
     + 'function filtreUygula(kat){var tbody=document.getElementById(\'per-tbody\');if(!tbody)return;var g=0;Array.from(tbody.querySelectorAll(\'tr\')).forEach(function(tr){var vis=kat===\'T\u00fcm\u00fc\'||tr.dataset.kat===kat;tr.style.display=vis?\'\':\'none\';if(vis){tr.cells[0].textContent=++g;tr.style.background=g%2===0?\'#fff\':\'#f9f5f0\';}});var s=document.getElementById(\'per-sayac\');if(s)s.textContent=\'Toplam \'+g+\' ki\u015fi g\u00f6steriliyor\';document.querySelectorAll(\'.flt-btn\').forEach(function(b){var a=b.id===\'flt-\'+kat;b.style.background=a?\'#6b1b1b\':\'#f3f4f6\';b.style.color=a?\'#fff\':\'#333\';});}'
     + 'function wordIndir(){'
-    +   'var ic=document.getElementById("rapor-icerik").innerHTML;'
-    // no-print class'lı TÜM elementleri kaldır (filtre butonları, üst buton barı vb.)
-    +   'ic=ic.replace(/<div[^>]*class="[^"]*no-print[^"]*"[^>]*>[\\s\\S]*?<\\/div>/gi,"");'
-    +   'ic=ic.replace(/<button[^>]*class="[^"]*(?:flt-btn|no-print)[^"]*"[^>]*>.*?<\\/button>/gi,"");'
-    // alt-cubuk ve küçük açıklama satırları
-    +   'ic=ic.replace(/<div[^>]*class="alt-cubuk[^"]*"[^>]*>[\\s\\S]*?<\\/div>/gi,"");'
-    // per-sayac div (Toplam X kişi gösteriliyor)
-    +   'ic=ic.replace(/<div[^>]*id="per-sayac"[^>]*>.*?<\\/div>/gi,"");'
+    // Word için ayrı üretilmiş temiz içeriği kullan (PDF içeriği değil)
+    +   'var ic = window._wordIcerikStr || document.getElementById("rapor-icerik").innerHTML;'
     +   'var wCss='
     +     '"@charset \\"UTF-8\\";"'
     +     '+"body{font-family:Arial,Helvetica,sans-serif;font-size:11pt;color:#1a1a1a;background:#fff;margin:0;padding:0}"'
     +     '+"@page{margin:2.5cm 2.5cm 2.5cm 2.5cm;mso-page-orientation:portrait}"'
     +     '+"@page Section1{size:21cm 29.7cm;margin:2.5cm 2.5cm 2.5cm 2.5cm}"'
     +     '+"div.Section1{page:Section1}"'
-    +     '+".no-print{display:none!important}"'
-    +     '+"p{margin:0 0 4pt 0;padding:0}"'
-    +     '+"table{width:100%;border-collapse:collapse;margin-bottom:10pt;table-layout:fixed}"'
-    +     '+"th{background:#6b1b1b;color:#fff;padding:6pt 9pt;text-align:left;font-size:10pt;font-weight:bold;border:1pt solid #5a1717}"'
-    +     '+"td{padding:6pt 9pt;border:1pt solid #dddddd;font-size:11pt;vertical-align:top;word-wrap:break-word}"'
-    +     '+"tr:nth-child(even) td{background:#f9f5f0}"'
-    +     '+"tr:nth-child(odd) td{background:#ffffff}"'
-    +     '+".bolum{margin-bottom:14pt}"'
-    +     '+".bolum-baslik{font-size:10pt;font-weight:bold;color:#6b1b1b;border-bottom:1.5pt solid #6b1b1b;padding-bottom:4pt;margin-bottom:8pt;text-transform:uppercase;letter-spacing:.5pt}"'
-    +     '+"div[style*=\\"display:flex\\"]{display:block}"'
+    +     '+"p{margin:0 0 4pt 0;padding:0;font-family:Arial,Helvetica,sans-serif}"'
+    +     '+"table{border-collapse:collapse;margin-bottom:10pt}"'
+    +     '+"th{padding:5pt 8pt;text-align:left;font-size:10pt;font-weight:bold;border:1pt solid #5a1717;font-family:Arial}"'
+    +     '+"td{padding:5pt 8pt;border:1pt solid #dddddd;font-size:11pt;vertical-align:top;word-wrap:break-word;font-family:Arial}"'
     +   ';'
     +   'var html="<html xmlns:o=\\"urn:schemas-microsoft-com:office:office\\" xmlns:w=\\"urn:schemas-microsoft-com:office:word\\" xmlns=\\"http://www.w3.org/TR/REC-html40\\">"'
-    +     '+"<head><meta charset=\\"utf-8\\"><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument></xml>"'
+    +     '+"<head><meta charset=\\"utf-8\\"><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom><w:DoNotOptimizeForBrowser/></w:WordDocument></xml>"'
     +     '+"<style>"+wCss+"</style></head>"'
     +     '+"<body><div class=\\"Section1\\">"+ic+"</div></body></html>";'
     +   'var blob=new Blob(["\\uFEFF"+html],{type:"application/msword;charset=utf-8"});'
