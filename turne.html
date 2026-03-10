@@ -11640,14 +11640,37 @@ function pdfDosyaSecildi(inputEl, dosyaObj) {
 var _pdfTurneDosyasi = null;
 
 function pdfDuzelt(str) {
-  return (str||'').replace(/(.)/g, '$1');
+  // PDF bazen karakterleri çift yazar (tasarım artefaktı) — tekilleştir
+  var s = (str||'');
+  // Boş karakter / kontrol karakterlerini temizle
+  s = s.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
+  return s;
+}
+
+// PDF sayfasındaki tekrarlı metni tekilleştir
+// Bazı PDF'lerde sayfa içeriği iki kez yazılır; ilk yarıyı al
+function pdfTekilSayfa(metin) {
+  var n = metin.length;
+  if (n < 40) return metin;
+  // Ortadan ikiye böl, iki yarı benzer mi kontrol et
+  var yari = Math.floor(n / 2);
+  var ilk = metin.substring(0, yari);
+  var ikinci = metin.substring(yari);
+  // İlk 60 karakter (boşluk temizlenmiş) aynıysa tekrar var demektir
+  var ilkOzet = ilk.replace(/\s+/g,'').substring(0,60);
+  var ikinciOzet = ikinci.replace(/\s+/g,'').substring(0,60);
+  if (ilkOzet.length > 20 && ikinciOzet.startsWith(ilkOzet.substring(0,30))) {
+    return ilk.trim();
+  }
+  return metin;
 }
 
 function pdfTurneDosyasimidir(sayfaMetinleri) {
-  var p0 = pdfDuzelt(sayfaMetinleri[0]||'');
-  var tam = sayfaMetinleri.join(' ');
-  return (/TURNESİ/.test(p0) || /TURNESİ/.test(tam)) &&
-         /GÖREVLİ PERSONEL|KONAKLAMA LİSTESİ|TURNE PROGRAMI/.test(tam);
+  // Büyük/küçük harf bağımsız kontrol
+  var tam = sayfaMetinleri.join(' ').toUpperCase();
+  var turneVar = /TURNES[İI]/.test(tam);
+  var personelVar = /G[ÖO]REVL[İI] PERSONEL|KONAKLAMA L[İI]STES[İI]|TURNE PROGRAM[I]/.test(tam);
+  return turneVar && personelVar;
 }
 
 async function pdfTurneDosyasiParse(arrayBuffer) {
@@ -11656,7 +11679,8 @@ async function pdfTurneDosyasiParse(arrayBuffer) {
   for (var i = 1; i <= pdfDoc.numPages; i++) {
     var pg = await pdfDoc.getPage(i);
     var tc = await pg.getTextContent();
-    sayfalar.push(tc.items.map(function(it){return it.str;}).join(' '));
+    var ham = tc.items.map(function(it){return it.str;}).join(' ');
+    sayfalar.push(pdfTekilSayfa(pdfDuzelt(ham)));
   }
 
   var r = {
@@ -11666,60 +11690,181 @@ async function pdfTurneDosyasiParse(arrayBuffer) {
     otelAdi:'', kamyon:'', kisiSayisi:0, personel:[]
   };
 
-  var s1 = pdfDuzelt(sayfalar[0]||'');
+  var tamMetin = sayfalar.join(' ');
+  var tamUpper = tamMetin.toUpperCase();
+  var s1 = sayfalar[0] || '';
+  var s1U = s1.toUpperCase();
 
-  // Oyun adı
-  var oyunM = s1.match(/([A-ZÇĞİÖŞÜ]{3}[A-ZÇĞİÖŞÜ\s]+?)(?=\s+(?:NİĞDE|NEVŞEHİR|ANKARA|BURSA|ORDU|GAZİANTEP|ADANA|TRABZON|TURNESİ|Turne))/);
-  if (oyunM) r.oyun = oyunM[1].trim();
-
-  // Tarih aralığı (09-13 MART 2026)
-  var ayMap2={'OCAK':'01','ŞUBAT':'02','MART':'03','NİSAN':'04','MAYIS':'05','HAZİRAN':'06',
-              'TEMMUZ':'07','AĞUSTOS':'08','EYLÜL':'09','EKİM':'10','KASIM':'11','ARALIK':'12'};
-  var tarihM = s1.match(/\((\d{1,2})-(\d{1,2})\s+(OCAK|ŞUBAT|MART|NİSAN|MAYIS|HAZİRAN|TEMMUZ|AĞUSTOS|EYLÜL|EKİM|KASIM|ARALIK)\s+(\d{4})\)/i);
-  if (tarihM) {
-    var ay2 = ayMap2[tarihM[3].toUpperCase()]||'01';
-    r.baslangicTarih = tarihM[4]+'-'+ay2+'-'+tarihM[1].padStart(2,'0');
-    r.bitisTarih     = tarihM[4]+'-'+ay2+'-'+tarihM[2].padStart(2,'0');
+  // ── Oyun adı ────────────────────────────────────────────────
+  // Format: "MÜNASEBETSİZ NİĞDE-NEVŞEHİR TURNESİ" veya başlık satırı
+  // Önce "XXX TURNESİ" öncesindeki büyük harf kelimeyi al
+  var oyunM = tamUpper.match(/([A-ZÇĞİÖŞÜ][A-ZÇĞİÖŞÜ\s]{2,40}?)\s+(?:[A-ZÇĞİÖŞÜ\/\-]+\s+)?TURNES[İI]/);
+  if (oyunM) {
+    // Orijinal metinden al (case korunsun)
+    var oyunPos = tamUpper.indexOf(oyunM[1]);
+    r.oyun = tamMetin.substring(oyunPos, oyunPos + oyunM[1].length).trim();
+  }
+  // Yedek: ilk sayfada tek satır büyük harf kelime
+  if (!r.oyun) {
+    var yedekM = s1U.match(/^([A-ZÇĞİÖŞÜ][A-ZÇĞİÖŞÜ\s]{2,30}?)\s+(?:NİĞDE|NEVŞEHİR|ANKARA|BURSA|KONYA|İZMİR)/);
+    if (yedekM) r.oyun = yedekM[1].trim();
   }
 
-  // Şehirler (tüm belgede arayıp İZMİR'i çıkar)
-  var tam = sayfalar.join(' ').toUpperCase();
-  ['NİĞDE','NEVŞEHİR','ANKARA','BURSA','ORDU','GAZİANTEP','ADANA','ANTALYA',
-   'TRABZON','SAMSUN','KAYSERİ','ESKİŞEHİR','KOCAELİ','KONYA','MERSİN',
-   'DENİZLİ','MALATYA','DİYARBAKIR','ERZURUM','ÇORUM','AMASYA','SIVAS'].forEach(function(s) {
-    if (tam.indexOf(s)!==-1 && r.sehirler.indexOf(s)===-1) r.sehirler.push(s);
+  // ── Tarih aralığı ───────────────────────────────────────────
+  // Format: (09-13 MART 2026) veya 09-13 MART 2026
+  var ayMap2 = {
+    'OCAK':'01','ŞUBAT':'02','MART':'03','NİSAN':'04','MAYIS':'05','HAZİRAN':'06',
+    'TEMMUZ':'07','AĞUSTOS':'08','EYLÜL':'09','EKİM':'10','KASIM':'11','ARALIK':'12'
+  };
+  var tarihM = tamUpper.match(/\(?(\d{1,2})\s*[-–]\s*(\d{1,2})\s+(OCAK|ŞUBAT|MART|NİSAN|MAYIS|HAZİRAN|TEMMUZ|AĞUSTOS|EYLÜL|EKİM|KASIM|ARALIK)\s+(\d{4})\)?/);
+  if (tarihM) {
+    var ay2 = ayMap2[tarihM[3]] || '01';
+    r.baslangicTarih = tarihM[4] + '-' + ay2 + '-' + tarihM[1].padStart(2,'0');
+    r.bitisTarih     = tarihM[4] + '-' + ay2 + '-' + tarihM[2].padStart(2,'0');
+  }
+
+  // ── Şehirler ────────────────────────────────────────────────
+  // Başlıktaki "NİĞDE-NEVŞEHİR" veya "NİĞDE/NEVŞEHİR" formatını da yakala
+  var sehirListesi = [
+    'NİĞDE','NEVŞEHİR','ANKARA','BURSA','ORDU','GAZİANTEP','ADANA','ANTALYA',
+    'TRABZON','SAMSUN','KAYSERİ','ESKİŞEHİR','KOCAELİ','KONYA','MERSİN',
+    'DENİZLİ','MALATYA','DİYARBAKIR','ERZURUM','ÇORUM','AMASYA','SIVAS',
+    'KAHRAMANMARAŞ','HATAY','KARS','VAN','BATMAN','MUĞLA','AYDIN','MANİSA',
+    'BALIKESİR','ÇANAKKALE','EDİRNE','TEKİRDAĞ','KIRKLARELİ','SAKARYA',
+    'BOLU','DÜZCE','ZONGULDAK','KASTAMONU','SİNOP','TOKAT','GİRESUN','RİZE',
+    'ARTVİN','ARDAHAN','IĞDIR','AĞRI','MUŞ','BİTLİS','SİİRT','ŞIRNAK',
+    'MARDİN','ŞANLIURFA','ADIYAMAN','KILIS','OSMANİYE','KARABÜK','BARTIN',
+    'YALOVA','BİLECİK','ESKİŞEHİR','KÜTAHYA','AFYONKARAHİSAR','UŞAK',
+    'ISPARTA','BURDUR','KARAMAN','AKSARAY','KIRŞEHİR','YOZGAT','ÇANKIRI',
+    'KIRIKKALERELİ','ANKARA','NEVŞEHİR','KIRIKKALE','ÇORUM','AMASYA',
+    'GÜMÜŞHANE','BAYBURT','ERZİNCAN','BİNGÖL','TUNCELİ','ELAZIĞ','MALATYA',
+    'KAHRAMANMARAŞ','ADIYAMAN'
+  ];
+  // Tekrarsız liste
+  var sehirSeti = {};
+  sehirListesi.forEach(function(s){sehirSeti[s]=true;});
+  sehirListesi = Object.keys(sehirSeti);
+
+  sehirListesi.forEach(function(s) {
+    // Başlıkta "NİĞDE-NEVŞEHİR" ya da "NİĞDE/NEVŞEHİR TURNESİ" şeklinde geçiyor
+    var re = new RegExp('(?:^|[\\s\\-/,])' + s.replace(/İ/g,'[İI]').replace(/Ş/g,'[ŞS]').replace(/Ğ/g,'[ĞG]').replace(/Ü/g,'[ÜU]').replace(/Ö/g,'[ÖO]').replace(/Ç/g,'[ÇC]') + '(?:[\\s\\-/,]|$)', 'i');
+    if (re.test(tamUpper) && r.sehirler.indexOf(s) === -1) {
+      r.sehirler.push(s);
+    }
   });
 
-  // Kamyon
-  var kamyonM = s1.match(/Kamyon\s*[-\u2013]\s*([^\u2013\-\d]+?)(?:\s*[-\u2013]|\s*\d{3}|\s*$)/i);
+  // ── Kamyon / Nakliye ─────────────────────────────────────────
+  // "Kamyon - Uyanık Nakiliyat - Barış Uyanık - 0..."
+  var kamyonM = tamMetin.match(/Kamyon\s*[-–]\s*([^-–\d\n]{3,60?}?)(?:\s*[-–]\s*[^-–\n]*?)?\s*[-–]\s*0\s*\d/i);
   if (kamyonM) r.kamyon = kamyonM[1].trim();
-
-  // Uçuş bilgileri (sayfa 2)
-  var s2 = (sayfalar[1]||'') + ' ' + (sayfalar[2]||'');
-  // Gidiş: İZMİR - ... saatHH:MM HAVAYOLU
-  var gidisRex = /İZMİR\s*[-–]\s*[\w\s\(\)]+?\s+(\d{1,2}[.:]\d{2})\s*[-–]\s*\d{1,2}[.:]\d{2}\s+(\w+)/gi;
-  var gm = gidisRex.exec(s2);
-  if (gm) { r.gidisUlasim='ucak'; r.gidisSaat=gm[1].replace('.',':'); r.gidisPlaka=gm[2]; }
-  // Dönüş: ... - İZMİR saatHH:MM HAVAYOLU
-  var donusRex = /[\w\s\(\)]+?[-–]\s*İZMİR\s+(\d{1,2}[.:]\d{2})\s*[-–]\s*\d{1,2}[.:]\d{2}\s+(\w+)/gi;
-  var dm, dLast;
-  while ((dm=donusRex.exec(s2))!==null) dLast=dm;
-  if (dLast) { r.donusUlasim='ucak'; r.donusSaat=dLast[1].replace('.',':'); r.donusPlaka=dLast[2]; }
-
-  // Otel
-  for (var pi=1; pi<Math.min(sayfalar.length,4); pi++) {
-    var otelM = sayfalar[pi].match(/konaklamas[\u0131i]\s*[,\s]+([^.]+?(?:Hotel|Otel)[^.]*)/i);
-    if (otelM && !r.otelAdi) r.otelAdi = otelM[1].replace(/Otel'de.*/i,'').trim().replace(/\s+ve\s+.*$/,'').trim();
+  // Yedek: sadece firma adı
+  if (!r.kamyon) {
+    var kamY = tamMetin.match(/[Kk]amyon\s*[-–:]\s*([A-ZÇĞİÖŞÜa-zçğışöüñ][^-–\n\d]{2,50}?)(?:\s*[-–]|\s*\d)/);
+    if (kamY) r.kamyon = kamY[1].trim();
   }
 
-  // Personel listesi
-  for (var pi2=2; pi2<sayfalar.length; pi2++) {
-    var ps = sayfalar[pi2];
-    var rex = /\d+\s+((?:[A-ZÇĞİÖŞÜ][a-zA-ZÇçĞğİışŞşÖöÜüĞğ]+\s+){1,4}[A-ZÇĞİÖŞÜ]+)\s+((?:Sanatçı|Sahne|Mutemet|Kondüvit|Aksesuar|Perukacı|Figüran)[^0-9]*?)(?=\s+\d{1,2}[./]\d{2}|\s+\d{9,}|\s+\d+\s+[A-ZÇĞŞ])/g;
-    var pm, liste2=[];
-    while ((pm=rex.exec(ps))!==null) liste2.push({ad:pm[1].trim(), unvan:pm[2].trim()});
-    if (liste2.length > r.personel.length) r.personel = liste2;
+  // ── Uçuş bilgileri ───────────────────────────────────────────
+  // Satır bazlı parse — aktarmalı uçuşları destekle
+  // Format: "09 MART 2026 PAZARTESİ İZMİR - İSTANBUL (SAW) 11.05 - 12.15 PEGASUS"
+  var tumSatirlar = tamMetin.split(/\n|\s{3,}/);
+  var gidisSatirlari = [];
+  var donusSatirlari = [];
+  tumSatirlar.forEach(function(satir) {
+    var su = satir.toUpperCase();
+    if (/\d{1,2}[.:]\d{2}/.test(satir) && /(PEGASUS|THY|ANADOLUJET|SUNEXPRESS|TK|PC|XQ|SHY)/i.test(satir)) {
+      if (/[İI]ZM[İI]R\s*[-–]/.test(su)) gidisSatirlari.push(satir);
+      else if (/[-–]\s*[İI]ZM[İI]R/.test(su)) donusSatirlari.push(satir);
+    }
+  });
+  // Satır bulunamazsa tüm metin üzerinde regex ile ara
+  if (!gidisSatirlari.length) {
+    var gRegex = /[İI]ZM[İI]R\s*[-–]\s*[\w\s()İĞÜŞÖÇığüşöç]+?\s+(\d{1,2}[.:]\d{2})\s*[-–]\s*\d{1,2}[.:]\d{2}\s+(PEGASUS|THY|ANADOLUJET|SUNEXPRESS)/gi;
+    var gm;
+    while((gm=gRegex.exec(tamMetin))!==null) {
+      r.gidisUlasim='ucak';
+      if(!r.gidisSaat) { r.gidisSaat=gm[1].replace('.',':'); r.gidisPlaka=gm[2]; }
+    }
+  } else {
+    var gSatir = gidisSatirlari[0];
+    var gSm = gSatir.match(/(\d{1,2}[.:]\d{2})\s*[-–]\s*\d{1,2}[.:]\d{2}\s+(PEGASUS|THY|ANADOLUJET|SUNEXPRESS)/i);
+    if (gSm) { r.gidisUlasim='ucak'; r.gidisSaat=gSm[1].replace('.',':'); r.gidisPlaka=gSm[2].toUpperCase(); }
   }
+  if (!donusSatirlari.length) {
+    var dRegex = /[\w\s()İĞÜŞÖÇığüşöç]+?\s*[-–]\s*[İI]ZM[İI]R\s+(\d{1,2}[.:]\d{2})\s*[-–]\s*\d{1,2}[.:]\d{2}\s+(PEGASUS|THY|ANADOLUJET|SUNEXPRESS)/gi;
+    var dLast2=null, dm2;
+    while((dm2=dRegex.exec(tamMetin))!==null) dLast2=dm2;
+    if(dLast2){ r.donusUlasim='ucak'; r.donusSaat=dLast2[1].replace('.',':'); r.donusPlaka=dLast2[2].toUpperCase(); }
+  } else {
+    var dSatir = donusSatirlari[donusSatirlari.length-1];
+    var dSm = dSatir.match(/(\d{1,2}[.:]\d{2})\s*[-–]\s*\d{1,2}[.:]\d{2}\s+(PEGASUS|THY|ANADOLUJET|SUNEXPRESS)/i);
+    if (dSm) { r.donusUlasim='ucak'; r.donusSaat=dSm[1].replace('.',':'); r.donusPlaka=dSm[2].toUpperCase(); }
+  }
+  // Eğer gidiş/dönüş bulunamadıysa genel havayolu satırı kontrolü
+  if (!r.gidisUlasim) {
+    var havayoluM = tamMetin.match(/uça[kğ]\s*(?:ile|yolculuk)/i);
+    if (havayoluM) r.gidisUlasim = 'ucak';
+  }
+
+  // ── Otel ─────────────────────────────────────────────────────
+  // "Grand Niğde Hotel ve Crowne Plaza Cappadocia Otel'de"
+  // "konaklamas..." veya "konakla..." kelimesinden sonra otel adını al
+  var otelRegexler = [
+    /konakla(?:ma|yacak)[^.]*?(?:olan\s+)?([A-ZÇĞİÖŞÜa-zçğışöü][^.]+?(?:Hotel|Otel)[^.]*?)(?:\s+ve\s+|\s*'?de\s*|[.,]|$)/i,
+    /([A-ZÇĞİÖŞÜ][a-zA-ZÇçĞğİışŞşÖöÜüĞğ\s]{3,}(?:Hotel|Otel))/,
+  ];
+  for (var oi=0; oi<sayfalar.length && !r.otelAdi; oi++) {
+    var oSayfa = sayfalar[oi];
+    for (var ri=0; ri<otelRegexler.length && !r.otelAdi; ri++) {
+      var om = oSayfa.match(otelRegexler[ri]);
+      if (om) {
+        var otelHam = (om[1]||'').trim();
+        // "Otel'de" gibi ekleri temizle
+        otelHam = otelHam.replace(/'[a-zçğışöü]+$/i,'').trim();
+        // Çok uzunsa kırp
+        if (otelHam.length > 80) otelHam = otelHam.substring(0,80);
+        r.otelAdi = otelHam;
+      }
+    }
+  }
+
+  // ── Personel listesi ─────────────────────────────────────────
+  // KONAKLAMA LİSTESİ sayfasını önce dene (daha temiz format)
+  // Format: "Özkan GEZGİN(Sanatçı-Turne Başkanı)" veya "1 Özkan GEZGİN Sanatçı- Turne Başkanı"
+  var unvanlar = 'Sanatçı|Sahne Amiri|Sahne Işıkçısı|Sahne Makinisti|Sahne Terzisi|Aksesuar Memuru|Kondüvit|Mutemet|Perukacı|Figüran|Turne Başkanı|Turne İdarecisi';
+  var bulunanPersonel = [];
+
+  for (var si=0; si<sayfalar.length; si++) {
+    var ps = sayfalar[si];
+    var psU = ps.toUpperCase();
+    // Bu sayfa personel listesi mi?
+    var personelSayfasi = /G[ÖO]REVL[İI] PERSONEL|KONAKLAMA L[İI]STES[İI]/.test(psU);
+    if (!personelSayfasi) continue;
+
+    var liste2 = [];
+
+    // Format 1: "1 Özkan GEZGİN Sanatçı- Turne Başkanı 6.08.1974 ..."
+    // veya "1 Özkan GEZGİN Sanatçı 25.12.1968 ..."
+    var rex1 = /\b(\d{1,2})\s+((?:[A-ZÇĞİÖŞÜ][a-zA-ZÇçĞğİışŞşÖöÜüĞğ]+\s+){1,4}[A-ZÇĞİÖŞÜ][A-ZÇĞİÖŞÜa-zA-ZÇçĞğ]+)\s+((?:Sanatçı|Sahne|Mutemet|Kondüvit|Aksesuar|Perukacı|Figüran)[^\d\n]{0,60}?)(?=\s+\d{1,2}[./]\d{2,4}|\s+\d{9,11}\b)/g;
+    var pm1;
+    while ((pm1=rex1.exec(ps))!==null) {
+      var unvan1 = pm1[3].trim().replace(/[-–]\s*$/, '').trim();
+      liste2.push({ad: pm1[2].trim(), unvan: unvan1});
+    }
+
+    // Format 2: "Özkan GEZGİN(Sanatçı-Turne Başkanı)" — konaklama listesi
+    if (liste2.length === 0) {
+      var rex2 = /([A-ZÇĞİÖŞÜ][a-zA-ZÇçĞğİışŞşÖöÜüĞğ]+(?:\s+[A-ZÇĞİÖŞÜ][a-zA-ZÇçĞğİışŞşÖöÜüĞğ]+){1,3})\s*\(\s*((?:Sanatçı|Sahne|Mutemet|Kondüvit|Aksesuar|Perukacı|Figüran)[^)]{0,60}?)\s*\)/g;
+      var pm2;
+      while ((pm2=rex2.exec(ps))!==null) {
+        liste2.push({ad: pm2[1].trim(), unvan: pm2[2].trim()});
+      }
+    }
+
+    // En uzun listeyi sakla
+    if (liste2.length > bulunanPersonel.length) bulunanPersonel = liste2;
+  }
+
+  r.personel = bulunanPersonel;
   r.kisiSayisi = r.personel.length;
   return r;
 }
