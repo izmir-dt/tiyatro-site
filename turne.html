@@ -7,6 +7,7 @@
   <title>Turne Yönetimi – İzmir Devlet Tiyatrosu</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -81,6 +82,58 @@
     [data-theme="dark"] .turne-card { box-shadow: 0 1px 4px rgba(0,0,0,.35); }
     [data-theme="dark"] .card-detail-box { box-shadow: 0 8px 32px rgba(0,0,0,.5), 0 0 0 1px hsl(220,13%,22%); }
     [data-theme="dark"] .modal-box { box-shadow: 0 8px 32px rgba(0,0,0,.5), 0 0 0 1px hsl(220,13%,22%); }
+
+    /* ── SANAL SCROLL / PERFORMANS ── */
+    .vs-container { position:relative; overflow-y:auto; }
+    .vs-spacer { pointer-events:none; }
+
+    /* ── TOAST BİLDİRİMLER ── */
+    #toast-stack { position:fixed; bottom:20px; right:20px; z-index:10000; display:flex; flex-direction:column-reverse; gap:8px; pointer-events:none; }
+    .toast-item { display:flex; align-items:center; gap:10px; padding:12px 18px; border-radius:10px; font-size:12px; font-weight:600; font-family:'Poppins',sans-serif; box-shadow:0 4px 20px rgba(0,0,0,.25); min-width:220px; max-width:340px; opacity:0; transform:translateX(20px); transition:opacity .25s,transform .25s; pointer-events:all; cursor:pointer; border:1px solid rgba(255,255,255,.12); }
+    .toast-item.visible { opacity:1; transform:translateX(0); }
+    .toast-item.toast-success { background:hsl(141,55%,18%); color:hsl(141,70%,75%); }
+    .toast-item.toast-error   { background:hsl(0,60%,20%); color:hsl(0,80%,80%); }
+    .toast-item.toast-info    { background:hsl(220,40%,18%); color:hsl(220,80%,80%); }
+    .toast-item.toast-warn    { background:hsl(38,60%,18%); color:hsl(38,90%,75%); }
+    .toast-icon { font-size:16px; flex-shrink:0; }
+    .toast-text { flex:1; }
+    .toast-close { opacity:.6; font-size:14px; background:none; border:none; color:inherit; cursor:pointer; padding:0 2px; flex-shrink:0; }
+    .toast-close:hover { opacity:1; }
+    .toast-progress { position:absolute; bottom:0; left:0; height:3px; border-radius:0 0 10px 10px; transition:width linear; }
+
+    /* ── KLAVYE KISAYOL FLOATİNG HİNT ── */
+    #kb-hint { position:fixed; bottom:20px; left:20px; z-index:9000; background:hsl(220,20%,16%); color:rgba(255,255,255,.75); padding:7px 12px; border-radius:8px; font-size:10px; font-family:'Poppins',sans-serif; display:flex; align-items:center; gap:7px; opacity:0; transition:opacity .3s; pointer-events:none; box-shadow:0 2px 12px rgba(0,0,0,.3); border:1px solid rgba(255,255,255,.1); }
+    #kb-hint.visible { opacity:1; pointer-events:all; cursor:pointer; }
+    .kb-key { display:inline-flex; align-items:center; justify-content:center; min-width:20px; height:18px; padding:0 4px; background:rgba(255,255,255,.12); border-radius:4px; font-weight:700; font-size:9px; border:1px solid rgba(255,255,255,.2); }
+
+    /* ── BAĞLAMSAL YARDIM (i butonu) ── */
+    .ctx-help { width:16px; height:16px; border-radius:50%; background:var(--muted); color:var(--muted-foreground); border:1px solid var(--border); font-size:9px; font-weight:700; cursor:help; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; vertical-align:middle; margin-left:5px; transition:background .15s; }
+    .ctx-help:hover { background:var(--primary); color:#fff; border-color:var(--primary); }
+    [data-tooltip] { position:relative; }
+    [data-tooltip]::after { content:attr(data-tooltip); position:absolute; bottom:calc(100% + 6px); left:50%; transform:translateX(-50%); background:hsl(220,25%,14%); color:#fff; padding:6px 10px; border-radius:7px; font-size:10px; font-family:'Poppins',sans-serif; white-space:nowrap; max-width:220px; white-space:normal; text-align:center; pointer-events:none; opacity:0; transition:opacity .15s; z-index:9999; line-height:1.5; }
+    [data-tooltip]:hover::after { opacity:1; }
+
+    /* ── TOPLU SEÇİM (Kadro Modal) ── */
+    .bulk-action-bar { display:flex; gap:6px; flex-wrap:wrap; padding:8px 12px; background:hsl(141,50%,96%); border-bottom:1px solid hsl(141,50%,85%); }
+    .bulk-btn { height:26px; padding:0 10px; border-radius:13px; border:1.5px solid; font-size:10px; font-weight:700; cursor:pointer; font-family:'Poppins',sans-serif; display:inline-flex; align-items:center; gap:4px; transition:all .12s; }
+    .bulk-btn-green  { background:hsl(141,55%,94%); color:hsl(141,60%,22%); border-color:hsl(141,55%,75%); }
+    .bulk-btn-green:hover { background:hsl(141,55%,88%); }
+    .bulk-btn-red    { background:hsl(0,70%,95%); color:hsl(0,65%,35%); border-color:hsl(0,65%,78%); }
+    .bulk-btn-red:hover { background:hsl(0,70%,90%); }
+    .bulk-btn-gray   { background:var(--muted); color:var(--muted-foreground); border-color:var(--border); }
+    .bulk-btn-gray:hover { background:var(--border); }
+
+    /* ── LOADING OVERLAY ── */
+    .loading-overlay { position:absolute; inset:0; background:rgba(255,255,255,.75); display:none; align-items:center; justify-content:center; z-index:50; border-radius:inherit; backdrop-filter:blur(2px); }
+    [data-theme="dark"] .loading-overlay { background:rgba(0,0,0,.6); }
+    .loading-spinner { width:28px; height:28px; border:3px solid var(--border); border-top-color:var(--primary); border-radius:50%; animation:spin .6s linear infinite; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+
+    /* ── İSTATİSTİK GRAFİKLER ── */
+    .chart-container { position:relative; background:var(--card); border:1px solid var(--border); border-radius:10px; padding:14px; }
+    .chart-title { font-size:12px; font-weight:700; color:var(--foreground); margin-bottom:12px; display:flex; align-items:center; gap:6px; }
+    .chart-canvas-wrap { position:relative; width:100%; }
+
   </style>
   <script>
     (function() {
@@ -1038,10 +1091,13 @@ height:20px !important;
       </select>
       <!-- MASAÜSTÜ: Excel + Rapor -->
       <div class="mobil-gizle" style="margin-left:auto;display:flex;gap:5px;flex-shrink:0">
-        <button class="btn btn-outline" onclick="exportExcel()" style="display:inline-flex;align-items:center;gap:4px;font-size:11px">
+        <button class="btn btn-outline" onclick="exportExcel()" style="display:inline-flex;align-items:center;gap:4px;font-size:11px" data-tooltip="Excel olarak dışa aktar">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg> Excel
         </button>
-        <button class="btn btn-outline" onclick="tumRaporlarPdf()" style="display:inline-flex;align-items:center;gap:4px;font-size:11px">
+        <button class="btn btn-outline" onclick="iCalIndir()" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:hsl(220,65%,45%);border-color:hsl(220,65%,70%)" data-tooltip="Google/Apple Takvim'e aktarmak için iCal (.ics) indir">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></svg> iCal
+        </button>
+        <button class="btn btn-outline" onclick="tumRaporlarPdf()" style="display:inline-flex;align-items:center;gap:4px;font-size:11px" data-tooltip="Tüm turnelerin PDF raporlarını oluştur">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> Raporlar
         </button>
       </div>
@@ -1374,6 +1430,15 @@ height:20px !important;
     <div id="istatistik-content" style="padding:14px 16px;overflow:auto"></div>
   </div>
 
+</div>
+
+<!-- TOAST STACK -->
+<div id="toast-stack"></div>
+
+<!-- KLAVYE KISAYOL HINT -->
+<div id="kb-hint" onclick="rehberAc()">
+  <span class="kb-key">K</span>
+  <span>Kısayollar için K'ya basın</span>
 </div>
 
 <!-- TURNE FORMU MODALI -->
@@ -1813,6 +1878,25 @@ height:20px !important;
         <div id="selected-pills-wrap" style="flex:1;overflow-y:auto;padding:8px 10px"></div>
       </div>
 
+    </div>
+
+    <!-- TOPLU İŞLEM BARI -->
+    <div class="bulk-action-bar" id="kisi-bulk-bar">
+      <span style="font-size:10px;font-weight:700;color:hsl(141,60%,28%);align-self:center">Toplu:</span>
+      <button class="bulk-btn bulk-btn-green" onclick="kisiModalTopluSec('sanatci')" data-tooltip="Tüm oyuncu/solist/koro/dansçıları seç">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polygon points="5 3 19 12 5 21 5 3"/></svg> Tüm Sanatçılar
+      </button>
+      <button class="bulk-btn bulk-btn-green" onclick="kisiModalTopluSec('teknik')" data-tooltip="Teknik/sahne/ses ekibini seç">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg> Tüm Teknik
+      </button>
+      <button class="bulk-btn bulk-btn-green" onclick="kisiModalTopluSec('hepsi')" data-tooltip="Filtrelenmiş listedeki herkesi seç">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> Tümünü Seç
+      </button>
+      <button class="bulk-btn bulk-btn-red" onclick="kisiModalTopluSec('temizle')" data-tooltip="Seçimi tamamen temizle">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg> Temizle
+      </button>
+      <button class="bulk-btn bulk-btn-gray" onclick="kisiModalTopluSec('ters')" data-tooltip="Seçimi tersine çevir">⇄ Ters</button>
+      <span id="kisi-bulk-count" style="font-size:10px;color:hsl(141,55%,28%);font-weight:700;margin-left:auto;align-self:center"></span>
     </div>
 
     <!-- FOOTER -->
@@ -3715,8 +3799,26 @@ function renderListe() {
         + '</div>';
     });
   }
+  // ── Pagination footer
+  if (filtered.length > 0) {
+    html += '<div id="liste-pagination-footer" style="text-align:center;padding:14px;color:var(--muted-foreground);font-size:11px">'
+      + filtered.length + ' turne gösteriliyor'
+      + '</div>';
+  }
+
   el.innerHTML = html;
-  // Açık kart varsa yeniden göster (renderListe DOM'u sıfırlamaz kartı kapatmaz ama modal state korunur)
+
+  // ── Sonsuz scroll sentineli — büyük listelerde otomatik daha fazla yükle
+  var sentinel = document.getElementById('vs-sentinel');
+  if (sentinel) sentinel.remove();
+  if (filtered.length > 0) {
+    var sent = document.createElement('div');
+    sent.id = 'vs-sentinel';
+    sent.style.cssText = 'height:20px;margin-top:-10px';
+    el.appendChild(sent);
+  }
+
+  // Açık kart varsa yeniden göster
   if (window._acikKartRowIdx != null) {
     setTimeout(function(){ openCardDetail(window._acikKartRowIdx); }, 0);
   }
@@ -4803,6 +4905,7 @@ async function saveKisiModal() {
       _gosterKayitHatasi('⚠️ Katılımcılar kaydedilemedi (Hata: ' + errBody + ')');
     } else {
       console.log('[saveKisiModal] Başarılı');
+      showToast(katSayisi + ' katılımcı kaydedildi', 'success', 3000);
       // Sheets'ten güncel veriyi çek — katılımcıların kalıcı olduğunu doğrula
       try {
         await fetchTurneler();
@@ -5839,11 +5942,7 @@ function _oyunYendenAdlandir(eskiAd) {
     populateFilters();
     renderOyunMgmt();
     renderListe();
-    var toast = document.createElement('div');
-    toast.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1e293b;color:#fff;padding:11px 20px;border-radius:9px;font-size:12px;font-weight:600;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.3);font-family:Poppins,sans-serif;display:flex;align-items:center;gap:8px';
-    toast.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg> "' + eskiAd + '" → "' + yeniAd + '"';
-    document.body.appendChild(toast);
-    setTimeout(function(){ toast.style.opacity='0'; toast.style.transition='opacity .4s'; setTimeout(function(){ toast.remove(); },400); }, 3000);
+    showToast('"' + eskiAd + '" \u2192 "' + yeniAd + '" olarak güncellendi', 'success', 3500);
   }
   okBtn.addEventListener('click', doRename);
   inp.addEventListener('keydown', function(e){ if(e.key==='Enter') doRename(); });
@@ -7372,9 +7471,127 @@ function calPopupNotSil(key) {
   renderCalendar();
 }
 
-// ============================================================
+// ════════════════════════════════════════════════════════════
+// TOAST BİLDİRİM SİSTEMİ
+// ════════════════════════════════════════════════════════════
+function showToast(msg, type, dur) {
+  type = type || 'success';
+  dur  = dur  || 4000;
+  var icons = { success:'✓', error:'✕', info:'ℹ', warn:'⚠' };
+  var stack = document.getElementById('toast-stack');
+  if (!stack) return;
+  var el = document.createElement('div');
+  el.className = 'toast-item toast-' + type;
+  el.style.position = 'relative';
+  el.innerHTML = '<span class="toast-icon">' + icons[type] + '</span>'
+    + '<span class="toast-text">' + msg + '</span>'
+    + '<button class="toast-close" onclick="this.parentNode.remove()">×</button>';
+  var prog = document.createElement('div');
+  prog.style.cssText = 'position:absolute;bottom:0;left:0;height:3px;border-radius:0 0 10px 10px;background:rgba(255,255,255,.3);width:100%;transition:width '+dur+'ms linear';
+  el.appendChild(prog);
+  stack.appendChild(el);
+  requestAnimationFrame(function() {
+    el.classList.add('visible');
+    requestAnimationFrame(function() { prog.style.width = '0%'; });
+  });
+  var tid = setTimeout(function() {
+    el.style.opacity='0'; el.style.transform='translateX(20px)';
+    setTimeout(function(){ el.remove(); },300);
+  }, dur);
+  el.onclick = function() { clearTimeout(tid); el.remove(); };
+}
+
+// ════════════════════════════════════════════════════════════
+// KADRO MODAL TOPLU SEÇİM
+// ════════════════════════════════════════════════════════════
+var SANATCI_KATEGORILER = ['Sanatçı','Oyuncu','Koro','Solist','Dansçı','Figüran','Müzisyen','Koro/Dans Ekibi','Koro/Dans','Orkestra'];
+var TEKNIK_KATEGORILER  = ['Teknik','Sahne Amiri','Ses','Kondüvit','Ses – Kondüvit','Mutemet','Turne Başkanı','Sahne Teknisyeni','Işık','Dekor'];
+function kisiModalTopluSec(tip) {
+  var oyunAdi = window._kisiModalOyunAdi || '';
+  var anaKadro = getPersonelForOyun(oyunAdi);
+  var visibleList = anaKadro;
+  var filterInput = document.getElementById('kisi-filter-input');
+  var q = filterInput ? filterInput.value.trim().toLowerCase() : '';
+  if (q) visibleList = anaKadro.filter(function(p){ return ((p.kisi||'')+(p.kategori||'')+(p.gorev||'')).toLowerCase().includes(q); });
+  if (tip==='temizle') {
+    kisiModalSecili = [];
+  } else if (tip==='hepsi') {
+    visibleList.forEach(function(p){ if(!kisiModalSecili.some(function(s){return s.kisi===p.kisi;})) kisiModalSecili.push({kisi:p.kisi,gorev:p.gorev||p.kategori,kategori:p.kategori}); });
+  } else if (tip==='sanatci') {
+    visibleList.filter(function(p){return SANATCI_KATEGORILER.indexOf(p.kategori)>=0;}).forEach(function(p){ if(!kisiModalSecili.some(function(s){return s.kisi===p.kisi;})) kisiModalSecili.push({kisi:p.kisi,gorev:p.gorev||p.kategori,kategori:p.kategori}); });
+  } else if (tip==='teknik') {
+    visibleList.filter(function(p){return TEKNIK_KATEGORILER.indexOf(p.kategori)>=0;}).forEach(function(p){ if(!kisiModalSecili.some(function(s){return s.kisi===p.kisi;})) kisiModalSecili.push({kisi:p.kisi,gorev:p.gorev||p.kategori,kategori:p.kategori}); });
+  } else if (tip==='ters') {
+    var yeni=[];
+    visibleList.forEach(function(p){ if(!kisiModalSecili.some(function(s){return s.kisi===p.kisi;})) yeni.push({kisi:p.kisi,gorev:p.gorev||p.kategori,kategori:p.kategori}); });
+    kisiModalSecili=yeni;
+  }
+  renderKisiModal();
+  var ct=document.getElementById('kisi-bulk-count'); if(ct) ct.textContent=kisiModalSecili.length?kisiModalSecili.length+' kişi seçili':'';
+  showToast(tip==='temizle'?'Seçim temizlendi':kisiModalSecili.length+' kişi seçili','info',2000);
+}
+
+// ════════════════════════════════════════════════════════════
+// iCAL EXPORT
+// ════════════════════════════════════════════════════════════
+function iCalIndir() {
+  var lines=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//İDT//TR','CALSCALE:GREGORIAN','X-WR-CALNAME:İDT Turne Takvimi'];
+  function icsDate(d){return d?d.replace(/-/g,''):'';}
+  function icsEsc(s){return(s||'').replace(/\\/g,'\\\\').replace(/;/g,'\\;').replace(/,/g,'\\,').replace(/\n/g,'\\n');}
+  turneler.forEach(function(t){
+    var bas=t.baslangicTarih||t.tarih||''; var bit=t.bitisTarih||t.tarih||bas; if(!bas)return;
+    var bitD=new Date(bit); bitD.setDate(bitD.getDate()+1);
+    var bitStr=bitD.getFullYear()+String(bitD.getMonth()+1).padStart(2,'0')+String(bitD.getDate()).padStart(2,'0');
+    var ilStr=typeof durakIllerListesi==='function'?durakIllerListesi(t).join(', '):(t.il||'');
+    var sr=typeof statuRenk==='function'?statuRenk(t.statu||'tamamlandi'):{};
+    lines.push('BEGIN:VEVENT');
+    lines.push('UID:turne-'+(t._rowIdx||Math.random().toString(36).slice(2))+'@idt.gov.tr');
+    lines.push('DTSTART;VALUE=DATE:'+icsDate(bas));
+    lines.push('DTEND;VALUE=DATE:'+bitStr);
+    lines.push('SUMMARY:'+icsEsc((t.oyun||'Turne')+' - '+ilStr));
+    lines.push('DESCRIPTION:'+icsEsc('İl: '+ilStr+(t.mekan?'\nMekan: '+t.mekan:'')+'\nStatü: '+(sr.label||t.statu||'')));
+    lines.push('LOCATION:'+icsEsc(ilStr+(t.mekan?', '+t.mekan:'')));
+    lines.push('END:VEVENT');
+  });
+  lines.push('END:VCALENDAR');
+  var blob=new Blob([lines.join('\r\n')],{type:'text/calendar;charset=utf-8'});
+  var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='IDT_Turne_Takvimi.ics'; a.click();
+  showToast('Takvim .ics olarak indirildi','success',5000);
+}
+
+// ════════════════════════════════════════════════════════════
+// CHART.JS GRAFİKLERİ
+// ════════════════════════════════════════════════════════════
+var _chartInstances = {};
+function _destroyChart(id){ if(_chartInstances[id]){_chartInstances[id].destroy();delete _chartInstances[id];} }
+function _createChart(id,cfg){ _destroyChart(id); var c=document.getElementById(id); if(!c||typeof Chart==='undefined')return; _chartInstances[id]=new Chart(c,cfg); }
+
+function renderIstatistikGrafikleri(kaynakTurneler) {
+  if (typeof Chart === 'undefined') return;
+  var PALETTE=['#9b1c2e','#c0392b','#e74c3c','#e67e22','#f39c12','#16a085','#2980b9','#8e44ad'];
+  var AYLAR=['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'];
+
+  // Oyun pasta
+  var oyunData={};
+  kaynakTurneler.forEach(function(t){if(t.oyun)oyunData[t.oyun]=(oyunData[t.oyun]||0)+1;});
+  var oyunSirali=Object.entries(oyunData).sort(function(a,b){return b[1]-a[1];}).slice(0,8);
+  _createChart('chart-oyun-pasta',{type:'doughnut',data:{labels:oyunSirali.map(function(x){return x[0];}),datasets:[{data:oyunSirali.map(function(x){return x[1];}),backgroundColor:PALETTE,borderWidth:2,borderColor:'#fff',hoverOffset:8}]},options:{responsive:true,maintainAspectRatio:false,cutout:'60%',plugins:{legend:{position:'right',labels:{font:{family:'Poppins',size:10},padding:8,boxWidth:10}},tooltip:{callbacks:{label:function(ctx){return ctx.label+': '+ctx.raw+' turne';}}}}}});
+
+  // Aylık bar
+  var ayData={};
+  kaynakTurneler.forEach(function(t){var d=t.baslangicTarih||t.tarih;if(!d)return;ayData[d.slice(0,7)]=(ayData[d.slice(0,7)]||0)+1;});
+  var ayKeys=Object.keys(ayData).sort().slice(-12);
+  var ayLabels=ayKeys.map(function(k){var p=k.split('-');return AYLAR[parseInt(p[1])-1]+' '+p[0].slice(2);});
+  _createChart('chart-aylik-bar',{type:'bar',data:{labels:ayLabels,datasets:[{label:'Turne',data:ayKeys.map(function(k){return ayData[k];}),backgroundColor:'hsl(350,55%,35%)',hoverBackgroundColor:'hsl(350,65%,45%)',borderRadius:6,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:function(ctx){return ctx.raw+' turne';}}}},scales:{x:{grid:{display:false},ticks:{font:{family:'Poppins',size:9}}},y:{beginAtZero:true,ticks:{precision:0,font:{family:'Poppins',size:9}},grid:{color:'rgba(0,0,0,.06)'}}},onClick:function(e,el){if(!el.length)return;var idx=el[0].index;var k=ayKeys[idx];var p=k.split('-');calYear=parseInt(p[0]);calMonth=parseInt(p[1])-1;switchTab('takvim');renderCalendar();showToast(ayLabels[idx]+' takvime gidildi','info',2000);}}});
+
+  // Statü yatay bar
+  var STATU_CHART=[{val:'taslak',label:'Taslak',color:'#6b7280'},{val:'onay-bekliyor',label:'Onay Bekliyor',color:'#d97706'},{val:'onaylandi',label:'Onaylandı',color:'#16a34a'},{val:'tamamlandi',label:'Tamamlandı',color:'#2563eb'},{val:'iptal',label:'İptal',color:'#dc2626'}];
+  _createChart('chart-statu-bar',{type:'bar',data:{labels:STATU_CHART.map(function(s){return s.label;}),datasets:[{data:STATU_CHART.map(function(s){return kaynakTurneler.filter(function(t){return t.statu===s.val;}).length;}),backgroundColor:STATU_CHART.map(function(s){return s.color+'cc';}),borderColor:STATU_CHART.map(function(s){return s.color;}),borderWidth:2,borderRadius:6,borderSkipped:false}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,ticks:{precision:0,font:{family:'Poppins',size:9}},grid:{color:'rgba(0,0,0,.06)'}},y:{ticks:{font:{family:'Poppins',size:10}},grid:{display:false}}}}});
+}
+
+// ════════════════════════════════════════════════════════════
 // İSTATİSTİK (sade, temiz)
-// ============================================================
+// ════════════════════════════════════════════════════════════
 function renderIstatistik(filtreStatu) {
   const el = document.getElementById('istatistik-content');
   if (!el) return;
@@ -7593,7 +7810,16 @@ function renderIstatistik(filtreStatu) {
   html += '</div>'; // sağ kolon bitti
   html += '</div>'; // 2 sütun grid bitti
 
+  // ── CHART.JS GRAFİK BÖLÜMÜ ekle
+  html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:12px">'
+    + '<div class="chart-container"><div class="chart-title"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 0 20 15.3 15.3 0 0 1 0-20"/><path d="M2 12h20"/></svg>Oyunlara Göre Dağılım</div><div class="chart-canvas-wrap" style="height:180px"><canvas id="chart-oyun-pasta"></canvas></div></div>'
+    + '<div class="chart-container"><div class="chart-title"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Aylık Turne Trendi <span style="font-size:9px;color:var(--muted-foreground);font-weight:400">(tıkla→takvim)</span></div><div class="chart-canvas-wrap" style="height:180px"><canvas id="chart-aylik-bar"></canvas></div></div>'
+    + '<div class="chart-container"><div class="chart-title"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="8" x2="11" y2="8"/><line x1="8" y1="16" x2="14" y2="16"/></svg>Statü Dağılımı</div><div class="chart-canvas-wrap" style="height:180px"><canvas id="chart-statu-bar"></canvas></div></div>'
+    + '</div>';
+
   el.innerHTML = html;
+  // Grafikleri render et (async)
+  setTimeout(function(){ renderIstatistikGrafikleri(kaynakTurneler); }, 60);
 }
 
 
@@ -7609,7 +7835,7 @@ function yedekAl() {
   a.click();
   URL.revokeObjectURL(a.href);
   var el = document.getElementById('yedek-mesaj');
-  if (el) { el.textContent = '✓ Yedek indirildi'; setTimeout(() => { el.textContent=''; }, 3000); }
+  if (el) { el.textContent = ''; } showToast('Yedek dosyası indirildi', 'success', 4000);
 }
 function geriYukle(event) {
   var file = event.target.files && event.target.files[0];
@@ -8058,9 +8284,10 @@ async function saveTurne() {
   if (sehirTel) acSave('sehirTeller', sehirTel);
   if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Kaydet'; }
   closeModal();
-  populateFilters(); 
+  populateFilters();
   console.log('[saveTurne] renderListe öncesi turneler sayısı:', turneler.length, '| yeni kayıt oyun:', yeniKayit.oyun, 'il:', yeniKayit.il, 'baslangic:', yeniKayit.baslangicTarih);
   renderListe(); renderCalendar();
+  showToast(editIdx !== '' ? (yeniKayit.oyun || 'Turne') + ' güncellendi' : (yeniKayit.oyun || 'Yeni turne') + ' eklendi', 'success', 3500);
 
   // Arka planda API'ye kaydet
   try {
