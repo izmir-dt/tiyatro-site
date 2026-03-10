@@ -11725,50 +11725,52 @@ async function pdfTurneDosyasiParse(arrayBuffer) {
   // Tüm metin (sadece analiz için)
   var tamMetin = sayfalar.join('\n');
 
-  // ── Oyun adı ve şehirler — SADECE SAYFA 1'DEN ──────────────
-  // Sayfa 1 başlığı: "MÜNASEBETSİZ\nNİĞDE-NEVŞEHİR TURNESİ\n(09-13 MART 2026)..."
-  // İçerik iki kez yazılmış olabilir — ilk TURNESİ görülene kadar al
-  var s1 = sayfalar[0] || '';
-  var s1Lines = s1.split('\n');
+  // ── Oyun adı ve şehirler — TURNESİ başlığı hangi sayfada olursa ──────────
+  // PDF versiyonuna göre değişir:
+  //   10 sayfalık: Sayfa 1'de "MÜNASEBETSİZ NİĞDE-NEVŞEHİR TURNESİ"
+  //    3 sayfalık: Sayfa 2'de "NİĞDE/NEVŞEHİR TURNESİ GÖREVLİ PERSONEL LİSTESİ"
+  var sehirListesi = ['NİĞDE','NEVŞEHİR','ANKARA','BURSA','ORDU','GAZİANTEP','ADANA',
+    'ANTALYA','TRABZON','SAMSUN','KAYSERİ','ESKİŞEHİR','KOCAELİ','KONYA','MERSİN',
+    'DENİZLİ','MALATYA','DİYARBAKIR','ERZURUM','ÇORUM','AMASYA','SIVAS','KAHRAMANMARAŞ',
+    'HATAY','MUĞLA','AYDIN','MANİSA','BALIKESİR','ÇANAKKALE','EDİRNE','TEKİRDAĞ',
+    'SAKARYA','BOLU','ZONGULDAK','KASTAMONU','SİNOP','TOKAT','GİRESUN','RİZE',
+    'ARTVİN','AĞRI','MUŞ','BİTLİS','MARDİN','ŞANLIURFA','ADIYAMAN','KILIS',
+    'OSMANİYE','KARABÜK','BARTIN','YALOVA','BİLECİK','KÜTAHYA','AFYONKARAHİSAR',
+    'UŞAK','ISPARTA','BURDUR','KARAMAN','AKSARAY','KIRŞEHİR','YOZGAT','ÇANKIRI',
+    'KIRIKKALE','ERZİNCAN','ELAZIĞ','GÜMÜŞHANE','BAYBURT','BİNGÖL','TUNCELİ'];
 
-  // TURNESİ içeren satırı bul
-  var turneLineIdx = -1;
-  for (var li = 0; li < s1Lines.length; li++) {
-    if (/TURNES[İI]/i.test(s1Lines[li])) { turneLineIdx = li; break; }
-  }
+  // Tüm sayfalarda TURNESİ içeren satırı bul — ilk bulunanı kullan
+  var baslikBlokBulundu = false;
+  for (var bi = 0; bi < sayfalar.length && !baslikBlokBulundu; bi++) {
+    var biSayfa = sayfalar[bi];
+    var biLines = biSayfa.split('\n');
+    for (var li = 0; li < biLines.length; li++) {
+      if (!/TURNES[İI]/i.test(biLines[li])) continue;
 
-  if (turneLineIdx >= 0) {
-    // TURNESİ satırı ve önceki 2 satır = başlık bloğu
-    var baslikBlok = s1Lines.slice(Math.max(0, turneLineIdx - 2), turneLineIdx + 1).join(' ').toUpperCase();
+      // TURNESİ satırı + önceki 2 satır = başlık bloğu
+      // Ama bu satırda "GÖREVLİ PERSONEL" vs. geçiyorsa şehir kısmı öncede
+      var baslikBlok = biLines.slice(Math.max(0, li - 2), li + 1).join(' ').toUpperCase();
 
-    // Oyun adı: TURNESİ'nden önce gelen büyük harf kelime(ler), şehir adı değil
-    // "MÜNASEBETSİZ NİĞDE-NEVŞEHİR TURNESİ" → oyun: MÜNASEBETSİZ
-    // Şehirler: başlık bloğundaki turne şehirleri
-    var sehirListesi = ['NİĞDE','NEVŞEHİR','ANKARA','BURSA','ORDU','GAZİANTEP','ADANA',
-      'ANTALYA','TRABZON','SAMSUN','KAYSERİ','ESKİŞEHİR','KOCAELİ','KONYA','MERSİN',
-      'DENİZLİ','MALATYA','DİYARBAKIR','ERZURUM','ÇORUM','AMASYA','SIVAS','KAHRAMANMARAŞ',
-      'HATAY','MUĞLA','AYDIN','MANİSA','BALIKESİR','ÇANAKKALE','EDİRNE','TEKİRDAĞ',
-      'SAKARYA','BOLU','ZONGULDAK','KASTAMONU','SİNOP','TOKAT','GİRESUN','RİZE',
-      'ARTVİN','AĞRI','MUŞ','BİTLİS','MARDİN','ŞANLIURFA','ADIYAMAN','KILIS',
-      'OSMANİYE','KARABÜK','BARTIN','YALOVA','BİLECİK','KÜTAHYA','AFYONKARAHİSAR',
-      'UŞAK','ISPARTA','BURDUR','KARAMAN','AKSARAY','KIRŞEHİR','YOZGAT','ÇANKIRI',
-      'KIRIKKALE','ERZİNCAN','ELAZIĞ','GÜMÜŞHANE','BAYBURT','BİNGÖL','TUNCELİ'];
+      // Sadece başlık kısmındaki şehirleri al (uçuş satırlarındaki transit değil)
+      // Başlık: "NİĞDE/NEVŞEHİR TURNESİ" veya "NİĞDE-NEVŞEHİR TURNESİ"
+      // TURNESİ kelimesinden önceki kısımda ara
+      var turneKismi = baslikBlok.substring(0, baslikBlok.indexOf('TURNES'));
+      sehirListesi.forEach(function(s) {
+        if (turneKismi.indexOf(s) !== -1 && r.sehirler.indexOf(s) === -1) r.sehirler.push(s);
+      });
 
-    // Başlık bloğundan şehirleri çıkar
-    sehirListesi.forEach(function(s) {
-      if (baslikBlok.indexOf(s) !== -1) r.sehirler.push(s);
-    });
+      // Oyun adı: TURNESİ öncesi, şehirler çıkarılınca kalan
+      var oyunBlok = turneKismi;
+      r.sehirler.forEach(function(s) { oyunBlok = oyunBlok.replace(new RegExp(s, 'g'), ''); });
+      oyunBlok = oyunBlok.replace(/[-\/\s]+/g, ' ').trim();
+      var oyunM = oyunBlok.match(/[A-ZÇĞİÖŞÜ][A-ZÇĞİÖŞÜÇçĞğİışŞşÖöÜü\s]{2,}/);
+      if (oyunM) {
+        var oyunUpper = oyunM[0].trim();
+        var pos = biSayfa.toUpperCase().indexOf(oyunUpper);
+        r.oyun = pos >= 0 ? biSayfa.substring(pos, pos + oyunUpper.length).trim() : oyunUpper;
+      }
 
-    // Oyun adı: başlık bloğundan şehirler ve TURNESİ çıkarılınca kalan büyük kelimeler
-    var oyunBlok = baslikBlok;
-    r.sehirler.forEach(function(s) { oyunBlok = oyunBlok.replace(new RegExp(s, 'g'), ''); });
-    oyunBlok = oyunBlok.replace(/TURNES[İI]/g,'').replace(/[-\/\s]+/g,' ').trim();
-    var oyunM = oyunBlok.match(/[A-ZÇĞİÖŞÜ][A-ZÇĞİÖŞÜÇçĞğİışŞşÖöÜü\s]{2,}/);
-    if (oyunM) {
-      // Orijinal metinden (büyük/küçük karışık) al
-      var oyunUpper = oyunM[0].trim();
-      var pos = s1.toUpperCase().indexOf(oyunUpper);
-      r.oyun = pos >= 0 ? s1.substring(pos, pos + oyunUpper.length).trim() : oyunUpper;
+      if (r.sehirler.length > 0 || r.oyun) { baslikBlokBulundu = true; break; }
     }
   }
 
@@ -11787,56 +11789,53 @@ async function pdfTurneDosyasiParse(arrayBuffer) {
   var kamyonM = tamMetin.match(/[Kk]amyon\s*[-–]\s*([^\n-–]{3,50}?)\s*[-–]\s*[^\n]{3,30}\s*[-–]\s*0\s*\d/);
   if (kamyonM) r.kamyon = kamyonM[1].trim();
 
-  // ── Uçuş bilgileri — SAYFA 2'DEN ──────────────────────────
-  // Gidiş: İZMİR'den kalkan ilk uçuş
-  var s2 = sayfalar[1] || '';
-  var gidisM = s2.match(/[İI]ZM[İI]R\s*[-–]\s*\S[^\n]*?(\d{1,2}[.:]\d{2})\s*[-–]\s*\d{1,2}[.:]\d{2}\s+(PEGASUS|THY|ANADOLUJET|SUNEXPRESS)/i);
+  // ── Uçuş + Otel — tüm sayfalardan ara (hangi sayfada olduğu değişebilir) ──
+  var gidisM = tamMetin.match(/[İI]ZM[İI]R\s*[-–]\s*\S[^\n]*?(\d{1,2}[.:]\d{2})\s*[-–]\s*\d{1,2}[.:]\d{2}\s+(PEGASUS|THY|ANADOLUJET|SUNEXPRESS)/i);
   if (gidisM) {
     r.gidisUlasim = 'ucak';
     r.gidisSaat = gidisM[1].replace('.', ':');
     r.gidisPlaka = gidisM[2].toUpperCase();
   }
-  // Dönüş: İZMİR'e inen son uçuş
   var donusRex = /[^\n]*[-–]\s*[İI]ZM[İI]R[^\n]*?(\d{1,2}[.:]\d{2})\s*[-–]\s*\d{1,2}[.:]\d{2}\s+(PEGASUS|THY|ANADOLUJET|SUNEXPRESS)/gi;
   var dLast = null, dm;
-  while ((dm = donusRex.exec(s2)) !== null) dLast = dm;
+  while ((dm = donusRex.exec(tamMetin)) !== null) dLast = dm;
   if (dLast) {
     r.donusUlasim = 'ucak';
     r.donusSaat = dLast[1].replace('.', ':');
     r.donusPlaka = dLast[2].toUpperCase();
   }
-  if (!r.gidisUlasim && /uça[kğ]la/i.test(s2)) r.gidisUlasim = 'ucak';
+  if (!r.gidisUlasim && /uça[kğ]la/i.test(tamMetin)) r.gidisUlasim = 'ucak';
 
-  // ── Otel — SAYFA 2'DEN ────────────────────────────────────
-  var otelM = s2.match(/konakla[^\n]*?\n[^\n]*?([A-ZÇĞİÖŞÜ][a-zA-ZÇçĞğİışŞşÖöÜüĞğ\s]{3,50}?(?:Hotel|Otel))/i);
-  if (!otelM) otelM = s2.match(/([A-ZÇĞİÖŞÜ][a-zA-ZÇçĞğİışŞşÖöÜüĞğ\s]{2,50}(?:Hotel|Otel))/i);
+  var otelM = tamMetin.match(/konakla[^\n]*?\n?[^\n]*?([A-ZÇĞİÖŞÜ][a-zA-ZÇçĞğİışŞşÖöÜüĞğ\s]{3,50}?(?:Hotel|Otel))/i);
+  if (!otelM) otelM = tamMetin.match(/([A-ZÇĞİÖŞÜ][a-zA-ZÇçĞğİışŞşÖöÜüĞğ\s]{2,50}(?:Hotel|Otel))/i);
   if (otelM) r.otelAdi = otelM[1].trim();
 
-  // ── Personel — SADECE GÖREVLİ PERSONEL LİSTESİ SAYFASINDAN ─
-  // Sayfa 4: "GÖREVLİ PERSONEL LİSTESİ" başlıklı sayfa
-  // Format: "1 Özkan GEZGİN Sanatçı- Turne Başkanı 6.08.1974 32011869932"
-  // Sayfa 5 (program sayfası) KULLANILMAZ
+  // ── Personel — GÖREVLİ PERSONEL LİSTESİ içeren HER sayfayı tara ──────────
+  // PDF versiyonuna göre personel sayfası değişebilir:
+  //   Versiyon A (10 sayfa): Sayfa 4 = sadece liste, Sayfa 5 = liste+program
+  //   Versiyon B (3 sayfa) : Sayfa 2 = liste+program birlikte
+  // Kural: GÖREVLİ PERSONEL içeren sayfayı bul, en çok kişiyi çıkaran sayfayı kullan
+  //
+  // Format A (doğum tarihli): "1 Özkan GEZGİN Sanatçı- Turne Başkanı 6.08.1974 32..."
+  // Format B (programlı)    : "1 Özkan GEZGİN Sanatçı- Turne Başkanı 09/03/2026 Paz..."
+  // İkisi de \d{1,2}[.\/]\d{2} ile biter → aynı regex yakalar
+
   var bulunanPersonel = [];
 
   for (var si = 0; si < sayfalar.length; si++) {
     var ps = sayfalar[si];
     var psU = ps.toUpperCase();
+    if (!/G[ÖO]REVL[İI] PERSONEL/.test(psU)) continue;
 
-    // Sadece "GÖREVLİ PERSONEL LİSTESİ" sayfasını kullan
-    // "TURNE PROGRAMI" da geçiyorsa bu sayfa 5 — atla
-    var gorevliPersonelVar = /G[ÖO]REVL[İI] PERSONEL L[İI]STES[İI]/.test(psU);
-    var programVar = /TURNE PROGRAM[I]/.test(psU);
-    if (!gorevliPersonelVar || programVar) continue;
-
-    // Format A: "1 Özkan GEZGİN Sanatçı- Turne Başkanı 6.08.1974 ..."
+    var liste2 = [];
     var rexA = /\b(\d{1,2})\s+((?:[A-ZÇĞİÖŞÜ][a-zA-ZÇçĞğİışŞşÖöÜüĞğ\.]+\s+){1,4}[A-ZÇĞİÖŞÜ]{2,})\s+((?:Sanatçı|Sahne|Mutemet|Kondüvit|Aksesuar|Perukacı|Figüran)[^\d\n]{0,60}?)(?=\s+\d{1,2}[.\/]\d{2})/g;
     var pmA;
     while ((pmA = rexA.exec(ps)) !== null) {
       var unvan = pmA[3].trim().replace(/[-–\s]+$/, '').trim();
-      bulunanPersonel.push({ ad: pmA[2].trim(), unvan: unvan });
+      liste2.push({ ad: pmA[2].trim(), unvan: unvan });
     }
-
-    if (bulunanPersonel.length > 0) break; // Bulduk, daha fazla aramaya gerek yok
+    // Daha fazla kişi içeren sayfayı tercih et
+    if (liste2.length > bulunanPersonel.length) bulunanPersonel = liste2;
   }
 
   r.personel = bulunanPersonel;
