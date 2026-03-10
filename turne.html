@@ -11860,23 +11860,74 @@ async function pdfDosyaKaydet() {
     var ov=document.getElementById('modal-overlay');if(ov)ov.classList.remove('on');
 
     var personelEklendi=0;
+    var kadroEslesti=0;
     var pcb=document.getElementById('pdf-personel-ekle-cb');
     if(pcb&&pcb.checked&&data.personel&&data.personel.length>0) {
+      // Ana kadro eslestirmesi: PDF kisisini tumPersonel ile karsilastir
+      var disKatilimcilar = [];
+      var turneKatilimcilar = [];
       for(var pi=0;pi<data.personel.length;pi++){
         var p=data.personel[pi];
+        var pAdNorm=(p.ad||'').trim().toLowerCase();
+        var eslesme=null;
+        if(typeof tumPersonel!=='undefined'){
+          // Once oyun + isim ile eslestir
+          eslesme=tumPersonel.find(function(tp){
+            return tp.kisi&&tp.kisi.trim().toLowerCase()===pAdNorm
+              &&(!data.oyun||!tp.oyun||tp.oyun.trim().toLowerCase()===(data.oyun||'').trim().toLowerCase());
+          });
+          // Oyun eslesmezse sadece isimle ara
+          if(!eslesme){
+            eslesme=tumPersonel.find(function(tp){
+              return tp.kisi&&tp.kisi.trim().toLowerCase()===pAdNorm;
+            });
+          }
+        }
+        if(eslesme){
+          turneKatilimcilar.push({kisi:eslesme.kisi,gorev:eslesme.gorev||p.unvan||eslesme.kategori,kategori:eslesme.kategori});
+          kadroEslesti++;
+        } else {
+          disKatilimcilar.push(p);
+        }
+      }
+      // Eslesen kisileri turne katilimcisi olarak kaydet
+      if(turneKatilimcilar.length>0){
+        var sonTurne=turneler[turneler.length-1];
+        if(sonTurne){
+          sonTurne.katilimcilar=turneKatilimcilar;
+          try{
+            var katIdx=sonTurne._rowIdx;
+            if(typeof katIdx!=='undefined'){
+              await apiFetch('/'+encodeURIComponent(TURNE_SHEET)+'/cell',{
+                method:'POST',headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({row:katIdx+2,col:40,value:JSON.stringify(turneKatilimcilar)})
+              });
+            }
+          }catch(e){console.warn('Katilimci kaydi hatasi:',e);}
+        }
+      }
+      // Eslesmeyenleri dis katilimci olarak ekle (zaten varsa atlat)
+      for(var di=0;di<disKatilimcilar.length;di++){
+        var dp=disKatilimcilar[di];
+        var zatenVar=typeof tumDisPersonel!=='undefined'&&
+          tumDisPersonel.some(function(x){return x.kisi&&x.kisi.trim().toLowerCase()===(dp.ad||'').trim().toLowerCase();});
+        if(zatenVar){personelEklendi++;continue;}
         try{
           await apiFetch('/'+encodeURIComponent(DIS_PERSONEL_SHEET)+'/row',{
             method:'POST',headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({values:[p.ad,unvanKat(p.unvan),p.unvan]})
+            body:JSON.stringify({values:[dp.ad,unvanKat(dp.unvan),dp.unvan]})
           });
           personelEklendi++;
           if(typeof tumDisPersonel!=='undefined')
-            tumDisPersonel.push({kisi:p.ad,kategori:unvanKat(p.unvan),gorev:p.unvan,_sheetRow:9999+pi});
-        }catch(e){console.warn('Personel:',p.ad,e);}
+            tumDisPersonel.push({kisi:dp.ad,kategori:unvanKat(dp.unvan),gorev:dp.unvan,_sheetRow:9999+di});
+        }catch(e){console.warn('Dis katilimci eklenemedi:',dp.ad,e);}
       }
       if(typeof renderDisPersonel==='function') setTimeout(renderDisPersonel,200);
+      if(typeof renderListe==='function') setTimeout(renderListe,300);
     }
-    var mesaj=basarili+' turne taslak eklendi'+(personelEklendi?' · '+personelEklendi+' kişi aktarıldı':'')+'!';
+    var mesaj=basarili+' turne taslak eklendi'
+      +(kadroEslesti?' · '+kadroEslesti+' kisi kadroya eklendi':'')
+      +(personelEklendi?' · '+personelEklendi+' dis katilimci eklendi':'')+'!';
     document.getElementById('pdf-done-msg').textContent=mesaj;
     pdfAdimGoster('done'); if(db)db.style.display='none';
     if(typeof showToast==='function')showToast('success','✅ '+mesaj);
