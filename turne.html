@@ -9070,10 +9070,13 @@ async function saveTurne() {
     if (apiBasarili) {
       console.log('[saveTurne] Başarılı');
       // Sheets'ten güncel veriyi çek — _rowIdx'lerin doğru olmasını garantile
-      try {
-        await fetchTurneler();
-        populateFilters(); renderListe(); renderCalendar();
-      } catch(e) { /* fetch hatası — mevcut veri korunur */ }
+      // pdfDosyaKaydet çalışıyorsa fetch'i atla (o zaten en sonda fetch yapacak)
+      if (!window._pdfKayitDevam) {
+        try {
+          await fetchTurneler();
+          populateFilters(); renderListe(); renderCalendar();
+        } catch(e) { /* fetch hatası — mevcut veri korunur */ }
+      }
     }
   } catch(e) {
     console.warn('API kayıt hatası:', e);
@@ -11870,6 +11873,7 @@ async function pdfDosyaKaydet() {
     }
     var sehirler=data.sehirler.length>0?data.sehirler:[''];
     var basarili=0;
+    window._pdfKayitDevam = true; // saveTurne'nin ara fetch yapmasını engelle
     for(var si=0;si<sehirler.length;si++) {
       var sehir=sehirler[si];
       openModal();
@@ -11905,6 +11909,9 @@ async function pdfDosyaKaydet() {
       await new Promise(function(r){setTimeout(r,100);});
     }
     var ov=document.getElementById('modal-overlay');if(ov)ov.classList.remove('on');
+    window._pdfKayitDevam = false;
+    // Tüm turneler eklendi — şimdi tek seferde Sheets'ten çek, _rowIdx'ler doğru olsun
+    try { await fetchTurneler(); populateFilters(); renderListe(); renderCalendar(); } catch(e) {}
 
     var personelEklendi=0;
     var kadroEslesti=0;
