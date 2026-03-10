@@ -11358,10 +11358,28 @@ function pdfDosyaSecildi(inputEl, dosyaObj) {
   reader.readAsDataURL(dosya);
 }
 
+function pdfApiKeyAl() {
+  var key = localStorage.getItem('anthropic_api_key');
+  if (key) return key;
+  key = prompt('Anthropic API anahtarınızı girin (sk-ant-...):\n\nAnahtar tarayıcınızda güvenli şekilde saklanacak.');
+  if (key && key.trim().startsWith('sk-')) {
+    localStorage.setItem('anthropic_api_key', key.trim());
+    return key.trim();
+  }
+  return null;
+}
+
 async function pdfAnalizEt(base64Data, dosyaAdi) {
   pdfAdimGoster('loading');
   document.getElementById('pdf-loading-msg').textContent = '"' + dosyaAdi + '" analiz ediliyor…';
   document.getElementById('pdf-kaydet-btn').style.display = 'none';
+
+  var apiKey = pdfApiKeyAl();
+  if (!apiKey) {
+    pdfAdimGoster('upload');
+    if (typeof showToast === 'function') showToast('error', '❌ API anahtarı gerekli. Lütfen tekrar deneyin.');
+    return;
+  }
 
   var prompt = `Sen bir tiyatro turne programı analiz asistanısın. Sana verilen PDF, İzmir Devlet Tiyatrosu'nun aylık program tablosudur.
 
@@ -11393,7 +11411,12 @@ Eğer hiç turne bulunamazsa boş dizi döndür: []`;
   try {
     var response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 1000,
@@ -11410,6 +11433,7 @@ Eğer hiç turne bulunamazsa boş dizi döndür: []`;
       })
     });
 
+    if (response.status === 401) { localStorage.removeItem('anthropic_api_key'); throw new Error('Geçersiz API anahtarı. Lütfen tekrar deneyin.'); }
     if (!response.ok) throw new Error('API hatası: ' + response.status);
     var data = await response.json();
     var text = (data.content || []).map(function(b){ return b.text || ''; }).join('');
