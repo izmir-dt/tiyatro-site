@@ -961,6 +961,11 @@ height:20px !important;
   </div>
   <div class="nav-right">
     <span id="yedek-mesaj" style="font-size:11px;color:#16a34a;font-weight:600"></span>
+    <!-- Son senkronizasyon göstergesi -->
+    <span id="son-senkron-indicator" style="font-size:10px;color:var(--muted-foreground);display:inline-flex;align-items:center;gap:3px;opacity:.7" title="Son veri senkronizasyon zamanı">
+      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+      <span id="son-senkron-zaman">—</span>
+    </span>
     <span id="_polling-indicator" title="Veriler yenileniyor..." style="opacity:0;transition:opacity .4s;font-size:11px;color:var(--muted-foreground);display:inline-flex;align-items:center;gap:4px"><!-- Modern Flat Yenileme İkonu -->
 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" style="animation:spin 1s linear infinite"><circle cx="12" cy="12" r="9" fill="#10b981"/><path d="M12 6v3l3-1.5" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/><path d="M17 12h-3" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/></svg> güncelleniyor</span>
     <div style="position:relative;display:inline-flex;align-items:center;gap:6px">
@@ -3130,6 +3135,28 @@ function statuDdToggle(e) {
   btn.style.borderColor = _statuDdAcik ? 'var(--primary)' : '';
   btn.style.boxShadow   = _statuDdAcik ? '0 0 0 2.5px hsl(38,65%,88%)' : '';
 }
+
+// ── Gelişmiş filtre paneli aç/kapat
+var _gelismisAcik = false;
+function gelismisFiltreToogle() {
+  _gelismisAcik = !_gelismisAcik;
+  var panel = document.getElementById('gelismis-filtre-panel');
+  var btn   = document.getElementById('gelismis-filtre-btn');
+  if (panel) panel.style.display = _gelismisAcik ? 'flex' : 'none';
+  if (btn) {
+    btn.style.background = _gelismisAcik ? 'hsl(38,55%,92%)' : 'var(--card)';
+    btn.style.color      = _gelismisAcik ? 'var(--primary)' : 'var(--muted-foreground)';
+    btn.style.borderColor = _gelismisAcik ? 'var(--primary)' : 'var(--border)';
+    btn.querySelector('span').textContent = _gelismisAcik ? 'Kapat' : 'Filtrele';
+  }
+}
+function sifirlaGelismis() {
+  var fo = document.getElementById('filter-oyun');
+  var fi = document.getElementById('filter-il');
+  if (fo) fo.value = '';
+  if (fi) fi.value = '';
+  renderListe();
+}
 function statuDdSec(val, el) {
   statuFiltre = val;
   _statuDdAcik = false;
@@ -3184,6 +3211,33 @@ function formatTarih(tarih, kisalt) {
     return d + ' ' + ay + ' ' + y;
   } catch { return tarih; }
 }
+// Kart için kısa tarih aralığı: "12–18 Mar" veya "12 Mar" veya "12–18 Mar 2025" (yıl farklıysa)
+function formatTarihKart(baslangic, bitis, sure) {
+  if (!baslangic) return '—';
+  try {
+    var aylarK = ['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'];
+    var bugunY = new Date().getFullYear();
+    var b = baslangic.split('-'); // [y,m,d]
+    var bY=parseInt(b[0]), bM=parseInt(b[1])-1, bD=parseInt(b[2]);
+    if (!bitis || bitis===baslangic || sure<=1) {
+      var s = bD + ' ' + aylarK[bM];
+      if (bY !== bugunY) s += ' ' + bY;
+      return s;
+    }
+    var e = bitis.split('-');
+    var eY=parseInt(e[0]), eM=parseInt(e[1])-1, eD=parseInt(e[2]);
+    if (bM===eM && bY===eY) {
+      // Aynı ay: "12–18 Mar"
+      var s = bD + '–' + eD + ' ' + aylarK[bM];
+      if (bY !== bugunY) s += ' ' + bY;
+      return s;
+    }
+    // Farklı ay: "12 Mar–5 Nis"
+    var s = bD + ' ' + aylarK[bM] + '–' + eD + ' ' + aylarK[eM];
+    if (bY !== bugunY || eY !== bugunY) s += ' ' + bY;
+    return s;
+  } catch(ex) { return formatTarih(baslangic); }
+}
 function getPersonelForOyun(oyunAdi) {
   if (!oyunAdi) return [];
   var aranan = oyunAdi.trim().toLowerCase();
@@ -3200,6 +3254,16 @@ function chipClass(k) {
   return 'chip-figuran';
 }
 function setLoading(show) {
+// Son senkronizasyon göstergesi güncelle
+function guncelleSonSenkron() {
+  var el = document.getElementById('son-senkron-zaman');
+  if (!el) return;
+  var now = new Date();
+  var h = String(now.getHours()).padStart(2,'0');
+  var m = String(now.getMinutes()).padStart(2,'0');
+  el.textContent = h + ':' + m;
+  el.title = 'Son güncelleme: ' + now.toLocaleString('tr-TR');
+}
   if (show) document.getElementById('liste-content').innerHTML = '<div class="loading"><div class="spinner"></div></div>';
 }
 
@@ -3481,9 +3545,13 @@ function switchTab(tab) {
     var fs = document.getElementById('filter-search'); if (fs) fs.value = '';
     var fo = document.getElementById('filter-oyun');   if (fo) fo.value = '';
     var fi = document.getElementById('filter-il');     if (fi) fi.value = '';
-    var fst = document.getElementById('filter-statu'); if (fst) fst.value = 'tum';
-    var fz = document.getElementById('filter-zaman');  if (fz) fz.value = 'tum';
-    statuFiltre = 'tum'; zamanFiltre = 'tum';
+    // Zaman filtresini sadece ilk girişte 'gelecek' olarak ayarla, sonra kullanıcı değiştirebilir
+    if (!window._listeIlkAcildi) {
+      var fz = document.getElementById('filter-zaman'); if (fz) fz.value = 'gelecek';
+      zamanFiltre = 'gelecek';
+      window._listeIlkAcildi = true;
+    }
+    statuFiltre = 'tum';
     renderListe();
   }
   if (tab === 'oyun') {
@@ -3902,10 +3970,8 @@ function turneCard(t) {
 
   var personel   = getPersonelForOyun(t.oyun);
   var sure       = turneSuresi(t);
-  var tarihStr   = sure > 1
-    ? formatTarih(t.baslangicTarih) + ' – ' + formatTarih(t.bitisTarih)
-    : formatTarih(t.baslangicTarih || t.tarih);
-  var gunStr = sure > 0 ? sure + ' gün' : '';
+  var tarihStr   = formatTarihKart(t.baslangicTarih||t.tarih, t.bitisTarih, sure);
+  var gunStr = sure > 1 ? sure + ' gün' : '';
 
   // Güzergah
   var sehirler = '';
@@ -3956,11 +4022,11 @@ function turneCard(t) {
 
   // Statü — canlı renkler (kullanıcı talebi)
   var STATU = {
-    'taslak':        { bg:'#f1f5f9', fg:'#475569', dot:'#94a3b8', label:'Taslak',        border:'#cbd5e1' },
-    'onay-bekliyor': { bg:'#fef3c7', fg:'#92400e', dot:'#f59e0b', label:'Onay Bekliyor', border:'#f59e0b' },
-    'onaylandi':     { bg:'#d1fae5', fg:'#065f46', dot:'#10b981', label:'Onaylandı',     border:'#10b981' },
-    'tamamlandi':    { bg:'#dbeafe', fg:'#1e3a8a', dot:'#3b82f6', label:'Tamamlandı',    border:'#3b82f6' },
-    'iptal':         { bg:'#fee2e2', fg:'#991b1b', dot:'#ef4444', label:'İptal',         border:'#ef4444' }
+    'taslak':        { bg:'#f1f5f9', fg:'#475569', dot:'#94a3b8', label:'📝 Taslak',        border:'#cbd5e1' },
+    'onay-bekliyor': { bg:'#fef3c7', fg:'#92400e', dot:'#f59e0b', label:'⏳ Onay Bekliyor', border:'#f59e0b' },
+    'onaylandi':     { bg:'#d1fae5', fg:'#065f46', dot:'#10b981', label:'✅ Onaylandı',     border:'#10b981' },
+    'tamamlandi':    { bg:'#dbeafe', fg:'#1e3a8a', dot:'#3b82f6', label:'✔️ Tamamlandı',    border:'#3b82f6' },
+    'iptal':         { bg:'#fee2e2', fg:'#991b1b', dot:'#ef4444', label:'❌ İptal',         border:'#ef4444' }
   };
   var sk = (t.statu||'taslak').toLowerCase().replace(/\s/g,'-');
   var st = STATU[sk] || STATU.taslak;
@@ -4039,11 +4105,11 @@ function turneCard(t) {
 
   // Statü — canlı renkler
   var STATU = {
-    'taslak':        { bg:'#f1f5f9', fg:'#475569', dot:'#94a3b8', label:'Taslak',        border:'#cbd5e1' },
-    'onay-bekliyor': { bg:'#fef3c7', fg:'#92400e', dot:'#f59e0b', label:'Onay Bekliyor', border:'#f59e0b' },
-    'onaylandi':     { bg:'#d1fae5', fg:'#065f46', dot:'#10b981', label:'Onaylandı',     border:'#10b981' },
-    'tamamlandi':    { bg:'#dbeafe', fg:'#1e3a8a', dot:'#3b82f6', label:'Tamamlandı',    border:'#3b82f6' },
-    'iptal':         { bg:'#fee2e2', fg:'#991b1b', dot:'#ef4444', label:'İptal',         border:'#ef4444' }
+    'taslak':        { bg:'#f1f5f9', fg:'#475569', dot:'#94a3b8', label:'📝 Taslak',        border:'#cbd5e1' },
+    'onay-bekliyor': { bg:'#fef3c7', fg:'#92400e', dot:'#f59e0b', label:'⏳ Onay Bekliyor', border:'#f59e0b' },
+    'onaylandi':     { bg:'#d1fae5', fg:'#065f46', dot:'#10b981', label:'✅ Onaylandı',     border:'#10b981' },
+    'tamamlandi':    { bg:'#dbeafe', fg:'#1e3a8a', dot:'#3b82f6', label:'✔️ Tamamlandı',    border:'#3b82f6' },
+    'iptal':         { bg:'#fee2e2', fg:'#991b1b', dot:'#ef4444', label:'❌ İptal',         border:'#ef4444' }
   };
 
   return '<div class="turne-card" style="border-left:4px solid ' + st.dot + ';cursor:pointer" onclick="openCardDetail(' + t._rowIdx + ')">'
@@ -4101,21 +4167,21 @@ function turneCard(t) {
     +   notHtml
     + '</div>'
 
-    // ── ALT EYLEM BANDI
-    + '<div style="padding:7px 10px;border-top:1px solid var(--border);display:flex;align-items:center;gap:4px;background:var(--muted)">'
-    +   '<button class="btn btn-primary" style="height:28px;font-size:11px;padding:0 11px;border-radius:6px;display:inline-flex;align-items:center;gap:4px;font-weight:700;flex-shrink:0" onclick="event.stopPropagation();openKisiModal(' + t._rowIdx + ')">'
-    +     '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="23" y1="11" x2="17" y2="11"/><line x1="20" y1="8" x2="20" y2="14"/></svg>'
-    +     (turneKadroSay > 0 ? 'Kadro\u00a0(' + turneKadroSay + ')' : '+ Kat\u0131l\u0131mc\u0131')
+    // ── ALT EYLEM BANDI — büyük butonlar, sil onaylı
+    + '<div class="turne-card-footer" style="display:flex;align-items:center;gap:4px">'
+    +   '<button class="btn btn-primary" style="height:32px;font-size:12px;padding:0 12px;border-radius:7px;display:inline-flex;align-items:center;gap:4px;font-weight:700;flex-shrink:0" onclick="event.stopPropagation();openKisiModal(' + t._rowIdx + ')" title="Turneye katılacak kişileri yönet">'
+    +     '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="23" y1="11" x2="17" y2="11"/><line x1="20" y1="8" x2="20" y2="14"/></svg>'
+    +     (turneKadroSay > 0 ? '👥\u00a0' + turneKadroSay + ' kişi' : '+ Kadro')
     +   '</button>'
     +   '<div style="flex:1"></div>'
-    +   '<button class="btn btn-outline" style="height:28px;font-size:10px;padding:0 9px;border-radius:6px;display:inline-flex;align-items:center;gap:3px" onclick="event.stopPropagation();editTurne(' + t._rowIdx + ')">'
-    +     '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> D\u00fczenle'
+    +   '<button class="btn btn-outline" style="height:32px;font-size:12px;padding:0 11px;border-radius:7px;display:inline-flex;align-items:center;gap:4px" onclick="event.stopPropagation();editTurne(' + t._rowIdx + ')" title="Turne bilgilerini düzenle">'
+    +     '✏️ Düzenle'
     +   '</button>'
-    +   '<button class="btn btn-outline" style="height:28px;font-size:10px;padding:0 9px;border-radius:6px;display:inline-flex;align-items:center;gap:3px" onclick="event.stopPropagation();gorevlendirmePdf(' + t._rowIdx + ')">'
-    +     '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/></svg> PDF'
+    +   '<button class="btn btn-outline" style="height:32px;font-size:12px;padding:0 11px;border-radius:7px;display:inline-flex;align-items:center;gap:4px" onclick="event.stopPropagation();gorevlendirmePdf(' + t._rowIdx + ')" title="PDF: Görevlendirme yazısı + kadro listesi">'
+    +     '📄 PDF'
     +   '</button>'
-    +   '<button style="height:28px;width:28px;border-radius:6px;border:1px solid hsl(0,50%,85%);background:hsl(0,80%,97%);color:hsl(0,65%,45%);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0" onclick="event.stopPropagation();deleteTurne(' + t._rowIdx + ')" title="Sil">'
-    +     '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3,6 5,6 21,6"/><path d="M19,6l-1,14a2,2,0,0,1-2,2H8a2,2,0,0,1-2-2L5,6"/></svg>'
+    +   '<button style="height:32px;width:32px;border-radius:7px;border:1px solid hsl(0,50%,85%);background:hsl(0,80%,97%);color:hsl(0,65%,45%);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0" title="Turneyi sil (onay gerekir)" onclick="event.stopPropagation();deleteTurneOnay(' + t._rowIdx + ', \'' + (t.oyun||'Turne').replace(/'/g,"\\'") + '\')">'
+    +     '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3,6 5,6 21,6"/><path d="M19,6l-1,14a2,2,0,0,1-2,2H8a2,2,0,0,1-2-2L5,6"/></svg>'
     +   '</button>'
     + '</div>'
     + '</div>';
@@ -8654,9 +8720,22 @@ function _gosterKayitHatasi(mesaj) {
 // ============================================================
 // SİL
 // ============================================================
-// Turne sil - 5 saniyelik geri al ile
+// Turne sil - Önce onay modal, sonra 5 saniyelik geri al
 var _silUndoTimer = null;
 var _silUndoRowIdx = null;
+
+// Onay modal'ı ile sil — kart butonundan çağrılır
+function deleteTurneOnay(rowIdx, oyunAdi) {
+  onayGoster({
+    baslik: 'Turneyi sil?',
+    mesaj: '"' + (oyunAdi||'Bu turne') + '" kalıcı olarak silinecek. Devam etmek istiyor musunuz?',
+    ikon: '🗑️',
+    ikonBg: 'hsl(0,80%,96%)',
+    tamamRenk: 'hsl(0,75%,48%)',
+    tamamYazi: 'Evet, sil',
+    onOnay: function() { deleteTurne(rowIdx); }
+  });
+}
 
 async function deleteTurne(rowIdx) {
   // Eğer zaten bekleyen bir silme varsa, onu iptal et
@@ -10194,6 +10273,7 @@ async function init() {
   renderListe();
   renderCalendar();
   setLoading(false);
+  guncelleSonSenkron();
 
   // Son sekmeyi geri yükle
   var _sonSekme = localStorage.getItem('_sonSekme') || 'liste';
@@ -10227,6 +10307,7 @@ function _pollingYap() {
     .then(function() {
       populateFilters(); renderListe(); renderCalendar();
       _sonPollingZamani = Date.now();
+      guncelleSonSenkron();
       if (_syncEl) setTimeout(function(){ _syncEl.style.opacity = '0'; }, 1200);
     })
     .catch(function() {
