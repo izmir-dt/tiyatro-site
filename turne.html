@@ -11920,11 +11920,71 @@ async function pdfAnalizEt(arrayBuffer, dosyaAdi) {
   try {
     // Önce Gemini ile dene
     var turneData = await geminiPdfParse(arrayBuffer.slice(0));
-    // Gemini'den gelen veriyi normalize et
-    turneData.oyun = turneData.oyun || '';
+    // Normalize et
+    turneData.oyun = (turneData.oyun || '').trim();
     turneData.sehirler = Array.isArray(turneData.sehirler) ? turneData.sehirler : [];
     turneData.personel = Array.isArray(turneData.personel) ? turneData.personel : [];
     turneData.kisiSayisi = turneData.personel.length;
+
+    // ── Oyun sistemde var mı kontrol et ─────────────────────────
+    var sistemdekiOyunlar = typeof turneler !== 'undefined'
+      ? [...new Set(turneler.map(function(t){ return (t.oyun||'').trim().toUpperCase(); }).filter(Boolean))]
+      : [];
+    var oyunBulundu = sistemdekiOyunlar.some(function(o){
+      return o === turneData.oyun.toUpperCase();
+    });
+
+    if (!oyunBulundu && turneData.oyun) {
+      // Oyun sistemde yok — uyarı göster
+      pdfAdimGoster('dosya');
+      document.getElementById('pdf-dosya-baslik').textContent = '⚠️ Oyun Sistemde Bulunamadı';
+      document.getElementById('pdf-dosya-alt').textContent =
+        '"' + turneData.oyun + '" adlı oyun henüz sistemde kayıtlı değil. ' +
+        'Önce kadro sayfasından bu oyunu ekleyin, sonra tekrar deneyin.';
+      document.getElementById('pdf-dosya-oyun').textContent = turneData.oyun;
+      document.getElementById('pdf-dosya-tarih-sehir').textContent = '';
+      document.getElementById('pdf-dosya-detaylar').innerHTML =
+        '<div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:12px;font-size:12px;color:#92400e;grid-column:1/-1">' +
+        '📋 PDF\'den alınan bilgiler:<br>' +
+        turneData.sehirler.join(', ') + ' · ' +
+        (turneData.baslangicTarih||'') + ' – ' + (turneData.bitisTarih||'') +
+        '</div>';
+      document.getElementById('pdf-dosya-personel-bolumu').style.display = 'none';
+      var kb = document.getElementById('pdf-dosya-kaydet-btn');
+      if (kb) kb.style.display = 'none';
+      return;
+    }
+
+    // ── Aynı oyunun geçmiş turnelerinden öğren ──────────────────
+    // Eksik alanları geçmiş kayıtlardan tamamla
+    if (typeof turneler !== 'undefined' && turneData.oyun) {
+      var gecmisTurneler = turneler.filter(function(t){
+        return (t.oyun||'').trim().toUpperCase() === turneData.oyun.toUpperCase();
+      }).sort(function(a,b){
+        // En yeni turneyi önce al
+        return (b.baslangicTarih||b.tarih||'').localeCompare(a.baslangicTarih||a.tarih||'');
+      });
+
+      if (gecmisTurneler.length > 0) {
+        var ref = gecmisTurneler[0]; // En son turne referans
+        // Gemini'den gelmediyse geçmişten al
+        if (!turneData.gidisUlasim && ref.gidisUlasim) turneData.gidisUlasim = ref.gidisUlasim;
+        if (!turneData.donusUlasim && ref.donusUlasim) turneData.donusUlasim = ref.donusUlasim;
+        if (!turneData.otelAdi && ref.otelAdi) turneData.otelAdi = ref.otelAdi;
+        if (!turneData.kamyon && ref.kamyon) turneData.kamyon = ref.kamyon;
+        // Personel: Gemini bulamadıysa geçmiş turnedeki kadroyu öner
+        if (turneData.personel.length === 0 && ref.katilimcilar && ref.katilimcilar.length > 0) {
+          turneData.personel = ref.katilimcilar.map(function(k){
+            return { ad: k.kisi||'', unvan: k.gorev||'' };
+          });
+          turneData.kisiSayisi = turneData.personel.length;
+          turneData._personelGecmisTurneden = true;
+        }
+        turneData._gecmisTurneRef = ref.il || (ref.duraklar&&ref.duraklar[0]&&ref.duraklar[0].il) || '';
+        turneData._gecmisTurneSayisi = gecmisTurneler.length;
+      }
+    }
+
     _pdfTurneDosyasi = turneData;
     pdfTurneDosyasiOnizle(turneData, dosyaAdi);
   } catch(err) {
@@ -11965,7 +12025,14 @@ function pdfTurneDosyasiOnizle(data, dosyaAdi) {
     return d.getDate()+' '+aylar[d.getMonth()]+' '+d.getFullYear();
   }
   document.getElementById('pdf-dosya-baslik').textContent='📋 Turne Dosyası Algılandı';
-  document.getElementById('pdf-dosya-alt').textContent=dosyaAdi+' · Aşağıdaki bilgiler turne kaydına otomatik aktarılacak';
+  var altYazi = dosyaAdi + ' · Aşağıdaki bilgiler turne kaydına otomatik aktarılacak';
+  if (data._gecmisTurneSayisi) {
+    altYazi += ' · ' + data._gecmisTurneSayisi + ' geçmiş turne referans alındı';
+  }
+  if (data._personelGecmisTurneden) {
+    altYazi += ' · Personel önceki turneden önerildi';
+  }
+  document.getElementById('pdf-dosya-alt').textContent = altYazi;
   document.getElementById('pdf-dosya-oyun').textContent=data.oyun||'—';
   var sehirStr=data.sehirler.join(' + ')||'—';
   var tarihStr=data.baslangicTarih ? fmtTarih(data.baslangicTarih)+' – '+fmtTarih(data.bitisTarih) : '—';
