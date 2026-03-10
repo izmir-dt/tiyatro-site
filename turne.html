@@ -11640,58 +11640,36 @@ function pdfDosyaSecildi(inputEl, dosyaObj) {
 var _pdfTurneDosyasi = null;
 
 // PDF metnini temizle — kontrol karakterleri vs.
-function pdfDuzelt(str) {
-  return (str||'').replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
+// Her item str'sini temizle: çift-harf varsa tekilleştir
+function pdfItemTemizle(str) {
+  if (!str || str.length < 2) return str || '';
+  // Bitişik çift harf oranı yüksekse (TTuurrnne gibi) tekilleştir
+  var ciftler = (str.match(/([\s\S])\1/g) || []).length;
+  if (ciftler >= str.length / 4) {
+    return str.replace(/([\s\S])\1/g, '$1');
+  }
+  return str;
 }
 
-// PDF.js bazen dekoratif sayfalarda her karakteri ayrı item verir
-// Sonuç: "T T u u r r n n e e" → "Turne" yapılmalı
+// PDF.js item listesini okunabilir metne çevir
+// hasEOL=true olan item'lardan sonra newline ekle
 function pdfItemleriBirlestir(items) {
   if (!items || !items.length) return '';
-  // Her item'ın transform.x pozisyonuna bakarak kelime boşluklarını belirle
-  // Eğer item varsa ve çoğunlukla tek karakterse çift-harf modudur
-  var strler = items.map(function(it){ return it.str || ''; });
-  var tek_karakter_sayisi = strler.filter(function(s){ return s.length === 1; }).length;
-  
-  if (tek_karakter_sayisi > strler.length * 0.6) {
-    // Çift-harf modu: boşluksuz birleştir, bitişik çiftleri tekilleştir
-    var kompakt = strler.join('');
-    // Her karakter ikilisini teke indir (TTuurrnne → Turne)
-    var temiz = kompakt.replace(/([\s\S])\1/g, '$1');
-    // Kalan boşlukları normalize et
-    return temiz.replace(/\s+/g, ' ').trim();
-  }
-  
-  // Normal mod: pozisyon bazlı boşluk ekleme
-  var sonuc = '';
+  var parcalar = [];
   for (var i = 0; i < items.length; i++) {
     var it = items[i];
-    var s = it.str || '';
-    if (!s) continue;
-    if (i === 0) { sonuc = s; continue; }
-    // Önceki item'a göre boşluk gerekiyor mu?
-    var prev = items[i-1];
-    var prevEnd = (prev.transform ? prev.transform[4] : 0) + (prev.width || 0);
-    var curStart = it.transform ? it.transform[4] : 0;
-    var gap = curStart - prevEnd;
-    // Belirgin boşluk varsa veya satır yüksekliği farklıysa boşluk ekle
-    var prevY = prev.transform ? prev.transform[5] : 0;
-    var curY = it.transform ? it.transform[5] : 0;
-    if (Math.abs(curY - prevY) > 2 || gap > 3) {
-      sonuc += ' ' + s;
-    } else {
-      sonuc += s;
-    }
+    var s = pdfItemTemizle(it.str || '');
+    if (!s && !it.hasEOL) continue;
+    parcalar.push(s);
+    if (it.hasEOL) parcalar.push('\n');
   }
-  return sonuc.replace(/\s+/g, ' ').trim();
+  return parcalar.join(' ').replace(/ \n /g, '\n').replace(/\n +/g, '\n').replace(/ +/g, ' ').trim();
 }
 
 function pdfTurneDosyasimidir(sayfaMetinleri) {
   var tam = sayfaMetinleri.join(' ').toUpperCase();
-  // Çift-harf modunda da tanıma: TTUURRNNEE veya TURNE
-  var turneVar = /TTURRNNE[Sİ]|TURNES[İI]|TURNESİ/i.test(tam);
-  var personelVar = /G[ÖO]REVL[İI] PERSONEL|KONAKLAMA L[İI]STES[İI]|TURNE PROGRAM[I]/.test(tam);
-  return turneVar && personelVar;
+  return /TURNES[İI]/.test(tam) &&
+    /G[ÖO]REVL[İI] PERSONEL|KONAKLAMA L[İI]STES[İI]|TURNE PROGRAM/.test(tam);
 }
 
 async function pdfTurneDosyasiParse(arrayBuffer) {
@@ -11700,8 +11678,7 @@ async function pdfTurneDosyasiParse(arrayBuffer) {
   for (var i = 1; i <= pdfDoc.numPages; i++) {
     var pg = await pdfDoc.getPage(i);
     var tc = await pg.getTextContent();
-    var metin = pdfDuzelt(pdfItemleriBirlestir(tc.items));
-    sayfalar.push(metin);
+    sayfalar.push(pdfItemleriBirlestir(tc.items));
   }
 
   var r = {
@@ -11714,118 +11691,75 @@ async function pdfTurneDosyasiParse(arrayBuffer) {
   var tamMetin = sayfalar.join('\n');
   var tamUpper = tamMetin.toUpperCase();
 
-  // ── Oyun adı ────────────────────────────────────────────────
-  // Format: "MÜNASEBETSİZ NİĞDE-NEVŞEHİR TURNESİ"
-  // Büyük harfli kelimelerden oluşan oyun adı TURNESİ'nden önce gelir
+  // ── Oyun adı ──────────────────────────────────────────────
   var oyunM = tamUpper.match(/([A-ZÇĞİÖŞÜ][A-ZÇĞİÖŞÜ\s]{2,40}?)\s+(?:[A-ZÇĞİÖŞÜ\/\-]+\s+)*TURNES[İI]/);
   if (oyunM) {
-    var oyunPos = tamUpper.indexOf(oyunM[1]);
-    r.oyun = tamMetin.substring(oyunPos, oyunPos + oyunM[1].length).trim();
-    // Çift harfli varsa tekilleştir
-    if (/(.)\1/.test(r.oyun)) r.oyun = r.oyun.replace(/([\s\S])\1/g,'$1').trim();
+    var pos = tamUpper.indexOf(oyunM[1]);
+    r.oyun = tamMetin.substring(pos, pos + oyunM[1].length).trim();
   }
 
-  // ── Tarih aralığı ───────────────────────────────────────────
-  var ayMap2 = {
+  // ── Tarih ─────────────────────────────────────────────────
+  var ayMap = {
     'OCAK':'01','ŞUBAT':'02','MART':'03','NİSAN':'04','MAYIS':'05','HAZİRAN':'06',
     'TEMMUZ':'07','AĞUSTOS':'08','EYLÜL':'09','EKİM':'10','KASIM':'11','ARALIK':'12'
   };
   var tarihM = tamUpper.match(/\(?(\d{1,2})\s*[-–]\s*(\d{1,2})\s+(OCAK|ŞUBAT|MART|NİSAN|MAYIS|HAZİRAN|TEMMUZ|AĞUSTOS|EYLÜL|EKİM|KASIM|ARALIK)\s+(\d{4})\)?/);
   if (tarihM) {
-    var ay2 = ayMap2[tarihM[3]] || '01';
+    var ay2 = ayMap[tarihM[3]] || '01';
     r.baslangicTarih = tarihM[4] + '-' + ay2 + '-' + tarihM[1].padStart(2,'0');
     r.bitisTarih     = tarihM[4] + '-' + ay2 + '-' + tarihM[2].padStart(2,'0');
   }
 
-  // ── Şehirler ────────────────────────────────────────────────
-  var sehirListesi = [
-    'NİĞDE','NEVŞEHİR','ANKARA','BURSA','ORDU','GAZİANTEP','ADANA','ANTALYA',
-    'TRABZON','SAMSUN','KAYSERİ','ESKİŞEHİR','KOCAELİ','KONYA','MERSİN',
-    'DENİZLİ','MALATYA','DİYARBAKIR','ERZURUM','ÇORUM','AMASYA','SIVAS',
-    'KAHRAMANMARAŞ','HATAY','MUĞLA','AYDIN','MANİSA','BALIKESİR','ÇANAKKALE',
-    'EDİRNE','TEKİRDAĞ','KIRKLARELİ','SAKARYA','BOLU','DÜZCE','ZONGULDAK',
-    'KASTAMONU','SİNOP','TOKAT','GİRESUN','RİZE','ARTVİN','ARDAHAN','IĞDIR',
-    'AĞRI','MUŞ','BİTLİS','SİİRT','ŞIRNAK','MARDİN','ŞANLIURFA','ADIYAMAN',
-    'KILIS','OSMANİYE','KARABÜK','BARTIN','YALOVA','BİLECİK','KÜTAHYA',
-    'AFYONKARAHİSAR','UŞAK','ISPARTA','BURDUR','KARAMAN','AKSARAY','KIRŞEHİR',
-    'YOZGAT','ÇANKIRI','KIRIKKALERELİ','NEVŞEHİR','KIRIKKALE','ERZİNCAN',
-    'BİNGÖL','TUNCELİ','ELAZIĞ','GÜMÜŞHANE','BAYBURT'
-  ];
-  sehirListesi.forEach(function(s) {
-    // Başlıktaki "NİĞDE-NEVŞEHİR" ve "NİĞDE/NEVŞEHİR" formatlarını da yakala
-    if (tamUpper.indexOf(s) !== -1 && r.sehirler.indexOf(s) === -1) {
-      r.sehirler.push(s);
-    }
-  });
-  // Şehirleri başlıktaki sırayla filtrele (Karadeniz turne rotası gibi alakasız şehirleri ele)
-  // Sadece başlıkta geçen şehirleri al (ilk 2 sayfada)
+  // ── Şehirler — sadece başlık sayfasından al ────────────────
   var baslıkMetin = (sayfalar[0] + ' ' + (sayfalar[1]||'')).toUpperCase();
-  r.sehirler = r.sehirler.filter(function(s){ return baslıkMetin.indexOf(s) !== -1; });
+  ['NİĞDE','NEVŞEHİR','ANKARA','BURSA','ORDU','GAZİANTEP','ADANA','ANTALYA',
+   'TRABZON','SAMSUN','KAYSERİ','ESKİŞEHİR','KOCAELİ','KONYA','MERSİN',
+   'DENİZLİ','MALATYA','DİYARBAKIR','ERZURUM','ÇORUM','AMASYA','SIVAS',
+   'KAHRAMANMARAŞ','HATAY','MUĞLA','AYDIN','MANİSA','BALIKESİR','ÇANAKKALE',
+   'EDİRNE','TEKİRDAĞ','SAKARYA','BOLU','ZONGULDAK','KASTAMONU','SİNOP',
+   'TOKAT','GİRESUN','RİZE','ARTVİN','AĞRI','MUŞ','BİTLİS','MARDİN',
+   'ŞANLIURFA','ADIYAMAN','KILIS','OSMANİYE','KARABÜK','BARTIN','YALOVA',
+   'BİLECİK','KÜTAHYA','AFYONKARAHİSAR','UŞAK','ISPARTA','BURDUR','KARAMAN',
+   'AKSARAY','KIRŞEHİR','YOZGAT','ÇANKIRI','KIRIKKALE','ERZİNCAN','ELAZIĞ',
+   'GÜMÜŞHANE','BAYBURT','BİNGÖL','TUNCELİ'
+  ].forEach(function(s) {
+    if (baslıkMetin.indexOf(s) !== -1 && r.sehirler.indexOf(s) === -1) r.sehirler.push(s);
+  });
 
-  // ── Kamyon / Nakliye ─────────────────────────────────────────
-  var kamyonM = tamMetin.match(/[Kk]amyon\s*[-–]\s*([A-ZÇĞİÖŞÜa-zçğışöü][^-–\n\d]{2,60}?)(?:\s*[-–]\s*[^-–\n\d]{2,40}?)?\s*[-–]\s*0\s*\d/);
+  // ── Kamyon ────────────────────────────────────────────────
+  var kamyonM = tamMetin.match(/[Kk]amyon\s*[-–]\s*([A-ZÇĞİÖŞÜa-zçğışöü][^-–\n\d]{2,60}?)(?:\s*[-–])/);
   if (kamyonM) r.kamyon = kamyonM[1].trim();
 
-  // ── Uçuş bilgileri ───────────────────────────────────────────
-  // "İZMİR - İSTANBUL (SAW) 11.05 - 12.15 PEGASUS"
-  // Gidiş: İZMİR'den çıkan ilk satır
-  var gidisM = tamMetin.match(/[İI]ZM[İI]R\s*-\s*\S[^\n]*?(\d{1,2}[.:]\d{2})\s*-\s*\d{1,2}[.:]\d{2}\s+(PEGASUS|THY|ANADOLUJET|SUNEXPRESS|TK|PC)/i);
-  if (gidisM) {
-    r.gidisUlasim = 'ucak';
-    r.gidisSaat = gidisM[1].replace('.', ':');
-    r.gidisPlaka = gidisM[2].toUpperCase();
-  }
-  // Dönüş: İZMİR'e gelen son satır
-  var donusRex = /[A-ZÇĞİÖŞÜa-z\s()]+\s*-\s*[İI]ZM[İI]R\s+(\d{1,2}[.:]\d{2})\s*-\s*\d{1,2}[.:]\d{2}\s+(PEGASUS|THY|ANADOLUJET|SUNEXPRESS|TK|PC)/gi;
-  var dLast = null, dm;
-  while ((dm = donusRex.exec(tamMetin)) !== null) dLast = dm;
-  if (dLast) {
-    r.donusUlasim = 'ucak';
-    r.donusSaat = dLast[1].replace('.', ':');
-    r.donusPlaka = dLast[2].toUpperCase();
-  }
-  // Uçak bilgisi yoksa metinde "uçakla" geçiyor mu?
-  if (!r.gidisUlasim && /uça[kğ]la/i.test(tamMetin)) r.gidisUlasim = 'ucak';
+  // ── Uçuş ──────────────────────────────────────────────────
+  var gidisM = tamMetin.match(/[İI]ZM[İI]R\s*-\s*\S[^\n]*?(\d{1,2}[.:]\d{2})\s*-\s*\d{1,2}[.:]\d{2}\s+(PEGASUS|THY|ANADOLUJET|SUNEXPRESS)/i);
+  if (gidisM) { r.gidisUlasim='ucak'; r.gidisSaat=gidisM[1].replace('.',':'); r.gidisPlaka=gidisM[2].toUpperCase(); }
+  var donusRex = /[^\n]*-\s*[İI]ZM[İI]R[^\n]*?(\d{1,2}[.:]\d{2})\s*-\s*\d{1,2}[.:]\d{2}\s+(PEGASUS|THY|ANADOLUJET|SUNEXPRESS)/gi;
+  var dLast=null, dm;
+  while ((dm=donusRex.exec(tamMetin))!==null) dLast=dm;
+  if (dLast) { r.donusUlasim='ucak'; r.donusSaat=dLast[1].replace('.',':'); r.donusPlaka=dLast[2].toUpperCase(); }
+  if (!r.gidisUlasim && /uça[kğ]la/i.test(tamMetin)) r.gidisUlasim='ucak';
 
-  // ── Otel ─────────────────────────────────────────────────────
-  // "konaklama... Grand Niğde Hotel ve Crowne Plaza Cappadocia Otel'de"
-  var otelM = tamMetin.match(/konakla[^.]*?(?:olan\s+|,\s*)?([A-ZÇĞİÖŞÜ][a-zA-ZÇçĞğİışŞşÖöÜüĞğ\s]{3,60}?(?:Hotel|Otel))[^.]*?(?:\.|'[a-z])/i);
-  if (otelM) {
-    r.otelAdi = otelM[1].trim().replace(/\s+/g,' ');
-  }
-  // Yedek: doğrudan "XXX Hotel" veya "XXX Otel" ara
-  if (!r.otelAdi) {
-    var otelY = tamMetin.match(/\b([A-ZÇĞİÖŞÜ][a-zA-ZÇçĞğİışŞşÖöÜüĞğ\s]{2,50}(?:Hotel|Otel))\b/);
-    if (otelY) r.otelAdi = otelY[1].trim();
-  }
+  // ── Otel ──────────────────────────────────────────────────
+  var otelM = tamMetin.match(/konakla[^\n]*?([A-ZÇĞİÖŞÜ][a-zA-ZÇçĞğİışŞşÖöÜüĞğ\s]{3,60}?(?:Hotel|Otel))/i);
+  if (otelM) r.otelAdi = otelM[1].trim();
 
-  // ── Personel listesi ─────────────────────────────────────────
-  // GÖREVLİ PERSONEL LİSTESİ sayfasını bul (4. sayfa genelde)
-  // Format: "1 Özkan GEZGİN Sanatçı- Turne Başkanı 6.08.1974 32011869932"
-  // Ad: büyük harfle başlar, soyad tamamen büyük harf
+  // ── Personel ──────────────────────────────────────────────
+  // GÖREVLİ PERSONEL LİSTESİ sayfasını bul ve parse et
   var bulunanPersonel = [];
-
   for (var si = 0; si < sayfalar.length; si++) {
     var ps = sayfalar[si];
-    var psU = ps.toUpperCase();
-    var isPersonelSayfa = /G[ÖO]REVL[İI] PERSONEL|KONAKLAMA L[İI]STES[İI]/.test(psU);
-    if (!isPersonelSayfa) continue;
+    if (!/G[ÖO]REVL[İI] PERSONEL|KONAKLAMA L[İI]STES[İI]/i.test(ps)) continue;
 
     var liste2 = [];
 
-    // Format A — GÖREVLİ PERSONEL LİSTESİ:
-    // "1 Özkan GEZGİN Sanatçı- Turne Başkanı 6.08.1974 ..."
-    // "3 Mehmet Asım Tuncay AYNUR Sanatçı 25.12.1968 ..."
-    // Ad kısmı: 1-4 kelime, son kelime büyük harfli (soyad)
+    // Format A: "1 Özkan GEZGİN Sanatçı- Turne Başkanı 6.08.1974 ..."
     var rexA = /\b(\d{1,2})\s+((?:[A-ZÇĞİÖŞÜ][a-zA-ZÇçĞğİışŞşÖöÜüĞğ\.]+\s+){1,4}[A-ZÇĞİÖŞÜ]{2,})\s+((?:Sanatçı|Sahne|Mutemet|Kondüvit|Aksesuar|Perukacı|Figüran)[^\d\n]{0,60}?)(?=\s+\d{1,2}[.\/]\d{2})/g;
     var pmA;
     while ((pmA = rexA.exec(ps)) !== null) {
-      var unvanA = pmA[3].trim().replace(/[-–\s]+$/, '').trim();
-      liste2.push({ ad: pmA[2].trim(), unvan: unvanA });
+      liste2.push({ ad: pmA[2].trim(), unvan: pmA[3].trim().replace(/[-–\s]+$/,'').trim() });
     }
 
-    // Format B — KONAKLAMA LİSTESİ:
-    // "Özkan GEZGİN(Sanatçı-Turne Başkanı)"
+    // Format B: "Özkan GEZGİN(Sanatçı-Turne Başkanı)"
     if (liste2.length === 0) {
       var rexB = /([A-ZÇĞİÖŞÜ][a-zA-ZÇçĞğİışŞşÖöÜüĞğ\.]+(?:\s+[A-ZÇĞİÖŞÜ][a-zA-ZÇçĞğİışŞşÖöÜüĞğ\.]+){1,3})\s*\(\s*((?:Sanatçı|Sahne|Mutemet|Kondüvit|Aksesuar|Perukacı|Figüran)[^)]{0,60}?)\s*\)/g;
       var pmB;
@@ -11853,7 +11787,7 @@ async function pdfAnalizEt(arrayBuffer, dosyaAdi) {
     for (var i=1; i<=pdfDoc2.numPages; i++) {
       var pg2 = await pdfDoc2.getPage(i);
       var tc2 = await pg2.getTextContent();
-      sayfaMetinleri.push(pdfDuzelt(pdfItemleriBirlestir(tc2.items)));
+      sayfaMetinleri.push(pdfItemleriBirlestir(tc2.items));
     }
     if (pdfTurneDosyasimidir(sayfaMetinleri)) {
       var turneData = await pdfTurneDosyasiParse(arrayBuffer);
@@ -11976,34 +11910,48 @@ async function pdfDosyaKaydet() {
     var kadroEslesti=0;
     var pcb=document.getElementById('pdf-personel-ekle-cb');
     if(pcb&&pcb.checked&&data.personel&&data.personel.length>0) {
-      // Ana kadro eslestirmesi: PDF kisisini tumPersonel ile karsilastir
-      var disKatilimcilar = [];
-      var turneKatilimcilar = [];
-      for(var pi=0;pi<data.personel.length;pi++){
-        var p=data.personel[pi];
-        var pAdNorm=(p.ad||'').trim().toLowerCase();
-        var eslesme=null;
-        if(typeof tumPersonel!=='undefined'){
-          // Once oyun + isim ile eslestir
-          eslesme=tumPersonel.find(function(tp){
-            return tp.kisi&&tp.kisi.trim().toLowerCase()===pAdNorm
-              &&(!data.oyun||!tp.oyun||tp.oyun.trim().toLowerCase()===(data.oyun||'').trim().toLowerCase());
-          });
-          // Oyun eslesmezse sadece isimle ara
-          if(!eslesme){
-            eslesme=tumPersonel.find(function(tp){
-              return tp.kisi&&tp.kisi.trim().toLowerCase()===pAdNorm;
+      var disKatilimcilar=[];
+      var turneKatilimcilar=[];
+
+      // PDF'den gelen adı tumPersonel ile eşleştir (büyük/küçük harf bağımsız)
+      function adEslestir(pdfAd) {
+        if(typeof tumPersonel==='undefined') return null;
+        var norm=pdfAd.trim().toLowerCase();
+        // 1) Oyun + isim ile tam eşleşme
+        var e=tumPersonel.find(function(tp){
+          return tp.kisi&&tp.kisi.trim().toLowerCase()===norm
+            &&(!data.oyun||!tp.oyun||tp.oyun.trim().toLowerCase()===(data.oyun||'').trim().toLowerCase());
+        });
+        // 2) Sadece isim ile eşleşme
+        if(!e) e=tumPersonel.find(function(tp){return tp.kisi&&tp.kisi.trim().toLowerCase()===norm;});
+        // 3) Soyad eşleşmesi: PDF'deki son büyük harf kelime soyadıdır
+        if(!e){
+          var parcalar=norm.split(/\s+/);
+          var soyad=parcalar[parcalar.length-1];
+          if(soyad.length>2){
+            e=tumPersonel.find(function(tp){
+              if(!tp.kisi) return false;
+              var tpParcalar=tp.kisi.trim().toLowerCase().split(/\s+/);
+              return tpParcalar[tpParcalar.length-1]===soyad;
             });
           }
         }
+        return e||null;
+      }
+
+      for(var pi=0;pi<data.personel.length;pi++){
+        var p=data.personel[pi];
+        var eslesme=adEslestir(p.ad||'');
         if(eslesme){
+          // tumPersonel'deki doğru ad formatını kullan
           turneKatilimcilar.push({kisi:eslesme.kisi,gorev:eslesme.gorev||p.unvan||eslesme.kategori,kategori:eslesme.kategori});
           kadroEslesti++;
         } else {
           disKatilimcilar.push(p);
         }
       }
-      // Eslesen kisileri turne katilimcisi olarak kaydet
+
+      // Eşleşenleri turne katılımcısı olarak kaydet
       if(turneKatilimcilar.length>0){
         var sonTurne=turneler[turneler.length-1];
         if(sonTurne){
@@ -12019,11 +11967,13 @@ async function pdfDosyaKaydet() {
           }catch(e){console.warn('Katilimci kaydi hatasi:',e);}
         }
       }
-      // Eslesmeyenleri dis katilimci olarak ekle (zaten varsa atlat)
+
+      // Eşleşmeyenleri dış katılımcı olarak ekle (zaten varsa atla)
       for(var di=0;di<disKatilimcilar.length;di++){
         var dp=disKatilimcilar[di];
+        var dpNorm=(dp.ad||'').trim().toLowerCase();
         var zatenVar=typeof tumDisPersonel!=='undefined'&&
-          tumDisPersonel.some(function(x){return x.kisi&&x.kisi.trim().toLowerCase()===(dp.ad||'').trim().toLowerCase();});
+          tumDisPersonel.some(function(x){return x.kisi&&x.kisi.trim().toLowerCase()===dpNorm;});
         if(zatenVar){personelEklendi++;continue;}
         try{
           await apiFetch('/'+encodeURIComponent(DIS_PERSONEL_SHEET)+'/row',{
@@ -12039,8 +11989,8 @@ async function pdfDosyaKaydet() {
       if(typeof renderListe==='function') setTimeout(renderListe,300);
     }
     var mesaj=basarili+' turne taslak eklendi'
-      +(kadroEslesti?' · '+kadroEslesti+' kisi kadroya eklendi':'')
-      +(personelEklendi?' · '+personelEklendi+' dis katilimci eklendi':'')+'!';
+      +(kadroEslesti?' · '+kadroEslesti+' kişi kadroya eklendi':'')
+      +(personelEklendi?' · '+personelEklendi+' dış katılımcı eklendi':'')+'!';
     document.getElementById('pdf-done-msg').textContent=mesaj;
     pdfAdimGoster('done'); if(db)db.style.display='none';
     if(typeof showToast==='function')showToast('success','✅ '+mesaj);
