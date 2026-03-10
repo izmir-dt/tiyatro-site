@@ -535,6 +535,7 @@
     .modal-section .form-group:not(:last-child) { margin-bottom: 8px; }
     /* .modal-section.active artık yukarıda tanımlı */
     .modal-footer { padding: 9px 16px; border-top: 1px solid var(--border); display: flex; gap: 8px; justify-content: space-between; align-items: center; flex-shrink: 0; background: var(--background); }
+    #modal-tabs-row { flex-shrink: 0; display: flex; flex-direction: column; }
     .modal-dots { display: flex; gap: 5px; }
     .modal-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--border); }
     .modal-dot.active { background: var(--primary); }
@@ -1529,7 +1530,7 @@ height:20px !important;
     </div>
     <div id="modal-tabs-row">
       <!-- SİHİRBAZ ADIM ÇUBUĞU -->
-      <div style="padding:12px 16px 0;background:var(--background);border-bottom:1px solid var(--border)">
+      <div style="padding:10px 16px 0;background:var(--background);border-bottom:1px solid var(--border);flex-shrink:0">
         <!-- Adım daireleri -->
         <div style="display:flex;align-items:center;margin-bottom:8px">
 
@@ -1650,10 +1651,17 @@ height:20px !important;
           <div class="form-error" id="err-il"></div>
         </div>
 
-        <!-- Notlar — tam genişlik -->
-        <div class="form-group" id="notlar-row">
-          <label class="form-label">Notlar</label>
-          <input class="form-input" type="text" id="m-not" placeholder="Opsiyonel not..." style="width:100%">
+        <!-- Prömiyer Tarihi + Notlar -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;align-items:start" id="notlar-row">
+          <div class="form-group" style="margin:0">
+            <label class="form-label">🎭 Prömiyer Tarihi</label>
+            <input class="form-input" type="date" id="m-premiyer" placeholder="Prömiyer tarihi...">
+            <div style="font-size:9px;color:var(--muted-foreground);margin-top:3px">İlk gösteri tarihi (opsiyonel)</div>
+          </div>
+          <div class="form-group" style="margin:0">
+            <label class="form-label">Notlar</label>
+            <input class="form-input" type="text" id="m-not" placeholder="Opsiyonel not..." style="width:100%">
+          </div>
           <div style="display:none"><input id="m-il" type="hidden"><input id="m-mekan" type="hidden"><input id="m-sayi" type="hidden" value="1"><input id="m-grup" type="hidden"></div>
         </div>
 
@@ -6930,7 +6938,7 @@ function renderHarita() {
       + '</svg>';
 
     var icon = L.divIcon({
-      html: svgHtml + '<div style="text-align:center;font-size:' + (sayi > 0 ? 9 : 8) + 'px;font-weight:' + (sayi > 0 ? 700 : 500) + ';color:' + (sayi > 0 ? 'hsl(350,45%,15%)' : '#666') + ';white-space:nowrap;font-family:Poppins,Arial,sans-serif;margin-top:-1px;text-shadow:0 0 3px #fff,0 0 3px #fff">' + il + '</div>',
+      html: svgHtml + '<div style="text-align:center;font-size:' + (sayi > 0 ? 9 : 8) + 'px;font-weight:' + (sayi > 0 ? 700 : 500) + ';color:' + (sayi > 0 ? 'hsl(350,45%,15%)' : '#666') + ';white-space:nowrap;font-family:Poppins,Arial,sans-serif;margin-top:-1px;text-shadow:0 0 3px #fff,0 0 3px #fff;max-width:80px;overflow:hidden;text-overflow:ellipsis">' + il + '</div>',
       className: '',
       iconSize: [(r*2+6), (r*2+20)],
       iconAnchor: [(r+3), (r+3)],
@@ -7737,6 +7745,23 @@ function iCalIndir() {
   a.download = 'idt-turneler.ics';
   a.click();
 }
+
+// Chart.js için yardımcı: varsa eski chart'ı destroy et, yenisini oluştur
+function _createChart(canvasId, config) {
+  var canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  // Varsa önceki chart instance'ı temizle
+  var existing = Chart.getChart ? Chart.getChart(canvas) : null;
+  if (!existing) {
+    // Eski API için
+    try { if (canvas._chartInstance) { canvas._chartInstance.destroy(); } } catch(e){}
+  }
+  if (existing) { try { existing.destroy(); } catch(e){} }
+  var chart = new Chart(canvas, config);
+  canvas._chartInstance = chart;
+  return chart;
+}
+
 function renderIstatistikGrafikleri(kaynakTurneler, ayKeys, ayLabels, ayData) {
   if (typeof Chart === 'undefined') return;
   var PALETTE = ['#b5730a','#7c3a0e','#0f766e','#1d4ed8','#7e22ce','#166534','#9f1239','#0369a1'];
@@ -7790,6 +7815,22 @@ function renderIstatistikGrafikleri(kaynakTurneler, ayKeys, ayLabels, ayData) {
       }
     });
   }
+
+  // Statü dağılımı bar chart
+  var statuLabels = ['Taslak','Onay Bkl.','Onaylandı','Tamamlandı','İptal'];
+  var statuVals = ['taslak','onay-bekliyor','onaylandi','tamamlandi','iptal'].map(function(v){ return kaynakTurneler.filter(function(t){return t.statu===v;}).length; });
+  var statuColors = ['#94a3b8','#f59e0b','#10b981','#3b82f6','#ef4444'];
+  _createChart('chart-statu-bar',{
+    type:'bar',
+    data:{labels:statuLabels,datasets:[{label:'Turne',data:statuVals,backgroundColor:statuColors,borderRadius:6,borderSkipped:false}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:function(ctx){return ' '+ctx.raw+' turne';}}}},
+      scales:{
+        x:{grid:{display:false},ticks:{font:{family:'Poppins',size:9}}},
+        y:{beginAtZero:true,ticks:{precision:0,font:{family:'Poppins',size:9}},grid:{color:'rgba(0,0,0,.05)'}}
+      }
+    }
+  });
 }
 
 // ════════════════════════════════════════════════════════════
@@ -7940,16 +7981,21 @@ function renderIstatistik(filtreStatu) {
     + (onayBekleyen.length>0 ? '<div style="margin-top:8px;font-size:10px;opacity:.75">hemen işleme al →</div>' : '')
     + '</div>';
 
-  // Kadro eksik
-  html += '<div onclick="(function(){var f=document.getElementById(\'filter-zaman\');if(f){f.value=\'gelecek\';zamanFiltre=\'gelecek\';}switchTab(\'liste\');renderListe();})()" '
-    + 'style="background:linear-gradient(135deg,#dc2626,#ef4444);border-radius:14px;padding:18px 16px;color:#fff;cursor:pointer;box-shadow:0 4px 14px rgba(220,38,38,.25);transition:transform .15s,box-shadow .15s" '
-    + 'onmouseenter="this.style.transform=\'translateY(-3px)\';this.style.boxShadow=\'0 8px 20px rgba(220,38,38,.35)\'" onmouseleave="this.style.transform=\'\';this.style.boxShadow=\'0 4px 14px rgba(220,38,38,.25)\'">'
-    + '<div style="font-size:11px;font-weight:700;opacity:.85;margin-bottom:6px;letter-spacing:.3px">👥 KADRO EKSİK</div>'
-    + '<div style="font-size:44px;font-weight:900;line-height:1;letter-spacing:-2px">'+kadroEksik.length+'</div>'
-    + (kadroEksik.length>0
-        ? kadroEksik.slice(0,2).map(function(t){ return '<div style="font-size:10px;opacity:.85;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">! '+(t.oyun||t.il||'Turne')+'</div>'; }).join('')
-        : '<div style="font-size:10px;opacity:.7;margin-top:6px">Tüm kadrolar tam ✓</div>')
-    + (kadroEksik.length>0 ? '<div style="margin-top:8px;font-size:10px;opacity:.75">kadro ata →</div>' : '')
+  // Bu ay tamamlanan
+  var buAyStr = bugun.slice(0,7);
+  var buAyTamamlanan = tumTurneler.filter(function(t){
+    var b = t.bitisTarih || t.baslangicTarih || t.tarih || '';
+    return b.slice(0,7) === buAyStr && t.statu === 'tamamlandi';
+  });
+  html += '<div onclick="renderIstatistik(\'tamamlandi\')" '
+    + 'style="background:linear-gradient(135deg,#0369a1,#0ea5e9);border-radius:14px;padding:18px 16px;color:#fff;cursor:pointer;box-shadow:0 4px 14px rgba(3,105,161,.25);transition:transform .15s,box-shadow .15s" '
+    + 'onmouseenter="this.style.transform=\'translateY(-3px)\';this.style.boxShadow=\'0 8px 20px rgba(3,105,161,.35)\'" onmouseleave="this.style.transform=\'\';this.style.boxShadow=\'0 4px 14px rgba(3,105,161,.25)\'">'
+    + '<div style="font-size:11px;font-weight:700;opacity:.85;margin-bottom:6px;letter-spacing:.3px">✅ BU AY TAMAMLANAN</div>'
+    + '<div style="font-size:44px;font-weight:900;line-height:1;letter-spacing:-2px">'+buAyTamamlanan.length+'</div>'
+    + (buAyTamamlanan.length>0
+        ? buAyTamamlanan.slice(0,2).map(function(t){ return '<div style="font-size:10px;opacity:.85;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">✓ '+(t.oyun||t.il||'Turne')+'</div>'; }).join('')
+        : '<div style="font-size:10px;opacity:.7;margin-top:6px">Bu ay henüz tamamlanan yok</div>')
+    + '<div style="margin-top:8px;font-size:10px;opacity:.75">tüm tamamlananlar →</div>'
     + '</div>';
 
   // Yaklaşan 7 gün
@@ -8000,7 +8046,7 @@ function renderIstatistik(filtreStatu) {
   html += '<div style="margin-bottom:6px;font-size:10px;font-weight:800;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.8px">🔍 Analizler</div>';
   html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:20px">';
 
-  // SOL: Aylık trend (Chart.js) + özet sayılar
+  // SOL: Aylık trend sayılar (chart altta)
   html += '<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:10px">'
     + '<div style="font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:space-between">'
     + '<span>📈 Aylık Trend</span>'
@@ -8013,17 +8059,30 @@ function renderIstatistik(filtreStatu) {
     + '<div style="width:1px;height:30px;background:var(--border)"></div>'
     + '<div style="text-align:center"><div style="font-size:22px;font-weight:800;color:var(--foreground)">'+toplamGun+'</div><div style="font-size:9px;color:var(--muted-foreground);font-weight:600">TOPLAM GÜN</div></div>'
     + '</div>'
-    + '<div class="chart-canvas-wrap" style="height:140px"><canvas id="chart-aylik-bar"></canvas></div>'
     + '</div>';
 
-  // ORTA: Oyun dağılımı halka
-  html += '<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:10px">'
-    + '<div style="font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:space-between">'
+  // ORTA: Oyun dağılımı - metin listesi
+  html += '<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden">'
+    + '<div style="padding:10px 14px;border-bottom:1px solid var(--border);font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:space-between">'
     + '<span>🎭 Oyun Dağılımı</span>'
     + '<span style="font-size:10px;color:var(--muted-foreground)">'+oyunSirali.length+' oyun</span>'
-    + '</div>'
-    + '<div class="chart-canvas-wrap" style="height:180px"><canvas id="chart-oyun-pasta"></canvas></div>'
     + '</div>';
+  if (oyunSirali.length === 0) {
+    html += '<div style="padding:24px;text-align:center;color:var(--muted-foreground);font-size:11px">Henüz veri yok</div>';
+  } else {
+    oyunSirali.slice(0,5).forEach(function(entry, i) {
+      var oyun=entry[0], sayi=entry[1], maxO=oyunSirali[0][1];
+      html += '<div style="display:flex;align-items:center;gap:8px;padding:7px 14px;border-bottom:1px solid var(--border)">'
+        + '<span style="font-size:10px;font-weight:800;color:var(--muted-foreground);width:16px;flex-shrink:0">'+(i+1)+'</span>'
+        + '<span style="font-size:11px;font-weight:700;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+oyun+'">'+oyun+'</span>'
+        + '<div style="width:60px;height:5px;background:var(--muted);border-radius:3px;overflow:hidden;flex-shrink:0">'
+        + '<div style="height:100%;background:var(--secondary);border-radius:3px;width:'+Math.round(sayi/maxO*100)+'%"></div>'
+        + '</div>'
+        + '<span style="font-size:11px;font-weight:800;color:var(--secondary);width:22px;text-align:right;flex-shrink:0">'+sayi+'</span>'
+        + '</div>';
+    });
+  }
+  html += '</div>';
 
   // SAĞ: En çok gidilen iller
   html += '<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden">'
@@ -8183,10 +8242,7 @@ function renderIstatistik(filtreStatu) {
     + '</div>';
 
   el.innerHTML = html;
-
-  el.innerHTML = html;
   setTimeout(function(){ renderIstatistikGrafikleri(kaynakTurneler, ayKeys, ayLabels, ayData); }, 80);
-  setTimeout(function(){ renderIstatistikGrafikleri(kaynakTurneler); }, 60);
 }
 
 
@@ -8267,7 +8323,7 @@ function openModal(rowIdx) {
   if (rowIdx === undefined) {
     if (!_taslakModu) document.getElementById('modal-title').textContent = 'Yeni Turne Ekle';
     document.getElementById('edit-rowidx').value = '';
-    ['m-oyun','m-tarih','m-bitis','m-not','m-gidis-ulasim','m-gidis-saat','m-gidis-plaka','m-gidis-surucu','m-gidis-kisi-sayisi','m-donus-ulasim','m-donus-saat','m-donus-plaka','m-donus-surucu','m-donus-kisi-sayisi','m-sehir-arac-tur','m-sehir-arac-detay','m-sehir-kisi-sayisi','m-sehir-surucu','m-sehir-tel','m-aktarma','m-otel-adi','m-otel-adr','m-otel-tel','m-kamyon','m-kapasite','m-lojistik-not','m-grup','m-arac-tur','m-yukleme-saat','m-yukleme-yer','m-bosaltma-saat','m-bosaltma-yer'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    ['m-oyun','m-tarih','m-bitis','m-not','m-premiyer','m-gidis-ulasim','m-gidis-saat','m-gidis-plaka','m-gidis-surucu','m-gidis-kisi-sayisi','m-donus-ulasim','m-donus-saat','m-donus-plaka','m-donus-surucu','m-donus-kisi-sayisi','m-sehir-arac-tur','m-sehir-arac-detay','m-sehir-kisi-sayisi','m-sehir-surucu','m-sehir-tel','m-aktarma','m-otel-adi','m-otel-adr','m-otel-tel','m-kamyon','m-kapasite','m-lojistik-not','m-grup','m-arac-tur','m-yukleme-saat','m-yukleme-yer','m-bosaltma-saat','m-bosaltma-yer'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
     var liftliEl = document.getElementById('m-arac-liftli'); if (liftliEl) liftliEl.checked = false;
     ucusBacaklar = { gidis: [], donus: [] };
     ['gidis-ucak-bacaklar','gidis-kara-row','donus-ucak-bacaklar','donus-kara-row','gidis-bacak-ekle-btn','donus-bacak-ekle-btn','gidis-ucak-trigger','donus-ucak-trigger'].forEach(id => { var el=document.getElementById(id); if(el) el.style.display='none'; });
@@ -8371,7 +8427,7 @@ function editTurne(rowIdx) {
   document.getElementById('m-statu').value = _sv;
   mStatuDdSec(_sv);
   document.getElementById('m-not').value   = t.not   || '';
-  document.getElementById('m-grup').value  = t.grup  || '';
+  var _pmEl = document.getElementById('m-premiyer'); if (_pmEl) _pmEl.value = t.promiyerTarih || '';
   // Ulaşım
   var gU = document.getElementById('m-gidis-ulasim');
   if (gU) gU.value = t.gidisUlasim || '';
@@ -8455,6 +8511,7 @@ async function saveTurne() {
   var statu       = document.getElementById('m-statu').value || 'taslak';
   var not_        = document.getElementById('m-not').value.trim();
   var grup        = document.getElementById('m-grup').value.trim();
+  var promiyerTarih = (document.getElementById('m-premiyer')||{value:''}).value.trim();
   var gidisUlasim = (document.getElementById('m-gidis-ulasim')||{value:''}).value;
   var gidisSaat   = (document.getElementById('m-gidis-saat')||{value:''}).value;
   // Uçak bacaklarını JSON olarak kaydet
@@ -8626,7 +8683,7 @@ async function saveTurne() {
   // Yerel veriyi hemen güncelle (optimistik)
   var yeniKayit = {
     _rowIdx: editIdx !== '' ? parseInt(editIdx) : (turneler.length > 0 ? Math.max(...turneler.map(x=>x._rowIdx)) + 1 : 0),
-    oyun, il, mekan, sayi, baslangicTarih: basTarih, bitisTarih, not: not_, statu, grup,
+    oyun, il, mekan, sayi, baslangicTarih: basTarih, bitisTarih, not: not_, statu, grup, promiyerTarih,
     duraklar: JSON.parse(JSON.stringify(gecerliDuraklar)),
     otelAdi, otelAdres, otelTelefon,
     gidisUlasim, gidisSaat, gidisInis, gidisUcusNo, gidisArac,
