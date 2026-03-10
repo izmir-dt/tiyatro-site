@@ -11853,35 +11853,38 @@ async function geminiPdfParse(arrayBuffer) {
   for (var i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
   var base64 = btoa(binary);
 
-  var prompt = `Bu bir İzmir Devlet Tiyatrosu turne dosyasıdır. PDF'den aşağıdaki bilgileri çıkar ve SADECE JSON formatında döndür, başka hiçbir şey yazma:
+  var prompt = `Bu bir İzmir Devlet Tiyatrosu turne dosyasıdır. PDF\'den bilgileri çıkar, SADECE JSON döndür, başka hiçbir şey yazma, markdown kullanma.
 
 {
-  "oyun": "oyun adı (örn: MÜNASEBETSİZ)",
-  "sehirler": ["şehir1", "şehir2"],
-  "baslangicTarih": "YYYY-MM-DD",
-  "bitisTarih": "YYYY-MM-DD",
-  "gidisUlasim": "ucak veya otobus veya tren veya bos",
-  "gidisSaat": "HH:MM",
-  "gidisPlaka": "havayolu kodu (PEGASUS/THY/vb) veya bos",
-  "donusUlasim": "ucak veya otobus veya tren veya bos",
-  "donusSaat": "HH:MM",
-  "donusPlaka": "havayolu kodu veya bos",
-  "otelAdi": "otel adı veya bos",
-  "kamyon": "nakliyat firması adı veya bos",
+  "oyun": "BÜYÜK HARFLE oyun adı, örn: MÜNASEBETSİZ",
+  "sehirler": ["Niğde", "Nevşehir"],
+  "baslangicTarih": "2026-03-09",
+  "bitisTarih": "2026-03-13",
+  "gidisUlasim": "ucak",
+  "gidisSaat": "11:05",
+  "gidisPlaka": "PEGASUS",
+  "donusUlasim": "ucak",
+  "donusSaat": "12:00",
+  "donusPlaka": "THY",
+  "otelAdi": "Grand Niğde Hotel",
+  "kamyon": "Uyanık Nakiliyat",
   "personel": [
-    {"ad": "Ad Soyad (sitemizdeki gibi - ad normal büyük/küçük, soyad BÜYÜK HARF)", "unvan": "görev unvanı"}
+    {"ad": "Özkan GEZGİN", "unvan": "Sanatçı- Turne Başkanı"},
+    {"ad": "Müjde BİLİR", "unvan": "Sahne Amiri-Turne İdarecisi"}
   ]
 }
 
-ÖNEMLİ KURALLAR:
-- sehirler: SADECE turnede gidilen şehirler (NİĞDE, NEVŞEHİR gibi) — transit uçuş noktaları (İSTANBUL, KAYSERİ gibi) EKLEME
-- personel: GÖREVLİ PERSONEL LİSTESİ sayfasındaki kişiler — ad formatı "Özkan GEZGİN" şeklinde (ad küçük/büyük karışık, soyad tamamen büyük)
-- tarih formatı: 2026-03-09 gibi
-- boş değerler için "" kullan, null kullanma
-- JSON dışında hiçbir şey yazma, markdown kullanma`;
+KURALLAR:
+- sehirler: Türkçe başharf formatı (Niğde, Nevşehir) — SADECE turnede gidilen şehirler, İstanbul/Kayseri gibi transit noktaları EKLEME
+- oyun: tamamen büyük harf
+- personel: GÖREVLİ PERSONEL LİSTESİ sayfasından al — "Ad SOYAD" formatı (ad ilk harf büyük, soyad tamamen büyük)
+- tarih: YYYY-MM-DD formatı
+- gidisUlasim/donusUlasim: "ucak", "otobus" veya "tren"
+- boş alanlar için "" kullan
+- JSON dışında HİÇBİR ŞEY yazma`;
 
   var response = await fetch(
-    'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' + GEMINI_API_KEY,
+    'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + GEMINI_API_KEY,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -12026,23 +12029,23 @@ async function pdfDosyaKaydet() {
     sv('m-bitis',data.bitisTarih);
     // Durakları doldur
     if(typeof duraklar!=='undefined' && data.sehirler && data.sehirler.length>0) {
-      // İlk duraği ayarla
-      if(!duraklar[0]) duraklar[0]={};
-      duraklar[0].il = data.sehirler[0];
-      if(typeof renderDuraklar==='function') renderDuraklar();
-      await new Promise(function(r){setTimeout(r,100);});
-      var ilEl0=document.querySelector('[id^="durak-il-"]');
-      if(ilEl0) ilEl0.value=data.sehirler[0];
-      // Ek duraklar
-      for(var di=1;di<data.sehirler.length;di++){
-        if(typeof durakEkle==='function') durakEkle();
-        await new Promise(function(r){setTimeout(r,80);});
-        var tumIlInputlari=document.querySelectorAll('[id^="durak-il-"]');
-        if(tumIlInputlari[di]) tumIlInputlari[di].value=data.sehirler[di];
-        if(typeof duraklar!=='undefined'&&duraklar[di]){
-          duraklar[di].il=data.sehirler[di];
-        }
+    // İlk duraği ayarla
+    if(!duraklar[0]) duraklar[0]={};
+    duraklar[0].il = data.sehirler[0];
+    if(typeof renderDuraklar==='function') renderDuraklar();
+    await new Promise(function(r){setTimeout(r,100);});
+    var ilEl0=document.querySelector('[id^="durak-il-"]');
+    if(ilEl0) ilEl0.value=data.sehirler[0];
+    // Ek duraklar
+    for(var di=1;di<data.sehirler.length;di++){
+      if(typeof durakEkle==='function') durakEkle();
+      await new Promise(function(r){setTimeout(r,80);});
+      var tumIlInputlari=document.querySelectorAll('[id^="durak-il-"]');
+      if(tumIlInputlari[di]) tumIlInputlari[di].value=data.sehirler[di];
+      if(typeof duraklar!=='undefined'&&duraklar[di]){
+        duraklar[di].il=data.sehirler[di];
       }
+    }
     }
     if(typeof mStatuDdSec==='function') mStatuDdSec('taslak');
     if(data.gidisUlasim){
