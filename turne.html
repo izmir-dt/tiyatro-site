@@ -11914,506 +11914,75 @@ KURALLAR:
 
 async function pdfAnalizEt(arrayBuffer, dosyaAdi) {
   pdfAdimGoster('loading');
-  document.getElementById('pdf-loading-msg').textContent = '"' + dosyaAdi + '" Gemini AI ile analiz ediliyor…';
+  document.getElementById('pdf-loading-msg').textContent = '"' + dosyaAdi + '" analiz ediliyor…';
   document.getElementById('pdf-kaydet-btn').style.display = 'none';
   var db = document.getElementById('pdf-dosya-kaydet-btn'); if(db) db.style.display='none';
   try {
-    // Önce Gemini ile dene
-    var turneData = await geminiPdfParse(arrayBuffer.slice(0));
-    // Normalize et
+    var pdfDoc2 = await pdfjsLib.getDocument({ data: arrayBuffer.slice(0) }).promise;
+    var sayfaMetinleri = [];
+    for (var i=1; i<=pdfDoc2.numPages; i++) {
+      var pg2 = await pdfDoc2.getPage(i);
+      var tc2 = await pg2.getTextContent();
+      sayfaMetinleri.push(pdfItemleriBirlestir(tc2.items));
+    }
+    if (!pdfTurneDosyasimidir(sayfaMetinleri)) {
+      var items = await pdfMetinCikar(arrayBuffer);
+      var turneListesi = turneKayitlariniCikar(items);
+      if (!Array.isArray(turneListesi)) throw new Error('Parse hatası');
+      pdfOnizlemeGoster(turneListesi, dosyaAdi);
+      return;
+    }
+    var turneData = await pdfTurneDosyasiParse(arrayBuffer);
     turneData.oyun = (turneData.oyun || '').trim();
     turneData.sehirler = Array.isArray(turneData.sehirler) ? turneData.sehirler : [];
     turneData.personel = Array.isArray(turneData.personel) ? turneData.personel : [];
     turneData.kisiSayisi = turneData.personel.length;
 
-    // ── Oyun sistemde var mı kontrol et ─────────────────────────
-    var sistemdekiOyunlar = typeof turneler !== 'undefined'
+    // Oyun sistemde var mi?
+    var sistemOyunlar = typeof turneler !== 'undefined'
       ? [...new Set(turneler.map(function(t){ return (t.oyun||'').trim().toUpperCase(); }).filter(Boolean))]
       : [];
-    var oyunBulundu = sistemdekiOyunlar.some(function(o){
-      return o === turneData.oyun.toUpperCase();
-    });
+    var oyunBulundu = !turneData.oyun || sistemOyunlar.some(function(o){ return o === turneData.oyun.toUpperCase(); });
 
-    if (!oyunBulundu && turneData.oyun) {
-      // Oyun sistemde yok — uyarı göster
+    if (!oyunBulundu) {
       pdfAdimGoster('dosya');
       document.getElementById('pdf-dosya-baslik').textContent = '⚠️ Oyun Sistemde Bulunamadı';
-      document.getElementById('pdf-dosya-alt').textContent =
-        '"' + turneData.oyun + '" adlı oyun henüz sistemde kayıtlı değil. ' +
-        'Önce kadro sayfasından bu oyunu ekleyin, sonra tekrar deneyin.';
+      document.getElementById('pdf-dosya-alt').textContent = '"' + turneData.oyun + '" sisteme kayıtlı değil. Önce Kadro sayfasından ekleyin.';
       document.getElementById('pdf-dosya-oyun').textContent = turneData.oyun;
-      document.getElementById('pdf-dosya-tarih-sehir').textContent = '';
-      document.getElementById('pdf-dosya-detaylar').innerHTML =
-        '<div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:12px;font-size:12px;color:#92400e;grid-column:1/-1">' +
-        '📋 PDF\'den alınan bilgiler:<br>' +
-        turneData.sehirler.join(', ') + ' · ' +
-        (turneData.baslangicTarih||'') + ' – ' + (turneData.bitisTarih||'') +
-        '</div>';
+      document.getElementById('pdf-dosya-tarih-sehir').textContent = '📍 ' + turneData.sehirler.join(' + ') + '   📅 ' + (turneData.baslangicTarih||'') + ' – ' + (turneData.bitisTarih||'');
+      document.getElementById('pdf-dosya-detaylar').innerHTML = '';
       document.getElementById('pdf-dosya-personel-bolumu').style.display = 'none';
-      var kb = document.getElementById('pdf-dosya-kaydet-btn');
-      if (kb) kb.style.display = 'none';
+      var kb = document.getElementById('pdf-dosya-kaydet-btn'); if(kb) kb.style.display='none';
       return;
     }
 
-    // ── Aynı oyunun geçmiş turnelerinden öğren ──────────────────
-    // Eksik alanları geçmiş kayıtlardan tamamla
+    // Gecmis turnelerden eksik alanlari tamamla
     if (typeof turneler !== 'undefined' && turneData.oyun) {
-      var gecmisTurneler = turneler.filter(function(t){
+      var gecmis = turneler.filter(function(t){
         return (t.oyun||'').trim().toUpperCase() === turneData.oyun.toUpperCase();
       }).sort(function(a,b){
-        // En yeni turneyi önce al
         return (b.baslangicTarih||b.tarih||'').localeCompare(a.baslangicTarih||a.tarih||'');
       });
-
-      if (gecmisTurneler.length > 0) {
-        var ref = gecmisTurneler[0]; // En son turne referans
-        // Gemini'den gelmediyse geçmişten al
+      if (gecmis.length > 0) {
+        var ref = gecmis[0];
         if (!turneData.gidisUlasim && ref.gidisUlasim) turneData.gidisUlasim = ref.gidisUlasim;
         if (!turneData.donusUlasim && ref.donusUlasim) turneData.donusUlasim = ref.donusUlasim;
         if (!turneData.otelAdi && ref.otelAdi) turneData.otelAdi = ref.otelAdi;
         if (!turneData.kamyon && ref.kamyon) turneData.kamyon = ref.kamyon;
-        // Personel: Gemini bulamadıysa geçmiş turnedeki kadroyu öner
         if (turneData.personel.length === 0 && ref.katilimcilar && ref.katilimcilar.length > 0) {
-          turneData.personel = ref.katilimcilar.map(function(k){
-            return { ad: k.kisi||'', unvan: k.gorev||'' };
-          });
+          turneData.personel = ref.katilimcilar.map(function(k){ return {ad:k.kisi||'',unvan:k.gorev||''}; });
           turneData.kisiSayisi = turneData.personel.length;
           turneData._personelGecmisTurneden = true;
         }
-        turneData._gecmisTurneRef = ref.il || (ref.duraklar&&ref.duraklar[0]&&ref.duraklar[0].il) || '';
-        turneData._gecmisTurneSayisi = gecmisTurneler.length;
+        turneData._gecmisTurneSayisi = gecmis.length;
       }
     }
 
     _pdfTurneDosyasi = turneData;
     pdfTurneDosyasiOnizle(turneData, dosyaAdi);
   } catch(err) {
-    console.warn('Gemini parse basarisiz, yedege dusulüyor:', err.message);
-    // Yedek: regex parse
-    try {
-      var pdfDoc2 = await pdfjsLib.getDocument({ data: arrayBuffer.slice(0) }).promise;
-      var sayfaMetinleri = [];
-      for (var i=1; i<=pdfDoc2.numPages; i++) {
-        var pg2 = await pdfDoc2.getPage(i);
-        var tc2 = await pg2.getTextContent();
-        sayfaMetinleri.push(pdfItemleriBirlestir(tc2.items));
-      }
-      if (pdfTurneDosyasimidir(sayfaMetinleri)) {
-        var turneData2 = await pdfTurneDosyasiParse(arrayBuffer);
-        _pdfTurneDosyasi = turneData2;
-        pdfTurneDosyasiOnizle(turneData2, dosyaAdi);
-      } else {
-        var items = await pdfMetinCikar(arrayBuffer);
-        var turneler = turneKayitlariniCikar(items);
-        if (!Array.isArray(turneler)) throw new Error('Parse hatası');
-        pdfOnizlemeGoster(turneler, dosyaAdi);
-      }
-    } catch(err2) {
-      pdfAdimGoster('upload');
-      if (typeof showToast === 'function') showToast('error', '❌ PDF analizi başarısız: ' + err2.message);
-      console.error(err2);
-    }
+    pdfAdimGoster('upload');
+    if (typeof showToast === 'function') showToast('error', '❌ PDF analizi başarısız: ' + err.message);
+    console.error(err);
   }
 }
-
-// ── Turne dosyası önizleme ────────────────────────────────────
-function pdfTurneDosyasiOnizle(data, dosyaAdi) {
-  pdfAdimGoster('dosya');
-  var aylar=['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'];
-  function fmtTarih(t) {
-    if (!t) return '—'; var d=new Date(t); if(isNaN(d)) return t;
-    return d.getDate()+' '+aylar[d.getMonth()]+' '+d.getFullYear();
-  }
-  document.getElementById('pdf-dosya-baslik').textContent='📋 Turne Dosyası Algılandı';
-  var altYazi = dosyaAdi + ' · Aşağıdaki bilgiler turne kaydına otomatik aktarılacak';
-  if (data._gecmisTurneSayisi) {
-    altYazi += ' · ' + data._gecmisTurneSayisi + ' geçmiş turne referans alındı';
-  }
-  if (data._personelGecmisTurneden) {
-    altYazi += ' · Personel önceki turneden önerildi';
-  }
-  document.getElementById('pdf-dosya-alt').textContent = altYazi;
-  document.getElementById('pdf-dosya-oyun').textContent=data.oyun||'—';
-  var sehirStr=data.sehirler.join(' + ')||'—';
-  var tarihStr=data.baslangicTarih ? fmtTarih(data.baslangicTarih)+' – '+fmtTarih(data.bitisTarih) : '—';
-  document.getElementById('pdf-dosya-tarih-sehir').textContent='📍 '+sehirStr+'   📅 '+tarihStr;
-
-  var detaylar=[];
-  if(data.gidisUlasim) detaylar.push({ikon:'✈️',baslik:'Gidiş',icerik:(data.gidisSaat||'')+(data.gidisPlaka?' · '+data.gidisPlaka:'')});
-  if(data.donusUlasim) detaylar.push({ikon:'🛬',baslik:'Dönüş',icerik:(data.donusSaat||'')+(data.donusPlaka?' · '+data.donusPlaka:'')});
-  if(data.otelAdi)     detaylar.push({ikon:'🏨',baslik:'Otel',icerik:data.otelAdi});
-  if(data.kamyon)      detaylar.push({ikon:'🚛',baslik:'Nakliye',icerik:data.kamyon});
-  if(data.kisiSayisi)  detaylar.push({ikon:'👥',baslik:'Ekip',icerik:data.kisiSayisi+' kişi'});
-
-  document.getElementById('pdf-dosya-detaylar').innerHTML=detaylar.map(function(d){
-    return '<div style="background:var(--muted);border-radius:8px;padding:8px 10px">'+
-      '<div style="font-size:10px;font-weight:600;color:var(--muted-foreground);margin-bottom:3px">'+d.ikon+' '+d.baslik+'</div>'+
-      '<div style="font-size:11px;font-weight:700;color:var(--foreground);line-height:1.4">'+d.icerik+'</div></div>';
-  }).join('');
-
-  var pb=document.getElementById('pdf-dosya-personel-bolumu');
-  if(data.personel && data.personel.length>0) {
-    pb.style.display='block';
-    document.getElementById('pdf-personel-sayi').textContent='('+data.personel.length+' kişi)';
-    document.getElementById('pdf-personel-grid').innerHTML=data.personel.map(function(p){
-      return '<div style="background:var(--muted);border-radius:7px;padding:7px 10px;display:flex;align-items:center;gap:8px">'+
-        '<div style="width:28px;height:28px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;flex-shrink:0">'+p.ad.charAt(0)+'</div>'+
-        '<div style="min-width:0">'+
-          '<div style="font-size:11px;font-weight:700;color:var(--foreground);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+p.ad+'</div>'+
-          '<div style="font-size:10px;color:var(--muted-foreground);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+p.unvan+'</div>'+
-        '</div></div>';
-    }).join('');
-  } else { pb.style.display='none'; }
-
-  var db=document.getElementById('pdf-dosya-kaydet-btn');
-  if(db){db.style.display='inline-flex';db.style.alignItems='center';}
-  document.getElementById('pdf-footer-info').textContent=
-    (data.sehirler.length>1 ? data.sehirler.length+' durak' : '1 turne')+
-    (data.kisiSayisi?' · '+data.kisiSayisi+' kişi':'');
-}
-
-// ── Turne dosyasını kaydet ────────────────────────────────────
-async function pdfDosyaKaydet() {
-  var data=_pdfTurneDosyasi; if(!data) return;
-  var db=document.getElementById('pdf-dosya-kaydet-btn');
-  if(db){db.disabled=true;document.getElementById('pdf-dosya-kaydet-label').textContent='Kaydediliyor…';}
-  try {
-    function unvanKat(u){ u=(u||'').toLowerCase();
-      if(u.indexOf('sanatçı')!==-1) return 'Sanatçı';
-      if(u.indexOf('sahne')!==-1||u.indexOf('kondüvit')!==-1||u.indexOf('aksesuar')!==-1||u.indexOf('perukacı')!==-1) return 'Teknik';
-      if(u.indexOf('mutemet')!==-1) return 'İdari';
-      if(u.indexOf('figüran')!==-1) return 'Sanatçı';
-      return 'Diğer';
-    }
-    var basarili=0;
-    window._pdfKayitDevam = true;
-    // Tüm şehirler TEK turnenin durakları — ayrı turne değil
-    openModal();
-    await new Promise(function(r){setTimeout(r,300);});
-    var sv=function(id,val){var el=document.getElementById(id);if(el&&val!==undefined&&val!=='')el.value=val;};
-    // Oyun adını select'e ekle (yoksa yeni option olarak)
-    if(data.oyun) {
-      var oyunSel = document.getElementById('m-oyun');
-      if(oyunSel) {
-        var mevcutMu = Array.from(oyunSel.options).some(function(o){ return o.value===data.oyun; });
-        if(!mevcutMu) {
-          var yeniOpt = document.createElement('option');
-          yeniOpt.value = data.oyun; yeniOpt.textContent = data.oyun;
-          oyunSel.appendChild(yeniOpt);
-        }
-        oyunSel.value = data.oyun;
-      }
-    }
-    sv('m-tarih',data.baslangicTarih);
-    sv('m-bitis',data.bitisTarih);
-    // Durakları doldur
-    if(typeof duraklar!=='undefined' && data.sehirler && data.sehirler.length>0) {
-    // İlk duraği ayarla
-    if(!duraklar[0]) duraklar[0]={};
-    duraklar[0].il = data.sehirler[0];
-    if(typeof renderDuraklar==='function') renderDuraklar();
-    await new Promise(function(r){setTimeout(r,100);});
-    // Ek duraklar
-    for(var di=1;di<data.sehirler.length;di++){
-      if(typeof durakEkle==='function') durakEkle();
-      await new Promise(function(r){setTimeout(r,100);});
-      if(typeof duraklar!=='undefined'){
-        if(!duraklar[di]) duraklar[di]={};
-        duraklar[di].il=data.sehirler[di];
-      }
-      if(typeof renderDuraklar==='function') renderDuraklar();
-    }
-    }
-    if(typeof mStatuDdSec==='function') mStatuDdSec('taslak');
-    if(data.gidisUlasim){
-      sv('m-gidis-ulasim',data.gidisUlasim);
-      if(typeof ulasimTuruDegisti==='function') ulasimTuruDegisti('gidis');
-      await new Promise(function(r){setTimeout(r,60);});
-      sv('m-gidis-saat',data.gidisSaat);
-      sv('m-gidis-plaka',data.gidisPlaka);
-      if(data.kisiSayisi) sv('m-gidis-kisi-sayisi',String(data.kisiSayisi));
-    }
-    if(data.donusUlasim){
-      sv('m-donus-ulasim',data.donusUlasim);
-      if(typeof ulasimTuruDegisti==='function') ulasimTuruDegisti('donus');
-      await new Promise(function(r){setTimeout(r,60);});
-      sv('m-donus-saat',data.donusSaat);
-      sv('m-donus-plaka',data.donusPlaka);
-      if(data.kisiSayisi) sv('m-donus-kisi-sayisi',String(data.kisiSayisi));
-    }
-    if(data.otelAdi){var oe=document.getElementById('m-otel-adi');if(oe)oe.value=data.otelAdi;}
-    if(data.kamyon) sv('m-kamyon','1');
-    await saveTurne(); basarili=1;
-    var ov=document.getElementById('modal-overlay');if(ov)ov.classList.remove('on');
-    window._pdfKayitDevam = false;
-    // Tüm turneler eklendi — şimdi tek seferde Sheets'ten çek, _rowIdx'ler doğru olsun
-    try { await fetchTurneler(); populateFilters(); renderListe(); renderCalendar(); } catch(e) {}
-
-    var personelEklendi=0;
-    var kadroEslesti=0;
-    var pcb=document.getElementById('pdf-personel-ekle-cb');
-    if(pcb&&pcb.checked&&data.personel&&data.personel.length>0) {
-      var disKatilimcilar=[];
-      var turneKatilimcilar=[];
-
-      // PDF'den gelen adı tumPersonel ile eşleştir (büyük/küçük harf bağımsız)
-      function adEslestir(pdfAd) {
-        if(typeof tumPersonel==='undefined') return null;
-        var norm=pdfAd.trim().toLowerCase();
-        // 1) Oyun + isim ile tam eşleşme
-        var e=tumPersonel.find(function(tp){
-          return tp.kisi&&tp.kisi.trim().toLowerCase()===norm
-            &&(!data.oyun||!tp.oyun||tp.oyun.trim().toLowerCase()===(data.oyun||'').trim().toLowerCase());
-        });
-        // 2) Sadece isim ile eşleşme
-        if(!e) e=tumPersonel.find(function(tp){return tp.kisi&&tp.kisi.trim().toLowerCase()===norm;});
-        // 3) Soyad eşleşmesi: PDF'deki son büyük harf kelime soyadıdır
-        if(!e){
-          var parcalar=norm.split(/\s+/);
-          var soyad=parcalar[parcalar.length-1];
-          if(soyad.length>2){
-            e=tumPersonel.find(function(tp){
-              if(!tp.kisi) return false;
-              var tpParcalar=tp.kisi.trim().toLowerCase().split(/\s+/);
-              return tpParcalar[tpParcalar.length-1]===soyad;
-            });
-          }
-        }
-        return e||null;
-      }
-
-      for(var pi=0;pi<data.personel.length;pi++){
-        var p=data.personel[pi];
-        var eslesme=adEslestir(p.ad||'');
-        if(eslesme){
-          // tumPersonel'deki doğru ad formatını kullan
-          turneKatilimcilar.push({kisi:eslesme.kisi,gorev:eslesme.gorev||p.unvan||eslesme.kategori,kategori:eslesme.kategori});
-          kadroEslesti++;
-        } else {
-          disKatilimcilar.push(p);
-        }
-      }
-
-      // Eşleşenleri turne katılımcısı olarak kaydet
-      if(turneKatilimcilar.length>0){
-        var sonTurne=turneler[turneler.length-1];
-        if(sonTurne){
-          sonTurne.katilimcilar=turneKatilimcilar;
-          try{
-            var katIdx=sonTurne._rowIdx;
-            if(typeof katIdx!=='undefined'){
-              await apiFetch('/'+encodeURIComponent(TURNE_SHEET)+'/cell',{
-                method:'POST',headers:{'Content-Type':'application/json'},
-                body:JSON.stringify({row:katIdx+2,col:40,value:JSON.stringify(turneKatilimcilar)})
-              });
-            }
-          }catch(e){console.warn('Katilimci kaydi hatasi:',e);}
-        }
-      }
-
-      // Eşleşmeyenleri dış katılımcı olarak ekle (zaten varsa atla)
-      for(var di=0;di<disKatilimcilar.length;di++){
-        var dp=disKatilimcilar[di];
-        var dpNorm=(dp.ad||'').trim().toLowerCase();
-        var zatenVar=typeof tumDisPersonel!=='undefined'&&
-          tumDisPersonel.some(function(x){return x.kisi&&x.kisi.trim().toLowerCase()===dpNorm;});
-        if(zatenVar){personelEklendi++;continue;}
-        try{
-          await apiFetch('/'+encodeURIComponent(DIS_PERSONEL_SHEET)+'/row',{
-            method:'POST',headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({values:[dp.ad,unvanKat(dp.unvan),dp.unvan]})
-          });
-          personelEklendi++;
-          if(typeof tumDisPersonel!=='undefined')
-            tumDisPersonel.push({kisi:dp.ad,kategori:unvanKat(dp.unvan),gorev:dp.unvan,_sheetRow:9999+di});
-        }catch(e){console.warn('Dis katilimci eklenemedi:',dp.ad,e);}
-      }
-      if(typeof renderDisPersonel==='function') setTimeout(renderDisPersonel,200);
-      if(typeof renderListe==='function') setTimeout(renderListe,300);
-    }
-    var mesaj=basarili+' turne taslak eklendi'
-      +(kadroEslesti?' · '+kadroEslesti+' kişi kadroya eklendi':'')
-      +(personelEklendi?' · '+personelEklendi+' dış katılımcı eklendi':'')+'!';
-    document.getElementById('pdf-done-msg').textContent=mesaj;
-    pdfAdimGoster('done'); if(db)db.style.display='none';
-    if(typeof showToast==='function')showToast('success','✅ '+mesaj);
-    if(typeof renderListe==='function')setTimeout(renderListe,500);
-  }catch(e){
-    console.error(e);
-    if(typeof showToast==='function')showToast('error','❌ Kayıt hatası: '+e.message);
-  }finally{
-    if(db){db.disabled=false;document.getElementById('pdf-dosya-kaydet-label').textContent='📋 Turneyi & Personeli Aktar';}
-  }
-}
-
-function pdfOnizlemeGoster(turneler, dosyaAdi) {
-  _pdfBulunanTurneler = turneler;
-  pdfAdimGoster('preview');
-
-  document.getElementById('pdf-preview-title').textContent = turneler.length + ' Turne Bulundu';
-  document.getElementById('pdf-preview-sub').textContent = dosyaAdi + ' · Eklemek istediklerinizi seçin';
-
-  var liste = document.getElementById('pdf-turne-listesi');
-  liste.innerHTML = '';
-
-  if (turneler.length === 0) {
-    liste.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--muted-foreground);font-size:13px">Bu PDF\'de turne kaydı bulunamadı.<br><span style="font-size:11px;opacity:.7">Yalnızca şehir dışı (turne) gösteriler algılanır.</span></div>';
-    document.getElementById('pdf-kaydet-btn').style.display = 'none';
-    document.getElementById('pdf-footer-info').textContent = '';
-    return;
-  }
-
-  turneler.forEach(function(t, i) {
-    var sure = '';
-    if (t.baslangicTarih && t.bitisTarih) {
-      var bas = new Date(t.baslangicTarih);
-      var bit = new Date(t.bitisTarih);
-      var gunFark = Math.round((bit - bas) / 86400000) + 1;
-      sure = gunFark + ' gün';
-      // Tarih gösterimi
-      var aylar = ['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'];
-      var basStr = bas.getDate() + ' ' + aylar[bas.getMonth()];
-      var bitStr = bit.getDate() + ' ' + aylar[bit.getMonth()] + ' ' + bit.getFullYear();
-      sure = basStr + ' – ' + bitStr + ' (' + gunFark + ' gün)';
-    } else if (t.baslangicTarih) {
-      var d = new Date(t.baslangicTarih);
-      var aylar = ['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'];
-      sure = d.getDate() + ' ' + aylar[d.getMonth()] + ' ' + d.getFullYear();
-    }
-
-    var row = document.createElement('div');
-    row.className = 'pdf-turne-row selected';
-    row.dataset.idx = i;
-    row.onclick = function(e) {
-      if (e.target.tagName === 'INPUT') return;
-      var cb = this.querySelector('input[type=checkbox]');
-      cb.checked = !cb.checked;
-      this.classList.toggle('selected', cb.checked);
-      pdfSecimGuncelle();
-    };
-
-    row.innerHTML =
-      '<input type="checkbox" checked onclick="event.stopPropagation();this.closest(\'.pdf-turne-row\').classList.toggle(\'selected\',this.checked);pdfSecimGuncelle()">' +
-      '<div class="pdf-row-body">' +
-        '<div class="pdf-row-oyun">' + (t.oyun || '<span style="color:var(--muted-foreground);font-weight:500;font-style:italic">Oyun adı belirtilmemiş</span>') + '</div>' +
-        '<div class="pdf-row-meta">' +
-          (t.il ? '<span class="pdf-meta-chip city">📍 ' + t.il + '</span>' : '') +
-          (sure ? '<span class="pdf-meta-chip date">📅 ' + sure + '</span>' : '') +
-          '<span class="pdf-meta-chip statu">Taslak</span>' +
-          (t.not ? '<span class="pdf-meta-chip" title="' + t.not + '">💬 Not var</span>' : '') +
-        '</div>' +
-      '</div>';
-
-    liste.appendChild(row);
-  });
-
-  pdfSecimGuncelle();
-}
-
-function pdfTumunuSec(sec) {
-  document.querySelectorAll('.pdf-turne-row').forEach(function(row) {
-    var cb = row.querySelector('input[type=checkbox]');
-    if (cb) { cb.checked = sec; row.classList.toggle('selected', sec); }
-  });
-  pdfSecimGuncelle();
-}
-
-function pdfSecimGuncelle() {
-  var secili = document.querySelectorAll('.pdf-turne-row input[type=checkbox]:checked').length;
-  var toplam = _pdfBulunanTurneler.length;
-  var btn = document.getElementById('pdf-kaydet-btn');
-  var info = document.getElementById('pdf-footer-info');
-
-  if (secili > 0) {
-    btn.style.display = 'inline-flex';
-    btn.style.alignItems = 'center';
-    document.getElementById('pdf-kaydet-label').textContent = secili + ' Turneyi Taslak Olarak Ekle';
-    info.textContent = secili + ' / ' + toplam + ' turne seçili';
-  } else {
-    btn.style.display = 'none';
-    info.textContent = 'Hiç turne seçilmedi';
-  }
-}
-
-function pdfSecilenleriKaydet() {
-  var checkboxlar = document.querySelectorAll('.pdf-turne-row input[type=checkbox]:checked');
-  var kaydedilecek = [];
-  checkboxlar.forEach(function(cb) {
-    var idx = parseInt(cb.closest('.pdf-turne-row').dataset.idx);
-    if (!isNaN(idx) && _pdfBulunanTurneler[idx]) {
-      kaydedilecek.push(_pdfBulunanTurneler[idx]);
-    }
-  });
-  if (kaydedilecek.length === 0) return;
-  pdfTurneleriDirektEkle(kaydedilecek);
-}
-
-async function pdfTurneleriDirektEkle(liste) {
-  document.getElementById('pdf-kaydet-btn').disabled = true;
-  document.getElementById('pdf-kaydet-label').textContent = 'Ekleniyor…';
-
-  var basarili = 0;
-  for (var i = 0; i < liste.length; i++) {
-    var t = liste[i];
-    try {
-      openModal();
-      // Modal animasyonu ve DOM render için bekle
-      await new Promise(function(r){ setTimeout(r, 250); });
-
-      var setVal = function(id, val) {
-        var el = document.getElementById(id);
-        if (el && val !== undefined && val !== null) el.value = val;
-      };
-      setVal('m-oyun', t.oyun || '');
-      setVal('m-tarih', t.baslangicTarih || '');
-      setVal('m-bitis', t.bitisTarih || t.baslangicTarih || '');
-      setVal('m-not', t.not || '');
-
-      // İl alanı — duraklar[0]
-      if (typeof duraklar !== 'undefined') {
-        if (!duraklar[0]) duraklar[0] = {};
-        duraklar[0].il = t.il || '';
-        if (typeof renderDuraklar === 'function') renderDuraklar();
-        await new Promise(function(r){ setTimeout(r, 80); });
-        var ilEl = document.querySelector('[id^="durak-il-"]');
-        if (ilEl && t.il) ilEl.value = t.il;
-      }
-
-      // Statu: taslak
-      setVal('m-statu', 'taslak');
-      if (typeof mStatuDdSec === 'function') mStatuDdSec('taslak');
-
-      // Kaydet
-      await saveTurne();
-      basarili++;
-
-      // Bir sonraki turne öncesi kısa bekleme
-      await new Promise(function(r){ setTimeout(r, 120); });
-    } catch(e) {
-      console.warn('PDF turne kayıt hatası (' + (t.il||'?') + '):', e);
-    }
-  }
-
-  // Modal'ı kapat
-  var ov = document.getElementById('modal-overlay');
-  if (ov) ov.classList.remove('on');
-
-  var mesaj = basarili + ' turne taslak olarak eklendi!';
-  document.getElementById('pdf-done-msg').textContent = mesaj;
-  pdfAdimGoster('done');
-  document.getElementById('pdf-kaydet-btn').style.display = 'none';
-  document.getElementById('pdf-footer-info').textContent = '';
-
-  if (typeof showToast === 'function') showToast('success', '✅ ' + mesaj);
-  if (typeof renderListe === 'function') setTimeout(renderListe, 500);
-}
-
-// Modal dışına tıklayınca kapat
-document.addEventListener('DOMContentLoaded', function() {
-  var ov = document.getElementById('pdf-import-overlay');
-  if (ov) ov.addEventListener('click', function(e) { if (e.target === this) pdfImportKapat(); });
-});
-</script>
-
-</body>
-</html>
