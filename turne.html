@@ -11843,33 +11843,113 @@ async function pdfTurneDosyasiParse(arrayBuffer) {
   return r;
 }
 
+// Gemini API ile PDF'den turne bilgilerini çıkar
+var GEMINI_API_KEY = 'AIzaSyAkig3TQfwwv4WYBtOJuAn8Py4mvfyRP4M';
+
+async function geminiPdfParse(arrayBuffer) {
+  // ArrayBuffer'ı base64'e çevir
+  var bytes = new Uint8Array(arrayBuffer);
+  var binary = '';
+  for (var i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+  var base64 = btoa(binary);
+
+  var prompt = `Bu bir İzmir Devlet Tiyatrosu turne dosyasıdır. PDF'den aşağıdaki bilgileri çıkar ve SADECE JSON formatında döndür, başka hiçbir şey yazma:
+
+{
+  "oyun": "oyun adı (örn: MÜNASEBETSİZ)",
+  "sehirler": ["şehir1", "şehir2"],
+  "baslangicTarih": "YYYY-MM-DD",
+  "bitisTarih": "YYYY-MM-DD",
+  "gidisUlasim": "ucak veya otobus veya tren veya bos",
+  "gidisSaat": "HH:MM",
+  "gidisPlaka": "havayolu kodu (PEGASUS/THY/vb) veya bos",
+  "donusUlasim": "ucak veya otobus veya tren veya bos",
+  "donusSaat": "HH:MM",
+  "donusPlaka": "havayolu kodu veya bos",
+  "otelAdi": "otel adı veya bos",
+  "kamyon": "nakliyat firması adı veya bos",
+  "personel": [
+    {"ad": "Ad Soyad (sitemizdeki gibi - ad normal büyük/küçük, soyad BÜYÜK HARF)", "unvan": "görev unvanı"}
+  ]
+}
+
+ÖNEMLİ KURALLAR:
+- sehirler: SADECE turnede gidilen şehirler (NİĞDE, NEVŞEHİR gibi) — transit uçuş noktaları (İSTANBUL, KAYSERİ gibi) EKLEME
+- personel: GÖREVLİ PERSONEL LİSTESİ sayfasındaki kişiler — ad formatı "Özkan GEZGİN" şeklinde (ad küçük/büyük karışık, soyad tamamen büyük)
+- tarih formatı: 2026-03-09 gibi
+- boş değerler için "" kullan, null kullanma
+- JSON dışında hiçbir şey yazma, markdown kullanma`;
+
+  var response = await fetch(
+    'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' + GEMINI_API_KEY,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          parts: [
+            { text: prompt },
+            { inline_data: { mime_type: 'application/pdf', data: base64 } }
+          ]
+        }],
+        generationConfig: { temperature: 0, maxOutputTokens: 2048 }
+      })
+    }
+  );
+
+  if (!response.ok) {
+    var err = await response.text();
+    throw new Error('Gemini API hatası: ' + response.status + ' — ' + err.substring(0, 200));
+  }
+
+  var result = await response.json();
+  var text = result.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  // Markdown code block varsa temizle
+  text = text.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/,'').trim();
+  return JSON.parse(text);
+}
+
 async function pdfAnalizEt(arrayBuffer, dosyaAdi) {
   pdfAdimGoster('loading');
-  document.getElementById('pdf-loading-msg').textContent = '"' + dosyaAdi + '" analiz ediliyor…';
+  document.getElementById('pdf-loading-msg').textContent = '"' + dosyaAdi + '" Gemini AI ile analiz ediliyor…';
   document.getElementById('pdf-kaydet-btn').style.display = 'none';
   var db = document.getElementById('pdf-dosya-kaydet-btn'); if(db) db.style.display='none';
   try {
-    var pdfDoc2 = await pdfjsLib.getDocument({ data: arrayBuffer.slice(0) }).promise;
-    var sayfaMetinleri = [];
-    for (var i=1; i<=pdfDoc2.numPages; i++) {
-      var pg2 = await pdfDoc2.getPage(i);
-      var tc2 = await pg2.getTextContent();
-      sayfaMetinleri.push(pdfItemleriBirlestir(tc2.items));
-    }
-    if (pdfTurneDosyasimidir(sayfaMetinleri)) {
-      var turneData = await pdfTurneDosyasiParse(arrayBuffer);
-      _pdfTurneDosyasi = turneData;
-      pdfTurneDosyasiOnizle(turneData, dosyaAdi);
-    } else {
-      var items = await pdfMetinCikar(arrayBuffer);
-      var turneler = turneKayitlariniCikar(items);
-      if (!Array.isArray(turneler)) throw new Error('Parse hatası');
-      pdfOnizlemeGoster(turneler, dosyaAdi);
-    }
+    // Önce Gemini ile dene
+    var turneData = await geminiPdfParse(arrayBuffer.slice(0));
+    // Gemini'den gelen veriyi normalize et
+    turneData.oyun = turneData.oyun || '';
+    turneData.sehirler = Array.isArray(turneData.sehirler) ? turneData.sehirler : [];
+    turneData.personel = Array.isArray(turneData.personel) ? turneData.personel : [];
+    turneData.kisiSayisi = turneData.personel.length;
+    _pdfTurneDosyasi = turneData;
+    pdfTurneDosyasiOnizle(turneData, dosyaAdi);
   } catch(err) {
-    pdfAdimGoster('upload');
-    if (typeof showToast === 'function') showToast('error', '❌ PDF analizi başarısız: ' + err.message);
-    console.error(err);
+    console.warn('Gemini parse başarısız, regex'e düşülüyor:', err.message);
+    // Yedek: regex parse
+    try {
+      var pdfDoc2 = await pdfjsLib.getDocument({ data: arrayBuffer.slice(0) }).promise;
+      var sayfaMetinleri = [];
+      for (var i=1; i<=pdfDoc2.numPages; i++) {
+        var pg2 = await pdfDoc2.getPage(i);
+        var tc2 = await pg2.getTextContent();
+        sayfaMetinleri.push(pdfItemleriBirlestir(tc2.items));
+      }
+      if (pdfTurneDosyasimidir(sayfaMetinleri)) {
+        var turneData2 = await pdfTurneDosyasiParse(arrayBuffer);
+        _pdfTurneDosyasi = turneData2;
+        pdfTurneDosyasiOnizle(turneData2, dosyaAdi);
+      } else {
+        var items = await pdfMetinCikar(arrayBuffer);
+        var turneler = turneKayitlariniCikar(items);
+        if (!Array.isArray(turneler)) throw new Error('Parse hatası');
+        pdfOnizlemeGoster(turneler, dosyaAdi);
+      }
+    } catch(err2) {
+      pdfAdimGoster('upload');
+      if (typeof showToast === 'function') showToast('error', '❌ PDF analizi başarısız: ' + err2.message);
+      console.error(err2);
+    }
   }
 }
 
