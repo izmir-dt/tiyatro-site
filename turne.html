@@ -671,6 +671,27 @@
       /* Kart detay da full-screen bottom sheet */
       .card-detail-box { width: 100% !important; max-width: 100% !important; border-radius: 20px 20px 0 0 !important; position: fixed !important; bottom: 0 !important; top: auto !important; max-height: 94dvh !important; }
       .card-detail-modal { align-items: flex-end !important; }
+
+      /* KİŞİ MODAL: mobilde tek sütun dikey layout */
+      #kisi-modal-overlay .modal { max-height: 96dvh !important; }
+      #kisi-modal-overlay [style*="grid-template-columns:1fr 1fr"] {
+        grid-template-columns: 1fr !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+      }
+      #kisi-modal-overlay [style*="grid-template-columns:1fr 1fr"] > div:first-child {
+        border-right: none !important;
+        border-bottom: 2px solid var(--border);
+        max-height: 55vh;
+        overflow-y: auto;
+      }
+      #kisi-modal-overlay [style*="grid-template-columns:1fr 1fr"] > div:last-child {
+        max-height: 30vh;
+        overflow-y: auto;
+      }
+      /* Toplu işlem bari mobilde wrap */
+      .bulk-action-bar { flex-wrap: wrap; gap: 4px !important; padding: 6px 10px !important; }
+      .bulk-btn { font-size: 10px !important; padding: 4px 8px !important; }
     }
 
     @media (max-width: 600px) {
@@ -678,7 +699,7 @@
       nav { padding: 0 12px; height: 52px; }
       .nav-sub { display: none; }
       /* Nav sağ buton yazılarını gizle, sadece ikonlar */
-      .nav-right { gap: 4px; }
+      .nav-right { gap: 4px; flex-wrap: nowrap; overflow: hidden; }
       .nav-right .btn-outline .nav-btn-txt { display: none; }
       .nav-right .btn-outline { padding: 0 8px; min-width: 32px; }
       /* Yedek al / geri yükle / ana sayfa gizle */
@@ -686,6 +707,9 @@
       .nav-right > a.nav-back { display: none !important; }
       /* Rehber butonu da gizle */
       .nav-right > button:first-child { display: none !important; }
+      /* Son senkron yazısı gizle mobilde */
+      #son-senkron-indicator { display: none !important; }
+      #yedek-mesaj { display: none !important; }
 
       /* ── SEKMELER: Sadece Turneler mobilde görünür ── */
       .tabs-bar { padding: 0; overflow-x: auto; }
@@ -972,7 +996,7 @@ height:20px !important;
       <button id="rehber-btn" onclick="event.stopPropagation();var p=document.getElementById('yedek-bilgi');p.style.display=p.style.display==='block'?'none':'block'" class="btn btn-outline" style="font-size:11px;display:inline-flex;align-items:center;gap:5px;height:30px;padding:0 12px;font-weight:700" title="Kullanım rehberi"><!-- Modern Flat Soru İkonu -->
 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" style="flex-shrink:0"><circle cx="12" cy="12" r="10" fill="#3b82f6"/><text x="12" y="16" text-anchor="middle" fill="#fff" font-size="10" font-weight="bold">?</text></svg> Rehber</button>
       <button class="btn btn-outline" onclick="yedekAl()" style="font-size:11px;display:inline-flex;align-items:center;gap:5px;height:30px;padding:0 12px"><!-- Modern Flat İndirme İkonu -->
-<svg width="13" height="13" viewBox="0 0 24 24" fill="none" style="flex-shrink:0"><rect x="4" y="3" width="16" height="18" rx="3" fill="#10b981"/><path d="M8 12l4 4 4-4" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg> Yedek Al</button>
+<svg width="13" height="13" viewBox="0 0 24 24" fill="none" style="flex-shrink:0"><rect x="4" y="3" width="16" height="18" rx="3" fill="#10b981"/><path d="M8 12l4 4 4-4" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg> <span class="nav-btn-txt">Yedek Al</span></button>
       <div id="yedek-bilgi" onclick="event.stopPropagation()" style="display:none;position:absolute;top:38px;right:0;z-index:900;width:360px;max-height:82vh;overflow-y:auto;background:var(--card);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 30px rgba(0,0,0,.18);padding:14px 16px;font-size:11px;color:var(--foreground)">
         <div style="font-size:12px;font-weight:800;color:var(--primary);margin-bottom:10px;border-bottom:1px solid var(--border);padding-bottom:6px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="margin-right:5px;vertical-align:-2px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>Hızlı Rehber</div>
         <div style="display:flex;flex-direction:column;gap:6px">
@@ -4169,6 +4193,9 @@ function turneCard(t) {
     +   '</button>'
     +   '<button class="btn btn-outline" style="height:32px;font-size:12px;padding:0 11px;border-radius:7px;display:inline-flex;align-items:center;gap:4px" onclick="event.stopPropagation();gorevlendirmePdf(' + t._rowIdx + ')" title="PDF: Görevlendirme yazısı + kadro listesi">'
     +     '📄 PDF'
+    +   '</button>'
+    +   '<button class="btn btn-outline" style="height:32px;width:32px;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0" onclick="event.stopPropagation();turneCopyala(' + t._rowIdx + ')" title="Taslak olarak kopyala">'
+    +     '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>'
     +   '</button>'
     +   '<button style="height:32px;width:32px;border-radius:7px;border:1px solid hsl(0,50%,85%);background:hsl(0,80%,97%);color:hsl(0,65%,45%);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0" title="Turneyi sil (onay gerekir)" onclick="event.stopPropagation();deleteTurneOnay(' + t._rowIdx + ', \'' + (t.oyun||'Turne').replace(/'/g,"\\'") + '\')">'
     +     '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3,6 5,6 21,6"/><path d="M19,6l-1,14a2,2,0,0,1-2,2H8a2,2,0,0,1-2-2L5,6"/></svg>'
