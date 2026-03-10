@@ -9013,6 +9013,18 @@ function _pdfCSS() {
     // ── ALT ÇUBUK ──
     + '.alt-cubuk{margin-top:18pt;padding-top:8pt;border-top:1pt solid #e5ddd5;display:flex;justify-content:space-between;align-items:center}'
     + '.alt-cubuk-sol{font-size:8pt;font-weight:700;color:#888}'
+    // ── SAYFA NUMARASI ──
+    + '@page{size:A4;margin:14mm 16mm;@bottom-right{content:"Sayfa " counter(page) " / " counter(pages);font-size:7.5pt;color:#aaa;font-family:Arial,sans-serif}}'
+    + '@media print{body{padding:0}}'
+    // ── SAYFA KIRMA ──
+    + '.personel-tablosu tr{page-break-inside:avoid}'
+    + '.personel-tablosu{page-break-before:auto}'
+    + '.bolum{page-break-inside:avoid}'
+    + '.turne-baslik-blok{page-break-after:avoid}'
+    // ── AKTARMALı UÇUŞ ──
+    + '.tr-aktarma{background:#fffbf5!important}'
+    + '.tr-aktarma .td-aktarma-label{font-size:9pt;color:#92400e;font-style:italic;padding-left:18pt}'
+    + '.aktarma-ok{color:#d97706;margin-right:4pt}'
     + '.alt-cubuk-sag{font-size:7.5pt;color:#bbb;text-align:right}'
     + '@media print{body{padding:0}@page{size:A4;margin:14mm 16mm}.no-print{display:none!important}thead{display:table-header-group}.turne-baslik-blok{-webkit-print-color-adjust:exact;print-color-adjust:exact}.kat-baslik-row{background:#ddd!important}.kat-baslik-row td{border-top:2pt solid #333!important;border-bottom:1pt solid #333!important;color:#000!important}.kol-saat{font-size:14pt!important;font-weight:900!important}.td-saat{font-size:14pt!important;font-weight:900!important;background:#f5f5f5!important}.bolum-baslik{border-bottom:2pt solid #333!important;color:#000!important}.rapor-header{border-bottom:3pt solid #333!important}.turne-baslik-blok{color:#000!important}.bilgi-kutu{border-left-width:4pt!important;border-left-color:#333!important}.td-saat,.kol-saat{outline:1pt solid #333}}';
 }
@@ -9073,23 +9085,37 @@ function _pdfIcerik(t) {
     } catch(e) {}
     if (!bacaklar.length) return null; // bacak yoksa null
 
-    var rows = '';
-    var ilkTarih = tarih;
-    bacaklar.forEach(function(b, bi) {
-      var nereden = b.nereden || (yon==='gidis' ? '\u0130zmir' : ilStr);
-      var nereye  = b.nereye  || (yon==='gidis' ? ilStr : '\u0130zmir');
-      var saat    = (b.kalkis ? b.kalkis : '\u2014') + (b.inis ? ' \u2192 ' + b.inis : '');
-      var ucusNo  = b.ucusNo  || '';
-      var isFirst = bi===0;
-      rows += '<tr style="background:'+(isFirst?'#f8f5f2':'#fff')+(isFirst?';border-top:2px solid #d0c4c4':'')+'">'
-        + '<td class="'+(isFirst?'td-dim':'td-aktarma')+'">'+(isFirst?ilkTarih:'\u2514 Aktarma')+'</td>'
-        + '<td class="td-bold">'+nereden+' \u2192 '+nereye+'</td>'
-        + '<td class="td-std">'+ulasimTur+'</td>'
-        + '<td class="td-saat">'+saat+'</td>'
-        + '<td class="td-firma">'+ucusNo+'</td>'
-        + '</tr>';
-    });
-    return rows;
+     var rows = '';
+     var ilkTarih = tarih;
+     bacaklar.forEach(function(b, bi) {
+       var nereden = b.nereden || (yon==='gidis' ? 'İzmir' : ilStr);
+       var nereye  = b.nereye  || (yon==='gidis' ? ilStr : 'İzmir');
+       var kalkisSaat = b.kalkis || '—';
+       var inisSaat   = b.inis ? ' → ' + b.inis : '';
+       var saat    = kalkisSaat + inisSaat;
+       var ucusNo  = b.ucusNo  || '';
+       var firma   = b.firma || b.havayolu || ulasimTur || '';
+       var firmaGoster = [firma, ucusNo].filter(Boolean).join(' · ');
+       var isFirst = bi===0;
+       if (isFirst) {
+         rows += '<tr style="background:#f8f5f2;border-top:2px solid #d0c4c4">'
+           + '<td class="td-dim">' + ilkTarih + '</td>'
+           + '<td class="td-bold">' + nereden + ' → ' + nereye + '</td>'
+           + '<td class="td-std">' + ulasimTur + '</td>'
+           + '<td class="td-saat">' + saat + '</td>'
+           + '<td class="td-firma">' + firmaGoster + '</td>'
+           + '</tr>';
+       } else {
+         rows += '<tr style="background:#fffbf5">'
+           + '<td style="padding:4pt 9pt;border:1pt solid #e5ddd5;font-size:9pt;color:#92400e;white-space:nowrap">⤷ Aktarma</td>'
+           + '<td style="padding:4pt 9pt 4pt 18pt;border:1pt solid #e5ddd5;font-size:10pt;font-weight:600;color:#92400e">' + nereden + ' → ' + nereye + '</td>'
+           + '<td style="padding:4pt 9pt;border:1pt solid #e5ddd5;font-size:9pt;color:#92400e">' + ulasimTur + '</td>'
+           + '<td style="padding:4pt 9pt;border:1pt solid #e5ddd5;font-size:11pt;font-weight:800;color:#92400e;white-space:nowrap">' + saat + '</td>'
+           + '<td style="padding:4pt 9pt;border:1pt solid #e5ddd5;font-size:9.5pt;font-weight:700;color:#b45309">' + firmaGoster + '</td>'
+           + '</tr>';
+       }
+     });
+     return rows;
   }
 
   // Gidi\u015f
@@ -9149,7 +9175,7 @@ function _pdfIcerik(t) {
       + '<th style="padding:6px 10px;color:#fff;text-align:left;border:1px solid #4a1212;font-size:10px">G\u00fczerg\u00e2h</th>'
       + '<th style="padding:6px 10px;color:#fff;text-align:left;border:1px solid #4a1212;font-size:10px">Ara\u00e7 / Havayolu</th>'
       + '<th style="padding:6px 10px;color:#fff;text-align:left;border:1px solid #4a1212;font-size:10px">Saat (Kalk\u0131\u015f \u2192 \u0130ni\u015f)</th>'
-      + '<th style="padding:6px 10px;color:#fff;text-align:left;border:1px solid #4a1212;font-size:10px">Firma Bilgisi</th>'
+      + '<th style="padding:6px 10px;color:#fff;text-align:left;border:1px solid #4a1212;font-size:10px">Havayolu / Uçuş No</th>'
       + '</tr></thead><tbody>' + ucusRows.join('') + '</tbody></table>'
     : '';
 
@@ -9351,7 +9377,7 @@ function _pdfIcerik(t) {
     // ── ULAŞIM ──────────────────────────────────────────────
     + (ucusHTML
       ? '<div class="bolum"><div class="bolum-baslik">Ula\u015f\u0131m Bilgileri</div>'
-        + ucusHTML.replace(/<thead><tr style="background:#5a1717">/g,'<thead><tr style="background:#6b1b1b">')
+        + ucusHTML
         + '</div>'
       : '')
 
@@ -9373,7 +9399,7 @@ function _pdfIcerik(t) {
     + '<div class="bolum"><div class="bolum-baslik">G\u00f6revlendirilen Personel</div>'
     + (katilimcilar.length===0
         ? '<p style="color:#999;font-style:italic;font-size:10pt;padding:8pt 0">Personel atamas\u0131 yap\u0131lmam\u0131\u015ft\u0131r.</p>'
-        : '<table style="width:100%;border-collapse:collapse">'
+        : '<table class="personel-tablosu" style="width:100%;border-collapse:collapse">'
           + '<thead><tr style="background:#6b1b1b">'
           + '<th style="padding:5px 8px;color:#fff;font-size:10px;border:1px solid #5a1717;width:28px;text-align:center">No</th>'
           + '<th style="padding:5px 8px;color:#fff;font-size:10px;border:1px solid #5a1717;text-align:left">Ad Soyad</th>'
