@@ -11343,6 +11343,152 @@ function pdfAdimGoster(adim) {
   });
 }
 
+// ── PDF.js ile AI'sız turne parse ──────────────────────────────
+var PDFJSLIB_LOADED = false;
+function pdfJsYukle(cb) {
+  if (PDFJSLIB_LOADED) { cb(); return; }
+  var s = document.createElement('script');
+  s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+  s.onload = function() {
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    PDFJSLIB_LOADED = true;
+    cb();
+  };
+  document.head.appendChild(s);
+}
+
+var AY_MAP = {
+  'Ocak':'01','Şubat':'02','Mart':'03','Nisan':'04','Mayıs':'05','Haziran':'06',
+  'Temmuz':'07','Ağustos':'08','Eylül':'09','Ekim':'10','Kasım':'11','Aralık':'12'
+};
+
+// Türkiye il listesi (büyük harf, Türkçe karakterli)
+var IL_LISTESI = [
+  'ADANA','ADIYAMAN','AFYONKARAHİSAR','AĞRI','AKSARAY','AMASYA','ANKARA','ANTALYA',
+  'ARDAHAN','ARTVİN','AYDIN','BALIKESİR','BARTIN','BATMAN','BAYBURT','BİLECİK',
+  'BİNGÖL','BİTLİS','BOLU','BURDUR','BURSA','ÇANAKKALE','ÇANKIRI','ÇORUM',
+  'DENİZLİ','DİYARBAKIR','DÜZCE','EDİRNE','ELAZIĞ','ERZİNCAN','ERZURUM','ESKİŞEHİR',
+  'GAZİANTEP','GİRESUN','GÜMÜŞHANE','HAKKARİ','HATAY','IĞDIR','ISPARTA','İSTANBUL',
+  'İZMİR','KAHRAMANMARAŞ','KARABÜK','KARAMAN','KARS','KASTAMONU','KAYSERİ','KIRIKKALE',
+  'KIRKLARELİ','KIRŞEHİR','KİLİS','KOCAELİ','KONYA','KÜTAHYA','MALATYA','MANİSA',
+  'MARDİN','MERSİN','MUĞLA','MUŞ','NEVŞEHİR','NİĞDE','ORDU','OSMANİYE','RİZE',
+  'SAKARYA','SAMSUN','SİİRT','SİNOP','SİVAS','ŞANLIURFA','ŞIRNAK','TEKİRDAĞ',
+  'TOKAT','TRABZON','TUNCELİ','UŞAK','VAN','YALOVA','YOZGAT','ZONGULDAK',
+  // Sık geçen özel yerler
+  'URLA','GAZİANTEP'
+];
+
+function tarihParse(str) {
+  if (!str) return null;
+  var m = str.match(/(\d+)\s+(\S+)\s+(\d{4})/);
+  if (!m) return null;
+  var ay = AY_MAP[m[2]];
+  if (!ay) return null;
+  return m[3] + '-' + ay + '-' + m[1].padStart(2, '0');
+}
+
+function sehirBul(metin) {
+  if (!metin) return null;
+  var ust = metin.toUpperCase();
+  for (var i = 0; i < IL_LISTESI.length; i++) {
+    if (ust.indexOf(IL_LISTESI[i]) !== -1) return IL_LISTESI[i];
+  }
+  return null;
+}
+
+function oyunAdCikar(metin, sehir) {
+  if (!metin || !sehir) return '';
+  // Şehir adını ve çevresindeki tire/boşlukları temizle
+  var temiz = metin.replace(new RegExp(sehir + '[^\\s]*', 'gi'), '').trim();
+  // Parantez içi saatleri temizle
+  temiz = temiz.replace(/\(\d{2}:\d{2}.*?\)/g, '').replace(/\(\d+\.\d+.*?\)/g, '').trim();
+  // Fazla tire/boşluk
+  temiz = temiz.replace(/^[-–\s]+|[-–\s]+$/g, '').trim();
+  return temiz;
+}
+
+async function pdfMetinCikar(arrayBuffer) {
+  var pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  var satirlar = [];
+  for (var p = 1; p <= pdf.numPages; p++) {
+    var page = await pdf.getPage(p);
+    var tc = await page.getTextContent();
+    // X koordinatına göre sütunları ayırt etmek için item'ları sakla
+    tc.items.forEach(function(item) {
+      satirlar.push({ str: item.str.trim(), x: Math.round(item.transform[4]), y: Math.round(item.transform[5]) });
+    });
+  }
+  return satirlar;
+}
+
+function turneKayitlariniCikar(items) {
+  // Tüm metni satırlara grupla (aynı Y değeri = aynı satır)
+  var satirMap = {};
+  items.forEach(function(item) {
+    if (!item.str) return;
+    var y = item.y;
+    if (!satirMap[y]) satirMap[y] = [];
+    satirMap[y].push(item);
+  });
+
+  // Y'ye göre sırala (büyükten küçüğe = yukarıdan aşağıya)
+  var yDegerleri = Object.keys(satirMap).map(Number).sort(function(a,b){return b-a;});
+
+  // Her PDF'in TURNE sütunları genellikle en sağda → x > 400 (yaklaşık)
+  // Önce başlık satırını bul: "TURNE" yazan hücrelerin X koordinatlarını öğren
+  var turneXler = [];
+  yDegerleri.forEach(function(y) {
+    var satirItems = satirMap[y];
+    satirItems.forEach(function(item) {
+      if (item.str === 'TURNE') turneXler.push(item.x);
+    });
+  });
+
+  // Eşik: en küçük TURNE X'i
+  var turneMinX = turneXler.length ? Math.min.apply(null, turneXler) - 20 : 400;
+
+  var kayitlar = [];
+  var guncelTarih = null;
+
+  yDegerleri.forEach(function(y) {
+    var satirItems = satirMap[y].sort(function(a,b){return a.x-b.x;});
+    var satirStr = satirItems.map(function(i){return i.str;}).join(' ');
+
+    // Tarih satırı mı?
+    var tarihM = satirStr.match(/(\d+\s+\S+\s+\d{4})/);
+    if (tarihM) {
+      var t = tarihParse(tarihM[1]);
+      if (t) guncelTarih = t;
+    }
+
+    // TURNE sütunundaki hücreler (x > turneMinX)
+    var turneItems = satirItems.filter(function(i){ return i.x >= turneMinX; });
+    turneItems.forEach(function(item) {
+      var sehir = sehirBul(item.str);
+      if (sehir && guncelTarih) {
+        // İzmir değilse turne
+        if (sehir !== 'İZMİR') {
+          var oyun = oyunAdCikar(item.str, sehir);
+          kayitlar.push({ sehir: sehir, oyun: oyun, tarih: guncelTarih });
+        }
+      }
+    });
+  });
+
+  // Ardışık aynı şehir+oyunları birleştir
+  var sonuc = [];
+  kayitlar.forEach(function(k) {
+    var son = sonuc[sonuc.length - 1];
+    if (son && son.il === k.sehir && son.oyun === k.oyun) {
+      son.bitisTarih = k.tarih;
+    } else {
+      sonuc.push({ oyun: k.oyun, il: k.sehir, baslangicTarih: k.tarih, bitisTarih: k.tarih });
+    }
+  });
+  return sonuc;
+}
+
 function pdfDosyaSecildi(inputEl, dosyaObj) {
   var dosya = dosyaObj || (inputEl && inputEl.files && inputEl.files[0]);
   if (!dosya) return;
@@ -11350,102 +11496,24 @@ function pdfDosyaSecildi(inputEl, dosyaObj) {
     if (typeof showToast === 'function') showToast('warn', '⚠️ Lütfen bir PDF dosyası seçin.');
     return;
   }
-  var reader = new FileReader();
-  reader.onload = function(e) {
-    var base64 = e.target.result.split(',')[1];
-    pdfAnalizEt(base64, dosya.name);
-  };
-  reader.readAsDataURL(dosya);
+  pdfJsYukle(function() {
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      pdfAnalizEt(e.target.result, dosya.name);
+    };
+    reader.readAsArrayBuffer(dosya);
+  });
 }
 
-function pdfApiKeyAl() {
-  var key = localStorage.getItem('anthropic_api_key');
-  if (key) return key;
-  key = prompt('Anthropic API anahtarınızı girin (sk-ant-...):\n\nAnahtar tarayıcınızda güvenli şekilde saklanacak.');
-  if (key && key.trim().startsWith('sk-')) {
-    localStorage.setItem('anthropic_api_key', key.trim());
-    return key.trim();
-  }
-  return null;
-}
-
-async function pdfAnalizEt(base64Data, dosyaAdi) {
+async function pdfAnalizEt(arrayBuffer, dosyaAdi) {
   pdfAdimGoster('loading');
   document.getElementById('pdf-loading-msg').textContent = '"' + dosyaAdi + '" analiz ediliyor…';
   document.getElementById('pdf-kaydet-btn').style.display = 'none';
-
-  var apiKey = pdfApiKeyAl();
-  if (!apiKey) {
-    pdfAdimGoster('upload');
-    if (typeof showToast === 'function') showToast('error', '❌ API anahtarı gerekli. Lütfen tekrar deneyin.');
-    return;
-  }
-
-  var prompt = `Sen bir tiyatro turne programı analiz asistanısın. Sana verilen PDF, İzmir Devlet Tiyatrosu'nun aylık program tablosudur.
-
-Görevin: PDF'deki TURNE kayıtlarını bul ve JSON dizisi olarak döndür.
-
-TURNE TANIMI: Bir turne, İzmir dışında (başka bir şehirde) yapılan gösterilerdir. PDF'de şehir adları (NİĞDE, NEVŞEHİR, ANKARA, ORDU, BURSA, GAZİANTEP, URLA vb.) genellikle başlı başına veya oyun adının yanında yazar. Bunlar turne işaretidir.
-
-ÖNEMLİ KURALLAR:
-- Her farklı şehir + oyun kombinasyonu = ayrı turne kaydı
-- Aynı turne birden fazla gün sürebilir (baslangicTarih ve bitisTarih ver)
-- Tarihler YYYY-MM-DD formatında olmalı
-- Eğer oyun adı bilinmiyorsa boş bırak
-- Sadece turne kayıtlarını döndür, İzmir'deki normal gösterileri ALMA
-- Şehir adını il alanına yaz (büyük harf ile, örn: "NİĞDE", "ANKARA")
-
-DÖNDÜRÜLECEK FORMAT (sadece bu JSON, başka hiçbir şey yazma):
-[
-  {
-    "oyun": "Oyun Adı",
-    "il": "ŞEHİR",
-    "baslangicTarih": "YYYY-MM-DD",
-    "bitisTarih": "YYYY-MM-DD",
-    "not": "Ek bilgi varsa"
-  }
-]
-
-Eğer hiç turne bulunamazsa boş dizi döndür: []`;
-
   try {
-    var response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 1000,
-        messages: [{
-          role: 'user',
-          content: [
-            {
-              type: 'document',
-              source: { type: 'base64', media_type: 'application/pdf', data: base64Data }
-            },
-            { type: 'text', text: prompt }
-          ]
-        }]
-      })
-    });
-
-    if (response.status === 401) { localStorage.removeItem('anthropic_api_key'); throw new Error('Geçersiz API anahtarı. Lütfen tekrar deneyin.'); }
-    if (!response.ok) throw new Error('API hatası: ' + response.status);
-    var data = await response.json();
-    var text = (data.content || []).map(function(b){ return b.text || ''; }).join('');
-
-    // JSON çıkar
-    var jsonMatch = text.match(/\[[\s\S]*\]/);
-    if (!jsonMatch) throw new Error('JSON bulunamadı');
-    var turneler = JSON.parse(jsonMatch[0]);
-
-    if (!Array.isArray(turneler)) throw new Error('Geçersiz format');
+    var items = await pdfMetinCikar(arrayBuffer);
+    var turneler = turneKayitlariniCikar(items);
+    if (!Array.isArray(turneler)) throw new Error('Parse hatası');
     pdfOnizlemeGoster(turneler, dosyaAdi);
-
   } catch(err) {
     pdfAdimGoster('upload');
     if (typeof showToast === 'function') showToast('error', '❌ PDF analizi başarısız: ' + err.message);
