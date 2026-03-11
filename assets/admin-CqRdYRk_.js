@@ -63,12 +63,10 @@ For more information, see https://radix-ui.com/primitives/docs/components/alert-
   const[M,F]=o.useState(null); // post-delete person info
   const[X,z]=o.useState(false); // new play dialog
   const[Z,J]=o.useState(""); // new play name
-  // Bulk edit state
   const[bulkMode,setBulkMode]=o.useState(false);
   const[bulkCol,setBulkCol]=o.useState(0);
   const[bulkVal,setBulkVal]=o.useState("");
   const[bulkPending,setBulkPending]=o.useState(false);
-  // Quick person add state
   const[quickAdd,setQuickAdd]=o.useState(false);
   const[quickVals,setQuickVals]=o.useState([]);
 
@@ -92,7 +90,6 @@ For more information, see https://radix-ui.com/primitives/docs/components/alert-
     enabled:!!n&&!$e,retry:false
   });
 
-  // MUTATIONS
   const ut=te({
     mutationFn:({row:u,col:g,value:p})=>re("PUT",`https://tiyatro-backend.vercel.app/api/sheets/${encodeURIComponent(n)}/cell`,{row:u,col:g,value:p}),
     onSuccess:(resp,{row:u,col:g,value:p})=>{
@@ -169,7 +166,6 @@ For more information, see https://radix-ui.com/primitives/docs/components/alert-
     onError:()=>e({title:"Hata",description:"Senkronizasyon başarısız",variant:"destructive"})
   });
 
-  // Bulk edit mutation - edit same column for all selected rows
   const doBulkEdit=async()=>{
     if(!N||f.size===0)return;
     setBulkPending(true);
@@ -222,7 +218,6 @@ For more information, see https://radix-ui.com/primitives/docs/components/alert-
 
   o.useEffect(()=>{l(1);h(null);v(0);w(new Set());},[s,n]);
 
-  // Keyboard shortcuts
   o.useEffect(()=>{
     const u=g=>{
       const p=g.ctrlKey||g.metaKey;
@@ -250,7 +245,6 @@ For more information, see https://radix-ui.com/primitives/docs/components/alert-
   const Or=N?.rows?.length||0;
   const ke=O&&U&&U[b]?.name||"";
 
-  // Stats for BÜTÜN OYUNLAR mode
   const playStats=o.useMemo(()=>{
     if(!O||!N||!ke)return null;
     const rows=Ee;
@@ -267,29 +261,23 @@ For more information, see https://radix-ui.com/primitives/docs/components/alert-
   },[O,N,ke,Ee,I]);
 
   return t.jsxs("div",{className:"flex flex-col h-[calc(100vh-var(--header-h,120px))] overflow-hidden",children:[
-    // Loading bar
     ct&&t.jsx("div",{className:"fixed top-0 left-0 right-0 z-[100] h-0.5 bg-primary/10",children:t.jsx("div",{className:"h-full bg-primary w-3/5 animate-pulse"})}),
 
-    // TOP TOOLBAR
     t.jsxs("div",{className:"flex items-center gap-2 flex-wrap px-4 py-2 border-b border-border bg-card/80 backdrop-blur shrink-0",children:[
-      // Sheet name + stats
       t.jsxs("div",{className:"flex items-center gap-2",children:[
         t.jsx("span",{className:"font-bold text-[11px] text-muted-foreground uppercase tracking-widest",children:n||"—"}),
         !me&&Or>0&&t.jsxs("span",{className:"text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full font-semibold",children:[Or," satır"]}),
         O&&ke&&t.jsxs("span",{className:"text-[10px] bg-amber-500/15 text-amber-600 dark:text-amber-400 px-1.5 py-0.5 rounded-full font-semibold flex items-center gap-0.5",children:[t.jsx(Yr,{className:"w-3 h-3"}),ke]}),
       ]}),
 
-      // Search
       t.jsxs("div",{className:"relative",children:[
         t.jsx(We,{className:"absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground"}),
         t.jsx(Je,{"data-testid":"input-search",placeholder:"Ara…",value:s,onChange:u=>i(u.target.value),className:"pl-8 h-8 w-40 sm:w-56 text-sm"}),
         s&&t.jsx("button",{className:"absolute right-2.5 top-1/2 -translate-y-1/2",onClick:()=>i(""),children:t.jsx(Fe,{className:"w-3.5 h-3.5 text-muted-foreground"})}),
       ]}),
 
-      // Refresh
       t.jsx(T,{size:"icon",variant:"ghost",className:"h-8 w-8",onClick:()=>Ar(),"data-testid":"button-refresh",title:"Yenile (F5)",children:t.jsx(gt,{className:`w-4 h-4 ${ct?"animate-spin":""}`})}),
 
-      // BÜTÜN OYUNLAR play navigation
       O&&U&&!s&&t.jsxs("div",{className:"flex items-center gap-1",children:[
         t.jsx(T,{size:"icon",variant:"ghost",className:"h-7 w-7",onClick:()=>v(u=>Math.max(0,u-1)),disabled:b<=0,children:t.jsx(vt,{className:"w-3.5 h-3.5"})}),
         t.jsx("select",{value:b,onChange:u=>v(Number(u.target.value)),className:"h-7 text-xs border border-border rounded-md bg-card px-2 text-foreground max-w-[180px]",children:Ce.map((u,g)=>t.jsx("option",{value:g,children:u},u))}),
@@ -297,9 +285,7 @@ For more information, see https://radix-ui.com/primitives/docs/components/alert-
         t.jsxs("span",{className:"text-[10px] text-muted-foreground whitespace-nowrap",children:[b+1,"/",Ce.length]}),
       ]}),
 
-      // Right actions
       t.jsxs("div",{className:"ml-auto flex items-center gap-1",children:[
-        // Bulk edit button
         f.size>0&&t.jsxs(t.Fragment,{children:[
           t.jsxs("span",{className:"text-xs text-muted-foreground px-2 py-1 bg-primary/10 rounded-md font-semibold",children:[f.size," seçili"]}),
           t.jsxs(T,{size:"sm",variant:"outline",className:"h-8 gap-1 text-xs text-primary border-primary/40 hover:bg-primary/10",onClick:()=>{setBulkMode(true);setBulkVal("");},title:"Seçili satırlarda toplu düzenleme",children:[t.jsx(en,{className:"w-3.5 h-3.5"}),"Toplu Düzenle"]}),
@@ -313,22 +299,17 @@ For more information, see https://radix-ui.com/primitives/docs/components/alert-
           t.jsxs(T,{size:"sm",variant:"outline",className:"h-8 gap-1 text-xs text-red-500 border-red-300 hover:bg-red-50 dark:border-red-800 dark:hover:bg-red-950",onClick:()=>w(new Set()),children:[t.jsx(Fe,{className:"w-3 h-3"}),"Seçimi Temizle"]}),
         ]}),
 
-        // Clipboard paste
         S.length>0&&t.jsxs(T,{size:"sm",variant:"outline",className:"h-8 gap-1 text-xs text-primary border-primary/40",title:`Yapıştır — ${S.length} satır`,onClick:()=>{
           S.forEach(u=>L.mutate(u));
           e({title:`${S.length} satır yapıştırıldı`});
         },children:[t.jsx(Jr,{className:"w-3.5 h-3.5"}),S.length," satır yapıştır"]}),
 
-        // Figüran sync
         n==="FİGÜRAN LİSTESİ"&&t.jsxs(T,{size:"sm",variant:"outline",className:"h-8 gap-1.5 text-xs text-purple-700 border-purple-300 hover:bg-purple-50 dark:text-purple-300 dark:border-purple-700",onClick:()=>Be.mutate(),disabled:Be.isPending,children:[Be.isPending?t.jsx(K,{className:"w-3.5 h-3.5 animate-spin"}):t.jsx(gt,{className:"w-3.5 h-3.5"}),"Figüranları Güncelle"]}),
 
-        // Archive button for current play
         O&&ke&&t.jsxs(T,{size:"sm",variant:"outline",className:"h-8 gap-1 text-xs text-amber-600 border-amber-400/50 hover:bg-amber-50 dark:border-amber-700 dark:hover:bg-amber-950","data-testid":"button-archive-play-toolbar",onClick:()=>k(ke),children:[t.jsx(Yr,{className:"w-3.5 h-3.5"}),"Arşive Taşı"]}),
 
-        // New play
         O&&t.jsxs(T,{size:"sm",className:"h-8 gap-1 text-xs","data-testid":"button-new-play-toolbar",onClick:()=>{J("");z(true);},style:{background:"hsl(var(--sidebar))",color:"hsl(var(--sidebar-primary))"},children:[t.jsx(q,{className:"w-3.5 h-3.5"}),"Yeni Oyun"]}),
 
-        // Logout
         t.jsx("button",{onClick:()=>{
           try{var o=JSON.parse(sessionStorage.getItem("tiyatro_erisim")||"{}");delete o["Admin Paneli"];sessionStorage.setItem("tiyatro_erisim",JSON.stringify(o));}catch(e){}
           window.location.reload();
@@ -336,7 +317,6 @@ For more information, see https://radix-ui.com/primitives/docs/components/alert-
       ]}),
     ]}),
 
-    // PLAY STATS BAR (only in BÜTÜN OYUNLAR + play selected)
     O&&ke&&playStats&&!s&&t.jsxs("div",{className:"flex items-center gap-3 px-4 py-2 border-b border-border shrink-0 bg-amber-50/50 dark:bg-amber-950/20",children:[
       t.jsxs("div",{className:"flex items-center gap-1.5 text-[11px] font-semibold text-amber-700 dark:text-amber-400",children:[t.jsx(We,{className:"w-3.5 h-3.5"}),playStats.kisiCount," kişi"]}),
       t.jsxs("div",{className:"flex items-center gap-1.5 text-[11px] font-semibold text-amber-700 dark:text-amber-400",children:[t.jsx(Zr,{className:"w-3.5 h-3.5"}),playStats.rowCount," kayıt"]}),
@@ -349,7 +329,6 @@ For more information, see https://radix-ui.com/primitives/docs/components/alert-
       ]}),
     ]}),
 
-    // BULK EDIT BAR
     bulkMode&&f.size>0&&I.length>0&&t.jsxs("div",{className:"flex items-center gap-3 px-4 py-2.5 border-b border-primary/30 bg-primary/5 shrink-0 flex-wrap",children:[
       t.jsxs("span",{className:"text-xs font-bold text-primary",children:["Toplu Düzenleme — ",f.size," satır seçili"]}),
       t.jsx("select",{value:bulkCol,onChange:u=>setBulkCol(Number(u.target.value)),className:"h-8 text-xs border border-primary/40 rounded-md bg-background px-2 text-foreground",children:I.map((col,idx)=>t.jsx("option",{value:idx,children:col},idx))}),
@@ -358,7 +337,6 @@ For more information, see https://radix-ui.com/primitives/docs/components/alert-
       t.jsx(T,{size:"sm",variant:"outline",className:"h-8 text-xs",onClick:()=>{setBulkMode(false);setBulkVal("");}},void 0,void 0,"İptal"),
     ]}),
 
-    // MAIN TABLE AREA
     t.jsx("div",{className:"flex-1 overflow-hidden px-4 pb-4 pt-2 min-h-0",children:
       t.jsxs("div",{className:"bg-card border border-card-border rounded-xl flex flex-col h-full overflow-hidden shadow-sm",children:[
         t.jsx("div",{className:"flex-1 overflow-auto",children:
@@ -374,7 +352,7 @@ For more information, see https://radix-ui.com/primitives/docs/components/alert-
             },disabled:L.isPending,className:"flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold text-white transition-colors disabled:opacity-60",style:{background:"hsl(var(--sidebar))"},children:[
               L.isPending?t.jsx(K,{className:"w-4 h-4 animate-spin"}):t.jsx(q,{className:"w-4 h-4",style:{color:"hsl(var(--sidebar-primary))"}}),"Sayfayı Oluştur",
             ]}),
-          ]):
+          ]}):
           me?t.jsxs("div",{className:"p-4 space-y-2",children:[t.jsx(Ge,{className:"h-10 w-full rounded-lg"}),[1,2,3,4,5,6,7].map(u=>t.jsx(Ge,{className:"h-11 w-full rounded-lg",style:{opacity:1-u*.1}},u))]}):
           I.length===0?t.jsxs("div",{className:"flex flex-col items-center justify-center h-64 text-muted-foreground gap-3",children:[t.jsx(yt,{className:"w-7 h-7 opacity-30"}),t.jsx("p",{className:"text-sm font-semibold",children:"Sayfa seçin"})]}):
           t.jsxs("table",{className:"w-full text-sm border-collapse",children:[
@@ -403,7 +381,6 @@ For more information, see https://radix-ui.com/primitives/docs/components/alert-
                     className:`border-b border-border/40 hover:bg-muted/30 group transition-colors ${V?"bg-primary/10 hover:bg-primary/15":g%2!==0?"bg-muted/10":""}`,
                     "data-testid":`row-data-${g}`,
                     children:[
-                      // Row number + selection
                       t.jsx("td",{className:"px-3 py-2 text-muted-foreground/50 text-[11px] font-mono tabular-nums select-none cursor-pointer group/num relative",
                         onClick:R=>{
                           if(R.ctrlKey||R.metaKey)w(P=>{const $=new Set(P);return $.has(p)?$.delete(p):$.add(p),$});
@@ -416,7 +393,6 @@ For more information, see https://radix-ui.com/primitives/docs/components/alert-
                           t.jsx("button",{onClick:R=>{R.stopPropagation();c(A?null:p);},title:"Altına satır ekle",className:"opacity-0 group-hover/num:opacity-100 transition-opacity text-primary hover:text-primary/80 leading-none",children:t.jsx(Vr,{className:"w-3 h-3"})}),
                         ]}),
                       }),
-                      // Data cells
                       I.map((R,P)=>{
                         const $=String(u[P]??"");
                         const Ke=x?.row===p&&x?.col===P;
@@ -437,7 +413,6 @@ For more information, see https://radix-ui.com/primitives/docs/components/alert-
                   A&&t.jsx(Dt,{headers:I,isPending:Se.isPending,onInsert:R=>Se.mutate({afterRow:p,values:R})},`insert-${p}`),
                 ].filter(Boolean);
               }),
-              // Inline add row
               I.length>0&&!s&&t.jsx(Pa,{
                 headers:I,
                 onAdd:u=>{
@@ -452,10 +427,9 @@ For more information, see https://radix-ui.com/primitives/docs/components/alert-
                 columnSuggestions:Dr,
               }),
             ]}),
-          ]),
+          ]}),
         }),
 
-        // Pagination (non-play-mode)
         !me&&I.length>0&&!O&&t.jsxs("div",{className:"flex items-center justify-between px-4 py-2 border-t border-border bg-muted/20 shrink-0",children:[
           t.jsx("span",{className:"text-xs text-muted-foreground",children:G.length>0?`${(d-1)*50+1}–${Math.min(d*50,G.length)} / ${G.length} satır`:"0 satır"}),
           t.jsxs("div",{className:"flex items-center gap-1",children:[
@@ -467,7 +441,6 @@ For more information, see https://radix-ui.com/primitives/docs/components/alert-
       ]}),
     }),
 
-    // SHEET TABS
     t.jsx("div",{className:"shrink-0 flex items-end gap-0 overflow-x-auto px-3 pt-1",style:{background:"hsl(var(--muted) / 0.5)",borderTop:"1px solid hsl(var(--border))"},children:
       $e?t.jsx("div",{className:"flex gap-1 pb-1 pt-1",children:[1,2,3].map(u=>t.jsx(Ge,{className:"h-7 w-24 rounded-t-md"},u))}):
       fe.map(u=>{
@@ -483,8 +456,6 @@ For more information, see https://radix-ui.com/primitives/docs/components/alert-
       })
     }),
 
-    // DIALOGS
-    // New Play dialog
     t.jsx(Te,{open:X,onOpenChange:u=>{u||z(false)},children:
       t.jsxs(he,{children:[
         t.jsxs(ge,{children:[t.jsx(xe,{children:"Yeni Oyun Ekle"}),t.jsx(ye,{children:"BÜTÜN OYUNLAR sayfasına yeni bir oyun ekler."})]}),
@@ -498,7 +469,6 @@ For more information, see https://radix-ui.com/primitives/docs/components/alert-
       ]}),
     }),
 
-    // Archive dialog
     t.jsx(Te,{open:C!==null,onOpenChange:u=>!u&&k(null),children:
       t.jsxs(he,{children:[
         t.jsxs(ge,{children:[
@@ -512,7 +482,6 @@ For more information, see https://radix-ui.com/primitives/docs/components/alert-
       ]}),
     }),
 
-    // Delete row dialog
     t.jsx(Te,{open:y!==null,onOpenChange:u=>!u&&m(null),children:
       t.jsxs(he,{children:[
         t.jsxs(ge,{children:[t.jsx(xe,{children:"Satır Silinsin mi?"}),t.jsx(ye,{children:"Bu işlem geri alınamaz."})]}),
@@ -523,7 +492,6 @@ For more information, see https://radix-ui.com/primitives/docs/components/alert-
       ]}),
     }),
 
-    // Post-delete person dialog (görevsiz kaldı)
     t.jsx(Te,{open:M!==null,onOpenChange:u=>!u&&F(null),children:
       t.jsxs(he,{children:[
         t.jsxs(ge,{children:[
