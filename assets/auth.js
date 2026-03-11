@@ -21,34 +21,60 @@
       +'<button id="__auth_sc" style="flex:1;font-size:11px;color:#6868a0;background:none;border:1px solid #2d2d4e;border-radius:6px;cursor:pointer;padding:6px">&#350;ifre De&#287;i&#351;tir</button>'
       +'</div>'
       +'<div id="__auth_sf" style="display:none;margin-top:10px">'
+      +'<input id="__auth_oi" type="password" placeholder="Mevcut &#351;ifre" maxlength="30" style="width:100%;background:#0e0e24;border:1px solid #2d2d4e;border-radius:8px;color:#e2e2f0;font-size:13px;padding:8px 10px;outline:none;margin-bottom:6px;box-sizing:border-box"/>'
       +'<input id="__auth_si" type="password" placeholder="Yeni &#351;ifre (min 4 karakter)" maxlength="30" style="width:100%;background:#0e0e24;border:1px solid #2d2d4e;border-radius:8px;color:#e2e2f0;font-size:13px;padding:8px 10px;outline:none;margin-bottom:6px;box-sizing:border-box"/>'
+      +'<div id="__auth_serr" style="color:#e05c5c;font-size:12px;min-height:16px;margin-bottom:6px"></div>'
       +'<button id="__auth_sb" style="width:100%;border:none;border-radius:6px;padding:8px;font-size:12px;font-weight:600;cursor:pointer;background:#2d2d4e;color:#e2e2f0">Kaydet</button>'
       +'</div>';
     ov.appendChild(box);
     document.body.appendChild(ov);
-    var inp=document.getElementById("__auth_inp"),btn=document.getElementById("__auth_btn"),
-        err=document.getElementById("__auth_err"),scBtn=document.getElementById("__auth_sc"),
-        sfDiv=document.getElementById("__auth_sf"),siInp=document.getElementById("__auth_si"),
+    var inp=document.getElementById("__auth_inp"),
+        btn=document.getElementById("__auth_btn"),
+        err=document.getElementById("__auth_err"),
+        scBtn=document.getElementById("__auth_sc"),
+        sfDiv=document.getElementById("__auth_sf"),
+        oiInp=document.getElementById("__auth_oi"),
+        siInp=document.getElementById("__auth_si"),
+        serr=document.getElementById("__auth_serr"),
         sbBtn=document.getElementById("__auth_sb");
     function chk(){
-      if(inp.value===getSifre()){sessionStorage.setItem(SK,"1");removeOverlay()}
+      if(inp.value===getSifre()){sessionStorage.setItem(SK,"1");removeOverlay();}
       else{inp.style.borderColor="#e05c5c";err.textContent="Hatali sifre!";
-        setTimeout(function(){inp.style.borderColor="#2d2d4e";err.textContent=""},2000)}
+        setTimeout(function(){inp.style.borderColor="#2d2d4e";err.textContent=""},2000);}
     }
     btn.addEventListener("click",chk);
-    inp.addEventListener("keydown",function(e){if(e.key==="Enter")chk()});
-    scBtn.addEventListener("click",function(){sfDiv.style.display=sfDiv.style.display==="none"?"block":"none"});
+    inp.addEventListener("keydown",function(e){if(e.key==="Enter")chk();});
+    scBtn.addEventListener("click",function(){
+      sfDiv.style.display=sfDiv.style.display==="none"?"block":"none";
+      serr.textContent="";
+    });
     sbBtn.addEventListener("click",function(){
+      var op=(oiInp.value||"").trim();
       var np=(siInp.value||"").trim();
-      if(np.length<4)return;
-      localStorage.setItem(SKEY,np);sfDiv.style.display="none";
-      err.textContent="Sifre degistirildi!";err.style.color="#4ade80";
+      if(op!==getSifre()){
+        serr.style.color="#e05c5c";
+        serr.textContent="Mevcut sifre yanlis!";
+        oiInp.style.borderColor="#e05c5c";
+        setTimeout(function(){oiInp.style.borderColor="#2d2d4e";serr.textContent=""},2000);
+        return;
+      }
+      if(np.length<4){
+        serr.style.color="#e05c5c";
+        serr.textContent="Yeni sifre en az 4 karakter olmali!";
+        setTimeout(function(){serr.textContent=""},2000);
+        return;
+      }
+      localStorage.setItem(SKEY,np);
+      sfDiv.style.display="none";
+      oiInp.value="";siInp.value="";
+      err.style.color="#4ade80";
+      err.textContent="Sifre degistirildi!";
       setTimeout(function(){err.textContent="";err.style.color="#e05c5c"},2000);
     });
-    setTimeout(function(){inp.focus()},50);
+    setTimeout(function(){inp.focus();},50);
   }
   var _push=history.pushState;
-  history.pushState=function(){_push.apply(history,arguments);setTimeout(showOverlay,100)};
-  window.addEventListener("popstate",function(){setTimeout(showOverlay,100)});
+  history.pushState=function(){_push.apply(history,arguments);setTimeout(showOverlay,100);};
+  window.addEventListener("popstate",function(){setTimeout(showOverlay,100);});
   document.addEventListener("DOMContentLoaded",showOverlay);
 })();
