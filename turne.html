@@ -2910,6 +2910,16 @@ function icon(name, extraStyle) {
   if (!s) return '';
   return '<span style="display:inline-flex;align-items:center;flex-shrink:0'+(extraStyle?';'+extraStyle:'')+'" aria-hidden="true">'+s+'</span>';
 }
+
+// ── Global Türkçe normalize yardımcısı ───────────────────────
+// Tüm scope'lardan erişilebilir; içeride aynı adla tanımlananlar kendi scope'u kapatır.
+function _trNormGlobal(s) {
+  return (s||'').toLowerCase()
+    .replace(/İ/g,'i').replace(/I/g,'ı')
+    .replace(/Ğ/g,'ğ').replace(/Ü/g,'ü')
+    .replace(/Ş/g,'ş').replace(/Ö/g,'ö')
+    .replace(/Ç/g,'ç');
+}
 // Statü badge — svg + etiket
 function statuBadge(sr, fontSize, padV, padH) {
   fontSize = fontSize || '10px'; padV = padV || '2px'; padH = padH || '8px';
@@ -4195,7 +4205,7 @@ function populateFilters() {
     if (t.duraklar) t.duraklar.forEach(function(d){ if (d.oyun) oyunSet.add(d.oyun); });
   });
   const oyunlar = [...oyunSet].sort();
-  const iller   = [...new Set(turneler.map(t => t.il))].filter(Boolean).sort();
+  const iller = [...new Set([...turneler.map(t => t.il), ...turneler.flatMap(t => (t.duraklar||[]).map(d => d.il))])].filter(Boolean).sort();
   ['filter-oyun','oyun-sec','kadro-oyun-sec','kisi-filter-oyun'].forEach(id => {
     const sel = document.getElementById(id);
     if (!sel) return;
@@ -4245,15 +4255,10 @@ function switchTab(tab) {
   if (sezonBar) sezonBar.style.display = tab === 'liste' ? 'flex' : 'none';
 
   document.getElementById('tab-' + tab).classList.add('active');
-  // Liste sekmesine dönünce filtreleri sıfırla
+  // Liste sekmesine dönünce sadece text aramasını sıfırla, dropdown filtreleri koru
   if (tab === 'liste') {
     var fs = document.getElementById('filter-search'); if (fs) fs.value = '';
-    var fo = document.getElementById('filter-oyun');   if (fo) fo.value = '';
-    var fi = document.getElementById('filter-il');     if (fi) fi.value = '';
-    // Zaman filtresini her zaman "Tüm Zamanlar" olarak aç
-    var fz = document.getElementById('filter-zaman'); if (fz) fz.value = 'tum';
-    zamanFiltre = 'tum';
-    statuFiltre = 'tum';
+    var fsClear = document.getElementById('fs-clear'); if (fsClear) fsClear.classList.remove('visible');
     renderListe();
   }
   if (tab === 'oyun') {
@@ -4288,6 +4293,9 @@ function switchTab(tab) {
     } else if (badge) {
       badge.style.display = 'none';
     }
+    // Tüm personel badge güncelle
+    var tpBadge = document.getElementById('tum-personel-badge');
+    if (tpBadge) tpBadge.textContent = tumPersonel.length || '';
   }
   if (tab === 'kisi')       renderKisiAra();
   if (tab === 'dispersonel') renderDisPersonel();
@@ -4532,7 +4540,7 @@ function renderListe() {
   const bugun  = _bn.getFullYear() + '-' + String(_bn.getMonth()+1).padStart(2,'0') + '-' + String(_bn.getDate()).padStart(2,'0');
   let filtered = turneler.filter(t => {
     if (fOyun && t.oyun !== fOyun) return false;
-    if (fIl   && t.il   !== fIl)   return false;
+    if (fIl && t.il !== fIl && !(t.duraklar||[]).some(d => d.il === fIl)) return false;
     if (statuFiltre !== 'tum' && t.statu !== statuFiltre) return false;
     const tBas = t.baslangicTarih || t.tarih || '';
     const tBit = t.bitisTarih     || t.tarih || '';
@@ -6618,16 +6626,30 @@ function renderTumPersonel() {
   function trN(s){ return (s||'').toLowerCase().replace(/İ/g,'i').replace(/I/g,'ı').replace(/Ğ/g,'ğ').replace(/Ü/g,'ü').replace(/Ş/g,'ş').replace(/Ö/g,'ö').replace(/Ç/g,'ç'); }
   var ara = trN(araRaw);
 
-  // Dropdown'ları ilk çalıştırmada doldur
+  // Dropdown'ları her çalıştırmada güncelle (yeni personel eklenince güncel kalsın)
   var oyunSel = document.getElementById('tum-personel-oyun-filter');
   var katSel  = document.getElementById('tum-personel-kat-filter');
-  if (oyunSel && oyunSel.options.length <= 1) {
+  if (oyunSel) {
+    var _prevOyun = oyunSel.value;
     var oyunlar = Array.from(new Set(tumPersonel.map(function(p){ return p.oyun; }).filter(Boolean))).sort();
-    oyunlar.forEach(function(o){ var opt = document.createElement('option'); opt.value = o; opt.textContent = o; oyunSel.appendChild(opt); });
+    var oyunOptStr = oyunlar.join('||');
+    if (oyunSel.dataset.lastOpts !== oyunOptStr) {
+      oyunSel.innerHTML = '<option value="">Tüm Oyunlar</option>';
+      oyunlar.forEach(function(o){ var opt = document.createElement('option'); opt.value = o; opt.textContent = o; oyunSel.appendChild(opt); });
+      oyunSel.dataset.lastOpts = oyunOptStr;
+      if (_prevOyun) oyunSel.value = _prevOyun;
+    }
   }
-  if (katSel && katSel.options.length <= 1) {
+  if (katSel) {
+    var _prevKat = katSel.value;
     var kats = Array.from(new Set(tumPersonel.map(function(p){ return p.kategori; }).filter(Boolean))).sort();
-    kats.forEach(function(k){ var opt = document.createElement('option'); opt.value = k; opt.textContent = k; katSel.appendChild(opt); });
+    var katOptStr = kats.join('||');
+    if (katSel.dataset.lastOpts !== katOptStr) {
+      katSel.innerHTML = '<option value="">Tüm Kategoriler</option>';
+      kats.forEach(function(k){ var opt = document.createElement('option'); opt.value = k; opt.textContent = k; katSel.appendChild(opt); });
+      katSel.dataset.lastOpts = katOptStr;
+      if (_prevKat) katSel.value = _prevKat;
+    }
   }
 
   // Filtrele
@@ -7800,8 +7822,8 @@ function kadroExcel() {
   var rows = [['Oyun','Kategori','Görevi','Ad Soyad']];
   kadro.forEach(p => rows.push([p.oyun, p.kategori, p.gorev, p.kisi]));
   var csv = '\uFEFF' + rows.map(r => r.map(c => '"'+(c||'').replace(/"/g,'""')+'"').join(',')).join('\n');
-  var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
-  a.download = oyun.slice(0,30) + '-kadro.csv'; a.click();
+  var _csvUrl1 = URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'})); var a = document.createElement('a'); a.href = _csvUrl1; a.download = oyun.slice(0,30) + '-kadro.csv'; document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(function(){ URL.revokeObjectURL(_csvUrl1); }, 1000);
+
 }
 
 // ============================================================
@@ -9037,11 +9059,14 @@ function iCalIndir() {
         + ('0'+(bitDate.getMonth()+1)).slice(-2)
         + ('0'+bitDate.getDate()).slice(-2);
       lines.push('BEGIN:VEVENT');
+      lines.push('UID:idt-turne-' + (t._rowIdx != null ? t._rowIdx : Math.random().toString(36).slice(2)) + '@idt.gov.tr');
+      lines.push('DTSTAMP:' + new Date().toISOString().replace(/[-:]/g,'').replace(/\.\d+/,'') + 'Z');
       lines.push('DTSTART;VALUE=DATE:' + bas);
       lines.push('DTEND;VALUE=DATE:' + bitPlus);
       lines.push('SUMMARY:' + (t.oyun||'Turne').replace(/[,;\\]/g, function(c){ return '\\'+c; }));
       var il = (t.duraklar&&t.duraklar[0]&&t.duraklar[0].il)||t.il||'';
-      if (il) lines.push('LOCATION:' + il.replace(/[,;\\]/g, function(c){ return '\\'+c; }));
+      var tumIller = (t.duraklar&&t.duraklar.length>1) ? t.duraklar.map(function(d){return d.il||'';}).filter(Boolean).join(', ') : il;
+      if (tumIller) lines.push('LOCATION:' + tumIller.replace(/[,;\\]/g, function(c){ return '\\'+c; }));
       if (t.not) lines.push('DESCRIPTION:' + (t.not||'').replace(/\n/g,'\\n').replace(/[,;\\]/g, function(c){ return '\\'+c; }));
       lines.push('STATUS:' + (t.statu==='onaylandi'?'CONFIRMED':t.statu==='taslak'?'TENTATIVE':'CONFIRMED'));
       lines.push('END:VEVENT');
@@ -9049,9 +9074,13 @@ function iCalIndir() {
     lines.push('END:VCALENDAR');
     var blob = new Blob([lines.join('\r\n')], {type:'text/calendar;charset=utf-8'});
     var a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
+    var _icalUrl = URL.createObjectURL(blob);
+    a.href = _icalUrl;
     a.download = 'idt-turneler.ics';
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(_icalUrl); }, 1000);
     overlay.remove();
   });
 }
@@ -9943,7 +9972,7 @@ async function saveTurne() {
   if (!gecerliDuraklar.length) { document.getElementById('err-il').textContent='En az bir durak girilmeli'; hatalar=true; } else { document.getElementById('err-il').textContent=''; }
   if (!basTarih) { document.getElementById('err-tarih').textContent='Tarih girilmeli'; document.getElementById('m-tarih').classList.add('error'); hatalar=true; } else { document.getElementById('err-tarih').textContent=''; document.getElementById('m-tarih').classList.remove('error'); }
   if (bitisTarih && bitisTarih < basTarih) { document.getElementById('err-bitis').textContent='Bitiş başlangıçtan önce olamaz'; hatalar=true; } else { document.getElementById('err-bitis').textContent=''; }
-  if (hatalar) { switchModalTab('genel', 0); return; }
+  if (hatalar) { switchModalTab('genel', 0); _saveTurneCalisiyor = false; var _sbErr = document.getElementById('save-turne-btn'); if (_sbErr) { _sbErr.disabled = false; _sbErr.textContent = 'Kaydet'; } return; }
 
   // Oyun adı: modal seçimi yoksa durakların oyunlarından türet
   if (!oyun) {
@@ -10269,10 +10298,10 @@ function exportExcel() {
     return r.map(function(c) { return '"' + (c||'').toString().replace(/"/g,'""') + '"'; }).join(',');
   }).join('\n');
   var tarih = new Date().toISOString().slice(0,10);
-  var a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv;charset=utf-8'}));
-  a.download = 'turne-raporu-' + tarih + '.csv';
-  a.click();
+  var _csvUrl2 = URL.createObjectURL(new Blob([csv], {type:'text/csv;charset=utf-8'})); var a = document.createElement('a'); a.href = _csvUrl2; a.download = 'turne-raporu-' + tarih + '.csv'; document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(function(){ URL.revokeObjectURL(_csvUrl2); }, 1000);
+
+
+
 }
 
 // ============================================================
@@ -11970,6 +11999,17 @@ function _pollingYap() {
   Promise.all([fetchTurneler(), fetchPersonel(), fetchDisPersonel(), calNotYukle()])
     .then(function() {
       populateFilters(); renderListe(); renderCalendar();
+      // Aktif sekmeye göre ek güncellemeler
+      var aktifSekme = localStorage.getItem('_sonSekme') || 'liste';
+      if (aktifSekme === 'kadro') {
+        var altSekme = window._kadroAltSekme || 'ana';
+        if (altSekme === 'tumPersonel') renderTumPersonel();
+        else if (altSekme === 'dis') renderDisPersonel();
+        else if (altSekme === 'oyun') renderOyunMgmt();
+        else renderKadro();
+      } else if (aktifSekme === 'istatistik') {
+        renderIstatistik();
+      }
       _sonPollingZamani = Date.now();
       guncelleSonSenkron();
       if (_syncEl) setTimeout(function(){ _syncEl.style.opacity = '0'; }, 1200);
