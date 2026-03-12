@@ -9719,6 +9719,7 @@ function openModal(rowIdx) {
     ['err-oyun','err-il','err-tarih','err-bitis'].forEach(id => { document.getElementById(id).textContent = ''; });
     programSatirlar = [];
     duraklar = [{ il:'', ilce:'', mekan:'', sayi:1, otelAdi:'', otelAdres:'', otelTel:'' }];
+    kisiModalSecili = []; // Önceki modal kalıntısını temizle
     renderDuraklar();
     renderProgramGunler();
   }
@@ -9783,6 +9784,10 @@ function turneCopyala(rowIdx) {
     renderDuraklar();
     programSatirlar = t.programSatirlar ? JSON.parse(JSON.stringify(t.programSatirlar)) : [];
     renderProgramGunler();
+    // Katılımcıları kopyala (kisiModalSecili state'ini güncelle)
+    kisiModalSecili = (t.katilimcilar && t.katilimcilar.length)
+      ? JSON.parse(JSON.stringify(t.katilimcilar))
+      : [];
     document.getElementById('modal-title').textContent = 'Turne Kopyalanıyor';
     acBindAll();
   }, 100);
@@ -9868,6 +9873,11 @@ function editTurne(rowIdx) {
   syncIlFromDuraklar();
   programSatirlar = t.programSatirlar ? JSON.parse(JSON.stringify(t.programSatirlar)) : [];
   renderProgramGunler();
+  // editTurne açılırken kisiModalSecili'yi mevcut katılımcılarla doldur
+  // Böylece saveTurne katılımcıları doğru okur
+  kisiModalSecili = (t.katilimcilar && t.katilimcilar.length)
+    ? JSON.parse(JSON.stringify(t.katilimcilar))
+    : [];
   document.getElementById('modal-overlay').classList.add('on');
   switchModalTab('genel', 0);
   hesaplaSure();
@@ -9875,7 +9885,7 @@ function editTurne(rowIdx) {
   window._editSnapshot = JSON.stringify(t);
   window._editAcilanZaman = Date.now();
 }
-function closeModal() { document.getElementById('modal-overlay').classList.remove('on'); _modalDirty = false; }
+function closeModal() { document.getElementById('modal-overlay').classList.remove('on'); _modalDirty = false; kisiModalSecili = []; }
 
 // ============================================================
 // KAYDET
@@ -10033,7 +10043,10 @@ async function saveTurne() {
   saveBtn.disabled = true; saveBtn.textContent = 'Kaydediliyor...';
   var duraklarJSON = JSON.stringify(gecerliDuraklar);
   // katJSON VALUES'DAN ÖNCE tanımlanmalı
-  var katJSON = editIdx !== '' ? JSON.stringify((turneler.find(x=>x._rowIdx===parseInt(editIdx))||{}).katilimcilar || []) : '[]';
+  // Düzenleme modunda: saveKisiModal zaten t.katilimcilar'ı güncelliyor, oradan oku.
+  // Yeni kayıt / kopyalama modunda: kisiModalSecili'den oku (turneCopyala orada set etti).
+  var _katMevcut = editIdx !== '' ? (turneler.find(x=>x._rowIdx===parseInt(editIdx))||{}).katilimcilar : null;
+  var katJSON = JSON.stringify(_katMevcut !== null && _katMevcut !== undefined ? _katMevcut : (kisiModalSecili || []));
   var programSatirlarJSON = programSatirlar.length ? JSON.stringify(programSatirlar) : '';
   // YENİ Sheets TURNE_KAYITLARI sütun sırası (41 eleman, 0-tabanlı) — Otel Rez No YOK:
   // [0-7]  oyun,il,basTarih,bitTarih,mekan,sayi,not,statu
@@ -10078,7 +10091,7 @@ async function saveTurne() {
     aktarma, kamyonSayisi: kamyon, sahneKapasitesi: kapasite, notlar: lojNot,
     aracTur: _aracTur||'', liftli: _liftli||false, yuklemeSaat: _yukSaat||'', yuklemeYer: _yukYer||'', bosaltmaSaat: _bosSaat||'', bosaltmaYer: _bosYer||'',
     programSatirlar: JSON.parse(JSON.stringify(programSatirlar)),
-    katilimcilar: editIdx !== '' ? (turneler.find(x=>x._rowIdx===parseInt(editIdx))||{}).katilimcilar : []
+    katilimcilar: JSON.parse(JSON.stringify(_katMevcut !== null && _katMevcut !== undefined ? _katMevcut : (kisiModalSecili || [])))
   };
   if (editIdx !== '') {
     var idx2 = turneler.findIndex(x => x._rowIdx === parseInt(editIdx));
@@ -12035,9 +12048,10 @@ function _pollingYap() {
   var overlay = document.getElementById('modal-overlay');
   var modalAcik = overlay && overlay.classList.contains('on');
   var kisiModalAcik = document.getElementById('kisi-modal-overlay') &&
-    document.getElementById('kisi-modal-overlay').style.display !== '' &&
-    document.getElementById('kisi-modal-overlay').style.display !== 'none';
-  if (modalAcik || kisiModalAcik) return;
+    document.getElementById('kisi-modal-overlay').classList.contains('on');
+  var cardDetailAcik = document.getElementById('card-detail-modal') &&
+    document.getElementById('card-detail-modal').classList.contains('on');
+  if (modalAcik || kisiModalAcik || cardDetailAcik) return;
 
   // Yenileme göstergesi (başlık çubuğunda subtle blink)
   var _syncEl = document.getElementById('_polling-indicator');
