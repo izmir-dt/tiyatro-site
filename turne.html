@@ -2610,6 +2610,19 @@ height:20px !important;
         <label class="form-label">Görevi / Rolü <span style="font-size:10px;font-weight:400;color:var(--muted-foreground)">(opsiyonel)</span></label>
         <input class="form-input" type="text" id="kadro-kisi-gorev" placeholder="Örn: Ana Karakter, Sahne Amiri...">
       </div>
+      <div class="form-group" id="kadro-ek-gorev-grup" style="display:none">
+        <label class="form-label" style="display:flex;align-items:center;gap:6px">
+          Ek Görev
+          <span style="font-size:10px;font-weight:400;color:var(--muted-foreground)">(turne listesinde " / " ile ayrılır)</span>
+        </label>
+        <div id="kadro-ek-gorev-liste" style="display:flex;flex-direction:column;gap:4px;margin-bottom:6px"></div>
+        <button type="button" onclick="kadroEkGorevSatirEkle()" style="height:28px;padding:0 12px;border:1.5px dashed hsl(220,55%,65%);border-radius:6px;background:transparent;cursor:pointer;font-size:11px;font-weight:600;color:hsl(220,62%,42%);font-family:Poppins,sans-serif;display:inline-flex;align-items:center;gap:4px">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Ek Görev Ekle
+        </button>
+      </div>
+      <div style="margin-top:-4px">
+        <button type="button" onclick="kadroEkGorevToggle()" id="kadro-ek-gorev-toggle-btn" style="height:24px;padding:0 10px;border:1px solid var(--border);border-radius:5px;background:transparent;cursor:pointer;font-size:10px;font-weight:600;color:var(--muted-foreground);font-family:Poppins,sans-serif">＋ Ek Görev Ekle</button>
+      </div>
     </div>
     <div class="modal-footer">
       <button id="kadro-sil-btn" class="btn btn-outline" style="color:var(--destructive);border-color:hsl(0,50%,85%);display:none" onclick="kadroKisiSil()">
@@ -5276,6 +5289,30 @@ function kisiGorevGuncelle(kisiAdiVeyaIdx, yeniGorev) {
   }
 }
 
+// Pill'deki görev inputuna ' / ' ekleyip ek görev girişi için cursor'u sona götür
+function _pillEkGorevEkle(idx) {
+  var wrap = document.getElementById('selected-pills-wrap');
+  if (!wrap) return;
+  var rows = wrap.querySelectorAll('[data-idx]');
+  var hedefRow = null;
+  rows.forEach(function(r){ if (parseInt(r.getAttribute('data-idx')) === idx) hedefRow = r; });
+  if (!hedefRow) return;
+  var inp = hedefRow.querySelector('input[type="text"]');
+  if (!inp) return;
+  var mevcutGorev = (kisiModalSecili[idx] && kisiModalSecili[idx].gorev) || '';
+  // Zaten ' / ' ile bitiyor mu?
+  if (!mevcutGorev.trim()) {
+    // Hiç görev yoksa — mevcut kategori değerini başlangıç yap
+    var katBaslangic = (kisiModalSecili[idx] && kisiModalSecili[idx].kategori) || '';
+    inp.value = katBaslangic + ' / ';
+  } else if (!mevcutGorev.endsWith(' / ')) {
+    inp.value = mevcutGorev + ' / ';
+  }
+  kisiModalSecili[idx].gorev = inp.value;
+  inp.focus();
+  inp.setSelectionRange(inp.value.length, inp.value.length);
+}
+
 function toggleKisiSecim(kisi, gorev, kategori) {
   const idx = kisiModalSecili.findIndex(s => s.kisi === kisi);
   if (idx >= 0) {
@@ -5314,6 +5351,11 @@ function renderSelectedPills(scrollToIdx) {
   el.innerHTML = '<div id="drag-list" style="display:flex;flex-direction:column;padding:3px 4px;gap:1px">'
     + kisiModalSecili.map(function(k, i) {
       var akt = (i === _aktifPillIdx);
+      // Ek görev var mı? gorev içinde ' / ' varsa göster
+      var gorevParcalar = (k.gorev||'').split(' / ').map(function(g){ return g.trim(); }).filter(Boolean);
+      var ekGorevBadge = gorevParcalar.length > 1
+        ? '<span style="font-size:9px;background:hsl(220,60%,92%);color:hsl(220,65%,38%);border-radius:3px;padding:0 4px;margin-left:3px;font-weight:700">+' + (gorevParcalar.length-1) + ' görev</span>'
+        : '';
       return '<div draggable="true" data-idx="' + i + '"'
         + ' onclick="event.stopPropagation();_pillFocus(' + i + ')"'
         + ' style="display:flex;align-items:center;gap:4px;padding:3px 5px;border-radius:5px;border:1.5px solid '
@@ -5323,16 +5365,20 @@ function renderSelectedPills(scrollToIdx) {
         + '<span style="font-size:10px;color:#bbb;width:14px;text-align:right;flex-shrink:0;font-weight:700;user-select:none">' + (i+1) + '</span>'
         // Drag handle
         + '<span style="font-size:11px;color:#ccc;cursor:grab;flex-shrink:0;user-select:none;line-height:1">\u2807</span>'
-        // \u0130sim + g\u00f6rev input
+        // İsim + görev input + ek görev butonu
         + '<div style="flex:1;min-width:0">'
-        +   '<div style="font-size:11px;font-weight:700;color:var(--foreground);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.3">' + (k.kisi||'') + '</div>'
+        +   '<div style="font-size:11px;font-weight:700;color:var(--foreground);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.3">' + (k.kisi||'') + ekGorevBadge + '</div>'
+        +   '<div style="display:flex;align-items:center;gap:3px">'
         +   '<input type="text" value="' + (k.gorev||'').replace(/"/g,'&quot;') + '"'
         +   ' placeholder="Görev..." list="gorev-datalist"'
         +   ' onclick="event.stopPropagation()"'
         +   ' oninput="event.stopPropagation();kisiGorevGuncelle(' + i + ',this.value)" onchange="event.stopPropagation();kisiGorevGuncelle(' + i + ',this.value);gorevHafizayaKaydet(this.value)"'
-        +   ' style="width:100%;border:1px solid var(--border);border-radius:3px;padding:1px 4px;font-size:10px;background:var(--card);font-family:Poppins,sans-serif;color:var(--foreground)">'
+        +   ' style="flex:1;min-width:0;border:1px solid var(--border);border-radius:3px;padding:1px 4px;font-size:10px;background:var(--card);font-family:Poppins,sans-serif;color:var(--foreground)">'
+        +   '<button onclick="event.stopPropagation();_pillEkGorevEkle(' + i + ')" title="Ek görev ekle (/ ile ayırır)" '
+        +   'style="flex-shrink:0;height:18px;padding:0 5px;border:1px solid hsl(220,55%,65%);border-radius:3px;background:transparent;cursor:pointer;font-size:9px;font-weight:700;color:hsl(220,62%,42%);white-space:nowrap;line-height:1">＋ek</button>'
+        +   '</div>'
         + '</div>'
-        // \u2191 \u2193 butonlar\u0131 - b\u00fcy\u00fck, net, t\u0131klanabilir
+        // ↑ ↓ butonları
         + '<div style="display:flex;gap:2px;flex-shrink:0">'
         + (i > 0   ? '<button onclick="event.stopPropagation();_pillMove(' + i + ',-1)" title="Yukar\u0131 ta\u015f\u0131 (\u2191)" style="width:26px;height:26px;border-radius:4px;border:1px solid var(--border);background:var(--card);cursor:pointer;font-size:14px;line-height:1;color:var(--foreground);display:flex;align-items:center;justify-content:center">\u2191</button>'
           : '<span style="width:26px;height:26px;display:inline-block"></span>')
@@ -5724,10 +5770,8 @@ async function saveKisiModal() {
   const t = turneler.find(x => x._rowIdx === kisiModalRowIdx);
   if (!t) return;
 
-  // Debug: dış katılımcıları logla
-  var disCount = kisiModalSecili.filter(function(k){ return k.dis || k.ekstra; }).length;
-  console.log('[saveKisiModal] Toplam:', kisiModalSecili.length, '| Dış katılımcı:', disCount);
-  console.log('[saveKisiModal] JSON:', JSON.stringify(kisiModalSecili));
+  // NOT: dis:true olan kişiler SADECE bu turnenin JSON'una kaydedilir.
+  // DIS_KATILIMCILAR sheet'ine otomatik yazılmaz — o listeyi yönetici kendisi yönetir.
 
   // 1. Yerel veriyi hemen güncelle
   t.katilimcilar = JSON.parse(JSON.stringify(kisiModalSecili));
@@ -6415,9 +6459,15 @@ async function disPersonelKaydet() {
   if (btn) { btn.disabled=true; btn.textContent='Kaydediliyor...'; }
 
   try {
-    if (disPersonelEditIdx !== null) {
-      // Güncelle
+    if (disPersonelEditIdx !== null && tumDisPersonel[disPersonelEditIdx]) {
+      // Güncelle — _sheetRow geçerliliğini kontrol et
       var p = tumDisPersonel[disPersonelEditIdx];
+      if (!p._sheetRow) {
+        // _sheetRow yoksa önce sheet'ten taze veri çek
+        await fetchDisPersonel();
+        var yeniIdx = tumDisPersonel.findIndex(function(x){ return x.kisi === p.kisi; });
+        if (yeniIdx >= 0) { disPersonelEditIdx = yeniIdx; p = tumDisPersonel[yeniIdx]; }
+      }
       var vals = [ad, kat, gorev];
       await Promise.all(vals.map(function(val, i){
         return apiFetch('/' + encodeURIComponent(DIS_PERSONEL_SHEET) + '/cell', {
@@ -6428,14 +6478,29 @@ async function disPersonelKaydet() {
       }));
       tumDisPersonel[disPersonelEditIdx] = { kisi: ad, kategori: kat, gorev: gorev, _sheetRow: p._sheetRow };
     } else {
-      // Yeni ekle
-      await apiFetch('/' + encodeURIComponent(DIS_PERSONEL_SHEET) + '/row', {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ values: [ad, kat, gorev] })
-      });
-      var maxRow = tumDisPersonel.reduce(function(m,p){ return Math.max(m,p._sheetRow||0); }, 1);
-      tumDisPersonel.push({ kisi: ad, kategori: kat, gorev: gorev, _sheetRow: maxRow + 1 });
+      // Yeni ekle — önce aynı isimde kayıt var mı kontrol et (mükerrer eklemeyi önle)
+      var mevcutIdx = tumDisPersonel.findIndex(function(x){ return x.kisi.toLowerCase() === ad.toLowerCase(); });
+      if (mevcutIdx >= 0) {
+        // Zaten var, güncelle
+        var mp = tumDisPersonel[mevcutIdx];
+        var mvals = [ad, kat, gorev];
+        await Promise.all(mvals.map(function(val, i){
+          return apiFetch('/' + encodeURIComponent(DIS_PERSONEL_SHEET) + '/cell', {
+            method: 'PUT',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ row: mp._sheetRow, col: i, value: val })
+          });
+        }));
+        tumDisPersonel[mevcutIdx] = { kisi: ad, kategori: kat, gorev: gorev, _sheetRow: mp._sheetRow };
+      } else {
+        await apiFetch('/' + encodeURIComponent(DIS_PERSONEL_SHEET) + '/row', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ values: [ad, kat, gorev] })
+        });
+        var maxRow = tumDisPersonel.reduce(function(m,p){ return Math.max(m,p._sheetRow||0); }, 1);
+        tumDisPersonel.push({ kisi: ad, kategori: kat, gorev: gorev, _sheetRow: maxRow + 1 });
+      }
     }
   } catch(e) {
     alert('Kayıt hatası: ' + e.message);
@@ -6444,6 +6509,8 @@ async function disPersonelKaydet() {
   }
 
   disPersonelModalKapat();
+  // Güncel _sheetRow değerleri için sheet'ten yeniden çek
+  try { await fetchDisPersonel(); } catch(e) { /* hata olursa local veri korunur */ }
   renderDisPersonel();
 }
 
@@ -6461,10 +6528,12 @@ async function disPersonelSil() {
 async function _disPersonelSilDevam2(p) {
   try {
     await apiFetch('/' + encodeURIComponent(DIS_PERSONEL_SHEET) + '/row/' + p._sheetRow, { method: 'DELETE' });
+    // Silme sonrası sheet'ten güncel veriyi çek (_sheetRow azaltma mantığı yerine)
     tumDisPersonel.splice(disPersonelEditIdx, 1);
-    tumDisPersonel.forEach(function(x){ if (x._sheetRow > p._sheetRow) x._sheetRow--; });
   } catch(e) { alert('Silme hatası: ' + e.message); return; }
   disPersonelModalKapat();
+  // Sheet'ten taze veri çek — _sheetRow değerleri güncel kalsın
+  try { await fetchDisPersonel(); } catch(e) { /* hata olursa local veri korunur */ }
   renderDisPersonel();
 }
 
@@ -7404,6 +7473,57 @@ function renderKadro() {
 }
 
 
+// ── EK GÖREV YÖNETİMİ (Kadro Modal) ──────────────────────────
+function kadroEkGorevToggle() {
+  var grup = document.getElementById('kadro-ek-gorev-grup');
+  var btn  = document.getElementById('kadro-ek-gorev-toggle-btn');
+  if (!grup) return;
+  var acik = grup.style.display !== 'none';
+  grup.style.display = acik ? 'none' : '';
+  if (btn) btn.style.display = acik ? '' : 'none';
+  if (!acik) kadroEkGorevSatirEkle();
+}
+
+function kadroEkGorevSatirEkle(deger) {
+  var liste = document.getElementById('kadro-ek-gorev-liste');
+  if (!liste) return;
+  var satirNo = liste.children.length;
+  var div = document.createElement('div');
+  div.style.cssText = 'display:flex;gap:4px;align-items:center';
+  div.innerHTML = '<input type="text" class="form-input" value="' + (deger||'').replace(/"/g,'&quot;') + '" placeholder="Ek görev adı..." style="flex:1;font-size:12px">'
+    + '<button type="button" onclick="this.parentElement.remove()" style="width:26px;height:26px;border:1px solid hsl(0,50%,85%);border-radius:5px;background:transparent;cursor:pointer;color:var(--destructive);font-size:13px;display:flex;align-items:center;justify-content:center;flex-shrink:0">×</button>';
+  liste.appendChild(div);
+  div.querySelector('input').focus();
+}
+
+function _kadroEkGorevleriOku() {
+  var liste = document.getElementById('kadro-ek-gorev-liste');
+  if (!liste || liste.style.display === 'none') {
+    var grup = document.getElementById('kadro-ek-gorev-grup');
+    if (!grup || grup.style.display === 'none') return [];
+  }
+  return Array.from(liste.querySelectorAll('input')).map(function(inp){ return inp.value.trim(); }).filter(Boolean);
+}
+
+function _kadroEkGorevleriDoldur(gorevStr) {
+  // "Ana Görev / Ek Görev 1 / Ek Görev 2" formatını parse et
+  var liste = document.getElementById('kadro-ek-gorev-liste');
+  var grup  = document.getElementById('kadro-ek-gorev-grup');
+  var btn   = document.getElementById('kadro-ek-gorev-toggle-btn');
+  if (!liste) return;
+  liste.innerHTML = '';
+  var parcalar = (gorevStr||'').split(' / ').map(function(g){ return g.trim(); }).filter(Boolean);
+  if (parcalar.length > 1) {
+    // Ek görevler var — göster
+    if (grup) grup.style.display = '';
+    if (btn)  btn.style.display  = 'none';
+    parcalar.slice(1).forEach(function(g){ kadroEkGorevSatirEkle(g); });
+  } else {
+    if (grup) grup.style.display = 'none';
+    if (btn)  btn.style.display  = '';
+  }
+}
+
 function kadroKisiEkleAc() {
   const oyun = document.getElementById('kadro-oyun-sec').value;
   if (!oyun) return;
@@ -7416,6 +7536,7 @@ function kadroKisiEkleAc() {
   document.getElementById('kadro-kisi-ad-err').textContent = '';
   document.getElementById('kadro-kisi-kat-err').textContent = '';
   document.getElementById('kadro-sil-btn').style.display = 'none';
+  _kadroEkGorevleriDoldur(''); // ek görev alanlarını sıfırla
   document.getElementById('kadro-kisi-modal').classList.add('on');
   setTimeout(() => document.getElementById('kadro-kisi-ad').focus(), 100);
 }
@@ -7428,10 +7549,13 @@ function kadroKisiDuzenleAc(idx) {
   document.getElementById('kadro-kisi-modal-sure').textContent = p.oyun;
   document.getElementById('kadro-kisi-ad').value = p.kisi;
   document.getElementById('kadro-kisi-kat').value = p.kategori;
-  document.getElementById('kadro-kisi-gorev').value = p.gorev;
+  // Ana görev (ilk parça) gorev inputuna, ek görevler ayrı alanlara
+  var parcalar = (p.gorev||'').split(' / ').map(function(g){ return g.trim(); }).filter(Boolean);
+  document.getElementById('kadro-kisi-gorev').value = parcalar[0] || '';
   document.getElementById('kadro-kisi-ad-err').textContent = '';
   document.getElementById('kadro-kisi-kat-err').textContent = '';
   document.getElementById('kadro-sil-btn').style.display = '';
+  _kadroEkGorevleriDoldur(p.gorev || ''); // ek görev alanlarını doldur
   document.getElementById('kadro-kisi-modal').classList.add('on');
   setTimeout(() => document.getElementById('kadro-kisi-ad').focus(), 100);
 }
@@ -7444,8 +7568,13 @@ function kadroKisiModalKapat() {
 async function kadroKisiKaydet() {
   const ad    = document.getElementById('kadro-kisi-ad').value.trim();
   const kat   = document.getElementById('kadro-kisi-kat').value;
-  const gorev = document.getElementById('kadro-kisi-gorev').value.trim();
+  const anaGorev = document.getElementById('kadro-kisi-gorev').value.trim();
   const oyun  = document.getElementById('kadro-oyun-sec').value || document.getElementById('kadro-kisi-modal-sure').textContent;
+  // Ek görevleri birleştir
+  const ekGorevler = _kadroEkGorevleriOku();
+  const gorev = ekGorevler.length > 0
+    ? [anaGorev, ...ekGorevler].filter(Boolean).join(' / ')
+    : anaGorev;
   let hata = false;
   if (!ad)  { document.getElementById('kadro-kisi-ad-err').textContent = 'Ad Soyad gerekli'; hata=true; } else { document.getElementById('kadro-kisi-ad-err').textContent = ''; }
   if (!kat) { document.getElementById('kadro-kisi-kat-err').textContent = 'Kategori seçilmeli'; hata=true; } else { document.getElementById('kadro-kisi-kat-err').textContent = ''; }
@@ -7456,7 +7585,6 @@ async function kadroKisiKaydet() {
 
   try {
     if (kadroEditIdx !== null) {
-      // GÜNCELLE — _sheetRow'dan gerçek Sheets satır numarasını al
       const sheetRow = tumPersonel[kadroEditIdx]._sheetRow;
       if (!sheetRow) { alert('Satır numarası bulunamadı, lütfen sayfayı yenileyin.'); return; }
       const vals = [oyun, kat, gorev, ad];
@@ -7467,19 +7595,16 @@ async function kadroKisiKaydet() {
           body: JSON.stringify({ row: sheetRow, col: i, value: val })
         })
       ));
-      // Local güncelle
       tumPersonel[kadroEditIdx].kisi = ad;
       tumPersonel[kadroEditIdx].kategori = kat;
       tumPersonel[kadroEditIdx].gorev = gorev;
       tumPersonel[kadroEditIdx].oyun = oyun;
     } else {
-      // EKLE — yeni satır append et
       await apiFetch('/' + encodeURIComponent(PERSONEL_SHEET) + '/row', {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
         body: JSON.stringify({ values: [oyun, kat, gorev, ad] })
       });
-      // Local ekle - _sheetRow: mevcut max + 1 (append sonunda eklendi)
       var maxRow = tumPersonel.reduce(function(m,p){ return Math.max(m, p._sheetRow||0); }, 0);
       var yeniSheetRow = maxRow + 1;
       var sonIdx = -1;
