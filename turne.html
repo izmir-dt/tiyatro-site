@@ -2462,6 +2462,7 @@ height:20px !important;
                 <input class="form-input" type="text" id="dis-kisi-ad" placeholder="Kişi seç veya yaz…"
                   onfocus="disKisiAraFocus()"
                   oninput="disKisiAra();var katEl=document.getElementById('dis-kisi-kat');if(katEl.getAttribute('data-locked-kat')){katEl.removeAttribute('data-locked-kat');katEl.style.opacity='';katEl.style.pointerEvents='';katEl.title=''}"
+                  onblur="setTimeout(function(){var l=document.getElementById('dis-oneri-liste');if(l)l.style.display='none';},150)"
                   style="width:100%;border:1.5px solid var(--border);background:var(--card)">
                 <div id="dis-oneri-liste" style="display:none;position:absolute;top:100%;left:0;width:100%;background:var(--background);border:1.5px solid var(--border);border-radius:6px;z-index:999;max-height:200px;overflow-y:auto;box-shadow:0 4px 16px rgba(0,0,0,.18)"></div>
               </div>
@@ -5374,8 +5375,6 @@ function renderSelectedPills(scrollToIdx) {
         +   ' onclick="event.stopPropagation()"'
         +   ' oninput="event.stopPropagation();kisiGorevGuncelle(' + i + ',this.value)" onchange="event.stopPropagation();kisiGorevGuncelle(' + i + ',this.value);gorevHafizayaKaydet(this.value)"'
         +   ' style="flex:1;min-width:0;border:1px solid var(--border);border-radius:3px;padding:1px 4px;font-size:10px;background:var(--card);font-family:Poppins,sans-serif;color:var(--foreground)">'
-        +   '<button onclick="event.stopPropagation();_pillEkGorevEkle(' + i + ')" title="Ek görev ekle (/ ile ayırır)" '
-        +   'style="flex-shrink:0;height:18px;padding:0 5px;border:1px solid hsl(220,55%,65%);border-radius:3px;background:transparent;cursor:pointer;font-size:9px;font-weight:700;color:hsl(220,62%,42%);white-space:nowrap;line-height:1">＋ek</button>'
         +   '</div>'
         + '</div>'
         // ↑ ↓ butonları
@@ -5573,7 +5572,7 @@ function _disKisiOneriGoster(q) {
   el.innerHTML = _disOneriCache.map(function(p, i) {
     var gl = p.gorev || p.kategori || '';
     var secili = seciliAdlar.has(p.kisi);
-    return '<div class="_dis_oneri" data-i="'+i+'" style="padding:8px 12px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px'+(secili?';background:hsl(145,50%,93%)':'')+'">'      + '<div><b style="color:'+(secili?'#166534':'var(--foreground)')+'">'+p.kisi+'</b>'+(gl?' <span style="color:var(--muted-foreground);font-size:10px">· '+gl+'</span>':'')+'</div>'      + (secili ? '<span style="font-size:10px;color:#166534;font-weight:700">✓ Seçili</span>' : '')      + '</div>';
+    return '<div class="_dis_oneri" data-i="'+i+'" onmousedown="event.preventDefault()" style="padding:8px 12px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px'+(secili?';background:hsl(145,50%,93%)':'')+'">'      + '<div><b style="color:'+(secili?'#166534':'var(--foreground)')+'">'+p.kisi+'</b>'+(gl?' <span style="color:var(--muted-foreground);font-size:10px">· '+gl+'</span>':'')+'</div>'      + (secili ? '<span style="font-size:10px;color:#166534;font-weight:700">✓ Seçili</span>' : '')      + '</div>';
   }).join('');
   el.querySelectorAll('._dis_oneri').forEach(function(div) {
     div.onmouseover = function(){ if(!this.classList.contains('secili')) this.style.background='var(--muted)'; };
@@ -6838,6 +6837,7 @@ function _topluHucreDegisti(el) {
   var field = el.getAttribute('data-field');
   if (isNaN(idx) || !field) return;
   _topluSatirlar[idx][field] = el.value;
+  _topluSatirlar[idx]._degisti = true; // satır bazlı değişim işareti
   _topluDegisti = true;
   document.getElementById('toplu-degisiklik-badge').style.display = '';
 }
@@ -6878,11 +6878,9 @@ function topluAra() {
 }
 
 async function topluKaydet() {
-  // Validasyon: ad ve kategori zorunlu
-  var hatalar = _topluSatirlar.filter(function(s){ return !s._silindi && !s._yeni === false && (!s.kisi.trim() || !s.kategori); });
+  // Validasyon: yeni eklenen satırlarda ad ve kategori zorunlu
   var yeniHata = _topluSatirlar.filter(function(s){ return s._yeni && !s._silindi && (!s.kisi.trim() || !s.kategori); });
   if (yeniHata.length > 0) {
-    // Eksik alanları vurgula
     var tbody = document.getElementById('toplu-tbody');
     tbody.querySelectorAll('input[data-field="kisi"]').forEach(function(inp) {
       var idx = parseInt(inp.getAttribute('data-idx'));
@@ -6902,36 +6900,36 @@ async function topluKaydet() {
   var basariSayisi = 0;
 
   try {
-    // 1. Silinenleri sil
+    // 1. Silinenleri sil (sadece _sheetRow olanlar — sheet'te gerçekten var)
     var silinecekler = _topluSatirlar.filter(function(s){ return s._silindi && s._sheetRow; });
     for (var i = 0; i < silinecekler.length; i++) {
       try {
-        var res = await apiFetch('/' + encodeURIComponent(PERSONEL_SHEET) + '/row/' + silinecekler[i]._sheetRow, { method: 'DELETE' });
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        // Local'den sil
-        if (silinecekler[i]._tumIdx >= 0) tumPersonel.splice(silinecekler[i]._tumIdx, 1);
-        else { var ti = tumPersonel.findIndex(function(p){ return p._sheetRow === silinecekler[i]._sheetRow; }); if (ti >= 0) tumPersonel.splice(ti, 1); }
+        var delRes = await apiFetch('/' + encodeURIComponent(PERSONEL_SHEET) + '/row/' + silinecekler[i]._sheetRow, { method: 'DELETE' });
+        if (!delRes.ok) throw new Error('HTTP ' + delRes.status);
+        var ti = tumPersonel.findIndex(function(p){ return p._sheetRow === silinecekler[i]._sheetRow; });
+        if (ti >= 0) tumPersonel.splice(ti, 1);
         basariSayisi++;
-      } catch(e) { hataSayisi++; console.warn('Silme hatası:', e); }
+      } catch(e) { hataSayisi++; console.warn('Silme hatası:', silinecekler[i].kisi, e); }
     }
 
-    // 2. Değiştirilen mevcut kayıtları güncelle
-    var mevcutlar = _topluSatirlar.filter(function(s){ return !s._silindi && !s._yeni && s._sheetRow; });
-    for (var j = 0; j < mevcutlar.length; j++) {
-      var satir = mevcutlar[j];
+    // 2. Sadece değiştirilmiş mevcut kayıtları güncelle (_degisti:true)
+    var degisenler = _topluSatirlar.filter(function(s){ return !s._silindi && !s._yeni && s._sheetRow && s._degisti; });
+    for (var j = 0; j < degisenler.length; j++) {
+      var satir = degisenler[j];
       try {
+        // Sıralı olarak gönder — Promise.all yerine sequential (rate limit dostu)
         var vals = [_topluOyun, satir.kategori, satir.gorev||'', satir.kisi];
-        await Promise.all(vals.map(function(val, ci) {
-          return apiFetch('/' + encodeURIComponent(PERSONEL_SHEET) + '/cell', {
+        for (var ci = 0; ci < vals.length; ci++) {
+          var putRes = await apiFetch('/' + encodeURIComponent(PERSONEL_SHEET) + '/cell', {
             method: 'PUT', headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({ row: satir._sheetRow, col: ci, value: val })
+            body: JSON.stringify({ row: satir._sheetRow, col: ci, value: vals[ci] })
           });
-        }));
-        // Local güncelle
-        var ti2 = satir._tumIdx >= 0 ? satir._tumIdx : tumPersonel.findIndex(function(p){ return p._sheetRow === satir._sheetRow; });
+          if (!putRes.ok) throw new Error('HTTP ' + putRes.status + ' col ' + ci);
+        }
+        var ti2 = tumPersonel.findIndex(function(p){ return p._sheetRow === satir._sheetRow; });
         if (ti2 >= 0) { tumPersonel[ti2].kisi = satir.kisi; tumPersonel[ti2].kategori = satir.kategori; tumPersonel[ti2].gorev = satir.gorev||''; }
         basariSayisi++;
-      } catch(e) { hataSayisi++; console.warn('Güncelleme hatası:', e); }
+      } catch(e) { hataSayisi++; console.warn('Güncelleme hatası:', satir.kisi, e); }
     }
 
     // 3. Yeni satırları ekle
@@ -6940,16 +6938,19 @@ async function topluKaydet() {
     for (var k = 0; k < yeniler.length; k++) {
       var ySatir = yeniler[k];
       try {
-        await apiFetch('/' + encodeURIComponent(PERSONEL_SHEET) + '/row', {
+        var postRes = await apiFetch('/' + encodeURIComponent(PERSONEL_SHEET) + '/row', {
           method: 'POST', headers: {'Content-Type':'application/json'},
           body: JSON.stringify({ values: [_topluOyun, ySatir.kategori, ySatir.gorev||'', ySatir.kisi] })
         });
+        if (!postRes.ok) throw new Error('HTTP ' + postRes.status);
         maxRow++;
-        var yeniKayit = { oyun: _topluOyun, kategori: ySatir.kategori, gorev: ySatir.gorev||'', kisi: ySatir.kisi, _sheetRow: maxRow };
-        tumPersonel.push(yeniKayit);
+        tumPersonel.push({ oyun: _topluOyun, kategori: ySatir.kategori, gorev: ySatir.gorev||'', kisi: ySatir.kisi, _sheetRow: maxRow });
         basariSayisi++;
-      } catch(e) { hataSayisi++; console.warn('Ekleme hatası:', e); }
+      } catch(e) { hataSayisi++; console.warn('Ekleme hatası:', ySatir.kisi, e); }
     }
+  } catch(e) {
+    console.error('topluKaydet beklenmeyen hata:', e);
+    hataSayisi++;
   } finally {
     if (btn) { btn.disabled = false; btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Tümünü Kaydet'; }
   }
@@ -6958,18 +6959,19 @@ async function topluKaydet() {
   renderKadro();
   renderOyunMgmt();
 
-  // Başarı veya hata bildirimi
+  // Sonuç bildirimi
+  var toplamIslem = basariSayisi + hataSayisi;
   var msg = hataSayisi > 0
-    ? ('⚠️ ' + basariSayisi + ' kayıt işlendi, ' + hataSayisi + ' hata oluştu')
-    : ('✓ ' + basariSayisi + ' değişiklik kaydedildi');
-  var toast = document.createElement('div');
-  toast.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:'+(hataSayisi>0?'#7c2d12':'#1e293b')+';color:#fff;padding:10px 20px;border-radius:8px;font-size:12px;font-weight:600;z-index:99999;box-shadow:0 4px 16px rgba(0,0,0,.3);font-family:Poppins,sans-serif;white-space:nowrap';
-  toast.textContent = msg;
-  document.body.appendChild(toast);
-  setTimeout(function(){ toast.remove(); }, 3000);
+    ? ('⚠️ ' + basariSayisi + '/' + toplamIslem + ' işlem başarılı, ' + hataSayisi + ' hata')
+    : (basariSayisi === 0 ? '✓ Değişiklik yok' : '✓ ' + basariSayisi + ' değişiklik kaydedildi');
+  showToast(msg, hataSayisi > 0 ? 'error' : 'success', 3500);
 
-  if (hataSayisi === 0) _topluKapat();
-  else { _topluDegisti = false; document.getElementById('toplu-degisiklik-badge').style.display = 'none'; }
+  if (hataSayisi === 0) {
+    _topluKapat();
+  } else {
+    _topluDegisti = false;
+    document.getElementById('toplu-degisiklik-badge').style.display = 'none';
+  }
 }
 
 function oyunEkleAc() {
