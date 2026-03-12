@@ -4797,7 +4797,10 @@ function openKisiModal(rowIdx) {
   } else {
     // Ana kadroyu varsayılan olarak seç
     var anaKadro = getPersonelForOyun(oyunAdi);
-    kisiModalSecili = anaKadro.map(function(p) { return { kisi: p.kisi, gorev: p.gorev || p.kategori, kategori: p.kategori }; });
+    kisiModalSecili = anaKadro.map(function(p) {
+      var gorevGoster = p.kategori === 'Oyuncu' ? 'Sanatçı' : (p.gorev || p.kategori || '');
+      return { kisi: p.kisi, gorev: gorevGoster, kategori: p.kategori };
+    });
   }
   document.getElementById('kisi-modal-title').textContent = (oyunAdi || t.il || 'Turne') + ' – Katılımcılar';
   document.getElementById('kisi-modal-sure').textContent = formatTarih(t.baslangicTarih || t.tarih) + ' · ' + t.il;
@@ -4823,7 +4826,10 @@ function kisiModalAnaKadroyuSec() {
   if (!t) return;
   var _kmOyun = t.oyun || (t.duraklar ? [...new Set(t.duraklar.map(function(d){return d.oyun||'';}).filter(Boolean))].join(' / ') : '');
   var anaKadro = getPersonelForOyun(_kmOyun);
-  kisiModalSecili = anaKadro.map(function(p) { return { kisi: p.kisi, gorev: p.gorev || p.kategori, kategori: p.kategori }; });
+  kisiModalSecili = anaKadro.map(function(p) {
+    var gorevGoster = p.kategori === 'Oyuncu' ? 'Sanatçı' : (p.gorev || p.kategori || '');
+    return { kisi: p.kisi, gorev: gorevGoster, kategori: p.kategori };
+  });
   var q = document.getElementById('kisi-filter-input').value.toLowerCase();
   renderKisiModalList(t.oyun, q);
   renderSelectedPills();
@@ -5140,10 +5146,27 @@ function renderKisiModalList(oyunAdi, q) {
     const gorevGoster = OYUNCU_K.indexOf(p.kategori||'') < 0 ? (p.gorev || '') : '';
     const secili = kisiModalSecili.some(s => s.kisi === p.kisi);
     const seciliKisi = secili ? kisiModalSecili.find(s => s.kisi === p.kisi) : null;
-    // Seçiliyken input değeri: kullanıcının daha önce yazdığı varsa onu kullan, yoksa kategori
-    const turneGorev = seciliKisi ? seciliKisi.gorev : (p.kategori || '');
+    // Seçiliyken input değeri: kullanıcının daha önce yazdığı varsa onu kullan, yoksa görüntülenen kategori adı
+    const turneGorev = seciliKisi ? seciliKisi.gorev : _katGoster;
     const esc = v => (v||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');
-    return '<div class="kisi-row' + (secili ? ' selected' : '') + '" onclick="toggleKisiSecim(\'' + esc(p.kisi) + '\',\'' + esc(p.kategori||'') + '\',\'' + esc(p.kategori||'') + '\')">'      + '<div class="kisi-checkbox">' + (secili ? '✓' : '') + '</div>'      + '<div class="kisi-row-info">'        + '<div class="kisi-row-name">' + p.kisi + '</div>'        + '<span class="kisi-kat-chip">' + _katGoster + '</span>'      + '</div>'      + (secili        ? '<input type="text" value="' + esc(turneGorev) + '" placeholder="Görevi" '          + 'onclick="event.stopPropagation()" list="gorev-datalist" '          + 'oninput="event.stopPropagation();kisiGorevGuncelle(\'' + esc(p.kisi) + '\',this.value)" onchange="event.stopPropagation();kisiGorevGuncelle(\'' + esc(p.kisi) + '\',this.value);gorevHafizayaKaydet(this.value)" '          + 'style="width:120px;border:1.5px solid var(--primary);border-radius:5px;padding:4px 7px;font-size:11px;background:var(--background);font-family:inherit;flex-shrink:0;color:var(--primary);font-weight:600">'        : '')      + '</div>';
+    // Seçiliyken sadece checkbox div toggle yapar (görev inputuna tıklama satırı kapatmasın)
+    const rowClick = secili
+      ? 'onclick="event.stopPropagation()"'
+      : 'onclick="toggleKisiSecim(\'' + esc(p.kisi) + '\',\'' + esc(_katGoster) + '\',\'' + esc(p.kategori||'') + '\')"';
+    const checkClick = 'onclick="event.stopPropagation();toggleKisiSecim(\'' + esc(p.kisi) + '\',\'' + esc(_katGoster) + '\',\'' + esc(p.kategori||'') + '\')" style="cursor:pointer"';
+    return '<div class="kisi-row' + (secili ? ' selected' : '') + '" ' + rowClick + '>'
+      + '<div class="kisi-checkbox" ' + checkClick + '>' + (secili ? '✓' : '') + '</div>'
+      + '<div class="kisi-row-info">'
+        + '<div class="kisi-row-name">' + p.kisi + '</div>'
+        + '<span class="kisi-kat-chip">' + _katGoster + '</span>'
+      + '</div>'
+      + (secili
+        ? '<input type="text" value="' + esc(turneGorev) + '" placeholder="Görevi" '
+          + 'onclick="event.stopPropagation()" list="gorev-datalist" '
+          + 'oninput="event.stopPropagation();kisiGorevGuncelle(\'' + esc(p.kisi) + '\',this.value)" onchange="event.stopPropagation();kisiGorevGuncelle(\'' + esc(p.kisi) + '\',this.value);gorevHafizayaKaydet(this.value)" '
+          + 'style="width:120px;border:1.5px solid var(--primary);border-radius:5px;padding:4px 7px;font-size:11px;background:var(--background);font-family:inherit;flex-shrink:0;color:var(--primary);font-weight:600">'
+        : '')
+      + '</div>';
   }).join('');
   } // end else personel.length > 0
   updateKisiCount();
