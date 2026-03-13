@@ -4449,20 +4449,27 @@ function openKisiModal(rowIdx) {
       return p.kisi && !kayitliAdlar.has(p.kisi.trim().toLowerCase());
     });
     if (eksikler.length > 0) {
-      var eksikAdlar = eksikler.map(function(p){ return '• ' + p.kisi + (p.gorev ? ' (' + p.gorev + ')' : ''); }).join('\n');
-      var ekleOnay = confirm(
-        'Ana kadroda olup bu turne listesinde olmayan ' + eksikler.length + ' kişi var:\n\n' +
-        eksikAdlar + '\n\nBu kişiler listeye eklensin mi?'
-      );
-      if (ekleOnay) {
-        eksikler.forEach(function(p){
-          kisiModalSecili.push({
-            kisi: p.kisi,
-            gorev: p.kategori === 'Oyuncu' ? 'Sanatçı' : (p.gorev || p.kategori || ''),
-            kategori: p.kategori
+      var eksikListe = eksikler.map(function(p){ return p.kisi + (p.gorev ? ' (' + p.gorev + ')' : ''); });
+      onayGoster({
+        baslik: 'Ana Kadroda Eksik Kişiler',
+        ikon: '👥',
+        ikonBg: 'hsl(220,80%,95%)',
+        mesaj: 'Ana kadroda olup bu turne listesinde olmayan ' + eksikler.length + ' kişi var:',
+        liste: eksikListe,
+        altMesaj: 'Bu kişiler listeye eklensin mi?',
+        tamamYazi: 'Evet, Ekle',
+        tamamRenk: 'hsl(220,75%,52%)',
+        onOnay: function() {
+          eksikler.forEach(function(p){
+            kisiModalSecili.push({
+              kisi: p.kisi,
+              gorev: p.kategori === 'Oyuncu' ? 'Sanatçı' : (p.gorev || p.kategori || ''),
+              kategori: p.kategori
+            });
           });
-        });
-      }
+          renderSelectedPills();
+        }
+      });
     }
   } else {
     // Ana kadroyu varsayılan olarak seç
@@ -6345,6 +6352,12 @@ function renderOyunMgmt() {
       + 'style="flex:1;height:28px;border:none;border-radius:6px;background:var(--primary);cursor:pointer;font-size:11px;font-weight:600;color:#fff;font-family:Poppins,sans-serif;display:flex;align-items:center;justify-content:center;gap:4px">'
       + '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Kişi Ekle'
       + '</button>';
+    html += '<button onclick="_oyunSilOnay(\'' + oyun.replace(/\'/g,\"\\\'\") + '\')" '
+      + 'title="Oyunu ve tüm kadrosunu sil" '
+      + 'style="width:28px;height:28px;flex-shrink:0;border:1.5px solid hsl(0,50%,85%);border-radius:6px;background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--destructive);transition:all .15s" '
+      + 'onmouseenter="this.style.background=\'hsl(0,80%,96%)\'" onmouseleave="this.style.background=\'transparent\'">'
+      + '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>'
+      + '</button>';
     html += '</div></div>';
   });
   html += '</div>';
@@ -6608,22 +6621,38 @@ async function topluKaydet() {
     }
 
     // 1b. Silinen kişiler turne JSON'larında var mı? Uyar.
+    // Turne kaydı olan silinecekler için önceden işaretle
     for (var si = 0; si < silinecekler.length; si++) {
       var silKisi = silinecekler[si].kisi;
       var etkilenenTurneler = turneler.filter(function(t){
         return t.katilimcilar && t.katilimcilar.some(function(k){ return k.kisi && k.kisi.trim().toLowerCase() === silKisi.trim().toLowerCase(); });
       });
       if (etkilenenTurneler.length > 0) {
-        var turneAdlari = etkilenenTurneler.map(function(t){ return '"' + (t.oyun||'') + (t.il?' – '+t.il:'') + '"'; }).join(', ');
-        var devamEt = confirm(
-          '"' + silKisi + '" şu turne kayıtlarında katılımcı olarak yer alıyor:\n' + turneAdlari +
-          '\n\nPersonel listesinden silmek istiyor musunuz?\n(Turne kayıtları değişmeyecek, sadece personel listesinden kalkacak.)'
-        );
-        if (!devamEt) {
-          silinecekler[si]._silindi = false;
-          _topluSatirlar.find(function(s){ return s.kisi === silKisi; })._silindi = false;
-          continue;
-        }
+        var turneAdlari2 = etkilenenTurneler.map(function(t){ return (t.oyun||'') + (t.il?' – '+t.il:''); });
+        // Modal ile sor — iptal ederse _onayReddedildi işareti koy
+        silinecekler[si]._onayBekleniyor = true;
+        (function(satirRef, kisiAdi, tAdlari) {
+          onayGoster({
+            baslik: '"' + kisiAdi + '" Silinecek',
+            ikon: '⚠️',
+            ikonBg: 'hsl(42,90%,94%)',
+            mesaj: 'Bu kişi şu turne kayıtlarında katılımcı olarak yer alıyor:',
+            liste: tAdlari,
+            altMesaj: 'Personel listesinden silinecek, turne kayıtları değişmeyecek.',
+            tamamYazi: 'Evet, Sil',
+            tamamRenk: 'hsl(0,75%,52%)',
+            onOnay: function() { satirRef._onayReddedildi = false; satirRef._onayBekleniyor = false; topluKaydet(); },
+          });
+          // İptal tıklanınca
+          var orijinalIptal = document.getElementById('onay-iptal').onclick;
+          document.getElementById('onay-iptal').onclick = function() {
+            satirRef._silindi = false;
+            satirRef._onayBekleniyor = false;
+            satirRef._onayReddedildi = true;
+            onayKapat();
+          };
+        })(silinecekler[si], silKisi, turneAdlari2);
+        return; // Modal açık, kullanıcı karar verince tekrar çağrılacak
       }
     }
 
@@ -6653,30 +6682,35 @@ async function topluKaydet() {
             });
           });
           if (etkilenenT.length > 0) {
-            var tAdlari = etkilenenT.map(function(t){ return '"' + (t.oyun||'') + (t.il?' – '+t.il:'') + '"'; }).join('\n');
-            var onay = confirm(
-              '"' + eskiKisiAdi + '" ismi "' + satir.kisi + '" olarak değiştirildi.\n\n' +
-              'Bu kişi şu turne kayıtlarında yer alıyor:\n' + tAdlari +
-              '\n\nTurne kayıtlarındaki isim de güncellensin mi?'
-            );
-            if (onay) {
-              for (var ti3 = 0; ti3 < etkilenenT.length; ti3++) {
-                var turneObj = etkilenenT[ti3];
-                turneObj.katilimcilar.forEach(function(k){
-                  if (k.kisi && k.kisi.trim().toLowerCase() === eskiKisiAdi.trim().toLowerCase()) {
-                    k.kisi = satir.kisi;
-                  }
-                });
-                // Sheets'e yaz
-                try {
-                  await apiFetch('/' + encodeURIComponent(TURNE_SHEET) + '/cell', {
-                    method: 'PUT', headers: {'Content-Type':'application/json'},
-                    body: JSON.stringify({ row: turneObj._rowIdx + 2, col: 39, value: JSON.stringify(turneObj.katilimcilar) })
+            var tGuncListe = etkilenenT.map(function(t){ return (t.oyun||'') + (t.il?' – '+t.il:''); });
+            var _eskiAdi = eskiKisiAdi, _yeniAdi = satir.kisi, _etkilenenT = etkilenenT;
+            onayGoster({
+              baslik: 'İsim Değişikliği – Turne Kayıtları',
+              ikon: '✏️',
+              ikonBg: 'hsl(220,80%,95%)',
+              mesaj: '"' + _eskiAdi + '" → "' + _yeniAdi + '" olarak güncellendi. Bu kişi şu turne kayıtlarında yer alıyor:',
+              liste: tGuncListe,
+              altMesaj: 'Turne kayıtlarındaki isim de güncellensin mi?',
+              tamamYazi: 'Evet, Güncelle',
+              tamamRenk: 'hsl(220,75%,52%)',
+              onOnay: async function() {
+                for (var ti3 = 0; ti3 < _etkilenenT.length; ti3++) {
+                  var turneObj = _etkilenenT[ti3];
+                  turneObj.katilimcilar.forEach(function(k){
+                    if (k.kisi && k.kisi.trim().toLowerCase() === _eskiAdi.trim().toLowerCase()) {
+                      k.kisi = _yeniAdi;
+                    }
                   });
-                } catch(te) { console.warn('Turne isim güncelleme hatası:', te); }
+                  try {
+                    await apiFetch('/' + encodeURIComponent(TURNE_SHEET) + '/cell', {
+                      method: 'PUT', headers: {'Content-Type':'application/json'},
+                      body: JSON.stringify({ row: turneObj._rowIdx + 2, col: 39, value: JSON.stringify(turneObj.katilimcilar) })
+                    });
+                  } catch(te) { console.warn('Turne isim güncelleme hatası:', te); }
+                }
+                showToast('"' + _eskiAdi + '" → "' + _yeniAdi + '" ' + _etkilenenT.length + ' turne kaydında güncellendi', 'success', 4000);
               }
-              showToast('"' + eskiKisiAdi + '" → "' + satir.kisi + '" ' + etkilenenT.length + ' turne kaydında güncellendi', 'success', 4000);
-            }
+            });
           }
         }
         basariSayisi++;
@@ -6845,6 +6879,47 @@ function kadroPdfIndir() {
 }
 
 // Oyun adını yeniden adlandır
+async function _oyunSilOnay(oyunAdi) {
+  var kadroSay = tumPersonel.filter(function(p){ return p.oyun === oyunAdi; }).length;
+  var turneSay = turneler.filter(function(t){ return t.oyun === oyunAdi; }).length;
+  var liste = [];
+  if (kadroSay > 0) liste.push(kadroSay + ' kadro kaydı silinecek (personel listesi)');
+  if (turneSay > 0) liste.push(turneSay + ' turne kaydı bu oyuna bağlı (turneler silinmez, sadece kadro)');
+  onayGoster({
+    baslik: '"' + oyunAdi + '" Oyunu Silinecek',
+    ikon: '🗑️',
+    ikonBg: 'hsl(0,80%,96%)',
+    mesaj: 'Bu işlem geri alınamaz. Etkilenecekler:',
+    liste: liste.length ? liste : ['Kadro kaydı yok'],
+    altMesaj: 'Devam etmek istiyor musunuz?',
+    tamamYazi: 'Evet, Sil',
+    tamamRenk: 'hsl(0,75%,52%)',
+    onOnay: function() { _oyunSilDevam(oyunAdi); }
+  });
+}
+
+async function _oyunSilDevam(oyunAdi) {
+  // Sheets'teki tüm kadro satırlarını sil
+  var kadroSatirlari = tumPersonel.filter(function(p){ return p.oyun === oyunAdi && p._sheetRow; });
+  var hataSayisi = 0;
+  for (var i = 0; i < kadroSatirlari.length; i++) {
+    try {
+      var r = await apiFetch('/' + encodeURIComponent(PERSONEL_SHEET) + '/row/' + kadroSatirlari[i]._sheetRow, { method: 'DELETE' });
+      if (!r.ok) hataSayisi++;
+    } catch(e) { hataSayisi++; }
+  }
+  // Local'den kaldır
+  tumPersonel = tumPersonel.filter(function(p){ return p.oyun !== oyunAdi; });
+  populateFilters();
+  renderOyunMgmt();
+  renderKadro();
+  if (hataSayisi === 0) {
+    showToast('✓ "' + oyunAdi + '" ve ' + kadroSatirlari.length + ' kadro kaydı silindi', 'success', 3500);
+  } else {
+    showToast('⚠️ ' + hataSayisi + ' satır silinemedi, sayfayı yenileyin', 'error', 4000);
+  }
+}
+
 function _oyunYendenAdlandir(eskiAd) {
   // Sezon bilgisini topla
   var oyunTurneleri = turneler.filter(function(t){ return t.oyun === eskiAd; });
@@ -9559,22 +9634,33 @@ async function saveTurne() {
             (_snapObj.statu       && _chkStatu && _chkStatu !== _snapObj.statu)
           );
           if (_snapDegisti) {
-            // Çakışma uyarısı — native confirm kullan (async akış beklediği için)
-            var _devamEt = window.confirm(
-              '⚠️ UYARI: Bu kayıt başka bir kullanıcı tarafından değiştirilmiş görünüyor!\n\n' +
-              "Sheets'teki mevcut değer: " + _chkOyun + ' / ' + _chkTarih + ' / ' + _chkStatu + '\n' +
-              'Sizin düzenlemeniz: ' + (document.getElementById('m-oyun').value||_snapObj.oyun) + '\n\n' +
-              'Yine de kaydetmek istiyor musunuz?'
-            );
-            if (!_devamEt) {
+            // Çakışma uyarısı — onayGoster ile göster
+            onayGoster({
+              baslik: '⚠️ Kayıt Çakışması',
+              ikon: '⚠️',
+              ikonBg: 'hsl(42,90%,94%)',
+              mesaj: 'Bu kayıt başka bir kullanıcı tarafından değiştirilmiş görünüyor!',
+              liste: [
+                "Sheets'teki değer: " + _chkOyun + ' / ' + _chkTarih + ' / ' + _chkStatu,
+                'Sizin düzenlemeniz: ' + (document.getElementById('m-oyun').value||_snapObj.oyun)
+              ],
+              altMesaj: 'Yine de kaydetmek istiyor musunuz?',
+              tamamYazi: 'Evet, Üzerine Yaz',
+              tamamRenk: 'hsl(42,85%,42%)',
+              onOnay: function() { _saveTurneCalisiyor = false; saveTurne(); }
+            });
+            // İptal: formu kapat, veriyi yenile
+            var _orijIptal = document.getElementById('onay-iptal').onclick;
+            document.getElementById('onay-iptal').onclick = async function() {
+              onayKapat();
               _saveTurneCalisiyor = false;
               var _sb = document.getElementById('save-turne-btn');
-              if (_sb) { _sb.disabled = false; _sb.textContent = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-2px;margin-right:5px"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>Kaydet'; }
+              if (_sb) { _sb.disabled = false; _sb.textContent = 'Kaydet'; }
               closeModal();
               await fetchTurneler();
               tumUIGuncelle();
-              return;
-            }
+            };
+            return;
           }
         }
       }
@@ -12021,7 +12107,22 @@ var _onayCallback = null;
 function onayGoster(opts) {
   var m = document.getElementById('onay-modal');
   document.getElementById('onay-baslik').textContent = opts.baslik || 'Emin misiniz?';
-  document.getElementById('onay-mesaj').textContent = opts.mesaj || '';
+  // Liste desteği: opts.liste varsa madde madde göster
+  var mesajEl = document.getElementById('onay-mesaj');
+  if (opts.liste && opts.liste.length > 0) {
+    var html = '';
+    if (opts.mesaj) html += '<div style="margin-bottom:10px;color:var(--foreground)">' + opts.mesaj + '</div>';
+    html += '<div style="background:var(--muted);border-radius:8px;padding:10px 12px;margin-bottom:10px;max-height:220px;overflow-y:auto">';
+    opts.liste.forEach(function(item) {
+      html += '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--border);font-size:12px;font-weight:600;color:var(--foreground)">'
+        + '<span style="color:var(--primary);font-size:14px">•</span>' + item + '</div>';
+    });
+    html += '</div>';
+    if (opts.altMesaj) html += '<div style="font-size:11px;color:var(--muted-foreground)">' + opts.altMesaj + '</div>';
+    mesajEl.innerHTML = html;
+  } else {
+    mesajEl.textContent = opts.mesaj || '';
+  }
   document.getElementById('onay-ikon').textContent = opts.ikon || '🗑️';
   document.getElementById('onay-ikon').style.background = opts.ikonBg || 'hsl(0,80%,96%)';
   var btn = document.getElementById('onay-tamam');
