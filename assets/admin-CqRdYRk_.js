@@ -109,6 +109,8 @@ For more information, see https://radix-ui.com/primitives/docs/components/alert-
     try{
       await fetch(`https://tiyatro-backend.vercel.app/api/sheets/${encodeURIComponent(n)}/cell`,{method:"PUT",headers:{"Content-Type":"application/json"},credentials:"include",body:JSON.stringify({row:rowIndex,col:aktifColIdx,value:makeAktif?"Evet":"Pasif"})});
       r.invalidateQueries({queryKey:["https://tiyatro-backend.vercel.app/api/sheets",n]});
+      const now=new Date();const pad=x=>String(x).padStart(2,"0");const tarih=`${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;const oyunAdi=playGroups?.[currentPlayIdx]?.name||n;const notifAciklama=makeAktif?`${personName} aktif konuma alındı — artık grafiklerde ve analizlerde görünecek.`:`${personName} pasif konuma alındı — artık grafiklerde ve analizlerde görünmeyecek.`;try{await fetch(`https://tiyatro-backend.vercel.app/api/sheets/${encodeURIComponent("BİLDİRİMLER")}/row`,{method:"POST",headers:{"Content-Type":"application/json"},credentials:"include",body:JSON.stringify({values:[tarih,makeAktif?"AKTİF YAPILDI":"PASİFE ALINDI",oyunAdi,personName,"",notifAciklama]})});}catch(_){}
+      r.invalidateQueries({queryKey:["https://tiyatro-backend.vercel.app/api/sheets","BİLDİRİMLER"]});
       if(makeAktif){e({title:`✓ ${personName} aktif yapıldı`,description:"Grafiklerde ve veri analizlerinde tekrar görünecek."});}
       else{e({title:`⏸ ${personName} pasife alındı`,description:"Artık grafiklerde ve veri analizlerinde yer almayacak."});}
     }catch(err){e({title:"Hata",description:"Güncelleme başarısız",variant:"destructive"});}
