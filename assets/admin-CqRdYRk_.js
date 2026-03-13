@@ -102,6 +102,19 @@ For more information, see https://radix-ui.com/primitives/docs/components/alert-
     onError:()=>e({title:"Hata",description:"Güncelleme başarısız",variant:"destructive"})
   });
 
+  const[toggleAktifPending,setToggleAktifPending]=o.useState(false);
+  const toggleAktif=async({personName,makeAktif,rowIndex})=>{
+    if(aktifColIdx===-1){e({title:"Hata",description:"Aktif kolonu bulunamadı",variant:"destructive"});return;}
+    setToggleAktifPending(true);
+    try{
+      await fetch(`https://tiyatro-backend.vercel.app/api/sheets/${encodeURIComponent(n)}/cell`,{method:"PUT",headers:{"Content-Type":"application/json"},credentials:"include",body:JSON.stringify({row:rowIndex,col:aktifColIdx,value:makeAktif?"Evet":"Pasif"})});
+      r.invalidateQueries({queryKey:["https://tiyatro-backend.vercel.app/api/sheets",n]});
+      if(makeAktif){e({title:`✓ ${personName} aktif yapıldı`,description:"Grafiklerde ve veri analizlerinde tekrar görünecek."});}
+      else{e({title:`⏸ ${personName} pasife alındı`,description:"Artık grafiklerde ve veri analizlerinde yer almayacak."});}
+    }catch(err){e({title:"Hata",description:"Güncelleme başarısız",variant:"destructive"});}
+    finally{setToggleAktifPending(false);}
+  };
+
   const L=te({
     mutationFn:u=>re("POST",`https://tiyatro-backend.vercel.app/api/sheets/${encodeURIComponent(n)}/row`,{values:u}),
     onSuccess:()=>{
@@ -258,6 +271,8 @@ For more information, see https://radix-ui.com/primitives/docs/components/alert-
   const Tr=Rr||N!==void 0&&N.headers.length===0&&N.rows.length===0&&!je.includes(n)&&pe.includes(n);
   const ft=N?.headers||[];
   const I=O?ft.slice(0,4):ft;
+  const aktifColIdx=ft.findIndex(h=>h.trim().toLowerCase()==="aktif"||h.trim().toLowerCase()==="isactive"||h.trim().toLowerCase()==="aktif/pasif"||h.trim().toLowerCase()==="durum");
+  const kisiColIdx=ft.findIndex(h=>h.trim().toLowerCase().startsWith("kişi")||h.trim().toLowerCase().startsWith("kisi"));
   const Or=N?.rows?.length||0;
   const ke=O&&U&&U[b]?.name||"";
 
@@ -430,6 +445,13 @@ For more information, see https://radix-ui.com/primitives/docs/components/alert-
                           setCopyDlg({personName:pName,rowData:newRow,oyunIdx:oi});
                           setCopyTarget("");
                         },children:t.jsx(xt,{className:"w-3.5 h-3.5"})}),
+                        O&&aktifColIdx!==-1&&(()=>{
+                          const ki=ft.findIndex(h=>h.trim().toLocaleLowerCase("tr-TR").startsWith("kişi")||h.trim().toLocaleLowerCase("tr-TR").startsWith("kisi"));
+                          const pName=ki>=0?String(u[ki]??"").trim():"";
+                          const aktifVal=String(u[aktifColIdx]??"").toLowerCase();
+                          const isActive=aktifVal!=="pasif"&&aktifVal!=="hayır"&&aktifVal!=="false";
+                          return t.jsx(T,{size:"icon",variant:"ghost",className:`h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity ${isActive?"text-amber-500 hover:text-amber-600 hover:bg-amber-500/10":"text-green-600 hover:text-green-700 hover:bg-green-500/10"}`,title:isActive?`${pName} pasife al`:`${pName} aktif yap`,disabled:toggleAktifPending,onClick:()=>toggleAktif({personName:pName,makeAktif:!isActive,rowIndex:p}),children:t.jsx(isActive?"⏸":"✓",{})});
+                        })(),
                         t.jsx(T,{size:"icon",variant:"ghost",className:"h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive hover:bg-destructive/10",onClick:()=>m(p),"data-testid":`button-delete-${g}`,children:t.jsx(qr,{className:"w-3.5 h-3.5"})}),
                       ]}),
                     ]
