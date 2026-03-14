@@ -6380,6 +6380,8 @@ function renderTumPersonel() {
 // ============================================================
 // OYUN YÖNETİMİ (Kadro > Oyun Yönetimi sekmesi)
 // ============================================================
+var _oyunMgmtAktifOyun = null; // aktif "Kadroyu Gör" seçimi
+
 function renderOyunMgmt() {
   var el = document.getElementById('oyun-mgmt-content');
   var ozet = document.getElementById('oyun-mgmt-ozet');
@@ -6455,8 +6457,8 @@ function renderOyunMgmt() {
     // 1. satır
     html += '<div style="display:flex;gap:5px">';
     html += '<button data-oyun-mgmt-gor="1" data-oyun="' + oyunEsc + '" onclick="_oyunMgmtKadroGor(this)" '
-      + 'style="flex:1;height:28px;border:1.5px solid var(--border);border-radius:6px;background:transparent;cursor:pointer;font-size:11px;font-weight:600;color:var(--foreground);font-family:Poppins,sans-serif;display:flex;align-items:center;justify-content:center;gap:4px;white-space:nowrap;transition:all .15s" '
-      + 'onmouseenter="this.style.background=\'var(--muted)\'" onmouseleave="this.style.background=\'transparent\'">'
+      + 'style="flex:1;height:28px;border:1.5px solid ' + (oyun === _oyunMgmtAktifOyun ? 'var(--primary)' : 'var(--border)') + ';border-radius:6px;background:' + (oyun === _oyunMgmtAktifOyun ? 'var(--primary)' : 'transparent') + ';cursor:pointer;font-size:11px;font-weight:600;color:' + (oyun === _oyunMgmtAktifOyun ? '#fff' : 'var(--foreground)') + ';font-family:Poppins,sans-serif;display:flex;align-items:center;justify-content:center;gap:4px;white-space:nowrap;transition:all .15s" '
+      + 'onmouseenter="this.style.background=this.dataset.oyun===_oyunMgmtAktifOyun?\'var(--primary)\':\' var(--muted)\'" onmouseleave="this.style.background=this.dataset.oyun===_oyunMgmtAktifOyun?\'var(--primary)\':\' transparent\'">'
       + '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>Kadroyu Gör'
       + '</button>';
     html += '<button onclick="_oyunSilOnay(' + JSON.stringify(oyun) + ')" '
@@ -6486,6 +6488,7 @@ function renderOyunMgmt() {
 
 function _oyunMgmtKadroGor(btn) {
   var oyun = btn.getAttribute('data-oyun');
+  _oyunMgmtAktifOyun = oyun; // aktif oyunu kaydet — renderOyunMgmt bunu kullanır
   // Sağ panel önizleme
   var personel = getPersonelForOyun(oyun);
   var baslik = document.getElementById('oyun-kadro-panel-baslik');
@@ -6533,15 +6536,8 @@ function _oyunMgmtKadroGor(btn) {
       icerik.innerHTML = html;
     }
   }
-  // Aktif oyun kartını vurgula
-  document.querySelectorAll('[data-oyun-mgmt-gor]').forEach(function(b){
-    var card = b.closest('div[style*="border-radius:10px"]') || b.parentElement.parentElement;
-    if (b.getAttribute('data-oyun') === oyun) {
-      b.style.background = 'var(--primary)'; b.style.color = '#fff'; b.style.borderColor = 'var(--primary)';
-    } else {
-      b.style.background = 'transparent'; b.style.color = 'var(--foreground)'; b.style.borderColor = 'var(--border)';
-    }
-  });
+  // Aktif oyun kartını vurgula — render ile senkronize et
+  renderOyunMgmt();
 }
 function _oyunMgmtKisiEkle(btn) {
   var oyun = btn.getAttribute('data-oyun');
@@ -10554,8 +10550,8 @@ function _pdfIcerik(t) {
         oyunHtml = '<span style="color:#1a1a1a;font-weight:800;font-size:11px"> · ' + s.oyun + '</span>';
       }
       return '<tr style="background:'+bg+';border-left:3px solid '+bc+'">'
-        + '<td class="td-dim">'+(s.tarih?s.tarih.split('-').reverse().join('/'):'—')+'</td>'
-        + '<td class="td-std" style="font-weight:600">'+(s.gun||'—')+'</td>'
+        + '<td class="td-bold" style="white-space:nowrap">'+(s.tarih?s.tarih.split('-').reverse().join('/'):'—')+'</td>'
+        + '<td class="td-std">'+(s.gun||'—')+'</td>'
         + '<td class="td-bold">'+(s.sehir||'—')+'</td>'
         + '<td style="font-size:11px;font-weight:700;color:'+bc+'">'+programLabel+oyunHtml+'</td>'
         + '<td class="td-saat">'
