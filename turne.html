@@ -4452,27 +4452,8 @@ function openKisiModal(rowIdx) {
       return p.kisi && !kayitliAdlar.has(p.kisi.trim().toLowerCase());
     });
     if (eksikler.length > 0) {
-      var eksikListe = eksikler.map(function(p){ return p.kisi + (p.gorev ? ' (' + p.gorev + ')' : ''); });
-      onayGoster({
-        baslik: 'Ana Kadroda Eksik Kişiler',
-        ikon: '👥',
-        ikonBg: 'hsl(220,80%,95%)',
-        mesaj: 'Ana kadroda olup bu turne listesinde olmayan ' + eksikler.length + ' kişi var:',
-        liste: eksikListe,
-        altMesaj: 'Bu kişiler listeye eklensin mi?',
-        tamamYazi: 'Evet, Ekle',
-        tamamRenk: 'hsl(220,75%,52%)',
-        onOnay: function() {
-          eksikler.forEach(function(p){
-            kisiModalSecili.push({
-              kisi: p.kisi,
-              gorev: p.kategori === 'Oyuncu' ? 'Sanatçı' : (p.gorev || p.kategori || ''),
-              kategori: p.kategori
-            });
-          });
-          renderSelectedPills();
-        }
-      });
+      // Checkbox'lı seçim modalı göster
+      _eksikKisilerSecimGoster(eksikler);
     }
   } else {
     // Ana kadroyu varsayılan olarak seç
@@ -4498,6 +4479,123 @@ function closeKisiModal() {
   document.getElementById('kisi-modal-overlay').classList.remove('on');
   kisiModalRowIdx = null;
   kisiModalSecili = [];
+}
+
+// Eksik kişiler için checkbox seçim modalı
+function _eksikKisilerSecimGoster(eksikler) {
+  // Tümü başlangıçta seçili
+  var secimler = eksikler.map(function() { return true; });
+
+  var overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:19500;display:flex;align-items:center;justify-content:center;padding:20px';
+
+  function _render() {
+    var seciliSayi = secimler.filter(Boolean).length;
+    overlay.innerHTML = '<div style="background:var(--card);border:1.5px solid var(--border);border-radius:14px;padding:0;width:100%;max-width:460px;box-shadow:0 20px 60px rgba(0,0,0,.3);font-family:Poppins,sans-serif;overflow:hidden">'
+      // Başlık
+      + '<div style="padding:16px 20px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">'
+      +   '<div style="width:34px;height:34px;border-radius:9px;background:hsl(220,80%,95%);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0">👥</div>'
+      +   '<div>'
+      +     '<div style="font-size:14px;font-weight:800;color:var(--foreground)">Ana Kadroda Eksik Kişiler</div>'
+      +     '<div style="font-size:11px;color:var(--muted-foreground);margin-top:1px">Eklemek istediklerinizi seçin</div>'
+      +   '</div>'
+      + '</div>'
+      // Toplu seçim kontrolü
+      + '<div style="padding:8px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;background:var(--muted)">'
+      +   '<label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:11px;font-weight:700;color:var(--muted-foreground);user-select:none">'
+      +     '<input type="checkbox" id="_eksik-tumunu-sec" ' + (secimler.every(Boolean) ? 'checked' : (secimler.some(Boolean) ? 'indeterminate' : '')) + ' '
+      +       'style="width:15px;height:15px;cursor:pointer;accent-color:var(--primary)" '
+      +       'onchange="(function(cb){var secili=cb.checked;[' + eksikler.map(function(_,i){ return i; }).join(',') + '].forEach(function(i){var c=document.getElementById(\'_eksik-cb-\'+i);if(c)c.checked=secili;});_eksikSecimGuncelle(' + JSON.stringify(eksikler.map(function(p){ return {kisi:p.kisi,gorev:p.gorev,kategori:p.kategori}; })) + ')})(this)">'
+      +     (secimler.every(Boolean) ? 'Tümünü Kaldır' : 'Tümünü Seç')
+      +   '</label>'
+      +   '<span style="margin-left:auto;font-size:11px;font-weight:700;color:var(--primary)">' + seciliSayi + ' / ' + eksikler.length + ' seçili</span>'
+      + '</div>'
+      // Kişi listesi
+      + '<div style="max-height:280px;overflow-y:auto;padding:6px 0">'
+      + eksikler.map(function(p, i) {
+          var gorevGoster = p.kategori === 'Oyuncu' ? 'Sanatçı' : (p.gorev || p.kategori || '');
+          var SANATCI_KATS = ['Sanatçı','Oyuncu','Koro','Koro/Dans','Koro/Dans Ekibi','Solist','Dansçı','Figüran','Müzisyen','Orkestra'];
+          var bg = SANATCI_KATS.includes(p.kategori)
+            ? {bg:'hsl(350,50%,92%)',fg:'hsl(350,65%,28%)'}
+            : {bg:'hsl(220,45%,92%)',fg:'hsl(220,65%,30%)'};
+          return '<label style="display:flex;align-items:center;gap:11px;padding:9px 20px;cursor:pointer;transition:background .1s;border-bottom:1px solid var(--border)" '
+            + 'onmouseenter="this.style.background=\'var(--muted)\'" onmouseleave="this.style.background=\'\'">'
+            +   '<input type="checkbox" id="_eksik-cb-' + i + '" ' + (secimler[i] ? 'checked' : '') + ' '
+            +     'style="width:16px;height:16px;cursor:pointer;accent-color:var(--primary);flex-shrink:0" '
+            +     'onchange="_eksikSecimGuncelle(' + JSON.stringify(eksikler.map(function(p2){ return {kisi:p2.kisi,gorev:p2.gorev,kategori:p2.kategori}; })) + ')">'
+            +   '<div style="flex:1;min-width:0">'
+            +     '<div style="font-size:12px;font-weight:700;color:var(--foreground)">' + p.kisi + '</div>'
+            +     (gorevGoster ? '<div style="font-size:10px;color:var(--muted-foreground);margin-top:1px">' + gorevGoster + '</div>' : '')
+            +   '</div>'
+            +   '<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:20px;background:' + bg.bg + ';color:' + bg.fg + ';white-space:nowrap">' + (p.kategori||'—') + '</span>'
+            + '</label>';
+        }).join('')
+      + '</div>'
+      // Butonlar
+      + '<div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end">'
+      +   '<button onclick="this.closest(\'[data-eksik-overlay]\').remove()" '
+      +     'style="height:36px;padding:0 18px;border:1.5px solid var(--border);border-radius:8px;background:transparent;cursor:pointer;font-size:12px;font-weight:600;color:var(--muted-foreground);font-family:Poppins,sans-serif">İptal</button>'
+      +   '<button id="_eksik-ekle-btn" onclick="_eksikSecilenlerEkle(' + JSON.stringify(eksikler.map(function(p){ return {kisi:p.kisi,gorev:p.gorev,kategori:p.kategori}; })) + ',this.closest(\'[data-eksik-overlay]\'))" '
+      +     'style="height:36px;padding:0 20px;border:none;border-radius:8px;background:hsl(220,75%,52%);color:#fff;cursor:pointer;font-size:12px;font-weight:700;font-family:Poppins,sans-serif;display:flex;align-items:center;gap:6px">'
+      +     '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>'
+      +     (seciliSayi > 0 ? seciliSayi + ' Kişiyi Ekle' : 'Seçim Yapılmadı')
+      +   '</button>'
+      + '</div>'
+      + '</div>';
+
+    // indeterminate state için
+    setTimeout(function() {
+      var tumunuCb = document.getElementById('_eksik-tumunu-sec');
+      if (tumunuCb) tumunuCb.indeterminate = secimler.some(Boolean) && !secimler.every(Boolean);
+    }, 0);
+  }
+
+  overlay.setAttribute('data-eksik-overlay', '1');
+  document.body.appendChild(overlay);
+
+  // Global yardımcılar (overlay içi onclick'ten erişmek için)
+  window._eksikSecimGuncelle = function(eksiklerData) {
+    eksiklerData.forEach(function(_, i) {
+      var cb = document.getElementById('_eksik-cb-' + i);
+      secimler[i] = cb ? cb.checked : false;
+    });
+    // Ekle butonunu güncelle
+    var seciliSayi2 = secimler.filter(Boolean).length;
+    var ekleBtn = document.getElementById('_eksik-ekle-btn');
+    if (ekleBtn) {
+      ekleBtn.lastChild.textContent = seciliSayi2 > 0 ? seciliSayi2 + ' Kişiyi Ekle' : 'Seçim Yapılmadı';
+      ekleBtn.style.opacity = seciliSayi2 > 0 ? '1' : '0.5';
+      ekleBtn.style.cursor = seciliSayi2 > 0 ? 'pointer' : 'default';
+    }
+    // Sayaç
+    var sayac = overlay.querySelector('[data-eksik-overlay] span[style*="primary"]');
+    // Tümünü seç checkbox indeterminate
+    var tumunuCb = document.getElementById('_eksik-tumunu-sec');
+    if (tumunuCb) {
+      tumunuCb.indeterminate = secimler.some(Boolean) && !secimler.every(Boolean);
+      tumunuCb.checked = secimler.every(Boolean);
+    }
+  };
+
+  window._eksikSecilenlerEkle = function(eksiklerData, overlayEl) {
+    var seciliSayi2 = secimler.filter(Boolean).length;
+    if (seciliSayi2 === 0) return;
+    eksiklerData.forEach(function(p, i) {
+      if (!secimler[i]) return;
+      var gorevGoster = p.kategori === 'Oyuncu' ? 'Sanatçı' : (p.gorev || p.kategori || '');
+      kisiModalSecili.push({ kisi: p.kisi, gorev: gorevGoster, kategori: p.kategori });
+    });
+    renderSelectedPills();
+    if (overlayEl) overlayEl.remove();
+  };
+
+  // ESC ile kapat
+  var _eskEscHandler = function(e) {
+    if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', _eskEscHandler); }
+  };
+  document.addEventListener('keydown', _eskEscHandler);
+
+  _render();
 }
 
 function kisiModalAnaKadroyuSec() {
