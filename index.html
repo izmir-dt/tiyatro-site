@@ -813,10 +813,26 @@ async function fetchSheet(sheetName) {
   if (CACHE[sheetName] && (now - CACHE[sheetName].t) < CACHE_TTL) {
     return CACHE[sheetName].d;
   }
-  const url = `${BACKEND}/api/sheets?sheet=${encodeURIComponent(sheetName)}`;
+  // React kodundaki format: /api/sheets/SHEET_NAME
+  const url = `${BACKEND}/api/sheets/${encodeURIComponent(sheetName)}`;
   const r = await fetch(url);
   if (!r.ok) throw new Error('API hatası: ' + r.status);
-  const d = await r.json();
+  const raw = await r.json();
+  // Backend { headers, rows } veya { values } veya düz array döndürebilir — normalize et
+  let d;
+  if (raw && Array.isArray(raw.rows)) {
+    d = raw; // { headers, rows } — zaten doğru
+  } else if (raw && Array.isArray(raw.values)) {
+    // { values: [[header1,header2,...],[row1...],[row2...]] }
+    const [headers, ...rows] = raw.values;
+    d = { headers: headers || [], rows: rows || [] };
+  } else if (Array.isArray(raw)) {
+    // Düz array: ilk eleman header
+    const [headers, ...rows] = raw;
+    d = { headers: headers || [], rows: rows || [] };
+  } else {
+    d = { headers: [], rows: [] };
+  }
   CACHE[sheetName] = { d, t: now };
   return d;
 }
