@@ -452,7 +452,7 @@ For more information, see https://radix-ui.com/primitives/docs/components/alert-
                           const pName=ki>=0?String(u[ki]??"").trim():"";
                           const aktifVal=String(u[aktifColIdx]??"").toLowerCase();
                           const isActive=aktifVal!=="pasif"&&aktifVal!=="hayır"&&aktifVal!=="false";
-                          return t.jsx(T,{size:"icon",variant:"ghost",className:`h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity ${isActive?"text-amber-500 hover:text-amber-600 hover:bg-amber-500/10":"text-green-600 hover:text-green-700 hover:bg-green-500/10"}`,title:isActive?`${pName} pasife al`:`${pName} aktif yap`,disabled:toggleAktifPending,onClick:()=>toggleAktif({personName:pName,makeAktif:!isActive,rowIndex:p}),children:isActive?"⏸":"✓"});
+                          return t.jsx("button",{className:`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold border transition-all cursor-pointer ${isActive?"bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-100":"bg-green-50 text-green-700 border-green-300 hover:bg-green-100"}`,title:isActive?`${pName} pasife al`:`${pName} aktif yap`,disabled:toggleAktifPending,onClick:()=>toggleAktif({personName:pName,makeAktif:!isActive,rowIndex:p}),children:isActive?"⏸ Pasife Al":"✓ Aktife Al"});
                         })(),
                         t.jsx(T,{size:"icon",variant:"ghost",className:"h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive hover:bg-destructive/10",onClick:()=>m(p),"data-testid":`button-delete-${g}`,children:t.jsx(qr,{className:"w-3.5 h-3.5"})}),
                       ]}),
