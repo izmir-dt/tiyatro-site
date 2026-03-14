@@ -6125,20 +6125,25 @@ async function disPersonelKaydet() {
 
 async function disPersonelSil() {
   if (disPersonelEditIdx === null) return;
-  var p = tumDisPersonel[disPersonelEditIdx];
+  // idx ve p'yi hemen yakala — onay beklenirken değişmesin
+  var _silDisIdx = disPersonelEditIdx;
+  var p = tumDisPersonel[_silDisIdx];
+  if (!p) return;
   onayGoster({
     baslik: p.kisi + ' silinecek',
     mesaj: 'Dış katılımcı kaydı kalıcı olarak silinecek.',
     ikon: '👤', ikonBg: 'hsl(0,80%,96%)',
     tamamRenk: 'hsl(0,75%,52%)', tamamYazi: 'Evet, sil',
-    onOnay: async function() { await _disPersonelSilDevam2(p); }
+    onOnay: async function() { await _disPersonelSilDevam2(p, _silDisIdx); }
   });
 }
-async function _disPersonelSilDevam2(p) {
+async function _disPersonelSilDevam2(p, silDisIdx) {
+  if (silDisIdx === undefined) silDisIdx = disPersonelEditIdx;
   try {
     await apiFetch('/' + encodeURIComponent(DIS_PERSONEL_SHEET) + '/row/' + p._sheetRow, { method: 'DELETE' });
     // Silme sonrası sheet'ten güncel veriyi çek (_sheetRow azaltma mantığı yerine)
-    tumDisPersonel.splice(disPersonelEditIdx, 1);
+    if (silDisIdx !== null && silDisIdx !== undefined) tumDisPersonel.splice(silDisIdx, 1);
+    if (disPersonelEditIdx === silDisIdx) disPersonelEditIdx = null;
   } catch(e) { alert('Silme hatası: ' + e.message); return; }
   disPersonelModalKapat();
   // Sheet'ten taze veri çek — _sheetRow değerleri güncel kalsın
@@ -7389,6 +7394,15 @@ function kadroKisiEkleAc() {
 }
 
 function kadroKisiDuzenleAc(idx) {
+  // Modal zaten açıksa ve farklı bir kişi seçiliyorsa, önce mevcut modalı kapat
+  var modal = document.getElementById('kadro-kisi-modal');
+  if (modal && modal.classList.contains('on') && kadroEditIdx !== null && kadroEditIdx !== idx) {
+    // Silme onayı bekleniyorsa yeni kişiyi açma
+    var onayModal = document.getElementById('onay-modal');
+    if (onayModal && onayModal.style.display === 'flex') return;
+    // Aksi hâlde mevcut modalı kapat, yeni kişiyi aç
+    kadroKisiModalKapat();
+  }
   const p = tumPersonel[idx];
   if (!p) return;
   kadroEditIdx = idx;
@@ -7477,31 +7491,39 @@ async function kadroKisiKaydet() {
 
 async function kadroKisiSil() {
   if (kadroEditIdx === null) return;
-  const p = tumPersonel[kadroEditIdx];
+  // kadroEditIdx'i hemen yakala — onay beklenirken başka kişi seçilirse değişmesin
+  const _silIdx = kadroEditIdx;
+  const p = tumPersonel[_silIdx];
+  if (!p) return;
   onayGoster({
     baslik: p.kisi + ' silinecek',
     mesaj: 'Kadro kaydı kalıcı olarak silinecek.',
     ikon: '👤', ikonBg: 'hsl(0,80%,96%)',
     tamamRenk: 'hsl(0,75%,52%)', tamamYazi: 'Evet, sil',
-    onOnay: function() { _kadroKisiSilDevam(); }
+    onOnay: function() { _kadroKisiSilDevam(_silIdx); }
   });
 }
-async function _kadroKisiSilDevam() {
-  if (kadroEditIdx === null) return;
-  const p = tumPersonel[kadroEditIdx];
+async function _kadroKisiSilDevam(silIdx) {
+  // Parametre yoksa (eski çağrı uyumluluğu) global'e bak
+  if (silIdx === undefined) silIdx = kadroEditIdx;
+  if (silIdx === null || silIdx === undefined) return;
+  const p = tumPersonel[silIdx];
+  if (!p) return;
   const btnSil = document.getElementById('kadro-sil-btn');
   if (btnSil) { btnSil.disabled = true; btnSil.textContent = 'Siliniyor...'; }
 
   try {
     // Sheets'ten sil: _sheetRow'dan gerçek satır numarasını al
-    const sheetRow = tumPersonel[kadroEditIdx]._sheetRow;
+    const sheetRow = tumPersonel[silIdx]._sheetRow;
     if (!sheetRow) { alert('Satır numarası bulunamadı, lütfen sayfayı yenileyin.'); return; }
     const res = await apiFetch('/' + encodeURIComponent(PERSONEL_SHEET) + '/row/' + sheetRow, {
       method: 'DELETE'
     });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     // Local sil
-    tumPersonel.splice(kadroEditIdx, 1);
+    tumPersonel.splice(silIdx, 1);
+    // Eğer modal hâlâ aynı kişiyi gösteriyorsa kapat
+    if (kadroEditIdx === silIdx) kadroEditIdx = null;
   } catch(e) {
     alert('Silme sırasında hata: ' + e.message);
     if (btnSil) { btnSil.disabled = false; btnSil.textContent = 'Sil'; }
