@@ -3806,6 +3806,9 @@ function switchTab(tab) {
     // Alt sekme başlat
     kadroAltSekme(_kadroAltSekme || 'ana');
     renderKadro();
+    renderOyunMgmt();
+    renderTumPersonel();
+    renderDisPersonel();
     // Dış katılımcı badge güncelle
     var badge = document.getElementById('dis-personel-badge');
     if (badge && tumDisPersonel.length > 0) {
@@ -5381,6 +5384,7 @@ async function saveKisiModal() {
   // 2. Modal'ı kapat, ekranı güncelle
   closeKisiModal();
   renderListe();
+  renderIstatistik();
 
   // 3. Arka planda sadece katilimcilar sütununu yaz (/cell endpoint — backend'de mevcut)
   try {
@@ -5404,6 +5408,7 @@ async function saveKisiModal() {
       try {
         await fetchTurneler();
         renderListe();
+        renderIstatistik();
       } catch(e) { /* fetch hatası — yerel veri korunur */ }
     }
   } catch(e) {
@@ -5915,6 +5920,10 @@ async function _kisiSilDevam(p, idxList) {
   } catch(e) { alert('Silme hatası: ' + e.message); return; }
   populateFilters();
   renderKisiAra();
+  renderKadro();
+  renderOyunMgmt();
+  renderTumPersonel();
+  renderIstatistik();
 }
 
 // Kişiye Göre sekmesinden kişiyi düzenle — ilk kaydı açar
@@ -6111,6 +6120,7 @@ async function disPersonelKaydet() {
   // Güncel _sheetRow değerleri için sheet'ten yeniden çek
   try { await fetchDisPersonel(); } catch(e) { /* hata olursa local veri korunur */ }
   renderDisPersonel();
+  renderKisiAra();
 }
 
 async function disPersonelSil() {
@@ -6134,6 +6144,7 @@ async function _disPersonelSilDevam2(p) {
   // Sheet'ten taze veri çek — _sheetRow değerleri güncel kalsın
   try { await fetchDisPersonel(); } catch(e) { /* hata olursa local veri korunur */ }
   renderDisPersonel();
+  renderKisiAra();
 }
 
 // ============================================================
@@ -6744,10 +6755,9 @@ async function topluKaydet() {
   renderKadro();
   renderOyunMgmt();
   renderListe();
-  // İstatistik sekmesi açıksa grafiği hemen güncelle
-  if (document.getElementById('tab-istatistik') && document.getElementById('tab-istatistik').style.display !== 'none') {
-    renderIstatistik();
-  }
+  renderKisiAra();
+  renderTumPersonel();
+  renderIstatistik();
 
   // Sonuç bildirimi
   var toplamIslem = basariSayisi + hataSayisi;
@@ -6799,12 +6809,9 @@ async function oyunEkleKaydet() {
     populateFilters();
     oyunEkleKapat();
     renderOyunMgmt();
+    renderKadro();
     // Başarı bildirimi
-    var t = document.createElement('div');
-    t.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1e293b;color:#fff;padding:10px 18px;border-radius:8px;font-size:12px;font-weight:600;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.3);font-family:Poppins,sans-serif';
-    t.textContent = '✓ "' + ad + '" oyunu eklendi';
-    document.body.appendChild(t);
-    setTimeout(function(){ t.remove(); }, 3000);
+    showToast('✓ "' + ad + '" oyunu eklendi', 'success', 3000);
   } catch(e) {
     document.getElementById('oyun-ekle-ad-err').textContent = 'Kayıt hatası: ' + e.message;
   } finally {
@@ -6913,6 +6920,9 @@ async function _oyunSilDevam(oyunAdi) {
   populateFilters();
   renderOyunMgmt();
   renderKadro();
+  renderKisiAra();
+  renderTumPersonel();
+  renderIstatistik();
   if (hataSayisi === 0) {
     showToast('✓ "' + oyunAdi + '" ve ' + kadroSatirlari.length + ' kadro kaydı silindi', 'success', 3500);
   } else {
@@ -6990,8 +7000,12 @@ function _oyunYendenAdlandir(eskiAd) {
     overlay.remove();
     populateFilters();
     renderOyunMgmt();
+    renderKadro();
     renderListe();
-    showToast('"' + eskiAd + '" \u2192 "' + yeniAd + '" olarak güncellendi', 'success', 3500);
+    renderKisiAra();
+    renderTumPersonel();
+    renderIstatistik();
+    showToast('"' + eskiAd + '" → "' + yeniAd + '" olarak güncellendi', 'success', 3500);
   }
   okBtn.addEventListener('click', doRename);
   inp.addEventListener('keydown', function(e){ if(e.key==='Enter') doRename(); });
@@ -7455,6 +7469,10 @@ async function kadroKisiKaydet() {
   populateFilters();
   kadroKisiModalKapat();
   renderKadro();
+  renderOyunMgmt();
+  renderKisiAra();
+  renderTumPersonel();
+  renderIstatistik();
 }
 
 async function kadroKisiSil() {
@@ -7493,6 +7511,10 @@ async function _kadroKisiSilDevam() {
   populateFilters();
   kadroKisiModalKapat();
   renderKadro();
+  renderOyunMgmt();
+  renderKisiAra();
+  renderTumPersonel();
+  renderIstatistik();
 }
 
 function kadroExcel() {
@@ -8859,18 +8881,17 @@ function tumUIGuncelle() {
   populateFilters();
   renderListe();
   renderCalendar();
-  // Aktif sekmeye göre ek render
-  var aktifTab = document.querySelector('.tab-panel.active');
-  if (aktifTab) {
-    var tabId = aktifTab.id ? aktifTab.id.replace('tab-','') : '';
-    if (tabId === 'kadro') { renderKadro(); renderOyunMgmt(); }
-    if (tabId === 'harita') renderHarita();
-    if (tabId === 'istatistik') renderIstatistik();
-  }
-  // İstatistik sekme açıksa her zaman güncelle
-  var istatistikPanel = document.getElementById('tab-istatistik');
-  if (istatistikPanel && istatistikPanel.classList.contains('active')) {
-    renderIstatistik();
+  // Tüm sekmeleri her zaman güncelle — hangi sekmede olursa olsun veri tutarlı kalsın
+  renderKadro();
+  renderOyunMgmt();
+  renderKisiAra();
+  renderTumPersonel();
+  renderDisPersonel();
+  renderIstatistik();
+  // Harita sadece aktifse render et (Leaflet map instance yönetimi)
+  var haritaPanel = document.getElementById('tab-harita');
+  if (haritaPanel && haritaPanel.classList.contains('active')) {
+    renderHarita();
   }
   guncelleSonSenkron();
 }
@@ -9776,9 +9797,7 @@ async function saveTurne() {
   populateFilters();
   console.log('[saveTurne] renderListe öncesi turneler sayısı:', turneler.length, '| yeni kayıt oyun:', yeniKayit.oyun, 'il:', yeniKayit.il, 'baslangic:', yeniKayit.baslangicTarih);
   renderListe(); renderCalendar();
-  if (document.getElementById('tab-istatistik') && document.getElementById('tab-istatistik').style.display !== 'none') {
-    renderIstatistik();
-  }
+  renderIstatistik();
   showToast(editIdx !== '' ? (yeniKayit.oyun || 'Turne') + ' güncellendi' : (yeniKayit.oyun || 'Yeni turne') + ' eklendi', 'success', 3500);
 
   // Arka planda API'ye kaydet
