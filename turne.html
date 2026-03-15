@@ -6984,19 +6984,42 @@ async function topluKaydet() {
         var turneAdlari2 = etkilenenTurneler.map(function(t){ return (t.oyun||'') + (t.il?' – '+t.il:''); });
         // Modal ile sor — iptal ederse _onayReddedildi işareti koy
         silinecekler[si]._onayBekleniyor = true;
-        (function(satirRef, kisiAdi, tAdlari) {
+        (function(satirRef, kisiAdi, tAdlari, etkilenenT) {
           onayGoster({
             baslik: '"' + kisiAdi + '" Silinecek',
             ikon: '⚠️',
             ikonBg: 'hsl(42,90%,94%)',
             mesaj: 'Bu kişi şu turne kayıtlarında katılımcı olarak yer alıyor:',
             liste: tAdlari,
-            altMesaj: 'Personel listesinden silinecek, turne kayıtları değişmeyecek.',
-            tamamYazi: 'Evet, Sil',
+            altMesaj: 'Turne katılımcı listelerinden de kaldırılsın mı?',
+            tamamYazi: 'Evet, Tüm Kayıtlardan Sil',
             tamamRenk: 'hsl(0,75%,52%)',
-            onOnay: function() { satirRef._onayReddedildi = false; satirRef._onayBekleniyor = false; topluKaydet(); },
+            iptalYazi: 'Hayır, Sadece Kadrodan',
+            onOnay: async function() {
+              // Turne katılımcılarından da kaldır
+              for (var ti = 0; ti < etkilenenT.length; ti++) {
+                var turneObj = etkilenenT[ti];
+                turneObj.katilimcilar = turneObj.katilimcilar.filter(function(k) {
+                  return !k.kisi || k.kisi.trim().toLowerCase() !== kisiAdi.trim().toLowerCase();
+                });
+                try {
+                  await apiFetch('/' + encodeURIComponent(TURNE_SHEET) + '/cell', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ row: turneObj._rowIdx + 2, col: 39, value: JSON.stringify(turneObj.katilimcilar) })
+                  });
+                } catch(te) { console.warn('Turne katılımcı silme hatası:', te); }
+              }
+              showToast('"' + kisiAdi + '" ' + etkilenenT.length + ' turne kaydından kaldırıldı', 'success', 4000);
+              renderListe(); renderIstatistik();
+              satirRef._onayReddedildi = false; satirRef._onayBekleniyor = false; topluKaydet();
+            },
+            onIptal: function() {
+              // Sadece kadrodan sil, turne kayıtları dokunulmadı
+              satirRef._onayReddedildi = false; satirRef._onayBekleniyor = false; topluKaydet();
+            }
           });
-          // İptal tıklanınca
+          // İptal butonuna özel davranış
           var orijinalIptal = document.getElementById('onay-iptal').onclick;
           document.getElementById('onay-iptal').onclick = function() {
             satirRef._silindi = false;
@@ -7004,7 +7027,7 @@ async function topluKaydet() {
             satirRef._onayReddedildi = true;
             onayKapat();
           };
-        })(silinecekler[si], silKisi, turneAdlari2);
+        })(silinecekler[si], silKisi, turneAdlari2, etkilenenTurneler);
         return; // Modal açık, kullanıcı karar verince tekrar çağrılacak
       }
     }
@@ -7845,7 +7868,6 @@ async function kadroKisiSil() {
   });
 }
 async function _kadroKisiSilDevam(silIdx) {
-  // Parametre yoksa (eski çağrı uyumluluğu) global'e bak
   if (silIdx === undefined) silIdx = kadroEditIdx;
   if (silIdx === null || silIdx === undefined) return;
   const p = tumPersonel[silIdx];
@@ -7853,22 +7875,61 @@ async function _kadroKisiSilDevam(silIdx) {
   const btnSil = document.getElementById('kadro-sil-btn');
   if (btnSil) { btnSil.disabled = true; btnSil.textContent = 'Siliniyor...'; }
 
+  // Sheets'ten sil
   try {
-    // Sheets'ten sil: _sheetRow'dan gerçek satır numarasını al
     const sheetRow = tumPersonel[silIdx]._sheetRow;
     if (!sheetRow) { alert('Satır numarası bulunamadı, lütfen sayfayı yenileyin.'); return; }
-    const res = await apiFetch('/' + encodeURIComponent(PERSONEL_SHEET) + '/row/' + sheetRow, {
-      method: 'DELETE'
-    });
+    const res = await apiFetch('/' + encodeURIComponent(PERSONEL_SHEET) + '/row/' + sheetRow, { method: 'DELETE' });
     if (!res.ok) throw new Error('HTTP ' + res.status);
-    // Local sil
     tumPersonel.splice(silIdx, 1);
-    // Eğer modal hâlâ aynı kişiyi gösteriyorsa kapat
     if (kadroEditIdx === silIdx) kadroEditIdx = null;
   } catch(e) {
     alert('Silme sırasında hata: ' + e.message);
     if (btnSil) { btnSil.disabled = false; btnSil.textContent = 'Sil'; }
     return;
+  }
+
+  // Bu kişi herhangi bir turnenin katılımcı listesinde var mı?
+  var _silKisiAdi = p.kisi;
+  var etkilenenTurneler = turneler.filter(function(t) {
+    return t.katilimcilar && t.katilimcilar.some(function(k) {
+      return k.kisi && k.kisi.trim().toLowerCase() === _silKisiAdi.trim().toLowerCase();
+    });
+  });
+
+  if (etkilenenTurneler.length > 0) {
+    var turneAdlari = etkilenenTurneler.map(function(t) {
+      return (t.oyun || '') + (t.il ? ' – ' + t.il : '') + (t.baslangicTarih ? ' (' + formatTarih(t.baslangicTarih) + ')' : '');
+    });
+    onayGoster({
+      baslik: '"' + _silKisiAdi + '" turne kayıtlarından da silinsin mi?',
+      ikon: '⚠️',
+      ikonBg: 'hsl(42,90%,94%)',
+      mesaj: 'Bu kişi ' + etkilenenTurneler.length + ' turne kaydında katılımcı olarak yer alıyor:',
+      liste: turneAdlari,
+      altMesaj: 'Turne katılımcı listelerinden de kaldırılsın mı?',
+      tamamYazi: 'Evet, Tüm Kayıtlardan Sil',
+      tamamRenk: 'hsl(0,75%,52%)',
+      iptalYazi: 'Hayır, Sadece Kadrodan',
+      onOnay: async function() {
+        for (var ti = 0; ti < etkilenenTurneler.length; ti++) {
+          var turneObj = etkilenenTurneler[ti];
+          turneObj.katilimcilar = turneObj.katilimcilar.filter(function(k) {
+            return !k.kisi || k.kisi.trim().toLowerCase() !== _silKisiAdi.trim().toLowerCase();
+          });
+          try {
+            await apiFetch('/' + encodeURIComponent(TURNE_SHEET) + '/cell', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ row: turneObj._rowIdx + 2, col: 39, value: JSON.stringify(turneObj.katilimcilar) })
+            });
+          } catch(te) { console.warn('Turne katılımcı silme hatası:', te); }
+        }
+        showToast('"' + _silKisiAdi + '" ' + etkilenenTurneler.length + ' turne kaydından kaldırıldı', 'success', 4000);
+        renderListe();
+        renderIstatistik();
+      }
+    });
   }
 
   populateFilters();
@@ -12582,12 +12643,24 @@ function onayGoster(opts) {
   btn.style.background = opts.tamamRenk || 'hsl(0,75%,52%)';
   _onayCallback = opts.onOnay || null;
   btn.onclick = function() { var cb = _onayCallback; onayKapat(); if (cb) cb(); };
+  // iptalYazi ve onIptal desteği
+  var iptalBtn = document.getElementById('onay-iptal');
+  if (iptalBtn) {
+    iptalBtn.textContent = opts.iptalYazi || 'İptal';
+    iptalBtn.onclick = function() {
+      onayKapat();
+      if (opts.onIptal) opts.onIptal();
+    };
+  }
   m.style.display = 'flex';
-  setTimeout(function() { document.getElementById('onay-iptal').focus(); }, 50);
+  setTimeout(function() { if (iptalBtn) iptalBtn.focus(); }, 50);
 }
 function onayKapat() {
   document.getElementById('onay-modal').style.display = 'none';
   _onayCallback = null;
+  // İptal butonunu varsayılana sıfırla
+  var iptalBtn = document.getElementById('onay-iptal');
+  if (iptalBtn) { iptalBtn.textContent = 'İptal'; iptalBtn.onclick = function(){ onayKapat(); }; }
 }
 // Dışarı tıklayınca kapat
 document.addEventListener('DOMContentLoaded', function() {
