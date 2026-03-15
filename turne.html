@@ -9055,8 +9055,15 @@ function renderHarita() {
       + (sayi > 0 ? '<text x="' + (r+3) + '" y="' + (r+7) + '" text-anchor="middle" font-size="' + (r > 12 ? 9 : 8) + '" font-weight="800" fill="' + textColor + '" font-family="Poppins,Arial,sans-serif">' + sayi + '</text>' : '')
       + '</svg>';
 
+    // Isı modunda etiket rengi: koyu background üzerinde okunabilir olsun
+    var labelColor = (_haritaMod === 'heatmap' && sayi > 0)
+      ? '#fff'
+      : (sayi > 0 ? 'hsl(350,45%,15%)' : '#666');
+    var labelShadow = (_haritaMod === 'heatmap' && sayi > 0)
+      ? '0 0 4px rgba(0,0,0,.8),0 0 4px rgba(0,0,0,.8)'
+      : '0 0 3px #fff,0 0 3px #fff';
     var icon = L.divIcon({
-      html: svgHtml + '<div style="text-align:center;font-size:' + (sayi > 0 ? 9 : 8) + 'px;font-weight:' + (sayi > 0 ? 700 : 500) + ';color:' + (sayi > 0 ? 'hsl(350,45%,15%)' : '#666') + ';white-space:nowrap;font-family:Poppins,Arial,sans-serif;margin-top:-1px;text-shadow:0 0 3px #fff,0 0 3px #fff;max-width:80px;overflow:hidden;text-overflow:ellipsis">' + il + '</div>',
+      html: svgHtml + '<div style="text-align:center;font-size:' + (sayi > 0 ? 9 : 8) + 'px;font-weight:' + (sayi > 0 ? 700 : 500) + ';color:' + labelColor + ';white-space:nowrap;font-family:Poppins,Arial,sans-serif;margin-top:-1px;text-shadow:' + labelShadow + ';max-width:80px;overflow:hidden;text-overflow:ellipsis">' + il + '</div>',
       className: '',
       iconSize: [(r*2+6), (r*2+20)],
       iconAnchor: [(r+3), (r+3)],
@@ -9246,14 +9253,30 @@ function haritaIlDetay(il, ilSayilar) {
     +'<table style="width:100%;table-layout:auto" aria-label="Kişi turne listesi"><thead><tr style="background:var(--muted)"><th scope="col" style="padding:6px 10px;font-size:11px;font-weight:700;color:var(--muted-foreground);white-space:nowrap">Oyun</th><th scope="col" style="padding:6px 10px;font-size:11px;font-weight:700;color:var(--muted-foreground);width:90px;white-space:nowrap">Tarih</th><th scope="col" style="padding:6px 10px;font-size:11px;font-weight:700;color:var(--muted-foreground);white-space:nowrap">Statü</th><th scope="col" style="width:36px"><span class="sr-only">Düzenle</span></th></tr></thead><tbody>'+rows+'</tbody></table>';
 }
 
-// Harita il detay panelinden turneler sekmesine geç ve kartı aç
+// Harita sağ panelinden turne detayına git — harita sekmesinde kal, slide-in göster
 function _haritaIlDetayGit(rowIdx) {
-  switchTab('liste');
-  setTimeout(function() {
-    openCardDetail(rowIdx);
-    var el = document.querySelector('[data-rowIdx="' + rowIdx + '"]');
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }, 250);
+  var t = turneler.find(function(x){ return x._rowIdx === rowIdx; });
+  if (!t) return;
+  var panel = document.getElementById('harita-turne-detay-panel');
+  if (!panel) {
+    // Panel yoksa oluştur (harita-detay içine ekle)
+    panel = document.createElement('div');
+    panel.id = 'harita-turne-detay-panel';
+    panel.style.cssText = 'position:fixed;top:0;right:-420px;width:400px;height:100vh;background:var(--card);border-left:1px solid var(--border);z-index:3000;overflow-y:auto;transition:right .3s cubic-bezier(.4,0,.2,1);box-shadow:-4px 0 24px rgba(0,0,0,.12);font-family:Poppins,sans-serif';
+    document.body.appendChild(panel);
+  }
+
+  var sr = statuRenk(t.statu || '');
+  var sure = turneSuresi(t);
+  var iller = durakIllerListesi ? durakIllerListesi(t).join(', ') : (t.il || '');
+  var temsil = durakToplamTemsil ? durakToplamTemsil(t) : '';
+  var kadroSay = t.katilimcilar ? t.katilimcilar.length : 0;
+
+  panel.innerHTML =
+    '<div style="background:var(--sidebar);padding:16px 18px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:1">'    + '<div style="color:#fff">'    +   '<div style="font-size:14px;font-weight:800;line-height:1.3">' + (t.oyun || '—') + '</div>'    +   '<div style="font-size:10px;opacity:.7;margin-top:2px">' + (iller || '') + '</div>'    + '</div>'    + '<button onclick="document.getElementById(\'harita-turne-detay-panel\').style.right=\'-420px\'" style="background:rgba(255,255,255,.15);border:none;color:#fff;cursor:pointer;border-radius:8px;width:30px;height:30px;font-size:16px;display:flex;align-items:center;justify-content:center">×</button>'    + '</div>'    + '<div style="padding:16px 18px;display:flex;flex-direction:column;gap:14px">'    + '<div style="display:flex;gap:8px;flex-wrap:wrap">'    +   (sure > 0 ? '<span style="padding:4px 12px;border-radius:20px;background:hsl(220,60%,96%);color:hsl(220,60%,35%);font-size:11px;font-weight:700;border:1px solid hsl(220,60%,85%)">📅 ' + sure + ' gün</span>' : '')    +   (temsil > 0 ? '<span style="padding:4px 12px;border-radius:20px;background:hsl(141,60%,95%);color:hsl(141,60%,25%);font-size:11px;font-weight:700;border:1px solid hsl(141,60%,80%)">▶ ' + temsil + ' temsil</span>' : '')    +   (kadroSay > 0 ? '<span style="padding:4px 12px;border-radius:20px;background:hsl(38,90%,95%);color:hsl(38,70%,28%);font-size:11px;font-weight:700;border:1px solid hsl(38,85%,80%)">👥 ' + kadroSay + ' kişi</span>' : '')    +   '<span style="padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700;background:' + sr.bg + ';color:' + sr.fg + ';border:1px solid ' + sr.border + '">' + (sr.label || '') + '</span>'    + '</div>'    + '<div style="background:var(--muted);border-radius:10px;padding:12px 14px">'    +   '<div style="font-size:10px;font-weight:700;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">📍 Turne Güzergahı</div>'    +   (iller ? '<div style="font-size:12px;font-weight:600;color:var(--foreground)">' + iller + '</div>' : '<div style="font-size:11px;color:var(--muted-foreground)">Güzergah belirtilmemiş</div>')    + '</div>'    + '<div style="display:flex;gap:8px">'    +   '<button onclick="editTurne(' + rowIdx + ')" style="flex:1;height:36px;border:1.5px solid var(--border);border-radius:8px;background:var(--card);color:var(--foreground);cursor:pointer;font-size:12px;font-weight:700;font-family:Poppins,sans-serif;display:flex;align-items:center;justify-content:center;gap:5px">✏️ Düzenle</button>'    +   '<button onclick="document.getElementById(\'harita-turne-detay-panel\').style.right=\'-420px\';switchTab(\'liste\');setTimeout(function(){openCardDetail(' + rowIdx + ');},200)" style="flex:1;height:36px;border:none;border-radius:8px;background:var(--primary);color:#fff;cursor:pointer;font-size:12px;font-weight:700;font-family:Poppins,sans-serif;display:flex;align-items:center;justify-content:center;gap:5px">→ Tam Detay</button>'    + '</div>'    + '</div>';
+
+  // Aç
+  setTimeout(function(){ panel.style.right = '0'; }, 10);
 }
 
 
