@@ -2622,6 +2622,8 @@ flex-shrink:0;
       <div>
         <div class="modal-title" id="kisi-modal-title">Katılımcıları Yönet</div>
         <div class="modal-sure" id="kisi-modal-sure"></div>
+        <!-- Çok oyunlu mod sekme bandı -->
+        <div id="kisi-modal-oyun-sekmeler" style="display:none;width:100%;margin-top:6px;gap:4px;flex-wrap:wrap"></div>
       </div>
       <button class="modal-close" onclick="closeKisiModal()">×</button>
     </div>
@@ -4542,43 +4544,65 @@ function openKisiModal(rowIdx, _durakOyunAdi) {
   }
 
   kisiModalRowIdx = rowIdx;
-  // oyun adını sakla — önce parametre, sonra t.oyun, sonra duraktan türet
-  var oyunAdi = _durakOyunAdi || t.oyun || '';
-  if (!oyunAdi && t.duraklar) {
-    var durakOyunlar = t.duraklar.map(function(d){ return d.oyun||''; }).filter(Boolean);
-    oyunAdi = [...new Set(durakOyunlar)][0] || '';
-  }
-  window._kisiModalOyunAdi = oyunAdi;
-  // Kayıtlı katılımcılar varsa onları yükle, yoksa ana kadroyu otomatik seç
-  var anaKadro = getPersonelForOyun(oyunAdi);
-  if (t.katilimcilar && t.katilimcilar.length > 0) {
-    kisiModalSecili = JSON.parse(JSON.stringify(t.katilimcilar));
 
-    // Canlı personel verisiyle karşılaştır — ana kadroda olup listede olmayan kişileri bul
-    var kayitliAdlar = new Set(kisiModalSecili.map(function(k){ return k.kisi.trim().toLowerCase(); }));
-    var eksikler = anaKadro.filter(function(p){
-      return p.kisi && !kayitliAdlar.has(p.kisi.trim().toLowerCase());
+  // Tüm durak oyunlarını bul (tekrarsız)
+  var _tumDurakOyunlar = [];
+  if (t.duraklar) t.duraklar.forEach(function(d){ if (d.oyun && !_tumDurakOyunlar.includes(d.oyun)) _tumDurakOyunlar.push(d.oyun); });
+  if (!_tumDurakOyunlar.length && t.oyun) _tumDurakOyunlar.push(t.oyun);
+  window._kisiModalTumOyunlar = _tumDurakOyunlar;
+
+  // Başlangıç oyunu — parametre verilmişse onu kullan
+  var oyunAdi = _durakOyunAdi || _tumDurakOyunlar[0] || t.oyun || '';
+  window._kisiModalOyunAdi = oyunAdi;
+
+  // Çok oyunlu mod: sekmeli yapı — her oyun için ayrı katilimci listesi
+  // window._kisiModalCoklu: { 'OYUN_ADI': [{kisi,gorev,kategori,oyun},...], ... }
+  if (_tumDurakOyunlar.length > 1) {
+    window._kisiModalCoklu = {};
+    _tumDurakOyunlar.forEach(function(o) {
+      // Kayıtlı katılımcılardan bu oyuna ait olanları al
+      var kayitli = (t.katilimcilar || []).filter(function(k){ return !k.oyun || k.oyun === o; });
+      if (kayitli.length > 0) {
+        window._kisiModalCoklu[o] = JSON.parse(JSON.stringify(kayitli));
+        // Eksik kontrolü
+        var anaKadroO = getPersonelForOyun(o);
+        var kayitliAdlar = new Set(kayitli.map(function(k){ return k.kisi.trim().toLowerCase(); }));
+        var eksikler = anaKadroO.filter(function(p){ return p.kisi && !kayitliAdlar.has(p.kisi.trim().toLowerCase()); });
+        if (eksikler.length > 0 && o === oyunAdi) _eksikKisilerSecimGoster(eksikler);
+      } else {
+        // Hiç kayıt yoksa ana kadroyu otomatik yükle
+        var anaKadroO = getPersonelForOyun(o);
+        window._kisiModalCoklu[o] = anaKadroO.map(function(p) {
+          var gorev = p.kategori === 'Oyuncu' ? 'Sanatçı' : (p.gorev || p.kategori || '');
+          return { kisi: p.kisi, gorev: gorev, kategori: p.kategori, oyun: o };
+        });
+      }
     });
-    if (eksikler.length > 0) {
-      // Checkbox'lı seçim modalı göster
-      _eksikKisilerSecimGoster(eksikler);
-    }
+    // Aktif sekmenin listesini kisiModalSecili'ye yansıt
+    kisiModalSecili = window._kisiModalCoklu[oyunAdi] || [];
+    _kisiModalSekmelerRender();
   } else {
-    // Ana kadroyu varsayılan olarak seç
-    kisiModalSecili = anaKadro.map(function(p) {
-      var gorevGoster = p.kategori === 'Oyuncu' ? 'Sanatçı' : (p.gorev || p.kategori || '');
-      return { kisi: p.kisi, gorev: gorevGoster, kategori: p.kategori };
-    });
+    // Tek oyun — mevcut davranış
+    window._kisiModalCoklu = null;
+    var anaKadro = getPersonelForOyun(oyunAdi);
+    if (t.katilimcilar && t.katilimcilar.length > 0) {
+      kisiModalSecili = JSON.parse(JSON.stringify(t.katilimcilar));
+      var kayitliAdlar = new Set(kisiModalSecili.map(function(k){ return k.kisi.trim().toLowerCase(); }));
+      var eksikler = anaKadro.filter(function(p){ return p.kisi && !kayitliAdlar.has(p.kisi.trim().toLowerCase()); });
+      if (eksikler.length > 0) _eksikKisilerSecimGoster(eksikler);
+    } else {
+      kisiModalSecili = anaKadro.map(function(p) {
+        var gorev = p.kategori === 'Oyuncu' ? 'Sanatçı' : (p.gorev || p.kategori || '');
+        return { kisi: p.kisi, gorev: gorev, kategori: p.kategori };
+      });
+    }
+    _kisiModalSekmelerGizle();
   }
-  document.getElementById('kisi-modal-title').textContent = (oyunAdi || t.il || 'Turne') + ' – Katılımcılar';
+
+  document.getElementById('kisi-modal-title').textContent = (t.il || 'Turne') + ' – Katılımcılar';
   document.getElementById('kisi-modal-sure').textContent = formatTarih(t.baslangicTarih || t.tarih) + ' · ' + t.il;
-  // Önceki arama metnini koru (aynı oyun için tekrar açılınca)
-  var _prevQ = window._kisiModalSonArama || '';
-  var _prevOyun = window._kisiModalSonOyun || '';
-  if (_prevOyun !== oyunAdi) _prevQ = ''; // oyun değiştiyse sıfırla
-  window._kisiModalSonOyun = oyunAdi;
-  document.getElementById('kisi-filter-input').value = _prevQ;
-  renderKisiModalList(oyunAdi, _prevQ);
+  document.getElementById('kisi-filter-input').value = '';
+  renderKisiModalList(oyunAdi, '');
   renderSelectedPills();
   document.getElementById('kisi-modal-overlay').classList.add('on');
 }
@@ -4587,6 +4611,9 @@ function closeKisiModal() {
   document.getElementById('kisi-modal-overlay').classList.remove('on');
   kisiModalRowIdx = null;
   kisiModalSecili = [];
+  window._kisiModalCoklu = null;
+  window._kisiModalTumOyunlar = [];
+  _kisiModalSekmelerGizle();
 }
 
 // Eksik kişiler için checkbox seçim modalı
@@ -4725,6 +4752,8 @@ function kisiModalAnaKadroyuSec() {
     var gorevGoster = p.kategori === 'Oyuncu' ? 'Sanatçı' : (p.gorev || p.kategori || '');
     return { kisi: p.kisi, gorev: gorevGoster, kategori: p.kategori };
   });
+  // Çok oyunlu modda aktif sekmeyi de güncelle
+  if (window._kisiModalCoklu && _kmOyun) window._kisiModalCoklu[_kmOyun] = JSON.parse(JSON.stringify(kisiModalSecili));
   var q = document.getElementById('kisi-filter-input').value.toLowerCase();
   renderKisiModalList(_kmOyun, q);
   renderSelectedPills();
@@ -5033,11 +5062,66 @@ function closeCardDetail() {
   window._acikKartRowIdx = null;
 }
 
+
+// ── Çok Oyunlu Modal Sekme Yönetimi ────────────────────────────────────────
+function _kisiModalSekmelerRender() {
+  var tumOyunlar = window._kisiModalTumOyunlar || [];
+  var aktif = window._kisiModalOyunAdi || '';
+  var el = document.getElementById('kisi-modal-oyun-sekmeler');
+  if (!el) return;
+  if (tumOyunlar.length < 2) { el.style.display = 'none'; return; }
+  el.style.display = 'flex';
+  // Index ile çağır — Türkçe karakter inline sorununu önler
+  window._kisiModalSekmeListesi = tumOyunlar;
+  el.innerHTML = tumOyunlar.map(function(o, oi) {
+    var isAktif = o === aktif;
+    var kat = window._kisiModalCoklu && window._kisiModalCoklu[o] ? window._kisiModalCoklu[o].length : 0;
+    return '<button onclick="_kisiModalSekmeGecIdx(' + oi + ')" '
+      + 'style="padding:5px 12px;border:1.5px solid ' + (isAktif ? 'var(--primary)' : 'var(--border)') + ';'
+      + 'border-radius:20px;background:' + (isAktif ? 'var(--primary)' : 'transparent') + ';'
+      + 'color:' + (isAktif ? '#fff' : 'var(--muted-foreground)') + ';'
+      + 'cursor:pointer;font-size:11px;font-weight:700;font-family:Poppins,sans-serif;'
+      + 'white-space:nowrap;transition:all .15s">'
+      + o + ' <span style="font-size:10px;opacity:.8">(' + kat + ')</span>'
+      + '</button>';
+  }).join('');
+}
+
+function _kisiModalSekmelerGizle() {
+  var el = document.getElementById('kisi-modal-oyun-sekmeler');
+  if (el) el.style.display = 'none';
+}
+
+function _kisiModalSekmeGecIdx(oi) {
+  var o = window._kisiModalSekmeListesi && window._kisiModalSekmeListesi[oi];
+  if (o !== undefined) _kisiModalSekmeGec(o);
+}
+function _kisiModalSekmeGec(yeniOyun) {
+  if (!window._kisiModalCoklu) return;
+  // Aktif sekmenin mevcut listesini kaydet
+  var eskiOyun = window._kisiModalOyunAdi;
+  if (eskiOyun) window._kisiModalCoklu[eskiOyun] = JSON.parse(JSON.stringify(kisiModalSecili));
+  // Yeni sekmeye geç
+  window._kisiModalOyunAdi = yeniOyun;
+  kisiModalSecili = window._kisiModalCoklu[yeniOyun] || [];
+  // UI güncelle
+  _kisiModalSekmelerRender();
+  document.getElementById('kisi-filter-input').value = '';
+  renderKisiModalList(yeniOyun, '');
+  renderSelectedPills();
+}
+// ───────────────────────────────────────────────────────────────────────────
+
+
+function _kisiCokluSync() {
+  if (window._kisiModalCoklu && window._kisiModalOyunAdi) {
+    window._kisiModalCoklu[window._kisiModalOyunAdi] = JSON.parse(JSON.stringify(kisiModalSecili));
+    _kisiModalSekmelerRender();
+  }
+}
 function filterKisiList() {
-  const t = turneler.find(x => x._rowIdx === kisiModalRowIdx);
-  if (!t) return;
   const q = document.getElementById('kisi-filter-input').value.toLowerCase();
-  renderKisiModalList(t.oyun, q);
+  renderKisiModalList(window._kisiModalOyunAdi || '', q);
 }
 
 function renderKisiModalList(oyunAdi, q) {
@@ -5157,14 +5241,13 @@ function toggleKisiSecim(kisi, gorev, kategori) {
   } else {
     kisiModalSecili.push({ kisi, gorev, kategori, ekstra: false });
   }
-  const t = turneler.find(x => x._rowIdx === kisiModalRowIdx);
-  const q = document.getElementById('kisi-filter-input').value.toLowerCase();
-  // oyun adı boşsa duraktan türet (t.oyun bazen boş olabilir)
-  var oyunAdiKisi = window._kisiModalOyunAdi || (t ? t.oyun : '') || '';
-  if (!oyunAdiKisi && t && t.duraklar) {
-    var durakOyunlar = t.duraklar.map(function(d){ return d.oyun||''; }).filter(Boolean);
-    oyunAdiKisi = durakOyunlar[0] || '';
+  // Çok oyunlu modda aktif sekmeyi senkronize et
+  if (window._kisiModalCoklu && window._kisiModalOyunAdi) {
+    window._kisiModalCoklu[window._kisiModalOyunAdi] = JSON.parse(JSON.stringify(kisiModalSecili));
+    _kisiModalSekmelerRender(); // Kişi sayısını güncelle
   }
+  const q = document.getElementById('kisi-filter-input').value.toLowerCase();
+  var oyunAdiKisi = window._kisiModalOyunAdi || '';
   renderKisiModalList(oyunAdiKisi, q);
   renderSelectedPills();
 }
@@ -5229,7 +5312,7 @@ function renderSelectedPills(scrollToIdx) {
     row.addEventListener('dragstart', function(e) { dSrc=this; this.style.opacity='.4'; e.dataTransfer.effectAllowed='move'; });
     row.addEventListener('dragend',   function()  { dl.querySelectorAll('[draggable]').forEach(function(r){r.style.opacity='1';r.style.boxShadow='';}); });
     row.addEventListener('dragover',  function(e) { e.preventDefault(); dl.querySelectorAll('[draggable]').forEach(function(r){r.style.boxShadow='';}); if(this!==dSrc) this.style.boxShadow='inset 0 2px 0 #3b82f6'; });
-    row.addEventListener('drop',      function(e) { e.preventDefault(); if(this===dSrc) return; var f=parseInt(dSrc.dataset.idx),t=parseInt(this.dataset.idx),item=kisiModalSecili.splice(f,1)[0]; kisiModalSecili.splice(t,0,item); _aktifPillIdx=t; renderSelectedPills(t); });
+    row.addEventListener('drop',      function(e) { e.preventDefault(); if(this===dSrc) return; var f=parseInt(dSrc.dataset.idx),t=parseInt(this.dataset.idx),item=kisiModalSecili.splice(f,1)[0]; kisiModalSecili.splice(t,0,item); _aktifPillIdx=t; _kisiCokluSync(); renderSelectedPills(t); });
   });
 
   // Scroll koru veya yeni elemana git
@@ -5280,10 +5363,10 @@ function _pillMove(idx, yon) {
 }
 
 // Eski isimler - geriye d\u00f6n\u00fck
-function kisiEnUsteTasi(idx) { var item=kisiModalSecili.splice(idx,1)[0]; kisiModalSecili.unshift(item); _aktifPillIdx=0; renderSelectedPills(0); }
+function kisiEnUsteTasi(idx) { var item=kisiModalSecili.splice(idx,1)[0]; kisiModalSecili.unshift(item); _aktifPillIdx=0; _kisiCokluSync(); renderSelectedPills(0); }
 function kisiYukariTasi(idx) { _pillMove(idx,-1); }
 function kisiAsagiTasi(idx)  { _pillMove(idx, 1); }
-function kisiEnAltaTasi(idx) { var item=kisiModalSecili.splice(idx,1)[0]; kisiModalSecili.push(item); _aktifPillIdx=kisiModalSecili.length-1; renderSelectedPills(kisiModalSecili.length-1); }
+function kisiEnAltaTasi(idx) { var item=kisiModalSecili.splice(idx,1)[0]; kisiModalSecili.push(item); _aktifPillIdx=kisiModalSecili.length-1; _kisiCokluSync(); renderSelectedPills(kisiModalSecili.length-1); }
 
 function toggleEkstraPanel() {
   var p = document.getElementById('ekstra-kisi-panel');
@@ -5351,6 +5434,7 @@ function ekstraKisiEkle() {
   if (!ad) return;
   if (!kisiModalSecili.some(s => s.kisi === ad)) {
     kisiModalSecili.push({ kisi: ad, gorev, kategori: 'Turne Ekstra Kadrosu', ekstra: true });
+    _kisiCokluSync();
     renderSelectedPills();
   }
   document.getElementById('extra-kisi-ad').value = '';
@@ -5519,6 +5603,7 @@ function disKisiEkle() {
   if (!ad) { document.getElementById('dis-kisi-ad').focus(); return; }
   if (!kisiModalSecili.some(function(s){ return s.kisi === ad; })) {
     kisiModalSecili.push({ kisi: ad, gorev: kat, kategori: kat, ekstra: true, dis: true });
+    _kisiCokluSync();
     var t = turneler.find(function(x){ return x._rowIdx === kisiModalRowIdx; });
     var oyunAdiKisi = window._kisiModalOyunAdi || (t ? t.oyun : '') || '';
     var q = document.getElementById('kisi-filter-input').value.toLowerCase();
@@ -5604,11 +5689,28 @@ async function saveKisiModal() {
   // NOT: dis:true olan kişiler SADECE bu turnenin JSON'una kaydedilir.
   // DIS_KATILIMCILAR sheet'ine otomatik yazılmaz — o listeyi yönetici kendisi yönetir.
 
+  // Çok oyunlu modda aktif sekmeyi önce kaydet
+  if (window._kisiModalCoklu && window._kisiModalOyunAdi) {
+    window._kisiModalCoklu[window._kisiModalOyunAdi] = JSON.parse(JSON.stringify(kisiModalSecili));
+  }
+
   // 1. Yerel veriyi hemen güncelle
-  t.katilimcilar = JSON.parse(JSON.stringify(kisiModalSecili));
+  // Çok oyunlu: tüm sekmeleri birleştir, oyun alanı ekle
+  var _birlesikListe;
+  if (window._kisiModalCoklu) {
+    _birlesikListe = [];
+    Object.keys(window._kisiModalCoklu).forEach(function(o) {
+      (window._kisiModalCoklu[o] || []).forEach(function(k) {
+        _birlesikListe.push(Object.assign({}, k, { oyun: o }));
+      });
+    });
+  } else {
+    _birlesikListe = JSON.parse(JSON.stringify(kisiModalSecili));
+  }
+  t.katilimcilar = _birlesikListe;
   const rowIdxKayit = t._rowIdx;
-  const katJSON2 = JSON.stringify(kisiModalSecili); // closeKisiModal'dan ÖNCE al
-  const katSayisi = kisiModalSecili.length; // log için closeKisiModal'dan ÖNCE al
+  const katJSON2 = JSON.stringify(_birlesikListe); // closeKisiModal'dan ÖNCE al
+  const katSayisi = _birlesikListe.length; // log için closeKisiModal'dan ÖNCE al
 
   // 2. Modal'ı kapat, ekranı güncelle
   closeKisiModal();
@@ -8914,6 +9016,7 @@ function kisiModalTopluSec(tip) {
     kisiModalSecili=yeni;
   }
   var _q2 = (document.getElementById('kisi-filter-input')||{}).value||'';
+  _kisiCokluSync();
   renderKisiModalList(window._kisiModalOyunAdi||'', _q2);
   renderSelectedPills();
   var ct=document.getElementById('kisi-bulk-count'); if(ct) ct.textContent=kisiModalSecili.length?kisiModalSecili.length+' kişi seçili':'';
