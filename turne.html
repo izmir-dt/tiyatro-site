@@ -8425,6 +8425,7 @@ function kadroKisiModalKapat() {
   if (btnSil) { btnSil.disabled = false; btnSil.textContent = 'Sil'; }
 }
 
+var _eskiAdGlobal = null;
 async function kadroKisiKaydet() {
   const ad    = document.getElementById('kadro-kisi-ad').value.trim();
   const kat   = document.getElementById('kadro-kisi-kat').value;
@@ -8445,6 +8446,7 @@ async function kadroKisiKaydet() {
 
   try {
     if (kadroEditIdx !== null) {
+      _eskiAdGlobal = tumPersonel[kadroEditIdx].kisi; // eski ismi kaydet
       const sheetRow = tumPersonel[kadroEditIdx]._sheetRow;
       if (!sheetRow) { alert('Satır numarası bulunamadı, lütfen sayfayı yenileyin.'); return; }
       const vals = [oyun, kat, gorev, ad];
@@ -8460,6 +8462,12 @@ async function kadroKisiKaydet() {
       tumPersonel[kadroEditIdx].gorev = gorev;
       tumPersonel[kadroEditIdx].oyun = oyun;
     } else {
+      // İsim değişmişse diğer oyunlardaki aynı kişiyi de güncelle
+      if (_eskiAdGlobal && _eskiAdGlobal !== ad) {
+        tumPersonel.forEach(function(p, pi) {
+          if (pi !== kadroEditIdx && p.kisi && p.kisi.trim().toLowerCase() === _eskiAdGlobal.trim().toLowerCase()) { p.kisi = ad; }
+        });
+      }
       await apiFetch('/' + encodeURIComponent(PERSONEL_SHEET) + '/row', {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
@@ -8479,6 +8487,18 @@ async function kadroKisiKaydet() {
     if (btnKaydet) { btnKaydet.disabled = false; btnKaydet.textContent = 'Kaydet'; }
   }
 
+  // İsim değişmişse: tüm turnelerin katılımcı listelerinde de eski ismi güncelle
+  if (_eskiAdGlobal && _eskiAdGlobal !== document.getElementById('kadro-kisi-ad') && typeof _eskiAdGlobal === 'string') {
+    var _yeniAd = (document.getElementById('kadro-kisi-ad')||{}).value || '';
+    if (_yeniAd && _yeniAd !== _eskiAdGlobal) {
+      turneler.forEach(function(t) {
+        if (t.katilimcilar) t.katilimcilar.forEach(function(k) {
+          if (k.kisi && k.kisi.trim().toLowerCase() === _eskiAdGlobal.trim().toLowerCase()) k.kisi = _yeniAd;
+        });
+      });
+    }
+  }
+  _eskiAdGlobal = null;
   populateFilters();
   kadroKisiModalKapat();
   renderKadro();
