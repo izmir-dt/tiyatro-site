@@ -11937,37 +11937,45 @@ function calAylikRaporPdf() {
     var tatilAdi = resmiTatilKontrol ? resmiTatilKontrol(key) : null;
     var gunNotu = calNotes[key] ? calNotes[key].not : '';
     if (!events.length && !tatilAdi && !gunNotu) continue;
-    turneGunSay++;
 
-    var evHTML = events.map(function(t) {
+    var tipRenk = {oyun:'#15803d',yol:'#b45309',donus:'#dc2626',prova:'#1d4ed8',dinlen:'#7c3aed',hazir:'#0891b2',genel:'#444'};
+    var isFirst = true;
+
+    if (!events.length) {
+      // Sadece tatil veya not
+      gunRows += '<tr style="border-top:1.5pt solid #e0e0e0">'        + '<td style="padding:6pt 8pt;font-size:11pt;font-weight:900;text-align:center;vertical-align:middle;white-space:nowrap;width:36pt">'+d+'</td>'        + '<td style="padding:6pt 4pt;font-size:8pt;font-weight:700;color:#999;text-align:center;vertical-align:middle;width:24pt">'+gunAdi+'</td>'        + '<td style="padding:6pt 8pt;color:#d97706;font-weight:700" colspan="3">'        + (tatilAdi ? '⭐ '+tatilAdi : '') + (gunNotu ? ' · 📝 '+gunNotu : '')        + '</td></tr>';
+      continue;
+    }
+
+    events.forEach(function(t, idx) {
       var ps = t.programSatirlar ? t.programSatirlar.find(function(s){ return s.tarih===key; }) : null;
       var st = _calEvStyle(ps, t);
-      var tipRenk = {oyun:'#15803d',yol:'#d97706',donus:'#dc2626',prova:'#1d4ed8',dinlen:'#7c3aed',hazir:'#0891b2',genel:'#555'};
-      var renk = tipRenk[st.tip] || '#555';
+      var renk = tipRenk[st.tip] || '#444';
       var temsil = typeof durakToplamTemsil==='function' ? durakToplamTemsil(t) : 0;
       var kadro = t.katilimcilar ? t.katilimcilar.length : 0;
       if (st.tip==='oyun') toplamTemsil += temsil;
       toplamKadro = Math.max(toplamKadro, kadro);
-      return '<tr>'        + '<td class="etkinlik-adi" style="color:'+renk+';white-space:nowrap">' + st.oyunAdi + '</td>'        + '<td class="saat c">' + (st.saat||'—') + '</td>'        + '<td>' + (st.ilStr||'—') + '</td>'        + '<td class="not">' + (gunNotu||'') + '</td>'        + '</tr>';
-    }).join('');
+      turneGunSay = turneGunSay; // sayacı dışarıda
 
-    if (tatilAdi && !events.length) {
-      evHTML = '<tr><td colspan="4" style="color:#d97706;font-weight:700">⭐ '+tatilAdi+'</td></tr>';
-    } else if (!evHTML && gunNotu) {
-      evHTML = '<tr><td colspan="4" class="not">📝 '+gunNotu+'</td></tr>';
-    }
-
-    gunRows += '<tr>'      + '<td class="tarih-hucre">'+d+'<span class="tarih-gun">'+gunAdi+'</span></td>'      + '<td style="padding:0"><table style="margin:0">'+evHTML+'</table></td>'      + '</tr>';
+      if (isFirst) {
+        gunRows += '<tr style="border-top:1.5pt solid #e0e0e0">'          + '<td rowspan="'+events.length+'" style="padding:6pt 8pt;font-size:12pt;font-weight:900;text-align:center;vertical-align:middle;white-space:nowrap;width:36pt;border-right:1pt solid #eee">'+d+'</td>'          + '<td rowspan="'+events.length+'" style="padding:6pt 4pt;font-size:8pt;font-weight:700;color:#999;text-align:center;vertical-align:middle;width:24pt;border-right:1pt solid #eee">'+gunAdi+'</td>'          + '<td style="padding:6pt 8pt;font-weight:800;color:'+renk+'">'+st.oyunAdi+'</td>'          + '<td style="padding:6pt 8pt;font-weight:900;font-size:11pt;text-align:center;white-space:nowrap;width:52pt">'+(st.saat||'')+'</td>'          + '<td style="padding:6pt 8pt;color:#555;font-size:9pt">'+(st.ilStr||'')+(idx===events.length-1 && gunNotu ? '<br><span style="color:#aaa;font-style:italic">📝 '+gunNotu+'</span>' : '')+'</td>'          + '</tr>';
+        isFirst = false;
+      } else {
+        gunRows += '<tr>'          + '<td style="padding:5pt 8pt;font-weight:800;color:'+renk+'">'+st.oyunAdi+'</td>'          + '<td style="padding:5pt 8pt;font-weight:900;font-size:11pt;text-align:center;white-space:nowrap">'+(st.saat||'')+'</td>'          + '<td style="padding:5pt 8pt;color:#555;font-size:9pt">'+(st.ilStr||'')+(idx===events.length-1 && gunNotu ? '<br><span style="color:#aaa;font-style:italic">📝 '+gunNotu+'</span>' : '')+'</td>'          + '</tr>';
+      }
+    });
+    turneGunSay++;
   }
 
-  var html = '<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>'+ayAdi+' Raporu</title>'    + _calPdfCSS() + '</head><body>'    + '<h1>'+ayAdi+'</h1>'    + '<div class="meta">Oluşturulma: '+bugun+'</div>'    + '<div class="ozet" style="grid-template-columns:repeat(4,1fr)">'    +   '<div class="ozet-kart"><div class="sayi">'+turneGunSay+'</div><div class="etiket">Turne Günü</div></div>'    +   '<div class="ozet-kart"><div class="sayi">'+toplamTemsil+'</div><div class="etiket">Toplam Temsil</div></div>'    +   '<div class="ozet-kart"><div class="sayi">'+ayTurneler.length+'</div><div class="etiket">Turne Sayısı</div></div>'    +   '<div class="ozet-kart"><div class="sayi">'+toplamKadro+'</div><div class="etiket">Max Kadro</div></div>'    + '</div>'    + '<h2>Günlük Program</h2>'    + '<table>'    + '<thead><tr><th style="width:44pt;text-align:center">Tarih</th><th>Etkinlik</th><th class="c" style="width:60pt">Saat</th><th>Şehir</th><th>Not</th></tr></thead>'    + '<tbody>'+gunRows+'</tbody></table>'    + (ayTurneler.length ? '<h2>Bu Aydaki Turneler</h2>'      + '<table><thead><tr><th>Oyun</th><th>Şehir</th><th>Tarih</th><th class="c">Süre</th><th class="c">Temsil</th><th class="c">Kadro</th><th>Statü</th></tr></thead><tbody>'      + ayTurneler.map(function(t) {          var sr = typeof statuRenk==='function' ? statuRenk(t.statu||'') : {};          var sure = typeof turneSuresi==='function' ? turneSuresi(t) : 0;          var temsil = typeof durakToplamTemsil==='function' ? durakToplamTemsil(t) : 0;          var kadro = t.katilimcilar ? t.katilimcilar.length : 0;          var iller = typeof durakIllerListesi==='function' ? durakIllerListesi(t).map(function(x){return x.replace(/\/MERKEZ/gi,'');}).join(', ') : (t.il||'');          var tarih = (typeof formatTarih==='function'?formatTarih(t.baslangicTarih||t.tarih):(t.baslangicTarih||t.tarih||''))            +(t.bitisTarih&&t.bitisTarih!==t.baslangicTarih?' – '+(typeof formatTarih==='function'?formatTarih(t.bitisTarih):t.bitisTarih):'');          return '<tr>'            +'<td style="font-weight:700">'+(t.oyun||'—')+'</td>'            +'<td>'+iller+'</td>'            +'<td style="white-space:nowrap">'+tarih+'</td>'            +'<td class="c">'+sure+' gün</td>'            +'<td class="c">'+temsil+'</td>'            +'<td class="c">'+kadro+'</td>'            +'<td><span class="badge" style="background:'+(sr.bg||'#eee')+';color:'+(sr.fg||'#333')+'">'+(sr.label||'')+'</span></td>'            +'</tr>';        }).join('')      + '</tbody></table>' : '')    + '<script>window.onload=function(){window.print();};<\/script>'    + '</body></html>';
+  var css = '<style>'    + '*{box-sizing:border-box;margin:0;padding:0}'    + 'body{font-family:Arial,Helvetica,sans-serif;font-size:10pt;color:#1a1a1a;background:#fff;padding:12mm 14mm;-webkit-print-color-adjust:exact;print-color-adjust:exact}'    + 'h1{font-size:18pt;font-weight:900;color:#1a1a1a;margin-bottom:3pt}'    + '.meta{font-size:9pt;color:#999;margin-bottom:14pt}'    + '.ozet{display:grid;grid-template-columns:repeat(4,1fr);gap:8pt;margin-bottom:16pt}'    + '.ozet-kart{border:1.5pt solid #e0e0e0;border-radius:4pt;padding:8pt 10pt;text-align:center}'    + '.ozet-kart .sayi{font-size:22pt;font-weight:900;color:#1a1a1a;line-height:1}'    + '.ozet-kart .etiket{font-size:7.5pt;color:#aaa;text-transform:uppercase;letter-spacing:.5pt;margin-top:4pt}'    + 'h2{font-size:10pt;font-weight:700;color:#fff;background:#2d2d2d;padding:5pt 10pt;margin:14pt 0 0;letter-spacing:.3pt}'    + 'table{width:100%;border-collapse:collapse}'    + 'thead th{background:#f0f0f0;color:#333;padding:5pt 8pt;font-size:8.5pt;font-weight:700;text-transform:uppercase;letter-spacing:.3pt;border-bottom:2pt solid #ccc}'    + 'td{vertical-align:middle;border-bottom:1pt solid #f0f0f0;font-size:10pt}'    + '.badge{display:inline-block;padding:1.5pt 7pt;border-radius:8pt;font-size:8pt;font-weight:700}'    + '@media print{@page{margin:10mm}body{padding:0}}'    + '</style>';
+
+  var html = '<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>'+ayAdi+' Raporu</title>'    + css + '</head><body>'    + '<h1>'+ayAdi+'</h1>'    + '<div class="meta">Oluşturulma: '+bugun+'</div>'    + '<div class="ozet">'    +   '<div class="ozet-kart"><div class="sayi">'+turneGunSay+'</div><div class="etiket">Turne Günü</div></div>'    +   '<div class="ozet-kart"><div class="sayi">'+toplamTemsil+'</div><div class="etiket">Toplam Temsil</div></div>'    +   '<div class="ozet-kart"><div class="sayi">'+ayTurneler.length+'</div><div class="etiket">Turne Sayısı</div></div>'    +   '<div class="ozet-kart"><div class="sayi">'+toplamKadro+'</div><div class="etiket">Max Kadro</div></div>'    + '</div>'    + '<h2>Günlük Program</h2>'    + '<table><thead><tr>'    + '<th style="width:36pt;text-align:center">Gün</th>'    + '<th style="width:24pt;text-align:center"></th>'    + '<th>Etkinlik</th>'    + '<th style="width:52pt;text-align:center">Saat</th>'    + '<th>Şehir</th>'    + '</tr></thead><tbody>'+gunRows+'</tbody></table>'    + (ayTurneler.length ? '<h2>Bu Aydaki Turneler</h2>'      + '<table><thead><tr>'      + '<th>Oyun</th><th>Şehir</th><th>Tarih</th><th style="text-align:center">Süre</th><th style="text-align:center">Temsil</th><th style="text-align:center">Kadro</th><th>Statü</th>'      + '</tr></thead><tbody>'      + ayTurneler.map(function(t) {          var sr = typeof statuRenk==='function' ? statuRenk(t.statu||'') : {};          var sure = typeof turneSuresi==='function' ? turneSuresi(t) : 0;          var temsil = typeof durakToplamTemsil==='function' ? durakToplamTemsil(t) : 0;          var kadro = t.katilimcilar ? t.katilimcilar.length : 0;          var iller = typeof durakIllerListesi==='function' ? durakIllerListesi(t).map(function(x){return x.replace(/\/MERKEZ/gi,'');}).join(', ') : (t.il||'');          var tarih = (typeof formatTarih==='function'?formatTarih(t.baslangicTarih||t.tarih):(t.baslangicTarih||t.tarih||''))            +(t.bitisTarih&&t.bitisTarih!==t.baslangicTarih?' – '+(typeof formatTarih==='function'?formatTarih(t.bitisTarih):t.bitisTarih):'');          return '<tr>'            +'<td style="font-weight:700;padding:6pt 8pt">'+( t.oyun||'—')+'</td>'            +'<td style="padding:6pt 8pt;color:#555">'+iller+'</td>'            +'<td style="padding:6pt 8pt;white-space:nowrap;color:#555">'+tarih+'</td>'            +'<td style="padding:6pt 8pt;text-align:center">'+sure+' gün</td>'            +'<td style="padding:6pt 8pt;text-align:center">'+temsil+'</td>'            +'<td style="padding:6pt 8pt;text-align:center">'+kadro+'</td>'            +'<td style="padding:6pt 8pt"><span class="badge" style="background:'+(sr.bg||'#eee')+';color:'+(sr.fg||'#333')+'">'+(sr.label||'')+'</span></td>'            +'</tr>';        }).join('')      + '</tbody></table>' : '')    + '<script>window.onload=function(){window.print();};<\/script>'    + '</body></html>';
 
   var win = window.open('', '_blank');
   if (!win) { alert('Pop-up engelleyiciyi kapatın.'); return; }
   win.document.write(html);
   win.document.close();
 }
-
 
 // ============================================================
 // TAKVİM — GENEL RAPOR PDF (tüm turneler özet)
