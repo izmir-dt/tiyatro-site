@@ -2349,6 +2349,8 @@ flex-shrink:0;
             <div class="cal-title" id="cal-title"></div>
             <button class="cal-nav-btn" onclick="calNext()" title="Sonraki ay">›</button>
             <button class="cal-today-btn" onclick="calToday()">Bugün</button>
+            <!-- Aylık özet chips -->
+            <div id="cal-ozet-chips" style="display:none;align-items:center;gap:6px;margin-left:4px"></div>
           </div>
           <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
             <div class="cal-legend">
@@ -9904,6 +9906,52 @@ function _calEventHTML(t, key) {
 // ════════════════════════════════════════════════════════════
 // ANA renderCalendar
 // ════════════════════════════════════════════════════════════
+function _calOzetChipsGuncelle() {
+  var el = document.getElementById('cal-ozet-chips');
+  if (!el) return;
+
+  var sonGun = new Date(calYear, calMonth + 1, 0).getDate();
+  var turneGun = 0, oyunGun = 0, yolGun = 0, toplamTemsil = 0;
+
+  for (var d = 1; d <= sonGun; d++) {
+    var key = calYear + '-' + String(calMonth+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+    var events = _calGunEvents(key);
+    if (!events.length) continue;
+    turneGun++;
+    events.forEach(function(t) {
+      var ps = t.programSatirlar ? t.programSatirlar.find(function(s){ return s.tarih === key; }) : null;
+      var tip = ps ? ps.program : '';
+      if (tip === 'Oyun') oyunGun++;
+      if (tip === 'Yol' || tip === 'Dönüş') yolGun++;
+    });
+  }
+
+  // Temsil toplam
+  var ayBas = calYear + '-' + String(calMonth+1).padStart(2,'0') + '-01';
+  var ayBit = calYear + '-' + String(calMonth+1).padStart(2,'0') + '-' + String(sonGun).padStart(2,'0');
+  turneler.forEach(function(t) {
+    var bas = t.baslangicTarih || t.tarih || '';
+    var bit = t.bitisTarih || bas;
+    if (bas <= ayBit && bit >= ayBas) {
+      toplamTemsil += typeof durakToplamTemsil==='function' ? durakToplamTemsil(t) : 0;
+    }
+  });
+
+  if (!turneGun) { el.style.display = 'none'; return; }
+  el.style.display = 'flex';
+
+  function chip(ikon, deger, renk) {
+    return '<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:20px;background:rgba(255,255,255,.12);font-size:11px;font-weight:700;color:' + (renk||'rgba(255,255,255,.85)') + ';white-space:nowrap">'
+      + ikon + ' ' + deger + '</span>';
+  }
+
+  el.innerHTML =
+    chip('📅', turneGun + ' gün')
+    + (toplamTemsil > 0 ? chip('▶', toplamTemsil + ' temsil', 'hsl(141,65%,68%)') : '')
+    + (yolGun > 0 ? chip('🚌', yolGun + ' seyahat', 'hsl(38,90%,72%)') : '');
+}
+
+
 function renderCalendar() {
   // Statü filtre buton vurgusu
   var calFilterBtns = document.querySelectorAll('#cal-statu-filtre-row button');
@@ -9919,6 +9967,9 @@ function renderCalendar() {
   const AYLAR_TR = ['Ocak','\u015eubat','Mart','Nisan','May\u0131s','Haziran','Temmuz','A\u011fustos','Eyl\u00fcl','Ekim','Kas\u0131m','Aral\u0131k'];
   var calTitleEl = document.getElementById('cal-title');
   if (calTitleEl) calTitleEl.textContent = AYLAR_TR[calMonth] + ' ' + calYear;
+
+  // Aylık özet chips güncelle
+  _calOzetChipsGuncelle();
 
   // Görünüm yönlendirme
   if (calCurrentView === 'liste') { _renderCalListe(); return; }
