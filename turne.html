@@ -5209,6 +5209,7 @@ function kisiGorevGuncelle(kisiAdiVeyaIdx, yeniGorev) {
     var idx = kisiModalSecili.findIndex(s => s.kisi === kisiAdiVeyaIdx);
     if (idx >= 0) kisiModalSecili[idx].gorev = yeniGorev;
   }
+  _kisiCokluSync();
 }
 
 // Pill'deki görev inputuna '-' ekleyip ek görev girişi için cursor'u sona götür
@@ -5230,6 +5231,7 @@ function _pillEkGorevEkle(idx) {
     inp.value = mevcutGorev + '-';
   }
   kisiModalSecili[idx].gorev = inp.value;
+  _kisiCokluSync();
   inp.focus();
   inp.setSelectionRange(inp.value.length, inp.value.length);
 }
@@ -5359,6 +5361,7 @@ function _pillMove(idx, yon) {
   kisiModalSecili[hedef] = kisiModalSecili[idx];
   kisiModalSecili[idx] = tmp;
   _aktifPillIdx = hedef;
+  _kisiCokluSync();
   renderSelectedPills(hedef);
 }
 
@@ -5418,13 +5421,14 @@ function ekstraOtomatikTamamla() {
 
 function kisiIsimGuncelle(idx, yeniIsim) {
   if (kisiModalSecili[idx]) kisiModalSecili[idx].kisi = yeniIsim;
+  _kisiCokluSync();
 }
 
 function kaldir(kisi) {
   kisiModalSecili = kisiModalSecili.filter(s => s.kisi !== kisi);
-  const t = turneler.find(x => x._rowIdx === kisiModalRowIdx);
+  _kisiCokluSync();
   const q = document.getElementById('kisi-filter-input').value.toLowerCase();
-  renderKisiModalList(t ? t.oyun : '', q);
+  renderKisiModalList(window._kisiModalOyunAdi || '', q);
   renderSelectedPills();
 }
 
@@ -5654,8 +5658,8 @@ document.addEventListener('click', function(e) {
 
 function disKisiKaldir(kisi) {
   kisiModalSecili = kisiModalSecili.filter(function(s){ return s.kisi !== kisi; });
-  var t = turneler.find(function(x){ return x._rowIdx === kisiModalRowIdx; });
-  var oyunAdiKisi = window._kisiModalOyunAdi || (t ? t.oyun : '') || '';
+  _kisiCokluSync();
+  var oyunAdiKisi = window._kisiModalOyunAdi || '';
   var q = document.getElementById('kisi-filter-input') ? document.getElementById('kisi-filter-input').value.toLowerCase() : '';
   renderKisiModalList(oyunAdiKisi, q);
   renderSelectedPills();
@@ -11014,6 +11018,25 @@ function _pdfPersonelIcerik(t) {
   var baseList = (t.katilimcilar && t.katilimcilar.length)
     ? t.katilimcilar
     : personel.map(function(p){ return { kisi:p.kisi, gorev:p.gorev||p.kategori, kategori:p.kategori }; });
+
+  // Çok oyunlu mod: katılımcılarda oyun alanı varsa gruplu göster
+  var _oyunGruplari = [];
+  var _oyunAlanVar = baseList.some(function(k){ return k.oyun && k.oyun.trim(); });
+  if (_oyunAlanVar) {
+    // Oyunlara göre grupla (sıra: ilk görülen oyun önce)
+    var _oyunSira = [];
+    baseList.forEach(function(k){ if (k.oyun && !_oyunSira.includes(k.oyun)) _oyunSira.push(k.oyun); });
+    _oyunGruplari = _oyunSira.map(function(o) {
+      var seen2 = {};
+      return {
+        oyun: o,
+        liste: baseList.filter(function(k){ return k.oyun === o; }).filter(function(p){
+          var key = (p.kisi||'').trim().toLowerCase(); if (!key || seen2[key]) return false; seen2[key]=true; return true;
+        })
+      };
+    });
+  }
+
   var seen = {};
   var tumListe = baseList.filter(function(p){
     var k=(p.kisi||'').trim().toLowerCase(); if(!k||seen[k]) return false; seen[k]=true; return true;
@@ -11071,16 +11094,40 @@ function _pdfPersonelIcerik(t) {
     +   '<div>' + katBtnler + '</div>'
     + '</div>'
 
-    // Personel tablosu — tam raporla birebir aynı format
-    + '<table width="100%" cellpadding="0" cellspacing="0" id="per-tablo" style="border-collapse:collapse;margin-bottom:10pt">'
-    +   '<thead><tr bgcolor="#6b1b1b">'
-    +     '<th width="28" align="center" style="padding:5pt 8pt;color:#ffffff;font-size:9pt;border:1pt solid #5a1717">No</th>'
-    +     '<th align="left" style="padding:5pt 8pt;color:#ffffff;font-size:9pt;border:1pt solid #5a1717">Ad Soyad</th>'
-    +     '<th align="left" style="padding:5pt 8pt;color:#ffffff;font-size:9pt;border:1pt solid #5a1717">G\u00f6rev / Unvan</th>'
-    +   '</tr></thead>'
-    +   '<tbody id="per-tbody">' + satirlar + '</tbody>'
-    + '</table>'
-    + '<div id="per-sayac" style="font-size:10px;color:#888;margin-top:6px;text-align:right">Toplam ' + tumListe.length + ' ki\u015fi g\u00f6steriliyor</div>';
+    // Personel tablosu — çok oyunlu ise ayrı gruplar, tek oyunlu ise normal
+    + (_oyunGruplari.length > 1
+      ? _oyunGruplari.map(function(og, gi) {
+          var grpSatir = og.liste.map(function(p, i){
+            var kat = p.kategori || '';
+            var unvan = OYUNCU_KATS.indexOf(kat)>=0 && !(p.gorev||'').includes('-')
+              ? kat : ((p.gorev&&p.gorev!==p.kategori&&p.gorev.trim())?p.gorev:kat);
+            return '<tr class="per-row" data-kat="' + kat + '" bgcolor="' + (i%2===0?'#f9f5f0':'#ffffff') + '">'
+              + '<td style="padding:5pt 8pt;border:1pt solid #dddddd;text-align:center;width:28px;color:#888;font-size:10pt">'+(i+1)+'</td>'
+              + '<td style="padding:5pt 8pt;border:1pt solid #dddddd;font-weight:bold;font-size:11pt;color:#1a1a1a">'+(p.kisi||'')+'</td>'
+              + '<td style="padding:5pt 8pt;border:1pt solid #dddddd;font-size:11pt;color:#444">' + unvan + '</td>'
+              + '</tr>';
+          }).join('');
+          return (gi > 0 ? '<div style="margin-top:18pt"></div>' : '')
+            + '<p style="font-size:13pt;font-weight:900;color:#6b1b1b;margin:0 0 6pt 0;border-bottom:1.5pt solid #6b1b1b;padding-bottom:3pt">' + og.oyun.toUpperCase() + '</p>'
+            + '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-bottom:6pt">'
+            + '<thead><tr bgcolor="#6b1b1b">'
+            + '<th width="28" align="center" style="padding:5pt 8pt;color:#fff;font-size:9pt;border:1pt solid #5a1717">No</th>'
+            + '<th align="left" style="padding:5pt 8pt;color:#fff;font-size:9pt;border:1pt solid #5a1717">Ad Soyad</th>'
+            + '<th align="left" style="padding:5pt 8pt;color:#fff;font-size:9pt;border:1pt solid #5a1717">Görev / Unvan</th>'
+            + '</tr></thead>'
+            + '<tbody>' + grpSatir + '</tbody></table>'
+            + '<div style="font-size:10px;color:#888;text-align:right;margin-bottom:4pt">'+og.oyun+' — '+og.liste.length+' kişi</div>';
+        }).join('')
+      : '<table width="100%" cellpadding="0" cellspacing="0" id="per-tablo" style="border-collapse:collapse;margin-bottom:10pt">'
+        + '<thead><tr bgcolor="#6b1b1b">'
+        + '<th width="28" align="center" style="padding:5pt 8pt;color:#ffffff;font-size:9pt;border:1pt solid #5a1717">No</th>'
+        + '<th align="left" style="padding:5pt 8pt;color:#ffffff;font-size:9pt;border:1pt solid #5a1717">Ad Soyad</th>'
+        + '<th align="left" style="padding:5pt 8pt;color:#ffffff;font-size:9pt;border:1pt solid #5a1717">G\u00f6rev / Unvan</th>'
+        + '</tr></thead>'
+        + '<tbody id="per-tbody">' + satirlar + '</tbody>'
+        + '</table>'
+        + '<div id="per-sayac" style="font-size:10px;color:#888;margin-top:6px;text-align:right">Toplam ' + tumListe.length + ' ki\u015fi g\u00f6steriliyor</div>'
+    );
 }
 
 // ============================================================
