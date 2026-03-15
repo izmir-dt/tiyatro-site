@@ -2346,11 +2346,16 @@ flex-shrink:0;
         <div class="cal-header">
           <div class="cal-header-left">
             <button class="cal-nav-btn" onclick="calPrev()" title="Önceki ay">‹</button>
-            <div class="cal-title" id="cal-title"></div>
+            <div class="cal-title" id="cal-title" style="min-width:auto"></div>
             <button class="cal-nav-btn" onclick="calNext()" title="Sonraki ay">›</button>
             <button class="cal-today-btn" onclick="calToday()">Bugün</button>
             <!-- Aylık özet chips -->
             <div id="cal-ozet-chips" style="display:none;align-items:center;gap:6px;margin-left:4px"></div>
+          </div>
+          <!-- Bugünün senaryosu -->
+          <div id="cal-gunun-senaryosu" style="flex:1;margin:0 16px;display:none;align-items:center;gap:8px;min-width:0">
+            <div style="font-size:10px;font-weight:700;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.5px;flex-shrink:0">Bugün</div>
+            <div id="cal-senaryo-metin" style="font-size:11.5px;font-weight:600;color:rgba(255,255,255,.85);line-height:1.35;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical"></div>
           </div>
           <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
             <div class="cal-legend">
@@ -9910,6 +9915,79 @@ function _calEventHTML(t, key) {
 // ════════════════════════════════════════════════════════════
 // ANA renderCalendar
 // ════════════════════════════════════════════════════════════
+// ── Bugünün senaryosu ─────────────────────────────────────
+// 10 Kasım ve yas günleri hariç tatillerde kutlama mesajı
+var _YAS_GUNLERI = {
+  '11-10': true,  // Atatürk'ü Anma — kutlama yok
+  '04-24': true,  // Ermeni Anma Günü (hassas)
+};
+var _TATIL_TEBRIK_HARIÇ = {
+  '11-10': true,
+};
+
+function _calGununSenaryosuGuncelle() {
+  var el  = document.getElementById('cal-gunun-senaryosu');
+  var txt = document.getElementById('cal-senaryo-metin');
+  if (!el || !txt) return;
+
+  var bugun = new Date();
+  var key   = bugun.getFullYear() + '-' + String(bugun.getMonth()+1).padStart(2,'0') + '-' + String(bugun.getDate()).padStart(2,'0');
+  var mm_dd = key.slice(5);
+
+  // Tatil kontrolü
+  var tatilAdi = resmiTatilKontrol ? resmiTatilKontrol(key) : null;
+  if (tatilAdi && !_TATIL_TEBRIK_HARIÇ[mm_dd]) {
+    var yasGunu = _YAS_GUNLERI[mm_dd];
+    if (!yasGunu) {
+      el.style.display = 'flex';
+      txt.textContent = '🎉 ' + tatilAdi + ' kutlu olsun!';
+      return;
+    }
+    // Yas / anma günü — sessiz göster
+    el.style.display = 'flex';
+    txt.textContent = tatilAdi;
+    return;
+  }
+
+  // Bugün turne var mı?
+  var bugunEvents = _calGunEvents(key);
+  if (!bugunEvents.length) {
+    el.style.display = 'none';
+    return;
+  }
+
+  el.style.display = 'flex';
+
+  // Her etkinlik için senaryo metni üret
+  var satirlar = bugunEvents.map(function(t) {
+    var ps = t.programSatirlar ? t.programSatirlar.find(function(s){ return s.tarih === key; }) : null;
+    var tip = ps ? ps.program : 'Genel';
+    var oyun = t.oyun || '';
+    var sehir = ps ? (ps.sehir || '') : (t.il || '');
+    sehir = sehir.replace(/\/MERKEZ/gi,'').trim();
+    var saat = ps ? (ps.saat || '') : '';
+
+    if (tip === 'Yol') {
+      return '🚌 ' + oyun + (sehir ? ' — ' + sehir + ' yolculuğu' : ' turneye hareket');
+    } else if (tip === 'Oyun') {
+      return '🎭 ' + oyun + (saat ? ' saat ' + saat + "'da" : '') + (sehir ? ' sahnede' : ' sahne');
+    } else if (tip === 'Prova') {
+      return '🎬 ' + oyun + (sehir ? ' · ' + sehir : '') + ' provası';
+    } else if (tip === 'Dönüş') {
+      return '🏠 ' + oyun + ' turnesi dönüş günü';
+    } else if (tip === 'Dinlenme') {
+      return '🌙 ' + oyun + ' · dinlenme günü';
+    } else if (tip === 'Hazırlık') {
+      return '🔧 ' + oyun + ' · sahne kurulum ve hazırlık';
+    } else {
+      return '📅 ' + oyun + (sehir ? ' · ' + sehir : '');
+    }
+  });
+
+  txt.textContent = satirlar.join('   ·   ');
+}
+
+
 function _calOzetChipsGuncelle() {
   var el = document.getElementById('cal-ozet-chips');
   if (!el) return;
@@ -9974,6 +10052,8 @@ function renderCalendar() {
 
   // Aylık özet chips güncelle
   _calOzetChipsGuncelle();
+  // Bugünün senaryosunu güncelle
+  _calGununSenaryosuGuncelle();
 
   // Görünüm yönlendirme
   if (calCurrentView === 'liste') { _renderCalListe(); return; }
