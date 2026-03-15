@@ -10266,7 +10266,9 @@ function calNext()  { calMonth++; if(calMonth>11){calMonth=0;calYear++;}  calSel
 function calToday() { const n=new Date(); calYear=n.getFullYear(); calMonth=n.getMonth(); calSelectedDay=null; renderCalendar(); }
 
 function calGunTikla(key, event) {
-  if (calSelectedDay === key) {
+  if (event && event.stopPropagation) event.stopPropagation();
+  // Aynı güne tıklayınca kapat
+  if (calSelectedDay === key && document.getElementById('cal-popup').style.display !== 'none') {
     calSelectedDay = null;
     calPopupKapat();
     renderCalendar();
@@ -10274,7 +10276,8 @@ function calGunTikla(key, event) {
   }
   calSelectedDay = key;
   renderCalendar();
-  _calPopupGoster(key, event);
+  // setTimeout: renderCalendar'ın tetiklediği click bubble'ı geçsin
+  setTimeout(function() { _calPopupGoster(key, event); }, 10);
 }
 
 function calPopupKapat() {
@@ -10403,36 +10406,11 @@ function calPopupSuruklenebilirYap(popup) {
 }
 
 function calPopupNotKaydet(key) {
-  // calGunNotDuzenle üzerinden inline edit ile çağrılır
-  // ya da doğrudan key + not ile (calPopupNotKaydetInline'dan)
+  // Eski uyumluluk için — calNotKaydet'e yönlendir
   var input = document.getElementById('cal-not-edit-input') || document.getElementById('cal-popup-not-input');
   var not = input ? input.value.trim() : (calNotes[key] ? calNotes[key].not : '');
-  if (!calNotes) calNotes = {};
-  // Sheets'e kaydet
-  var _notKey = key;
-  var _mevcutNot = calNotes[_notKey];
-  (async function() {
-    try {
-      if (not) {
-        if (_mevcutNot && _mevcutNot._sheetRow) {
-          await apiFetch('/' + encodeURIComponent('TAKVIM_NOTLARI') + '/row/' + _mevcutNot._sheetRow, {
-            method: 'PUT', headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({ values: [_notKey, not, (calNotes[_notKey]||{}).ad || (localStorage.getItem('calKullanici_idt')||'?')] })
-          });
-        } else {
-          var r = await apiFetch('/' + encodeURIComponent('TAKVIM_NOTLARI') + '/row', {
-            method: 'POST', headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({ values: [_notKey, not, localStorage.getItem('calKullanici_idt')||'?'] })
-          });
-          var rData = await r.json();
-          if (calNotes[_notKey]) calNotes[_notKey]._sheetRow = rData.rowNumber || null;
-        }
-      } else if (_mevcutNot && _mevcutNot._sheetRow) {
-        await apiFetch('/' + encodeURIComponent('TAKVIM_NOTLARI') + '/row/' + _mevcutNot._sheetRow, { method: 'DELETE' });
-        delete calNotes[_notKey];
-      }
-    } catch(e) { console.warn('Not kaydetme hatası:', e); }
-  })();
+  var ad = localStorage.getItem('calKullanici_idt') || '?';
+  calNotKaydet(key, not, ad);
 }
 
 function calGunNotDuzenle(key) {
@@ -10457,12 +10435,11 @@ function calPopupNotKaydetInline(key) {
   var inp = document.getElementById('cal-not-edit-input');
   if (!inp) return;
   var not = inp.value.trim();
-  // calPopupNotKaydet'in mantığını kullan
-  calNotes[key] = calNotes[key] || {};
-  calNotes[key].not = not;
-  calGunTikla(key, null); // popup'ı yeniden render et
-  // Arka planda kaydet
-  calPopupNotKaydet(key);
+  // Doğrudan calNotKaydet kullan — hem local hem Sheets'i doğru yönetir
+  var ad = localStorage.getItem('calKullanici_idt') || '?';
+  calNotKaydet(key, not, ad);
+  // Popup'ı yeniden render et
+  _calPopupGoster(key, null);
 }
 
 
@@ -14147,7 +14124,13 @@ document.addEventListener('click', function(e) {
   // Popup kapat - cal-day veya popup içine tıklanmadıysa
   var popup = document.getElementById('cal-popup');
   if (popup && popup.style.display !== 'none') {
-    if (!popup.contains(e.target) && !e.target.closest('.cal-day') && !e.target.closest('.cal-event')) {
+    var hedef = e.target;
+    var popupIcinde = popup.contains(hedef);
+    var calDayIcinde = !!hedef.closest('.cal-day');
+    var calEventIcinde = !!hedef.closest('.cal-event');
+    var calStatuIcinde = !!hedef.closest('.cal-statu-row');
+    var calHeaderIcinde = !!hedef.closest('.cal-header');
+    if (!popupIcinde && !calDayIcinde && !calEventIcinde && !calStatuIcinde && !calHeaderIcinde) {
       calPopupKapat();
     }
   }
