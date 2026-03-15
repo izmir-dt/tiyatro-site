@@ -5292,6 +5292,12 @@ function veriKontrolCalistir() {
   }, 50);
 }
 
+function _turneOzet(t) {
+  var oyun = t.oyun || (t.duraklar ? [...new Set(t.duraklar.map(function(d){return d.oyun||'';}).filter(Boolean))].join('/') : '');
+  var sehir = t.il || (t.duraklar ? t.duraklar.filter(function(d){return d.il;}).map(function(d){return d.il;}).join('→') : '');
+  var tarih = t.baslangicTarih ? formatTarih(t.baslangicTarih) : '';
+  return [oyun, sehir, tarih].filter(Boolean).join(' · ');
+}
 function _veriKontrolHesapla() {
   var gruplar = [];
 
@@ -5352,7 +5358,17 @@ function _veriKontrolHesapla() {
       });
     });
     if (!turneVar) {
-      grup2.items.push({ kisi: p.kisi, detay: (p.oyun || '—') + ' · ' + (p.kategori || '—') });
+      // Eksik olduğu turne(ler)i bul
+      var _eksikTurneler = oyunTurneleri.filter(function(t) {
+        return !t.katilimcilar || !t.katilimcilar.some(function(k) {
+          return k.kisi && k.kisi.trim().toLowerCase() === key2;
+        });
+      });
+      grup2.items.push({
+        kisi: p.kisi,
+        detay: (p.oyun || '—') + ' · ' + (p.kategori || '—'),
+        turneDetay: _eksikTurneler.map(function(t){ return _turneOzet(t); }).join(' | ')
+      });
     }
   });
   gruplar.push(grup2);
@@ -5374,7 +5390,7 @@ function _veriKontrolHesapla() {
       if (sayac[key] > 1) {
         var asil = t.katilimcilar.find(function(k){ return k.kisi && k.kisi.trim().toLowerCase() === key; });
         var turneAdi = (t.oyun || '') + (t.il ? ' – ' + t.il : '') + (t.baslangicTarih ? ' (' + formatTarih(t.baslangicTarih) + ')' : '');
-        grup3.items.push({ kisi: asil ? asil.kisi : key, detay: turneAdi + ' · ' + sayac[key] + 'x kayıtlı', rowIdx: t._rowIdx });
+        grup3.items.push({ kisi: asil ? asil.kisi : key, detay: sayac[key] + 'x kayıtlı', turneDetay: _turneOzet(t), rowIdx: t._rowIdx });
       }
     });
   });
@@ -5423,7 +5439,8 @@ function _veriKontrolHesapla() {
           var tB = (b.turne.oyun || '') + (b.turne.il ? ' – ' + b.turne.il : '');
           grup4.items.push({
             kisi: liste[i].kisi,
-            detay: tA + ' ↔ ' + tB
+            detay: 'Tarih çakışması',
+            turneDetay: tA + ' ↔ ' + tB
           });
         }
       }
@@ -5460,7 +5477,7 @@ function _veriKontrolHesapla() {
         // Aynı oyun aynı turne için tekrar ekleme
         var zatenVar = grup7.items.some(function(x){ return x.detay === d.oyun && x.rowIdx === t._rowIdx; });
         if (!zatenVar) {
-          grup7.items.push({ kisi: d.oyun, detay: turneAdi, rowIdx: t._rowIdx });
+          grup7.items.push({ kisi: d.oyun, detay: 'Kadro kaydı bulunamadı', turneDetay: _turneOzet(t), rowIdx: t._rowIdx });
         }
       }
     });
@@ -5531,7 +5548,8 @@ function _veriKontrolRender(gruplar) {
           + '<div style="width:7px;height:7px;border-radius:50%;background:' + g.renk + ';flex-shrink:0"></div>'
           + '<div style="min-width:0;flex:1">'
           + _kisiHtml
-          + '<div style="font-size:10px;color:var(--muted-foreground);margin-top:1px;line-height:1.4;' + (_yoksayili ? 'text-decoration:line-through;' : '') + '">' + (item.detay || '') + '</div>'
+          + (item.detay ? '<div style="font-size:10px;color:var(--muted-foreground);margin-top:1px;line-height:1.5;' + (_yoksayili ? 'text-decoration:line-through;' : '') + '">' + item.detay + '</div>' : '')
+          + (item.turneDetay ? '<div style="font-size:10px;font-weight:600;color:hsl(220,60%,45%);margin-top:2px;display:flex;align-items:center;gap:4px"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 21s7-6.5 7-11a7 7 0 1 0-14 0c0 4.5 7 11 7 11z"/><circle cx="12" cy="10" r="2"/></svg>' + item.turneDetay + '</div>' : '')
           + '</div>'
           + '<button onclick="_vkToggleYokSay(\'' + _itemKey + '\')" style="flex-shrink:0;height:22px;padding:0 9px;border:1px solid var(--border);border-radius:5px;background:' + (_yoksayili ? 'var(--muted)' : 'transparent') + ';cursor:pointer;font-size:10px;font-weight:700;color:var(--muted-foreground);font-family:Poppins,sans-serif;white-space:nowrap" title="Yok say / Göster">'
           + (_yoksayili ? 'Göster' : 'Yok Say')
