@@ -5145,6 +5145,65 @@ function _kisiModalSekmeGec(yeniOyun) {
 // ═══════════════════════════════════════════════════════════════
 // VERİ TUTARLILIK PANELİ
 // ═══════════════════════════════════════════════════════════════
+
+function _vkYokSay(itemKey) {
+  if (!window._vkYokSay_data) window._vkYokSay_data = {};
+  window._vkYokSay_data[itemKey] = true;
+  // window._vkYokSay olarak erişilebilir yap
+  window._vkYokSay = window._vkYokSay_data;
+  // Sadece o item satırını DOM'dan kaldır (re-render etmeden)
+  // Panel içindeki tüm butonları tara, bu key'e sahip "✕" butonunu bul
+  var panel = document.getElementById('veri-kontrol-panel');
+  if (!panel) return;
+  var btns = panel.querySelectorAll('button');
+  btns.forEach(function(btn) {
+    if (btn.getAttribute('onclick') && btn.getAttribute('onclick').includes(itemKey)) {
+      var satir = btn.closest('[style*="border-top"]');
+      if (satir) satir.remove();
+    }
+  });
+  // Badge sayısını güncelle
+  var badge = document.getElementById('veri-kontrol-badge');
+  if (badge && parseInt(badge.textContent) > 0) {
+    var yeniSayi = parseInt(badge.textContent) - 1;
+    badge.textContent = yeniSayi;
+    badge.style.display = yeniSayi > 0 ? 'inline' : 'none';
+  }
+  // Grup sayacını güncelle
+  var grupDiv = panel.querySelector('[data-item-key="' + itemKey + '"]');
+}
+
+window._vkKatilimciAc = function(rowIdx, kisiAdi) {
+  // Paneli kapat
+  document.getElementById('veri-kontrol-panel').style.display = 'none';
+  // Turneler sekmesine geç
+  switchTab('liste');
+  mbnSetActive('liste');
+  setTimeout(function() {
+    // Katılımcı modalını aç
+    openKisiModal(rowIdx);
+    // Modal açıldıktan sonra kişiyi ara ve vurgula
+    setTimeout(function() {
+      var araInput = document.getElementById('kisi-filter-input');
+      if (araInput && kisiAdi) {
+        araInput.value = kisiAdi;
+        araInput.dispatchEvent(new Event('input'));
+        // Seçili kişiyi de vurgula
+        var pills = document.getElementById('selected-pills-wrap');
+        if (pills) {
+          var spans = pills.querySelectorAll('[data-kisi]');
+          spans.forEach(function(s) {
+            if (s.getAttribute('data-kisi') && s.getAttribute('data-kisi').toLowerCase() === kisiAdi.toLowerCase()) {
+              s.style.outline = '2px solid #ef4444';
+              s.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              setTimeout(function(){ s.style.outline = ''; }, 3000);
+            }
+          });
+        }
+      }
+    }, 400);
+  }, 150);
+};
 function _veriKontrolGitBtn() {
   var rowIdx = window._vkGitData ? window._vkGitData.rowIdx : undefined;
   var kisi = window._vkGitKisi || undefined;
@@ -5220,12 +5279,17 @@ function veriKontrolCalistir() {
 function _veriKontrolHesapla() {
   var gruplar = [];
 
+  // İptal edilmiş turneları dışarıda bırak
+  var gecerliTurneler = turneler.filter(function(t) {
+    return t.statu !== 'iptal';
+  });
+
   // ── 1. Turne katılımcısı var ama ana kadroda yok ──────────────
   var grup1 = { id: 'kat-kadro-dis', renk: '#f59e0b', ikon: '⚠️',
     baslik: 'Turne katılımcısı ama ana kadroda yok',
     aciklama: 'Bu kişiler turneye eklenmiş ama TURNE_PERSONEL sayfasında bulunmuyor.',
     items: [] };
-  turneler.forEach(function(t) {
+  gecerliTurneler.forEach(function(t) {
     if (!t.katilimcilar || !t.katilimcilar.length) return;
     var turneAdi = (t.oyun || '') + (t.il ? ' – ' + t.il : '') + (t.baslangicTarih ? ' (' + formatTarih(t.baslangicTarih) + ')' : '');
     t.katilimcilar.forEach(function(k) {
@@ -5257,8 +5321,8 @@ function _veriKontrolHesapla() {
     var key2 = p.kisi.trim().toLowerCase();
     if (_seen2[key2]) return;
     _seen2[key2] = true;
-    // Bu kişinin oyununa ait turne var mı?
-    var oyunTurneleri = turneler.filter(function(t) {
+    // Bu kişinin oyununa ait turne var mı? (iptal hariç)
+    var oyunTurneleri = gecerliTurneler.filter(function(t) {
       var tOyunlar = [];
       if (t.oyun) tOyunlar.push(t.oyun.trim().toLowerCase());
       if (t.duraklar) t.duraklar.forEach(function(d){ if (d.oyun) tOyunlar.push(d.oyun.trim().toLowerCase()); });
@@ -5282,7 +5346,7 @@ function _veriKontrolHesapla() {
     baslik: 'Aynı kişi aynı turneye çift kayıtlı',
     aciklama: 'Bu turnelerde aynı kişi birden fazla kez katılımcı listesine eklenmiş.',
     items: [] };
-  turneler.forEach(function(t) {
+  gecerliTurneler.forEach(function(t) {
     if (!t.katilimcilar || !t.katilimcilar.length) return;
     var sayac = {};
     t.katilimcilar.forEach(function(k) {
@@ -5307,7 +5371,7 @@ function _veriKontrolHesapla() {
     items: [] };
 
   // Turne → tarih aralığı olan kayıtları topla
-  var turneAraliklari = turneler.filter(function(t) {
+  var turneAraliklari = gecerliTurneler.filter(function(t) {
     return t.baslangicTarih && t.bitisTarih && t.katilimcilar && t.katilimcilar.length;
   });
 
@@ -5356,7 +5420,7 @@ function _veriKontrolHesapla() {
     baslik: 'Hiç katılımcı eklenmemiş turneler',
     aciklama: 'Bu turnelerin katılımcı listesi boş — + Kadro butonuyla eklenebilir.',
     items: [] };
-  turneler.forEach(function(t) {
+  gecerliTurneler.forEach(function(t) {
     if (t.katilimcilar && t.katilimcilar.length > 0) return;
     // Taslak ve iptaller dahil uyar
     var turneAdi = (t.oyun || '?') + (t.il ? ' – ' + t.il : '') + (t.baslangicTarih ? ' (' + formatTarih(t.baslangicTarih) + ')' : '');
@@ -5370,7 +5434,7 @@ function _veriKontrolHesapla() {
     baslik: 'Durakta oyun var ama o oyunun kadrosu tanımlı değil',
     aciklama: 'Bu turne duraklarındaki oyun adı, TURNE_PERSONEL sayfasında hiç kayıtlı değil.',
     items: [] };
-  turneler.forEach(function(t) {
+  gecerliTurneler.forEach(function(t) {
     if (!t.duraklar) return;
     t.duraklar.forEach(function(d) {
       if (!d.oyun || !d.oyun.trim()) return;
@@ -5437,16 +5501,27 @@ function _veriKontrolRender(gruplar) {
       html += '<div style="padding:10px 14px;font-size:11px;color:var(--muted-foreground);text-align:center">Sorun tespit edilmedi ✓</div>';
     } else {
       html += '<div style="max-height:220px;overflow-y:auto">';
-      g.items.forEach(function(item) {
+      g.items.forEach(function(item, itemIdx) {
+        var _itemKey = g.id + '::' + itemIdx;
+        var _yokSayildi = (window._vkYokSay || {})[_itemKey];
+        if (_yokSayildi) return; // Yok sayılmış, gösterme
+        var _hasRowIdx = item.rowIdx !== undefined && item.rowIdx !== null;
+        // Kişi adı: rowIdx varsa tıklanabilir → katılımcı modalı aç
+        var _kisiHtml = _hasRowIdx
+          ? '<span onclick="window._vkKatilimciAc(' + item.rowIdx + ',\'' + (item.kisi||'').replace(/\'/g,"\\'") + '\')" style="font-size:12px;font-weight:700;color:var(--primary);cursor:pointer;text-decoration:underline;text-underline-offset:2px">' + (item.kisi || '') + '</span>'
+          : '<span style="font-size:12px;font-weight:700;color:var(--foreground)">' + (item.kisi || '') + '</span>';
         html += '<div style="padding:8px 14px;border-top:1px solid var(--border);display:flex;align-items:flex-start;gap:8px">'
-          + '<div style="width:7px;height:7px;border-radius:50%;background:' + g.renk + ';flex-shrink:0;margin-top:4px"></div>'
-          + '<div style="min-width:0">'
-          + '<div style="font-size:12px;font-weight:700;color:var(--foreground)">' + (item.kisi || '') + '</div>'
+          + '<div style="width:7px;height:7px;border-radius:50%;background:' + g.renk + ';flex-shrink:0;margin-top:5px"></div>'
+          + '<div style="min-width:0;flex:1">'
+          + _kisiHtml
           + '<div style="font-size:10px;color:var(--muted-foreground);margin-top:1px;line-height:1.4">' + (item.detay || '') + '</div>'
           + '</div>'
-          + (item.rowIdx !== undefined
-            ? '<button onclick="window._vkGitData={rowIdx:' + item.rowIdx + '};window._vkGitKisi=\'' + (item.kisi||'').replace(/\'/g,"\\'") + '\';_veriKontrolGitBtn()" style="flex-shrink:0;height:22px;padding:0 8px;border:1px solid var(--border);border-radius:5px;background:transparent;cursor:pointer;font-size:10px;font-weight:600;color:var(--muted-foreground);font-family:Poppins,sans-serif" title="Kadro ve turneye git">→</button>'
+          + '<div style="display:flex;gap:4px;flex-shrink:0">'
+          + (_hasRowIdx
+            ? '<button onclick="window._vkGitData={rowIdx:' + item.rowIdx + '};window._vkGitKisi=\'' + (item.kisi||'').replace(/\'/g,"\\'") + '\';_veriKontrolGitBtn()" style="height:22px;padding:0 8px;border:1px solid var(--border);border-radius:5px;background:transparent;cursor:pointer;font-size:10px;font-weight:600;color:var(--muted-foreground);font-family:Poppins,sans-serif" title="Turneye git">→</button>'
             : '')
+          + '<button onclick="_vkYokSay(\'' + _itemKey + '\')" style="height:22px;padding:0 8px;border:1px solid var(--border);border-radius:5px;background:transparent;cursor:pointer;font-size:10px;font-weight:600;color:var(--muted-foreground);font-family:Poppins,sans-serif" title="Bu uyarıyı yok say">✕</button>'
+          + '</div>'
           + '</div>';
       });
       html += '</div>';
