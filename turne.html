@@ -8442,7 +8442,10 @@ async function kadroKisiKaydet() {
   const ad    = document.getElementById('kadro-kisi-ad').value.trim();
   const kat   = document.getElementById('kadro-kisi-kat').value;
   const anaGorev = document.getElementById('kadro-kisi-gorev').value.trim();
-  const oyun  = document.getElementById('kadro-oyun-sec').value || document.getElementById('kadro-kisi-modal-sure').textContent;
+  // Düzenleme modunda kişinin kendi oyununu koru, yeni kayıtta dropdown'dan al
+  const oyun = (kadroEditIdx !== null && tumPersonel[kadroEditIdx])
+    ? tumPersonel[kadroEditIdx].oyun
+    : (document.getElementById('kadro-oyun-sec').value || document.getElementById('kadro-kisi-modal-sure').textContent.trim());
   // Ek görevleri birleştir
   const ekGorevler = _kadroEkGorevleriOku();
   const gorev = ekGorevler.length > 0
@@ -8458,7 +8461,8 @@ async function kadroKisiKaydet() {
 
   try {
     if (kadroEditIdx !== null) {
-      _eskiAdGlobal = tumPersonel[kadroEditIdx].kisi; // eski ismi kaydet
+      // Düzenleme — eski ismi kaydet
+      _eskiAdGlobal = tumPersonel[kadroEditIdx].kisi;
       const sheetRow = tumPersonel[kadroEditIdx]._sheetRow;
       if (!sheetRow) { alert('Satır numarası bulunamadı, lütfen sayfayı yenileyin.'); return; }
       const vals = [oyun, kat, gorev, ad];
@@ -8469,17 +8473,21 @@ async function kadroKisiKaydet() {
           body: JSON.stringify({ row: sheetRow, col: i, value: val })
         })
       ));
+      // Yerel veriyi güncelle
       tumPersonel[kadroEditIdx].kisi = ad;
       tumPersonel[kadroEditIdx].kategori = kat;
       tumPersonel[kadroEditIdx].gorev = gorev;
       tumPersonel[kadroEditIdx].oyun = oyun;
-    } else {
-      // İsim değişmişse diğer oyunlardaki aynı kişiyi de güncelle
+      // İsim değişmişse: aynı kişinin diğer oyunlardaki kayıtlarını da güncelle
       if (_eskiAdGlobal && _eskiAdGlobal !== ad) {
         tumPersonel.forEach(function(p, pi) {
-          if (pi !== kadroEditIdx && p.kisi && p.kisi.trim().toLowerCase() === _eskiAdGlobal.trim().toLowerCase()) { p.kisi = ad; }
+          if (pi !== kadroEditIdx && p.kisi && p.kisi.trim().toLowerCase() === _eskiAdGlobal.trim().toLowerCase()) {
+            p.kisi = ad;
+          }
         });
       }
+    } else {
+      // Yeni kayıt ekle
       await apiFetch('/' + encodeURIComponent(PERSONEL_SHEET) + '/row', {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
