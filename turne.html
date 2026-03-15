@@ -533,11 +533,11 @@
     .cal-add-btn:hover { opacity: 1 !important; transform: scale(1.1); }
 
     /* ── ETKİNLİK KARTI ── */
-    .cal-event { margin-top: 0; padding: 5px 8px 5px 7px; border-radius: 6px; font-size: 10.5px; font-weight: 700; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; cursor: pointer; line-height: 1.5; border-left: 3px solid transparent; position: relative; display: flex; align-items: center; gap: 5px; min-height: 26px; }
+    .cal-event { margin-top: 0; padding: 5px 9px 5px 8px; border-radius: 7px; font-size: 11px; font-weight: 700; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; cursor: pointer; line-height: 1.5; border-left: 3.5px solid transparent; position: relative; display: flex; align-items: center; gap: 5px; min-height: 28px; }
     .cal-event:hover { filter: brightness(0.95); transform: translateX(1px); box-shadow: 0 1px 4px rgba(0,0,0,.12); }
     .cal-event-icon { flex-shrink: 0; opacity: .8; }
-    .cal-event-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
-    .cal-event-saat { font-size: 8.5px; font-weight: 600; opacity: .75; flex-shrink: 0; }
+    .cal-event-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; font-size: 11px; }
+    .cal-event-saat { font-size: 10px; font-weight: 700; opacity: .85; flex-shrink: 0; background: rgba(0,0,0,.07); border-radius: 4px; padding: 1px 5px; }
 
     /* Renk sistemi */
     .cal-event.tip-oyun    { background: hsl(141,50%,94%); color: hsl(141,60%,22%); border-left-color: hsl(141,60%,38%); }
@@ -2376,6 +2376,8 @@ flex-shrink:0;
           <button class="cal-statu-btn" data-filtre="tamamlandi" onclick="calStatuFiltre='tamamlandi';renderCalendar()" style="background:#eaf2ff;color:#1748c4;border-color:#7fb0f5"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg> Tamamlandı</button>
           <button class="cal-statu-btn" data-filtre="iptal" onclick="calStatuFiltre='iptal';renderCalendar()" style="background:#fff0f0;color:#a81a1a;border-color:#f08080"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg> İptal</button>
         </div>
+        <!-- AYLIK ÖZET BANDI -->
+        <div id="cal-aylik-ozet" style="display:none;padding:8px 16px;background:hsl(222,28%,14%);border-bottom:1px solid rgba(255,255,255,.08);display:flex;align-items:center;gap:16px;flex-wrap:wrap"></div>
         <!-- HAFTANIN GÜNLERİ -->
         <div class="cal-weekdays">
           <div class="cal-weekday">Pzt</div>
@@ -3044,6 +3046,7 @@ flex-shrink:0;
         <thead>
           <tr style="background:var(--muted);position:sticky;top:0;z-index:2">
             <th style="width:36px;padding:8px 10px;text-align:center;border-bottom:2px solid var(--border);font-size:10px;color:var(--muted-foreground)">#</th>
+            <th style="width:52px;padding:8px 6px;text-align:center;border-bottom:2px solid var(--border);font-size:10px;color:var(--muted-foreground)" title="Sırayı değiştir">⇅</th>
             <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--border);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--foreground)">Ad Soyad</th>
             <th style="width:160px;padding:8px 10px;text-align:left;border-bottom:2px solid var(--border);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--foreground)">Kategori</th>
             <th style="width:180px;padding:8px 10px;text-align:left;border-bottom:2px solid var(--border);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--foreground)">Görevi / Rolü</th>
@@ -7603,6 +7606,38 @@ function _topluKatSelect(seciliKat) {
   return '<select onchange="_topluHucreDegisti(this)" data-field="kategori" style="width:100%;height:26px;border:1px solid var(--border);border-radius:4px;font-size:11px;font-family:Poppins,sans-serif;background:var(--card);color:var(--foreground);padding:0 4px">'+opts+'</select>';
 }
 
+function _topluSiraDegistir(idx, yon) {
+  // idx: _topluSatirlar'daki gerçek index, yon: -1 yukarı, +1 aşağı
+  // Sadece silinmemiş satırlar arasında swap yap
+  var aktifIdxler = [];
+  _topluSatirlar.forEach(function(s, i){ if (!s._silindi) aktifIdxler.push(i); });
+
+  var posInAktif = aktifIdxler.indexOf(idx);
+  if (posInAktif < 0) return;
+
+  var hedefPos = posInAktif + yon;
+  if (hedefPos < 0 || hedefPos >= aktifIdxler.length) return;
+
+  var hedefIdx = aktifIdxler[hedefPos];
+
+  // Swap
+  var tmp = _topluSatirlar[idx];
+  _topluSatirlar[idx] = _topluSatirlar[hedefIdx];
+  _topluSatirlar[hedefIdx] = tmp;
+
+  _topluDegisti = true;
+  document.getElementById('toplu-degisiklik-badge').style.display = '';
+  _topluRender();
+
+  // Scroll ile taşınan satırı görünür tut
+  setTimeout(function() {
+    var yeniPos = hedefPos;
+    var satirlar = document.querySelectorAll('#toplu-tbody tr');
+    if (satirlar[yeniPos]) satirlar[yeniPos].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, 30);
+}
+
+
 function _topluRender(filtre) {
   var tbody = document.getElementById('toplu-tbody');
   var bosMesaj = document.getElementById('toplu-bos-mesaj');
@@ -7635,6 +7670,21 @@ function _topluRender(filtre) {
     var yeniStr  = satir._yeni ? 'border-left:3px solid hsl(142,55%,42%);' : '';
     html += '<tr data-idx="'+gercekIdx+'" style="background:'+zebraStr+';'+yeniStr+'">';
     html += '<td style="padding:6px 10px;text-align:center;color:var(--muted-foreground);font-size:11px;vertical-align:middle">'+(gorunenIdx+1)+'</td>';
+    // ↑↓ sıralama butonları — filtre aktifken gizle (sıralama anlamsız olur)
+    var ilkMi = gercekIdx === _topluSatirlar.findIndex(function(s){ return !s._silindi; });
+    var sonMi = gercekIdx === (function(){ var son=-1; _topluSatirlar.forEach(function(s,i){ if(!s._silindi) son=i; }); return son; })();
+    html += '<td style="padding:2px 4px;text-align:center;vertical-align:middle;white-space:nowrap">'
+      + '<button onclick="_topluSiraDegistir('+gercekIdx+',-1)" title="Yukarı taşı" '
+      + (araRaw || ilkMi ? 'disabled style="opacity:.25;cursor:default;' : 'style="')
+      + 'width:22px;height:22px;border:1px solid var(--border);border-radius:4px;background:transparent;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;color:var(--muted-foreground)" '
+      + 'onmouseenter="if(!this.disabled)this.style.background='\''var(--muted)'\''" onmouseleave="this.style.background='\''transparent'\''">'
+      + '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="18 15 12 9 6 15"/></svg></button>'
+      + '<button onclick="_topluSiraDegistir('+gercekIdx+',1)" title="Aşağı taşı" '
+      + (araRaw || sonMi ? 'disabled style="opacity:.25;cursor:default;' : 'style="')
+      + 'width:22px;height:22px;border:1px solid var(--border);border-radius:4px;background:transparent;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;color:var(--muted-foreground)" '
+      + 'onmouseenter="if(!this.disabled)this.style.background='\''var(--muted)'\''" onmouseleave="this.style.background='\''transparent'\''">'
+      + '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg></button>'
+      + '</td>';
     // Ad
     html += '<td style="padding:4px 8px;vertical-align:middle"><input data-field="kisi" data-idx="'+gercekIdx+'" type="text" value="'+_esc(satir.kisi)+'" onchange="_topluHucreDegisti(this)" placeholder="Ad Soyad..." style="width:100%;height:28px;border:1px solid var(--border);border-radius:4px;font-size:12px;font-family:Poppins,sans-serif;padding:0 8px;background:var(--card);color:var(--foreground)"></td>';
     // Kategori
@@ -9877,6 +9927,76 @@ function _calEventHTML(t, key) {
 // ════════════════════════════════════════════════════════════
 // ANA renderCalendar
 // ════════════════════════════════════════════════════════════
+function _calAylikOzetGuncelle() {
+  var el = document.getElementById('cal-aylik-ozet');
+  if (!el) return;
+
+  var sonGun = new Date(calYear, calMonth + 1, 0).getDate();
+  var turneGunSay = 0, temsilSay = 0, oyunGunSay = 0, yolGunSay = 0;
+  var oyunlar = {};
+
+  for (var d = 1; d <= sonGun; d++) {
+    var key = calYear + '-' + String(calMonth+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+    var events = _calGunEvents(key);
+    if (!events.length) continue;
+    turneGunSay++;
+    events.forEach(function(t) {
+      var ps = t.programSatirlar ? t.programSatirlar.find(function(s){ return s.tarih===key; }) : null;
+      var tip = ps ? ps.program : 'Genel';
+      if (tip === 'Oyun') {
+        oyunGunSay++;
+        // Temsil sayısını gün bazında say
+        if (ps && ps.saat) temsilSay++;
+        else if (!ps) temsilSay++;
+        oyunlar[t.oyun||'?'] = (oyunlar[t.oyun||'?']||0) + 1;
+      }
+      if (tip === 'Yol') yolGunSay++;
+    });
+  }
+
+  // Toplam temsil için durakToplamTemsil kullan
+  var ayTurneler = turneler.filter(function(t) {
+    var bas = t.baslangicTarih || t.tarih || '';
+    var bit = t.bitisTarih || bas;
+    var ayBas = calYear + '-' + String(calMonth+1).padStart(2,'0') + '-01';
+    var ayBit = calYear + '-' + String(calMonth+1).padStart(2,'0') + '-' + String(sonGun).padStart(2,'0');
+    return bas <= ayBit && bit >= ayBas;
+  });
+  var toplamTemsil = ayTurneler.reduce(function(s,t){ return s + (typeof durakToplamTemsil==='function' ? durakToplamTemsil(t) : 0); }, 0);
+  var toplamKadro  = ayTurneler.reduce(function(s,t){ return s + (t.katilimcilar ? t.katilimcilar.length : 0); }, 0);
+
+  if (!turneGunSay) { el.style.display = 'none'; return; }
+  el.style.display = 'flex';
+
+  function stat(ikon, deger, etiket, renk) {
+    return '<div style="display:flex;align-items:center;gap:6px">'
+      + '<span style="font-size:13px">' + ikon + '</span>'
+      + '<div><div style="font-size:13px;font-weight:800;color:' + (renk||'#fff') + '">' + deger + '</div>'
+      + '<div style="font-size:9px;color:rgba(255,255,255,.45);font-weight:600;text-transform:uppercase;letter-spacing:.4px">' + etiket + '</div></div>'
+      + '</div>';
+  }
+  function ayrac() { return '<div style="width:1px;height:28px;background:rgba(255,255,255,.12)"></div>'; }
+
+  el.innerHTML =
+    stat('📅', turneGunSay, 'Turne Günü', '#fff')
+    + ayrac()
+    + stat('▶', toplamTemsil || oyunGunSay, 'Temsil', 'hsl(141,65%,60%)')
+    + ayrac()
+    + stat('🚌', yolGunSay, 'Seyahat Günü', 'hsl(38,85%,65%)')
+    + ayrac()
+    + stat('👥', toplamKadro || '—', 'Kadro', 'hsl(220,65%,72%)')
+    + (Object.keys(oyunlar).length > 0
+        ? ayrac() + '<div style="font-size:10px;color:rgba(255,255,255,.5);font-weight:600">'
+          + Object.keys(oyunlar).slice(0,3).join(' · ')
+          + (Object.keys(oyunlar).length > 3 ? ' +' + (Object.keys(oyunlar).length-3) : '')
+          + '</div>'
+        : '')
+    + '<div style="margin-left:auto;font-size:9px;color:rgba(255,255,255,.3);font-weight:600;white-space:nowrap">'
+      + ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'][calMonth]
+      + ' ' + calYear + ' Özeti</div>';
+}
+
+
 function renderCalendar() {
   // Statü filtre buton vurgusu
   var calFilterBtns = document.querySelectorAll('#cal-statu-filtre-row button');
@@ -9892,6 +10012,9 @@ function renderCalendar() {
   const AYLAR_TR = ['Ocak','\u015eubat','Mart','Nisan','May\u0131s','Haziran','Temmuz','A\u011fustos','Eyl\u00fcl','Ekim','Kas\u0131m','Aral\u0131k'];
   var calTitleEl = document.getElementById('cal-title');
   if (calTitleEl) calTitleEl.textContent = AYLAR_TR[calMonth] + ' ' + calYear;
+
+  // Aylık özet bandını güncelle
+  _calAylikOzetGuncelle();
 
   // Görünüm yönlendirme
   if (calCurrentView === 'liste') { _renderCalListe(); return; }
@@ -10010,7 +10133,14 @@ function _renderCalHafta() {
     var isSelected = key === calSelectedDay;
     rowHTML += '<div style="min-height:120px;padding:6px;border-right:1px solid var(--border);border-bottom:1px solid var(--border);background:'+(isTodayCol?'hsl(42,90%,98%)':(isSelected?'hsl(350,60%,97%)':'var(--card)'))+';cursor:pointer;transition:background .12s;display:flex;flex-direction:column;gap:3px" onclick="calGunTikla(\''+key+'\',event)">'
       + (tatilAdi ? '<div style="font-size:8px;font-weight:700;color:hsl(42,75%,32%);background:hsl(42,85%,88%);border-radius:3px;padding:1px 5px;margin-bottom:2px">⭐ '+tatilAdi+'</div>' : '')
-      + events.map(function(t){ return _calEventHTML(t, key); }).join('')
+      + events.map(function(t) {
+          var ps = t.programSatirlar ? t.programSatirlar.find(function(s){ return s.tarih===key; }) : null;
+          var st = _calEvStyle(ps, t);
+          return '<div style="border-radius:6px;border-left:3px solid '+st.border+';background:'+st.bg+';color:'+st.fg+';padding:4px 8px;margin-bottom:3px;cursor:pointer;font-size:10.5px;font-weight:700;" onclick="event.stopPropagation();calGunTikla(\''+key+'\',event)">'
+            + '<div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + st.ikon + ' ' + st.oyunAdi + '</div>'
+            + (st.saat ? '<div style="font-size:11px;font-weight:800;opacity:.9;margin-top:1px">⏰ ' + st.saat + '</div>' : '')
+            + '</div>';
+        }).join('')
       + '</div>';
   });
 
@@ -10067,13 +10197,36 @@ function _renderCalListe() {
           if (t.programSatirlar) progSatir = t.programSatirlar.find(function(s){ return s.tarih === item.key; });
           var st = _calEvStyle(progSatir, t);
           var sr = typeof statuRenk==='function' ? statuRenk(t.statu||'tamamlandi') : {};
-          return '<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;background:'+st.bg+';border:1px solid '+st.border+';cursor:pointer;transition:box-shadow .12s" onclick="calGunTikla(\''+item.key+'\',event)">'
-            + '<div style="display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:8px;background:'+st.border+';color:#fff;flex-shrink:0">' + st.ikon + '</div>'
-            + '<div style="flex:1;min-width:0">'
-            +   '<div style="font-size:12px;font-weight:800;color:'+st.fg+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + st.oyunAdi + (st.saat ? ' <span style="font-weight:400;font-size:11px">'+st.saat+'</span>' : '') + '</div>'
-            +   '<div style="font-size:10px;color:hsl(0,0%,55%);margin-top:2px">' + (st.ilStr||'') + '</div>'
+          var kadroSay = t.katilimcilar ? t.katilimcilar.length : 0;
+          var sure = typeof turneSuresi==='function' ? turneSuresi(t) : 0;
+          var temsil = typeof durakToplamTemsil==='function' ? durakToplamTemsil(t) : 0;
+          var _gunMekan = '';
+          if (progSatir && progSatir.sehir && t.duraklar) {
+            var _dd = t.duraklar.find(function(d){ return (d.il||'').replace(/\/MERKEZ/gi,'').trim().toLowerCase() === (progSatir.sehir||'').replace(/\/MERKEZ/gi,'').trim().toLowerCase(); });
+            if (_dd) _gunMekan = _dd.mekan || '';
+          } else if (t.mekan) { _gunMekan = t.mekan; }
+          return '<div style="display:flex;align-items:stretch;gap:0;border-radius:10px;border:1px solid '+st.border+';overflow:hidden;cursor:pointer;transition:box-shadow .12s" onclick="calGunTikla(\''+item.key+'\',event)" onmouseenter="this.style.boxShadow=\'0 2px 12px rgba(0,0,0,.1)\'" onmouseleave="this.style.boxShadow=\'\'">'
+            + '<div style="width:6px;flex-shrink:0;background:'+st.border+'"></div>'
+            + '<div style="flex:1;padding:10px 14px;background:'+st.bg+'">'
+            +   '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">'
+            +     '<div style="min-width:0;flex:1">'
+            +       '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
+            +         '<span style="font-size:13px;font-weight:800;color:'+st.fg+'">' + st.oyunAdi + '</span>'
+            +         (st.saat ? '<span style="font-size:11px;font-weight:700;color:'+st.fg+';opacity:.85;background:rgba(0,0,0,.08);padding:1px 7px;border-radius:5px">⏰ '+st.saat+'</span>' : '')
+            +       '</div>'
+            +       (st.ilStr ? '<div style="font-size:11px;color:'+st.fg+';opacity:.7;margin-top:3px;display:flex;align-items:center;gap:4px"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>' + st.ilStr + '</div>' : '')
+            +       (_gunMekan ? '<div style="font-size:10px;color:'+st.fg+';opacity:.6;margin-top:2px">🎭 '+_gunMekan+'</div>' : '')
+            +     '</div>'
+            +     '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">'
+            +       (sr.label ? '<span style="padding:2px 9px;border-radius:12px;font-size:9px;font-weight:700;background:'+(sr.bg||'#eee')+';color:'+(sr.fg||'#333')+';white-space:nowrap">' + sr.label + '</span>' : '')
+            +       '<div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end">'
+            +         (sure > 1 ? '<span style="font-size:9px;font-weight:700;padding:1px 6px;border-radius:8px;background:rgba(0,0,0,.07);color:'+st.fg+'">📅 '+sure+' gün</span>' : '')
+            +         (temsil > 0 ? '<span style="font-size:9px;font-weight:700;padding:1px 6px;border-radius:8px;background:rgba(0,0,0,.07);color:'+st.fg+'">▶ '+temsil+' temsil</span>' : '')
+            +         (kadroSay > 0 ? '<span style="font-size:9px;font-weight:700;padding:1px 6px;border-radius:8px;background:rgba(0,0,0,.07);color:'+st.fg+'">👥 '+kadroSay+'</span>' : '')
+            +       '</div>'
+            +     '</div>'
+            +   '</div>'
             + '</div>'
-            + (sr.label ? '<span style="padding:2px 8px;border-radius:12px;font-size:9px;font-weight:700;background:'+(sr.bg||'#eee')+';color:'+(sr.fg||'#333')+';white-space:nowrap">' + sr.label + '</span>' : '')
             + '</div>';
         }).join('');
 
