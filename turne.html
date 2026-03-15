@@ -1972,6 +1972,9 @@ flex-shrink:0;
           <button id="kadro-excel-btn" onclick="kadroExcel()" style="display:none;height:30px;padding:0 12px;border-radius:6px;border:1px solid var(--sidebar-border);background:transparent;color:hsl(38,55%,82%);font-size:11px;font-weight:600;cursor:pointer;font-family:Poppins,sans-serif;align-items:center;gap:4px">
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Excel
           </button>
+          <button onclick="isimleriByukHarfYap()" title="Tüm kadro isimlerini BÜYÜK HARF yap" style="height:30px;padding:0 12px;border-radius:6px;border:1px solid hsl(220,50%,55%);background:transparent;color:hsl(220,65%,72%);font-size:11px;font-weight:700;cursor:pointer;font-family:Poppins,sans-serif;display:inline-flex;align-items:center;gap:5px;white-space:nowrap">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>İsimleri Büyüt
+          </button>
           <button id="kadro-ekle-btn" onclick="kadroKisiEkleAc()" style="display:none;height:30px;padding:0 14px;border-radius:6px;border:none;background:var(--primary);color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:Poppins,sans-serif;display:none;align-items:center;gap:5px">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Kişi Ekle
           </button>
@@ -5145,16 +5148,44 @@ function _kisiModalSekmeGec(yeniOyun) {
 // ═══════════════════════════════════════════════════════════════
 // VERİ TUTARLILIK PANELİ
 // ═══════════════════════════════════════════════════════════════
-function _veriKontrolGit(rowIdx) {
+function _veriKontrolGitBtn() {
+  var rowIdx = window._vkGitData ? window._vkGitData.rowIdx : undefined;
+  var kisi = window._vkGitKisi || undefined;
+  _veriKontrolGit(rowIdx, kisi);
+}
+function _veriKontrolGit(rowIdx, kisiAdi) {
   document.getElementById('veri-kontrol-panel').style.display = 'none';
-  setTimeout(function() {
-    var el = document.querySelector('[data-rowIdx="' + rowIdx + '"]');
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth' });
-      el.style.outline = '2px solid var(--primary)';
-      setTimeout(function(){ el.style.outline = ''; }, 2000);
-    }
-  }, 100);
+  // Önce Kadro sekmesine geç ve kişiyi ara
+  if (kisiAdi) {
+    switchTab('kadro');
+    mbnSetActive('kadro');
+    setTimeout(function() {
+      // Tüm Personel alt sekmesine geç ve ara
+      kadroAltSekme('tumPersonel');
+      var araInput = document.getElementById('tum-personel-search');
+      if (araInput) {
+        araInput.value = kisiAdi;
+        araInput.dispatchEvent(new Event('input'));
+        araInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        araInput.focus();
+      }
+    }, 150);
+  }
+  // Sonra (varsa) turne kartına da vurgu yap
+  if (rowIdx !== undefined && rowIdx !== null) {
+    setTimeout(function() {
+      switchTab('liste');
+      mbnSetActive('liste');
+      setTimeout(function() {
+        var el = document.querySelector('[data-rowIdx="' + rowIdx + '"]');
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth' });
+          el.style.outline = '2px solid var(--primary)';
+          setTimeout(function(){ el.style.outline = ''; }, 2500);
+        }
+      }, 200);
+    }, kisiAdi ? 2500 : 100);
+  }
 }
 function veriKontrolAc(e) {
   e.stopPropagation();
@@ -5213,31 +5244,6 @@ function _veriKontrolHesapla() {
     });
   });
   gruplar.push(grup1);
-
-  // ── 2. Ana kadroda var ama hiçbir turneye eklenmemiş ─────────
-  var grup2 = { id: 'kadro-turne-yok', renk: '#6366f1', ikon: '💤',
-    baslik: 'Ana kadroda var ama hiç turneye eklenmemiş',
-    aciklama: 'Bu kişiler TURNE_PERSONEL sayfasında kayıtlı ama hiçbir turnenin katılımcı listesinde yok.',
-    items: [] };
-  tumPersonel.forEach(function(p) {
-    if (!p.kisi || !p.kisi.trim()) return;
-    var turneVar = turneler.some(function(t) {
-      return t.katilimcilar && t.katilimcilar.some(function(k) {
-        return k.kisi && k.kisi.trim().toLowerCase() === p.kisi.trim().toLowerCase();
-      });
-    });
-    if (!turneVar) {
-      grup2.items.push({ kisi: p.kisi, detay: (p.oyun || '—') + ' · ' + (p.kategori || '—') });
-    }
-  });
-  // Tekrar eden isimleri tekilleştir (aynı kişi birden fazla oyunda olabilir)
-  var seen2 = {};
-  grup2.items = grup2.items.filter(function(x) {
-    var k = x.kisi.trim().toLowerCase();
-    if (seen2[k]) return false;
-    seen2[k] = true; return true;
-  });
-  gruplar.push(grup2);
 
   // ── 3. Aynı kişi aynı turneye çift kayıtlı ──────────────────
   var grup3 = { id: 'cift-kayit', renk: '#ef4444', ikon: '🔁',
@@ -5371,7 +5377,7 @@ function _veriKontrolRender(gruplar) {
           + '<div style="font-size:10px;color:var(--muted-foreground);margin-top:1px;line-height:1.4">' + (item.detay || '') + '</div>'
           + '</div>'
           + (item.rowIdx !== undefined
-            ? '<button onclick="_veriKontrolGit(' + item.rowIdx + ')" style="flex-shrink:0;height:22px;padding:0 8px;border:1px solid var(--border);border-radius:5px;background:transparent;cursor:pointer;font-size:10px;font-weight:600;color:var(--muted-foreground);font-family:Poppins,sans-serif" title="Turneye git">→</button>'
+            ? '<button onclick="window._vkGitData={rowIdx:' + item.rowIdx + '};window._vkGitKisi=\'' + (item.kisi||'').replace(/\'/g,"\\'") + '\';_veriKontrolGitBtn()" style="flex-shrink:0;height:22px;padding:0 8px;border:1px solid var(--border);border-radius:5px;background:transparent;cursor:pointer;font-size:10px;font-weight:600;color:var(--muted-foreground);font-family:Poppins,sans-serif" title="Kadro ve turneye git">→</button>'
             : '')
           + '</div>';
       });
@@ -8218,6 +8224,112 @@ async function _kadroKisiSilDevam(silIdx) {
   renderTumPersonel();
   renderIstatistik();
 }
+
+
+// ══════════════════════════════════════════════════════════════
+// İSİMLERİ BÜYÜK HARF YAP — Tüm kadro + turne katılımcıları
+// ══════════════════════════════════════════════════════════════
+function _trBuyuk(str) {
+  // Türkçe karakterlere özel büyük harf
+  return (str || '').replace(/[a-zğüşıöçğüşöç]/g, function(c) {
+    var map = { 'i':'İ','ı':'I','ğ':'Ğ','ü':'Ü','ş':'Ş','ö':'Ö','ç':'Ç' };
+    return map[c] || c.toUpperCase();
+  });
+}
+
+async function isimleriByukHarfYap() {
+  // Önce kaç kişi etkilenecek hesapla
+  var degisecekler = tumPersonel.filter(function(p) {
+    return p.kisi && p.kisi.trim() && p.kisi !== _trBuyuk(p.kisi);
+  });
+
+  if (degisecekler.length === 0) {
+    showToast('Tüm isimler zaten büyük harf ✓', 'success', 3000);
+    return;
+  }
+
+  // Turne katılımcılarında etkilenecek kayıt sayısı
+  var etkilenenTurne = 0;
+  turneler.forEach(function(t) {
+    if (!t.katilimcilar) return;
+    t.katilimcilar.forEach(function(k) {
+      if (k.kisi && k.kisi !== _trBuyuk(k.kisi)) etkilenenTurne++;
+    });
+  });
+
+  onayGoster({
+    baslik: 'İsimleri Büyük Harf Yap',
+    ikon: '🔠',
+    ikonBg: 'hsl(220,80%,95%)',
+    mesaj: degisecekler.length + ' kadro kaydı ve ' + etkilenenTurne + ' turne katılımcı kaydı büyük harfe çevrilecek.',
+    altMesaj: 'Bu işlem geri alınamaz. Devam etmek istiyor musunuz?',
+    tamamYazi: 'Evet, Dönüştür',
+    tamamRenk: 'hsl(220,75%,52%)',
+    onOnay: async function() { await _isimleriByukHarfUygula(degisecekler); }
+  });
+}
+
+async function _isimleriByukHarfUygula(degisecekler) {
+  var btn = document.querySelector('[onclick="isimleriByukHarfYap()"]');
+  if (btn) { btn.disabled = true; btn.textContent = 'Dönüştürülüyor…'; }
+
+  var hata = 0, basari = 0;
+
+  // 1. Ana kadro — her kişi için cell PUT
+  for (var i = 0; i < degisecekler.length; i++) {
+    var p = degisecekler[i];
+    var yeniIsim = _trBuyuk(p.kisi);
+    try {
+      var res = await apiFetch('/' + encodeURIComponent(PERSONEL_SHEET) + '/cell', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ row: p._sheetRow, col: 3, value: yeniIsim }) // col 3 = Ad Soyad
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      p.kisi = yeniIsim; // yerel güncelle
+      basari++;
+    } catch(e) {
+      console.warn('Büyük harf hatası:', p.kisi, e);
+      hata++;
+    }
+  }
+
+  // 2. Turne katılımcıları — etkilenen turne kayıtlarını güncelle
+  var etkilenenTurneler = [];
+  turneler.forEach(function(t) {
+    if (!t.katilimcilar) return;
+    var degisti = false;
+    t.katilimcilar.forEach(function(k) {
+      var yeni = _trBuyuk(k.kisi);
+      if (k.kisi !== yeni) { k.kisi = yeni; degisti = true; }
+    });
+    if (degisti) etkilenenTurneler.push(t);
+  });
+
+  for (var j = 0; j < etkilenenTurneler.length; j++) {
+    var t = etkilenenTurneler[j];
+    try {
+      await apiFetch('/' + encodeURIComponent(TURNE_SHEET) + '/cell', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ row: t._rowIdx + 2, col: 39, value: JSON.stringify(t.katilimcilar) })
+      });
+    } catch(e) { console.warn('Turne katılımcı büyük harf hatası:', e); }
+  }
+
+  if (btn) { btn.disabled = false; btn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>İsimleri Büyüt'; }
+
+  if (hata === 0) {
+    showToast(basari + ' isim büyük harfe çevrildi ✓', 'success', 4000);
+  } else {
+    showToast(basari + ' başarılı, ' + hata + ' hata', 'warning', 5000);
+  }
+
+  renderKadro();
+  renderTumPersonel();
+  renderListe();
+}
+// ══════════════════════════════════════════════════════════════
 
 function kadroExcel() {
   const oyun = document.getElementById('kadro-oyun-sec').value;
