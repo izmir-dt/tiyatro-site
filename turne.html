@@ -3784,7 +3784,10 @@ async function fetchTurneler() {
       sehirTel:       (r[38] || '').trim(),
       katilimcilar:   (() => {
         var raw = (r[39]||'').trim();
-        if (raw.startsWith('[')) { try { var p2 = JSON.parse(raw); if (Array.isArray(p2)) return p2; } catch(e){} }
+        if (raw.startsWith('[')) { try { var p2 = JSON.parse(raw); if (Array.isArray(p2) && p2.length > 0) return p2; } catch(e){} }
+        // Sheets'ten boş gelirse mevcut cache'deki katılımcıları koru (race condition)
+        var _cached = turneler.find(function(x){ return x._rowIdx === sheetRowIdx; });
+        if (_cached && _cached.katilimcilar && _cached.katilimcilar.length) return _cached.katilimcilar;
         return [];
       })(),
       programSatirlar: (() => {
@@ -4792,11 +4795,11 @@ function kisiModalAnaKadroyuSec() {
 // ============================================================
 var _cdAktifTab = 'bilgi';
 
-function openCardDetail(rowIdx, _forceTab) {
+function openCardDetail(rowIdx) {
   var t = turneler.find(function(x){ return x._rowIdx === rowIdx; });
   if (!t) return;
   window._acikKartRowIdx = rowIdx;
-  _cdAktifTab = _forceTab || 'bilgi';
+  _cdAktifTab = 'bilgi';
   _renderCardDetail(rowIdx);
   document.getElementById('card-detail-modal').classList.add('on');
 }
@@ -5194,7 +5197,8 @@ window._vkKatilimciAc = function(rowIdx, kisiAdi) {
   mbnSetActive('liste');
   setTimeout(function() {
     // Kart detay modalını aç, direkt Katılımcılar sekmesine geç
-    openCardDetail(rowIdx, 'katilimcilar');
+    _cdAktifTab = 'katilimcilar';
+    openCardDetail(rowIdx);
     // Kişiyi sağ panelde vurgula
     if (kisiAdi) {
       setTimeout(function() {
@@ -9866,9 +9870,9 @@ function renderIstatistik(filtreStatu) {
   var gecenAySayisi = ayData[gecenAy]||0;
   var ayDegisim = gecenAySayisi>0 ? Math.round((buAySayisi-gecenAySayisi)/gecenAySayisi*100) : null;
 
-  // Personel
+  // Personel — her zaman tüm turneleri say (filtreStatu olsa bile)
   var kisiData = {};
-  kaynakTurneler.forEach(function(t){
+  tumTurneler.forEach(function(t){
     var liste = (t.katilimcilar&&t.katilimcilar.length) ? t.katilimcilar
       : getPersonelForOyun(t.oyun).map(function(p){ return {kisi:p.kisi,gorev:p.gorev||p.kategori,kategori:p.kategori}; });
     var seen = {};
