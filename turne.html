@@ -2559,34 +2559,12 @@ flex-shrink:0;
             <input class="form-input" type="number" min="0" id="m-kamyon" placeholder="1">
           </div>
         </div>
-        <!-- Yükleme -->
-        <div style="background:var(--muted);border-radius:8px;padding:10px 12px;margin-top:8px;border-left:3px solid hsl(155,55%,50%)">
-          <div style="font-size:11px;font-weight:700;color:hsl(155,55%,32%);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> Yükleme</div>
-          <div class="form-grid-2" style="gap:8px">
-            <div class="form-group" style="margin:0">
-              <label class="form-label">Saat</label>
-              <input class="form-input" type="time" id="m-yukleme-saat">
-            </div>
-            <div class="form-group" style="margin:0">
-              <label class="form-label">Yer / Adres</label>
-              <input class="form-input" type="text" id="m-yukleme-yer" placeholder="Sahne girişi, depo...">
-            </div>
-          </div>
-        </div>
-        <!-- Boşaltma -->
-        <div style="background:var(--muted);border-radius:8px;padding:10px 12px;margin-top:6px;border-left:3px solid hsl(38,80%,50%)">
-          <div style="font-size:11px;font-weight:700;color:hsl(38,70%,30%);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Boşaltma</div>
-          <div class="form-grid-2" style="gap:8px">
-            <div class="form-group" style="margin:0">
-              <label class="form-label">Saat</label>
-              <input class="form-input" type="time" id="m-bosaltma-saat">
-            </div>
-            <div class="form-group" style="margin:0">
-              <label class="form-label">Yer / Adres</label>
-              <input class="form-input" type="text" id="m-bosaltma-yer" placeholder="Sahne, dekor deposu...">
-            </div>
-          </div>
-        </div>
+        <!-- Yükleme / Boşaltma — dinamik, çoğaltılabilir -->
+        <div id="m-yukbos-container" style="display:flex;flex-direction:column;gap:6px;margin-top:8px"></div>
+        <button type="button" onclick="_yukBosEkle()" style="margin-top:6px;width:100%;height:32px;border:1.5px dashed var(--border);border-radius:8px;background:transparent;cursor:pointer;font-size:11px;font-weight:600;color:var(--muted-foreground);font-family:Poppins,sans-serif;display:flex;align-items:center;justify-content:center;gap:5px;transition:border-color .15s,color .15s" onmouseenter="this.style.borderColor='var(--primary)';this.style.color='var(--primary)'" onmouseleave="this.style.borderColor='var(--border)';this.style.color='var(--muted-foreground)'">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Yükleme / Boşaltma Ekle
+        </button>
         <!-- Kapasite + Not -->
         <div style="display:flex;align-items:center;gap:10px;margin-top:8px">
           <div class="form-group" style="margin:0;flex:1">
@@ -3443,6 +3421,79 @@ function formatTarihKart(baslangic, bitis, sure) {
     return bD + ' ' + aylar[bM] + ' ' + bY + ' ' + bGun + ' – ' + eD + ' ' + aylar[eM] + ' ' + eY + ' ' + eGun;
   } catch(ex) { return formatTarih(baslangic); }
 }
+// ── Yükleme / Boşaltma — dinamik çoğaltılabilir yönetim ─────────────────────
+window._yukBoslar = window._yukBoslar || [];
+
+function _yukBosRender() {
+  var c = document.getElementById('m-yukbos-container');
+  if (!c) return;
+  var arr = window._yukBoslar || [];
+  if (!arr.length) { c.innerHTML = ''; return; }
+  c.innerHTML = arr.map(function(yb, i) {
+    var isYuk = yb.tip === 'yukleme';
+    var borderColor = isYuk ? 'hsl(155,55%,50%)' : 'hsl(38,80%,50%)';
+    var labelColor  = isYuk ? 'hsl(155,55%,32%)' : 'hsl(38,70%,30%)';
+    var labelIkon   = isYuk
+      ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>'
+      : '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
+    var labelTxt = isYuk ? 'Yükleme' : 'Boşaltma';
+    var esc = function(v){ return (v||'').replace(/"/g,'&quot;'); };
+    return '<div style="background:var(--muted);border-radius:8px;padding:10px 12px;border-left:3px solid '+borderColor+'">'
+      + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'
+      +   '<div style="display:flex;align-items:center;gap:5px">'
+      +     '<select onchange="_yukBosTipDegis('+i+',this.value)" style="border:none;background:transparent;font-size:11px;font-weight:700;color:'+labelColor+';text-transform:uppercase;letter-spacing:.5px;cursor:pointer;font-family:Poppins,sans-serif;padding:0">'
+      +       '<option value="yukleme"'+(isYuk?' selected':'')+'>'+labelIkon+' Yükleme</option>'
+      +       '<option value="bosaltma"'+(!isYuk?' selected':'')+'>Boşaltma</option>'
+      +     '</select>'
+      +   '</div>'
+      +   '<button type="button" onclick="_yukBosSil('+i+')" title="Kaldır" style="width:22px;height:22px;border:none;background:transparent;cursor:pointer;color:var(--muted-foreground);display:flex;align-items:center;justify-content:center;border-radius:5px;padding:0" onmouseenter="this.style.background='var(--border)'" onmouseleave="this.style.background='transparent'">'
+      +     '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>'
+      +   '</button>'
+      + '</div>'
+      + '<div class="form-grid-2" style="gap:8px">'
+      +   '<div class="form-group" style="margin:0">'
+      +     '<label class="form-label">Saat</label>'
+      +     '<input class="form-input" type="time" value="'+esc(yb.saat)+'" oninput="_yukBosGuncelle('+i+','saat',this.value)">'
+      +   '</div>'
+      +   '<div class="form-group" style="margin:0">'
+      +     '<label class="form-label">Yer / Adres</label>'
+      +     '<input class="form-input" type="text" value="'+esc(yb.yer)+'" placeholder="'+(isYuk?'Sahne girişi, depo...':'Sahne, dekor deposu...')+'" oninput="_yukBosGuncelle('+i+','yer',this.value)">'
+      +   '</div>'
+      + '</div>'
+      + '</div>';
+  }).join('');
+}
+
+function _yukBosEkle() {
+  if (!window._yukBoslar) window._yukBoslar = [];
+  // Sıradaki tip: eğer son eleman yükleme ise boşaltma ekle, yoksa yükleme
+  var sonTip = window._yukBoslar.length ? window._yukBoslar[window._yukBoslar.length-1].tip : '';
+  var yeniTip = sonTip === 'yukleme' ? 'bosaltma' : 'yukleme';
+  window._yukBoslar.push({ tip: yeniTip, saat: '', yer: '' });
+  _yukBosRender();
+  // Yeni eklenen satırın saat inputuna focus
+  var c = document.getElementById('m-yukbos-container');
+  if (c) { var inputs = c.querySelectorAll('input[type=time]'); if (inputs.length) inputs[inputs.length-1].focus(); }
+}
+
+function _yukBosSil(idx) {
+  if (!window._yukBoslar) return;
+  window._yukBoslar.splice(idx, 1);
+  _yukBosRender();
+}
+
+function _yukBosGuncelle(idx, alan, deger) {
+  if (!window._yukBoslar || !window._yukBoslar[idx]) return;
+  window._yukBoslar[idx][alan] = deger;
+}
+
+function _yukBosTipDegis(idx, yeniTip) {
+  if (!window._yukBoslar || !window._yukBoslar[idx]) return;
+  window._yukBoslar[idx].tip = yeniTip;
+  _yukBosRender();
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 function getPersonelForOyun(oyunAdi) {
   if (!oyunAdi) return [];
   var aranan = oyunAdi.trim().toLowerCase();
@@ -3679,7 +3730,7 @@ async function fetchTurneler() {
       sahneKapasitesi:(r[17] || '').trim(),
       notlar:         (r[18] || '').trim(),
       // Ekstra lojistik alanları: notlar JSON ise parse et
-      ...( (function(){ var raw=(r[18]||'').trim(); if(!raw.startsWith('{')) return {}; try{ var p=JSON.parse(raw); return { aracTur:p.aracTur||'', liftli:!!p.liftli, yuklemeSaat:p.yuklemeSaat||'', yuklemeYer:p.yuklemeYer||'', bosaltmaSaat:p.bosaltmaSaat||'', bosaltmaYer:p.bosaltmaYer||'', notlarDuz:p.not||'' }; }catch(e){ return {}; } })() ),
+      ...( (function(){ var raw=(r[18]||'').trim(); if(!raw.startsWith('{')) return {}; try{ var p=JSON.parse(raw); var _ybArr=Array.isArray(p.yukBoslar)?p.yukBoslar:(p.yuklemeSaat||p.bosaltmaSaat?[{tip:'yukleme',saat:p.yuklemeSaat||'',yer:p.yuklemeYer||''},{tip:'bosaltma',saat:p.bosaltmaSaat||'',yer:p.bosaltmaYer||''}].filter(function(x){return x.saat||x.yer;}):[]);  return { aracTur:p.aracTur||'', liftli:!!p.liftli, yukBoslar:_ybArr, yuklemeSaat:p.yuklemeSaat||'', yuklemeYer:p.yuklemeYer||'', bosaltmaSaat:p.bosaltmaSaat||'', bosaltmaYer:p.bosaltmaYer||'', notlarDuz:p.not||'' }; }catch(e){ return {}; } })() ),
       grup:           '',
       duraklar:       parsedDuraklar || null,
       gidisInis:      (r[20] || '').trim(),
@@ -4430,15 +4481,53 @@ function turneCard(t) {
 }
 
 
-function openKisiModal(rowIdx) {
+function openKisiModal(rowIdx, _durakOyunAdi) {
   const t = turneler.find(x => x._rowIdx === rowIdx);
   if (!t) return;
+
+  // Turnede kaç farklı oyun var?
+  var tumOyunlar = [];
+  if (t.oyun) tumOyunlar.push(t.oyun);
+  if (t.duraklar) t.duraklar.forEach(function(d){ if (d.oyun && !tumOyunlar.includes(d.oyun)) tumOyunlar.push(d.oyun); });
+
+  // Birden fazla farklı oyun varsa ve hangisi seçileceği belirtilmemişse → seçim dialog'u göster
+  if (tumOyunlar.length > 1 && !_durakOyunAdi) {
+    var _selOv = document.createElement('div');
+    _selOv.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:19500;display:flex;align-items:center;justify-content:center;padding:20px';
+    _selOv.innerHTML = '<div style="background:var(--card);border:1.5px solid var(--border);border-radius:14px;padding:0;width:100%;max-width:400px;box-shadow:0 20px 60px rgba(0,0,0,.3);font-family:Poppins,sans-serif;overflow:hidden">'
+      + '<div style="padding:16px 20px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">'
+      +   '<div style="width:34px;height:34px;border-radius:9px;background:hsl(42,70%,90%);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0">🎭</div>'
+      +   '<div><div style="font-size:14px;font-weight:800;color:var(--foreground)">Hangi oyunun kadrosu?</div>'
+      +   '<div style="font-size:11px;color:var(--muted-foreground);margin-top:1px">Bu turnede birden fazla oyun var</div></div>'
+      + '</div>'
+      + '<div style="padding:12px 20px;display:flex;flex-direction:column;gap:8px">'
+      + tumOyunlar.map(function(o) {
+          var kadroSay = getPersonelForOyun(o).length;
+          return '<button onclick="this.closest(\'[data-oyunsel-ov]\').remove();openKisiModal('+rowIdx+',\''+o.replace(/'/g,"\\'")+'\')" '
+            + 'style="text-align:left;padding:10px 14px;border:1.5px solid var(--border);border-radius:9px;background:var(--card);cursor:pointer;font-family:Poppins,sans-serif;transition:border-color .15s,background .15s" '
+            + 'onmouseenter="this.style.borderColor=\'var(--primary)\';this.style.background=\'var(--muted)\'" '
+            + 'onmouseleave="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--card)\'">'
+            +   '<div style="font-size:13px;font-weight:700;color:var(--foreground)">' + o + '</div>'
+            +   '<div style="font-size:11px;color:var(--muted-foreground);margin-top:2px">' + kadroSay + ' kişi</div>'
+            + '</button>';
+        }).join('')
+      + '</div>'
+      + '<div style="padding:10px 20px 14px;display:flex;justify-content:flex-end">'
+      +   '<button onclick="this.closest(\'[data-oyunsel-ov]\').remove()" style="height:34px;padding:0 16px;border:1.5px solid var(--border);border-radius:8px;background:transparent;cursor:pointer;font-size:12px;font-weight:600;color:var(--muted-foreground);font-family:Poppins,sans-serif">İptal</button>'
+      + '</div>'
+      + '</div>';
+    _selOv.setAttribute('data-oyunsel-ov','1');
+    _selOv.addEventListener('click', function(e){ if(e.target===_selOv) _selOv.remove(); });
+    document.body.appendChild(_selOv);
+    return;
+  }
+
   kisiModalRowIdx = rowIdx;
-  // oyun adını sakla (duraktan türet gerekirse)
-  var oyunAdi = t.oyun || '';
+  // oyun adını sakla — önce parametre, sonra t.oyun, sonra duraktan türet
+  var oyunAdi = _durakOyunAdi || t.oyun || '';
   if (!oyunAdi && t.duraklar) {
     var durakOyunlar = t.duraklar.map(function(d){ return d.oyun||''; }).filter(Boolean);
-    oyunAdi = [...new Set(durakOyunlar)].join(' / ');
+    oyunAdi = [...new Set(durakOyunlar)][0] || '';
   }
   window._kisiModalOyunAdi = oyunAdi;
   // Kayıtlı katılımcılar varsa onları yükle, yoksa ana kadroyu otomatik seç
@@ -4601,14 +4690,14 @@ function _eksikKisilerSecimGoster(eksikler) {
 function kisiModalAnaKadroyuSec() {
   var t = turneler.find(x => x._rowIdx === kisiModalRowIdx);
   if (!t) return;
-  var _kmOyun = t.oyun || (t.duraklar ? [...new Set(t.duraklar.map(function(d){return d.oyun||'';}).filter(Boolean))].join(' / ') : '');
+  var _kmOyun = window._kisiModalOyunAdi || t.oyun || (t.duraklar ? [...new Set(t.duraklar.map(function(d){return d.oyun||'';}).filter(Boolean))][0] : '') || '';
   var anaKadro = getPersonelForOyun(_kmOyun);
   kisiModalSecili = anaKadro.map(function(p) {
     var gorevGoster = p.kategori === 'Oyuncu' ? 'Sanatçı' : (p.gorev || p.kategori || '');
     return { kisi: p.kisi, gorev: gorevGoster, kategori: p.kategori };
   });
   var q = document.getElementById('kisi-filter-input').value.toLowerCase();
-  renderKisiModalList(t.oyun, q);
+  renderKisiModalList(_kmOyun, q);
   renderSelectedPills();
 }
 
@@ -4838,12 +4927,17 @@ function _renderCardDetail(rowIdx) {
   var _lojNot = _lojExtra.not || (!t.notlar||t.notlar.startsWith('{')?'':t.notlar);
   var aracTur  = _lojExtra.aracTur || t.aracTur || '';
   var liftli   = _lojExtra.liftli  || t.liftli  || false;
-  var yukSaat  = _lojExtra.yuklemeSaat || '';
-  var yukYer   = _lojExtra.yuklemeYer  || '';
-  var bosaltSaat = _lojExtra.bosaltmaSaat || '';
-  var bosaltYer  = _lojExtra.bosaltmaYer  || '';
+  // yukBoslar: array varsa kullan, yoksa eski tekil alanlardan migrate
+  var _yukBoslarGor = Array.isArray(_lojExtra.yukBoslar) && _lojExtra.yukBoslar.length
+    ? _lojExtra.yukBoslar
+    : (function(){
+        var _arr = [];
+        if (_lojExtra.yuklemeSaat || _lojExtra.yuklemeYer) _arr.push({ tip:'yukleme', saat:_lojExtra.yuklemeSaat||'', yer:_lojExtra.yuklemeYer||'' });
+        if (_lojExtra.bosaltmaSaat || _lojExtra.bosaltmaYer) _arr.push({ tip:'bosaltma', saat:_lojExtra.bosaltmaSaat||'', yer:_lojExtra.bosaltmaYer||'' });
+        return _arr;
+      })();
 
-  if (!t.kamyonSayisi && !aracTur && !t.sahneKapasitesi && !yukSaat && !_lojNot) {
+  if (!t.kamyonSayisi && !aracTur && !t.sahneKapasitesi && !_yukBoslarGor.length && !_lojNot) {
     lojistikHtml = '<div style="text-align:center;padding:32px 16px;color:var(--muted-foreground)">'
       + '<div style="font-size:32px;margin-bottom:8px">📦</div>'
       + '<div style="font-size:13px;font-weight:600;margin-bottom:4px">Lojistik bilgisi yok</div>'
@@ -4862,10 +4956,18 @@ function _renderCardDetail(rowIdx) {
         + '<span style="font-size:12px;font-weight:700">'+r[1]+'</span></div>';
     });
     lojistikHtml += '</div>';
-    if (yukSaat || yukYer || bosaltSaat || bosaltYer) {
+    if (_yukBoslarGor.length) {
       lojistikHtml += secBaslik('Yükleme / Boşaltma');
-      if (yukSaat || yukYer) lojistikHtml += '<div style="padding:7px 0;border-bottom:1px solid var(--border)"><div style="font-size:11px;font-weight:700;color:#15803d;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Yükleme</div><div style="font-size:12px">'+(yukSaat?yukSaat:'')+(yukYer?' · '+yukYer:'')+'</div></div>';
-      if (bosaltSaat || bosaltYer) lojistikHtml += '<div style="padding:7px 0"><div style="font-size:11px;font-weight:700;color:#7c3aed;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Boşaltma</div><div style="font-size:12px">'+(bosaltSaat?bosaltSaat:'')+(bosaltYer?' · '+bosaltYer:'')+'</div></div>';
+      _yukBoslarGor.forEach(function(yb, _yi) {
+        var isLast = _yi === _yukBoslarGor.length - 1;
+        var isYuk = yb.tip === 'yukleme';
+        var _label = isYuk ? 'Yükleme' : 'Boşaltma';
+        var _color = isYuk ? '#15803d' : '#7c3aed';
+        lojistikHtml += '<div style="padding:7px 0' + (isLast ? '' : ';border-bottom:1px solid var(--border)') + '">'
+          + '<div style="font-size:11px;font-weight:700;color:'+_color+';text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">'+_label+'</div>'
+          + '<div style="font-size:12px">'+(yb.saat||'')+(yb.yer?' · '+yb.yer:'')+'</div>'
+          + '</div>';
+      });
     }
     if (_lojNot) {
       lojistikHtml += secBaslik('Not');
@@ -9508,8 +9610,10 @@ function openModal(rowIdx) {
   if (rowIdx === undefined) {
     if (!_taslakModu) document.getElementById('modal-title').textContent = 'Yeni Turne Ekle';
     document.getElementById('edit-rowidx').value = '';
-    ['m-oyun','m-tarih','m-bitis','m-not','m-premiyer','m-gidis-ulasim','m-gidis-saat','m-gidis-plaka','m-gidis-surucu','m-gidis-kisi-sayisi','m-donus-ulasim','m-donus-saat','m-donus-plaka','m-donus-surucu','m-donus-kisi-sayisi','m-sehir-arac-tur','m-sehir-arac-detay','m-sehir-kisi-sayisi','m-sehir-surucu','m-sehir-tel','m-aktarma','m-otel-adi','m-otel-adr','m-otel-tel','m-kamyon','m-kapasite','m-lojistik-not','m-grup','m-arac-tur','m-yukleme-saat','m-yukleme-yer','m-bosaltma-saat','m-bosaltma-yer'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    ['m-oyun','m-tarih','m-bitis','m-not','m-premiyer','m-gidis-ulasim','m-gidis-saat','m-gidis-plaka','m-gidis-surucu','m-gidis-kisi-sayisi','m-donus-ulasim','m-donus-saat','m-donus-plaka','m-donus-surucu','m-donus-kisi-sayisi','m-sehir-arac-tur','m-sehir-arac-detay','m-sehir-kisi-sayisi','m-sehir-surucu','m-sehir-tel','m-aktarma','m-otel-adi','m-otel-adr','m-otel-tel','m-kamyon','m-kapasite','m-lojistik-not','m-grup','m-arac-tur'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
     var liftliEl = document.getElementById('m-arac-liftli'); if (liftliEl) liftliEl.checked = false;
+    window._yukBoslar = [];
+    _yukBosRender();
     ucusBacaklar = { gidis: [], donus: [] };
     karaAraclar  = { gidis: [{firma:'',kisi:''}], donus: [{firma:'',kisi:''}] };
     sehirAraclar = [{tur:'',firma:'',kisi:'',tel:''}];
@@ -9569,10 +9673,15 @@ function turneCopyala(rowIdx) {
     document.getElementById('m-lojistik-not').value = _lojNot;
     var _atEl = document.getElementById('m-arac-tur'); if (_atEl) _atEl.value = _lojExtra.aracTur||t.aracTur||'';
     var _liEl = document.getElementById('m-arac-liftli'); if (_liEl) _liEl.checked = !!(_lojExtra.liftli||t.liftli||false);
-    var _ysEl = document.getElementById('m-yukleme-saat'); if (_ysEl) _ysEl.value = _lojExtra.yuklemeSaat||'';
-    var _yyEl = document.getElementById('m-yukleme-yer'); if (_yyEl) _yyEl.value = _lojExtra.yuklemeYer||'';
-    var _bsEl = document.getElementById('m-bosaltma-saat'); if (_bsEl) _bsEl.value = _lojExtra.bosaltmaSaat||'';
-    var _byEl = document.getElementById('m-bosaltma-yer'); if (_byEl) _byEl.value = _lojExtra.bosaltmaYer||'';
+    // Yükleme/boşaltma: array varsa kullan, yoksa eski tekil alanlardan migrate et
+    if (Array.isArray(_lojExtra.yukBoslar) && _lojExtra.yukBoslar.length) {
+      window._yukBoslar = JSON.parse(JSON.stringify(_lojExtra.yukBoslar));
+    } else {
+      window._yukBoslar = [];
+      if (_lojExtra.yuklemeSaat || _lojExtra.yuklemeYer) window._yukBoslar.push({ tip: 'yukleme', saat: _lojExtra.yuklemeSaat||'', yer: _lojExtra.yuklemeYer||'' });
+      if (_lojExtra.bosaltmaSaat || _lojExtra.bosaltmaYer) window._yukBoslar.push({ tip: 'bosaltma', saat: _lojExtra.bosaltmaSaat||'', yer: _lojExtra.bosaltmaYer||'' });
+    }
+    _yukBosRender();
     // Uçuş bacaklarını kopyala
     try { ucusBacaklar.gidis = t.gidisUcusBacakJSON ? JSON.parse(t.gidisUcusBacakJSON) : []; } catch(e) { ucusBacaklar.gidis = []; }
     try { ucusBacaklar.donus = t.donusUcusBacakJSON ? JSON.parse(t.donusUcusBacakJSON) : []; } catch(e) { ucusBacaklar.donus = []; }
@@ -9654,10 +9763,14 @@ function editTurne(rowIdx) {
   document.getElementById('m-lojistik-not').value = _lojNot2;
   var _atEl2 = document.getElementById('m-arac-tur'); if (_atEl2) _atEl2.value = _lojExtra2.aracTur||t.aracTur||'';
   var _liEl2 = document.getElementById('m-arac-liftli'); if (_liEl2) _liEl2.checked = !!(_lojExtra2.liftli||t.liftli||false);
-  var _ysEl2 = document.getElementById('m-yukleme-saat'); if (_ysEl2) _ysEl2.value = _lojExtra2.yuklemeSaat||'';
-  var _yyEl2 = document.getElementById('m-yukleme-yer'); if (_yyEl2) _yyEl2.value = _lojExtra2.yuklemeYer||'';
-  var _bsEl2 = document.getElementById('m-bosaltma-saat'); if (_bsEl2) _bsEl2.value = _lojExtra2.bosaltmaSaat||'';
-  var _byEl2 = document.getElementById('m-bosaltma-yer'); if (_byEl2) _byEl2.value = _lojExtra2.bosaltmaYer||'';
+  if (Array.isArray(_lojExtra2.yukBoslar) && _lojExtra2.yukBoslar.length) {
+    window._yukBoslar = JSON.parse(JSON.stringify(_lojExtra2.yukBoslar));
+  } else {
+    window._yukBoslar = [];
+    if (_lojExtra2.yuklemeSaat || _lojExtra2.yuklemeYer) window._yukBoslar.push({ tip: 'yukleme', saat: _lojExtra2.yuklemeSaat||'', yer: _lojExtra2.yuklemeYer||'' });
+    if (_lojExtra2.bosaltmaSaat || _lojExtra2.bosaltmaYer) window._yukBoslar.push({ tip: 'bosaltma', saat: _lojExtra2.bosaltmaSaat||'', yer: _lojExtra2.bosaltmaYer||'' });
+  }
+  _yukBosRender();
   // Durakları yükle (eski format uyumlu)
   if (t.duraklar && t.duraklar.length) {
     duraklar = JSON.parse(JSON.stringify(t.duraklar));
@@ -9746,14 +9859,11 @@ async function saveTurne() {
   var _lojNotDuz  = (document.getElementById('m-lojistik-not')||{value:''}).value.trim();
   var _aracTur    = (document.getElementById('m-arac-tur')||{value:''}).value.trim();
   var _liftli     = !!(document.getElementById('m-arac-liftli')||{checked:false}).checked;
-  var _yukSaat    = (document.getElementById('m-yukleme-saat')||{value:''}).value.trim();
-  var _yukYer     = (document.getElementById('m-yukleme-yer')||{value:''}).value.trim();
-  var _bosSaat    = (document.getElementById('m-bosaltma-saat')||{value:''}).value.trim();
-  var _bosYer     = (document.getElementById('m-bosaltma-yer')||{value:''}).value.trim();
+  var _yukBoslarSave = (window._yukBoslar || []).filter(function(x){ return x.saat || x.yer; });
   // Ekstra lojistik verileri JSON olarak notlar sütununa sakla
-  var _hasExtra = _aracTur || _liftli || _yukSaat || _yukYer || _bosSaat || _bosYer;
+  var _hasExtra = _aracTur || _liftli || _yukBoslarSave.length;
   var lojNot = _hasExtra
-    ? JSON.stringify({ not: _lojNotDuz, aracTur: _aracTur, liftli: _liftli, yuklemeSaat: _yukSaat, yuklemeYer: _yukYer, bosaltmaSaat: _bosSaat, bosaltmaYer: _bosYer })
+    ? JSON.stringify({ not: _lojNotDuz, aracTur: _aracTur, liftli: _liftli, yukBoslar: _yukBoslarSave })
     : _lojNotDuz;
   var editIdx     = document.getElementById('edit-rowidx').value;
 
@@ -9903,7 +10013,7 @@ async function saveTurne() {
     donusUcusBacakJSON, donusPlaka, donusSurucu, donusKisiSayisi,
     sehirAracTur, sehirAracDetay, sehirKisiSayisi, sehirSurucu, sehirTel,
     aktarma, kamyonSayisi: kamyon, sahneKapasitesi: kapasite, notlar: lojNot,
-    aracTur: _aracTur||'', liftli: _liftli||false, yuklemeSaat: _yukSaat||'', yuklemeYer: _yukYer||'', bosaltmaSaat: _bosSaat||'', bosaltmaYer: _bosYer||'',
+    aracTur: _aracTur||'', liftli: _liftli||false, yukBoslar: (window._yukBoslar||[]).filter(function(x){return x.saat||x.yer;}),
     programSatirlar: JSON.parse(JSON.stringify(programSatirlar)),
     katilimcilar: JSON.parse(JSON.stringify(_katMevcut !== null && _katMevcut !== undefined ? _katMevcut : (kisiModalSecili || [])))
   };
@@ -10516,24 +10626,36 @@ function _pdfIcerik(t) {
   try { if (t.notlar && t.notlar.startsWith('{')) _lojP = JSON.parse(t.notlar); } catch(e) {}
   var _aracTurPdf    = _lojP.aracTur    || t.aracTur    || '';
   var _liftliPdf     = _lojP.liftli     !== undefined ? _lojP.liftli     : (t.liftli||false);
-  var _yukSaatPdf    = _lojP.yuklemeSaat|| t.yuklemeSaat|| '';
-  var _yukYerPdf     = _lojP.yuklemeYer || t.yuklemeYer || '';
-  var _bosSaatPdf    = _lojP.bosaltmaSaat||t.bosaltmaSaat||'';
-  var _bosYerPdf     = _lojP.bosaltmaYer||t.bosaltmaYer ||'';
+  // yukBoslar: array varsa kullan, yoksa eski tekil alanlardan migrate
+  var _yukBoslarPdf = Array.isArray(_lojP.yukBoslar) && _lojP.yukBoslar.length
+    ? _lojP.yukBoslar
+    : (function(){
+        var _arr = [];
+        var _ys = _lojP.yuklemeSaat|| t.yuklemeSaat|| '';
+        var _yy = _lojP.yuklemeYer || t.yuklemeYer || '';
+        var _bs = _lojP.bosaltmaSaat||t.bosaltmaSaat||'';
+        var _by = _lojP.bosaltmaYer||t.bosaltmaYer ||'';
+        if (_ys || _yy) _arr.push({ tip:'yukleme', saat:_ys, yer:_yy });
+        if (_bs || _by) _arr.push({ tip:'bosaltma', saat:_bs, yer:_by });
+        return _arr;
+      })();
 
-  if (t.kamyonSayisi || _aracTurPdf || _yukSaatPdf || _bosSaatPdf) {
+  if (t.kamyonSayisi || _aracTurPdf || _yukBoslarPdf.length) {
     var _aracStr = (_aracTurPdf || 'Kamyon') + (_liftliPdf ? ' (Liftli)' : '');
     if (t.kamyonSayisi) _aracStr = t.kamyonSayisi + ' adet ' + _aracStr;
     nakliyeHTML = '<table style="width:100%;border-collapse:collapse;font-size:11px">';
     nakliyeHTML += '<thead><tr style="background:#1e3a5f"><th colspan="2" style="padding:6px 10px;color:#fff;text-align:left;border:1px solid #1a305a;font-size:10px">\ud83d\ude9b Nakliye Bilgileri</th></tr></thead><tbody>';
     nakliyeHTML += '<tr style="background:#f0f7ff"><td style="padding:6px 10px;border:1px solid #ddd;font-weight:700;width:40%">Araç</td><td style="padding:6px 10px;border:1px solid #ddd">' + _aracStr + '</td></tr>';
     if (t.sahneKapasitesi) nakliyeHTML += '<tr><td style="padding:6px 10px;border:1px solid #ddd;font-weight:700">Sahne Kapasitesi</td><td style="padding:6px 10px;border:1px solid #ddd">' + t.sahneKapasitesi + ' kişi</td></tr>';
-    if (_yukSaatPdf || _yukYerPdf) {
-      nakliyeHTML += '<tr style="background:#fff8e7"><td style="padding:6px 10px;border:1px solid #ddd;font-weight:700"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> Yükleme</td><td style="padding:6px 10px;border:1px solid #ddd">' + (_yukSaatPdf ? '<strong>' + _yukSaatPdf + '</strong>' : '') + (_yukYerPdf ? (' — ' + _yukYerPdf) : '') + '</td></tr>';
-    }
-    if (_bosSaatPdf || _bosYerPdf) {
-      nakliyeHTML += '<tr style="background:#fff0f0"><td style="padding:6px 10px;border:1px solid #ddd;font-weight:700"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Boşaltma</td><td style="padding:6px 10px;border:1px solid #ddd">' + (_bosSaatPdf ? '<strong>' + _bosSaatPdf + '</strong>' : '') + (_bosYerPdf ? (' — ' + _bosYerPdf) : '') + '</td></tr>';
-    }
+    _yukBoslarPdf.forEach(function(yb) {
+      var isYuk = yb.tip === 'yukleme';
+      var _bg   = isYuk ? '#fff8e7' : '#fff0f0';
+      var _svg  = isYuk
+        ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>'
+        : '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
+      var _lbl = isYuk ? 'Yükleme' : 'Boşaltma';
+      nakliyeHTML += '<tr style="background:'+_bg+'"><td style="padding:6px 10px;border:1px solid #ddd;font-weight:700">'+_svg+' '+_lbl+'</td><td style="padding:6px 10px;border:1px solid #ddd">' + (yb.saat ? '<strong>' + yb.saat + '</strong>' : '') + (yb.yer ? ' — ' + yb.yer : '') + '</td></tr>';
+    });
     nakliyeHTML += '</tbody></table>';
   }
 
@@ -11894,7 +12016,13 @@ async function init() {
     renderListe();
     renderCalendar();
   } else {
-    setLoading(true);
+    // Cache yoksa spinner + "Veriler yükleniyor" placeholder göster (boş gibi görünmesin)
+    var _lcEl = document.getElementById('liste-content');
+    if (_lcEl) _lcEl.innerHTML = '<div style="max-width:420px;margin:56px auto;text-align:center;padding:0 20px">'
+      + '<div style="width:48px;height:48px;border:3px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 16px"></div>'
+      + '<div style="font-size:14px;font-weight:700;color:var(--foreground);margin-bottom:6px">Turneler yükleniyor…</div>'
+      + '<div style="font-size:11px;color:var(--muted-foreground)">Google Sheets\'ten veriler çekiliyor, lütfen bekleyin.</div>'
+      + '</div>';
   }
 
   // Arka planda API'den güncelle (notlar dahil)
