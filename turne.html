@@ -2310,6 +2310,8 @@ flex-shrink:0;
             </div>
           </div>
           <div id="leaflet-map" style="height:480px;width:100%;border-radius:0 0 10px 10px"></div>
+          <!-- İstatistik paneli — haritaIstatistikGoster() tarafından doldurulur -->
+          <div id="harita-istatistik-panel" style="display:none;padding:14px 16px;border-top:1px solid var(--border);background:var(--background)"></div>
           <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 14px;border-top:1px solid var(--border);background:var(--background);border-radius:0 0 10px 10px">
             <span style="font-size:11px;font-weight:700;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.5px">Yoğunluk:</span>
             <div style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--muted-foreground)"><div style="width:12px;height:12px;border-radius:50%;background:#e0e0e0;border:2px solid #bbb"></div>Gidilmedi</div>
@@ -9349,23 +9351,29 @@ function haritaHeatmapCiz(ilSayilar) {
     if (!ll) return;
 
     var ratio = sayi / maxSayi;
-    var r = Math.round(30 + ratio * 50);
-    // Sıcaklık rengi: sarı → turuncu → kırmızı
-    var h = Math.round(10 + (1 - ratio) * 40); // 10-50 arası hue
-    var s = 90, l2 = Math.round(35 + (1 - ratio) * 30);
-    var color = 'hsl(' + h + ',' + s + '%,' + l2 + '%)';
+    // Radius: daha küçük ve orantılı (30km - 65km arası)
+    var radiusKm = 30000 + ratio * 35000;
+    // Renk: sarıdan kırmızıya doğru (hue 50 → 0)
+    var hue  = Math.round(50 * (1 - ratio));
+    var sat  = 90;
+    var lig  = Math.round(55 - ratio * 25); // 55% → 30%
+    var color = 'hsl(' + hue + ',' + sat + '%,' + lig + '%)';
+    var fillOpacity = 0.25 + ratio * 0.35;
 
     var circle = L.circle(ll, {
-      radius: r * 2500,
+      radius: radiusKm,
       fillColor: color,
-      fillOpacity: 0.35 + ratio * 0.35,
+      fillOpacity: fillOpacity,
       color: color,
-      weight: 0,
+      weight: 1,
+      opacity: 0.4,
     }).addTo(_leafletMap);
 
-    circle.bindTooltip('<strong>' + il + '</strong> · ' + sayi + ' turne', {
-      sticky: true, opacity: 0.92
-    });
+    circle.bindTooltip(
+      '<strong>' + il + '</strong> · ' + sayi + ' turne'
+      + (maxSayi > 1 ? ' <span style="color:#888">(' + Math.round(ratio*100) + '%)</span>' : ''),
+      { sticky: true, opacity: 0.95 }
+    );
 
     _haritaHeatLayers.push(circle);
   });
