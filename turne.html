@@ -7560,6 +7560,18 @@ function _topluAcKart(rowIdx) {
 }
 
 
+// Oyunun PERSONEL sheet'indeki en son satır numarasını bul
+function _oyunSonSheetRow(oyunAdi) {
+  var son = 0;
+  tumPersonel.forEach(function(p) {
+    if ((p.oyun||'').trim().toLowerCase() === (oyunAdi||'').trim().toLowerCase()) {
+      if (p._sheetRow && p._sheetRow > son) son = p._sheetRow;
+    }
+  });
+  return son; // 0 = bulunamadı → en alta ekle
+}
+
+
 function topluDuzenleAc(oyunAdi) {
   _topluOyun = oyunAdi;
   _topluDegisti = false;
@@ -7863,13 +7875,22 @@ async function topluKaydet() {
     for (var k = 0; k < yeniler.length; k++) {
       var ySatir = yeniler[k];
       try {
+        var _insertAfter1 = _oyunSonSheetRow(_topluOyun);
+        var _postBody1 = { values: [_topluOyun, ySatir.kategori, ySatir.gorev||'', ySatir.kisi] };
+        if (_insertAfter1 > 0) _postBody1.insertAfterRow = _insertAfter1;
         var postRes = await apiFetch('/' + encodeURIComponent(PERSONEL_SHEET) + '/row', {
           method: 'POST', headers: {'Content-Type':'application/json'},
-          body: JSON.stringify({ values: [_topluOyun, ySatir.kategori, ySatir.gorev||'', ySatir.kisi] })
+          body: JSON.stringify(_postBody1)
         });
         if (!postRes.ok) throw new Error('HTTP ' + postRes.status);
-        maxRow++;
-        tumPersonel.push({ oyun: _topluOyun, kategori: ySatir.kategori, gorev: ySatir.gorev||'', kisi: ySatir.kisi, _sheetRow: maxRow });
+        // _sheetRow: insertAfter kullandıysak tüm sonraki satırlar kaydı (backend hallediyor)
+        // Sonraki personeli de güncelle
+        var _newRow1 = _insertAfter1 > 0 ? _insertAfter1 + 1 : (maxRow + 1);
+        if (_insertAfter1 > 0) {
+          tumPersonel.forEach(function(p){ if (p._sheetRow && p._sheetRow >= _newRow1) p._sheetRow++; });
+        }
+        maxRow = tumPersonel.reduce(function(m,p){ return Math.max(m, p._sheetRow||0); }, maxRow);
+        tumPersonel.push({ oyun: _topluOyun, kategori: ySatir.kategori, gorev: ySatir.gorev||'', kisi: ySatir.kisi, _sheetRow: _newRow1 });
         basariSayisi++;
       } catch(e) { hataSayisi++; console.warn('Ekleme hatası:', ySatir.kisi, e); }
     }
@@ -8601,13 +8622,19 @@ async function kadroKisiKaydet() {
         });
       }
     } else {
+      var _insertAfter2 = _oyunSonSheetRow(oyun);
+      var _postBody2 = { values: [oyun, kat, gorev, ad] };
+      if (_insertAfter2 > 0) _postBody2.insertAfterRow = _insertAfter2;
       await apiFetch('/' + encodeURIComponent(PERSONEL_SHEET) + '/row', {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ values: [oyun, kat, gorev, ad] })
+        body: JSON.stringify(_postBody2)
       });
       var maxRow = tumPersonel.reduce(function(m,p){ return Math.max(m, p._sheetRow||0); }, 0);
-      var yeniSheetRow = maxRow + 1;
+      var yeniSheetRow = _insertAfter2 > 0 ? _insertAfter2 + 1 : maxRow + 1;
+      if (_insertAfter2 > 0) {
+        tumPersonel.forEach(function(p){ if (p._sheetRow && p._sheetRow >= yeniSheetRow) p._sheetRow++; });
+      }
       var sonIdx = -1;
       tumPersonel.forEach(function(p, i){ if (p.oyun === oyun) sonIdx = i; });
       var yeniKayit = { oyun, kategori: kat, gorev, kisi: ad, _sheetRow: yeniSheetRow };
