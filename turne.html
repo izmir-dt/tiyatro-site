@@ -3775,6 +3775,16 @@ function guncelleSonSenkron() {
   var m = String(now.getMinutes()).padStart(2,'0');
   el.textContent = h + ':' + m;
   el.title = 'Son güncelleme: ' + now.toLocaleString('tr-TR');
+  // Misafir modunda son senkron zamanını kart badge'lerine de yansıt
+  if (window._goruntuleme_modu) {
+    var label = '\u2713 G\u00fcncel · ' + h + ':' + m;
+    document.querySelectorAll('._sync-badge').forEach(function(b){
+      b.style.background = 'hsl(142,50%,94%)';
+      b.style.color = 'hsl(142,50%,28%)';
+      b.style.borderColor = 'hsl(142,50%,78%)';
+      b.textContent = label;
+    });
+  }
 }
 
 // ============================================================
@@ -4708,6 +4718,7 @@ function turneCard(t) {
     +       '<span style="font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;background:' + st.bg + ';color:' + st.fg + ';border:1px solid ' + st.dot + ';display:inline-flex;align-items:center;gap:4px;white-space:nowrap;line-height:1.45">'
     +         '<span style="width:5px;height:5px;border-radius:50%;background:' + st.dot + '"></span>' + st.label
     +       '</span>'
+    +       (window._goruntuleme_modu ? '<span class="_sync-badge" data-rowidx="' + t._rowIdx + '" style="font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px;display:inline-flex;align-items:center;gap:3px;white-space:nowrap;background:hsl(142,50%,94%);color:hsl(142,50%,28%);border:1px solid hsl(142,50%,78%)">✓ Güncel</span>' : '')
     +     '</div>'
     +   '</div>'
     + '</div>'
@@ -13637,6 +13648,15 @@ function _pollingYap() {
   // Yenileme göstergesi (başlık çubuğunda subtle blink)
   var _syncEl = document.getElementById('_polling-indicator');
   if (_syncEl) _syncEl.style.opacity = '1';
+  // Misafir modunda kart badge'lerini 'Yenileniyor' yap
+  if (window._goruntuleme_modu) {
+    document.querySelectorAll('._sync-badge').forEach(function(b){
+      b.style.background = 'hsl(42,85%,93%)';
+      b.style.color = 'hsl(42,70%,28%)';
+      b.style.borderColor = 'hsl(42,70%,75%)';
+      b.textContent = '↻ Yenileniyor';
+    });
+  }
 
   Promise.all([fetchTurneler(), fetchPersonel(), fetchDisPersonel(), calNotYukle()])
     .then(function() {
@@ -13655,9 +13675,30 @@ function _pollingYap() {
       _sonPollingZamani = Date.now();
       guncelleSonSenkron();
       if (_syncEl) setTimeout(function(){ _syncEl.style.opacity = '0'; }, 1200);
+      // Misafir: yeniden render edilen kartların badge'leri otomatik güncel
+      // Ancak render olmayan durum olursa diye manuelde de yeşile çek
+      if (window._goruntuleme_modu) {
+        setTimeout(function(){
+          document.querySelectorAll('._sync-badge').forEach(function(b){
+            b.style.background = 'hsl(142,50%,94%)';
+            b.style.color = 'hsl(142,50%,28%)';
+            b.style.borderColor = 'hsl(142,50%,78%)';
+            b.textContent = '\u2713 G\u00fcncel';
+          });
+        }, 300);
+      }
     })
     .catch(function() {
       if (_syncEl) _syncEl.style.opacity = '0';
+      // Misafir: hata durumunda 'Güncel Değil' göster
+      if (window._goruntuleme_modu) {
+        document.querySelectorAll('._sync-badge').forEach(function(b){
+          b.style.background = 'hsl(0,70%,95%)';
+          b.style.color = 'hsl(0,65%,40%)';
+          b.style.borderColor = 'hsl(0,65%,80%)';
+          b.textContent = '\u26a0 G\u00fcncel De\u011fil';
+        });
+      }
     });
 }
 
