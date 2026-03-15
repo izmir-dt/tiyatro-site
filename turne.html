@@ -9239,12 +9239,35 @@ function _calEventHTML(t, key) {
   var temsil = typeof durakToplamTemsil === 'function' ? durakToplamTemsil(t) : 0;
   var sr     = typeof statuRenk === 'function' ? statuRenk(t.statu||'tamamlandi') : {};
 
-  // Tooltip verisi
+  // Tooltip — o güne özel durak bilgisi
+  var _gunSehir = progSatir ? (progSatir.sehir || '') : '';
+  var _gunDurak = null;
+  if (_gunSehir && t.duraklar && t.duraklar.length) {
+    _gunDurak = t.duraklar.find(function(d) {
+      return (d.il||'').replace(/\/MERKEZ/gi,'').trim().toLowerCase() === _gunSehir.replace(/\/MERKEZ/gi,'').trim().toLowerCase();
+    }) || t.duraklar.find(function(d) {
+      return _gunSehir.toLowerCase().indexOf((d.il||'').replace(/\/MERKEZ/gi,'').trim().split(' ')[0].toLowerCase()) >= 0;
+    });
+  }
+  var _gunOtel  = _gunDurak ? (_gunDurak.otelAdi||'') : (t.otelAdi||'');
+  var _gunMekan = _gunDurak ? (_gunDurak.mekan||t.mekan||'') : (t.mekan||'');
+  // Gidiş/dönüş sadece yol günlerinde göster
+  var _gidisBilgi = (progSatir && progSatir.program === 'Yol') ? (t.gidisUlasim||'') : '';
+  var _gidisSaat  = (progSatir && progSatir.program === 'Yol') ? (t.gidisSaat||'') : '';
+  var _donusBilgi = (progSatir && progSatir.program === 'Dönüş') ? (t.donusUlasim||'') : '';
+  var _donusSaat  = (progSatir && progSatir.program === 'Dönüş') ? (t.donusSaat||'') : '';
+
   var ttData = encodeURIComponent(JSON.stringify({
-    oyun: t.oyun||'—', il: st.ilStr,
+    oyun: t.oyun||'—',
+    il: _gunSehir || st.ilStr,
     tarih: (typeof formatTarih==='function' ? formatTarih(t.baslangicTarih||t.tarih) : '') + (t.bitisTarih&&t.bitisTarih!==t.baslangicTarih ? ' – '+(typeof formatTarih==='function'?formatTarih(t.bitisTarih):'') : ''),
     statu: sr.label||'', statuBg: sr.bg||'', statuFg: sr.fg||'',
-    mekan: t.mekan||'', gidis: t.gidisUlasim||'', otel: t.otelAdi||'',
+    mekan: _gunMekan,
+    gidis: _gidisBilgi, gidisSaat: _gidisSaat,
+    donus: _donusBilgi, donusSaat: _donusSaat,
+    sehirArac: t.sehirAracTur||'', sehirDetay: t.sehirAracDetay||'',
+    otel: _gunOtel,
+    not: t.not||'',
     sure: sure, temsil: temsil, rowIdx: t._rowIdx,
     progTip: st.tip, oyunAdi: st.oyunAdi, saat: st.saat
   }));
