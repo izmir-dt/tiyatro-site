@@ -3046,7 +3046,6 @@ flex-shrink:0;
         <thead>
           <tr style="background:var(--muted);position:sticky;top:0;z-index:2">
             <th style="width:36px;padding:8px 10px;text-align:center;border-bottom:2px solid var(--border);font-size:10px;color:var(--muted-foreground)">#</th>
-            <th style="width:52px;padding:8px 6px;text-align:center;border-bottom:2px solid var(--border);font-size:10px;color:var(--muted-foreground)" title="Sırayı değiştir">⇅</th>
             <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--border);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--foreground)">Ad Soyad</th>
             <th style="width:160px;padding:8px 10px;text-align:left;border-bottom:2px solid var(--border);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--foreground)">Kategori</th>
             <th style="width:180px;padding:8px 10px;text-align:left;border-bottom:2px solid var(--border);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--foreground)">Görevi / Rolü</th>
@@ -7606,38 +7605,6 @@ function _topluKatSelect(seciliKat) {
   return '<select onchange="_topluHucreDegisti(this)" data-field="kategori" style="width:100%;height:26px;border:1px solid var(--border);border-radius:4px;font-size:11px;font-family:Poppins,sans-serif;background:var(--card);color:var(--foreground);padding:0 4px">'+opts+'</select>';
 }
 
-function _topluSiraDegistir(idx, yon) {
-  // idx: _topluSatirlar'daki gerçek index, yon: -1 yukarı, +1 aşağı
-  // Sadece silinmemiş satırlar arasında swap yap
-  var aktifIdxler = [];
-  _topluSatirlar.forEach(function(s, i){ if (!s._silindi) aktifIdxler.push(i); });
-
-  var posInAktif = aktifIdxler.indexOf(idx);
-  if (posInAktif < 0) return;
-
-  var hedefPos = posInAktif + yon;
-  if (hedefPos < 0 || hedefPos >= aktifIdxler.length) return;
-
-  var hedefIdx = aktifIdxler[hedefPos];
-
-  // Swap
-  var tmp = _topluSatirlar[idx];
-  _topluSatirlar[idx] = _topluSatirlar[hedefIdx];
-  _topluSatirlar[hedefIdx] = tmp;
-
-  _topluDegisti = true;
-  document.getElementById('toplu-degisiklik-badge').style.display = '';
-  _topluRender();
-
-  // Scroll ile taşınan satırı görünür tut
-  setTimeout(function() {
-    var yeniPos = hedefPos;
-    var satirlar = document.querySelectorAll('#toplu-tbody tr');
-    if (satirlar[yeniPos]) satirlar[yeniPos].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-  }, 30);
-}
-
-
 function _topluRender(filtre) {
   var tbody = document.getElementById('toplu-tbody');
   var bosMesaj = document.getElementById('toplu-bos-mesaj');
@@ -7670,21 +7637,6 @@ function _topluRender(filtre) {
     var yeniStr  = satir._yeni ? 'border-left:3px solid hsl(142,55%,42%);' : '';
     html += '<tr data-idx="'+gercekIdx+'" style="background:'+zebraStr+';'+yeniStr+'">';
     html += '<td style="padding:6px 10px;text-align:center;color:var(--muted-foreground);font-size:11px;vertical-align:middle">'+(gorunenIdx+1)+'</td>';
-    // ↑↓ sıralama butonları — filtre aktifken gizle (sıralama anlamsız olur)
-    var ilkMi = gercekIdx === _topluSatirlar.findIndex(function(s){ return !s._silindi; });
-    var sonMi = gercekIdx === (function(){ var son=-1; _topluSatirlar.forEach(function(s,i){ if(!s._silindi) son=i; }); return son; })();
-    html += '<td style="padding:2px 4px;text-align:center;vertical-align:middle;white-space:nowrap">'
-      + '<button onclick="_topluSiraDegistir('+gercekIdx+',-1)" title="Yukarı taşı" '
-      + (araRaw || ilkMi ? 'disabled style="opacity:.25;cursor:default;' : 'style="')
-      + 'width:22px;height:22px;border:1px solid var(--border);border-radius:4px;background:transparent;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;color:var(--muted-foreground)" '
-      + 'onmouseenter="if(!this.disabled)this.style.background='\''var(--muted)'\''" onmouseleave="this.style.background='\''transparent'\''">'
-      + '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="18 15 12 9 6 15"/></svg></button>'
-      + '<button onclick="_topluSiraDegistir('+gercekIdx+',1)" title="Aşağı taşı" '
-      + (araRaw || sonMi ? 'disabled style="opacity:.25;cursor:default;' : 'style="')
-      + 'width:22px;height:22px;border:1px solid var(--border);border-radius:4px;background:transparent;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;color:var(--muted-foreground)" '
-      + 'onmouseenter="if(!this.disabled)this.style.background='\''var(--muted)'\''" onmouseleave="this.style.background='\''transparent'\''">'
-      + '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg></button>'
-      + '</td>';
     // Ad
     html += '<td style="padding:4px 8px;vertical-align:middle"><input data-field="kisi" data-idx="'+gercekIdx+'" type="text" value="'+_esc(satir.kisi)+'" onchange="_topluHucreDegisti(this)" placeholder="Ad Soyad..." style="width:100%;height:28px;border:1px solid var(--border);border-radius:4px;font-size:12px;font-family:Poppins,sans-serif;padding:0 8px;background:var(--card);color:var(--foreground)"></td>';
     // Kategori
