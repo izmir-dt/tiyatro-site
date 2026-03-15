@@ -2376,8 +2376,6 @@ flex-shrink:0;
           <button class="cal-statu-btn" data-filtre="tamamlandi" onclick="calStatuFiltre='tamamlandi';renderCalendar()" style="background:#eaf2ff;color:#1748c4;border-color:#7fb0f5"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg> Tamamlandı</button>
           <button class="cal-statu-btn" data-filtre="iptal" onclick="calStatuFiltre='iptal';renderCalendar()" style="background:#fff0f0;color:#a81a1a;border-color:#f08080"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg> İptal</button>
         </div>
-        <!-- AYLIK ÖZET BANDI -->
-        <div id="cal-aylik-ozet" style="display:none;padding:8px 16px;background:hsl(222,28%,14%);border-bottom:1px solid rgba(255,255,255,.08);display:flex;align-items:center;gap:16px;flex-wrap:wrap"></div>
         <!-- HAFTANIN GÜNLERİ -->
         <div class="cal-weekdays">
           <div class="cal-weekday">Pzt</div>
@@ -2392,7 +2390,7 @@ flex-shrink:0;
         <div class="cal-grid" id="cal-days"></div>
       </div>
       <!-- POPUP -->
-      <div id="cal-popup" style="display:none;position:fixed;z-index:1200;width:400px;background:var(--card);border:1px solid var(--border);border-radius:14px;box-shadow:0 16px 56px rgba(0,0,0,.25);overflow:hidden"></div>
+      <div id="cal-popup" style="display:none;position:fixed;z-index:1200;width:380px;max-height:80vh;overflow-y:auto;background:var(--card);border:1px solid var(--border);border-radius:14px;box-shadow:0 16px 56px rgba(0,0,0,.25);overflow:hidden"></div>
       <!-- TOOLTIP -->
       <div id="cal-tooltip" style="display:none;position:fixed;z-index:1300;background:hsl(222,28%,12%);color:#fff;padding:12px 16px;border-radius:12px;font-size:11px;pointer-events:none;max-width:280px;box-shadow:0 8px 28px rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.08)"></div>
     </div>
@@ -9906,76 +9904,6 @@ function _calEventHTML(t, key) {
 // ════════════════════════════════════════════════════════════
 // ANA renderCalendar
 // ════════════════════════════════════════════════════════════
-function _calAylikOzetGuncelle() {
-  var el = document.getElementById('cal-aylik-ozet');
-  if (!el) return;
-
-  var sonGun = new Date(calYear, calMonth + 1, 0).getDate();
-  var turneGunSay = 0, temsilSay = 0, oyunGunSay = 0, yolGunSay = 0;
-  var oyunlar = {};
-
-  for (var d = 1; d <= sonGun; d++) {
-    var key = calYear + '-' + String(calMonth+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
-    var events = _calGunEvents(key);
-    if (!events.length) continue;
-    turneGunSay++;
-    events.forEach(function(t) {
-      var ps = t.programSatirlar ? t.programSatirlar.find(function(s){ return s.tarih===key; }) : null;
-      var tip = ps ? ps.program : 'Genel';
-      if (tip === 'Oyun') {
-        oyunGunSay++;
-        // Temsil sayısını gün bazında say
-        if (ps && ps.saat) temsilSay++;
-        else if (!ps) temsilSay++;
-        oyunlar[t.oyun||'?'] = (oyunlar[t.oyun||'?']||0) + 1;
-      }
-      if (tip === 'Yol') yolGunSay++;
-    });
-  }
-
-  // Toplam temsil için durakToplamTemsil kullan
-  var ayTurneler = turneler.filter(function(t) {
-    var bas = t.baslangicTarih || t.tarih || '';
-    var bit = t.bitisTarih || bas;
-    var ayBas = calYear + '-' + String(calMonth+1).padStart(2,'0') + '-01';
-    var ayBit = calYear + '-' + String(calMonth+1).padStart(2,'0') + '-' + String(sonGun).padStart(2,'0');
-    return bas <= ayBit && bit >= ayBas;
-  });
-  var toplamTemsil = ayTurneler.reduce(function(s,t){ return s + (typeof durakToplamTemsil==='function' ? durakToplamTemsil(t) : 0); }, 0);
-  var toplamKadro  = ayTurneler.reduce(function(s,t){ return s + (t.katilimcilar ? t.katilimcilar.length : 0); }, 0);
-
-  if (!turneGunSay) { el.style.display = 'none'; return; }
-  el.style.display = 'flex';
-
-  function stat(ikon, deger, etiket, renk) {
-    return '<div style="display:flex;align-items:center;gap:6px">'
-      + '<span style="font-size:13px">' + ikon + '</span>'
-      + '<div><div style="font-size:13px;font-weight:800;color:' + (renk||'#fff') + '">' + deger + '</div>'
-      + '<div style="font-size:9px;color:rgba(255,255,255,.45);font-weight:600;text-transform:uppercase;letter-spacing:.4px">' + etiket + '</div></div>'
-      + '</div>';
-  }
-  function ayrac() { return '<div style="width:1px;height:28px;background:rgba(255,255,255,.12)"></div>'; }
-
-  el.innerHTML =
-    stat('📅', turneGunSay, 'Turne Günü', '#fff')
-    + ayrac()
-    + stat('▶', toplamTemsil || oyunGunSay, 'Temsil', 'hsl(141,65%,60%)')
-    + ayrac()
-    + stat('🚌', yolGunSay, 'Seyahat Günü', 'hsl(38,85%,65%)')
-    + ayrac()
-    + stat('👥', toplamKadro || '—', 'Kadro', 'hsl(220,65%,72%)')
-    + (Object.keys(oyunlar).length > 0
-        ? ayrac() + '<div style="font-size:10px;color:rgba(255,255,255,.5);font-weight:600">'
-          + Object.keys(oyunlar).slice(0,3).join(' · ')
-          + (Object.keys(oyunlar).length > 3 ? ' +' + (Object.keys(oyunlar).length-3) : '')
-          + '</div>'
-        : '')
-    + '<div style="margin-left:auto;font-size:9px;color:rgba(255,255,255,.3);font-weight:600;white-space:nowrap">'
-      + ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'][calMonth]
-      + ' ' + calYear + ' Özeti</div>';
-}
-
-
 function renderCalendar() {
   // Statü filtre buton vurgusu
   var calFilterBtns = document.querySelectorAll('#cal-statu-filtre-row button');
@@ -9991,9 +9919,6 @@ function renderCalendar() {
   const AYLAR_TR = ['Ocak','\u015eubat','Mart','Nisan','May\u0131s','Haziran','Temmuz','A\u011fustos','Eyl\u00fcl','Ekim','Kas\u0131m','Aral\u0131k'];
   var calTitleEl = document.getElementById('cal-title');
   if (calTitleEl) calTitleEl.textContent = AYLAR_TR[calMonth] + ' ' + calYear;
-
-  // Aylık özet bandını güncelle
-  _calAylikOzetGuncelle();
 
   // Görünüm yönlendirme
   if (calCurrentView === 'liste') { _renderCalListe(); return; }
@@ -10368,16 +10293,22 @@ function _calPopupGoster(key, event) {
     + '<div style="padding:12px 14px;max-height:400px;overflow-y:auto">'
     +   (evHTML || '<div style="text-align:center;padding:20px;color:var(--muted-foreground);font-size:12px">Bu g\u00fcn i\u00e7in etkinlik yok</div>')
     + '</div>'
-    + '<div style="padding:8px 14px 10px;border-top:1px solid var(--border);background:var(--muted)">'  + '<div style="font-size:10px;font-weight:700;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;display:flex;align-items:center;gap:5px">'  + '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>'  + 'G\u00fcn Notu (Yol, Sahne, Saat...)</div>'  + '<div style="display:flex;gap:8px;align-items:flex-start">'
-    +   '<textarea id="cal-popup-not-input" placeholder="\u00d6r: Otob\u00fcs 08:30 \u00b7 Sahne kurulum 16:00 \u00b7 G\u00f6steri 20:30" style="flex:1;border:1px solid var(--border);border-radius:7px;padding:6px 10px;font-family:Poppins,sans-serif;font-size:11px;background:var(--card);color:var(--foreground);resize:none;height:34px;outline:none">' + (gunNotu||'') + '</textarea>'
-    +   '<button onclick="calPopupNotKaydet(\'' + key + '\')" style="height:34px;padding:0 12px;background:var(--primary);color:#fff;border:none;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;font-family:Poppins,sans-serif;white-space:nowrap">Kaydet</button>'
-    + '</div>';
+    + '<div style="padding:8px 14px 10px;border-top:1px solid var(--border);background:var(--muted)">'
+    + (gunNotu
+        ? '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">'
+          + '<div style="font-size:11px;color:var(--muted-foreground);display:flex;align-items:flex-start;gap:5px;flex:1;min-width:0">'
+          + '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0;margin-top:2px"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>'
+          + '<span style="line-height:1.5">' + gunNotu + '</span></div>'
+          + '<button onclick="event.stopPropagation();calGunNotDuzenle(\''+key+'\')" style="flex-shrink:0;height:22px;padding:0 8px;border:1px solid var(--border);border-radius:5px;background:transparent;cursor:pointer;font-size:10px;font-weight:600;color:var(--muted-foreground);font-family:Poppins,sans-serif">✏️</button>'
+          + '</div>'
+        : '<button onclick="event.stopPropagation();calGunNotDuzenle(\''+key+'\')" style="width:100%;height:28px;border:1.5px dashed var(--border);border-radius:6px;background:transparent;cursor:pointer;font-size:10px;font-weight:600;color:var(--muted-foreground);font-family:Poppins,sans-serif">📝 Gün notu ekle</button>'
+    ) + '</div>';
 
   popup.style.display = 'block';
 
   // Konumlandır
   var rect = event && event.currentTarget ? event.currentTarget.getBoundingClientRect() : null;
-  var pw = 400, ph = 520;
+  var pw = 380, ph = 460;
   var vw = window.innerWidth, vh = window.innerHeight;
   var left, top;
   if (rect) {
@@ -10417,18 +10348,73 @@ function calPopupSuruklenebilirYap(popup) {
 }
 
 function calPopupNotKaydet(key) {
-  var input = document.getElementById('cal-popup-not-input');
-  if (!input) return;
-  var not = input.value.trim();
+  // calGunNotDuzenle üzerinden inline edit ile çağrılır
+  // ya da doğrudan key + not ile (calPopupNotKaydetInline'dan)
+  var input = document.getElementById('cal-not-edit-input') || document.getElementById('cal-popup-not-input');
+  var not = input ? input.value.trim() : (calNotes[key] ? calNotes[key].not : '');
   if (!calNotes) calNotes = {};
-  if (not) {
-    calNotes[key] = { not: not };
-  } else {
-    delete calNotes[key];
-  }
-  calPopupKapat();
-  renderCalendar();
+  // Sheets'e kaydet
+  var _notKey = key;
+  var _mevcutNot = calNotes[_notKey];
+  (async function() {
+    try {
+      if (not) {
+        if (_mevcutNot && _mevcutNot._sheetRow) {
+          await apiFetch('/' + encodeURIComponent('TAKVIM_NOTLARI') + '/row/' + _mevcutNot._sheetRow, {
+            method: 'PUT', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ values: [_notKey, not, (calNotes[_notKey]||{}).ad || (localStorage.getItem('calKullanici_idt')||'?')] })
+          });
+        } else {
+          var r = await apiFetch('/' + encodeURIComponent('TAKVIM_NOTLARI') + '/row', {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ values: [_notKey, not, localStorage.getItem('calKullanici_idt')||'?'] })
+          });
+          var rData = await r.json();
+          if (calNotes[_notKey]) calNotes[_notKey]._sheetRow = rData.rowNumber || null;
+        }
+      } else if (_mevcutNot && _mevcutNot._sheetRow) {
+        await apiFetch('/' + encodeURIComponent('TAKVIM_NOTLARI') + '/row/' + _mevcutNot._sheetRow, { method: 'DELETE' });
+        delete calNotes[_notKey];
+      }
+    } catch(e) { console.warn('Not kaydetme hatası:', e); }
+  })();
 }
+
+function calGunNotDuzenle(key) {
+  // Popup içindeki not alanını inline editöre çevir
+  var popup = document.getElementById('cal-popup');
+  if (!popup) return;
+  var notDiv = popup.querySelector('[data-not-alani]') || popup.lastElementChild;
+  // Note bölümünü bul ve editörle değiştir
+  var mevcutNot = calNotes[key] ? calNotes[key].not : '';
+  // Popup'ın son div'ini (not alanı) bul
+  var divler = popup.querySelectorAll('div[style*="padding:8px 14px 10px"]');
+  var notAlani = divler[divler.length - 1];
+  if (!notAlani) return;
+  notAlani.innerHTML =
+    '<div style="display:flex;gap:6px;align-items:flex-start">'
+    + '<textarea id="cal-not-edit-input" style="flex:1;border:1.5px solid var(--primary);border-radius:6px;padding:6px 10px;font-family:Poppins,sans-serif;font-size:11px;background:var(--card);color:var(--foreground);resize:none;height:52px;outline:none;line-height:1.5">'
+    + (mevcutNot || '')
+    + '</textarea>'
+    + '<div style="display:flex;flex-direction:column;gap:4px">'
+    + '<button onclick="calPopupNotKaydetInline('' + key + '')" style="height:24px;padding:0 10px;background:var(--primary);color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:10px;font-weight:700;font-family:Poppins,sans-serif">Kaydet</button>'
+    + '<button onclick="calGunTikla('' + key + '',null)" style="height:24px;padding:0 10px;background:transparent;border:1px solid var(--border);border-radius:5px;cursor:pointer;font-size:10px;font-weight:600;color:var(--muted-foreground);font-family:Poppins,sans-serif">İptal</button>'
+    + '</div></div>';
+  setTimeout(function(){ var inp = document.getElementById('cal-not-edit-input'); if(inp){ inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); } }, 50);
+}
+
+function calPopupNotKaydetInline(key) {
+  var inp = document.getElementById('cal-not-edit-input');
+  if (!inp) return;
+  var not = inp.value.trim();
+  // calPopupNotKaydet'in mantığını kullan
+  calNotes[key] = calNotes[key] || {};
+  calNotes[key].not = not;
+  calGunTikla(key, null); // popup'ı yeniden render et
+  // Arka planda kaydet
+  calPopupNotKaydet(key);
+}
+
 
 function calPopupNotSil(key) {
   if (calNotes) delete calNotes[key];
