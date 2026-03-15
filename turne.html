@@ -4613,7 +4613,7 @@ function _eksikKisilerSecimGoster(eksikler) {
       +   '<label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:11px;font-weight:700;color:var(--muted-foreground);user-select:none">'
       +     '<input type="checkbox" id="_eksik-tumunu-sec" ' + (secimler.every(Boolean) ? 'checked' : (secimler.some(Boolean) ? 'indeterminate' : '')) + ' '
       +       'style="width:15px;height:15px;cursor:pointer;accent-color:var(--primary)" '
-      +       'onchange="(function(cb){var secili=cb.checked;[' + eksikler.map(function(_,i){ return i; }).join(',') + '].forEach(function(i){var c=document.getElementById(\'_eksik-cb-\'+i);if(c)c.checked=secili;});_eksikSecimGuncelle(' + JSON.stringify(eksikler.map(function(p){ return {kisi:p.kisi,gorev:p.gorev,kategori:p.kategori}; })) + ')})(this)">'
+      +       'onchange="(function(cb){var secili=cb.checked;[' + eksikler.map(function(_,i){ return i; }).join(',') + '].forEach(function(i){var c=document.getElementById(\'_eksik-cb-\'+i);if(c)c.checked=secili;});_eksikSecimGuncelle()})(this)">'
       +     (secimler.every(Boolean) ? 'Tümünü Kaldır' : 'Tümünü Seç')
       +   '</label>'
       +   '<span style="margin-left:auto;font-size:11px;font-weight:700;color:var(--primary)">' + seciliSayi + ' / ' + eksikler.length + ' seçili</span>'
@@ -4630,7 +4630,7 @@ function _eksikKisilerSecimGoster(eksikler) {
             + 'onmouseenter="this.style.background=\'var(--muted)\'" onmouseleave="this.style.background=\'\'">'
             +   '<input type="checkbox" id="_eksik-cb-' + i + '" ' + (secimler[i] ? 'checked' : '') + ' '
             +     'style="width:16px;height:16px;cursor:pointer;accent-color:var(--primary);flex-shrink:0" '
-            +     'onchange="_eksikSecimGuncelle(' + JSON.stringify(eksikler.map(function(p2){ return {kisi:p2.kisi,gorev:p2.gorev,kategori:p2.kategori}; })) + ')">'
+            +     'onchange="_eksikSecimGuncelle()">'
             +   '<div style="flex:1;min-width:0">'
             +     '<div style="font-size:12px;font-weight:700;color:var(--foreground)">' + p.kisi + '</div>'
             +     (gorevGoster ? '<div style="font-size:10px;color:var(--muted-foreground);margin-top:1px">' + gorevGoster + '</div>' : '')
@@ -4643,7 +4643,7 @@ function _eksikKisilerSecimGoster(eksikler) {
       + '<div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end">'
       +   '<button onclick="this.closest(\'[data-eksik-overlay]\').remove()" '
       +     'style="height:36px;padding:0 18px;border:1.5px solid var(--border);border-radius:8px;background:transparent;cursor:pointer;font-size:12px;font-weight:600;color:var(--muted-foreground);font-family:Poppins,sans-serif">İptal</button>'
-      +   '<button id="_eksik-ekle-btn" onclick="_eksikSecilenlerEkle(' + JSON.stringify(eksikler.map(function(p){ return {kisi:p.kisi,gorev:p.gorev,kategori:p.kategori}; })) + ',this.closest(\'[data-eksik-overlay]\'))" '
+      +   '<button id="_eksik-ekle-btn" onclick="_eksikSecilenlerEkle()" '
       +     'style="height:36px;padding:0 20px;border:none;border-radius:8px;background:hsl(220,75%,52%);color:#fff;cursor:pointer;font-size:12px;font-weight:700;font-family:Poppins,sans-serif;display:flex;align-items:center;gap:6px">'
       +     '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>'
       +     (seciliSayi > 0 ? seciliSayi + ' Kişiyi Ekle' : 'Seçim Yapılmadı')
@@ -4658,11 +4658,14 @@ function _eksikKisilerSecimGoster(eksikler) {
     }, 0);
   }
 
+  // Veriyi global'e al — inline JSON/tırnak sorununu önler
+  window._eksikData = eksikler.map(function(p){ return {kisi:p.kisi, gorev:p.gorev, kategori:p.kategori}; });
   overlay.setAttribute('data-eksik-overlay', '1');
   document.body.appendChild(overlay);
 
   // Global yardımcılar (overlay içi onclick'ten erişmek için)
-  window._eksikSecimGuncelle = function(eksiklerData) {
+  window._eksikSecimGuncelle = function() {
+    var eksiklerData = window._eksikData || [];
     eksiklerData.forEach(function(_, i) {
       var cb = document.getElementById('_eksik-cb-' + i);
       secimler[i] = cb ? cb.checked : false;
@@ -4685,15 +4688,22 @@ function _eksikKisilerSecimGoster(eksikler) {
     }
   };
 
-  window._eksikSecilenlerEkle = function(eksiklerData, overlayEl) {
+  window._eksikSecilenlerEkle = function() {
+    var eksiklerData = window._eksikData || [];
     var seciliSayi2 = secimler.filter(Boolean).length;
     if (seciliSayi2 === 0) return;
     eksiklerData.forEach(function(p, i) {
       if (!secimler[i]) return;
       var gorevGoster = p.kategori === 'Oyuncu' ? 'Sanatçı' : (p.gorev || p.kategori || '');
-      kisiModalSecili.push({ kisi: p.kisi, gorev: gorevGoster, kategori: p.kategori });
+      // Zaten listede yoksa ekle
+      var zatenVar = kisiModalSecili.some(function(s){ return s.kisi.trim().toLowerCase() === p.kisi.trim().toLowerCase(); });
+      if (!zatenVar) kisiModalSecili.push({ kisi: p.kisi, gorev: gorevGoster, kategori: p.kategori });
     });
     renderSelectedPills();
+    // Kisi modal listesini de yenile
+    var q = document.getElementById('kisi-filter-input');
+    renderKisiModalList(window._kisiModalOyunAdi || '', q ? q.value : '');
+    var overlayEl = document.querySelector('[data-eksik-overlay]');
     if (overlayEl) overlayEl.remove();
   };
 
