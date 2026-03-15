@@ -5146,31 +5146,44 @@ function _kisiModalSekmeGec(yeniOyun) {
 // VERİ TUTARLILIK PANELİ
 // ═══════════════════════════════════════════════════════════════
 
-function _vkYokSay(itemKey) {
-  if (!window._vkYokSay_data) window._vkYokSay_data = {};
-  window._vkYokSay_data[itemKey] = true;
-  // window._vkYokSay olarak erişilebilir yap
-  window._vkYokSay = window._vkYokSay_data;
-  // Sadece o item satırını DOM'dan kaldır (re-render etmeden)
-  // Panel içindeki tüm butonları tara, bu key'e sahip "✕" butonunu bul
+function _vkToggleYokSay(itemKey) {
+  if (!window._vkYokSay) window._vkYokSay = {};
+  var simdiYoksayili = !!window._vkYokSay[itemKey];
+  window._vkYokSay[itemKey] = !simdiYoksayili;
+  // localStorage'a kaydet — sayfa yenilenince de hatırlansın
+  try { localStorage.setItem('_vkYokSay', JSON.stringify(window._vkYokSay)); } catch(e) {}
+  // Satırı bul ve güncelle
+  var domKey = itemKey.replace(/:/g, '_');
+  var satir = document.getElementById('vk-item-' + domKey);
+  if (satir) {
+    var yeniDurum = window._vkYokSay[itemKey];
+    satir.style.opacity = yeniDurum ? '0.4' : '1';
+    var detayEl = satir.querySelector('div > div:last-child');
+    if (detayEl) detayEl.style.textDecoration = yeniDurum ? 'line-through' : '';
+    var btn = satir.querySelector('button');
+    if (btn) {
+      btn.textContent = yeniDurum ? 'Göster' : 'Yok Say';
+      btn.style.background = yeniDurum ? 'var(--muted)' : 'transparent';
+    }
+  }
+  // Badge sayısını güncelle
+  _vkBadgeGuncelle();
+}
+
+function _vkBadgeGuncelle() {
+  // Yoksayılmamış item sayısını say
   var panel = document.getElementById('veri-kontrol-panel');
   if (!panel) return;
-  var btns = panel.querySelectorAll('button');
-  btns.forEach(function(btn) {
-    if (btn.getAttribute('onclick') && btn.getAttribute('onclick').includes(itemKey)) {
-      var satir = btn.closest('[style*="border-top"]');
-      if (satir) satir.remove();
-    }
+  var tumSatirlar = panel.querySelectorAll('[id^="vk-item-"]');
+  var aktifSayi = 0;
+  tumSatirlar.forEach(function(s) {
+    if (s.style.opacity !== '0.4') aktifSayi++;
   });
-  // Badge sayısını güncelle
   var badge = document.getElementById('veri-kontrol-badge');
-  if (badge && parseInt(badge.textContent) > 0) {
-    var yeniSayi = parseInt(badge.textContent) - 1;
-    badge.textContent = yeniSayi;
-    badge.style.display = yeniSayi > 0 ? 'inline' : 'none';
+  if (badge) {
+    badge.textContent = aktifSayi;
+    badge.style.display = aktifSayi > 0 ? 'inline' : 'none';
   }
-  // Grup sayacını güncelle
-  var grupDiv = panel.querySelector('[data-item-key="' + itemKey + '"]');
 }
 
 window._vkKatilimciAc = function(rowIdx, kisiAdi) {
@@ -5241,6 +5254,9 @@ function _veriKontrolGit(rowIdx, kisiAdi) {
     }, 100);
   }
 }
+// Yok say verilerini localStorage'dan yükle
+try { window._vkYokSay = JSON.parse(localStorage.getItem('_vkYokSay') || '{}'); } catch(e) { window._vkYokSay = {}; }
+
 function veriKontrolAc(e) {
   e.stopPropagation();
   var panel = document.getElementById('veri-kontrol-panel');
@@ -5510,18 +5526,16 @@ function _veriKontrolRender(gruplar) {
         var _kisiHtml = _hasRowIdx
           ? '<span onclick="window._vkKatilimciAc(' + item.rowIdx + ',\'' + (item.kisi||'').replace(/\'/g,"\\'") + '\')" style="font-size:12px;font-weight:700;color:var(--primary);cursor:pointer;text-decoration:underline;text-underline-offset:2px">' + (item.kisi || '') + '</span>'
           : '<span style="font-size:12px;font-weight:700;color:var(--foreground)">' + (item.kisi || '') + '</span>';
-        html += '<div style="padding:8px 14px;border-top:1px solid var(--border);display:flex;align-items:flex-start;gap:8px">'
-          + '<div style="width:7px;height:7px;border-radius:50%;background:' + g.renk + ';flex-shrink:0;margin-top:5px"></div>'
+        var _yoksayili = !!(window._vkYokSay && window._vkYokSay[_itemKey]);
+        html += '<div id="vk-item-' + _itemKey.replace(/:/g,'_') + '" style="padding:8px 14px;border-top:1px solid var(--border);display:flex;align-items:center;gap:8px;' + (_yoksayili ? 'opacity:.4;' : '') + '">'
+          + '<div style="width:7px;height:7px;border-radius:50%;background:' + g.renk + ';flex-shrink:0"></div>'
           + '<div style="min-width:0;flex:1">'
           + _kisiHtml
-          + '<div style="font-size:10px;color:var(--muted-foreground);margin-top:1px;line-height:1.4">' + (item.detay || '') + '</div>'
+          + '<div style="font-size:10px;color:var(--muted-foreground);margin-top:1px;line-height:1.4;' + (_yoksayili ? 'text-decoration:line-through;' : '') + '">' + (item.detay || '') + '</div>'
           + '</div>'
-          + '<div style="display:flex;gap:4px;flex-shrink:0">'
-          + (_hasRowIdx
-            ? '<button onclick="window._vkGitData={rowIdx:' + item.rowIdx + '};window._vkGitKisi=\'' + (item.kisi||'').replace(/\'/g,"\\'") + '\';_veriKontrolGitBtn()" style="height:22px;padding:0 8px;border:1px solid var(--border);border-radius:5px;background:transparent;cursor:pointer;font-size:10px;font-weight:600;color:var(--muted-foreground);font-family:Poppins,sans-serif" title="Turneye git">→</button>'
-            : '')
-          + '<button onclick="_vkYokSay(\'' + _itemKey + '\')" style="height:22px;padding:0 8px;border:1px solid var(--border);border-radius:5px;background:transparent;cursor:pointer;font-size:10px;font-weight:600;color:var(--muted-foreground);font-family:Poppins,sans-serif" title="Bu uyarıyı yok say">✕</button>'
-          + '</div>'
+          + '<button onclick="_vkToggleYokSay(\'' + _itemKey + '\')" style="flex-shrink:0;height:22px;padding:0 9px;border:1px solid var(--border);border-radius:5px;background:' + (_yoksayili ? 'var(--muted)' : 'transparent') + ';cursor:pointer;font-size:10px;font-weight:700;color:var(--muted-foreground);font-family:Poppins,sans-serif;white-space:nowrap" title="Yok say / Göster">'
+          + (_yoksayili ? 'Göster' : 'Yok Say')
+          + '</button>'
           + '</div>';
       });
       html += '</div>';
