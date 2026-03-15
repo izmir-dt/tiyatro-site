@@ -4481,19 +4481,37 @@ function turneCard(t) {
 }
 
 
+function _oyunSelKapat() {
+  var ov = document.getElementById('_oyunsel-overlay');
+  if (ov) ov.remove();
+}
+function _oyunSelSec(oi) {
+  var o = window._oyunSelList && window._oyunSelList[oi];
+  var rowIdx = window._oyunSelRowIdx;
+  _oyunSelKapat();
+  if (o !== undefined && rowIdx !== undefined) {
+    openKisiModal(rowIdx, o);
+  }
+}
+
 function openKisiModal(rowIdx, _durakOyunAdi) {
   const t = turneler.find(x => x._rowIdx === rowIdx);
   if (!t) return;
 
   // Turnede kaç farklı oyun var?
+  // Farklı oyunları bul: önce durakları tara, t.oyun zaten birleşik olabilir
   var tumOyunlar = [];
-  if (t.oyun) tumOyunlar.push(t.oyun);
   if (t.duraklar) t.duraklar.forEach(function(d){ if (d.oyun && !tumOyunlar.includes(d.oyun)) tumOyunlar.push(d.oyun); });
+  // Durakta oyun yoksa t.oyun'u kullan
+  if (!tumOyunlar.length && t.oyun) tumOyunlar.push(t.oyun);
 
   // Birden fazla farklı oyun varsa ve hangisi seçileceği belirtilmemişse → seçim dialog'u göster
   if (tumOyunlar.length > 1 && !_durakOyunAdi) {
     var _selOv = document.createElement('div');
     _selOv.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:19500;display:flex;align-items:center;justify-content:center;padding:20px';
+    // Oyun listesini global'e al — Türkçe karakter sorununu önlemek için index kullan
+    window._oyunSelList = tumOyunlar;
+    window._oyunSelRowIdx = rowIdx;
     _selOv.innerHTML = '<div style="background:var(--card);border:1.5px solid var(--border);border-radius:14px;padding:0;width:100%;max-width:400px;box-shadow:0 20px 60px rgba(0,0,0,.3);font-family:Poppins,sans-serif;overflow:hidden">'
       + '<div style="padding:16px 20px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">'
       +   '<div style="width:34px;height:34px;border-radius:9px;background:hsl(42,70%,90%);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0">🎭</div>'
@@ -4501,9 +4519,9 @@ function openKisiModal(rowIdx, _durakOyunAdi) {
       +   '<div style="font-size:11px;color:var(--muted-foreground);margin-top:1px">Bu turnede birden fazla oyun var</div></div>'
       + '</div>'
       + '<div style="padding:12px 20px;display:flex;flex-direction:column;gap:8px">'
-      + tumOyunlar.map(function(o) {
+      + tumOyunlar.map(function(o, oi) {
           var kadroSay = getPersonelForOyun(o).length;
-          return '<button onclick="this.closest(\'[data-oyunsel-ov]\').remove();openKisiModal('+rowIdx+',\''+o.replace(/'/g,"\\'")+'\')" '
+          return '<button onclick="_oyunSelSec(' + oi + ')" '
             + 'style="text-align:left;padding:10px 14px;border:1.5px solid var(--border);border-radius:9px;background:var(--card);cursor:pointer;font-family:Poppins,sans-serif;transition:border-color .15s,background .15s" '
             + 'onmouseenter="this.style.borderColor=\'var(--primary)\';this.style.background=\'var(--muted)\'" '
             + 'onmouseleave="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--card)\'">'
@@ -4513,11 +4531,12 @@ function openKisiModal(rowIdx, _durakOyunAdi) {
         }).join('')
       + '</div>'
       + '<div style="padding:10px 20px 14px;display:flex;justify-content:flex-end">'
-      +   '<button onclick="this.closest(\'[data-oyunsel-ov]\').remove()" style="height:34px;padding:0 16px;border:1.5px solid var(--border);border-radius:8px;background:transparent;cursor:pointer;font-size:12px;font-weight:600;color:var(--muted-foreground);font-family:Poppins,sans-serif">İptal</button>'
+      +   '<button onclick="_oyunSelKapat()" style="height:34px;padding:0 16px;border:1.5px solid var(--border);border-radius:8px;background:transparent;cursor:pointer;font-size:12px;font-weight:600;color:var(--muted-foreground);font-family:Poppins,sans-serif">İptal</button>'
       + '</div>'
       + '</div>';
+    _selOv.id = '_oyunsel-overlay';
     _selOv.setAttribute('data-oyunsel-ov','1');
-    _selOv.addEventListener('click', function(e){ if(e.target===_selOv) _selOv.remove(); });
+    _selOv.addEventListener('click', function(e){ if(e.target===_selOv) _oyunSelKapat(); });
     document.body.appendChild(_selOv);
     return;
   }
