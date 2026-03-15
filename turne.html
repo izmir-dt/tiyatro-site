@@ -5243,21 +5243,30 @@ function _veriKontrolHesapla() {
   });
   gruplar.push(grup1);
 
-  // ── 2. Ana kadroda (sanatçı/figüran) ama turneye eklenmemiş ──
+  // ── 2. Ana kadroda (sanatçı/figüran) ama o oyunun turnesine eklenmemiş ──
   var SANATCI_KATS2 = ['Sanatçı','Oyuncu','Figüran','Figüran/Müzisyen','Koro','Koro/Dans','Koro/Dans Ekibi','Solist','Dansçı','Müzisyen','Orkestra','Kurumdan Emekli Sanatçı'];
   var grup2 = { id: 'kadro-turne-yok', renk: '#6366f1', ikon: '💤',
-    baslik: 'Ana kadroda var ama turneye eklenmemiş',
-    aciklama: 'Bu sanatçı/figüranlar TURNE_PERSONEL sayfasında kayıtlı ama hiçbir turnenin katılımcı listesinde yok.',
+    baslik: 'Ana kadroda var ama o oyunun turnesine eklenmemiş',
+    aciklama: 'Bu sanatçı/figüranlar, kayıtlı oldukları oyunun bir turnesi var ama katılımcı listesine eklenmemiş.',
     items: [] };
   var _seen2 = {};
   tumPersonel.forEach(function(p) {
     if (!p.kisi || !p.kisi.trim()) return;
-    // Sadece sanatçı/figüran kategorileri
     if (!SANATCI_KATS2.includes(p.kategori)) return;
+    if (!p.oyun) return; // Oyunu olmayan personeli atla
     var key2 = p.kisi.trim().toLowerCase();
-    if (_seen2[key2]) return; // tekrar eden ismi atla
+    if (_seen2[key2]) return;
     _seen2[key2] = true;
-    var turneVar = turneler.some(function(t) {
+    // Bu kişinin oyununa ait turne var mı?
+    var oyunTurneleri = turneler.filter(function(t) {
+      var tOyunlar = [];
+      if (t.oyun) tOyunlar.push(t.oyun.trim().toLowerCase());
+      if (t.duraklar) t.duraklar.forEach(function(d){ if (d.oyun) tOyunlar.push(d.oyun.trim().toLowerCase()); });
+      return tOyunlar.includes(p.oyun.trim().toLowerCase());
+    });
+    if (!oyunTurneleri.length) return; // O oyunun turnesi yoksa uyarma
+    // O oyunun turnelerinden herhangi birinde katılımcı mı?
+    var turneVar = oyunTurneleri.some(function(t) {
       return t.katilimcilar && t.katilimcilar.some(function(k) {
         return k.kisi && k.kisi.trim().toLowerCase() === key2;
       });
