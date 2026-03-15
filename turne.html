@@ -9021,6 +9021,11 @@ function renderHarita() {
   Object.values(_leafletMarkers).forEach(function(m) { m.remove(); });
   _leafletMarkers = {};
 
+  // GeoJSON layer temizle
+  if (_haritaGeoJSONLayer) { _haritaGeoJSONLayer.remove(); _haritaGeoJSONLayer = null; }
+  _haritaHeatLayers.forEach(function(l){ l.remove(); });
+  _haritaHeatLayers = [];
+
   // Filtreye göre hangi illeri göster
   Object.entries(IL_LATLON).forEach(function(entry) {
     var il = entry[0], latlon = entry[1];
@@ -9082,6 +9087,7 @@ function renderHarita() {
   if (_haritaMod === 'heatmap') {
     haritaHeatmapCiz(ilSayilar);
   } else {
+    if (_haritaGeoJSONLayer) { _haritaGeoJSONLayer.remove(); _haritaGeoJSONLayer = null; }
     _haritaHeatLayers.forEach(function(l){ l.remove(); }); _haritaHeatLayers = [];
   }
   if (seciliIl) haritaIlDetay(seciliIl, ilSayilar);
@@ -9335,46 +9341,145 @@ function haritaRotaCiz(turnelerFiltreli) {
 }
 
 // ── Isı haritası ─────────────────────────────────────────────
+// ── GeoJSON cache ────────────────────────────────────────────
+var _ilGeoJSON = null;
+var _ilGeoJSONLoading = false;
+var _ilGeoJSONCallbacks = [];
+var _haritaGeoJSONLayer = null;
+
+function _ilGeoJSONYukle(callback) {
+  if (_ilGeoJSON) { callback(_ilGeoJSON); return; }
+  _ilGeoJSONCallbacks.push(callback);
+  if (_ilGeoJSONLoading) return;
+  _ilGeoJSONLoading = true;
+  fetch('https://raw.githubusercontent.com/cihadturhan/tr-geojson/master/geo/tr-cities-utf8.json')
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      _ilGeoJSON = data;
+      _ilGeoJSONLoading = false;
+      var cbs = _ilGeoJSONCallbacks.slice();
+      _ilGeoJSONCallbacks = [];
+      cbs.forEach(function(cb){ cb(data); });
+    })
+    .catch(function(err){
+      console.warn('GeoJSON yuklenemedi, daire fallback:', err);
+      _ilGeoJSONLoading = false;
+      var cbs = _ilGeoJSONCallbacks.slice();
+      _ilGeoJSONCallbacks = [];
+      cbs.forEach(function(cb){ cb(null); });
+    });
+}
+
+function _heatmapRenk(ratio) {
+  // Sarıdan koyu kırmızıya 4 durak gradyanı
+  var stops = [[255,247,188],[254,196,79],[240,59,32],[153,0,13]];
+  var t = ratio * (stops.length - 1);
+  var i = Math.min(Math.floor(t), stops.length - 2);
+  var f = t - i;
+  var r = Math.round(stops[i][0] + f * (stops[i+1][0] - stops[i][0]));
+  var g = Math.round(stops[i][1] + f * (stops[i+1][1] - stops[i][1]));
+  var b = Math.round(stops[i][2] + f * (stops[i+1][2] - stops[i][2]));
+  return 'rgb(' + r + ',' + g + ',' + b + ')';
+}
+
 function haritaHeatmapCiz(ilSayilar) {
   if (!_leafletMap) return;
 
-  // Önceki heat layer temizle
+  // Önceki layerları temizle
+  if (_haritaGeoJSONLayer) { _haritaGeoJSONLayer.remove(); _haritaGeoJSONLayer = null; }
   _haritaHeatLayers.forEach(function(l){ l.remove(); });
   _haritaHeatLayers = [];
 
   var maxSayi = Math.max.apply(null, Object.values(ilSayilar).filter(function(v){ return v > 0; }).concat([1]));
 
+  // Yükleniyor göstergesi
+  var mapDiv = document.getElementById('leaflet-map');
+  var loadEl = document.getElementById('harita-heatmap-load');
+  if (!loadEl && mapDiv) {
+    loadEl = document.createElement('div');
+    loadEl.id = 'harita-heatmap-load';
+    loadEl.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:999;background:rgba(255,255,255,.93);border-radius:10px;padding:12px 22px;font-size:12px;font-weight:700;color:#444;font-family:Poppins,sans-serif;pointer-events:none;box-shadow:0 4px 18px rgba(0,0,0,.13)';
+    if (mapDiv.style.position !== 'relative') mapDiv.style.position = 'relative';
+    mapDiv.appendChild(loadEl);
+  }
+  if (loadEl) { loadEl.textContent = '\uD83D\uDDFA Il sinirları yükleniyor...'; loadEl.style.display = 'block'; }
+
+  _ilGeoJSONYukle(function(geojson) {
+    if (loadEl) loadEl.style.display = 'none';
+    if (!geojson) { _haritaHeatmapDaireCiz(ilSayilar, maxSayi); return; }
+
+    _haritaGeoJSONLayer = L.geoJSON(geojson, {
+      style: function(feature) {
+        var ilAdi = feature.properties && (
+          feature.properties.name || feature.properties.Name ||
+          feature.properties.NAME || feature.properties.il || ''
+        );
+        var key = Object.keys(IL_LATLON).find(function(k) {
+          return k.toLocaleLowerCase('tr-TR') === (ilAdi||'').toLocaleLowerCase('tr-TR');
+        });
+        var sayi = key ? (ilSayilar[key] || 0) : 0;
+        var ratio = sayi > 0 ? sayi / maxSayi : 0;
+        if (sayi === 0) {
+          return { fillColor: '#e0e0e0', fillOpacity: 0.5, color: '#bbb', weight: 0.8 };
+        }
+        return {
+          fillColor: _heatmapRenk(ratio),
+          fillOpacity: 0.75,
+          color: 'rgba(80,0,0,0.3)',
+          weight: 1,
+        };
+      },
+      onEachFeature: function(feature, layer) {
+        var ilAdi = feature.properties && (
+          feature.properties.name || feature.properties.Name ||
+          feature.properties.NAME || feature.properties.il || ''
+        );
+        var key = Object.keys(IL_LATLON).find(function(k) {
+          return k.toLocaleLowerCase('tr-TR') === (ilAdi||'').toLocaleLowerCase('tr-TR');
+        });
+        var sayi = key ? (ilSayilar[key] || 0) : 0;
+        var ratio = sayi > 0 ? sayi / maxSayi : 0;
+
+        var tipHtml = '<div style="font-family:Poppins,sans-serif;font-size:12px">'
+          + '<strong>' + (key || ilAdi) + '</strong>';
+        if (sayi > 0) {
+          tipHtml += '&nbsp;<span style="color:hsl(350,70%,35%);font-weight:700">' + sayi + ' turne</span>'
+            + '<div style="margin-top:5px;height:6px;border-radius:3px;background:#ddd;overflow:hidden">'
+            + '<div style="height:6px;border-radius:3px;background:' + _heatmapRenk(ratio)
+            + ';width:' + Math.round(ratio * 100) + '%"></div></div>';
+        } else {
+          tipHtml += '&nbsp;<span style="color:#aaa;font-size:10px">gidilmedi</span>';
+        }
+        tipHtml += '</div>';
+
+        layer.bindTooltip(tipHtml, { sticky: true, opacity: 0.97, className: 'harita-leaflet-tip' });
+
+        layer.on('click', function() { if (key) haritaIlTikla(key); });
+        layer.on('mouseover', function() {
+          if (sayi > 0) { layer.setStyle({ fillOpacity: 0.95, weight: 2, color: 'rgba(80,0,0,0.6)' }); layer.bringToFront(); }
+        });
+        layer.on('mouseout', function() {
+          if (sayi > 0) { layer.setStyle({ fillOpacity: 0.75, weight: 1, color: 'rgba(80,0,0,0.3)' }); }
+        });
+      }
+    }).addTo(_leafletMap);
+  });
+}
+
+function _haritaHeatmapDaireCiz(ilSayilar, maxSayi) {
   Object.keys(ilSayilar).forEach(function(il) {
     var sayi = ilSayilar[il];
     if (!sayi) return;
     var ll = IL_LATLON[il];
     if (!ll) return;
-
     var ratio = sayi / maxSayi;
-    // Radius: daha küçük ve orantılı (30km - 65km arası)
-    var radiusKm = 30000 + ratio * 35000;
-    // Renk: sarıdan kırmızıya (hue 50 → 0)
-    var hue  = Math.round(50 * (1 - ratio));
-    var sat  = 90;
-    var lig  = Math.round(55 - ratio * 25);
-    var color = 'hsl(' + hue + ',' + sat + '%,' + lig + '%)';
-    var fillOpacity = 0.25 + ratio * 0.35;
-
+    var color = _heatmapRenk(ratio);
     var circle = L.circle(ll, {
-      radius: radiusKm,
-      fillColor: color,
-      fillOpacity: fillOpacity,
-      color: color,
-      weight: 1,
-      opacity: 0.4,
+      radius: 30000 + ratio * 35000,
+      fillColor: color, fillOpacity: 0.65,
+      color: 'rgba(80,0,0,0.3)', weight: 1,
     }).addTo(_leafletMap);
-
-    circle.bindTooltip(
-      '<strong>' + il + '</strong> · ' + sayi + ' turne'
-      + (maxSayi > 1 ? ' <span style="color:#888">(' + Math.round(ratio*100) + '%)</span>' : ''),
-      { sticky: true, opacity: 0.95 }
-    );
-
+    circle.bindTooltip('<strong>' + il + '</strong> · ' + sayi + ' turne', { sticky: true, opacity: 0.95 });
     _haritaHeatLayers.push(circle);
   });
 }
