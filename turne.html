@@ -5243,6 +5243,31 @@ function _veriKontrolHesapla() {
   });
   gruplar.push(grup1);
 
+  // ── 2. Ana kadroda (sanatçı/figüran) ama turneye eklenmemiş ──
+  var SANATCI_KATS2 = ['Sanatçı','Oyuncu','Figüran','Figüran/Müzisyen','Koro','Koro/Dans','Koro/Dans Ekibi','Solist','Dansçı','Müzisyen','Orkestra','Kurumdan Emekli Sanatçı'];
+  var grup2 = { id: 'kadro-turne-yok', renk: '#6366f1', ikon: '💤',
+    baslik: 'Ana kadroda var ama turneye eklenmemiş',
+    aciklama: 'Bu sanatçı/figüranlar TURNE_PERSONEL sayfasında kayıtlı ama hiçbir turnenin katılımcı listesinde yok.',
+    items: [] };
+  var _seen2 = {};
+  tumPersonel.forEach(function(p) {
+    if (!p.kisi || !p.kisi.trim()) return;
+    // Sadece sanatçı/figüran kategorileri
+    if (!SANATCI_KATS2.includes(p.kategori)) return;
+    var key2 = p.kisi.trim().toLowerCase();
+    if (_seen2[key2]) return; // tekrar eden ismi atla
+    _seen2[key2] = true;
+    var turneVar = turneler.some(function(t) {
+      return t.katilimcilar && t.katilimcilar.some(function(k) {
+        return k.kisi && k.kisi.trim().toLowerCase() === key2;
+      });
+    });
+    if (!turneVar) {
+      grup2.items.push({ kisi: p.kisi, detay: (p.oyun || '—') + ' · ' + (p.kategori || '—') });
+    }
+  });
+  gruplar.push(grup2);
+
   // ── 3. Aynı kişi aynı turneye çift kayıtlı ──────────────────
   var grup3 = { id: 'cift-kayit', renk: '#ef4444', ikon: '🔁',
     baslik: 'Aynı kişi aynı turneye çift kayıtlı',
@@ -5330,36 +5355,6 @@ function _veriKontrolHesapla() {
     grup5.items.push({ kisi: turneAdi, detay: statu ? 'Statü: ' + statu : 'Statü belirtilmemiş', rowIdx: t._rowIdx });
   });
   gruplar.push(grup5);
-
-  // ── 6. Katılımcı sayısı ana kadrodan az olan turneler ────────
-  var grup6 = { id: 'kadro-eksik', renk: '#f97316', ikon: '📉',
-    baslik: 'Katılımcı sayısı ana kadrodan az',
-    aciklama: 'Bu turnelerde katılımcı listesi, oyunun tam ana kadrosundan daha az kişi içeriyor.',
-    items: [] };
-  turneler.forEach(function(t) {
-    if (!t.katilimcilar || !t.katilimcilar.length) return;
-    // Turnedeki oyunları bul
-    var oyunlar = [];
-    if (t.duraklar) t.duraklar.forEach(function(d){ if (d.oyun && !oyunlar.includes(d.oyun)) oyunlar.push(d.oyun); });
-    if (!oyunlar.length && t.oyun) oyunlar.push(t.oyun);
-    oyunlar.forEach(function(oyun) {
-      var anaKadroSay = getPersonelForOyun(oyun).length;
-      if (anaKadroSay === 0) return; // Ana kadro tanımlı değilse atla
-      var turneKatSay = t.katilimcilar.filter(function(k) {
-        return !k.oyun || k.oyun === oyun;
-      }).length;
-      if (turneKatSay < anaKadroSay) {
-        var turneAdi = oyun + (t.il ? ' – ' + t.il : '') + (t.baslangicTarih ? ' (' + formatTarih(t.baslangicTarih) + ')' : '');
-        var eksik = anaKadroSay - turneKatSay;
-        grup6.items.push({
-          kisi: turneAdi,
-          detay: turneKatSay + ' / ' + anaKadroSay + ' kişi · ' + eksik + ' eksik',
-          rowIdx: t._rowIdx
-        });
-      }
-    });
-  });
-  gruplar.push(grup6);
 
   // ── 7. Turne durakları farklı oyun ama o oyunun kadrosu eksik
   var grup7 = { id: 'durak-oyun-kadro-yok', renk: '#ec4899', ikon: '🎭',
