@@ -9238,17 +9238,22 @@ function haritaIlDetay(il, ilSayilar) {
   }
   const rows = ilT.map(function(t) {
     const sr=statuRenk(t.statu); const sure=turneSuresi(t);
-    return '<tr><td style="padding:7px 10px;border-bottom:1px solid var(--border);white-space:nowrap"><strong style="font-size:12px">'+t.oyun+'</strong></td>'
-      +'<td style="padding:7px 10px;border-bottom:1px solid var(--border);font-size:11px;white-space:nowrap;width:90px">'+formatTarih(t.baslangicTarih||t.tarih)+(sure>1?'<br><span style="color:var(--muted-foreground)">'+sure+' gün</span>':'')+'</td>'
-      +'<td style="padding:7px 10px;border-bottom:1px solid var(--border);white-space:nowrap;width:1px"><span class="badge-statu" style="display:inline-flex;align-items:center;gap:5px;padding:2px 8px 2px 6px;background:'+sr.bg+';color:'+sr.fg+';border:1.5px solid '+sr.border+';border-radius:20px;font-weight:700;white-space:nowrap">'+(sr.svg||'')+'<span style="white-space:nowrap">'+sr.label+'</span></span></td>'
-      +'<td style="padding:7px 10px;border-bottom:1px solid var(--border);width:32px"><button class="btn btn-outline" style="height:22px;font-size:10px;padding:0 6px" onclick="editTurne('+t._rowIdx+')">✏️</button></td>'
-      +'</tr>';
-  }).join('');
+    return '<tr style="cursor:pointer;transition:background .12s" onmouseenter="this.style.background=\'var(--muted)\'" onmouseleave="this.style.background=\'\' onclick="_haritaIlDetayGit(' + t._rowIdx + ')">'      +'<td style="padding:7px 10px;border-bottom:1px solid var(--border)">'      +'<div style="font-size:12px;font-weight:700">'+t.oyun+'</div>'      +'<div style="font-size:10px;color:hsl(220,60%,45%);margin-top:2px;display:flex;align-items:center;gap:3px">'      +'<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>'      +'Detaya git</div></td>'      +'<td style="padding:7px 10px;border-bottom:1px solid var(--border);font-size:11px;white-space:nowrap;width:90px">'+formatTarih(t.baslangicTarih||t.tarih)+(sure>1?'<br><span style="color:var(--muted-foreground)">'+sure+' gün</span>':'')+'</td>'      +'<td style="padding:7px 10px;border-bottom:1px solid var(--border);white-space:nowrap;width:1px"><span class="badge-statu" style="display:inline-flex;align-items:center;gap:5px;padding:2px 8px 2px 6px;background:'+sr.bg+';color:'+sr.fg+';border:1.5px solid '+sr.border+';border-radius:20px;font-weight:700;white-space:nowrap">'+(sr.svg||'')+'<span style="white-space:nowrap">'+sr.label+'</span></span></td>'      +'<td style="padding:7px 10px;border-bottom:1px solid var(--border);width:32px"><button class="btn btn-outline" style="height:22px;font-size:10px;padding:0 6px" onclick="event.stopPropagation();editTurne('+t._rowIdx+')">✏️</button></td>'      +'</tr>';  }).join('');
   el.innerHTML = '<div class="section-header" style="border-radius:10px 10px 0 0">'
     +'<div style="display:flex;flex-direction:column"><span style="font-size:13px;font-weight:700"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="vertical-align:-2px;margin-right:4px;flex-shrink:0"><path d="M12 21s7-6.5 7-11a7 7 0 1 0-14 0c0 4.5 7 11 7 11z"/><circle cx="12" cy="10" r="2"/></svg>'+il+'</span><span style="font-size:10px;font-weight:500;color:var(--muted-foreground)">'+sayi+' turne · '+toplamGun+' gün'+kmStr+'</span></div>'
     +'<button class="btn btn-outline" style="height:24px;font-size:10px;padding:0 8px" onclick="seciliIl=null;renderHarita()">× Kapat</button>'
     +'</div>'
     +'<table style="width:100%;table-layout:auto" aria-label="Kişi turne listesi"><thead><tr style="background:var(--muted)"><th scope="col" style="padding:6px 10px;font-size:11px;font-weight:700;color:var(--muted-foreground);white-space:nowrap">Oyun</th><th scope="col" style="padding:6px 10px;font-size:11px;font-weight:700;color:var(--muted-foreground);width:90px;white-space:nowrap">Tarih</th><th scope="col" style="padding:6px 10px;font-size:11px;font-weight:700;color:var(--muted-foreground);white-space:nowrap">Statü</th><th scope="col" style="width:36px"><span class="sr-only">Düzenle</span></th></tr></thead><tbody>'+rows+'</tbody></table>';
+}
+
+// Harita il detay panelinden turneler sekmesine geç ve kartı aç
+function _haritaIlDetayGit(rowIdx) {
+  switchTab('liste');
+  setTimeout(function() {
+    openCardDetail(rowIdx);
+    var el = document.querySelector('[data-rowIdx="' + rowIdx + '"]');
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, 250);
 }
 
 
@@ -9371,8 +9376,15 @@ function _ilGeoJSONYukle(callback) {
 }
 
 function _heatmapRenk(ratio) {
-  // Sarıdan koyu kırmızıya 4 durak gradyanı
-  var stops = [[255,247,188],[254,196,79],[240,59,32],[153,0,13]];
+  // Açık pembe → somon → turuncu-kırmızı → koyu kırmızı
+  // ratio=0.1 → açık, ratio=1.0 → koyu — geniş aralık
+  var stops = [
+    [255, 220, 220],  // çok az  — açık pembe
+    [252, 160, 130],  // az      — somon
+    [230,  70,  50],  // orta    — kırmızı-turuncu
+    [180,  20,  20],  // fazla   — kırmızı
+    [110,   0,   0],  // çok fazla — koyu bordo
+  ];
   var t = ratio * (stops.length - 1);
   var i = Math.min(Math.floor(t), stops.length - 2);
   var f = t - i;
