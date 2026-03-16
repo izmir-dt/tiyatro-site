@@ -17,6 +17,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
@@ -9293,14 +9294,30 @@ async function _kadroKisiSilDevam(silIdx) {
 
 
 function kadroExcel() {
+  if (typeof XLSX === 'undefined') { showToast('Excel kütüphanesi yükleniyor, bekle ve tekrar dene', 'warn', 2500); return; }
   const oyun = document.getElementById('kadro-oyun-sec').value;
   if (!oyun) return;
   const kadro = getPersonelForOyun(oyun);
-  var rows = [['Oyun','Kategori','Görevi','Ad Soyad']];
-  kadro.forEach(p => rows.push([p.oyun, p.kategori, p.gorev, p.kisi]));
-  var csv = '\uFEFF' + rows.map(r => r.map(c => '"'+(c||'').replace(/"/g,'""')+'"').join(',')).join('\n');
-  var _csvUrl1 = URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'})); var a = document.createElement('a'); a.href = _csvUrl1; a.download = oyun.slice(0,30) + '-kadro.csv'; document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(function(){ URL.revokeObjectURL(_csvUrl1); }, 1000);
+  if (!kadro.length) { showToast('Bu oyun için kadro bulunamadı', 'warn', 2000); return; }
 
+  var baslik = ['No', 'Ad Soyad', 'Kategori', 'Görevi', 'Oyun'];
+  var rows = [baslik];
+  kadro.forEach(function(p, i) {
+    rows.push([i+1, p.kisi, p.kategori, p.gorev || '', p.oyun || oyun]);
+  });
+
+  var wb = XLSX.utils.book_new();
+  var ws = XLSX.utils.aoa_to_sheet(rows);
+
+  ws['!cols'] = [{wch:6},{wch:30},{wch:18},{wch:28},{wch:22}];
+
+  var baslikStil = { font:{bold:true,color:{rgb:'FFFFFF'}}, fill:{fgColor:{rgb:'6B1B1B'}}, alignment:{horizontal:'center',vertical:'center'} };
+  ['A1','B1','C1','D1','E1'].forEach(function(ref){ if(ws[ref]) ws[ref].s = baslikStil; });
+  ws['!rows'] = [{hpt:20}];
+
+  XLSX.utils.book_append_sheet(wb, ws, 'Kadro');
+  XLSX.writeFile(wb, oyun.slice(0,30).replace(/[\\/:*?"<>|]/g,'-') + '_Kadro.xlsx');
+  showToast('Kadro Excel indirildi', 'success', 2000);
 }
 
 // ============================================================
@@ -12526,25 +12543,29 @@ async function _turneSilDevam(rowIdx) {
 // EXCEL
 // ============================================================
 function exportExcel() {
-  // Türkçe başlıklı, tüm alanlar dahil kapsamlı Excel raporu
+  if (typeof XLSX === 'undefined') { showToast('Excel kütüphanesi yükleniyor, bekle ve tekrar dene', 'warn', 2500); return; }
   var baslik = [
     'Oyun Adı','Şehir / İl','Sahne / Mekan','Başlangıç Tarihi','Bitiş Tarihi',
-    'Süre (Gün)','Temsil Sayısı','Statü','Turne Grubu','Gidiş Ulaşım','Gidiş Saati',
-    'Dönüş Ulaşım','Dönüş Saati','Aktarma','Otel Adı','Otel Adresi',
-    'Otel Tel','Rezervasyon No','Kamyon','Kapasite','Notlar','Katılımcı Sayısı','Duraklar (JSON)'
+    'Süre (Gün)','Temsil Sayısı','Statü','Turne Grubu',
+    'Gidiş Ulaşım','Gidiş Saati','Dönüş Ulaşım','Dönüş Saati',
+    'Aktarma','Otel Adı','Otel Adresi','Otel Tel',
+    'Kamyon','Kapasite','Notlar','Katılımcı Sayısı'
   ];
   var rows = [baslik];
   turneler.forEach(function(t) {
     var sr = statuRenk(t.statu);
+    var iller = t.duraklar && t.duraklar.length
+      ? t.duraklar.map(function(d){ return d.il || ''; }).filter(Boolean).join(' › ')
+      : (t.il || '');
     rows.push([
-      t.oyun,
-      t.il,
+      t.oyun || '',
+      iller,
       t.mekan || '',
       t.baslangicTarih || t.tarih || '',
       t.bitisTarih     || t.tarih || '',
       turneSuresi(t),
-      t.sayi || 1,
-      sr.label,
+      Number(t.sayi) || 1,
+      sr.label || '',
       t.grup || '',
       t.gidisUlasim || '',
       t.gidisSaat   || '',
@@ -12554,22 +12575,39 @@ function exportExcel() {
       t.otelAdi     || '',
       t.otelAdres   || '',
       t.otelTelefon || '',
-      t.otelRezNo   || '',
-      t.kamyonSayisi     || '',
-      t.sahneKapasitesi  || '',
+      t.kamyonSayisi    || '',
+      t.sahneKapasitesi || '',
       t.not || '',
-      (t.katilimcilar ? t.katilimcilar.length : getPersonelForOyun(t.oyun).length),
-      t.duraklar ? JSON.stringify(t.duraklar) : ''
+      t.katilimcilar ? t.katilimcilar.length : getPersonelForOyun(t.oyun).length
     ]);
   });
-  var csv = '\uFEFF' + rows.map(function(r) {
-    return r.map(function(c) { return '"' + (c||'').toString().replace(/"/g,'""') + '"'; }).join(',');
-  }).join('\n');
+
+  var wb = XLSX.utils.book_new();
+  var ws = XLSX.utils.aoa_to_sheet(rows);
+
+  // Sütun genişlikleri
+  ws['!cols'] = [
+    {wch:28},{wch:22},{wch:28},{wch:14},{wch:14},
+    {wch:10},{wch:10},{wch:12},{wch:14},
+    {wch:16},{wch:12},{wch:16},{wch:12},
+    {wch:20},{wch:24},{wch:26},{wch:14},
+    {wch:10},{wch:10},{wch:30},{wch:12}
+  ];
+
+  // Başlık satırı stili — kalın + arka plan
+  var baslikStil = { font:{bold:true,color:{rgb:'FFFFFF'}}, fill:{fgColor:{rgb:'6B1B1B'}}, alignment:{horizontal:'center',vertical:'center'}, border:{bottom:{style:'medium',color:{rgb:'5A1717'}}} };
+  var harfler = 'ABCDEFGHIJKLMNOPQRSTU';
+  for (var ci = 0; ci < baslik.length; ci++) {
+    var cellRef = harfler[ci] + '1';
+    if (ws[cellRef]) ws[cellRef].s = baslikStil;
+  }
+  // Satır yüksekliği
+  ws['!rows'] = [{ hpt: 20 }];
+
+  XLSX.utils.book_append_sheet(wb, ws, 'Turneler');
   var tarih = new Date().toISOString().slice(0,10);
-  var _csvUrl2 = URL.createObjectURL(new Blob([csv], {type:'text/csv;charset=utf-8'})); var a = document.createElement('a'); a.href = _csvUrl2; a.download = 'turne-raporu-' + tarih + '.csv'; document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(function(){ URL.revokeObjectURL(_csvUrl2); }, 1000);
-
-
-
+  XLSX.writeFile(wb, 'Turne_Raporu_' + tarih + '.xlsx');
+  showToast('Excel indirildi', 'success', 2000);
 }
 
 // ============================================================
