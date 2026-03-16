@@ -10006,7 +10006,9 @@ function _calEventHTML(t, key) {
     not: t.not||'',
     sure: sure, temsil: temsil, rowIdx: t._rowIdx,
     progTip: st.tip, oyunAdi: st.oyunAdi, saat: st.saat,
-    gidisSaatSt: (st.tip==='yol' ? st.saat : ''), donusSaatSt: (st.tip==='donus' ? st.saat : '')
+    gidisSaatSt: (st.tip==='yol' ? st.saat : ''), donusSaatSt: (st.tip==='donus' ? st.saat : ''),
+    gidisBacaklar: (function(){ try{ var g=t.gidisUcusBacakJSON?JSON.parse(t.gidisUcusBacakJSON):[]; return g.map(function(b){return {kalkis:b.kalkis||'',inis:b.inis||'',ucusNo:b.ucusNo||'',nereden:b.nereden||'',nereye:b.nereye||''};});}catch(e){return [];} })(),
+    donusBacaklar: (function(){ try{ var d2=t.donusUcusBacakJSON?JSON.parse(t.donusUcusBacakJSON):[]; return d2.map(function(b){return {kalkis:b.kalkis||'',inis:b.inis||'',ucusNo:b.ucusNo||'',nereden:b.nereden||'',nereye:b.nereye||''};});}catch(e){return [];} })()
   }));
 
   return '<div class="cal-event tip-' + st.tip + '" '
@@ -10431,21 +10433,49 @@ function calTooltipGoster(e, encodedData) {
     var _efSaat = (d.progTip==='yol') ? (d.gidisSaat||d.gidisSaatSt||d.saat||'') : (d.progTip==='donus') ? (d.donusSaat||d.donusSaatSt||d.saat||'') : (d.saat||'');
     var _efUlasim = (d.progTip==='yol') ? (d.gidis||'') : ((d.progTip==='donus') ? (d.donus||'') : '');
 
-    tt.innerHTML = '<div style="min-width:220px;max-width:280px">'
+    var _isUcak = (_efUlasim||'').toLowerCase().indexOf('u\u00e7ak') >= 0 || (_efUlasim||'').toLowerCase().indexOf('ucak') >= 0;
+    var _bacaklar = (d.progTip==='yol') ? (d.gidisBacaklar||[]) : (d.progTip==='donus') ? (d.donusBacaklar||[]) : [];
+
+    // Uçak için bacak saatleri HTML
+    var _ucakSaatlerHTML = '';
+    if (_isUcak && _bacaklar.length) {
+      _ucakSaatlerHTML = _bacaklar.map(function(b, i) {
+        var satir = '';
+        if (b.kalkis || b.inis) {
+          satir = '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:3px">'
+            + '<div style="font-size:10px;color:rgba(255,255,255,.5)">'
+            + (b.nereden ? b.nereden : ('\u0411acak '+(i+1)))
+            + (b.nereye ? ' \u2192 '+b.nereye : '')
+            + (b.ucusNo ? ' \u00b7 '+b.ucusNo : '')
+            + '</div>'
+            + '<span style="font-size:11.5px;font-weight:800;color:#fff;background:rgba(255,255,255,.12);padding:2px 8px;border-radius:6px;white-space:nowrap">'
+            + (b.kalkis||'') + (b.inis ? ' \u2192 '+b.inis : '')
+            + '</span>'
+            + '</div>';
+        }
+        return satir;
+      }).join('');
+    }
+
+    // Normal saat (otobüs vb)
+    var _saatBadge = (!_isUcak && _efSaat)
+      ? '<span style="font-size:12px;font-weight:800;color:#fff;background:rgba(255,255,255,.12);padding:2px 8px;border-radius:6px">' + _efSaat + '</span>'
+      : '';
+
+    tt.innerHTML = '<div style="min-width:220px;max-width:290px">'
       + '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:8px">'
       +   '<div style="font-size:13px;font-weight:800;color:#fff;line-height:1.3">' + (d.oyunAdi||d.oyun||'\u2014') + '</div>'
-      +   '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">'
-      +     '<span style="font-size:9px;font-weight:700;padding:2px 7px;border-radius:12px;background:rgba(255,255,255,.15);color:rgba(255,255,255,.85);white-space:nowrap">' + tipLabel + '</span>'
-      +     (_efSaat ? '<span style="font-size:13px;font-weight:900;color:#fff;letter-spacing:.5px;font-family:monospace">' + _efSaat + '</span>' : '')
-      +   '</div>'
+      +   '<span style="font-size:9px;font-weight:700;padding:2px 7px;border-radius:12px;background:rgba(255,255,255,.15);color:rgba(255,255,255,.85);white-space:nowrap">' + tipLabel + '</span>'
       + '</div>'
       + (d.il ? '<div style="font-size:11px;color:rgba(255,255,255,.75);display:flex;align-items:center;gap:5px;margin-bottom:4px">' + ICON_SVG.pin + d.il + (d.mekan ? ' \u00b7 ' + d.mekan : '') + '</div>' : '')
       + '<div style="font-size:11px;color:rgba(255,255,255,.75);display:flex;align-items:center;gap:5px;margin-bottom:8px">' + ICON_SVG.cal + d.tarih + (d.sure?' \u00b7 <strong>'+d.sure+' g\u00fcn</strong>':'') + (d.temsil?' \u00b7 '+d.temsil+' temsil':'') + '</div>'
-      + (_efUlasim||d.gidisSaat||d.donusSaat||d.otel ? '<div style="border-top:1px solid rgba(255,255,255,.12);padding-top:6px;display:flex;flex-direction:column;gap:4px;font-size:10.5px;color:rgba(255,255,255,.7)">'
-        + (_efUlasim ? '<div style="display:flex;align-items:center;gap:5px">' + _ulasimIkon(_efUlasim) + ' <span>' + _efUlasim + '</span></div>' : '')
-        + (d.gidisPlaka ? '<div style="display:flex;align-items:center;gap:5px;color:rgba(255,255,255,.5);font-size:9.5px">\ud83d\ude97 ' + d.gidisPlaka + '</div>' : '')
-        + (d.donusPlaka ? '<div style="display:flex;align-items:center;gap:5px;color:rgba(255,255,255,.5);font-size:9.5px">\ud83d\ude97 ' + d.donusPlaka + '</div>' : '')
-        + (d.otel ? '<div style="display:flex;align-items:center;gap:5px">\ud83c\udfe8 ' + d.otel + '</div>' : '')
+      + (_efUlasim||_efSaat||_ucakSaatlerHTML||d.otel ? '<div style="border-top:1px solid rgba(255,255,255,.12);padding-top:7px;display:flex;flex-direction:column;gap:3px">'
+        + (_efUlasim ? '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">'
+          + '<div style="font-size:10.5px;color:rgba(255,255,255,.75);display:flex;align-items:center;gap:5px">' + _ulasimIkon(_efUlasim) + ' <span>' + _efUlasim + '</span></div>'
+          + _saatBadge
+          + '</div>' : '')
+        + _ucakSaatlerHTML
+        + (d.otel ? '<div style="font-size:10px;color:rgba(255,255,255,.55);display:flex;align-items:center;gap:5px;margin-top:2px">\ud83c\udfe8 ' + d.otel + '</div>' : '')
         + '</div>' : '')
       + (d.statu ? '<div style="margin-top:8px"><span style="display:inline-block;padding:2px 8px;border-radius:12px;font-size:9px;font-weight:700;background:' + d.statuBg + ';color:' + d.statuFg + '">' + d.statu + '</span></div>' : '')
       + '</div>';
