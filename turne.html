@@ -9886,11 +9886,18 @@ function _calEvStyle(progSatir, turne) {
     tip='yol'; bg='hsl(38,90%,93%)'; fg='hsl(38,70%,28%)'; border='hsl(38,85%,50%)';
     ikon='<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><rect x="2" y="4" width="20" height="14" rx="2"/><path d="M2 10h20"/><circle cx="7" cy="17" r="1"/><circle cx="17" cy="17" r="1"/></svg>';
     oyunAdi = progSatir.sehir ? progSatir.sehir : (ilStr || 'Yol');
-    saat = '';
+    saat = t.gidisSaat || (function(){
+      if (t.gidisUcusBacakJSON) { try { var gb=JSON.parse(t.gidisUcusBacakJSON); if(gb&&gb[0]&&gb[0].kalkis) return gb[0].kalkis; } catch(e){} }
+      return '';
+    })();
   } else if (progSatir && progSatir.program === 'Dönüş') {
     tip='donus'; bg='hsl(0,70%,95%)'; fg='hsl(0,65%,35%)'; border='hsl(0,65%,52%)';
     ikon='<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/></svg>';
     oyunAdi = 'Dönüş';
+    saat = t.donusSaat || (function(){
+      if (t.donusUcusBacakJSON) { try { var db=JSON.parse(t.donusUcusBacakJSON); if(db&&db[0]&&db[0].kalkis) return db[0].kalkis; } catch(e){} }
+      return '';
+    })();
   } else if (progSatir && progSatir.program === 'Prova') {
     tip='prova'; bg='hsl(220,70%,95%)'; fg='hsl(220,65%,32%)'; border='hsl(220,65%,52%)';
     ikon='<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>';
@@ -9989,7 +9996,10 @@ function _calEventHTML(t, key) {
     sehirArac: _sehirArac, sehirDetay: _sehirDetay, sehirSurucu: _sehirSurucu, sehirTel: _sehirTel,
     not: t.not||'',
     sure: sure, temsil: temsil, rowIdx: t._rowIdx,
-    progTip: st.tip, oyunAdi: st.oyunAdi, saat: st.saat
+    progTip: st.tip, oyunAdi: st.oyunAdi, saat: st.saat,
+    gidisSaatSt: (st.tip==='yol' ? st.saat : ''), donusSaatSt: (st.tip==='donus' ? st.saat : ''),
+    gidisBacaklar: (function(){ try{ var g=t.gidisUcusBacakJSON?JSON.parse(t.gidisUcusBacakJSON):[]; return g.map(function(b){return {kalkis:b.kalkis||'',inis:b.inis||'',ucusNo:b.ucusNo||'',nereden:b.nereden||'',nereye:b.nereye||''};});}catch(e){return [];} })(),
+    donusBacaklar: (function(){ try{ var d2=t.donusUcusBacakJSON?JSON.parse(t.donusUcusBacakJSON):[]; return d2.map(function(b){return {kalkis:b.kalkis||'',inis:b.inis||'',ucusNo:b.ucusNo||'',nereden:b.nereden||'',nereye:b.nereye||''};});}catch(e){return [];} })()
   }));
 
   return '<div class="cal-event tip-' + st.tip + '" '
@@ -10396,16 +10406,65 @@ function calTooltipGoster(e, encodedData) {
       pin:'<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>'
     };
 
-    tt.innerHTML = '<div style="min-width:220px;max-width:260px">'
+    var _ulasimIkon = function(tip) {
+      tip = (tip||'').toLowerCase();
+      if (tip.indexOf('u\u00e7ak') >= 0 || tip.indexOf('ucak') >= 0) return '\u2708\ufe0f';
+      if (tip.indexOf('otob\u00fcs') >= 0 || tip.indexOf('otobus') >= 0) return '\ud83d\ude8c';
+      if (tip.indexOf('tren') >= 0) return '\ud83d\ude86';
+      if (tip.indexOf('minib\u00fcs') >= 0 || tip.indexOf('minibus') >= 0) return '\ud83d\ude90';
+      if (tip.indexOf('servis') >= 0) return '\ud83d\ude90';
+      if (tip.indexOf('feribot') >= 0) return '\u26f4\ufe0f';
+      return '\ud83d\ude8c';
+    };
+
+    var _efUlasim = (d.progTip==='yol') ? (d.gidis||'') : ((d.progTip==='donus') ? (d.donus||'') : '');
+    var _efSaat   = (d.progTip==='yol') ? (d.gidisSaat||d.gidisSaatSt||d.saat||'') : (d.progTip==='donus') ? (d.donusSaat||d.donusSaatSt||d.saat||'') : (d.saat||'');
+    var _isUcak   = _efUlasim.toLowerCase().indexOf('u\u00e7ak') >= 0 || _efUlasim.toLowerCase().indexOf('ucak') >= 0;
+    var _bacaklar = (d.progTip==='yol') ? (d.gidisBacaklar||[]) : (d.progTip==='donus') ? (d.donusBacaklar||[]) : [];
+
+    var _ucakSaatlerHTML = '';
+    if (_isUcak && _bacaklar.length) {
+      _ucakSaatlerHTML = _bacaklar.map(function(b) {
+        if (!b.kalkis && !b.inis) return '';
+        return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:3px">'
+          + '<div style="font-size:10px;color:rgba(255,255,255,.5)">'
+          + (b.nereden||'') + (b.nereye?' \u2192 '+b.nereye:'') + (b.ucusNo?' \u00b7 '+b.ucusNo:'')
+          + '</div>'
+          + '<span style="font-size:11.5px;font-weight:800;color:#fff;background:rgba(255,255,255,.12);padding:2px 8px;border-radius:6px;white-space:nowrap">'
+          + (b.kalkis||'') + (b.inis?' \u2192 '+b.inis:'')
+          + '</span></div>';
+      }).join('');
+    }
+
+    var _saatBadge = (_efSaat && !_isUcak)
+      ? '<span style="font-size:12px;font-weight:800;color:#fff;background:rgba(255,255,255,.12);padding:2px 8px;border-radius:6px">' + _efSaat + '</span>'
+      : '';
+    var _oyunSaatBadge = (d.saat && d.progTip !== 'yol' && d.progTip !== 'donus')
+      ? '<span style="font-size:12px;font-weight:800;color:#fff;background:rgba(255,255,255,.12);padding:2px 8px;border-radius:6px">' + d.saat + '</span>'
+      : '';
+
+    var ICON_SVG = {
+      cal:'<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="2"/><line x1="3" y1="11" x2="21" y2="11"/></svg>',
+      pin:'<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>'
+    };
+
+    tt.innerHTML = '<div style="min-width:220px;max-width:290px">'
       + '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:8px">'
       +   '<div style="font-size:13px;font-weight:800;color:#fff;line-height:1.3">' + (d.oyunAdi||d.oyun||'\u2014') + '</div>'
-      +   '<span style="font-size:9px;font-weight:700;padding:2px 7px;border-radius:12px;background:rgba(255,255,255,.15);color:rgba(255,255,255,.85);white-space:nowrap">' + tipLabel + '</span>'
+      +   '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">'
+      +     '<span style="font-size:9px;font-weight:700;padding:2px 7px;border-radius:12px;background:rgba(255,255,255,.15);color:rgba(255,255,255,.85);white-space:nowrap">' + tipLabel + '</span>'
+      +     _oyunSaatBadge
+      +   '</div>'
       + '</div>'
-      + (d.il ? '<div style="font-size:11px;color:rgba(255,255,255,.75);display:flex;align-items:center;gap:5px;margin-bottom:4px">' + ICON_SVG.pin + d.il + (d.mekan ? ' \u00b7 ' + d.mekan : '') + '</div>' : '')
+      + (d.il ? '<div style="font-size:11px;color:rgba(255,255,255,.75);display:flex;align-items:center;gap:5px;margin-bottom:4px">' + ICON_SVG.pin + d.il + (d.mekan?' \u00b7 '+d.mekan:'') + '</div>' : '')
       + '<div style="font-size:11px;color:rgba(255,255,255,.75);display:flex;align-items:center;gap:5px;margin-bottom:8px">' + ICON_SVG.cal + d.tarih + (d.sure?' \u00b7 <strong>'+d.sure+' g\u00fcn</strong>':'') + (d.temsil?' \u00b7 '+d.temsil+' temsil':'') + '</div>'
-      + (d.gidis||d.otel ? '<div style="border-top:1px solid rgba(255,255,255,.12);padding-top:6px;display:flex;flex-direction:column;gap:3px;font-size:10px;color:rgba(255,255,255,.6)">'
-        + (d.gidis ? '<div>\u2708\ufe0f ' + d.gidis + '</div>' : '')
-        + (d.otel  ? '<div>\ud83c\udfe8 ' + d.otel  + '</div>' : '')
+      + (_efUlasim||_efSaat||_ucakSaatlerHTML||d.otel ? '<div style="border-top:1px solid rgba(255,255,255,.12);padding-top:7px;display:flex;flex-direction:column;gap:3px">'
+        + (_efUlasim ? '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">'
+          + '<div style="font-size:10.5px;color:rgba(255,255,255,.75);display:flex;align-items:center;gap:5px">' + _ulasimIkon(_efUlasim) + ' <span>' + _efUlasim + '</span></div>'
+          + _saatBadge
+          + '</div>' : '')
+        + _ucakSaatlerHTML
+        + (d.otel ? '<div style="font-size:10px;color:rgba(255,255,255,.55);display:flex;align-items:center;gap:5px;margin-top:2px">\ud83c\udfe8 ' + d.otel + '</div>' : '')
         + '</div>' : '')
       + (d.statu ? '<div style="margin-top:8px"><span style="display:inline-block;padding:2px 8px;border-radius:12px;font-size:9px;font-weight:700;background:' + d.statuBg + ';color:' + d.statuFg + '">' + d.statu + '</span></div>' : '')
       + '</div>';
