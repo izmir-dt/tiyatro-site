@@ -5501,6 +5501,8 @@ function _konaklamaSekmesiHTML(t, rowIdx) {
   var tekler    = kat.filter(function(p){ return p.odaTip === 'tek'; });
   var ciftler   = kat.filter(function(p){ return p.odaTip === 'cift'; });
   var atanmamis = kat.filter(function(p){ return !p.odaTip; });
+  // Tümü sekmesinde gösterilecek = atanmamış + çift seçilmiş ama eşi yok
+  var tumListeSay = kat.filter(function(p){ return !p.odaTip || (p.odaTip === 'cift' && !p.odaEsi); }).length;
   var ciftOdaSay = Math.ceil(ciftler.length / 2);
   var aktif = _konaklamaAktifSekme;
 
@@ -5525,14 +5527,14 @@ function _konaklamaSekmesiHTML(t, rowIdx) {
     + '<div style="display:flex;gap:14px">'
     + '<span style="font-size:12px;font-weight:700">🛏 Tek: <strong>' + tekler.length + '</strong></span>'
     + '<span style="font-size:12px;font-weight:700">🛏🛏 Çift Oda: <strong>' + ciftOdaSay + '</strong></span>'
-    + (atanmamis.length ? '<span style="font-size:12px;font-weight:700;color:#d97706">⏳ Atanmamış: <strong>' + atanmamis.length + '</strong></span>' : '')
+    + (tumListeSay ? '<span style="font-size:12px;font-weight:700;color:#d97706">⏳ Atanmamış: <strong>' + tumListeSay + '</strong></span>' : '')
     + '</div>'
     + '<button onclick="_konaklamaPdfIndir(' + rowIdx + ')" style="height:28px;padding:0 12px;border:none;border-radius:6px;background:#6b1b1b;font-size:10.5px;font-weight:700;cursor:pointer;font-family:Poppins,sans-serif;color:#fff">📄 PDF</button>'
     + '</div>';
 
   // 3 sekme — Tümü artık "atanmamışlar"
   var sekmeler = [
-    { id:'tumü', label:'⏳ Atanmamış', say: atanmamis.length },
+    { id:'tumü', label:'⏳ Atanmamış', say: tumListeSay },
     { id:'cift', label:'🛏🛏 Çift',   say: ciftler.length },
     { id:'tek',  label:'🛏 Tek',       say: tekler.length },
   ];
@@ -5548,13 +5550,17 @@ function _konaklamaSekmesiHTML(t, rowIdx) {
   });
   html += '</div>';
 
-  // ── ATANMAMIŞ SEKMESİ (eski Tümü)
+  // ── ATANMAMIŞ SEKMESİ
+  // Tümü = atanmamışlar + çift seçilmiş ama eşi henüz seçilmemiş olanlar
   if (aktif === 'tumü') {
-    if (!atanmamis.length) {
+    // Tümü'nde gösterilecekler: odaTip yok VEYA çift seçili ama odaEsi yok
+    var tumHepsi = kat.filter(function(p){ return !p.odaTip || (p.odaTip === 'cift' && !p.odaEsi); });
+    if (!tumHepsi.length) {
       html += '<div style="padding:24px 16px;text-align:center;color:var(--muted-foreground);font-size:12px">✅ Tüm kişiler atandı.</div>';
     } else {
-      atanmamis.forEach(function(p) {
+      tumHepsi.forEach(function(p) {
         var i = kat.indexOf(p);
+        var isCiftSecildi = p.odaTip === 'cift'; // Çift seçilmiş ama eşi yok
         html += '<div style="padding:8px 16px;border-bottom:1px solid var(--border)">'
           + '<div style="display:flex;align-items:center;gap:8px">'
           + '<div style="flex:1;min-width:0">'
@@ -5563,15 +5569,34 @@ function _konaklamaSekmesiHTML(t, rowIdx) {
           + '</div>'
           + '<div style="display:flex;gap:4px;flex-shrink:0">'
           + '<button onclick="_konaklamaOdaTipSec(' + t._rowIdx + ',' + i + ',\'tek\')" '
-          + 'style="height:26px;padding:0 9px;border:1.5px solid var(--border);border-radius:5px;'
+          + 'style="height:26px;padding:0 9px;border:1.5px solid ' + (!isCiftSecildi?'var(--border)':'var(--border)') + ';border-radius:5px;'
           + 'background:transparent;color:var(--muted-foreground);'
           + 'font-size:10px;font-weight:700;cursor:pointer;font-family:Poppins,sans-serif">Tek</button>'
           + '<button onclick="_konaklamaOdaTipSec(' + t._rowIdx + ',' + i + ',\'cift\')" '
-          + 'style="height:26px;padding:0 9px;border:1.5px solid var(--border);border-radius:5px;'
-          + 'background:transparent;color:var(--muted-foreground);'
+          + 'style="height:26px;padding:0 9px;border:1.5px solid ' + (isCiftSecildi?'#6b1b1b':'var(--border)') + ';border-radius:5px;'
+          + 'background:' + (isCiftSecildi?'#6b1b1b':'transparent') + ';color:' + (isCiftSecildi?'#fff':'var(--muted-foreground)') + ';'
           + 'font-size:10px;font-weight:700;cursor:pointer;font-family:Poppins,sans-serif">Çift</button>'
-          + '</div></div>'
-          + '</div>';
+          + '</div></div>';
+        // Çift seçildiyse oda arkadaşı dropdown'u göster
+        if (isCiftSecildi) {
+          var esiOpts = '<option value="">— Oda arkadaşı seç —</option>';
+          // Oda arkadaşı olabilecekler: çift seçilmiş (eşi yok dahil) + atanmamışlar
+          kat.forEach(function(q, j) {
+            if (j === i) return; // kendisi değil
+            if (q.odaTip === 'tek') return; // tek odacılar çıksın
+            if (q.odaEsi && q.odaEsi !== p.kisi) return; // başkasıyla eşleşmiş
+            esiOpts += '<option value="' + j + '">' + q.kisi + '</option>';
+          });
+          html += '<div style="display:flex;align-items:center;gap:8px;margin-top:5px;padding:0 0 4px 0">'
+            + '<span style="font-size:10px;color:var(--muted-foreground);flex-shrink:0;white-space:nowrap">Oda arkadaşı:</span>'
+            + '<select onchange="_konaklamaEsiSecVeGec(' + t._rowIdx + ',' + i + ',this.value)" '
+            + 'style="flex:1;min-width:0;height:28px;padding:0 8px;border:1.5px solid #d97706;border-radius:6px;'
+            + 'font-size:11px;font-weight:600;background:var(--card);color:var(--foreground);font-family:Poppins,sans-serif;cursor:pointer">'
+            + esiOpts + '</select>'
+            + '<span style="font-size:10px;color:#d97706;flex-shrink:0">?</span>'
+            + '</div>';
+        }
+        html += '</div>';
       });
     }
 
@@ -5671,14 +5696,16 @@ function _konaklamaOdaTipSec(rowIdx, kisiIdx, tip) {
     var eskiEsi = t.katilimcilar.find(function(x){ return x.kisi === p.odaEsi; });
     if (eskiEsi) { eskiEsi.odaEsi = ''; }
   }
-  p.odaTip = tip || undefined; // boş string → atama kaldır
-  if (!tip) delete p.odaTip;
-  p.odaEsi = '';
+  if (!tip) {
+    delete p.odaTip;
+    p.odaEsi = '';
+    _konaklamaAktifSekme = 'tumü'; // atama kaldırılınca Atanmamış'a dön
+  } else {
+    p.odaTip = tip;
+    p.odaEsi = '';
+    // Sekmeyi DEĞİŞTİRME — kullanıcı hangi sekmededeyse orada kalsın
+  }
   _cdAktifTab = 'konaklama';
-  // Atama yapılınca ilgili sekmeye geç; kaldırınca Tümü'ne dön
-  if (tip === 'tek') _konaklamaAktifSekme = 'tek';
-  else if (tip === 'cift') _konaklamaAktifSekme = 'cift';
-  else _konaklamaAktifSekme = 'tumü';
   _renderCardDetail(rowIdx);
   _konaklamaSheetKaydet(t);
 }
@@ -5709,6 +5736,36 @@ function _konaklamaEsiSec(rowIdx, kisiIdx, esiIdxStr) {
   esi.odaEsi = p.kisi;
   esi.odaTip = 'cift';
   _cdAktifTab = 'konaklama';
+  _renderCardDetail(rowIdx);
+  _konaklamaSheetKaydet(t);
+}
+
+// Tümü sekmesindeki oda arkadaşı seçimi — eş seçilince çift sekmeye geç
+function _konaklamaEsiSecVeGec(rowIdx, kisiIdx, esiIdxStr) {
+  rowIdx = parseInt(rowIdx);
+  var t = turneler.find(function(x){ return x._rowIdx === rowIdx; });
+  if (!t || !t.katilimcilar) return;
+  if (esiIdxStr === '') return; // boş seçim, bir şey yapma
+  var p = t.katilimcilar[kisiIdx];
+  var esi = t.katilimcilar[parseInt(esiIdxStr)];
+  if (!esi) return;
+  // Eski eş bağlarını temizle
+  if (p.odaEsi) {
+    var pe = t.katilimcilar.find(function(x){ return x.kisi === p.odaEsi; });
+    if (pe) { pe.odaEsi = ''; }
+  }
+  if (esi.odaEsi) {
+    var ee = t.katilimcilar.find(function(x){ return x.kisi === esi.odaEsi; });
+    if (ee) { ee.odaEsi = ''; }
+  }
+  // Her ikisini eşleştir
+  p.odaTip   = 'cift';
+  p.odaEsi   = esi.kisi;
+  esi.odaTip = 'cift';
+  esi.odaEsi = p.kisi;
+  _cdAktifTab = 'konaklama';
+  // Eşleştirme tamamlandı → Çift sekmesine geç
+  _konaklamaAktifSekme = 'cift';
   _renderCardDetail(rowIdx);
   _konaklamaSheetKaydet(t);
 }
