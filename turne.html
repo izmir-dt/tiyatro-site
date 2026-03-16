@@ -5497,8 +5497,10 @@ function _konaklamaSekmesiHTML(t, rowIdx) {
       + 'Kadro atanmadan konaklama düzenlenemez.</div>';
   }
 
-  var tekler  = kat.filter(function(p){ return p.odaTip === 'tek'; });
-  var ciftler = kat.filter(function(p){ return p.odaTip === 'cift' || !p.odaTip; });
+  // Tümü = atanmamışlar (odaTip yok), Tek = tek, Çift = cift
+  var tekler    = kat.filter(function(p){ return p.odaTip === 'tek'; });
+  var ciftler   = kat.filter(function(p){ return p.odaTip === 'cift'; });
+  var atanmamis = kat.filter(function(p){ return !p.odaTip; });
   var ciftOdaSay = Math.ceil(ciftler.length / 2);
   var aktif = _konaklamaAktifSekme;
 
@@ -5523,15 +5525,16 @@ function _konaklamaSekmesiHTML(t, rowIdx) {
     + '<div style="display:flex;gap:14px">'
     + '<span style="font-size:12px;font-weight:700">🛏 Tek: <strong>' + tekler.length + '</strong></span>'
     + '<span style="font-size:12px;font-weight:700">🛏🛏 Çift Oda: <strong>' + ciftOdaSay + '</strong></span>'
+    + (atanmamis.length ? '<span style="font-size:12px;font-weight:700;color:#d97706">⏳ Atanmamış: <strong>' + atanmamis.length + '</strong></span>' : '')
     + '</div>'
     + '<button onclick="_konaklamaPdfIndir(' + rowIdx + ')" style="height:28px;padding:0 12px;border:none;border-radius:6px;background:#6b1b1b;font-size:10.5px;font-weight:700;cursor:pointer;font-family:Poppins,sans-serif;color:#fff">📄 PDF</button>'
     + '</div>';
 
-  // 3 sekme
+  // 3 sekme — Tümü artık "atanmamışlar"
   var sekmeler = [
-    { id:'tumü', label:'👥 Tümü',        say: kat.length },
-    { id:'cift', label:'🛏🛏 Çift',      say: ciftler.length },
-    { id:'tek',  label:'🛏 Tek',          say: tekler.length },
+    { id:'tumü', label:'⏳ Atanmamış', say: atanmamis.length },
+    { id:'cift', label:'🛏🛏 Çift',   say: ciftler.length },
+    { id:'tek',  label:'🛏 Tek',       say: tekler.length },
   ];
   html += '<div style="display:flex;border-bottom:2px solid var(--border)">';
   sekmeler.forEach(function(s) {
@@ -5545,60 +5548,77 @@ function _konaklamaSekmesiHTML(t, rowIdx) {
   });
   html += '</div>';
 
-  // ── TÜMÜ SEKMESİ
+  // ── ATANMAMIŞ SEKMESİ (eski Tümü)
   if (aktif === 'tumü') {
-    kat.forEach(function(p, i) {
-      var isTek = p.odaTip === 'tek';
-      var esiOpts = '<option value="">— Seç —</option>';
-      kat.forEach(function(q, j) {
-        if (j === i || q.odaTip === 'tek') return;
-        esiOpts += '<option value="' + j + '"' + (p.odaEsi===q.kisi?' selected':'') + '>' + q.kisi + '</option>';
-      });
-      html += '<div style="padding:8px 16px;border-bottom:1px solid var(--border)">'
-        + '<div style="display:flex;align-items:center;gap:8px">'
-        + '<div style="flex:1;min-width:0">'
-        + '<div style="font-size:11.5px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--foreground)">' + p.kisi + '</div>'
-        + '<div style="font-size:10px;color:var(--muted-foreground);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (p.gorev||p.kategori||'') + '</div>'
-        + '</div>'
-        + '<div style="display:flex;gap:4px;flex-shrink:0">'
-        + '<button onclick="_konaklamaOdaTipSec(' + t._rowIdx + ',' + i + ',\'tek\')" '
-        + 'style="height:26px;padding:0 9px;border:1.5px solid ' + (isTek?'#6b1b1b':'var(--border)') + ';border-radius:5px;'
-        + 'background:' + (isTek?'#6b1b1b':'transparent') + ';color:' + (isTek?'#fff':'var(--muted-foreground)') + ';'
-        + 'font-size:10px;font-weight:700;cursor:pointer;font-family:Poppins,sans-serif">Tek</button>'
-        + '<button onclick="_konaklamaOdaTipSec(' + t._rowIdx + ',' + i + ',\'cift\')" '
-        + 'style="height:26px;padding:0 9px;border:1.5px solid ' + (!isTek?'#6b1b1b':'var(--border)') + ';border-radius:5px;'
-        + 'background:' + (!isTek?'#6b1b1b':'transparent') + ';color:' + (!isTek?'#fff':'var(--muted-foreground)') + ';'
-        + 'font-size:10px;font-weight:700;cursor:pointer;font-family:Poppins,sans-serif">Çift</button>'
-        + '</div></div>';
-      if (!isTek) {
-        html += '<div style="display:flex;align-items:center;gap:8px;margin-top:5px">'
-          + '<span style="font-size:10px;color:var(--muted-foreground);flex-shrink:0;white-space:nowrap">Oda arkadaşı:</span>'
-          + '<select onchange="_konaklamaEsiSec(' + t._rowIdx + ',' + i + ',this.value)" '
-          + 'style="flex:1;min-width:0;height:28px;padding:0 8px;border:1.5px solid var(--border);border-radius:6px;'
-          + 'font-size:11px;font-weight:600;background:var(--card);color:var(--foreground);font-family:Poppins,sans-serif;cursor:pointer">'
-          + esiOpts + '</select>'
-          + (p.odaEsi?'<span style="font-size:11px;font-weight:700;color:#15803d;flex-shrink:0">✓</span>':'<span style="font-size:10px;color:#d97706;flex-shrink:0">?</span>')
+    if (!atanmamis.length) {
+      html += '<div style="padding:24px 16px;text-align:center;color:var(--muted-foreground);font-size:12px">✅ Tüm kişiler atandı.</div>';
+    } else {
+      atanmamis.forEach(function(p) {
+        var i = kat.indexOf(p);
+        html += '<div style="padding:8px 16px;border-bottom:1px solid var(--border)">'
+          + '<div style="display:flex;align-items:center;gap:8px">'
+          + '<div style="flex:1;min-width:0">'
+          + '<div style="font-size:11.5px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--foreground)">' + p.kisi + '</div>'
+          + '<div style="font-size:10px;color:var(--muted-foreground);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (p.gorev||p.kategori||'') + '</div>'
+          + '</div>'
+          + '<div style="display:flex;gap:4px;flex-shrink:0">'
+          + '<button onclick="_konaklamaOdaTipSec(' + t._rowIdx + ',' + i + ',\'tek\')" '
+          + 'style="height:26px;padding:0 9px;border:1.5px solid var(--border);border-radius:5px;'
+          + 'background:transparent;color:var(--muted-foreground);'
+          + 'font-size:10px;font-weight:700;cursor:pointer;font-family:Poppins,sans-serif">Tek</button>'
+          + '<button onclick="_konaklamaOdaTipSec(' + t._rowIdx + ',' + i + ',\'cift\')" '
+          + 'style="height:26px;padding:0 9px;border:1.5px solid var(--border);border-radius:5px;'
+          + 'background:transparent;color:var(--muted-foreground);'
+          + 'font-size:10px;font-weight:700;cursor:pointer;font-family:Poppins,sans-serif">Çift</button>'
+          + '</div></div>'
           + '</div>';
-      }
-      html += '</div>';
-    });
+      });
+    }
 
   // ── ÇİFT ODA SEKMESİ
   } else if (aktif === 'cift') {
     if (!ciftGruplar.length) {
       html += '<div style="padding:24px 16px;text-align:center;color:var(--muted-foreground);font-size:12px">Çift odada kimse yok.</div>';
     } else {
-      html += '<div style="padding:10px 12px;display:grid;grid-template-columns:1fr 1fr;gap:8px">';
+      html += '<div style="padding:10px 12px;display:flex;flex-direction:column;gap:6px">';
       ciftGruplar.forEach(function(gr) {
-        html += '<div style="border:1.5px solid #6b1b1b;border-radius:8px;padding:10px 12px;background:#fdf5f5;min-width:0;overflow:hidden">';
+        html += '<div style="border:1.5px solid #6b1b1b;border-radius:8px;padding:10px 12px;background:#fdf5f5;display:flex;flex-direction:column;gap:0">';
         gr.forEach(function(p, pi) {
-          html += (pi>0?'<div style="margin-top:7px;padding-top:7px;border-top:1px dashed #e0c8c8">':'<div>')
+          var i = kat.indexOf(p);
+          var esiOpts = '<option value="">— Oda arkadaşı seç —</option>';
+          ciftler.forEach(function(q, qi) {
+            if (q.kisi === p.kisi) return;
+            esiOpts += '<option value="' + kat.indexOf(q) + '"' + (p.odaEsi===q.kisi?' selected':'') + '>' + q.kisi + '</option>';
+          });
+          html += (pi>0?'<div style="margin-top:7px;padding-top:7px;border-top:1px dashed #e0c8c8">':'<div>');
+          html += '<div style="display:flex;align-items:center;gap:6px">'
+            + '<div style="flex:1;min-width:0">'
             + '<div style="font-size:11.5px;font-weight:700;color:#1a1a1a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + p.kisi + '</div>'
             + '<div style="font-size:10px;color:#6b1b1b;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (p.gorev||p.kategori||'') + '</div>'
+            + '</div>'
+            + '<button onclick="_konaklamaOdaTipSec(' + t._rowIdx + ',' + i + ',\'\')" '
+            + 'title="Atamayı kaldır" '
+            + 'style="flex-shrink:0;height:22px;width:22px;border:1px solid #e0c8c8;border-radius:4px;background:#fff;color:#999;font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center">✕</button>'
             + '</div>';
+          html += '</div>';
         });
-        if (gr.length===1) {
-          html += '<div style="margin-top:7px;padding-top:7px;border-top:1px dashed #e0c8c8;font-size:10px;color:#bbb;font-style:italic">Oda arkadaşı atanmadı</div>';
+        // Eşleştirme — grup tek kişiyse eşleştirme dropdown'u göster
+        if (gr.length === 1) {
+          var p = gr[0];
+          var i = kat.indexOf(p);
+          var esiOpts = '<option value="">— Oda arkadaşı seç —</option>';
+          ciftler.forEach(function(q) {
+            if (q.kisi === p.kisi) return;
+            esiOpts += '<option value="' + kat.indexOf(q) + '"' + (p.odaEsi===q.kisi?' selected':'') + '>' + q.kisi + '</option>';
+          });
+          html += '<div style="display:flex;align-items:center;gap:8px;margin-top:7px;padding-top:7px;border-top:1px dashed #e0c8c8">'
+            + '<span style="font-size:10px;color:var(--muted-foreground);flex-shrink:0;white-space:nowrap">Oda arkadaşı:</span>'
+            + '<select onchange="_konaklamaEsiSec(' + t._rowIdx + ',' + i + ',this.value)" '
+            + 'style="flex:1;min-width:0;height:28px;padding:0 8px;border:1.5px solid var(--border);border-radius:6px;'
+            + 'font-size:11px;font-weight:600;background:var(--card);color:var(--foreground);font-family:Poppins,sans-serif;cursor:pointer">'
+            + esiOpts + '</select>'
+            + '<span style="font-size:10px;color:#d97706;flex-shrink:0">?</span>'
+            + '</div>';
         }
         html += '</div>';
       });
@@ -5612,9 +5632,17 @@ function _konaklamaSekmesiHTML(t, rowIdx) {
     } else {
       html += '<div style="padding:10px 12px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">';
       tekler.forEach(function(p) {
-        html += '<div style="border:1.5px solid #6b1b1b;border-radius:8px;padding:10px 12px;background:#fdf5f5;min-width:0;overflow:hidden">'
+        var i = kat.indexOf(p);
+        html += '<div style="border:1.5px solid #6b1b1b;border-radius:8px;padding:10px 12px;background:#fdf5f5;min-width:0;overflow:hidden;position:relative">'
+          + '<div style="display:flex;align-items:flex-start;gap:4px">'
+          + '<div style="flex:1;min-width:0">'
           + '<div style="font-size:11.5px;font-weight:700;color:#1a1a1a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + p.kisi + '</div>'
           + '<div style="font-size:10px;color:#6b1b1b;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (p.gorev||p.kategori||'') + '</div>'
+          + '</div>'
+          + '<button onclick="_konaklamaOdaTipSec(' + t._rowIdx + ',' + i + ',\'\')" '
+          + 'title="Atamayı kaldır" '
+          + 'style="flex-shrink:0;height:18px;width:18px;border:1px solid #e0c8c8;border-radius:3px;background:#fff;color:#999;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;line-height:1">✕</button>'
+          + '</div>'
           + '</div>';
       });
       html += '</div>';
@@ -5638,17 +5666,19 @@ function _konaklamaOdaTipSec(rowIdx, kisiIdx, tip) {
   var t = turneler.find(function(x){ return x._rowIdx === rowIdx; });
   if (!t || !t.katilimcilar || !t.katilimcilar[kisiIdx]) return;
   var p = t.katilimcilar[kisiIdx];
+  // Eski eşi varsa bağını kaldır
   if (p.odaEsi) {
     var eskiEsi = t.katilimcilar.find(function(x){ return x.kisi === p.odaEsi; });
     if (eskiEsi) { eskiEsi.odaEsi = ''; }
   }
-  p.odaTip = tip;
+  p.odaTip = tip || undefined; // boş string → atama kaldır
+  if (!tip) delete p.odaTip;
   p.odaEsi = '';
   _cdAktifTab = 'konaklama';
-  // Sekmeyi 'tumü' olarak koru — kullanıcı tümü sekmesindeyken buton tıklayınca sekmeden çıkmasın
-  if (_konaklamaAktifSekme !== 'tumü') {
-    // tek veya çift sekmesindeyse de kalabilir, sadece resetleme
-  }
+  // Atama yapılınca ilgili sekmeye geç; kaldırınca Tümü'ne dön
+  if (tip === 'tek') _konaklamaAktifSekme = 'tek';
+  else if (tip === 'cift') _konaklamaAktifSekme = 'cift';
+  else _konaklamaAktifSekme = 'tumü';
   _renderCardDetail(rowIdx);
   _konaklamaSheetKaydet(t);
 }
