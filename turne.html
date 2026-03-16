@@ -5482,6 +5482,8 @@ function _renderCardDetail(rowIdx) {
 // KONAKLAMA SEKMESİ
 // ════════════════════════════════════════════════════════════
 
+var _konaklamaAktifSekme = 'cift'; // 'tek' veya 'cift'
+
 function _konaklamaSekmesiHTML(t, rowIdx) {
   var kat = t.katilimcilar || [];
   if (!kat.length) {
@@ -5493,22 +5495,39 @@ function _konaklamaSekmesiHTML(t, rowIdx) {
   var tekler  = kat.filter(function(p){ return p.odaTip === 'tek'; });
   var ciftler = kat.filter(function(p){ return p.odaTip === 'cift' || !p.odaTip; });
   var ciftOdaSay = Math.ceil(ciftler.length / 2);
+  var aktif = _konaklamaAktifSekme;
 
   var html = '<div>';
 
-  // Özet + PDF
+  // ── Özet + PDF butonu
   html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:var(--muted);border-bottom:1px solid var(--border);flex-wrap:wrap;gap:8px">'
     + '<div style="display:flex;gap:14px">'
     + '<span style="font-size:12px;font-weight:700">🛏 Tek: <strong>' + tekler.length + '</strong></span>'
     + '<span style="font-size:12px;font-weight:700">🛏🛏 Çift Oda: <strong>' + ciftOdaSay + '</strong></span>'
     + '</div>'
-    + '<button onclick="_konaklamaPdfIndir(' + rowIdx + ')" style="height:28px;padding:0 12px;border:none;border-radius:6px;background:var(--primary);font-size:10.5px;font-weight:700;cursor:pointer;font-family:Poppins,sans-serif;color:#fff">📄 PDF</button>'
+    + '<button onclick="_konaklamaPdfIndir(' + rowIdx + ')" style="height:28px;padding:0 12px;border:none;border-radius:6px;background:#6b1b1b;font-size:10.5px;font-weight:700;cursor:pointer;font-family:Poppins,sans-serif;color:#fff">📄 PDF</button>'
     + '</div>';
 
-  // Kişi listesi
-  kat.forEach(function(p, i) {
-    var isTek  = p.odaTip === 'tek';
-    var isCift = !isTek;
+  // ── Tek / Çift sekme butonları
+  html += '<div style="display:flex;border-bottom:2px solid var(--border)">'
+    + '<button onclick="_konaklamaSekmeGec(\'' + rowIdx + '\',\'cift\')" style="flex:1;height:38px;border:none;background:' + (aktif==='cift'?'var(--background)':'var(--muted)') + ';'
+    + 'border-bottom:2.5px solid ' + (aktif==='cift'?'#6b1b1b':'transparent') + ';margin-bottom:-2px;'
+    + 'color:' + (aktif==='cift'?'#6b1b1b':'var(--muted-foreground)') + ';font-size:11.5px;font-weight:700;cursor:pointer;font-family:Poppins,sans-serif">'
+    + '🛏🛏 Çift Oda <span style="font-size:10px;opacity:.7">(' + ciftler.length + ' kişi)</span></button>'
+    + '<button onclick="_konaklamaSekmeGec(\'' + rowIdx + '\',\'tek\')" style="flex:1;height:38px;border:none;background:' + (aktif==='tek'?'var(--background)':'var(--muted)') + ';'
+    + 'border-bottom:2.5px solid ' + (aktif==='tek'?'#6b1b1b':'transparent') + ';margin-bottom:-2px;'
+    + 'color:' + (aktif==='tek'?'#6b1b1b':'var(--muted-foreground)') + ';font-size:11.5px;font-weight:700;cursor:pointer;font-family:Poppins,sans-serif">'
+    + '🛏 Tek Oda <span style="font-size:10px;opacity:.7">(' + tekler.length + ' kişi)</span></button>'
+    + '</div>';
+
+  // ── Aktif sekmeye göre liste
+  var gosteilen = aktif === 'tek' ? kat.filter(function(p){ return p.odaTip === 'tek'; })
+                                  : kat.filter(function(p){ return p.odaTip === 'cift' || !p.odaTip; });
+
+  // Tam kadro listesi üzerinden index bul
+  gosteilen.forEach(function(p) {
+    var i = kat.indexOf(p);
+    var isTek = p.odaTip === 'tek';
 
     var esiOptions = '<option value="">— Seç —</option>';
     kat.forEach(function(q, j) {
@@ -5517,7 +5536,7 @@ function _konaklamaSekmesiHTML(t, rowIdx) {
       esiOptions += '<option value="' + j + '"' + selected + '>' + q.kisi + '</option>';
     });
 
-    html += '<div style="padding:8px 16px;border-bottom:1px solid var(--border)">'
+    html += '<div style="padding:9px 16px;border-bottom:1px solid var(--border)">'
       + '<div style="display:flex;align-items:center;gap:8px">'
       + '<div style="flex:1;min-width:0">'
       + '<div style="font-size:12px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + p.kisi + '</div>'
@@ -5525,31 +5544,40 @@ function _konaklamaSekmesiHTML(t, rowIdx) {
       + '</div>'
       + '<div style="display:flex;gap:4px;flex-shrink:0">'
       + '<button onclick="_konaklamaOdaTipSec(' + rowIdx + ',' + i + ',\'tek\')" '
-      + 'style="height:26px;padding:0 9px;border:1.5px solid ' + (isTek?'var(--primary)':'var(--border)') + ';border-radius:5px;'
-      + 'background:' + (isTek?'var(--primary)':'transparent') + ';color:' + (isTek?'#fff':'var(--muted-foreground)') + ';'
+      + 'style="height:26px;padding:0 9px;border:1.5px solid ' + (isTek?'#6b1b1b':'var(--border)') + ';border-radius:5px;'
+      + 'background:' + (isTek?'#6b1b1b':'transparent') + ';color:' + (isTek?'#fff':'var(--muted-foreground)') + ';'
       + 'font-size:10px;font-weight:700;cursor:pointer;font-family:Poppins,sans-serif">Tek</button>'
       + '<button onclick="_konaklamaOdaTipSec(' + rowIdx + ',' + i + ',\'cift\')" '
-      + 'style="height:26px;padding:0 9px;border:1.5px solid ' + (isCift?'var(--primary)':'var(--border)') + ';border-radius:5px;'
-      + 'background:' + (isCift?'var(--primary)':'transparent') + ';color:' + (isCift?'#fff':'var(--muted-foreground)') + ';'
+      + 'style="height:26px;padding:0 9px;border:1.5px solid ' + (!isTek?'#6b1b1b':'var(--border)') + ';border-radius:5px;'
+      + 'background:' + (!isTek?'#6b1b1b':'transparent') + ';color:' + (!isTek?'#fff':'var(--muted-foreground)') + ';'
       + 'font-size:10px;font-weight:700;cursor:pointer;font-family:Poppins,sans-serif">Çift</button>'
       + '</div></div>';
 
-    if (isCift) {
+    if (!isTek) {
       html += '<div style="display:flex;align-items:center;gap:8px;margin-top:5px">'
         + '<span style="font-size:10px;color:var(--muted-foreground);white-space:nowrap">Oda arkadaşı:</span>'
         + '<select onchange="_konaklamaEsiSec(' + rowIdx + ',' + i + ',this.value)" '
         + 'style="flex:1;height:28px;padding:0 8px;border:1.5px solid var(--border);border-radius:6px;font-size:11px;font-weight:600;'
         + 'background:var(--card);color:var(--foreground);font-family:Poppins,sans-serif;cursor:pointer">'
         + esiOptions + '</select>'
-        + (p.odaEsi ? '<span style="font-size:11px;font-weight:700;color:hsl(142,55%,32%)">✓</span>' : '<span style="font-size:10px;color:var(--muted-foreground)">?</span>')
+        + (p.odaEsi ? '<span style="font-size:11px;font-weight:700;color:#15803d">✓</span>' : '<span style="font-size:10px;color:#d97706">?</span>')
         + '</div>';
     }
 
     html += '</div>';
   });
 
+  if (!gosteilen.length) {
+    html += '<div style="padding:24px 16px;text-align:center;color:var(--muted-foreground);font-size:12px">Bu grupta kimse yok.</div>';
+  }
+
   html += '</div>';
   return html;
+}
+
+function _konaklamaSekmeGec(rowIdx, sekme) {
+  _konaklamaAktifSekme = sekme;
+  _cdSwitchTab('konaklama', parseInt(rowIdx));
 }
 
 function _konaklamaOdaTipSec(rowIdx, kisiIdx, tip) {
@@ -5562,6 +5590,7 @@ function _konaklamaOdaTipSec(rowIdx, kisiIdx, tip) {
   }
   p.odaTip = tip;
   p.odaEsi = '';
+  _konaklamaAktifSekme = tip;
   _cdSwitchTab('konaklama', rowIdx);
 }
 
@@ -5604,7 +5633,7 @@ function _konaklamaPdfIndir(rowIdx) {
   var tekler  = t.katilimcilar.filter(function(p){ return p.odaTip === 'tek'; });
   var ciftler = t.katilimcilar.filter(function(p){ return p.odaTip === 'cift' || !p.odaTip; });
 
-  // Çift odaları eşleşmiş gruplara ayır
+  // Çift odaları eşleşmiş gruplar
   var islendi = {};
   var ciftGruplar = [];
   ciftler.forEach(function(p) {
@@ -5618,23 +5647,24 @@ function _konaklamaPdfIndir(rowIdx) {
     ciftGruplar.push(grup);
   });
 
-  // Tek oda kartları HTML
+  // Tek oda kartları — 3'lü grid, vişne tonu
   var tekKartlar = tekler.map(function(p) {
-    return '<div class="oda-kart tek-kart">'
-      + '<div class="kisi-ad">' + p.kisi + '</div>'
-      + '<div class="kisi-kat">' + (p.gorev||p.kategori||'') + '</div>'
+    return '<div class="kart tek-kart">'
+      + '<div class="k-ad">' + p.kisi + '</div>'
+      + '<div class="k-kat">' + (p.gorev||p.kategori||'') + '</div>'
       + '</div>';
   }).join('');
 
-  // Çift oda kartları HTML — her grup bir kart, içinde 2 kişi
-  var ciftKartlar = ciftGruplar.map(function(grup, gi) {
-    var icerik = grup.map(function(p, pi) {
-      return '<div class="cift-kisi' + (pi > 0 ? ' cift-kisi-alt' : '') + '">'
-        + '<div class="kisi-ad">' + p.kisi + '</div>'
-        + '<div class="kisi-kat">' + (p.gorev||p.kategori||'') + '</div>'
-        + '</div>';
-    }).join('');
-    return '<div class="oda-kart cift-kart">' + icerik + '</div>';
+  // Çift oda kartları — 2'li grid, her kutuda 2 kişi
+  var ciftKartlar = ciftGruplar.map(function(grup) {
+    return '<div class="kart cift-kart">'
+      + grup.map(function(p, pi) {
+          return '<div class="cift-kisi' + (pi>0?' cift-kisi-alt':'') + '">'
+            + '<div class="k-ad">' + p.kisi + '</div>'
+            + '<div class="k-kat">' + (p.gorev||p.kategori||'') + '</div>'
+            + '</div>';
+        }).join('')
+      + '</div>';
   }).join('');
 
   var html = '<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8">'
@@ -5647,19 +5677,18 @@ function _konaklamaPdfIndir(rowIdx) {
     + '.baslik h1{font-size:15pt;font-weight:900;text-transform:uppercase;letter-spacing:1pt}'
     + '.baslik h2{font-size:10.5pt;font-weight:700;text-transform:uppercase;letter-spacing:.5pt;margin-top:4pt;color:#6b1b1b}'
     + '.baslik h3{font-size:9pt;font-weight:500;color:#777;margin-top:3pt}'
-    + '.bolum-baslik{font-size:11pt;font-weight:800;text-transform:uppercase;letter-spacing:.5pt;margin:16pt 0 8pt;'
-    +   'padding:6pt 12pt;border-radius:5pt;display:flex;align-items:center;gap:8pt}'
-    + '.bolum-tek{background:#edf2ff;color:#1e3a8a;border-left:4pt solid #1e3a8a}'
-    + '.bolum-cift{background:#fef3c7;color:#92400e;border-left:4pt solid #d97706}'
-    + '.kart-grid{display:grid;gap:8pt}'
+    + '.bolum{display:flex;align-items:center;gap:8pt;margin:14pt 0 8pt;padding:6pt 12pt;border-radius:5pt;background:#6b1b1b;color:#fff}'
+    + '.bolum-label{font-size:10.5pt;font-weight:800;text-transform:uppercase;letter-spacing:.5pt}'
+    + '.bolum-say{font-size:9pt;font-weight:500;opacity:.8}'
+    + '.kart-grid{display:grid;gap:7pt}'
     + '.tek-grid{grid-template-columns:repeat(3,1fr)}'
     + '.cift-grid{grid-template-columns:repeat(2,1fr)}'
-    + '.oda-kart{border-radius:6pt;padding:8pt 10pt;border:1pt solid}'
-    + '.tek-kart{background:#edf2ff;border-color:#bfdbfe}'
-    + '.cift-kart{background:#fffbeb;border-color:#fde68a}'
-    + '.kisi-ad{font-size:10pt;font-weight:800;line-height:1.3}'
-    + '.kisi-kat{font-size:8pt;color:#888;font-weight:500;margin-top:1pt}'
-    + '.cift-kisi-alt{margin-top:7pt;padding-top:7pt;border-top:1pt dashed #f0e0a0}'
+    + '.kart{border-radius:5pt;padding:8pt 10pt;border:1pt solid #d4b8b8;background:#fdf5f5}'
+    + '.tek-kart{border-left:3pt solid #6b1b1b}'
+    + '.cift-kart{border-left:3pt solid #9b2c2c}'
+    + '.k-ad{font-size:10pt;font-weight:800;line-height:1.3;color:#1a1a1a}'
+    + '.k-kat{font-size:8pt;color:#888;font-weight:500;margin-top:1pt}'
+    + '.cift-kisi-alt{margin-top:7pt;padding-top:7pt;border-top:1pt dashed #e0c8c8}'
     + '@media print{@page{size:A4;margin:12mm}body{padding:0}}'
     + '</style></head><body>'
     + '<div class="baslik">'
@@ -5667,10 +5696,10 @@ function _konaklamaPdfIndir(rowIdx) {
     + '<h2>' + ilStr.toUpperCase() + ' TURNESİ KONAKLAMA LİSTESİ</h2>'
     + '<h3>' + tarihStr + '</h3>'
     + '</div>'
-    + '<div class="bolum-baslik bolum-tek">🛏 Tek Oda &nbsp;<span style="font-weight:500;font-size:10pt">' + tekler.length + ' kişi</span></div>'
-    + (tekKartlar ? '<div class="kart-grid tek-grid">' + tekKartlar + '</div>' : '<div style="color:#bbb;font-style:italic;font-size:9pt;padding:4pt 0">—</div>')
-    + '<div class="bolum-baslik bolum-cift" style="margin-top:18pt">🛏🛏 Çift Oda &nbsp;<span style="font-weight:500;font-size:10pt">' + ciftGruplar.length + ' oda</span></div>'
-    + (ciftKartlar ? '<div class="kart-grid cift-grid">' + ciftKartlar + '</div>' : '<div style="color:#bbb;font-style:italic;font-size:9pt;padding:4pt 0">—</div>')
+    + '<div class="bolum"><span class="bolum-label">🛏 Tek Oda</span><span class="bolum-say">' + tekler.length + ' kişi</span></div>'
+    + (tekKartlar ? '<div class="kart-grid tek-grid">' + tekKartlar + '</div>' : '<div style="color:#bbb;font-style:italic;font-size:9pt;padding:4pt 2pt">—</div>')
+    + '<div class="bolum" style="margin-top:18pt"><span class="bolum-label">🛏🛏 Çift Oda</span><span class="bolum-say">' + ciftGruplar.length + ' oda</span></div>'
+    + (ciftKartlar ? '<div class="kart-grid cift-grid">' + ciftKartlar + '</div>' : '<div style="color:#bbb;font-style:italic;font-size:9pt;padding:4pt 2pt">—</div>')
     + '<script>window.onload=function(){window.print();};<\/script>'
     + '</body></html>';
 
