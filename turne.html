@@ -13342,7 +13342,16 @@ function _turneDosyasiOlustur(rowIdx) {
           }).join('')
     +   '</div>'
     // Harici belgeler
-    +   '<div style="font-size:10px;font-weight:700;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.6px;margin:16px 0 10px">Harici Belgeler (opsiyonel)</div>'
+    +   '<div style="font-size:10px;font-weight:700;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.6px;margin:16px 0 10px">Sabit Belgeler</div>'
+    +   '<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px">'
+    +   '<label style="display:flex;align-items:center;gap:10px;padding:9px 12px;border:1.5px solid #7c3aed;border-radius:8px;cursor:pointer;background:rgba(124,58,237,.04)" id="_tdl_genelge">'
+    +   '<input type="checkbox" id="_tdck_genelge" checked style="width:15px;height:15px;accent-color:#7c3aed;flex-shrink:0">'
+    +   '<div style="flex:1;min-width:0">'
+    +   '<div style="font-size:12px;font-weight:600;color:var(--foreground)">📋 2008 Turne Genelgesi</div>'
+    +   '<div style="font-size:10px;color:var(--muted-foreground)">Görev tanımları — Genel Müdürlük, otomatik eklenir</div>'
+    +   '</div></label>'
+    +   '</div>'
+    +   '<div style="font-size:10px;font-weight:700;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.6px;margin:0 0 10px">Harici Belgeler (opsiyonel)</div>'
     +   '<div id="_td_drop" style="border:2px dashed var(--border);border-radius:10px;padding:16px;text-align:center;cursor:pointer;transition:.2s;background:var(--muted)">'
     +     '<div style="font-size:22px;margin-bottom:6px">📄</div>'
     +     '<div style="font-size:12px;font-weight:600;color:var(--foreground)">PDF sürükle veya tıkla</div>'
@@ -13472,6 +13481,18 @@ function _turneDosyasiOlustur(rowIdx) {
           var srcDoc = await PDFLib.PDFDocument.load(new Uint8Array(ab));
           var pages = await mergedPdf.copyPages(srcDoc, srcDoc.getPageIndices());
           pages.forEach(function(p){ mergedPdf.addPage(p); });
+        }
+        // Genelge ekle
+        if (document.getElementById('_tdck_genelge') && document.getElementById('_tdck_genelge').checked) {
+          try {
+            var gRes = await fetch('https://izmir-dt.github.io/tiyatro-site/assets/turne-genelge-2008.pdf');
+            if (gRes.ok) {
+              var gAb = await gRes.arrayBuffer();
+              var gDoc = await PDFLib.PDFDocument.load(new Uint8Array(gAb));
+              var gPages = await mergedPdf.copyPages(gDoc, gDoc.getPageIndices());
+              gPages.forEach(function(p){ mergedPdf.addPage(p); });
+            } else { showToast('Genelge yüklenemedi', 'warn', 2000); }
+          } catch(ge) { showToast('Genelge yüklenemedi', 'warn', 2000); console.warn(ge); }
         }
         var pdfBytes = await mergedPdf.save();
         var blob = new Blob([pdfBytes], { type:'application/pdf' });
