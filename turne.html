@@ -5482,35 +5482,6 @@ function _renderCardDetail(rowIdx) {
 // KONAKLAMA SEKMESİ
 // ════════════════════════════════════════════════════════════
 
-// Tek odada kalması önerilen kategoriler
-var _TEK_ODA_KATS = ['Turne Başkanı', 'Sahne Amiri', 'Kondüvit', 'Mutemet', 'Teknik Direktör', 'Sahne Yöneticisi', 'Reji Yardımcısı (Sahne)'];
-
-function _konaklamaOtomatikOner(katilimcilar) {
-  // Her kişi için odaTip ve odaEsi belirle
-  var liste = katilimcilar.map(function(p) {
-    return {
-      kisi: p.kisi || '',
-      gorev: p.gorev || p.kategori || '',
-      kategori: p.kategori || '',
-      odaTip: p.odaTip || (_TEK_ODA_KATS.indexOf(p.kategori) >= 0 ? 'tek' : 'cift'),
-      odaEsi: p.odaEsi || ''
-    };
-  });
-
-  // Çift odaları eşleştir (henüz eşi olmayanları)
-  var ciftler = liste.filter(function(p) { return p.odaTip === 'cift' && !p.odaEsi; });
-  for (var i = 0; i < ciftler.length - 1; i += 2) {
-    ciftler[i].odaEsi = ciftler[i+1].kisi;
-    ciftler[i+1].odaEsi = ciftler[i].kisi;
-  }
-  // Tek sayıda çift oda kişisi varsa sona tek kalır
-  if (ciftler.length % 2 === 1) {
-    ciftler[ciftler.length-1].odaTip = 'tek';
-    ciftler[ciftler.length-1].odaEsi = '';
-  }
-  return liste;
-}
-
 function _konaklamaSekmesiHTML(t, rowIdx) {
   var katilimcilar = t.katilimcilar || [];
   if (!katilimcilar.length) {
@@ -5519,130 +5490,50 @@ function _konaklamaSekmesiHTML(t, rowIdx) {
       + 'Kadro atanmadan konaklama düzenlenemez.</div>';
   }
 
-  // Mevcut oda verisi yoksa otomatik öner
-  var herhangiOdaVar = katilimcilar.some(function(p){ return p.odaTip; });
-  var odaListe = herhangiOdaVar
-    ? katilimcilar.map(function(p){ return { kisi:p.kisi, gorev:p.gorev||p.kategori||'', kategori:p.kategori||'', odaTip:p.odaTip||'cift', odaEsi:p.odaEsi||'' }; })
-    : _konaklamaOtomatikOner(katilimcilar);
+  var tekler  = katilimcilar.filter(function(p){ return p.odaTip === 'tek'; });
+  var ciftler = katilimcilar.filter(function(p){ return p.odaTip === 'cift' || !p.odaTip; });
+  var tekSay  = tekler.length;
+  var ciftOdaSay = Math.ceil(ciftler.length / 2);
 
-  var tekSay  = odaListe.filter(function(p){ return p.odaTip === 'tek'; }).length;
-  var ciftSay = Math.ceil(odaListe.filter(function(p){ return p.odaTip === 'cift'; }).length / 2);
+  var html = '<div>';
 
-  var kisilerJSON = encodeURIComponent(JSON.stringify(odaListe));
-
-  var html = '<div style="padding:0">';
-
-  // Özet bar
-  html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:var(--muted);border-bottom:1px solid var(--border);gap:8px;flex-wrap:wrap">'
-    + '<div style="display:flex;gap:12px">'
-    + '<span style="font-size:12px;font-weight:700;color:var(--foreground)">🛏 Tek: <strong>' + tekSay + '</strong></span>'
-    + '<span style="font-size:12px;font-weight:700;color:var(--foreground)">🛏🛏 Çift: <strong>' + ciftSay + '</strong></span>'
+  // ── Özet + PDF butonu
+  html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:var(--muted);border-bottom:1px solid var(--border);flex-wrap:wrap;gap:8px">'
+    + '<div style="display:flex;gap:14px">'
+    + '<span style="font-size:12px;font-weight:700">🛏 Tek Oda: <strong>' + tekSay + '</strong></span>'
+    + '<span style="font-size:12px;font-weight:700">🛏🛏 Çift Oda: <strong>' + ciftOdaSay + '</strong></span>'
     + '</div>'
-    + '<div style="display:flex;gap:6px">'
-    + '<button onclick="_konaklamaOtomatikUygula(' + rowIdx + ')" style="height:28px;padding:0 10px;border:1.5px solid var(--border);border-radius:6px;background:var(--card);font-size:10.5px;font-weight:700;cursor:pointer;font-family:Poppins,sans-serif;color:var(--muted-foreground)">🔄 Yeniden Öner</button>'
-    + '<button onclick="_konaklamaPdfIndir(' + rowIdx + ')" style="height:28px;padding:0 10px;border:1.5px solid var(--primary);border-radius:6px;background:var(--primary);font-size:10.5px;font-weight:700;cursor:pointer;font-family:Poppins,sans-serif;color:#fff">📄 PDF</button>'
-    + '</div>'
+    + '<button onclick="_konaklamaPdfIndir(' + rowIdx + ')" style="height:28px;padding:0 12px;border:none;border-radius:6px;background:var(--primary);font-size:10.5px;font-weight:700;cursor:pointer;font-family:Poppins,sans-serif;color:#fff">📄 PDF</button>'
     + '</div>';
 
-  // Tek odalar
-  var tekler = odaListe.filter(function(p){ return p.odaTip === 'tek'; });
-  if (tekler.length) {
-    html += '<div style="padding:10px 16px 4px;font-size:10px;font-weight:800;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.6px">Tek Oda (' + tekler.length + ')</div>';
-    tekler.forEach(function(p, i) {
-      html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 16px;border-bottom:1px solid var(--border);gap:8px">'
-        + '<div style="min-width:0">'
-        + '<div style="font-size:12.5px;font-weight:700;color:var(--foreground);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + p.kisi + '</div>'
-        + '<div style="font-size:10.5px;color:var(--muted-foreground)">' + p.gorev + '</div>'
-        + '</div>'
-        + '<button onclick="_konaklamaTipDegistir(' + rowIdx + ',\'' + encodeURIComponent(p.kisi) + '\',\'cift\')" style="height:24px;padding:0 8px;border:1.5px solid var(--border);border-radius:5px;background:transparent;font-size:10px;font-weight:700;cursor:pointer;font-family:Poppins,sans-serif;color:var(--muted-foreground);white-space:nowrap">→ Çift</button>'
-        + '</div>';
-    });
-  }
+  // ── Kadro listesi — her kişiye tek/çift seçimi
+  html += '<div style="padding:8px 16px 4px;font-size:10px;font-weight:800;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.6px;margin-top:8px">Kadro — Oda Tipi</div>';
 
-  // Çift odalar — eşleştirilmiş
-  var ciftListesi = odaListe.filter(function(p){ return p.odaTip === 'cift'; });
-  var islendi = {};
-  var ciftGruplar = [];
-  ciftListesi.forEach(function(p) {
-    if (islendi[p.kisi]) return;
-    islendi[p.kisi] = true;
-    var grup = [p];
-    if (p.odaEsi) {
-      var esi = ciftListesi.find(function(x){ return x.kisi === p.odaEsi; });
-      if (esi && !islendi[esi.kisi]) { islendi[esi.kisi] = true; grup.push(esi); }
-    }
-    ciftGruplar.push(grup);
+  katilimcilar.forEach(function(p, i) {
+    var tip = p.odaTip || 'cift';
+    var isTek = tip === 'tek';
+    html += '<div style="display:flex;align-items:center;gap:8px;padding:7px 16px;border-bottom:1px solid var(--border)">'
+      + '<div style="flex:1;min-width:0">'
+      + '<div style="font-size:12px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + p.kisi + '</div>'
+      + '<div style="font-size:10px;color:var(--muted-foreground)">' + (p.gorev||p.kategori||'') + '</div>'
+      + '</div>'
+      + '<div style="display:flex;gap:4px;flex-shrink:0">'
+      + '<button onclick="_konaklamaOdaTipSec(' + rowIdx + ',' + i + ',\'tek\')" '
+      + 'style="height:26px;padding:0 8px;border:1.5px solid ' + (isTek ? 'var(--primary)' : 'var(--border)') + ';border-radius:5px;background:' + (isTek ? 'var(--primary)' : 'transparent') + ';color:' + (isTek ? '#fff' : 'var(--muted-foreground)') + ';font-size:10px;font-weight:700;cursor:pointer;font-family:Poppins,sans-serif">Tek</button>'
+      + '<button onclick="_konaklamaOdaTipSec(' + rowIdx + ',' + i + ',\'cift\')" '
+      + 'style="height:26px;padding:0 8px;border:1.5px solid ' + (!isTek ? 'var(--primary)' : 'var(--border)') + ';border-radius:5px;background:' + (!isTek ? 'var(--primary)' : 'transparent') + ';color:' + (!isTek ? '#fff' : 'var(--muted-foreground)') + ';font-size:10px;font-weight:700;cursor:pointer;font-family:Poppins,sans-serif">Çift</button>'
+      + '</div>'
+      + '</div>';
   });
-
-  if (ciftGruplar.length) {
-    html += '<div style="padding:10px 16px 4px;font-size:10px;font-weight:800;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.6px">Çift Oda (' + ciftGruplar.length + ')</div>';
-    ciftGruplar.forEach(function(grup, gi) {
-      html += '<div style="padding:8px 16px;border-bottom:1px solid var(--border)">'
-        + '<div style="display:flex;align-items:flex-start;gap:8px">'
-        + '<div style="width:20px;height:20px;border-radius:50%;background:var(--primary);color:#fff;font-size:9px;font-weight:900;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px">' + (gi+1) + '</div>'
-        + '<div style="flex:1;min-width:0">';
-      grup.forEach(function(p, pi) {
-        html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:6px' + (pi > 0 ? ';margin-top:5px;padding-top:5px;border-top:1px dashed var(--border)' : '') + '">'
-          + '<div style="min-width:0">'
-          + '<div style="font-size:12px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + p.kisi + '</div>'
-          + '<div style="font-size:10.5px;color:var(--muted-foreground)">' + p.gorev + '</div>'
-          + '</div>'
-          + '<button onclick="_konaklamaTipDegistir(' + rowIdx + ',\'' + encodeURIComponent(p.kisi) + '\',\'tek\')" style="height:22px;padding:0 7px;border:1.5px solid var(--border);border-radius:5px;background:transparent;font-size:9.5px;font-weight:700;cursor:pointer;font-family:Poppins,sans-serif;color:var(--muted-foreground);white-space:nowrap;flex-shrink:0">Tek →</button>'
-          + '</div>';
-      });
-      html += '</div></div></div>';
-    });
-  }
 
   html += '</div>';
   return html;
 }
 
-function _konaklamaTipDegistir(rowIdx, kisiEnc, yeniTip) {
+function _konaklamaOdaTipSec(rowIdx, kisiIdx, tip) {
   var t = turneler[rowIdx];
-  if (!t || !t.katilimcilar) return;
-  var kisi = decodeURIComponent(kisiEnc);
-
-  // Önce herkesi güncelle
-  var odaListe = _konaklamaOtomatikOner(t.katilimcilar);
-
-  // Bu kişinin tipini değiştir
-  var hedef = odaListe.find(function(p){ return p.kisi === kisi; });
-  if (!hedef) return;
-
-  // Eski eşinin bağını kopar
-  if (hedef.odaEsi) {
-    var eskiEsi = odaListe.find(function(p){ return p.kisi === hedef.odaEsi; });
-    if (eskiEsi) { eskiEsi.odaEsi = ''; }
-  }
-  hedef.odaTip = yeniTip;
-  hedef.odaEsi = '';
-
-  // Çift yapılıyorsa en yakın eşsiz çift kişiyle eşleştir
-  if (yeniTip === 'cift') {
-    var esiAday = odaListe.find(function(p){ return p.kisi !== kisi && p.odaTip === 'cift' && !p.odaEsi; });
-    if (esiAday) { hedef.odaEsi = esiAday.kisi; esiAday.odaEsi = hedef.kisi; }
-  }
-
-  // katilimcilar'a geri yaz
-  t.katilimcilar.forEach(function(p) {
-    var guncel = odaListe.find(function(x){ return x.kisi === p.kisi; });
-    if (guncel) { p.odaTip = guncel.odaTip; p.odaEsi = guncel.odaEsi; }
-  });
-
-  _cdSwitchTab('konaklama', rowIdx);
-}
-
-function _konaklamaOtomatikUygula(rowIdx) {
-  var t = turneler[rowIdx];
-  if (!t || !t.katilimcilar) return;
-  // Temizle ve yeniden öner
-  t.katilimcilar.forEach(function(p){ delete p.odaTip; delete p.odaEsi; });
-  var odaListe = _konaklamaOtomatikOner(t.katilimcilar);
-  t.katilimcilar.forEach(function(p) {
-    var guncel = odaListe.find(function(x){ return x.kisi === p.kisi; });
-    if (guncel) { p.odaTip = guncel.odaTip; p.odaEsi = guncel.odaEsi; }
-  });
+  if (!t || !t.katilimcilar || !t.katilimcilar[kisiIdx]) return;
+  t.katilimcilar[kisiIdx].odaTip = tip;
   _cdSwitchTab('konaklama', rowIdx);
 }
 
@@ -5650,53 +5541,41 @@ function _konaklamaPdfIndir(rowIdx) {
   var t = turneler[rowIdx];
   if (!t || !t.katilimcilar) return;
 
-  var herhangiOdaVar = t.katilimcilar.some(function(p){ return p.odaTip; });
-  var odaListe = herhangiOdaVar
-    ? t.katilimcilar.map(function(p){ return { kisi:p.kisi, gorev:p.gorev||p.kategori||'', kategori:p.kategori||'', odaTip:p.odaTip||'cift', odaEsi:p.odaEsi||'' }; })
-    : _konaklamaOtomatikOner(t.katilimcilar);
-
   var AYLAR_TR = ['Ocak','\u015eubat','Mart','Nisan','May\u0131s','Haziran','Temmuz','A\u011fustos','Eyl\u00fcl','Ekim','Kas\u0131m','Aral\u0131k'];
   function fmtTarih(s) {
     if (!s) return '';
     var p = s.split('-');
     return parseInt(p[2]) + ' ' + AYLAR_TR[parseInt(p[1])-1] + ' ' + p[0];
   }
+
   var ilStr = typeof durakIlStr === 'function' ? durakIlStr(t).replace(/\/MERKEZ/gi,'') : (t.il||'');
   var tarihStr = fmtTarih(t.baslangicTarih||t.tarih) + (t.bitisTarih && t.bitisTarih !== t.baslangicTarih ? ' - ' + fmtTarih(t.bitisTarih) : '');
 
-  var tekler = odaListe.filter(function(p){ return p.odaTip === 'tek'; });
-  var ciftListesi = odaListe.filter(function(p){ return p.odaTip === 'cift'; });
+  var tekler  = t.katilimcilar.filter(function(p){ return p.odaTip === 'tek'; });
+  var ciftler = t.katilimcilar.filter(function(p){ return p.odaTip === 'cift' || !p.odaTip; });
 
-  // Tek oda satırları — 2 sütun
+  // Tek oda satırları — 2 kişi yan yana
   var tekRows = '';
   for (var i = 0; i < tekler.length; i += 2) {
-    tekRows += '<tr>';
-    tekRows += '<td>' + tekler[i].kisi + '<span class="kat">(' + tekler[i].gorev + ')</span></td>';
-    tekRows += '<td>' + (tekler[i+1] ? tekler[i+1].kisi + '<span class="kat">(' + tekler[i+1].gorev + ')</span>' : '') + '</td>';
-    tekRows += '</tr>';
+    tekRows += '<tr>'
+      + '<td>' + tekler[i].kisi + ' <span class="kat">(' + (tekler[i].gorev||tekler[i].kategori||'') + ')</span></td>'
+      + '<td>' + (tekler[i+1] ? tekler[i+1].kisi + ' <span class="kat">(' + (tekler[i+1].gorev||tekler[i+1].kategori||'') + ')</span>' : '') + '</td>'
+      + '</tr>';
   }
 
-  // Çift oda satırları — 3 sütun (oda no, kişi 1, kişi 2)
-  var islendi = {};
-  var ciftGruplar = [];
-  ciftListesi.forEach(function(p) {
-    if (islendi[p.kisi]) return;
-    islendi[p.kisi] = true;
-    var grup = [p];
-    if (p.odaEsi) {
-      var esi = ciftListesi.find(function(x){ return x.kisi === p.odaEsi; });
-      if (esi && !islendi[esi.kisi]) { islendi[esi.kisi] = true; grup.push(esi); }
+  // Çift oda satırları — 3 kişi yan yana (oda grupları)
+  var ciftRows = '';
+  for (var j = 0; j < ciftler.length; j += 3) {
+    ciftRows += '<tr>';
+    for (var k = j; k < Math.min(j+3, ciftler.length); k++) {
+      ciftRows += '<td>' + ciftler[k].kisi + ' <span class="kat">(' + (ciftler[k].gorev||ciftler[k].kategori||'') + ')</span></td>';
     }
-    ciftGruplar.push(grup);
-  });
-
-  var ciftRows = ciftGruplar.map(function(grup, gi) {
-    return '<tr>'
-      + '<td style="text-align:center;font-weight:900;font-size:13pt;color:#6b1b1b">' + (gi+1) + '</td>'
-      + '<td>' + grup[0].kisi + '<span class="kat">(' + grup[0].gorev + ')</span></td>'
-      + '<td>' + (grup[1] ? grup[1].kisi + '<span class="kat">(' + grup[1].gorev + ')</span>' : '<span style="color:#bbb;font-style:italic">—</span>') + '</td>'
-      + '</tr>';
-  }).join('');
+    // Eksik hücreleri doldur
+    for (var m = ciftler.length - j; m < 3 && j + m < j + 3; m++) {
+      if (j + m >= ciftler.length) ciftRows += '<td></td>';
+    }
+    ciftRows += '</tr>';
+  }
 
   var html = '<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8">'
     + '<title>Konaklama Listesi</title>'
@@ -5704,17 +5583,16 @@ function _konaklamaPdfIndir(rowIdx) {
     + '@import url(\'https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800;900&display=swap\');'
     + '*{box-sizing:border-box;margin:0;padding:0}'
     + 'body{font-family:Poppins,Arial,sans-serif;font-size:10pt;color:#1a1a1a;padding:14mm 16mm;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
-    + '.baslik{text-align:center;margin-bottom:16pt}'
-    + '.baslik h1{font-size:16pt;font-weight:900;text-transform:uppercase;letter-spacing:1pt}'
-    + '.baslik h2{font-size:12pt;font-weight:700;text-transform:uppercase;letter-spacing:.5pt;margin-top:4pt;color:#6b1b1b}'
-    + '.baslik h3{font-size:10pt;font-weight:600;color:#555;margin-top:3pt}'
-    + '.bolum{font-size:9pt;font-weight:800;text-transform:uppercase;letter-spacing:.8pt;background:#6b1b1b;color:#fff;padding:5pt 10pt;margin:14pt 0 0}'
-    + '.ozet{display:inline-block;font-size:9pt;font-weight:700;color:#6b1b1b;margin:6pt 0 8pt}'
+    + '.baslik{text-align:center;margin-bottom:16pt;border-bottom:3pt solid #1a1a1a;padding-bottom:12pt}'
+    + '.baslik h1{font-size:15pt;font-weight:900;text-transform:uppercase;letter-spacing:1pt}'
+    + '.baslik h2{font-size:11pt;font-weight:700;text-transform:uppercase;letter-spacing:.5pt;margin-top:4pt}'
+    + '.baslik h3{font-size:9.5pt;font-weight:500;color:#555;margin-top:3pt}'
+    + '.bolum{font-size:10pt;font-weight:800;text-transform:uppercase;letter-spacing:.5pt;margin:14pt 0 6pt;border-bottom:1.5pt solid #1a1a1a;padding-bottom:4pt}'
     + 'table{width:100%;border-collapse:collapse}'
-    + 'td{padding:6pt 9pt;border-bottom:1pt solid #eee;font-size:10pt;vertical-align:middle}'
+    + 'td{padding:5pt 8pt;border-bottom:1pt solid #eee;font-size:10pt;vertical-align:top;width:50%}'
+    + '.cift td{width:33.33%}'
     + 'tr:last-child td{border-bottom:none}'
-    + 'tr:nth-child(even) td{background:#fafafa}'
-    + '.kat{font-size:8.5pt;color:#888;font-weight:400;margin-left:5pt}'
+    + '.kat{font-size:8.5pt;color:#888;font-weight:400}'
     + '@media print{@page{size:A4;margin:12mm}body{padding:0}}'
     + '</style></head><body>'
     + '<div class="baslik">'
@@ -5723,9 +5601,9 @@ function _konaklamaPdfIndir(rowIdx) {
     + '<h3>' + tarihStr + '</h3>'
     + '</div>'
     + '<div class="bolum">Tek Oda: ' + tekler.length + '</div>'
-    + (tekRows ? '<table><tbody>' + tekRows + '</tbody></table>' : '<div style="padding:8pt 10pt;color:#aaa;font-size:9pt">—</div>')
-    + '<div class="bolum" style="margin-top:14pt">Çift Oda: ' + ciftGruplar.length + '</div>'
-    + (ciftRows ? '<table><thead><tr><th style="width:36pt;text-align:center;background:#f5f0f0;padding:5pt 9pt;font-size:8pt;border-bottom:2pt solid #6b1b1b">Oda</th><th style="background:#f5f0f0;padding:5pt 9pt;font-size:8pt;border-bottom:2pt solid #6b1b1b">1. Kişi</th><th style="background:#f5f0f0;padding:5pt 9pt;font-size:8pt;border-bottom:2pt solid #6b1b1b">2. Kişi</th></tr></thead><tbody>' + ciftRows + '</tbody></table>' : '<div style="padding:8pt 10pt;color:#aaa;font-size:9pt">—</div>')
+    + '<table><tbody>' + (tekRows || '<tr><td colspan="2" style="color:#aaa;font-style:italic">—</td></tr>') + '</tbody></table>'
+    + '<div class="bolum">Çift Oda: ' + Math.ceil(ciftler.length/2) + '</div>'
+    + '<table class="cift"><tbody>' + (ciftRows || '<tr><td colspan="3" style="color:#aaa;font-style:italic">—</td></tr>') + '</tbody></table>'
     + '<script>window.onload=function(){window.print();};<\/script>'
     + '</body></html>';
 
@@ -5734,6 +5612,7 @@ function _konaklamaPdfIndir(rowIdx) {
   win.document.write(html);
   win.document.close();
 }
+
 
 function _cdSwitchTab(tabId, rowIdx) {
   _cdAktifTab = tabId;
