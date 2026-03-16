@@ -5494,11 +5494,10 @@ function _konaklamaSekmesiHTML(t, rowIdx) {
 
   var tekler  = kat.filter(function(p){ return p.odaTip === 'tek'; });
   var ciftler = kat.filter(function(p){ return p.odaTip === 'cift' || !p.odaTip; });
-  var atamasizlar = kat.filter(function(p){ return !p.odaTip; });
   var ciftOdaSay = Math.ceil(ciftler.length / 2);
   var aktif = _konaklamaAktifSekme;
 
-  // Çift odaları eşleşmiş gruplara ayır
+  // Çift gruplar
   var islendi = {};
   var ciftGruplar = [];
   ciftler.forEach(function(p) {
@@ -5514,7 +5513,7 @@ function _konaklamaSekmesiHTML(t, rowIdx) {
 
   var html = '<div>';
 
-  // ── Özet + PDF
+  // Özet + PDF
   html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:var(--muted);border-bottom:1px solid var(--border);flex-wrap:wrap;gap:8px">'
     + '<div style="display:flex;gap:14px">'
     + '<span style="font-size:12px;font-weight:700">🛏 Tek: <strong>' + tekler.length + '</strong></span>'
@@ -5523,41 +5522,38 @@ function _konaklamaSekmesiHTML(t, rowIdx) {
     + '<button onclick="_konaklamaPdfIndir(' + rowIdx + ')" style="height:28px;padding:0 12px;border:none;border-radius:6px;background:#6b1b1b;font-size:10.5px;font-weight:700;cursor:pointer;font-family:Poppins,sans-serif;color:#fff">📄 PDF</button>'
     + '</div>';
 
-  // ── 3 sekme: Tümü / Çift Oda / Tek Oda
+  // 3 sekme
   var sekmeler = [
-    { id:'tumü',  label:'👥 Tümü',         say: kat.length },
-    { id:'cift',  label:'🛏🛏 Çift Oda',   say: ciftler.length },
-    { id:'tek',   label:'🛏 Tek Oda',       say: tekler.length },
+    { id:'tumü', label:'👥 Tümü',        say: kat.length },
+    { id:'cift', label:'🛏🛏 Çift Oda', say: ciftler.length },
+    { id:'tek',  label:'🛏 Tek Oda',     say: tekler.length },
   ];
   html += '<div style="display:flex;border-bottom:2px solid var(--border)">';
   sekmeler.forEach(function(s) {
-    var isAktif = aktif === s.id;
-    html += '<button onclick="_konaklamaSekmeGec(\'' + rowIdx + '\',\'' + s.id + '\')" '
-      + 'style="flex:1;height:36px;border:none;background:' + (isAktif?'var(--background)':'var(--muted)') + ';'
-      + 'border-bottom:2.5px solid ' + (isAktif?'#6b1b1b':'transparent') + ';margin-bottom:-2px;'
-      + 'color:' + (isAktif?'#6b1b1b':'var(--muted-foreground)') + ';font-size:10.5px;font-weight:700;'
-      + 'cursor:pointer;font-family:Poppins,sans-serif;white-space:nowrap">'
-      + s.label + ' <span style="font-size:9.5px;opacity:.65">(' + s.say + ')</span></button>';
+    var a = aktif === s.id;
+    html += '<button onclick="_konaklamaSekmeGec(' + rowIdx + ',\'' + s.id + '\')" '
+      + 'style="flex:1;height:36px;border:none;background:' + (a?'var(--background)':'var(--muted)') + ';'
+      + 'border-bottom:2.5px solid ' + (a?'#6b1b1b':'transparent') + ';margin-bottom:-2px;'
+      + 'color:' + (a?'#6b1b1b':'var(--muted-foreground)') + ';font-size:10px;font-weight:700;'
+      + 'cursor:pointer;font-family:Poppins,sans-serif;white-space:nowrap;padding:0 4px">'
+      + s.label + ' <span style="font-size:9px;opacity:.65">(' + s.say + ')</span></button>';
   });
   html += '</div>';
 
-  // ── İçerik
+  // İçerik
   if (aktif === 'tumü') {
-    // Tüm kadro — Tek/Çift toggle + oda arkadaşı seçimi
     kat.forEach(function(p, i) {
       var isTek = p.odaTip === 'tek';
-      var esiOptions = '<option value="">— Seç —</option>';
+      var esiOpts = '<option value="">— Seç —</option>';
       kat.forEach(function(q, j) {
         if (j === i || q.odaTip === 'tek') return;
-        var sel = (p.odaEsi === q.kisi) ? ' selected' : '';
-        esiOptions += '<option value="' + j + '"' + sel + '>' + q.kisi + '</option>';
+        esiOpts += '<option value="' + j + '"' + (p.odaEsi===q.kisi?' selected':'') + '>' + q.kisi + '</option>';
       });
-
-      html += '<div style="padding:9px 16px;border-bottom:1px solid var(--border)">'
+      html += '<div style="padding:8px 16px;border-bottom:1px solid var(--border)">'
         + '<div style="display:flex;align-items:center;gap:8px">'
-        + '<div style="flex:1;min-width:0">'
-        + '<div style="font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + p.kisi + '</div>'
-        + '<div style="font-size:10.5px;color:var(--muted-foreground);font-weight:500">' + (p.gorev||p.kategori||'') + '</div>'
+        + '<div style="flex:1;min-width:0;overflow:hidden">'
+        + '<div style="font-size:12px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + p.kisi + '</div>'
+        + '<div style="font-size:10px;color:var(--muted-foreground);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (p.gorev||p.kategori||'') + '</div>'
         + '</div>'
         + '<div style="display:flex;gap:4px;flex-shrink:0">'
         + '<button onclick="_konaklamaOdaTipSec(' + rowIdx + ',' + i + ',\'tek\')" '
@@ -5569,36 +5565,34 @@ function _konaklamaSekmesiHTML(t, rowIdx) {
         + 'background:' + (!isTek?'#6b1b1b':'transparent') + ';color:' + (!isTek?'#fff':'var(--muted-foreground)') + ';'
         + 'font-size:10px;font-weight:700;cursor:pointer;font-family:Poppins,sans-serif">Çift</button>'
         + '</div></div>';
-
       if (!isTek) {
         html += '<div style="display:flex;align-items:center;gap:8px;margin-top:5px">'
-          + '<span style="font-size:10px;color:var(--muted-foreground);white-space:nowrap">Oda arkadaşı:</span>'
+          + '<span style="font-size:10px;color:var(--muted-foreground);flex-shrink:0">Oda arkadaşı:</span>'
           + '<select onchange="_konaklamaEsiSec(' + rowIdx + ',' + i + ',this.value)" '
-          + 'style="flex:1;height:28px;padding:0 8px;border:1.5px solid var(--border);border-radius:6px;font-size:11px;font-weight:600;'
-          + 'background:var(--card);color:var(--foreground);font-family:Poppins,sans-serif;cursor:pointer">'
-          + esiOptions + '</select>'
-          + (p.odaEsi ? '<span style="font-size:11px;font-weight:700;color:#15803d">✓</span>' : '<span style="font-size:10px;color:#d97706">?</span>')
+          + 'style="flex:1;min-width:0;height:28px;padding:0 8px;border:1.5px solid var(--border);border-radius:6px;'
+          + 'font-size:11px;font-weight:600;background:var(--card);color:var(--foreground);font-family:Poppins,sans-serif;cursor:pointer">'
+          + esiOpts + '</select>'
+          + (p.odaEsi?'<span style="font-size:11px;font-weight:700;color:#15803d;flex-shrink:0">✓</span>':'<span style="font-size:10px;color:#d97706;flex-shrink:0">?</span>')
           + '</div>';
       }
       html += '</div>';
     });
 
   } else if (aktif === 'cift') {
-    // Çift oda — eşleşmiş gruplar kutucuklar halinde
     if (!ciftGruplar.length) {
       html += '<div style="padding:24px 16px;text-align:center;color:var(--muted-foreground);font-size:12px">Çift odada kimse yok.</div>';
     } else {
-      html += '<div style="padding:12px 16px;display:grid;grid-template-columns:1fr 1fr;gap:8px;min-width:0">';
-      ciftGruplar.forEach(function(grup, gi) {
-        html += '<div style="border:1.5px solid #6b1b1b;border-radius:8px;padding:10px 12px;background:#fdf5f5">';
+      html += '<div style="padding:10px 12px;display:grid;grid-template-columns:1fr 1fr;gap:8px">';
+      ciftGruplar.forEach(function(grup) {
+        html += '<div style="border:1.5pt solid #6b1b1b;border-radius:8px;padding:10px 12px;background:#fdf5f5;min-width:0;overflow:hidden">';
         grup.forEach(function(p, pi) {
-          html += (pi > 0 ? '<div style="margin-top:8px;padding-top:8px;border-top:1px dashed #e0c8c8">' : '<div>')
-            + '<div style="font-size:11.5px;font-weight:700;color:#1a1a1a;word-break:break-word;line-height:1.3">' + p.kisi + '</div>'
-            + '<div style="font-size:9.5px;color:#6b1b1b;font-weight:600;margin-top:1px">' + (p.gorev||p.kategori||'') + '</div>'
+          html += (pi>0?'<div style="margin-top:7px;padding-top:7px;border-top:1px dashed #e0c8c8">':'<div>')
+            + '<div style="font-size:11.5px;font-weight:800;color:#1a1a1a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + p.kisi + '</div>'
+            + '<div style="font-size:10px;color:#6b1b1b;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (p.gorev||p.kategori||'') + '</div>'
             + '</div>';
         });
-        if (grup.length === 1) {
-          html += '<div style="margin-top:8px;padding-top:8px;border-top:1px dashed #e0c8c8;font-size:10px;color:#bbb;font-style:italic">Oda arkadaşı atanmadı</div>';
+        if (grup.length===1) {
+          html += '<div style="margin-top:7px;padding-top:7px;border-top:1px dashed #e0c8c8;font-size:10px;color:#ccc;font-style:italic">Oda arkadaşı atanmadı</div>';
         }
         html += '</div>';
       });
@@ -5606,15 +5600,14 @@ function _konaklamaSekmesiHTML(t, rowIdx) {
     }
 
   } else {
-    // Tek oda — kutucuklar
     if (!tekler.length) {
       html += '<div style="padding:24px 16px;text-align:center;color:var(--muted-foreground);font-size:12px">Tek odada kimse yok.</div>';
     } else {
-      html += '<div style="padding:12px 16px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;min-width:0">';
+      html += '<div style="padding:10px 12px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">';
       tekler.forEach(function(p) {
-        html += '<div style="border:1.5px solid #6b1b1b;border-radius:8px;padding:10px 12px;background:#fdf5f5">'
-          + '<div style="font-size:11.5px;font-weight:700;color:#1a1a1a;word-break:break-word;line-height:1.3">' + p.kisi + '</div>'
-          + '<div style="font-size:9.5px;color:#6b1b1b;font-weight:600;margin-top:1px">' + (p.gorev||p.kategori||'') + '</div>'
+        html += '<div style="border:1.5px solid #6b1b1b;border-radius:8px;padding:10px 12px;background:#fdf5f5;min-width:0;overflow:hidden">'
+          + '<div style="font-size:11.5px;font-weight:800;color:#1a1a1a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + p.kisi + '</div>'
+          + '<div style="font-size:10px;color:#6b1b1b;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (p.gorev||p.kategori||'') + '</div>'
           + '</div>';
       });
       html += '</div>';
@@ -5645,6 +5638,7 @@ function _konaklamaOdaTipSec(rowIdx, kisiIdx, tip) {
 }
 
 function _konaklamaEsiSec(rowIdx, kisiIdx, esiIdxStr) {
+  rowIdx = parseInt(rowIdx);
   var t = turneler[rowIdx];
   if (!t || !t.katilimcilar) return;
   var p = t.katilimcilar[kisiIdx];
@@ -5666,6 +5660,7 @@ function _konaklamaEsiSec(rowIdx, kisiIdx, esiIdxStr) {
 }
 
 function _konaklamaPdfIndir(rowIdx) {
+  rowIdx = parseInt(rowIdx);
   var t = turneler[rowIdx];
   if (!t || !t.katilimcilar) return;
 
@@ -5675,25 +5670,24 @@ function _konaklamaPdfIndir(rowIdx) {
     var p = s.split('-');
     return parseInt(p[2]) + ' ' + AYLAR_TR[parseInt(p[1])-1] + ' ' + p[0];
   }
-
-  var ilStr = typeof durakIlStr === 'function' ? durakIlStr(t).replace(/\/MERKEZ/gi,'') : (t.il||'');
+  var ilStr = typeof durakIlStr==='function' ? durakIlStr(t).replace(/\/MERKEZ/gi,'') : (t.il||'');
   var tarihStr = fmtTarih(t.baslangicTarih||t.tarih)
-    + (t.bitisTarih && t.bitisTarih !== t.baslangicTarih ? ' - ' + fmtTarih(t.bitisTarih) : '');
+    + (t.bitisTarih&&t.bitisTarih!==t.baslangicTarih?' - '+fmtTarih(t.bitisTarih):'');
 
-  var tekler  = t.katilimcilar.filter(function(p){ return p.odaTip === 'tek'; });
-  var ciftler = t.katilimcilar.filter(function(p){ return p.odaTip === 'cift' || !p.odaTip; });
+  var tekler  = t.katilimcilar.filter(function(p){ return p.odaTip==='tek'; });
+  var ciftler = t.katilimcilar.filter(function(p){ return p.odaTip==='cift'||!p.odaTip; });
 
-  var islendi2 = {};
-  var ciftGruplar2 = [];
+  var isl2 = {};
+  var ciftGr = [];
   ciftler.forEach(function(p) {
-    if (islendi2[p.kisi]) return;
-    islendi2[p.kisi] = true;
-    var grup = [p];
+    if (isl2[p.kisi]) return;
+    isl2[p.kisi] = true;
+    var gr = [p];
     if (p.odaEsi) {
-      var esi = ciftler.find(function(x){ return x.kisi === p.odaEsi; });
-      if (esi && !islendi2[esi.kisi]) { islendi2[esi.kisi] = true; grup.push(esi); }
+      var e = ciftler.find(function(x){ return x.kisi===p.odaEsi; });
+      if (e&&!isl2[e.kisi]) { isl2[e.kisi]=true; gr.push(e); }
     }
-    ciftGruplar2.push(grup);
+    ciftGr.push(gr);
   });
 
   var tekKartlar = tekler.map(function(p) {
@@ -5703,53 +5697,50 @@ function _konaklamaPdfIndir(rowIdx) {
       + '</div>';
   }).join('');
 
-  var ciftKartlar = ciftGruplar2.map(function(grup) {
+  var ciftKartlar = ciftGr.map(function(gr) {
     return '<div class="kart">'
-      + grup.map(function(p, pi) {
-          return '<div' + (pi>0?' style="margin-top:7pt;padding-top:7pt;border-top:1pt dashed #e0c8c8"':'') + '>'
-            + '<div class="k-ad">' + p.kisi + '</div>'
-            + '<div class="k-kat">' + (p.gorev||p.kategori||'') + '</div>'
+      + gr.map(function(p,pi){
+          return (pi>0?'<div style="margin-top:6pt;padding-top:6pt;border-top:1pt dashed #999">':'<div>')
+            + '<div class="k-ad">'+p.kisi+'</div>'
+            + '<div class="k-kat">'+( p.gorev||p.kategori||'')+'</div>'
             + '</div>';
         }).join('')
-      + (grup.length===1 ? '<div style="margin-top:7pt;padding-top:7pt;border-top:1pt dashed #e0c8c8;font-size:8pt;color:#ccc;font-style:italic">—</div>' : '')
+      + (gr.length===1?'<div style="margin-top:6pt;padding-top:6pt;border-top:1pt dashed #999;font-size:8pt;color:#999;font-style:italic">—</div>':'')
       + '</div>';
   }).join('');
 
-  var html = '<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8">'
-    + '<title>Konaklama Listesi</title>'
-    + '<style>'
-    + '@import url(\'https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800;900&display=swap\');'
+  var html = '<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Konaklama</title><style>'
     + '@page{size:A4 landscape;margin:10mm}'
     + '*{box-sizing:border-box;margin:0;padding:0}'
-    + 'body{font-family:Poppins,Arial,sans-serif;font-size:10pt;color:#1a1a1a;padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
-    + '.baslik{text-align:center;margin-bottom:12pt;padding-bottom:8pt;border-bottom:3pt solid #6b1b1b}'
-    + '.baslik h1{font-size:14pt;font-weight:900;text-transform:uppercase;letter-spacing:1pt}'
-    + '.baslik h2{font-size:10pt;font-weight:700;text-transform:uppercase;letter-spacing:.5pt;margin-top:3pt;color:#6b1b1b}'
-    + '.baslik h3{font-size:8.5pt;font-weight:500;color:#777;margin-top:2pt}'
-    + '.bolum{display:flex;align-items:center;gap:8pt;margin:12pt 0 7pt;padding:5pt 10pt;border-radius:4pt;background:#6b1b1b;color:#fff}'
-    + '.bolum-label{font-size:10pt;font-weight:800;text-transform:uppercase;letter-spacing:.4pt}'
-    + '.bolum-say{font-size:8.5pt;font-weight:500;opacity:.8}'
-    + '.kart-grid{display:grid;gap:6pt}'
+    + 'body{font-family:Arial,Helvetica,sans-serif;font-size:9pt;color:#000;background:#fff;padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
+    + '.baslik{text-align:center;margin-bottom:10pt;padding-bottom:8pt;border-bottom:2pt solid #000}'
+    + '.baslik h1{font-size:13pt;font-weight:900;text-transform:uppercase;letter-spacing:1pt}'
+    + '.baslik h2{font-size:9.5pt;font-weight:700;text-transform:uppercase;letter-spacing:.5pt;margin-top:3pt}'
+    + '.baslik h3{font-size:8pt;color:#444;margin-top:2pt}'
+    + '.bolum{font-size:9pt;font-weight:900;text-transform:uppercase;letter-spacing:.5pt;'
+    +   'margin:10pt 0 6pt;padding:4pt 8pt;border:1.5pt solid #000;background:#000;color:#fff;display:inline-block}'
+    + '.kart-grid{display:grid;gap:5pt}'
     + '.tek-grid{grid-template-columns:repeat(5,1fr)}'
     + '.cift-grid{grid-template-columns:repeat(4,1fr)}'
-    + '.kart{border:1.5pt solid #6b1b1b;border-radius:5pt;padding:7pt 9pt;background:#fdf5f5;overflow:hidden}'
-    + '.k-ad{font-size:9.5pt;font-weight:800;line-height:1.3;color:#1a1a1a;word-break:break-word;hyphens:auto}'
-    + '.k-kat{font-size:8pt;color:#6b1b1b;font-weight:600;margin-top:1pt}'
+    + '.kart{border:1.5pt solid #000;border-radius:3pt;padding:6pt 8pt;background:#fff;overflow:hidden}'
+    + '.k-ad{font-size:9pt;font-weight:900;line-height:1.3;color:#000;word-break:break-word}'
+    + '.k-kat{font-size:7.5pt;color:#333;font-weight:400;margin-top:1pt}'
+    + '@media print{body{padding:0}}'
     + '</style></head><body>'
     + '<div class="baslik">'
     + '<h1>' + (t.oyun||'').toUpperCase() + '</h1>'
     + '<h2>' + ilStr.toUpperCase() + ' TURNESİ KONAKLAMA LİSTESİ</h2>'
     + '<h3>' + tarihStr + '</h3>'
     + '</div>'
-    + '<div class="bolum"><span class="bolum-label">🛏 Tek Oda</span><span class="bolum-say">' + tekler.length + ' kişi</span></div>'
-    + (tekKartlar ? '<div class="kart-grid tek-grid">' + tekKartlar + '</div>' : '<div style="color:#bbb;font-style:italic;font-size:8.5pt;padding:3pt 0">—</div>')
-    + '<div class="bolum" style="margin-top:14pt"><span class="bolum-label">🛏🛏 Çift Oda</span><span class="bolum-say">' + ciftGruplar2.length + ' oda</span></div>'
-    + (ciftKartlar ? '<div class="kart-grid cift-grid">' + ciftKartlar + '</div>' : '<div style="color:#bbb;font-style:italic;font-size:8.5pt;padding:3pt 0">—</div>')
+    + '<div class="bolum">TEK ODA — ' + tekler.length + ' KİŞİ</div>'
+    + (tekKartlar?'<div class="kart-grid tek-grid">'+tekKartlar+'</div>':'<p style="font-size:8pt;color:#999;margin:3pt 0">—</p>')
+    + '<div class="bolum" style="margin-top:12pt">ÇİFT ODA — ' + ciftGr.length + ' ODA</div>'
+    + (ciftKartlar?'<div class="kart-grid cift-grid">'+ciftKartlar+'</div>':'<p style="font-size:8pt;color:#999;margin:3pt 0">—</p>')
     + '<script>window.onload=function(){window.print();};<\/script>'
     + '</body></html>';
 
-  var win = window.open('', '_blank');
-  if (!win) { alert('Pop-up engelleyiciyi kapatın.'); return; }
+  var win = window.open('','_blank');
+  if (!win){alert('Pop-up engelleyiciyi kapatın.');return;}
   win.document.write(html);
   win.document.close();
 }
