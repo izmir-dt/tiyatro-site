@@ -5856,6 +5856,9 @@ function _konaklamaSekmesiHTML(t, rowIdx) {
             + 'title="Atamayı kaldır" '
             + 'style="flex-shrink:0;height:22px;width:22px;border:1px solid #e0c8c8;border-radius:4px;background:#fff;color:#999;font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center">✕</button>'
             + '</div>';
+          html += '<input type="text" placeholder="📅 not / tarih" value="' + (p.odaNot||'').replace(/"/g,'&quot;') + '"'
+            + ' onchange="_konaklamaNotKaydet(' + t._rowIdx + ',' + i + ',this.value)"'
+            + ' style="margin-top:5px;width:100%;height:23px;padding:0 7px;border:1px solid #e0c8c8;border-radius:5px;font-size:9.5px;font-family:Poppins,sans-serif;background:#fff;color:#555;box-sizing:border-box">';
           html += '</div>';
         });
         // Eşleştirme — grup tek kişiyse eşleştirme dropdown'u göster
@@ -5903,6 +5906,9 @@ function _konaklamaSekmesiHTML(t, rowIdx) {
           + 'title="Atamayı kaldır" '
           + 'style="flex-shrink:0;height:18px;width:18px;border:1px solid #e0c8c8;border-radius:3px;background:#fff;color:#999;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;line-height:1">✕</button>'
           + '</div>'
+          + '<input type="text" placeholder="📅 not / tarih" value="' + (p.odaNot||'').replace(/"/g,'&quot;') + '"'
+          + ' onchange="_konaklamaNotKaydet(' + t._rowIdx + ',' + i + ',this.value)"'
+          + ' style="margin-top:6px;width:100%;height:24px;padding:0 7px;border:1px solid #e0c8c8;border-radius:5px;font-size:9.5px;font-family:Poppins,sans-serif;background:#fff;color:#555;box-sizing:border-box">'
           + '</div>';
       });
       html += '</div>';
@@ -6004,6 +6010,13 @@ function _konaklamaEsiSecVeGec(rowIdx, kisiIdx, esiIdxStr) {
   _konaklamaSheetKaydet(t);
 }
 
+function _konaklamaNotKaydet(rowIdx, kisiIdx, not) {
+  var t = turneler.find(function(x){ return x._rowIdx === rowIdx; });
+  if (!t || !t.katilimcilar || !t.katilimcilar[kisiIdx]) return;
+  t.katilimcilar[kisiIdx].odaNot = not.trim();
+  _konaklamaSheetKaydet(t);
+}
+
 function _konaklamaSheetKaydet(t) {
   if (!t || t._rowIdx === undefined || !t.katilimcilar) return;
   apiFetch('/' + encodeURIComponent(TURNE_SHEET) + '/cell', {
@@ -6075,7 +6088,9 @@ function _konaklamaPdfIndir(rowIdx) {
   var bMB      = cokYogun ? '4pt'       : yogun ? '6pt'       : '10pt';
 
   var tekKartlar = tekler.map(function(p) {
-    return '<div class="kart"><div class="k-ad">' + p.kisi + '</div><div class="k-kat">' + (p.gorev||p.kategori||'') + '</div></div>';
+    return '<div class="kart"><div class="k-ad">' + p.kisi + '</div><div class="k-kat">' + (p.gorev||p.kategori||'') + '</div>'
+      + (p.odaNot ? '<div class="k-not">' + p.odaNot + '</div>' : '')
+      + '</div>';
   }).join('');
 
   var ciftKartlar = ciftGr.map(function(gr) {
@@ -6084,6 +6099,7 @@ function _konaklamaPdfIndir(rowIdx) {
           return (pi>0?'<div class="esi-sep">':'<div>')
             + '<div class="k-ad">'+p.kisi+'</div>'
             + '<div class="k-kat">'+(p.gorev||p.kategori||'')+'</div>'
+            + (p.odaNot ? '<div class="k-not">'+p.odaNot+'</div>' : '')
             + '</div>';
         }).join('')
       + (gr.length===1?'<div class="esi-sep e-bos">—</div>':'')
@@ -6111,6 +6127,7 @@ function _konaklamaPdfIndir(rowIdx) {
     + '.k-ad{font-size:' + adFont + ';font-weight:800;line-height:1.25;overflow-wrap:anywhere;word-break:break-word}'
     + '.k-kat{font-size:' + katFont + ';color:#7b2d2d;font-weight:600;margin-top:1pt;overflow-wrap:break-word}'
     + '.esi-sep{margin-top:' + esiSep + ';padding-top:' + esiSep + ';border-top:1pt dashed #dab8b8}'
+    + '.k-not{font-size:' + katFont + ';color:#2563eb;font-weight:700;margin-top:2pt;overflow-wrap:break-word}'
     + '.e-bos{font-size:' + katFont + ';color:#ccc;font-style:italic}'
     + '@media print{@page{size:A4 landscape;margin:7mm 9mm}html,body{height:auto!important}'
     + '.baslik{page-break-inside:avoid}.grid{page-break-inside:avoid}}'
