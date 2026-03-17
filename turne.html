@@ -8149,6 +8149,110 @@ function _gosterKayitHatasi(mesaj) {
 }
 
 
+function deleteTurneOnay(rowIdx, oyunAdi) {
+  onayGoster({
+    baslik: 'Turneyi sil?',
+    mesaj: '"' + (oyunAdi||'Bu turne') + '" kalıcı olarak silinecek. Devam etmek istiyor musunuz?',
+    ikon: '🗑️',
+    ikonBg: 'hsl(0,80%,96%)',
+    tamamRenk: 'hsl(0,75%,48%)',
+    tamamYazi: 'Evet, sil',
+    onOnay: function() { deleteTurne(rowIdx); }
+  });
+}
+
+async function deleteTurne(rowIdx) {
+  // Eğer zaten bekleyen bir silme varsa, onu iptal et
+  if (_silUndoTimer !== null) {
+    clearTimeout(_silUndoTimer);
+    _silUndoTimer = null;
+    _silUndoRowIdx = null;
+    _silUndoBarGizle();
+  }
+  // Turneyi bul ve adını al
+  var t = turneler.find(function(x){ return x._rowIdx === rowIdx; });
+  var turneAdi = t ? ((t.oyun || '') + (t.il ? ' – ' + t.il : '')) : 'Turne';
+
+  // Listeyi geçici olarak güncelle (optimistic)
+  _silUndoRowIdx = rowIdx;
+  var oncekiTurneler = turneler.slice();
+  turneler = turneler.filter(function(x){ return x._rowIdx !== rowIdx; });
+  renderListe();
+  renderCalendar();
+
+  // Geri al barını göster
+  _silUndoBarGoster(turneAdi, oncekiTurneler);
+
+  // 5 saniye sonra gerçekten sil
+  _silUndoTimer = setTimeout(async function() {
+    _silUndoTimer = null;
+    _silUndoRowIdx = null;
+    _silUndoBarGizle();
+    await _turneSilDevam(rowIdx);
+  }, 5000);
+}
+
+function _silUndoBarGoster(turneAdi, oncekiTurneler) {
+  var bar = document.getElementById('turne-sil-geri-bar');
+  if (!bar) return;
+  var span = document.getElementById('turne-sil-geri-ad');
+  if (span) span.textContent = '"' + (turneAdi.length > 40 ? turneAdi.substring(0,40)+'…' : turneAdi) + '" silindi';
+  bar.style.display = 'flex';
+  // Progress bar animasyonu başlat
+  var prog = document.getElementById('turne-sil-geri-prog');
+  if (prog) {
+    prog.style.transition = 'none';
+    prog.style.width = '100%';
+    setTimeout(function(){ prog.style.transition = 'width 5s linear'; prog.style.width = '0%'; }, 20);
+  }
+  // Geri al butonu
+  var btn = document.getElementById('turne-sil-geri-btn');
+  if (btn) {
+    btn.onclick = function() {
+      if (_silUndoTimer !== null) {
+        clearTimeout(_silUndoTimer);
+        _silUndoTimer = null;
+        _silUndoRowIdx = null;
+      }
+      // Listeyi geri yükle
+      turneler = oncekiTurneler;
+      renderListe();
+      renderCalendar();
+      _silUndoBarGizle();
+    };
+  }
+}
+
+function _silUndoBarGizle() {
+  var bar = document.getElementById('turne-sil-geri-bar');
+  if (bar) bar.style.display = 'none';
+}
+
+async function _turneSilDevam(rowIdx) {
+  try {
+    var url = '/' + encodeURIComponent(TURNE_SHEET) + '/row/' + (rowIdx + 2);
+    var r = await apiFetch(url, { method:'DELETE' });
+    var responseText = await r.text();
+    if (!r.ok) {
+      var errMsg;
+      try { errMsg = JSON.parse(responseText).error; } catch(e2) { errMsg = responseText; }
+      throw new Error('HTTP ' + r.status + ': ' + (errMsg || 'Bilinmeyen hata'));
+    }
+    setLoading(true);
+    await fetchTurneler();
+    tumUIGuncelle();
+    setLoading(false);
+    if (typeof showToast === 'function') showToast('success', '✅ Turne silindi');
+  } catch(e) {
+    // Silme başarısız — listeyi yenile (silinen kaydı geri getir)
+    await fetchTurneler();
+    tumUIGuncelle();
+    if (typeof showToast === 'function') showToast('error', '❌ Silme hatası: ' + e.message);
+    else alert('Silme hatası: ' + e.message);
+  }
+}
+
+
 async function kisiGoruSil(idxList) {
   if (!idxList || !idxList.length) return;
   var p = tumPersonel[idxList[0]];
