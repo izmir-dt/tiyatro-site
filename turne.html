@@ -4070,6 +4070,131 @@ function guncelleSonSenkron() {
 // ============================================================
 // VERİ YÜKLEMELERİ
 // ============================================================
+
+function tumUIGuncelle() {
+  populateFilters();
+  renderListe();
+  renderCalendar();
+  // Tüm sekmeleri her zaman güncelle — hangi sekmede olursa olsun veri tutarlı kalsın
+  renderKadro();
+  renderOyunMgmt();
+  renderKisiAra();
+  renderTumPersonel();
+  renderDisPersonel();
+  renderIstatistik();
+  // Harita sadece aktifse render et (Leaflet map instance yönetimi)
+  var haritaPanel = document.getElementById('tab-harita');
+  if (haritaPanel && haritaPanel.classList.contains('active')) {
+    renderHarita();
+  }
+  guncelleSonSenkron();
+}
+
+
+function yedekAl() {
+  var blob = new Blob([JSON.stringify({ versiyon:'v2', tarih:new Date().toISOString(), turneler:turneler }, null, 2)], { type:'application/json' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'turne-yedek-' + new Date().toISOString().slice(0,10) + '.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  var el = document.getElementById('yedek-mesaj');
+  if (el) { el.textContent = ''; } showToast('Yedek dosyası indirildi', 'success', 4000);
+}
+
+
+function geriYukle(event) {
+  var file = event.target.files && event.target.files[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(ev) {
+    try {
+      var json  = JSON.parse(ev.target.result);
+      var liste = json.turneler || json;
+      if (!Array.isArray(liste)) throw new Error('Geçersiz format');
+      const _liste = liste;
+      onayGoster({
+        baslik: 'Veri geri yüklenecek',
+        mesaj: _liste.length + ' kayıt mevcut verinin üzerine yazılacak. Önce yedek aldınız mı?',
+        ikon: '📂', ikonBg: 'hsl(220,80%,96%)',
+        tamamRenk: 'hsl(220,65%,45%)', tamamYazi: 'Evet, yükle',
+        onOnay: function() { _geriYukleDevam(_liste); }
+      });
+    } catch(e) { alert('Hata: ' + e.message); }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
+
+function exportExcel() {
+  if (typeof XLSX === 'undefined') { showToast('Excel kütüphanesi yükleniyor, bekle ve tekrar dene', 'warn', 2500); return; }
+  var baslik = [
+    'Oyun Adı','Şehir / İl','Sahne / Mekan','Başlangıç Tarihi','Bitiş Tarihi',
+    'Süre (Gün)','Temsil Sayısı','Statü','Turne Grubu',
+    'Gidiş Ulaşım','Gidiş Saati','Dönüş Ulaşım','Dönüş Saati',
+    'Aktarma','Otel Adı','Otel Adresi','Otel Tel',
+    'Kamyon','Kapasite','Notlar','Katılımcı Sayısı'
+  ];
+  var rows = [baslik];
+  turneler.forEach(function(t) {
+    var sr = statuRenk(t.statu);
+    var iller = t.duraklar && t.duraklar.length
+      ? t.duraklar.map(function(d){ return d.il || ''; }).filter(Boolean).join(' › ')
+      : (t.il || '');
+    rows.push([
+      t.oyun || '',
+      iller,
+      t.mekan || '',
+      t.baslangicTarih || t.tarih || '',
+      t.bitisTarih     || t.tarih || '',
+      turneSuresi(t),
+      Number(t.sayi) || 1,
+      sr.label || '',
+      t.grup || '',
+      t.gidisUlasim || '',
+      t.gidisSaat   || '',
+      t.donusUlasim || '',
+      t.donusSaat   || '',
+      t.aktarma     || '',
+      t.otelAdi     || '',
+      t.otelAdres   || '',
+      t.otelTelefon || '',
+      t.kamyonSayisi    || '',
+      t.sahneKapasitesi || '',
+      t.not || '',
+      t.katilimcilar ? t.katilimcilar.length : getPersonelForOyun(t.oyun).length
+    ]);
+  });
+
+  var wb = XLSX.utils.book_new();
+  var ws = XLSX.utils.aoa_to_sheet(rows);
+
+  // Sütun genişlikleri
+  ws['!cols'] = [
+    {wch:28},{wch:22},{wch:28},{wch:14},{wch:14},
+    {wch:10},{wch:10},{wch:12},{wch:14},
+    {wch:16},{wch:12},{wch:16},{wch:12},
+    {wch:20},{wch:24},{wch:26},{wch:14},
+    {wch:10},{wch:10},{wch:30},{wch:12}
+  ];
+
+  // Başlık satırı stili — kalın + arka plan
+  var baslikStil = { font:{bold:true,color:{rgb:'FFFFFF'}}, fill:{fgColor:{rgb:'6B1B1B'}}, alignment:{horizontal:'center',vertical:'center'}, border:{bottom:{style:'medium',color:{rgb:'5A1717'}}} };
+  var harfler = 'ABCDEFGHIJKLMNOPQRSTU';
+  for (var ci = 0; ci < baslik.length; ci++) {
+    var cellRef = harfler[ci] + '1';
+    if (ws[cellRef]) ws[cellRef].s = baslikStil;
+  }
+  // Satır yüksekliği
+  ws['!rows'] = [{ hpt: 20 }];
+
+  XLSX.utils.book_append_sheet(wb, ws, 'Turneler');
+  var tarih = new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb, 'Turne_Raporu_' + tarih + '.xlsx');
+  showToast('Excel indirildi', 'success', 2000);
+}
+
 async function fetchPersonel() {
   try {
     const res  = await apiFetch('/' + encodeURIComponent(PERSONEL_SHEET));
