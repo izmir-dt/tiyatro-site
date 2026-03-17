@@ -8155,7 +8155,7 @@ async function kisiGoruSil(idxList) {
   if (!p) return;
   onayGoster({
     baslik: p.kisi + ' silinecek',
-    mesaj: '"' + p.kisi + '" tüm personel listesinden silinecek. Oyun Yönetimi ve Tüm Personel sekmelerinden kaldırılır. Daha önce atandığı turne kadroları etkilenmez. İşlem birkaç saniye sürebilir. Bu işlem geri alınamaz.',
+    mesaj: '"' + p.kisi + '" tüm oyunlardan ve personel listesinden silinecek (' + idxList.length + ' kayıt). Daha önce atandığı turne kadroları etkilenmez. İşlem birkaç saniye sürebilir. Bu işlem geri alınamaz.',
     ikon: '👤', ikonBg: 'hsl(0,80%,96%)',
     tamamRenk: 'hsl(0,75%,52%)', tamamYazi: 'Evet, sil',
     onOnay: function() { _kisiSilDevam(p, idxList); }
@@ -8441,27 +8441,14 @@ function renderTumPersonel() {
   var badge  = document.getElementById('tum-personel-badge');
   if (!el) return;
 
-  var araRaw   = (document.getElementById('tum-personel-search')||{value:''}).value.trim();
-  var filOyun  = (document.getElementById('tum-personel-oyun-filter')||{value:''}).value;
-  var filKat   = (document.getElementById('tum-personel-kat-filter')||{value:''}).value;
+  var araRaw  = (document.getElementById('tum-personel-search')||{value:''}).value.trim();
+  var filKat  = (document.getElementById('tum-personel-kat-filter')||{value:''}).value;
 
   function trN(s){ return (s||'').toLowerCase().replace(/İ/g,'i').replace(/I/g,'ı').replace(/Ğ/g,'ğ').replace(/Ü/g,'ü').replace(/Ş/g,'ş').replace(/Ö/g,'ö').replace(/Ç/g,'ç'); }
   var ara = trN(araRaw);
 
-  // Dropdown'ları her çalıştırmada güncelle (yeni personel eklenince güncel kalsın)
-  var oyunSel = document.getElementById('tum-personel-oyun-filter');
-  var katSel  = document.getElementById('tum-personel-kat-filter');
-  if (oyunSel) {
-    var _prevOyun = oyunSel.value;
-    var oyunlar = Array.from(new Set(tumPersonel.map(function(p){ return p.oyun; }).filter(Boolean))).sort();
-    var oyunOptStr = oyunlar.join('||');
-    if (oyunSel.dataset.lastOpts !== oyunOptStr) {
-      oyunSel.innerHTML = '<option value="">Tüm Oyunlar</option>';
-      oyunlar.forEach(function(o){ var opt = document.createElement('option'); opt.value = o; opt.textContent = o; oyunSel.appendChild(opt); });
-      oyunSel.dataset.lastOpts = oyunOptStr;
-      if (_prevOyun) oyunSel.value = _prevOyun;
-    }
-  }
+  // Kategori dropdown güncelle
+  var katSel = document.getElementById('tum-personel-kat-filter');
   if (katSel) {
     var _prevKat = katSel.value;
     var kats = Array.from(new Set(tumPersonel.map(function(p){ return p.kategori; }).filter(Boolean))).sort();
@@ -8474,59 +8461,97 @@ function renderTumPersonel() {
     }
   }
 
+  // Oyun dropdown'u artık gerek yok — kişi bazlı görünüm
+  var oyunSel = document.getElementById('tum-personel-oyun-filter');
+  if (oyunSel) oyunSel.style.display = 'none';
+
+  // Kişileri GRUPLA — aynı ad = tek satır
+  var kisiGrup = {}; // { 'egecan intepeler': { kisi: 'Egecan İNTEPELER', kayitlar: [...], kategoriler: Set, gorevler: Set } }
+  tumPersonel.forEach(function(p) {
+    if (!p.kisi) return;
+    var key = trN(p.kisi);
+    if (!kisiGrup[key]) kisiGrup[key] = { kisi: p.kisi, kayitlar: [], kategoriler: new Set(), gorevler: new Set() };
+    kisiGrup[key].kayitlar.push(p);
+    if (p.kategori) kisiGrup[key].kategoriler.add(p.kategori);
+    if (p.gorev)    kisiGrup[key].gorevler.add(p.gorev);
+  });
+
+  var grupListe = Object.values(kisiGrup).sort(function(a,b){
+    return trN(a.kisi).localeCompare(trN(b.kisi), 'tr');
+  });
+
   // Filtrele
-  var liste = tumPersonel.filter(function(p) {
-    if (!p.kisi) return false;
-    if (filOyun && p.oyun !== filOyun) return false;
-    if (filKat  && p.kategori !== filKat) return false;
-    if (ara && !trN(p.kisi).includes(ara) && !trN(p.gorev||'').includes(ara) && !trN(p.oyun||'').includes(ara)) return false;
+  var filtreli = grupListe.filter(function(g) {
+    if (filKat && !g.kategoriler.has(filKat)) return false;
+    if (ara && !trN(g.kisi).includes(ara)) return false;
     return true;
   });
 
-  if (badge) badge.textContent = tumPersonel.length;
-  if (sonuc) sonuc.textContent = (araRaw || filOyun || filKat) ? liste.length + ' / ' + tumPersonel.length + ' kişi' : tumPersonel.length + ' kişi';
+  var toplamKisi = grupListe.length;
+  if (badge) badge.textContent = toplamKisi;
+  if (sonuc) sonuc.textContent = (araRaw || filKat) ? filtreli.length + ' / ' + toplamKisi + ' kişi' : toplamKisi + ' kişi';
 
-  if (!liste.length) {
-    el.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:200px;gap:12px;color:var(--muted-foreground)">'
-      + '<div style="font-size:32px">🔍</div>'
-      + '<div style="font-size:13px;font-weight:600;color:var(--foreground)">Sonuç bulunamadı</div>'
-      + '</div>';
+  if (!filtreli.length) {
+    el.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:200px;gap:12px;color:var(--muted-foreground)"><div style="font-size:32px">🔍</div><div style="font-size:13px;font-weight:600;color:var(--foreground)">Sonuç bulunamadı</div></div>';
     return;
   }
-
-  // Tabloya döküm
-  var h = '<div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:12px">'
-    + '<thead><tr style="background:var(--sidebar)">'
-    + '<th style="padding:8px 12px;text-align:center;font-size:11px;font-weight:700;color:rgba(255,255,255,.7);white-space:nowrap;width:44px">NO</th>'
-    + '<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:700;color:rgba(255,255,255,.7)">Ad Soyad</th>'
-    + '<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:700;color:rgba(255,255,255,.7)">Kategori</th>'
-    + '<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:700;color:rgba(255,255,255,.7)">Görev</th>'
-    + '<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:700;color:rgba(255,255,255,.7)">Oyun</th>'
-    + '<th style="padding:8px 12px;text-align:right;font-size:11px;font-weight:700;color:rgba(255,255,255,.7)"></th>'
-    + '</tr></thead><tbody>';
 
   var SANATCI_KATS = ['Sanatçı','Oyuncu','Koro','Koro/Dans','Koro/Dans Ekibi','Solist','Dansçı','Figüran','Figüran/Müzisyen','Müzisyen','Orkestra','Kurumdan Emekli Sanatçı'];
   var TEKNIK_KATS  = ['Sahne Amiri','Kondüvit','Ses','Mutemet','Işık Kontrol','Sahne Makinisti','Aksesuar Memuru','Dekor/Aksesuar','Sahne Terzisi','Kostüm','Perukacı','Turne Başkanı'];
 
-  liste.forEach(function(p, i) {
-    var globalIdx = tumPersonel.indexOf(p);
-    var bg  = SANATCI_KATS.includes(p.kategori) ? {bg:'hsl(350,50%,88%)',fg:'hsl(350,65%,26%)'}
-            : TEKNIK_KATS.includes(p.kategori)  ? {bg:'hsl(220,45%,88%)',fg:'hsl(220,65%,28%)'}
+  var h = '<div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:12px">'
+    + '<thead><tr style="background:var(--sidebar)">'
+    + '<th style="padding:8px 12px;text-align:center;font-size:11px;font-weight:700;color:rgba(255,255,255,.7);width:44px">NO</th>'
+    + '<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:700;color:rgba(255,255,255,.7)">Ad Soyad</th>'
+    + '<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:700;color:rgba(255,255,255,.7)">Kategori / Görev</th>'
+    + '<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:700;color:rgba(255,255,255,.7)">Oyunlar</th>'
+    + '<th style="padding:8px 12px;text-align:right;font-size:11px;font-weight:700;color:rgba(255,255,255,.7)"></th>'
+    + '</tr></thead><tbody>';
+
+  filtreli.forEach(function(g, i) {
+    var kat = Array.from(g.kategoriler)[0] || '';
+    var bg  = SANATCI_KATS.includes(kat) ? {bg:'hsl(350,50%,88%)',fg:'hsl(350,65%,26%)'}
+            : TEKNIK_KATS.includes(kat)  ? {bg:'hsl(220,45%,88%)',fg:'hsl(220,65%,28%)'}
             : {bg:'hsl(265,40%,88%)',fg:'hsl(265,55%,28%)'};
-    var isimHtml = araRaw ? (p.kisi||'').replace(new RegExp('('+araRaw.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi'),'<mark style="background:#fef08a;border-radius:2px;padding:0 1px">$1</mark>') : (p.kisi||'');
+
+    var isimHtml = araRaw
+      ? g.kisi.replace(new RegExp('(' + araRaw.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + ')','gi'), '<mark style="background:#fef08a;border-radius:2px;padding:0 1px">$1</mark>')
+      : g.kisi;
+
+    // Oyun badge'leri
+    var oyunBadges = g.kayitlar.map(function(k){
+      return '<span style="display:inline-block;padding:1px 7px;border-radius:20px;background:var(--muted);border:1px solid var(--border);font-size:10px;font-weight:600;color:var(--foreground);margin:1px 2px 1px 0">' + (k.oyun||'—') + '</span>';
+    }).join('');
+
+    // Görev
+    var gorevStr = Array.from(g.gorevler).filter(function(gv){ return gv && gv !== kat; }).join(', ') || '';
+
+    // Tüm kayıt indexleri (silme için)
+    var idxList = g.kayitlar.map(function(k){ return tumPersonel.indexOf(k); }).filter(function(x){ return x >= 0; });
+    var idxAttr = idxList.join('|');
+
+    // Düzenle: ilk kaydı aç
+    var ilkIdx = idxList[0];
+
     h += '<tr style="border-bottom:1px solid var(--border);transition:background .1s" onmouseenter="this.style.background=\'var(--muted)\'" onmouseleave="this.style.background=\'\'">'
       + '<td style="padding:7px 12px;font-size:11px;color:var(--muted-foreground);font-weight:700;text-align:center;width:44px">' + (i+1) + '</td>'
       + '<td style="padding:7px 12px;font-weight:700;font-size:12px">' + isimHtml + '</td>'
-      + '<td style="padding:7px 12px"><span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:20px;background:'+bg.bg+';color:'+bg.fg+'">' + (p.kategori||'—') + '</span></td>'
-      + '<td style="padding:7px 12px;font-size:12px;color:var(--foreground)">' + (p.gorev||'<span style="color:var(--muted-foreground)">—</span>') + '</td>'
-      + '<td style="padding:7px 12px;font-size:11px;color:var(--muted-foreground)">' + (p.oyun||'—') + '</td>'
-      + '<td style="padding:7px 12px;text-align:right;white-space:nowrap">'
-      + (globalIdx >= 0 ? '<button onclick="kadroKisiDuzenleAc('+globalIdx+')" '
-        + 'style="height:28px;padding:0 11px;border:1.5px solid var(--border);border-radius:6px;background:transparent;cursor:pointer;font-size:11px;font-weight:600;color:var(--muted-foreground);font-family:Poppins,sans-serif;display:inline-flex;align-items:center;gap:4px;transition:all .15s" '
-        + 'onmouseenter="this.style.borderColor=\'var(--primary)\';this.style.color=\'var(--primary)\'" '
-        + 'onmouseleave="this.style.borderColor=\'var(--border)\';this.style.color=\'var(--muted-foreground)\'">'
-        + '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>Düzenle'
-        + '</button>' : '')
+      + '<td style="padding:7px 12px"><span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:20px;background:' + bg.bg + ';color:' + bg.fg + '">' + kat + '</span>'
+      + (gorevStr ? '<div style="font-size:10px;color:var(--muted-foreground);margin-top:2px">' + gorevStr + '</div>' : '')
+      + '</td>'
+      + '<td style="padding:7px 12px">' + oyunBadges + '</td>'
+      + '<td style="padding:7px 12px;text-align:right;white-space:nowrap;display:flex;gap:6px;justify-content:flex-end;align-items:center">'
+      + (ilkIdx >= 0
+        ? '<button onclick="kadroKisiDuzenleAc(' + ilkIdx + ')" '
+          + 'style="height:28px;padding:0 11px;border:1.5px solid var(--border);border-radius:6px;background:transparent;cursor:pointer;font-size:11px;font-weight:600;color:var(--muted-foreground);font-family:Poppins,sans-serif;display:inline-flex;align-items:center;gap:4px;transition:all .15s" '
+          + 'onmouseenter="this.style.borderColor=\'var(--primary)\';this.style.color=\'var(--primary)\'" '
+          + 'onmouseleave="this.style.borderColor=\'var(--border)\';this.style.color=\'var(--muted-foreground)\'">✏️ Düzenle</button>'
+        : '')
+      + (idxList.length > 0
+        ? '<button data-idxlist="' + idxAttr + '" onclick="event.stopPropagation();var idxs=this.getAttribute(\'data-idxlist\').split(\'|\').map(Number);kisiGoruSil(idxs)" '
+          + 'style="height:28px;padding:0 10px;border:1.5px solid hsl(0,50%,85%);border-radius:6px;background:transparent;cursor:pointer;font-size:11px;font-weight:600;color:var(--destructive);font-family:Poppins,sans-serif;display:inline-flex;align-items:center;gap:4px;transition:all .15s" '
+          + 'onmouseenter="this.style.background=\'hsl(0,80%,96%)\'" onmouseleave="this.style.background=\'transparent\'">🗑 Sil</button>'
+        : '')
       + '</td></tr>';
   });
 
@@ -9842,7 +9867,7 @@ async function kadroKisiSil() {
   if (!p) return;
   onayGoster({
     baslik: p.kisi + ' silinecek',
-    mesaj: '"' + p.kisi + '" tüm personel listesinden silinecek. Oyun Yönetimi ve Tüm Personel sekmelerinden kaldırılır. Daha önce atandığı turne kadroları etkilenmez. İşlem birkaç saniye sürebilir. Bu işlem geri alınamaz.',
+    mesaj: '"' + p.kisi + '" tüm oyunlardan ve personel listesinden silinecek (' + idxList.length + ' kayıt). Daha önce atandığı turne kadroları etkilenmez. İşlem birkaç saniye sürebilir. Bu işlem geri alınamaz.',
     ikon: '👤', ikonBg: 'hsl(0,80%,96%)',
     tamamRenk: 'hsl(0,75%,52%)', tamamYazi: 'Evet, sil',
     onOnay: function() { _kadroKisiSilDevam(_silIdx); }
