@@ -5880,33 +5880,38 @@ function _konaklamaSekmesiHTML(t, rowIdx) {
             + ' style="margin-top:5px;width:100%;height:23px;padding:0 7px;border:1px solid #e0c8c8;border-radius:5px;font-size:9.5px;font-family:Poppins,sans-serif;background:#fff;color:#555;box-sizing:border-box">';
           html += '</div>';
         });
-        // Eşleşme geçmişi + yeni eşleşme
-        // Her zaman göster (gr.length===1 veya erken ayrılış sonrası yeni eşleşme)
+        // Yeni eşleşme dropdown — tekte kalan veya yeni kişi atanacak herkese göster
         (function() {
-          // Eşleşme geçmişi: p.odaEslesmeler = [{kisi, tarih}] dizisi
-          // Grubun tüm kişileri için geçmişi listele
-          var herkesEslendi = gr.length >= 2 && gr.every(function(x){ return x.odaEsi; });
-          var birKisiErken = gr.some(function(x){ return x.erkenAyrildi; });
-          // Yeni eşleştirme: her zaman göster (yeni eşleşme eklenebilsin)
-          var soloPerson = gr.length === 1 ? gr[0] : (birKisiErken ? gr.find(function(x){ return !x.erkenAyrildi; }) : null);
-          if (soloPerson) {
+          // Ayrılanlar: erken veya geç işaretli
+          function ayrildi(x) { return x.erkenAyrildi || x.gecAyrildi; }
+          // Solo kişiler: grubunda oda arkadaşı olmayan (gr=1 veya ikisi de ayrılmış)
+          var sololar = [];
+          if (gr.length === 1) {
+            sololar = [gr[0]];
+          } else {
+            // Biri ayrıldıysa kalan(lar) solo; ikisi de ayrıldıysa ikisi de solo
+            gr.forEach(function(x) {
+              if (!x.odaEsi || ayrildi(x)) sololar.push(x);
+            });
+          }
+          sololar.forEach(function(soloPerson) {
             var si = kat.indexOf(soloPerson);
-            var esiOpts = '<option value="">— Yeni oda arkadaşı seç —</option>';
+            var esiOpts = '<option value="">— Yeni oda arkadasi sec —</option>';
             kat.forEach(function(q, qi) {
               if (q.kisi === soloPerson.kisi) return;
               if (q.odaTip === 'tek') return;
-              if (q.odaEsi && q.odaEsi !== soloPerson.kisi && !q.erkenAyrildi) return;
-              esiOpts += '<option value="' + qi + '"' + (soloPerson.odaEsi===q.kisi?' selected':'') + '>' + q.kisi + (q.erkenAyrildi?' (erken)':'') + '</option>';
+              if (q.odaEsi && q.odaEsi !== soloPerson.kisi && !ayrildi(q)) return;
+              var etiket = ayrildi(q) ? ' (' + (q.erkenAyrildi?'erken':'gec') + ')' : '';
+              esiOpts += '<option value="' + qi + '"' + (soloPerson.odaEsi===q.kisi?' selected':'') + '>' + q.kisi + etiket + '</option>';
             });
             html += '<div style="display:flex;align-items:center;gap:8px;margin-top:7px;padding-top:7px;border-top:1px dashed #e0c8c8">'
-              + '<span style="font-size:10px;color:var(--muted-foreground);flex-shrink:0;white-space:nowrap">Oda arkadaşı:</span>'
+              + '<span style="font-size:10px;color:var(--muted-foreground);flex-shrink:0;white-space:nowrap">' + soloPerson.kisi.split(' ')[0] + ' oda ark.:</span>'
               + '<select onchange="_konaklamaEsiSecGecimiyle(' + t._rowIdx + ',' + si + ',this.value)" '
               + 'style="flex:1;min-width:0;height:28px;padding:0 8px;border:1.5px solid var(--border);border-radius:6px;'
               + 'font-size:11px;font-weight:600;background:var(--card);color:var(--foreground);font-family:Poppins,sans-serif;cursor:pointer">'
               + esiOpts + '</select>'
-              + '<span style="font-size:10px;color:#d97706;flex-shrink:0">?</span>'
               + '</div>';
-          }
+          });
         })();
         html += '</div>';
       });
@@ -6104,12 +6109,15 @@ function _konaklamaVersiyonGoster(rowIdx) {
   el.id = overlayId;
   el.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center';
   el.addEventListener('click', function(e){ if (e.target === el) el.remove(); });
+  var pdfBtnId = 'konaklama-versiyon-pdf-' + rowIdx;
   el.innerHTML = '<div style="background:#fff;border-radius:10px;padding:0;min-width:320px;max-width:500px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.2);overflow:hidden">'
     + '<div style="background:#6b1b1b;color:#fff;padding:12px 16px;display:flex;align-items:center;justify-content:space-between">'
     + '<span style="font-size:13px;font-weight:800;font-family:Poppins,sans-serif">Versiyon Gecmisi</span>'
+    + '<div style="display:flex;gap:8px;align-items:center">'
+    + '<button id="' + pdfBtnId + '" style="height:26px;padding:0 10px;border:1px solid rgba(255,255,255,.5);border-radius:5px;background:rgba(255,255,255,.15);color:#fff;font-size:10.5px;font-weight:700;cursor:pointer;font-family:Poppins,sans-serif">PDF</button>'
     + '<button id="konaklama-versiyon-kapat" style="background:none;border:none;color:#fff;font-size:18px;cursor:pointer;padding:0;line-height:1">x</button>'
-    + '</div>'
-    + '<div style="max-height:60vh;overflow-y:auto">'
+    + '</div></div>'
+    + '<div id="konaklama-versiyon-tablo" style="max-height:60vh;overflow-y:auto">'
     + '<table style="width:100%;border-collapse:collapse">'
     + '<tbody>' + rows + '</tbody>'
     + '</table>'
@@ -6117,6 +6125,53 @@ function _konaklamaVersiyonGoster(rowIdx) {
     + '</div>';
   document.body.appendChild(el);
   document.getElementById('konaklama-versiyon-kapat').onclick = function(){ el.remove(); };
+  document.getElementById(pdfBtnId).onclick = function() {
+    var t2 = turneler.find(function(x){ return x._rowIdx === rowIdx; });
+    if (!t2) return;
+    var ilStr = typeof durakIlStr==='function' ? durakIlStr(t2).replace(/\/MERKEZ/gi,'') : (t2.il||'');
+    var pdfRows = '';
+    // Versiyonlar
+    var versiyonlar2 = t2.versiyonlar || [];
+    if (versiyonlar2.length) {
+      pdfRows += '<tr><td colspan="3" style="padding:5pt 8pt 2pt;font-size:8pt;font-weight:800;color:#6b1b1b;background:#f9f0f0;text-transform:uppercase">Ayrilis Versiyonlari</td></tr>';
+      versiyonlar2.forEach(function(v) {
+        var renk2 = v.tip === 'Erken Ayrilis' ? '#b45309' : '#1d4ed8';
+        pdfRows += '<tr style="border-bottom:1pt solid #eee"><td style="padding:5pt 8pt;font-size:10pt;font-weight:700">' + v.kisi + '</td><td style="padding:5pt 8pt;font-size:9pt;font-weight:700;color:' + renk2 + '">(' + v.tip + ')</td><td style="padding:5pt 8pt;font-size:9pt;color:#555">' + (v.not||'—') + '</td></tr>';
+      });
+    }
+    // Geçmiş eşleşmeler
+    var kat2 = t2.katilimcilar || [];
+    var islendi2 = {};
+    var hasGecmis = false;
+    kat2.forEach(function(p) {
+      if (!p.odaEslesmeler || !p.odaEslesmeler.length) return;
+      p.odaEslesmeler.forEach(function(e) {
+        var key2 = [p.kisi, e.kisi].sort().join('|');
+        if (islendi2[key2]) return;
+        islendi2[key2] = true;
+        if (!hasGecmis) {
+          pdfRows += '<tr><td colspan="3" style="padding:8pt 8pt 2pt;font-size:8pt;font-weight:800;color:#6b1b1b;background:#f9f0f0;text-transform:uppercase">Gecmis Oda Eslesmeler</td></tr>';
+          hasGecmis = true;
+        }
+        pdfRows += '<tr style="border-bottom:1pt solid #eee"><td style="padding:5pt 8pt;font-size:10pt;font-weight:700">' + p.kisi + '</td><td style="padding:5pt 8pt;font-size:9pt;color:#555">— ' + e.kisi + '</td><td style="padding:5pt 8pt;font-size:9pt;color:#999">' + (e.tarih||'') + '</td></tr>';
+      });
+    });
+    var pdfHtml = '<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Versiyon Gecmisi</title>'
+      + '<style>@page{size:A4;margin:12mm 14mm}*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,Helvetica,sans-serif;color:#1a1a1a}'
+      + '.baslik{text-align:center;padding-bottom:8pt;border-bottom:2pt solid #6b1b1b;margin-bottom:10pt}'
+      + '.baslik h1{font-size:14pt;font-weight:900;text-transform:uppercase}'
+      + '.baslik h2{font-size:9pt;color:#6b1b1b;font-weight:700;margin-top:2pt}'
+      + 'table{width:100%;border-collapse:collapse}'
+      + '@media print{html,body{height:auto!important}}</style></head><body>'
+      + '<div class="baslik"><h1>' + (t2.oyun||'').toUpperCase() + '</h1><h2>' + ilStr.toUpperCase() + ' — VERSIYON GECMISI</h2></div>'
+      + '<table><tbody>' + pdfRows + '</tbody></table>'
+      + '<script>window.onload=function(){setTimeout(function(){window.print();},100);}<\/script>'
+      + '</body></html>';
+    var win = window.open('','_blank');
+    if (!win){alert('Pop-up engelleyiciyi kapatın.');return;}
+    win.document.write(pdfHtml);
+    win.document.close();
+  };
 }
 
 function _konaklamaAyrilisToggle(rowIdx, kisiIdx, tip) {
@@ -6172,15 +6227,20 @@ function _konaklamaAyrilisToggle(rowIdx, kisiIdx, tip) {
       t.versiyonlar.push({ _id: vid2, kisi: p.kisi, tip: 'Gec Ayrilma', not: p.odaNot||'' });
     }
     // Çift odadaysa oda arkadaşını geçmişe al, eşleşmeyi çöz
+    // Not: eşi de ayrılmışsa geçmişe eklemeden eşleşmeyi sadece çöz
     if (p.odaTip === 'cift' && p.odaEsi) {
       var esi = t.katilimcilar.find(function(x){ return x.kisi === p.odaEsi; });
       var now = new Date();
       var ts = now.getDate() + '.' + (now.getMonth()+1) + '.' + now.getFullYear();
       p.odaEslesmeler = p.odaEslesmeler || [];
-      p.odaEslesmeler.push({ kisi: p.odaEsi, tarih: ts });
+      if (!p.odaEslesmeler.some(function(e){ return e.kisi === p.odaEsi; })) {
+        p.odaEslesmeler.push({ kisi: p.odaEsi, tarih: ts });
+      }
       if (esi) {
         esi.odaEslesmeler = esi.odaEslesmeler || [];
-        esi.odaEslesmeler.push({ kisi: p.kisi, tarih: ts });
+        if (!esi.odaEslesmeler.some(function(e){ return e.kisi === p.kisi; })) {
+          esi.odaEslesmeler.push({ kisi: p.kisi, tarih: ts });
+        }
         esi.odaEsi = '';
       }
       p.odaEsi = '';
