@@ -8302,6 +8302,7 @@ function editTurne(rowIdx) {
   document.getElementById('m-not').value   = t.not   || '';
   var _pmEl = document.getElementById('m-premiyer'); if (_pmEl) _pmEl.value = t.promiyerTarih || '';
   var _afEl = document.getElementById('m-afis-url'); if (_afEl) _afEl.value = t.afisUrl || '';
+  var _afEl = document.getElementById('m-afis-url'); if (_afEl) _afEl.value = t.afisUrl || '';
   // Ulaşım
   var gU = document.getElementById('m-gidis-ulasim');
   if (gU) gU.value = t.gidisUlasim || '';
@@ -8447,6 +8448,7 @@ async function saveTurne() {
   var not_        = document.getElementById('m-not').value.trim();
   var grup        = document.getElementById('m-grup').value.trim();
   var promiyerTarih = (document.getElementById('m-premiyer')||{value:''}).value.trim();
+  var afisUrl = (document.getElementById('m-afis-url')||{value:''}).value.trim();
   var afisUrl = (document.getElementById('m-afis-url')||{value:''}).value.trim();
   var gidisUlasim = (document.getElementById('m-gidis-ulasim')||{value:''}).value;
   var gidisSaat   = (document.getElementById('m-gidis-saat')||{value:''}).value;
@@ -8657,7 +8659,7 @@ async function saveTurne() {
   // Yerel veriyi hemen güncelle (optimistik)
   var yeniKayit = {
     _rowIdx: editIdx !== '' ? parseInt(editIdx) : (turneler.length > 0 ? Math.max(...turneler.map(x=>x._rowIdx)) + 1 : 0),
-    oyun, il, mekan, sayi, baslangicTarih: basTarih, bitisTarih, not: not_, statu, grup, promiyerTarih, afisUrl,
+    oyun, il, mekan, sayi, baslangicTarih: basTarih, bitisTarih, not: not_, statu, grup, promiyerTarih, afisUrl, afisUrl,
     duraklar: JSON.parse(JSON.stringify(gecerliDuraklar)),
     otelAdi, otelAdres, otelTelefon,
     gidisUlasim, gidisSaat, gidisInis, gidisUcusNo, gidisArac,
@@ -13607,6 +13609,126 @@ function _pdfIcerik(t) {
 
 
 
+// ── TURNE DOSYASI PDF (4. seçenek) ──────────────────────────
+// Kapak (afiş arkaplan) + Konaklama + Personel Listesi + Program
+function _pdfTurneDosyasiIcerik(t) {
+  var bugun = new Date().toLocaleDateString('tr-TR',{day:'numeric',month:'long',year:'numeric'});
+  var sure  = turneSuresi(t);
+  var AYLAR = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
+  var GUNLER= ['Pazar','Pazartesi','Salı','Çarşamba','Perşembe','Cuma','Cumartesi'];
+
+  function _fmt(s){ if(!s)return '—'; var p=s.split('-'); return p[2]+' '+AYLAR[+p[1]-1]+' '+p[0]; }
+
+  var oyunAdi = t.oyun||(t.duraklar?[...new Set(t.duraklar.map(function(d){return d.oyun||'';}).filter(Boolean))].join(' / '):'');
+  var ilStr   = _temizleIlPdf(durakIlStr(t));
+  var afisUrl = t.afisUrl||'';
+  var basTarih= _fmt(t.baslangicTarih||t.tarih);
+  var bitTarih= t.bitisTarih?_fmt(t.bitisTarih):'';
+  var tarihAralik = basTarih+(bitTarih&&bitTarih!==basTarih?' – '+bitTarih:'');
+  var tarihParantez = '('+tarihAralik+')';
+
+  // ── SAYFA 1: KAPAK ────────────────────────────────────────
+  var P1 = '<div style="page-break-after:always;position:relative;min-height:297mm;margin:-14mm -16mm;overflow:hidden;font-family:Arial,Helvetica,sans-serif">';
+
+  // Arkaplan: afiş varsa tam ekran
+  if (afisUrl) {
+    P1 += '<div style="position:absolute;inset:0;background:url(''+afisUrl+'') center/cover no-repeat;filter:brightness(.4)"></div>';
+  } else {
+    P1 += '<div style="position:absolute;inset:0;background:linear-gradient(180deg,#2a0505 0%,#6b1b1b 50%,#1a0505 100%)"></div>';
+  }
+  P1 += '<div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.3) 0%,rgba(0,0,0,.5) 55%,rgba(0,0,0,.82) 100%)"></div>';
+
+  P1 += '<div style="position:relative;z-index:1;padding:22pt 30pt;display:flex;flex-direction:column;min-height:297mm">';
+
+  // Üst: logolar
+  P1 += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0">';
+  P1 += '<div style="background:rgba(255,255,255,.1);border:1.5pt solid rgba(255,255,255,.22);border-radius:6pt;padding:8pt 14pt">';
+  P1 += '<div style="color:#e8c84a;font-size:15pt;font-weight:900;letter-spacing:1pt;line-height:1">İDT</div>';
+  P1 += '<div style="color:rgba(255,255,255,.65);font-size:5pt;letter-spacing:.5pt;margin-top:2pt">İZMİR DEVLET TİYATROSU</div>';
+  P1 += '</div>';
+  P1 += '<div style="text-align:right"><div style="color:rgba(255,255,255,.5);font-size:8pt">'+bugun+'</div><div style="color:rgba(255,255,255,.3);font-size:7pt;margin-top:2pt">2025–2026 Sezonu</div></div>';
+  P1 += '</div>';
+
+  // Orta: oyun adı
+  P1 += '<div style="flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:20pt 10pt">';
+  P1 += '<div style="color:#e8c84a;font-size:8.5pt;font-weight:700;letter-spacing:3pt;text-transform:uppercase;margin-bottom:14pt;opacity:.8">İZMİR DEVLET TİYATROSU SUNAR</div>';
+  P1 += '<div style="color:#fff;font-size:48pt;font-weight:900;letter-spacing:.5pt;text-transform:uppercase;line-height:1;text-shadow:0 4pt 20pt rgba(0,0,0,.9);margin-bottom:14pt">'+oyunAdi+'</div>';
+  P1 += '<div style="color:#e8c84a;font-size:15pt;font-weight:700;letter-spacing:2.5pt;text-transform:uppercase;text-shadow:0 2pt 8pt rgba(0,0,0,.7);margin-bottom:8pt">'+ilStr+' TURNESİ</div>';
+  P1 += '<div style="color:rgba(255,255,255,.78);font-size:13pt;font-weight:600;letter-spacing:.3pt">'+tarihParantez+'</div>';
+  P1 += '</div>';
+
+  // Alt 3 bölüm
+  P1 += '<div style="border-top:1pt solid rgba(255,255,255,.18);padding-top:16pt">';
+
+  // Takip personeli
+  var ttp = [
+    {unvan:'Müdür Yardımcısı',  ad:'Fuat ŞARBALKAN',     tel:'0 555 558 70 79'},
+    {unvan:'Sanat Teknik BS.',   ad:'Filiz AĞLAN GÜRLER', tel:'0 555 537 08 11'},
+    {unvan:'Sahne Uzmanı',       ad:'Koray ÜNVER',        tel:'0 554 692 0 666'}
+  ];
+  P1 += '<div style="margin-bottom:14pt">';
+  P1 += '<div style="color:#e8c84a;font-size:8.5pt;font-weight:700;letter-spacing:.6pt;text-transform:uppercase;margin-bottom:7pt">Turne Takip Personeli</div>';
+  ttp.forEach(function(p){
+    P1 += '<div style="color:#fff;font-size:10pt;margin-bottom:3pt">'+p.unvan+' – <strong>'+p.ad+'</strong> – Tel : '+p.tel+'</div>';
+  });
+  P1 += '</div>';
+
+  // Bölge ilgili kişiler
+  var durakListeK = (t.duraklar&&t.duraklar.length)?t.duraklar:[];
+  var bolgeKisiler = durakListeK.filter(function(d){return d.ilgiliKisi&&d.ilgiliKisi.trim();});
+  if (bolgeKisiler.length) {
+    P1 += '<div style="margin-bottom:14pt">';
+    P1 += '<div style="color:#e8c84a;font-size:8.5pt;font-weight:700;letter-spacing:.6pt;text-transform:uppercase;margin-bottom:7pt">Turne Bölgesi İlgili Kişiler</div>';
+    bolgeKisiler.forEach(function(d){
+      P1 += '<div style="color:#fff;font-size:10pt;margin-bottom:3pt">'+_temizleIlPdf(d.il||'')+' – <strong>'+(d.ilgiliKisi||'')+'</strong>'+(d.ilgiliTel?' – '+(d.ilgiliTel):'')+' </div>';
+    });
+    P1 += '</div>';
+  }
+
+  // Nakliye
+  var _lojNot = t.not||t.notlar||'';
+  if(_lojNot.startsWith('{')){ try{_lojNot=JSON.parse(_lojNot).not||'';}catch(e){_lojNot='';} }
+  if (t.kamyonSayisi||t.aracTur||(_lojNot&&_lojNot.indexOf('🚛')===0)) {
+    P1 += '<div style="margin-bottom:8pt">';
+    P1 += '<div style="color:#e8c84a;font-size:8.5pt;font-weight:700;letter-spacing:.6pt;text-transform:uppercase;margin-bottom:7pt">Nakliye Ve Ulaşım Bilgileri</div>';
+    var _aracStr=(t.kamyonSayisi?t.kamyonSayisi+' adet ':'')+(t.aracTur||'Kamyon');
+    var _kFirma='',_kTel='';
+    if(_lojNot.indexOf('🚛')===0){var _kL=_lojNot.split('
+')[0].replace('🚛 ','');var _kP=_kL.split(' · ');_kFirma=_kP[0]||'';_kTel=_kP[1]||'';}
+    P1 += '<div style="color:#fff;font-size:10pt">'+_aracStr+(_kFirma?' - '+_kFirma:'')+(_kTel?' - '+_kTel:'')+'</div>';
+    P1 += '</div>';
+  }
+
+  P1 += '</div>'; // alt bölümler
+  P1 += '</div>'; // içerik
+  P1 += '</div>'; // kapak
+
+  // ── SAYFA 2: KONAKLAMA ────────────────────────────────────
+  var durakListeO=(t.duraklar&&t.duraklar.length)?t.duraklar:(t.il?[{il:t.il,otelAdi:t.otelAdi,otelAdres:t.otelAdres,otelTel:t.otelTelefon}]:[]);
+  var otelBulunan=durakListeO.filter(function(d){return d.otelAdi&&d.otelAdi.trim();});
+  var P2='';
+  if(otelBulunan.length){
+    P2+='<div style="page-break-before:always">';
+    P2+='<div style="background:#6b1b1b;color:#fff;padding:10pt 14pt;margin-bottom:16pt;text-align:center">';
+    P2+='<div style="font-size:14pt;font-weight:900;letter-spacing:.5pt">'+oyunAdi.toUpperCase()+'</div>';
+    P2+='<div style="font-size:11pt;font-weight:700;margin-top:3pt">'+ilStr.toUpperCase()+' TURNESİ KONAKLAMA LİSTESİ</div>';
+    P2+='<div style="font-size:10pt;margin-top:2pt;opacity:.85">'+tarihAralik+'</div>';
+    P2+='</div>';
+    P2+='<table style="width:100%;border-collapse:collapse;font-size:11pt">';
+    P2+='<thead><tr style="background:#1e3a5f"><th style="padding:7pt 10pt;color:#fff;text-align:left;border:1pt solid #17304f">Şehir</th><th style="padding:7pt 10pt;color:#fff;text-align:left;border:1pt solid #17304f">Otel Adı</th><th style="padding:7pt 10pt;color:#fff;text-align:left;border:1pt solid #17304f">Adres</th><th style="padding:7pt 10pt;color:#fff;text-align:left;border:1pt solid #17304f">Telefon</th></tr></thead><tbody>';
+    otelBulunan.forEach(function(d,ki){
+      var bg=ki%2===0?'#f0fdf4':'#fff';
+      P2+='<tr style="background:'+bg+'"><td style="padding:7pt 10pt;border:1pt solid #ddd;font-weight:700;color:#15803d">'+_temizleIlPdf(d.il||'')+'</td><td style="padding:7pt 10pt;border:1pt solid #ddd;font-weight:700">'+(d.otelAdi||'')+'</td><td style="padding:7pt 10pt;border:1pt solid #ddd;font-size:10pt">'+(d.otelAdres||'—')+'</td><td style="padding:7pt 10pt;border:1pt solid #ddd;font-weight:700;color:#1d4ed8">'+(d.otelTel||d.otelTelefon||'—')+'</td></tr>';
+    });
+    P2+='</tbody></table></div>';
+  }
+
+  // ── SAYFA 3 & 4: PERSONEL + PROGRAM (orijinal _pdfProgramPersonelIcerik ile aynı) ──
+  var P34 = _pdfProgramPersonelIcerik(t);
+
+  return P1 + P2 + '<div style="page-break-before:always">' + P34 + '</div>';
+}
+
 // ── PDF MOD SEÇİM DIALOG ─────────────────────────────────────
 function _pdfModSec(rowIdx) {
   var overlay = document.createElement('div');
@@ -13619,12 +13741,13 @@ function _pdfModSec(rowIdx) {
     + '<button id="_pdf_prog" style="padding:11px 14px;background:#0f766e;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;text-align:left">📅 Personel Listesi + Turne Programı<div style=\'font-size:10px;font-weight:400;margin-top:2px;opacity:.8\'>Günlük program tablosu + görevli personel listesi</div></button>'
     + '<button id="_pdf_per" style="padding:11px 14px;background:#1d4ed8;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;text-align:left"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:6px"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="10" r="2"/><path d="M2 20c0-3.5 4-6 7-6s7 2.5 7 6"/><path d="M14 20c0-2 2-3.5 4-3.5s4 1.5 4 3.5"/></svg>Sadece Personel Listesi<div style=\'font-size:10px;font-weight:400;margin-top:2px;opacity:.8\'>Kategoriye göre filtrelenebilir PDF</div></button>'
 
-    + '<button id="_pdf_iptal" style="padding:8px 14px;background:#f3f4f6;color:#333;border:none;border-radius:8px;font-size:12px;cursor:pointer">İptal</button>'
+    + '<button id="_pdf_dosya" style="padding:11px 14px;background:#7c3aed;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;text-align:left">📁 Turne Dosyası<div style=\'font-size:10px;font-weight:400;margin-top:2px;opacity:.8\'>Kapak (afiş) + konaklama + personel + program</div></button>'    + '<button id="_pdf_iptal" style="padding:8px 14px;background:#f3f4f6;color:#333;border:none;border-radius:8px;font-size:12px;cursor:pointer">İptal</button>'
     + '</div></div>';
   document.body.appendChild(overlay);
   overlay.querySelector('#_pdf_tam').onclick   = function(){ document.body.removeChild(overlay); gorevlendirmePdf(rowIdx,'tam'); };
   overlay.querySelector('#_pdf_prog').onclick  = function(){ document.body.removeChild(overlay); gorevlendirmePdf(rowIdx,'program'); };
   overlay.querySelector('#_pdf_per').onclick   = function(){ document.body.removeChild(overlay); gorevlendirmePdf(rowIdx,'personel'); };
+  overlay.querySelector('#_pdf_dosya').onclick  = function(){ document.body.removeChild(overlay); gorevlendirmePdf(rowIdx,'dosya'); };
   overlay.querySelector('#_pdf_iptal').onclick = function(){ document.body.removeChild(overlay); };
   overlay.addEventListener('click', function(e){ if(e.target===overlay) document.body.removeChild(overlay); });
 }
@@ -14169,9 +14292,9 @@ function gorevlendirmePdf(rowIdx, mod) {
   var ilStr = _temizleIlPdf(durakIlStr(t));
   var baslik = (oyunAdi !== 'Rapor' ? oyunAdi + ' – ' : '') + ilStr + ' Turnesi';
 
-  var icerik = mod === 'personel' ? _pdfPersonelIcerik(t) : mod === 'program' ? _pdfProgramPersonelIcerik(t) : _pdfIcerik(t);
+  var icerik = mod === 'personel' ? _pdfPersonelIcerik(t) : mod === 'program' ? _pdfProgramPersonelIcerik(t) : mod === 'dosya' ? _pdfTurneDosyasiIcerik(t) : _pdfIcerik(t);
   // Word indirme için ayrı temiz içerik hazırla (PDF div'leri değil tablo tabanlı)
-  var wordIcerikStr = mod === 'personel' ? _wordPersonelIcerik(t) : mod === 'program' ? _pdfProgramPersonelIcerik(t) : _wordIcerik(t);
+  var wordIcerikStr = mod === 'personel' ? _wordPersonelIcerik(t) : mod === 'program' ? _pdfProgramPersonelIcerik(t) : mod === 'dosya' ? _pdfTurneDosyasiIcerik(t) : _wordIcerik(t);
   // Dosya adı: YYYYMMDD_OyunAdi_Il_Mod
   var _tarihKisa = (t.baslangicTarih||t.tarih||'').replace(/-/g,'');
   var _oyunKisa  = (oyunAdi||'Turne').replace(/[^a-zA-Z0-9ÇçĞğİıÖöŞşÜü ]/g,'').replace(/\s+/g,'_').slice(0,20);
@@ -14319,7 +14442,8 @@ function renderDuraklar() {
         + '</div>'
       + '</div>'
       // Satır 3: Bölge ilgili kişi | Telefon
-      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;min-width:0">'        + '<input class="form-input" type="text" placeholder="Bölge ilgili kişi" value="' + (d.ilgiliKisi||'') + '" '          + 'oninput="duraklar[' + i + '].ilgiliKisi=this.value" style="width:100%;font-size:12px">'        + '<input class="form-input" type="tel" placeholder="Telefon" value="' + (d.ilgiliTel||'') + '" '          + 'oninput="duraklar[' + i + '].ilgiliTel=this.value" style="width:100%;font-size:12px;font-weight:600">'      + '</div>'      // Sil — sağ alta, padding yok
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;min-width:0">'        + '<input class="form-input" type="text" placeholder="Bölge ilgili kişi" value="' + (d.ilgiliKisi||'') + '" '          + 'oninput="duraklar[' + i + '].ilgiliKisi=this.value" style="width:100%;font-size:12px">'        + '<input class="form-input" type="tel" placeholder="Telefon" value="' + (d.ilgiliTel||'') + '" '          + 'oninput="duraklar[' + i + '].ilgiliTel=this.value" style="width:100%;font-size:12px;font-weight:600">'      + '</div>'      // Satır 3: Bölge ilgili kişi | Telefon
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;min-width:0">'        + '<input class="form-input" type="text" placeholder="Bölge ilgili kişi (opsiyonel)" value="' + (d.ilgiliKisi||'') + '" '          + 'oninput="duraklar[' + i + '].ilgiliKisi=this.value" style="width:100%;font-size:12px">'        + '<input class="form-input" type="tel" placeholder="Telefonu" value="' + (d.ilgiliTel||'') + '" '          + 'oninput="duraklar[' + i + '].ilgiliTel=this.value" style="width:100%;font-size:12px;font-weight:600">'      + '</div>'      // Sil — sağ alta, padding yok
       + '<div style="display:flex;justify-content:flex-end">'
         + '<button onclick="durakSil(' + i + ')" '
           + 'style="height:20px;padding:0 8px;border-radius:4px;border:1px solid var(--border);background:transparent;cursor:pointer;color:var(--destructive);font-size:10px;font-weight:600;font-family:Poppins,sans-serif;display:flex;align-items:center;gap:3px">× Sil</button>'
