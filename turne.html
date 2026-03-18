@@ -7205,6 +7205,10 @@ function ekstraKisiEkle() {
   const ad    = document.getElementById('extra-kisi-ad').value.trim();
   const gorev = document.getElementById('extra-kisi-gorev').value.trim();
   if (!ad) return;
+  // Zaten listede var mı? (çift tıklama önleme)
+  if (kisiModalSecili.some(s => s.kisi.trim().toLowerCase() === ad.toLowerCase())) {
+    showToast('Bu kişi zaten listede', 'warn', 2000); return;
+  }
   if (!kisiModalSecili.some(s => s.kisi === ad)) {
     kisiModalSecili.push({ kisi: ad, gorev, kategori: 'Turne Ekstra Kadrosu', ekstra: true });
     _kisiCokluSync();
@@ -7490,7 +7494,39 @@ async function saveKisiModal() {
   renderListe();
   renderIstatistik();
 
-  // 3. Arka planda sadece katilimcilar sütununu yaz (/cell endpoint — backend'de mevcut)
+  // 3. Conflict check: kaydetmeden önce sheet'teki mevcut veriyi kontrol et
+  try {
+    const _chkRes2 = await apiFetch('/' + encodeURIComponent(TURNE_SHEET));
+    if (_chkRes2.ok) {
+      const _chkData2 = await _chkRes2.json();
+      const _chkRows2 = _chkData2.rows || [];
+      const _chkNums2 = _chkData2.rowNumbers || [];
+      const _chkIdx2 = _chkNums2.indexOf(rowIdxKayit + 2);
+      if (_chkIdx2 >= 0 && _chkRows2[_chkIdx2]) {
+        const _guncelKat = _chkRows2[_chkIdx2][39] || '';
+        const _snapKat = window._kisiModalSnapshot || '[]';
+        if (_guncelKat && _guncelKat !== _snapKat && _guncelKat !== '[]') {
+          // Başka biri değiştirmiş — kullanıcıya sor
+          var _devamEt = window.confirm(
+            'Bu turnenin katılımcı listesi başka biri tarafından değiştirilmiş.\n\n'
+            + 'Devam edersen o değişiklikler kaybolur.\n\nYine de kaydet?'
+          );
+          if (!_devamEt) {
+            _saveKisiModalCalisiyor = false;
+            var _kb3 = document.getElementById('save-kisi-btn');
+            if (_kb3) { _kb3.disabled = false; _kb3.textContent = 'Kaydet'; }
+            // Güncel veriyi yeniden yükle
+            _cacheSil('cache_turneler');
+            await fetchTurneler(true);
+            tumUIGuncelle();
+            return;
+          }
+        }
+      }
+    }
+  } catch(_ce) { /* conflict check hatası — yine de kaydet */ }
+
+  // 4. Arka planda sadece katilimcilar sütununu yaz (/cell endpoint — backend'de mevcut)
   try {
     const KAT_COL = 39; // yeni yapıda index 39 = katilimcilar sütunu
     const cellRes = await apiFetch('/' + encodeURIComponent(TURNE_SHEET) + '/cell', {
@@ -7505,7 +7541,6 @@ async function saveKisiModal() {
       _gosterKayitHatasi('⚠️ Katılımcılar kaydedilemedi (Hata: ' + errBody + ')');
     } else {
       showToast(katSayisi + ' katılımcı kaydedildi', 'success', 3000);
-      // Sheets'ten güncel veriyi çek — katılımcıların kalıcı olduğunu doğrula
       try {
         await fetchTurneler();
         renderListe();
@@ -7515,6 +7550,10 @@ async function saveKisiModal() {
   } catch(e) {
     console.error('[saveKisiModal] Beklenmeyen hata:', e);
     _gosterKayitHatasi('⚠️ Katılımcılar kaydedilemedi: ' + (e.message || e));
+  } finally {
+    _saveKisiModalCalisiyor = false;
+    var _kb = document.getElementById('save-kisi-btn');
+    if (_kb) { _kb.disabled = false; _kb.textContent = 'Kaydet'; }
   }
 }
 
@@ -8227,6 +8266,21 @@ async function saveTurne() {
   var oyun        = document.getElementById('m-oyun').value.trim();
   var basTarih    = document.getElementById('m-tarih').value.trim();
   var bitisTarih  = document.getElementById('m-bitis').value.trim() || basTarih;
+  // Tarih validasyonu
+  if (!basTarih) {
+    showToast('Başlangıç tarihi zorunludur', 'error', 3000);
+    _saveTurneCalisiyor = false;
+    var _sb = document.getElementById('save-turne-btn');
+    if (_sb) { _sb.disabled = false; _sb.textContent = 'Kaydet'; }
+    return;
+  }
+  if (bitisTarih && basTarih && bitisTarih < basTarih) {
+    showToast('Bitiş tarihi başlangıç tarihinden önce olamaz', 'error', 3000);
+    _saveTurneCalisiyor = false;
+    var _sb2 = document.getElementById('save-turne-btn');
+    if (_sb2) { _sb2.disabled = false; _sb2.textContent = 'Kaydet'; }
+    return;
+  }
   var statu       = document.getElementById('m-statu').value || 'taslak';
   var not_        = document.getElementById('m-not').value.trim();
   var grup        = document.getElementById('m-grup').value.trim();
