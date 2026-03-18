@@ -16942,51 +16942,127 @@ function _pdfTurneDosyasiIcerik(t) {
   var OYUNCU_KATS=['Sanat\u00e7\u0131','Fig\u00fcran','Koro','Solist','Dans\u00e7\u0131'];
   function unvan(p){var kat=p.kategori||'';return OYUNCU_KATS.indexOf(kat)>=0&&!(p.gorev||'').includes('-')?kat:((p.gorev&&p.gorev!==p.kategori)?p.gorev:kat);}
 
-  var odaRows='';
-  // Tek odalar
+  // ── ODA LİSTESİ ────────────────────────────────────────────
+  var seen2={};
+  var katilimcilar=kat.filter(function(p){var k=(p.kisi||'').trim().toLowerCase();if(!k||seen2[k])return false;seen2[k]=true;return true;});
+  var tekler=katilimcilar.filter(function(p){return p.odaTip==='tek'&&!p.munferit;});
+  var ciftler=katilimcilar.filter(function(p){return p.odaTip==='cift'&&!p.munferit;});
+  var munferit=katilimcilar.filter(function(p){return p.munferit;});
+  var atanmamis=katilimcilar.filter(function(p){return !p.odaTip&&!p.munferit;});
+  var OYUNCU_KATS=['Sanat\u00e7\u0131','Fig\u00fcran','Koro','Solist','Dans\u00e7\u0131'];
+  function unvan(p){var k=p.kategori||'';return OYUNCU_KATS.indexOf(k)>=0&&!(p.gorev||'').includes('-')?k:((p.gorev&&p.gorev!==p.kategori)?p.gorev:k);}
+
+  // Çift odaları eşli grupla
+  var ciftGruplar=[]; var ciftGoruldu={};
+  ciftler.forEach(function(p){
+    if(ciftGoruldu[p.kisi])return;
+    ciftGoruldu[p.kisi]=true;
+    var esi=p.odaEsi?ciftler.find(function(x){return x.kisi===p.odaEsi;}):null;
+    if(esi){ciftGoruldu[esi.kisi]=true;ciftGruplar.push([p,esi]);}
+    else{ciftGruplar.push([p]);}
+  });
+
+  // TEK ODA TABLOSU
+  var tekOdaHTML='';
   if(tekler.length){
-    odaRows+='<tr style="background:#e8f4ff"><td colspan="3" style="font-weight:800;font-size:10pt;color:#1e3a5f;padding:5pt 9pt">\ud83d\udecc Tek Oda \u2014 '+tekler.length+' Ki\u015fi</td></tr>';
-    tekler.forEach(function(p,i){
-      odaRows+='<tr style="background:'+(i%2===0?'#f0f7ff':'#fff')+'">'
-        +'<td style="width:26px;text-align:center;color:#999;font-size:9pt">'+(i+1)+'</td>'
-        +'<td style="font-weight:700">'+(p.kisi||'')+'</td>'
-        +'<td style="color:#666;font-size:10pt">'+unvan(p)+'</td>'
+    var tekRows=tekler.map(function(p,i){
+      return '<tr>'
+        +'<td style="width:28pt;text-align:center;color:#777;font-size:9pt">'+(i+1)+'</td>'
+        +'<td style="font-weight:700;font-size:11pt">'+( p.kisi||'')+'</td>'
+        +'<td style="color:#555;font-size:10pt">'+unvan(p)+'</td>'
         +'</tr>';
-    });
+    }).join('');
+    tekOdaHTML=''
+      +'<div style="margin-bottom:14pt">'
+      +'<div style="background:#1e3a5f;color:#fff;padding:7pt 10pt;font-size:10pt;font-weight:700;display:flex;justify-content:space-between;align-items:center">'
+      +'<span>\ud83d\udecf Tek Oda</span>'
+      +'<span style="background:rgba(255,255,255,.2);border-radius:12pt;padding:2pt 10pt;font-size:9pt">'+tekler.length+' ki\u015fi</span>'
+      +'</div>'
+      +'<table style="border-top:none"><thead><tr style="background:#2d5282">'
+      +'<th style="width:28pt;text-align:center">#</th>'
+      +'<th>Ad Soyad</th>'
+      +'<th>G\u00f6rev / Unvan</th>'
+      +'</tr></thead><tbody>'+tekRows+'</tbody></table>'
+      +'</div>';
   }
-  // Çift odalar
+
+  // ÇİFT ODA TABLOSU
+  var ciftOdaHTML='';
   if(ciftGruplar.length){
-    odaRows+='<tr style="background:#e8ffe8"><td colspan="3" style="font-weight:800;font-size:10pt;color:#15803d;padding:5pt 9pt">\ud83d\udecf Çift Oda \u2014 '+ciftGruplar.length+' Oda</td></tr>';
-    ciftGruplar.forEach(function(gr,gi){
+    var ciftRows=ciftGruplar.map(function(gr,gi){
       var p1=gr[0], p2=gr[1];
-      odaRows+='<tr style="background:'+(gi%2===0?'#f0fdf4':'#fff')+'">'
-        +'<td style="width:26px;text-align:center;color:#999;font-size:9pt">'+(gi+1)+'</td>'
-        +'<td style="font-weight:700">'+(p1.kisi||'')+(p2?'<br><span style="color:#666;font-weight:500">'+p2.kisi+'</span>':'<br><span style="color:#dc2626;font-size:9pt">\u26a0 Oda e\u015fi atanmam\u0131\u015f</span>')+'</td>'
-        +'<td style="color:#666;font-size:10pt">'+unvan(p1)+(p2?'<br>'+unvan(p2):'')+'</td>'
+      var eksikEsi=!p2;
+      return '<tr style="'+(gi%2===0?'background:#fff':'background:#f5f5f5')+';border-bottom:2pt solid #d0c8c0">'
+        +'<td style="width:28pt;text-align:center;color:#777;font-size:9pt;vertical-align:middle">'+(gi+1)+'</td>'
+        +'<td style="vertical-align:top;padding:6pt 8pt">'
+          +'<div style="font-weight:700;font-size:11pt;margin-bottom:4pt">'+( p1.kisi||'')+'</div>'
+          +(p2
+            ?'<div style="font-weight:700;font-size:11pt;color:#15803d">'+p2.kisi+'</div>'
+            :'<div style="color:#dc2626;font-size:9pt;font-weight:600">\u26a0 Oda e\u015fi atanmam\u0131\u015f</div>'
+          )
+        +'</td>'
+        +'<td style="vertical-align:top;padding:6pt 8pt">'
+          +'<div style="font-size:10pt;color:#444;margin-bottom:4pt">'+unvan(p1)+'</div>'
+          +(p2?'<div style="font-size:10pt;color:#15803d">'+unvan(p2)+'</div>':'')
+        +'</td>'
         +'</tr>';
-    });
+    }).join('');
+    ciftOdaHTML=''
+      +'<div style="margin-bottom:14pt">'
+      +'<div style="background:#15803d;color:#fff;padding:7pt 10pt;font-size:10pt;font-weight:700;display:flex;justify-content:space-between;align-items:center">'
+      +'<span>\ud83d\udecc \u00c7ift Oda</span>'
+      +'<span style="background:rgba(255,255,255,.2);border-radius:12pt;padding:2pt 10pt;font-size:9pt">'+ciftGruplar.length+' oda &nbsp;\u2022&nbsp; '+(ciftGruplar.length*2)+' ki\u015fi</span>'
+      +'</div>'
+      +'<table style="border-top:none"><thead><tr style="background:#166534">'
+      +'<th style="width:28pt;text-align:center">Oda</th>'
+      +'<th>Ki\u015filer</th>'
+      +'<th>G\u00f6rev / Unvan</th>'
+      +'</tr></thead><tbody>'+ciftRows+'</tbody></table>'
+      +'</div>';
   }
-  // Münferit
+
+  // MÜNFERİT
+  var munferitHTML='';
   if(munferit.length){
-    odaRows+='<tr style="background:#fef3c7"><td colspan="3" style="font-weight:800;font-size:10pt;color:#92400e;padding:5pt 9pt">\ud83d\udeaa M\u00fcnferit \u2014 '+munferit.length+' Ki\u015fi</td></tr>';
-    munferit.forEach(function(p,i){
-      odaRows+='<tr style="background:'+(i%2===0?'#fff8e7':'#fff')+'">'
-        +'<td style="width:26px;text-align:center;color:#999;font-size:9pt">'+(i+1)+'</td>'
-        +'<td style="font-weight:700">'+(p.kisi||'')+'</td>'
-        +'<td style="color:#666;font-size:10pt">'+unvan(p)+'</td>'
+    var munRows=munferit.map(function(p,i){
+      return '<tr>'
+        +'<td style="width:28pt;text-align:center;color:#777;font-size:9pt">'+(i+1)+'</td>'
+        +'<td style="font-weight:700">'+( p.kisi||'')+'</td>'
+        +'<td style="color:#555;font-size:10pt">'+unvan(p)+'</td>'
         +'</tr>';
-    });
+    }).join('');
+    munferitHTML=''
+      +'<div style="margin-bottom:14pt">'
+      +'<div style="background:#92400e;color:#fff;padding:7pt 10pt;font-size:10pt;font-weight:700;display:flex;justify-content:space-between">'
+      +'<span>\ud83d\udeb6 M\u00fcnferit</span>'
+      +'<span style="background:rgba(255,255,255,.2);border-radius:12pt;padding:2pt 10pt;font-size:9pt">'+munferit.length+' ki\u015fi</span>'
+      +'</div>'
+      +'<table style="border-top:none"><thead><tr style="background:#b45309">'
+      +'<th style="width:28pt;text-align:center">#</th><th>Ad Soyad</th><th>G\u00f6rev / Unvan</th>'
+      +'</tr></thead><tbody>'+munRows+'</tbody></table>'
+      +'</div>';
   }
-  // Atanmamış
+
+  // ATANMAMIŞ
+  var atanmamisHTML='';
   if(atanmamis.length){
-    odaRows+='<tr style="background:#fde8e8"><td colspan="3" style="font-weight:800;font-size:10pt;color:#dc2626;padding:5pt 9pt">\u26a0 Oda Atanmam\u0131\u015f \u2014 '+atanmamis.length+' Ki\u015fi</td></tr>';
-    atanmamis.forEach(function(p,i){
-      odaRows+='<tr style="background:'+(i%2===0?'#fef2f2':'#fff')+'">'
-        +'<td style="width:26px;text-align:center;color:#999;font-size:9pt">'+(i+1)+'</td>'
-        +'<td style="font-weight:700;color:#dc2626">'+(p.kisi||'')+'</td>'
-        +'<td style="color:#666;font-size:10pt">'+unvan(p)+'</td>'
+    var atRows=atanmamis.map(function(p,i){
+      return '<tr style="background:#fef2f2">'
+        +'<td style="width:28pt;text-align:center;color:#777;font-size:9pt">'+(i+1)+'</td>'
+        +'<td style="font-weight:700;color:#dc2626">'+( p.kisi||'')+'</td>'
+        +'<td style="color:#dc2626;font-size:10pt">'+unvan(p)+'</td>'
         +'</tr>';
-    });
+    }).join('');
+    atanmamisHTML=''
+      +'<div style="margin-bottom:14pt">'
+      +'<div style="background:#dc2626;color:#fff;padding:7pt 10pt;font-size:10pt;font-weight:700;display:flex;justify-content:space-between">'
+      +'<span>\u26a0 Oda Atanmam\u0131\u015f</span>'
+      +'<span style="background:rgba(255,255,255,.2);border-radius:12pt;padding:2pt 10pt;font-size:9pt">'+atanmamis.length+' ki\u015fi</span>'
+      +'</div>'
+      +'<table style="border-top:none"><thead><tr style="background:#b91c1c">'
+      +'<th style="width:28pt;text-align:center">#</th><th>Ad Soyad</th><th>G\u00f6rev / Unvan</th>'
+      +'</tr></thead><tbody>'+atRows+'</tbody></table>'
+      +'</div>';
   }
 
   var sayfa4='<div class="sayfa">'
@@ -17010,8 +17086,8 @@ function _pdfTurneDosyasiIcerik(t) {
       return '<table style="margin-bottom:14pt"><thead><tr><th>\u015eehir</th><th>Otel</th><th>Adres</th><th>Telefon</th></tr></thead><tbody>'+otelRows+'</tbody></table>';
     })()
     +'<div class="bolum-baslik">\ud83d\udecc Oda Da\u011f\u0131l\u0131m\u0131</div>'
-    +(odaRows
-      ?'<table><thead><tr><th style="width:26px;text-align:center">No</th><th>Ad Soyad</th><th>G\u00f6rev</th></tr></thead><tbody>'+odaRows+'</tbody></table>'
+    +(tekOdaHTML||ciftOdaHTML||munferitHTML||atanmamisHTML
+      ?tekOdaHTML+ciftOdaHTML+munferitHTML+atanmamisHTML
       :'<p style="color:#999;font-style:italic">Oda atamas\u0131 yap\u0131lmam\u0131\u015ft\u0131r.</p>'
     )
     +'<div class="sayfa-no">'+bugun+'</div>'
