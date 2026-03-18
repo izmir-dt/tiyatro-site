@@ -2847,6 +2847,16 @@ flex-shrink:0;
             <input class="form-input" type="number" min="0" id="m-kamyon" placeholder="1">
           </div>
         </div>
+        <div style="display:flex;gap:8px;margin-top:6px">
+          <div class="form-group" style="flex:1;margin:0">
+            <label class="form-label">Firma Adı</label>
+            <input class="form-input" type="text" id="m-kamyon-firma" placeholder="Nakliye firması...">
+          </div>
+          <div class="form-group" style="width:140px;margin:0">
+            <label class="form-label">Telefon</label>
+            <input class="form-input" type="tel" id="m-kamyon-tel" placeholder="0xxx xxx xx xx" style="font-weight:600">
+          </div>
+        </div>
         <!-- Yükleme / Boşaltma — dinamik, çoğaltılabilir -->
         <div id="m-yukbos-container" style="display:flex;flex-direction:column;gap:6px;margin-top:8px"></div>
         <button type="button" onclick="_yukBosEkle()" style="margin-top:6px;width:100%;height:32px;border:1.5px dashed var(--border);border-radius:8px;background:transparent;cursor:pointer;font-size:11px;font-weight:600;color:var(--muted-foreground);font-family:Poppins,sans-serif;display:flex;align-items:center;justify-content:center;gap:5px;transition:border-color .15s,color .15s" onmouseenter="this.style.borderColor='var(--primary)';this.style.color='var(--primary)'" onmouseleave="this.style.borderColor='var(--border)';this.style.color='var(--muted-foreground)'">
@@ -3237,12 +3247,21 @@ function haritaTooltipGoster(e, encodedData) {
       // YOL GÜNÜ: Gidiş ulaşım + dekor/kamyon + lojistik
       if (d.gidis) { detayRows += '<div style="display:flex;gap:5px"><span>&#x1F68C;</span><span>' + d.gidis + (d.gidisSaat?' <strong>'+d.gidisSaat+'</strong>':'') + (d.gidisPlaka?' · '+d.gidisPlaka:'') + '</span></div>'; }
       if (d.gidisSurucu) { detayRows += '<div style="display:flex;gap:5px"><span>&#x1F464;</span><span>Şoför: ' + d.gidisSurucu + '</span></div>'; }
-      if (d.kamyon) { detayRows += '<div style="display:flex;gap:5px"><span>&#x1F69A;</span><span>Dekor kamyonu: ' + d.kamyon + ' araç</span></div>'; }
+      if (d.kamyon) { detayRows += '<div style="display:flex;gap:5px"><span>&#x1F69A;</span><span>Dekor kamyonu: ' + d.kamyon + ' araç' + (d.kamyonFirma ? ' · <strong>' + d.kamyonFirma + '</strong>' : '') + (d.kamyonTel ? ' · <strong style="color:var(--primary);font-size:12px">' + d.kamyonTel + '</strong>' : '') + '</span></div>'; }
       if (d.aracTur) { detayRows += '<div style="display:flex;gap:5px"><span>&#x1F4E6;</span><span>Araç tipi: ' + d.aracTur + '</span></div>'; }
       if (d.yukleme) { detayRows += '<div style="display:flex;gap:5px"><span>&#x2B06;&#xFE0F;</span><span>Yükleme: ' + d.yukleme + '</span></div>'; }
       if (d.bosaltma) { detayRows += '<div style="display:flex;gap:5px"><span>&#x2B07;&#xFE0F;</span><span>Boşaltma: ' + d.bosaltma + '</span></div>'; }
       if (d.aktarma) { detayRows += '<div style="display:flex;gap:5px"><span>&#x21C4;</span><span>Aktarma: ' + d.aktarma + '</span></div>'; }
-      if (d.lojNot) { detayRows += '<div style="display:flex;gap:5px;opacity:.75;font-style:italic"><span>&#x1F4DD;</span><span>' + d.lojNot + '</span></div>'; }
+      if (d.lojNot) {
+        var _lojLines = d.lojNot.split('\n');
+        _lojLines.forEach(function(line) {
+          if (!line.trim()) return;
+          var isKamyon = line.indexOf('🚛') === 0;
+          detayRows += '<div style="display:flex;gap:5px' + (isKamyon ? '' : ';opacity:.75;font-style:italic') + '">'
+            + '<span>' + (isKamyon ? '🚛' : '📝') + '</span>'
+            + '<span style="' + (isKamyon ? 'font-weight:600' : '') + '">' + (isKamyon ? line.replace('🚛 ','') : line) + '</span></div>';
+        });
+      }
     } else if (tip === 'donus') {
       // DÖNÜŞ GÜNÜ: Sadece dönüş ulaşım bilgileri — sahne/mekan yok
       if (d.donus) { detayRows += '<div style="display:flex;gap:5px"><span>&#x1F68C;</span><span>' + d.donus + (d.donusSaat?' <strong>'+d.donusSaat+'</strong>':'') + (d.donusPlaka?' · '+d.donusPlaka:'') + '</span></div>'; }
@@ -3250,7 +3269,7 @@ function haritaTooltipGoster(e, encodedData) {
     } else if (tip === 'oyun' || tip === 'prova') {
       // OYUN/PROVA GÜNÜ: Mekan, şehir içi servis, otel
       if (d.sehirArac) {
-        var sStr = d.sehirArac + (d.sehirDetay?' · '+d.sehirDetay:'') + (d.sehirSurucu?' — '+d.sehirSurucu:'') + (d.sehirTel?' ('+d.sehirTel+')':'');
+        var sStr = d.sehirArac + (d.sehirDetay?' · '+d.sehirDetay:'') + (d.sehirSurucu?' — '+d.sehirSurucu:'') + (d.sehirTel?' · <strong style="color:var(--primary)">' + d.sehirTel + '</strong>':'');
         detayRows += '<div style="display:flex;gap:5px"><span>&#x1F68C;</span><span>Servis: ' + sStr + '</span></div>';
       }
       if (d.otel) { d.otel.split('|').forEach(function(o){ if(o.trim()) detayRows += '<div style="display:flex;gap:5px"><span>&#x1F3E8;</span><span>' + o.trim() + '</span></div>'; }); }
@@ -8158,7 +8177,20 @@ function turneCopyala(rowIdx) {
     var _lojExtra = {};
     try { var _lojRaw = t.notlar||''; if (_lojRaw.startsWith('{')) _lojExtra = JSON.parse(_lojRaw); } catch(e){}
     var _lojNot = _lojExtra.not !== undefined ? _lojExtra.not : (t.notlar && !t.notlar.startsWith('{') ? t.notlar : '');
-    document.getElementById('m-lojistik-not').value = _lojNot;
+    // Kamyon firma/tel'i lojNot'tan parse et
+    var _parsedLojNot = _lojNot;
+    var _kamyonFirmaVal = '', _kamyonTelVal = '';
+    if (_lojNot.startsWith('🚛 ') || _lojNot.indexOf('🚛') === 0) {
+      var _lines = _lojNot.split('\n');
+      var _kamyonLine = _lines[0].replace('🚛 ', '');
+      var _parts = _kamyonLine.split(' · ');
+      if (_parts.length >= 2) { _kamyonFirmaVal = _parts[0]; _kamyonTelVal = _parts[1]; }
+      else { _kamyonFirmaVal = _kamyonLine; }
+      _parsedLojNot = _lines.slice(1).join('\n').trim();
+    }
+    document.getElementById('m-lojistik-not').value = _parsedLojNot;
+    var _kfEl = document.getElementById('m-kamyon-firma'); if (_kfEl) _kfEl.value = _kamyonFirmaVal;
+    var _ktEl = document.getElementById('m-kamyon-tel'); if (_ktEl) _ktEl.value = _kamyonTelVal;
     var _atEl = document.getElementById('m-arac-tur'); if (_atEl) _atEl.value = _lojExtra.aracTur||t.aracTur||'';
     var _liEl = document.getElementById('m-arac-liftli'); if (_liEl) _liEl.checked = !!(_lojExtra.liftli||t.liftli||false);
     // Yükleme/boşaltma: array varsa kullan, yoksa eski tekil alanlardan migrate et
@@ -8248,7 +8280,17 @@ function editTurne(rowIdx) {
   var _lojExtra2 = {};
   try { var _lojRaw2 = t.notlar||''; if (_lojRaw2.startsWith('{')) _lojExtra2 = JSON.parse(_lojRaw2); } catch(e){}
   var _lojNot2 = _lojExtra2.not !== undefined ? _lojExtra2.not : (t.notlar && !t.notlar.startsWith('{') ? t.notlar : '');
-  document.getElementById('m-lojistik-not').value = _lojNot2;
+  var _parsedLojNot2 = _lojNot2;
+  var _kamyonFirmaVal2 = '', _kamyonTelVal2 = '';
+  if (_lojNot2 && _lojNot2.indexOf('🚛') === 0) {
+    var _lines2 = _lojNot2.split('\n');
+    var _parts2 = _lines2[0].replace('🚛 ', '').split(' · ');
+    _kamyonFirmaVal2 = _parts2[0]||''; _kamyonTelVal2 = _parts2[1]||'';
+    _parsedLojNot2 = _lines2.slice(1).join('\n').trim();
+  }
+  document.getElementById('m-lojistik-not').value = _parsedLojNot2;
+  var _kfEl2 = document.getElementById('m-kamyon-firma'); if (_kfEl2) _kfEl2.value = _kamyonFirmaVal2;
+  var _ktEl2 = document.getElementById('m-kamyon-tel'); if (_ktEl2) _ktEl2.value = _kamyonTelVal2;
   var _atEl2 = document.getElementById('m-arac-tur'); if (_atEl2) _atEl2.value = _lojExtra2.aracTur||t.aracTur||'';
   var _liEl2 = document.getElementById('m-arac-liftli'); if (_liEl2) _liEl2.checked = !!(_lojExtra2.liftli||t.liftli||false);
   if (Array.isArray(_lojExtra2.yukBoslar) && _lojExtra2.yukBoslar.length) {
@@ -8358,8 +8400,16 @@ async function saveTurne() {
   var otelAdres   = (gecerliOtelDurak.otelAdres   || '').trim();
   var otelTelefon = (gecerliOtelDurak.otelTel     || '').trim();
   var kamyon      = (document.getElementById('m-kamyon')||{value:''}).value.trim();
+  var kamyonFirma = (document.getElementById('m-kamyon-firma')||{value:''}).value.trim();
+  var kamyonTel   = (document.getElementById('m-kamyon-tel')||{value:''}).value.trim();
   var kapasite    = (document.getElementById('m-kapasite')||{value:''}).value.trim();
   var _lojNotDuz  = (document.getElementById('m-lojistik-not')||{value:''}).value.trim();
+  // Kamyon firma/tel varsa lojNot'a ekle
+  var _lojNotFull = _lojNotDuz;
+  if (kamyonFirma || kamyonTel) {
+    var _kamyonBilgi = '🚛 ' + [kamyonFirma, kamyonTel].filter(Boolean).join(' · ');
+    _lojNotFull = _kamyonBilgi + (_lojNotDuz ? '\n' + _lojNotDuz : '');
+  }
   var _aracTur    = (document.getElementById('m-arac-tur')||{value:''}).value.trim();
   var _liftli     = !!(document.getElementById('m-arac-liftli')||{checked:false}).checked;
   var _yukBoslarSave = (window._yukBoslar || []).filter(function(x){ return x.saat || x.yer; });
@@ -8492,7 +8542,7 @@ async function saveTurne() {
     oyun, il, basTarih, bitisTarih, mekan, String(sayi), not_, statu,
     otelAdi, otelAdres, otelTelefon,
     gidisUlasim, gidisSaat, donusUlasim, donusSaat,
-    aktarma, kamyon, kapasite, lojNot,
+    aktarma, kamyon, kapasite, _lojNotFull,
     duraklarJSON,
     gidisInis, gidisUcusNo, gidisArac,
     donusInis, donusUcusNo, donusArac,
