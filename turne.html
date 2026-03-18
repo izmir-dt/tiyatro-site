@@ -14642,9 +14642,10 @@ function sehirAraclarRender() {
   if (!wrap) return;
   if (!sehirAraclar.length) sehirAraclar = [{tur:'',firma:'',kisi:'',tel:''}];
   // başlık satırı
-  var head = '<div style="display:grid;grid-template-columns:2fr 2fr 1.2fr 20px;gap:5px;margin-bottom:2px;padding:0 1px">' +
+  var head = '<div style="display:grid;grid-template-columns:2fr 2fr 1fr 1.2fr 20px;gap:5px;margin-bottom:2px;padding:0 1px">' +
     '<div style="font-size:9px;font-weight:700;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.4px">Araç Türü</div>' +
     '<div style="font-size:9px;font-weight:700;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.4px">Firma</div>' +
+    '<div style="font-size:9px;font-weight:700;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.4px">Telefon</div>' +
     '<div style="font-size:9px;font-weight:700;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.4px">Kişi</div>' +
     '<div></div></div>';
   wrap.innerHTML = head + sehirAraclar.map(function(a, i) {
@@ -14653,11 +14654,12 @@ function sehirAraclarRender() {
     }).join('');
     var turSel = '<select class="form-input" data-si="'+i+'" style="font-size:11px;padding:4px 6px;min-width:0"><option value="">-- Yok --</option>'+opts+'</select>';
     var firmaInp = '<input class="form-input" type="text" value="'+(a.firma||'')+'" placeholder="Firma..." data-si="'+i+'" data-field="firma" style="font-size:11px;padding:4px 6px">';
+    var telInp   = '<input class="form-input" type="tel" value="'+(a.tel||'')+'" placeholder="0xxx..." data-si="'+i+'" data-field="tel" style="font-size:11px;padding:4px 6px">';
     var kisiInp  = '<input class="form-input" type="number" min="1" value="'+(a.kisi||'')+'" placeholder="Kişi" data-si="'+i+'" data-field="kisi" style="font-size:11px;padding:4px 6px;min-width:0">';
     var silBtn   = sehirAraclar.length > 1
       ? '<button type="button" data-si="'+i+'" data-action="sil" style="flex-shrink:0;width:20px;height:20px;border-radius:4px;border:1px solid var(--destructive);background:transparent;color:var(--destructive);cursor:pointer;font-size:15px;line-height:1;display:flex;align-items:center;justify-content:center;padding:0">×</button>'
       : '<div style="width:20px"></div>';
-    return '<div style="display:grid;grid-template-columns:2fr 2fr 1.2fr 20px;gap:5px;align-items:center;margin-bottom:4px">'+turSel+firmaInp+kisiInp+silBtn+'</div>';
+    return '<div style="display:grid;grid-template-columns:2fr 2fr 1fr 1.2fr 20px;gap:5px;align-items:center;margin-bottom:4px">'+turSel+firmaInp+telInp+kisiInp+silBtn+'</div>';
   }).join('');
   // event bind
   wrap.querySelectorAll('select[data-si]').forEach(function(el){
@@ -16719,8 +16721,10 @@ function _pdfTurneDosyasiIcerik(t) {
   var _lojN=t.not||t.notlar||'';
   try{if(_lojN.startsWith('{'))_lojN=JSON.parse(_lojN).not||'';}catch(e){_lojN='';}
   var _nakKapak='';
-  if(t.kamyonSayisi||t.aracTur){
-    var _ac=(t.kamyonSayisi?t.kamyonSayisi+' adet ':'')+( t.aracTur||'Kamyon');
+  var _lojPKapak={}; try{if((t.notlar||'').startsWith('{'))_lojPKapak=JSON.parse(t.notlar);}catch(e){}
+  var _aracTurKapak = _lojPKapak.aracTur || t.aracTur || '';
+  if(t.kamyonSayisi||_aracTurKapak){
+    var _ac = (t.kamyonSayisi ? t.kamyonSayisi + ' adet ' : '') + (_aracTurKapak || (t.kamyonSayisi ? 'Kamyon' : ''));
     var _kf='',_kt='';
     if(_lojN&&_lojN.length>2){
       var _kl=_lojN.split('\n')[0];
@@ -16917,7 +16921,8 @@ function _pdfTurneDosyasiIcerik(t) {
   var _lojP={};
   try{if((t.notlar||'').startsWith('{'))_lojP=JSON.parse(t.notlar);}catch(e){}
   var _yukBoslar=Array.isArray(_lojP.yukBoslar)&&_lojP.yukBoslar.length?_lojP.yukBoslar:[];
-  var nakArac=(t.kamyonSayisi?t.kamyonSayisi+' adet ':'')+(t.aracTur||'Kamyon');
+  var _aracTurPdf2 = _lojP.aracTur || t.aracTur || '';
+  var nakArac = (t.kamyonSayisi ? t.kamyonSayisi + ' adet ' : '') + (_aracTurPdf2 || (t.kamyonSayisi ? 'Kamyon' : ''));
   var kf2='',kt2='';
   if(lojNot&&lojNot.charAt(0)==='\ud83d'){var kl2=lojNot.split('\n')[0].slice(3);var kp2=kl2.split(' \u00b7 ');kf2=kp2[0]||'';kt2=kp2[1]||'';}
   var yukBosRows=_yukBoslar.map(function(yb){
@@ -16944,7 +16949,7 @@ function _pdfTurneDosyasiIcerik(t) {
       ?'<div class="bolum-baslik">\u2708\ufe0f Ula\u015f\u0131m Bilgileri</div>'
         +'<table style="margin-bottom:16pt"><thead><tr><th>Tarih</th><th>G\u00fczerg\u00e2h</th><th>Ara\u00e7</th><th style="text-align:center">Saat</th><th>Firma / Hat</th></tr></thead><tbody>'+ucusRows.join('')+'</tbody></table>'
       :'')
-    +((t.kamyonSayisi||t.aracTur||_yukBoslar.length)
+    +((t.kamyonSayisi||_aracTurPdf2||_yukBoslar.length)
       ?'<div class="bolum-baslik">\ud83d\ude9b Nakliye / Dekor</div>'
         +'<table style="margin-bottom:6pt"><tbody>'
         +'<tr><td style="font-weight:700;width:30%">Ara\u00e7</td><td>'+nakArac+'</td></tr>'
