@@ -13539,6 +13539,16 @@ function _pdfIcerik(t) {
     nakliyeHTML = '<table style="width:100%;border-collapse:collapse;font-size:11px">';
     nakliyeHTML += '<thead><tr style="background:#1e3a5f"><th colspan="2" style="padding:6px 10px;color:#fff;text-align:left;border:1px solid #1a305a;font-size:10px">\ud83d\ude9b Nakliye Bilgileri</th></tr></thead><tbody>';
     nakliyeHTML += '<tr style="background:#f0f7ff"><td style="padding:6px 10px;border:1px solid #ddd;font-weight:700;width:40%">Araç</td><td style="padding:6px 10px;border:1px solid #ddd">' + _aracStr + '</td></tr>';
+    // Kamyon firma/tel — lojNot'tan parse et
+    var _lojNotKamyon = t.not || t.notlar || '';
+    if (_lojNotKamyon.startsWith('{')) { try { _lojNotKamyon = JSON.parse(_lojNotKamyon).not||''; } catch(e){ _lojNotKamyon=''; } }
+    if (_lojNotKamyon.indexOf('🚛') === 0) {
+      var _kLine = _lojNotKamyon.split('\n')[0].replace('🚛 ','');
+      var _kParts = _kLine.split(' · ');
+      var _kFirma = _kParts[0]||''; var _kTel = _kParts[1]||'';
+      if (_kFirma) nakliyeHTML += '<tr style="background:#f0f7ff"><td style="padding:6px 10px;border:1px solid #ddd;font-weight:700">Firma</td><td style="padding:8px 10px;border:1px solid #ddd;font-weight:700;font-size:12px">' + _kFirma + '</td></tr>';
+      if (_kTel)   nakliyeHTML += '<tr style="background:#e8f4ff"><td style="padding:6px 10px;border:1px solid #ddd;font-weight:700">Telefon</td><td style="padding:8px 10px;border:1px solid #ddd;font-weight:800;font-size:13px;color:#1e3a5f">' + _kTel + '</td></tr>';
+    }
     if (t.sahneKapasitesi) nakliyeHTML += '<tr><td style="padding:6px 10px;border:1px solid #ddd;font-weight:700">Sahne Kapasitesi</td><td style="padding:6px 10px;border:1px solid #ddd">' + t.sahneKapasitesi + ' kişi</td></tr>';
     _yukBoslarPdf.forEach(function(yb) {
       var isYuk = yb.tip === 'yukleme';
@@ -13589,6 +13599,11 @@ function _pdfIcerik(t) {
   var _notRaw = t.not || t.notlar || '';
   var _notGoster = _notRaw;
   if (_notRaw.startsWith('{')) { try { var _np=JSON.parse(_notRaw); _notGoster=_np.not||''; } catch(e) { _notGoster=''; } }
+  // 🚛 satırını notGoster'dan temizle — nakliye tablosunda gösteriliyor
+  if (_notGoster.indexOf('🚛') === 0) {
+    var _notLines = _notGoster.split('\n');
+    _notGoster = _notLines.slice(1).join('\n').trim();
+  }
   var notHTML = _notGoster
     ? '<div style="padding:9px 14px;background:#fef3c7;border-radius:5px;border-left:3px solid #d97706;font-size:11px;margin-top:12px"><strong>\ud83d\udcdd Not:</strong> '+_notGoster+'</div>'
     : '';
@@ -14109,6 +14124,8 @@ function _wordIcerik(t) {
   // ── NOT ───────────────────────────────────────────────────
   var _notRaw=t.not||t.notlar||''; var _notGoster=_notRaw;
   if(_notRaw.startsWith('{')){ try{var _np=JSON.parse(_notRaw);_notGoster=_np.not||'';}catch(e){_notGoster='';} }
+  // 🚛 nakliye satırını not kutusundan çıkar
+  if (_notGoster.indexOf('🚛') === 0) { _notGoster = _notGoster.split('\n').slice(1).join('\n').trim(); }
 
   // ── HTML ÇIKTI (100% tablo tabanlı, Word uyumlu) ──────────
   var html = '';
