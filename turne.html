@@ -6915,8 +6915,8 @@ function renderKisiModalList(oyunAdi, q) {
       ? 'onclick="event.stopPropagation()"'
       : 'onclick="toggleKisiSecim(\'' + esc(p.kisi) + '\',\'' + esc(_katGoster) + '\',\'' + esc(p.kategori||'') + '\')"';
     const checkClick = 'onclick="event.stopPropagation();toggleKisiSecim(\'' + esc(p.kisi) + '\',\'' + esc(_katGoster) + '\',\'' + esc(p.kategori||'') + '\')" style="cursor:pointer"';
-    return '<div class="kisi-row" ' + rowClick + '>'
-      + '<div class="kisi-checkbox" ' + checkClick + '></div>'
+    return '<div class="kisi-row' + (secili ? ' selected' : '') + '" ' + rowClick + '>'
+      + '<div class="kisi-checkbox" ' + checkClick + '>' + (secili ? '\u2713' : '') + '</div>'
       + '<div class="kisi-row-info">'
         + '<div class="kisi-row-name">' + p.kisi + '</div>'
         + '<span class="kisi-kat-chip">' + _katGoster + '</span>'
@@ -7459,9 +7459,21 @@ function updateKisiCount() {
   }
 }
 
+var _saveKisiModalCalisiyor = false;
 async function saveKisiModal() {
+  if (_saveKisiModalCalisiyor) return;
+  // Boş liste koruması
+  var _toplamSecili = window._kisiModalCoklu
+    ? Object.values(window._kisiModalCoklu).reduce(function(s,a){ return s+(a||[]).length; },0)
+    : kisiModalSecili.length;
+  if (_toplamSecili === 0) {
+    if (!window.confirm('Katılımcı listesi boş. Kaydetmek tüm mevcut kadroyu silecek.\n\nDevam edilsin mi?')) return;
+  }
+  _saveKisiModalCalisiyor = true;
+  var _kaydetBtn = document.getElementById('save-kisi-btn');
+  if (_kaydetBtn) { _kaydetBtn.disabled = true; _kaydetBtn.textContent = 'Kaydediliyor...'; }
   const t = turneler.find(x => x._rowIdx === kisiModalRowIdx);
-  if (!t) return;
+  if (!t) { _saveKisiModalCalisiyor = false; if (_kaydetBtn) { _kaydetBtn.disabled = false; _kaydetBtn.textContent = 'Kaydet'; } return; }
 
   // NOT: dis:true olan kişiler SADECE bu turnenin JSON'una kaydedilir.
   // DIS_KATILIMCILAR sheet'ine otomatik yazılmaz — o listeyi yönetici kendisi yönetir.
