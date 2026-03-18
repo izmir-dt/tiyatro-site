@@ -17149,57 +17149,57 @@ function _pdfTurneDosyasiIcerik(t) {
   return CSS + kapak + sayfa2 + sayfa3 + sayfa4 + sayfa5;
 }
 
-// ── İLGİLİ KİŞİ ÖNERİ FONKSİYONU ──────────────────────────
-function ilgiliKisiOneri(input, ilceVal, durakIdx) {
-  var val = input.value.trim().toLowerCase();
-  var dd = document.getElementById('ilgili-dd-' + durakIdx);
-  if (!dd) return;
-
-  // Mevcut turnelerden il bazlı ilgili kişileri topla
-  var il = (duraklar[durakIdx] && duraklar[durakIdx].il) ? duraklar[durakIdx].il.toLowerCase() : '';
-  var oneriMap = {};
-  (typeof turneler !== 'undefined' ? turneler : []).forEach(function(t) {
-    (t.duraklar || []).forEach(function(d) {
-      if (!d.ilgiliKisi || !d.ilgiliKisi.trim()) return;
-      // Il eşleşmesi varsa öncelikli, yoksa da göster
-      var key = d.ilgiliKisi.trim().toLowerCase();
-      if (!oneriMap[key]) oneriMap[key] = { kisi: d.ilgiliKisi.trim(), tel: d.ilgiliTel || '', il: d.il || '', count: 0 };
-      oneriMap[key].count++;
-      if (!oneriMap[key].tel && d.ilgiliTel) oneriMap[key].tel = d.ilgiliTel;
-    });
-  });
-
-  var onerilier = Object.values(oneriMap)
-    .filter(function(o) { return !val || o.kisi.toLowerCase().includes(val) || (o.il||'').toLowerCase().includes(val); })
-    .sort(function(a, b) {
-      // İl eşleşenleri üste al, sonra kullanım sıklığına göre
-      var aIl = (a.il||'').toLowerCase().includes(il) ? 1 : 0;
-      var bIl = (b.il||'').toLowerCase().includes(il) ? 1 : 0;
-      if (bIl !== aIl) return bIl - aIl;
-      return b.count - a.count;
-    })
-    .slice(0, 6);
-
-  if (!onerilier.length || !val) { dd.style.display = 'none'; return; }
-
-  dd.innerHTML = onerilier.map(function(o) {
-    return '<div onclick="ilgiliKisiSec(' + durakIdx + ','' + o.kisi.replace(/'/g, "\'") + '','' + (o.tel||'').replace(/'/g, "\'") + '')" '
-      + 'style="padding:7px 10px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;font-size:12px;font-family:Poppins,sans-serif">'
-      + '<div><strong>' + o.kisi + '</strong>'
-      + (o.il ? '<span style="font-size:10px;color:var(--muted-foreground);margin-left:6px">' + o.il + '</span>' : '')
-      + '</div>'
-      + (o.tel ? '<span style="font-size:11px;font-weight:700;color:var(--primary)">' + o.tel + '</span>' : '')
-      + '</div>';
-  }).join('');
-  dd.style.display = 'block';
-}
-
+// ── İLGİLİ KİŞİ ÖNERİ ─────────────────────────────────────
 function ilgiliKisiSec(idx, kisi, tel) {
   duraklar[idx].ilgiliKisi = kisi;
   duraklar[idx].ilgiliTel  = tel;
   renderDuraklar();
-  var dd = document.getElementById('ilgili-dd-' + idx);
-  if (dd) dd.style.display = 'none';
+}
+
+function ilgiliKisiOneri(input, _unused, durakIdx) {
+  var val = (input.value || '').trim().toLowerCase();
+  var ddId = 'ilgili-dd-' + durakIdx;
+  var dd = document.getElementById(ddId);
+  if (!dd) return;
+
+  var il = (duraklar[durakIdx] && duraklar[durakIdx].il || '').toLowerCase();
+  var map = {};
+  var arr = typeof turneler !== 'undefined' ? turneler : [];
+  arr.forEach(function(t) {
+    (t.duraklar || []).forEach(function(d) {
+      if (!d.ilgiliKisi || !d.ilgiliKisi.trim()) return;
+      var key = d.ilgiliKisi.trim().toLowerCase();
+      if (!map[key]) map[key] = { kisi: d.ilgiliKisi.trim(), tel: d.ilgiliTel || '', il: d.il || '', n: 0 };
+      map[key].n++;
+      if (!map[key].tel && d.ilgiliTel) map[key].tel = d.ilgiliTel;
+    });
+  });
+
+  var list = Object.values(map).filter(function(o) {
+    return !val || o.kisi.toLowerCase().indexOf(val) >= 0 || (o.il || '').toLowerCase().indexOf(val) >= 0;
+  }).sort(function(a, b) {
+    var aM = il && (a.il || '').toLowerCase().indexOf(il) >= 0 ? 1 : 0;
+    var bM = il && (b.il || '').toLowerCase().indexOf(il) >= 0 ? 1 : 0;
+    return bM !== aM ? bM - aM : b.n - a.n;
+  }).slice(0, 6);
+
+  if (!list.length || !val) { dd.style.display = 'none'; return; }
+
+  var html = '';
+  list.forEach(function(o) {
+    var kisiSafe = o.kisi.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    var telSafe  = (o.tel||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    html += '<div onclick="ilgiliKisiSec(' + durakIdx + ',\'' + kisiSafe + '\',\'' + telSafe + '\')"'
+          + ' style="padding:7px 10px;cursor:pointer;border-bottom:1px solid var(--border);'
+          + 'display:flex;justify-content:space-between;align-items:center;font-size:12px;font-family:Poppins,sans-serif">'
+          + '<div><strong>' + o.kisi + '</strong>'
+          + (o.il ? '<span style="font-size:10px;color:var(--muted-foreground);margin-left:6px">' + _temizleIlPdf(o.il) + '</span>' : '')
+          + '</div>'
+          + (o.tel ? '<span style="font-size:11px;font-weight:700;color:var(--primary)">' + o.tel + '</span>' : '')
+          + '</div>';
+  });
+  dd.innerHTML = html;
+  dd.style.display = 'block';
 }
 
 
