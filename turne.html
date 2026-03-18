@@ -2698,12 +2698,12 @@ flex-shrink:0;
             <input class="form-input" type="text" id="m-not" placeholder="Opsiyonel not..." style="width:100%">
           </div>
         </div>
-        <div style="margin-bottom:10px">
+        <div style="display:none">
           <div class="form-group" style="margin:0">
-            <label class="form-label" style="font-size:11px">Oyun Afişi URL <span style="font-weight:400;color:var(--muted-foreground);font-size:10px">(Turne Dosyası PDF kapağı için)</span></label>
-            <input class="form-input" type="url" id="m-afis-url" placeholder="https://... (opsiyonel)" style="width:100%;font-size:12px">
+            <label class="form-label">Afiş URL</label>
+            <input class="form-input" type="text" id="m-afis-url" placeholder="">
           </div>
-          <div style="display:none"><input id="m-il" type="hidden"><input id="m-mekan" type="hidden"><input id="m-sayi" type="hidden" value="1"><input id="m-grup" type="hidden"><input id="m-premiyer" type="hidden"></div>
+          <div><input id="m-il" type="hidden"><input id="m-mekan" type="hidden"><input id="m-sayi" type="hidden" value="1"><input id="m-grup" type="hidden"><input id="m-premiyer" type="hidden"></div>
         </div>
 
       </div>
@@ -3529,6 +3529,9 @@ const STATU_OPTS = [
 
 let tumPersonel = [];
 let turneler    = [];
+// Oyun bazlı afiş URL - localStorage
+var oyunAfisler = (function(){try{return JSON.parse(localStorage.getItem('_oyunAfisler')||'{}');}catch(e){return {};}})();
+function oyunAfisKaydet(oyun,url){oyunAfisler[oyun]=url;try{localStorage.setItem('_oyunAfisler',JSON.stringify(oyunAfisler));}catch(e){}}
 let calYear, calMonth, calSelectedDay = null;
 var calNotes = {}; // key: 'YYYY-MM-DD' → not metni (localStorage'dan yüklenir)
 var calStatuFiltre = ''; // takvim statü filtresi
@@ -7720,6 +7723,16 @@ function renderOyunDetay() {
             + '</div>'
             + (iller.length ? '<div style="font-size:10px;color:var(--muted-foreground);overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;flex-shrink:0"><path d="M12 21s7-6.5 7-11a7 7 0 1 0-14 0c0 4.5 7 11 7 11z"/><circle cx="12" cy="10" r="2"/></svg> '
               + iller.slice(0,6).join(', ')+(iller.length>6?' +'+(iller.length-6)+' il':'')+'</div>' : '')
+            + '<div onclick="event.stopPropagation()" style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px">'
+            + '<div style="font-size:9px;font-weight:700;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Oyun Afişi URL</div>'
+            + '<div style="display:flex;gap:4px">'
+            + '<input type="text" value="'+(oyunAfisler[o]||'')+'" placeholder="https://i.ibb.co/..." '
+            + 'id="afis-inp-'+oi+'" '
+            + 'style="flex:1;padding:4px 7px;border:1px solid var(--border);border-radius:5px;font-size:10px;background:var(--muted);color:var(--foreground);font-family:Poppins,sans-serif" '
+            + 'onclick="event.stopPropagation()">'
+            + '<button onclick="event.stopPropagation();var v=document.getElementById(\'afis-inp-'+oi+'\').value.trim();oyunAfisKaydet(\''+oSafe+'\',v);showToast(\'success\',\'✓ Afiş kaydedildi\')" '
+            + 'style="padding:4px 8px;background:var(--primary);color:#fff;border:none;border-radius:5px;font-size:10px;font-weight:700;cursor:pointer;font-family:Poppins,sans-serif;flex-shrink:0">Kaydet</button>'
+            + '</div></div>'
             + '</div>';
         }).join('')
       + '</div></div>';
@@ -8449,6 +8462,11 @@ async function saveTurne() {
   var grup        = document.getElementById('m-grup').value.trim();
   var promiyerTarih = (document.getElementById('m-premiyer')||{value:''}).value.trim();
   var afisUrl = (document.getElementById('m-afis-url')||{value:''}).value.trim();
+  // Boşsa oyun bazlı afişten al
+  if (!afisUrl) {
+    var _oyunForAfis = (document.getElementById('m-oyun')||{value:''}).value.trim();
+    if (_oyunForAfis && oyunAfisler[_oyunForAfis]) afisUrl = oyunAfisler[_oyunForAfis];
+  }
   var gidisUlasim = (document.getElementById('m-gidis-ulasim')||{value:''}).value;
   var gidisSaat   = (document.getElementById('m-gidis-saat')||{value:''}).value;
   // Uçak bacaklarını JSON olarak kaydet
