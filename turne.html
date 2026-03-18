@@ -16647,129 +16647,123 @@ function _pdfTurneDosyasiIcerik(t) {
   var bugun = new Date().toLocaleDateString('tr-TR',{day:'numeric',month:'long',year:'numeric'});
   var sure  = turneSuresi(t);
   var AYLAR = ['Ocak','\u015eubat','Mart','Nisan','May\u0131s','Haziran','Temmuz','A\u011fustos','Eyl\u00fcl','Ekim','Kas\u0131m','Aral\u0131k'];
+  function _f(s){ if(!s)return '\u2014'; var p=s.split('-'); return p[2]+' '+AYLAR[+p[1]-1]+' '+p[0]; }
 
-  function _fmt(s){
-    if(!s) return '\u2014';
-    var p = s.split('-');
-    return p[2]+' '+AYLAR[+p[1]-1]+' '+p[0];
-  }
-
-  var oyunAdi = t.oyun || (t.duraklar ? [...new Set(t.duraklar.map(function(d){return d.oyun||'';}).filter(Boolean))].join(' / ') : '');
+  var oyunAdi = t.oyun||(t.duraklar?[...new Set(t.duraklar.map(function(d){return d.oyun||'';}).filter(Boolean))].join(' / '):'');
   var ilStr   = _temizleIlPdf(durakIlStr(t));
-  var afisUrl = t.afisUrl || '';
-  var tarihStr= _fmt(t.baslangicTarih||t.tarih) + (t.bitisTarih && t.bitisTarih !== (t.baslangicTarih||t.tarih) ? ' \u2013 '+_fmt(t.bitisTarih) : '');
-  var tarihPar= '('+tarihStr+')';
+  var afisUrl = t.afisUrl||'';
+  var tarih   = _f(t.baslangicTarih||t.tarih)+(t.bitisTarih&&t.bitisTarih!==(t.baslangicTarih||t.tarih)?' \u2013 '+_f(t.bitisTarih):'');
 
-  // ── SAYFA 1: KAPAK ──────────────────────────────────────
-  var bg = afisUrl
-    ? 'background-color:#000;background-image:url("'+afisUrl+'");background-size:cover;background-repeat:no-repeat;background-position:center'
-    : 'background:linear-gradient(180deg,#2a0505 0%,#6b1b1b 50%,#1a0505 100%)';
+  // ── CSS ──────────────────────────────────────────────────
+  var css = [
+    '*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;box-sizing:border-box;margin:0;padding:0}',
+    'body{font-family:Arial,Helvetica,sans-serif;background:#fff}',
+    '.sayfa{width:210mm;min-height:297mm;position:relative;overflow:hidden;background:#fff}',
+    '.kapak-bg{position:absolute;inset:0;background-size:cover!important;background-position:center!important;background-repeat:no-repeat!important;filter:brightness(.42)}',
+    '.kapak-overlay{position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.3) 0%,rgba(0,0,0,.5) 55%,rgba(0,0,0,.82) 100%)}',
+    '.kapak-icerik{position:relative;z-index:1;padding:20mm 18mm;display:flex;flex-direction:column;min-height:297mm}',
+    '.bolum-baslik{background:#6b1b1b;color:#fff;padding:8mm 10mm;text-align:center;margin-bottom:8mm}',
+    '.bolum-baslik h1{font-size:16pt;font-weight:900;margin-bottom:3pt}',
+    '.bolum-baslik p{font-size:11pt;font-weight:700;margin-top:3pt}',
+    '.bolum-baslik small{font-size:10pt;opacity:.85}',
+    'table{width:100%;border-collapse:collapse;font-size:11pt}',
+    'thead tr{background:#1e3a5f}',
+    'th{padding:6pt 9pt;color:#fff;text-align:left;border:1pt solid #17304f;font-size:10pt}',
+    'td{padding:6pt 9pt;border:1pt solid #ddd;vertical-align:middle}',
+    'tbody tr:nth-child(even){background:#f5f5f5}',
+    '@media print{',
+    '  body{background:#fff}',
+    '  .no-print{display:none!important}',
+    '  @page{size:A4 portrait;margin:0}',
+    '  .sayfa{page-break-after:always;page-break-inside:avoid}',
+    '  .sayfa:last-child{page-break-after:auto}',
+    '}'
+  ].join('');
 
-  var html = '';
-  html += '<div style="page-break-after:always;position:relative;min-height:297mm;margin:-14mm -16mm;overflow:hidden;font-family:Arial,Helvetica,sans-serif">';
-  html += '<div class="afis-bg" style="position:absolute;inset:0;'+bg+';filter:brightness(.42)"></div>';
-  html += '<div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.3) 0%,rgba(0,0,0,.5) 55%,rgba(0,0,0,.82) 100%)"></div>';
-  html += '<div style="position:relative;z-index:1;padding:22pt 30pt;display:flex;flex-direction:column;min-height:297mm">';
+  // ── SAYFA 1: KAPAK ───────────────────────────────────────
+  var bgStyle = afisUrl ? 'background:#000 url("'+afisUrl+'")' : 'background:linear-gradient(180deg,#2a0505 0%,#6b1b1b 50%,#1a0505 100%)';
 
-  // Logo
-  html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0">';
-  html += '<div style="background:rgba(255,255,255,.1);border:1.5pt solid rgba(255,255,255,.22);border-radius:6pt;padding:8pt 14pt">';
-  html += '<div style="color:#e8c84a;font-size:15pt;font-weight:900;letter-spacing:1pt;line-height:1">\u0130DT</div>';
-  html += '<div style="color:rgba(255,255,255,.65);font-size:5pt;letter-spacing:.5pt;margin-top:2pt">\u0130ZM\u0130R DEVLET T\u0130YATROSU</div>';
-  html += '</div>';
-  html += '<div style="text-align:right"><div style="color:rgba(255,255,255,.5);font-size:8pt">'+bugun+'</div><div style="color:rgba(255,255,255,.3);font-size:7pt;margin-top:2pt">2025\u20132026 Sezonu</div></div>';
-  html += '</div>';
-
-  // Orta: oyun adı
-  html += '<div style="flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:20pt 10pt">';
-  html += '<div style="color:#e8c84a;font-size:8.5pt;font-weight:700;letter-spacing:3pt;text-transform:uppercase;margin-bottom:14pt;opacity:.8">\u0130ZM\u0130R DEVLET T\u0130YATROSU SUNAR</div>';
-  html += '<div style="color:#fff;font-size:46pt;font-weight:900;letter-spacing:.5pt;text-transform:uppercase;line-height:1;text-shadow:0 4pt 20pt rgba(0,0,0,.9);margin-bottom:14pt">'+oyunAdi+'</div>';
-  html += '<div style="color:#e8c84a;font-size:15pt;font-weight:700;letter-spacing:2.5pt;text-transform:uppercase;text-shadow:0 2pt 8pt rgba(0,0,0,.7);margin-bottom:8pt">'+ilStr+' TURNES\u0130</div>';
-  html += '<div style="color:rgba(255,255,255,.78);font-size:13pt;font-weight:600;letter-spacing:.3pt">'+tarihPar+'</div>';
-  html += '</div>';
-
-  // Alt bilgiler
-  html += '<div style="border-top:1pt solid rgba(255,255,255,.18);padding-top:16pt">';
-
-  // Turne Takip Personeli
   var ttp = [
-    {unvan:'M\u00fcd\u00fcr Yard\u0131mc\u0131s\u0131', ad:'Fuat \u015eARBALKAN',     tel:'0 555 558 70 79'},
-    {unvan:'Sanat Teknik BS.',                              ad:'Filiz A\u011eLAN G\u00dcRLER', tel:'0 555 537 08 11'},
-    {unvan:'Sahne Uzman\u0131',                           ad:'Koray \u00dcNVER',        tel:'0 554 692 0 666'}
+    {u:'M\u00fcd\u00fcr Yard\u0131mc\u0131s\u0131', a:'Fuat \u015eARBALKAN',     t:'0 555 558 70 79'},
+    {u:'Sanat Teknik BS.',             a:'Filiz A\u011eLAN G\u00dcRLER', t:'0 555 537 08 11'},
+    {u:'Sahne Uzman\u0131',            a:'Koray \u00dcNVER',        t:'0 554 692 0 666'}
   ];
-  html += '<div style="margin-bottom:14pt">';
-  html += '<div style="color:#e8c84a;font-size:8.5pt;font-weight:700;letter-spacing:.6pt;text-transform:uppercase;margin-bottom:7pt">Turne Takip Personeli</div>';
-  ttp.forEach(function(p){
-    html += '<div style="color:#fff;font-size:10pt;margin-bottom:3pt">'+p.unvan+' \u2013 <strong>'+p.ad+'</strong> \u2013 Tel : '+p.tel+'</div>';
-  });
-  html += '</div>';
+  var ttpHtml = ttp.map(function(p){
+    return '<div style="color:#fff;font-size:11pt;margin-bottom:4pt">'+p.u+' \u2013 <strong>'+p.a+'</strong> \u2013 Tel : '+p.t+'</div>';
+  }).join('');
 
-  // Bölge ilgili kişiler
-  var duraklar2 = (t.duraklar&&t.duraklar.length) ? t.duraklar : [];
+  var duraklar2 = (t.duraklar&&t.duraklar.length)?t.duraklar:[];
   var bolge = duraklar2.filter(function(d){return d.ilgiliKisi&&d.ilgiliKisi.trim();});
-  if (bolge.length) {
-    html += '<div style="margin-bottom:14pt">';
-    html += '<div style="color:#e8c84a;font-size:8.5pt;font-weight:700;letter-spacing:.6pt;text-transform:uppercase;margin-bottom:7pt">Turne B\u00f6lgesi \u0130lgili Ki\u015filer</div>';
-    bolge.forEach(function(d){
-      html += '<div style="color:#fff;font-size:10pt;margin-bottom:3pt">'+_temizleIlPdf(d.il||'')+' \u2013 <strong>'+(d.ilgiliKisi||'')+'</strong>'+(d.ilgiliTel?' \u2013 '+d.ilgiliTel:'')+' </div>';
-    });
-    html += '</div>';
-  }
+  var bolgeHtml = bolge.map(function(d){
+    return '<div style="color:#fff;font-size:11pt;margin-bottom:4pt">'+_temizleIlPdf(d.il||'')+' \u2013 <strong>'+(d.ilgiliKisi||'')+'</strong>'+(d.ilgiliTel?' \u2013 '+d.ilgiliTel:'')+' </div>';
+  }).join('');
 
-  // Nakliye
   var lojNot = t.not||t.notlar||'';
-  try{ if(lojNot.startsWith('{')) lojNot=JSON.parse(lojNot).not||''; }catch(e){ lojNot=''; }
-  if (t.kamyonSayisi||t.aracTur||(lojNot&&lojNot.indexOf('\ud83d\ude9b')===0)) {
-    html += '<div style="margin-bottom:8pt">';
-    html += '<div style="color:#e8c84a;font-size:8.5pt;font-weight:700;letter-spacing:.6pt;text-transform:uppercase;margin-bottom:7pt">Nakliye Ve Ula\u015f\u0131m Bilgileri</div>';
-    var aracStr = (t.kamyonSayisi?t.kamyonSayisi+' adet ':'')+(t.aracTur||'Kamyon');
-    var kFirma='', kTel='';
-    if (lojNot.indexOf('\ud83d\ude9b')===0) {
-      var kLine = lojNot.split('\n')[0].replace('\ud83d\ude9b ','');
-      var kParts = kLine.split(' \u00b7 ');
-      kFirma = kParts[0]||''; kTel = kParts[1]||'';
+  try{if(lojNot.startsWith('{'))lojNot=JSON.parse(lojNot).not||'';}catch(e){lojNot='';}
+  var nakHtml = '';
+  if(t.kamyonSayisi||t.aracTur||(lojNot&&lojNot.indexOf('\ud83d\ude9b')===0)){
+    var ac=(t.kamyonSayisi?t.kamyonSayisi+' adet ':'')+(t.aracTur||'Kamyon');
+    var kf='',kt='';
+    if(lojNot.indexOf('\ud83d\ude9b')===0){
+      var kl=lojNot.split('\n')[0].replace('\ud83d\ude9b ','');
+      var kp=kl.split(' \u00b7 '); kf=kp[0]||''; kt=kp[1]||'';
     }
-    html += '<div style="color:#fff;font-size:10pt">'+aracStr+(kFirma?' - '+kFirma:'')+(kTel?' - '+kTel:'')+'</div>';
-    html += '</div>';
+    nakHtml = '<div style="color:#fff;font-size:11pt">'+ac+(kf?' \u2013 '+kf:'')+(kt?' \u2013 '+kt:'')+'</div>';
   }
 
-  html += '</div>'; // alt
-  html += '</div>'; // içerik
-  html += '</div>'; // kapak
+  var P1 = '<div class="sayfa">'
+    + '<div class="kapak-bg afis-bg" style="'+bgStyle+'"></div>'
+    + '<div class="kapak-overlay"></div>'
+    + '<div class="kapak-icerik">'
+    // Logo
+    + '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0">'
+    + '<div style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.22);border-radius:6px;padding:8px 14px">'
+    + '<div style="color:#e8c84a;font-size:20px;font-weight:900">\u0130DT</div>'
+    + '<div style="color:rgba(255,255,255,.6);font-size:7px;margin-top:2px">\u0130ZM\u0130R DEVLET T\u0130YATROSU</div>'
+    + '</div>'
+    + '<div style="color:rgba(255,255,255,.5);font-size:9pt;text-align:right">'+bugun+'<br><span style="font-size:8pt">2025\u20132026 Sezonu</span></div>'
+    + '</div>'
+    // Oyun adı
+    + '<div style="flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:15mm 8mm">'
+    + '<div style="color:#e8c84a;font-size:9pt;font-weight:700;letter-spacing:3px;text-transform:uppercase;margin-bottom:12pt;opacity:.85">\u0130ZM\u0130R DEVLET T\u0130YATROSU SUNAR</div>'
+    + '<div style="color:#fff;font-size:44pt;font-weight:900;text-transform:uppercase;line-height:1.05;text-shadow:0 4px 20px rgba(0,0,0,.9);margin-bottom:12pt">'+oyunAdi+'</div>'
+    + '<div style="color:#e8c84a;font-size:16pt;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin-bottom:8pt">'+ilStr+' TURNES\u0130</div>'
+    + '<div style="color:rgba(255,255,255,.8);font-size:13pt;font-weight:600">('+tarih+')</div>'
+    + '</div>'
+    // Alt bilgiler
+    + '<div style="border-top:1px solid rgba(255,255,255,.2);padding-top:14pt">'
+    + '<div style="color:#e8c84a;font-size:9pt;font-weight:700;letter-spacing:.6px;text-transform:uppercase;margin-bottom:7pt">Turne Takip Personeli</div>'
+    + ttpHtml
+    + (bolgeHtml ? '<div style="margin-top:12pt"><div style="color:#e8c84a;font-size:9pt;font-weight:700;letter-spacing:.6px;text-transform:uppercase;margin-bottom:7pt">Turne B\u00f6lgesi \u0130lgili Ki\u015filer</div>'+bolgeHtml+'</div>' : '')
+    + (nakHtml   ? '<div style="margin-top:12pt"><div style="color:#e8c84a;font-size:9pt;font-weight:700;letter-spacing:.6px;text-transform:uppercase;margin-bottom:7pt">Nakliye Ve Ula\u015f\u0131m Bilgileri</div>'+nakHtml+'</div>' : '')
+    + '</div>'
+    + '</div></div>';
 
-  // ── SAYFA 2: KONAKLAMA ──────────────────────────────────
-  var durakListeO = (t.duraklar&&t.duraklar.length)?t.duraklar:(t.il?[{il:t.il,otelAdi:t.otelAdi,otelAdres:t.otelAdres,otelTel:t.otelTelefon}]:[]);
-  var oteller = durakListeO.filter(function(d){return d.otelAdi&&d.otelAdi.trim();});
-  if (oteller.length) {
-    html += '<div style="page-break-before:always">';
-    html += '<div style="background:#6b1b1b;color:#fff;padding:10pt 14pt;margin-bottom:16pt;text-align:center">';
-    html += '<div style="font-size:14pt;font-weight:900">'+oyunAdi.toUpperCase()+'</div>';
-    html += '<div style="font-size:11pt;font-weight:700;margin-top:3pt">'+ilStr.toUpperCase()+' TURNES\u0130 KONAKLAMA L\u0130STES\u0130</div>';
-    html += '<div style="font-size:10pt;margin-top:2pt;opacity:.85">'+tarihStr+'</div>';
-    html += '</div>';
-    html += '<table style="width:100%;border-collapse:collapse;font-size:11pt">';
-    html += '<thead><tr style="background:#1e3a5f">';
-    html += '<th style="padding:7pt 10pt;color:#fff;text-align:left;border:1pt solid #17304f">\u015eehir</th>';
-    html += '<th style="padding:7pt 10pt;color:#fff;text-align:left;border:1pt solid #17304f">Otel Ad\u0131</th>';
-    html += '<th style="padding:7pt 10pt;color:#fff;text-align:left;border:1pt solid #17304f">Adres</th>';
-    html += '<th style="padding:7pt 10pt;color:#fff;text-align:left;border:1pt solid #17304f">Telefon</th>';
-    html += '</tr></thead><tbody>';
-    oteller.forEach(function(d,ki){
-      var bg2 = ki%2===0?'#f0fdf4':'#fff';
-      html += '<tr style="background:'+bg2+'">';
-      html += '<td style="padding:7pt 10pt;border:1pt solid #ddd;font-weight:700;color:#15803d">'+_temizleIlPdf(d.il||'')+'</td>';
-      html += '<td style="padding:7pt 10pt;border:1pt solid #ddd;font-weight:700">'+(d.otelAdi||'')+'</td>';
-      html += '<td style="padding:7pt 10pt;border:1pt solid #ddd;font-size:10pt">'+(d.otelAdres||'\u2014')+'</td>';
-      html += '<td style="padding:7pt 10pt;border:1pt solid #ddd;font-weight:700;color:#1d4ed8">'+(d.otelTel||d.otelTelefon||'\u2014')+'</td>';
-      html += '</tr>';
-    });
-    html += '</tbody></table></div>';
+  // ── SAYFA 2: KONAKLAMA ───────────────────────────────────
+  var durakListeO=(t.duraklar&&t.duraklar.length)?t.duraklar:(t.il?[{il:t.il,otelAdi:t.otelAdi,otelAdres:t.otelAdres,otelTel:t.otelTelefon}]:[]);
+  var oteller=durakListeO.filter(function(d){return d.otelAdi&&d.otelAdi.trim();});
+  var P2='';
+  if(oteller.length){
+    var otelRows=oteller.map(function(d,ki){
+      var bg=ki%2===0?'#f0fdf4':'#fff';
+      return '<tr style="background:'+bg+'">'
+        +'<td style="font-weight:700;color:#15803d">'+_temizleIlPdf(d.il||'')+'</td>'
+        +'<td style="font-weight:700">'+(d.otelAdi||'')+'</td>'
+        +'<td style="font-size:10pt">'+(d.otelAdres||'\u2014')+'</td>'
+        +'<td style="font-weight:700;color:#1d4ed8">'+(d.otelTel||d.otelTelefon||'\u2014')+'</td>'
+        +'</tr>';
+    }).join('');
+    P2='<div class="sayfa" style="padding:15mm 18mm">'
+      +'<div class="bolum-baslik"><h1>'+oyunAdi.toUpperCase()+'</h1><p>'+ilStr.toUpperCase()+' TURNES\u0130 KONAKLAMA L\u0130STES\u0130</p><small>'+tarih+'</small></div>'
+      +'<table><thead><tr><th>\u015eehir</th><th>Otel Ad\u0131</th><th>Adres</th><th>Telefon</th></tr></thead>'
+      +'<tbody>'+otelRows+'</tbody></table>'
+      +'</div>';
   }
 
-  // ── SAYFA 3-4: PERSONEL + PROGRAM (mevcut fonksiyonu kullan) ──
-  html += '<div style="page-break-before:always">' + _pdfProgramPersonelIcerik(t) + '</div>';
+  // ── SAYFA 3-4: PERSONEL + PROGRAM ───────────────────────
+  var P34 = '<div class="sayfa" style="padding:15mm 18mm">'+_pdfProgramPersonelIcerik(t)+'</div>';
 
-  return html;
+  return '<style>'+css+'</style>' + P1 + P2 + P34;
 }
 
 
