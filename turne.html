@@ -5301,14 +5301,16 @@ function openKisiModal(rowIdx, _durakOyunAdi) {
     window._kisiModalCoklu = null;
     var anaKadro = getPersonelForOyun(oyunAdi);
     if (t.katilimcilar && t.katilimcilar.length > 0) {
-      // Mevcut kadroyu normalize ederek sağ listeye yükle
-      var OYUNCU_K = ['Oyuncu','Sanatçı','Koro','Koro/Dans Ekibi','Koro/Dans','Solist','Dansçı','Figüran','Müzisyen','Orkestra','Kurumdan Emekli Sanatçı'];
-      // Sağ panel: mevcut kadroyu kategori adıyla yükle
+      // Mevcut kadroyu normalize et — eski karakter isimlerini kategori adıyla değiştir
       var OYUNCU_K = ['Oyuncu','Sanatçı','Koro','Koro/Dans Ekibi','Koro/Dans','Solist','Dansçı','Figüran','Müzisyen','Orkestra','Kurumdan Emekli Sanatçı'];
       kisiModalSecili = JSON.parse(JSON.stringify(t.katilimcilar)).map(function(k) {
+        // tumPersonel'den gerçek kategoriyi bul
         var personelKayit = (tumPersonel || []).find(function(p){ return p.kisi === k.kisi; });
         var gercekKat = (personelKayit ? personelKayit.kategori : '') || k.kategori || '';
-        var katGoster = OYUNCU_K.indexOf(gercekKat) >= 0 ? 'Sanatçı' : (gercekKat || k.gorev || '');
+        // Sanatçı kategorileri → 'Sanatçı', diğerleri kendi adıyla, fallback k.gorev
+        // Figüran kendi adıyla kalsın, diğer oyuncu kategorileri → Sanatçı
+        var _sanatcilar = OYUNCU_K.filter(function(x){ return x !== 'Figüran'; });
+        var katGoster = _sanatcilar.indexOf(gercekKat) >= 0 ? 'Sanatçı' : (gercekKat || k.gorev || '');
         return Object.assign({}, k, { gorev: katGoster, kategori: gercekKat });
       });
       var kayitliAdlar = new Set(kisiModalSecili.map(function(k){ return k.kisi.trim().toLowerCase(); }));
