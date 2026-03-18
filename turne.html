@@ -14325,42 +14325,41 @@ function gorevlendirmePdf(rowIdx, mod) {
 
   // ── TURNE DOSYASI: özel pencere (afis URL girişli) ──────────
   if (mod === 'dosya') {
-    var _win2 = window.open('', '_blank');
-    if (!_win2) { alert('Lütfen pop-up engelleyiciyi kapatın.'); return; }
     var _icerik2 = _pdfTurneDosyasiIcerik(t);
     var _afisVal = (t.afisUrl || '').replace(/"/g, '&quot;');
-    var _d2 = '<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Turne Dosyasi</title>'
-      + '<style>'
-      + '*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;box-sizing:border-box}'
-      + 'body{margin:0;padding:0;font-family:Arial,Helvetica,sans-serif;background:#f0f0f0}'
-      + '@media print{'
-      + '  body{background:#fff}'
-      + '  .no-print{display:none!important}'
-      + '  @page{size:A4 portrait;margin:0}'
-      + '}'
-      + '</style>'
-      + '</head><body>'
-      + '<div class="no-print" style="position:sticky;top:0;background:#1a1a1a;padding:10px 16px;display:flex;align-items:center;gap:10px;z-index:9999;box-shadow:0 2px 8px rgba(0,0,0,.5)">'
+    var _toolbar = '<div class="no-print" style="position:sticky;top:0;background:#1a1a1a;padding:10px 16px;display:flex;align-items:center;gap:10px;z-index:9999;box-shadow:0 2px 8px rgba(0,0,0,.5)">'
       + '<span style="color:#e8c84a;font-weight:900;font-size:14px;font-family:sans-serif;white-space:nowrap">📁 Turne Dosyası</span>'
       + '<span style="color:#aaa;font-size:11px;font-family:sans-serif;white-space:nowrap">Oyun Afişi URL:</span>'
-      + '<input id="afis_url_inp" type="url" value="' + _afisVal + '" placeholder="https://... (opsiyonel)" style="flex:1;max-width:400px;padding:6px 10px;border:1px solid #444;border-radius:5px;background:#2a2a2a;color:#fff;font-size:12px;font-family:sans-serif">'
-      + '<button onclick="afisUygula()" style="padding:6px 16px;background:#7c3aed;color:#fff;border:none;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer;font-family:sans-serif;white-space:nowrap">Uygula</button>'
-      + '<button onclick="window.print()" style="padding:6px 18px;background:#6b1b1b;color:#fff;border:none;border-radius:5px;font-size:13px;font-weight:700;cursor:pointer;font-family:sans-serif;white-space:nowrap">🖨 Yazdır / PDF</button>'
-      + '</div>'
+      + '<input id="afis_url_inp" type="url" value="' + _afisVal + '" placeholder="https://..." style="flex:1;max-width:400px;padding:6px 10px;border:1px solid #444;border-radius:5px;background:#2a2a2a;color:#fff;font-size:12px;font-family:sans-serif">'
+      + '<button id="afis_btn" style="padding:6px 16px;background:#7c3aed;color:#fff;border:none;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer;font-family:sans-serif;white-space:nowrap">Uygula</button>'
+      + '<button id="print_btn" style="padding:6px 18px;background:#6b1b1b;color:#fff;border:none;border-radius:5px;font-size:13px;font-weight:700;cursor:pointer;font-family:sans-serif;white-space:nowrap">🖨 Yazdır / PDF</button>'
+      + '</div>';
+    var _css = '*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;box-sizing:border-box}'
+      + 'body{margin:0;padding:0;font-family:Arial,Helvetica,sans-serif;background:#f0f0f0}'
+      + '@media print{body{background:#fff}.no-print{display:none!important}@page{size:A4 portrait;margin:0}}';
+    var _fullHTML = '<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Turne Dosyasi</title><style>' + _css + '</style></head><body>'
+      + _toolbar
       + '<div id="turne_dosya_wrap">' + _icerik2 + '</div>'
-      + '<script>'
-      + 'function afisUygula(){'
-      + '  var url=document.getElementById("afis_url_inp").value.trim();'
-      + '  var imgs=document.querySelectorAll(".afis-bg");'
-      + '  imgs.forEach(function(el){'
-      + '    if(url) el.style.backgroundImage="url(\""+url+"\")";'
-      + '    else el.style.backgroundImage="none";'
-      + '  });'
-      + '}'
-      + '<\/script>'
       + '</body></html>';
-    _win2.document.write(_d2);
-    _win2.document.close();
+    var _blob = new Blob([_fullHTML], {type: 'text/html;charset=utf-8'});
+    var _url  = URL.createObjectURL(_blob);
+    var _win2 = window.open(_url, '_blank');
+    if (!_win2) { alert('Lütfen pop-up engelleyiciyi kapatın.'); return; }
+    // Pencere açıldıktan sonra butonlara event ekle
+    setTimeout(function() {
+      try {
+        var btn = _win2.document.getElementById('afis_btn');
+        var pbtn = _win2.document.getElementById('print_btn');
+        if (btn) btn.addEventListener('click', function() {
+          var url = _win2.document.getElementById('afis_url_inp').value.trim();
+          _win2.document.querySelectorAll('.afis-bg').forEach(function(el) {
+            el.style.backgroundImage = url ? 'url("' + url + '")' : 'none';
+            el.style.filter = url ? 'brightness(.42)' : 'none';
+          });
+        });
+        if (pbtn) pbtn.addEventListener('click', function() { _win2.print(); });
+      } catch(e) {}
+    }, 800);
     return;
   }
   var oyunAdi = t.oyun || (t.duraklar ? [...new Set(t.duraklar.map(function(d){return d.oyun||'';}).filter(Boolean))].join(' / ') : 'Rapor');
