@@ -5294,6 +5294,9 @@ function closeKisiModal() {
   kisiModalSecili = [];
   window._kisiModalCoklu = null;
   window._kisiModalTumOyunlar = [];
+  window._kisiModalMevcutKadro = null;
+  window._kisiModalSnapshot = null;
+  window._kisiModalAcilanZaman = null;
   _kisiModalSekmelerGizle();
 }
 
@@ -6897,8 +6900,14 @@ function _kisiCokluSync() {
 function _kisiModalOyunKadrosuYukle() {
   var oyunAdi = window._kisiModalOyunAdi || '';
   renderKisiModalList(oyunAdi, '');
-  // Mevcut kayıtlı kadro varsa sağ listeye de yükle
-  if (window._kisiModalMevcutKadro && window._kisiModalMevcutKadro.length && kisiModalSecili.length === 0) {
+  // Mevcut kayıtlı kadro varsa sağ listeye yükle
+  // Güvenlik: _kisiModalMevcutKadro bu turneye ait mi kontrol et
+  var t = turneler.find(function(x){ return x._rowIdx === kisiModalRowIdx; });
+  var mevcutGecerli = window._kisiModalMevcutKadro
+    && window._kisiModalMevcutKadro.length
+    && kisiModalSecili.length === 0
+    && t && t.katilimcilar && t.katilimcilar.length > 0;
+  if (mevcutGecerli) {
     kisiModalSecili = JSON.parse(JSON.stringify(window._kisiModalMevcutKadro));
     renderSelectedPills();
     updateKisiCount();
@@ -7488,7 +7497,13 @@ async function saveKisiModal() {
     ? Object.values(window._kisiModalCoklu).reduce(function(s,a){ return s+(a||[]).length; },0)
     : kisiModalSecili.length;
   if (_toplamSecili === 0) {
-    if (!window.confirm('Katılımcı listesi boş. Kaydetmek tüm mevcut kadroyu silecek.\n\nDevam edilsin mi?')) return;
+    var _t0 = turneler.find(function(x){ return x._rowIdx === (turneler.find ? kisiModalRowIdx : -1); });
+    var _mevcutVar = _t0 && _t0.katilimcilar && _t0.katilimcilar.length > 0;
+    if (_mevcutVar) {
+      showToast('Önce "Oyun Kadrosu" butonuna basarak kadroyu yükleyin', 'warn', 3500);
+      return;
+    }
+    if (!window.confirm('Katılımcı listesi boş. Yeni bir turne için devam edilsin mi?')) return;
   }
   _saveKisiModalCalisiyor = true;
   var _kaydetBtn = document.getElementById('save-kisi-btn');
