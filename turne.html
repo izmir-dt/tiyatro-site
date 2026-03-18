@@ -3531,7 +3531,11 @@ let tumPersonel = [];
 let turneler    = [];
 // Oyun bazlı afiş URL - localStorage
 var oyunAfisler = (function(){try{return JSON.parse(localStorage.getItem('_oyunAfisler')||'{}');}catch(e){return {};}})();
-function oyunAfisKaydet(oyun,url){oyunAfisler[oyun]=url;try{localStorage.setItem('_oyunAfisler',JSON.stringify(oyunAfisler));}catch(e){}}
+function oyunAfisKaydet(oyun,url){
+  oyunAfisler[oyun]=url;
+  try{localStorage.setItem('_oyunAfisler',JSON.stringify(oyunAfisler));}catch(e){}
+  if(typeof showToast==='function') showToast('success','\u2713 Afi\u015f kaydedildi \u2014 Yedek al\'\u0131nca JSON\'a i\u015flenecek');
+}
 let calYear, calMonth, calSelectedDay = null;
 var calNotes = {}; // key: 'YYYY-MM-DD' → not metni (localStorage'dan yüklenir)
 var calStatuFiltre = ''; // takvim statü filtresi
@@ -4161,7 +4165,7 @@ function tumUIGuncelle() {
 
 
 function yedekAl() {
-  var blob = new Blob([JSON.stringify({ versiyon:'v2', tarih:new Date().toISOString(), turneler:turneler }, null, 2)], { type:'application/json' });
+  var blob = new Blob([JSON.stringify({ versiyon:'v2', tarih:new Date().toISOString(), turneler:turneler, oyunAfisler:oyunAfisler }, null, 2)], { type:'application/json' });
   var a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = 'turne-yedek-' + new Date().toISOString().slice(0,10) + '.json';
@@ -4181,6 +4185,10 @@ function geriYukle(event) {
       var json  = JSON.parse(ev.target.result);
       var liste = json.turneler || json;
       if (!Array.isArray(liste)) throw new Error('Geçersiz format');
+      if (json.oyunAfisler && typeof json.oyunAfisler === 'object') {
+        Object.assign(oyunAfisler, json.oyunAfisler);
+        try{localStorage.setItem('_oyunAfisler',JSON.stringify(oyunAfisler));}catch(e){}
+      }
       const _liste = liste;
       onayGoster({
         baslik: 'Veri geri yüklenecek',
