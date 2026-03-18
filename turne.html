@@ -4269,7 +4269,26 @@ async function fetchPersonel() {
   }
 }
 
-async function fetchTurneler() {
+var _CACHE_TTL = 5 * 60 * 1000; // 5 dakika
+function _cacheYaz(key, data) {
+  try { sessionStorage.setItem(key, JSON.stringify({ ts: Date.now(), data: data })); } catch(e) {}
+}
+function _cacheOku(key) {
+  try {
+    var raw = sessionStorage.getItem(key);
+    if (!raw) return null;
+    var parsed = JSON.parse(raw);
+    if (Date.now() - parsed.ts > _CACHE_TTL) { sessionStorage.removeItem(key); return null; }
+    return parsed.data;
+  } catch(e) { return null; }
+}
+function _cacheSil(key) { try { sessionStorage.removeItem(key); } catch(e) {} }
+
+async function fetchTurneler(zorlaYenile) {
+  if (!zorlaYenile) {
+    var _cached = _cacheOku('cache_turneler');
+    if (_cached && _cached.length) { turneler = _cached; return; }
+  }
   try {
     const res  = await apiFetch('/' + encodeURIComponent(TURNE_SHEET));
     if (!res.ok) {
@@ -4397,7 +4416,8 @@ async function fetchTurneler() {
       })(),
       };
     }).filter(r => r.oyun || r.il || r.baslangicTarih || (r.duraklar && r.duraklar.length));
-  } catch(e) { console.warn('Turne verisi çekilemedi:', e); turneler = []; }
+  _cacheYaz('cache_turneler', turneler);
+  } catch(e) { console.warn('Turne verisi çekilemedi:', e); }
 }
 
 // ============================================================
@@ -5870,7 +5890,7 @@ function _konaklamaSekmesiHTML(t, rowIdx) {
             + 'style="flex-shrink:0;height:22px;width:22px;border:1px solid #e0c8c8;border-radius:4px;background:#fff;color:#999;font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center">x</button>'
             + '</div>';
           html += '<input type="text" placeholder="not / tarih" value="' + (p.odaNot||'').replace(/"/g,'&quot;') + '"'
-            + ' onchange="_konaklamaNotKaydet(' + t._rowIdx + ',' + i + ',this.value)"'
+            + ' onblur="_konaklamaNotKaydet(' + t._rowIdx + ',' + i + ',this.value)"'
             + ' style="margin-top:5px;width:100%;height:23px;padding:0 7px;border:1px solid #e0c8c8;border-radius:5px;font-size:9.5px;font-family:Poppins,sans-serif;background:#fff;color:#555;box-sizing:border-box">';
           html += '</div>';
         });
@@ -5949,7 +5969,7 @@ function _konaklamaSekmesiHTML(t, rowIdx) {
           + '</div>'
           + '</div>'
           + '<input type="text" placeholder="not / tarih" value="' + (p.odaNot||'').replace(/"/g,'&quot;') + '"'
-          + ' onchange="_konaklamaNotKaydet(' + t._rowIdx + ',' + i + ',this.value)"'
+          + ' onblur="_konaklamaNotKaydet(' + t._rowIdx + ',' + i + ',this.value)"'
           + ' style="margin-top:6px;width:100%;height:24px;padding:0 7px;border:1px solid #e0c8c8;border-radius:5px;font-size:9.5px;font-family:Poppins,sans-serif;background:#fff;color:#555;box-sizing:border-box">'
           + '</div>';
       });
@@ -8467,7 +8487,8 @@ async function saveTurne() {
       // pdfDosyaKaydet çalışıyorsa fetch'i atla (o zaten en sonda fetch yapacak)
       if (!window._pdfKayitDevam) {
         try {
-          await fetchTurneler();
+          _cacheSil('cache_turneler');
+          await fetchTurneler(true);
           tumUIGuncelle();
         } catch(e) { /* fetch hatası — mevcut veri korunur */ }
       }
@@ -8587,7 +8608,8 @@ async function _turneSilDevam(rowIdx) {
       throw new Error('HTTP ' + r.status + ': ' + (errMsg || 'Bilinmeyen hata'));
     }
     setLoading(true);
-    await fetchTurneler();
+    _cacheSil('cache_turneler');
+    await fetchTurneler(true);
     tumUIGuncelle();
     setLoading(false);
     if (typeof showToast === 'function') showToast('✅ Turne silindi', 'success', 2500);
@@ -10432,6 +10454,7 @@ async function _kadroKisiSilDevam(silIdx) {
     });
   }
 
+  showToast('Kadro kaydı silindi', 'success', 2000);
   populateFilters();
   kadroKisiModalKapat();
   renderKadro();
