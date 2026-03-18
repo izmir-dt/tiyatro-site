@@ -8205,6 +8205,7 @@ function turneCopyala(rowIdx) {
     document.getElementById('m-statu').value = 'taslak'; mStatuDdSec('taslak');
     document.getElementById('m-not').value   = t.not || '';
     document.getElementById('m-grup').value  = t.grup || '';
+    var _afEl2 = document.getElementById('m-afis-url'); if (_afEl2) _afEl2.value = t.afisUrl || '';
     // Ulaşım
     var gU = document.getElementById('m-gidis-ulasim'); if (gU) gU.value = t.gidisUlasim || '';
     var dU = document.getElementById('m-donus-ulasim'); if (dU) dU.value = t.donusUlasim || '';
@@ -16756,11 +16757,9 @@ function _pdfTurneDosyasiIcerik(t) {
       if(_kl.length>3)_kl=_kl.slice(3);
       var _kp=_kl.split(' \u00b7 ');_kf=_kp[0]||'';_kt=_kp[1]||'';
     }
-    _nakKapak='<div style="color:#fff;font-size:9.5pt;line-height:1.6">'
-      +_ac
-      +(_kf?' \u2013 <strong>'+_kf+'</strong>':'')
-      +(_kt?'<br><span style="color:#e8c84a;font-weight:700;font-size:11pt">'+_kt+'</span>':'')
-      +'</div>';
+    _nakKapak='<div style="color:rgba(255,255,255,.55);font-size:8.5pt;margin-bottom:2pt">'+_ac+'</div>'
+      +(_kf?'<div style="font-weight:700;font-size:10pt;color:#fff;margin-bottom:2pt">'+_kf+'</div>':'')
+      +(_kt?'<div style="font-weight:700;font-size:11pt;color:#e8c84a">'+_kt+'</div>':'');
   }
 
   var kapak='<div class="sayfa-kapak">'
@@ -16871,30 +16870,66 @@ function _pdfTurneDosyasiIcerik(t) {
   // Ulaşım
   var ucusRows=[];
   if(t.gidisUlasim){
-    var gf='',gt='';
-    var gr=t.gidisSurucu||''; var gmf=gr.match(/\|FIRMA:([^|]*)/); var gmt=gr.match(/\|TEL:([^|]*)/);
-    if(gmf)gf=gmf[1]; if(gmt)gt=gmt[1];
-    var gFirma=(gf?'<strong>'+gf+'</strong>':'')+( gt?(gf?' &middot; ':'')+gt:'');
-    ucusRows.push('<tr style="background:#f8f5f2">'
-      +'<td style="font-weight:700;white-space:nowrap">'+_fk(t.baslangicTarih||t.tarih)+'</td>'
-      +'<td style="font-weight:700">\u0130zmir \u2192 '+ilStr+'</td>'
-      +'<td>'+t.gidisUlasim+'</td>'
-      +'<td style="font-size:13pt;font-weight:900;text-align:center;color:#1a1a2e">'+(t.gidisSaat||'\u2014')+'</td>'
-      +'<td style="color:#1d4ed8;font-weight:700">'+( gFirma||t.gidisUcusNo||'')+'</td>'
-      +'</tr>');
+    var gBacaklar=[];
+    try{if(t.gidisUcusBacakJSON)gBacaklar=JSON.parse(t.gidisUcusBacakJSON);}catch(e){}
+    if(gBacaklar.length){
+      gBacaklar.forEach(function(b,bi){
+        var nereden=b.nereden||'\u0130zmir'; var nereye=b.nereye||ilStr;
+        var saat=(b.kalkis||'\u2014')+(b.inis?' \u2192 '+b.inis:'');
+        var firma=b.firma||b.havayolu||t.gidisUlasim||'';
+        var hat=[firma,b.ucusNo].filter(Boolean).join(' \u00b7 ');
+        ucusRows.push('<tr style="background:'+(bi===0?'#f8f5f2':'#fff9f2')+'">'
+          +'<td style="font-weight:700;white-space:nowrap">'+(bi===0?_fk(t.baslangicTarih||t.tarih):'\u21b3 Aktarma')+'</td>'
+          +'<td style="font-weight:700">'+nereden+' \u2192 '+nereye+'</td>'
+          +'<td>'+( b.havayolu||t.gidisUlasim||'')+'</td>'
+          +'<td style="font-size:13pt;font-weight:900;text-align:center;color:#1a1a2e">'+saat+'</td>'
+          +'<td style="color:#1d4ed8;font-weight:700">'+hat+'</td>'
+          +'</tr>');
+      });
+    } else {
+      var gf='',gt='';
+      var gr=t.gidisSurucu||''; var gmf=gr.match(/\|FIRMA:([^|]*)/); var gmt=gr.match(/\|TEL:([^|]*)/);
+      if(gmf)gf=gmf[1]; if(gmt)gt=gmt[1];
+      var gFirma=(gf?'<strong>'+gf+'</strong>':'')+( gt?(gf?' &middot; ':'')+gt:'');
+      ucusRows.push('<tr style="background:#f8f5f2">'
+        +'<td style="font-weight:700;white-space:nowrap">'+_fk(t.baslangicTarih||t.tarih)+'</td>'
+        +'<td style="font-weight:700">\u0130zmir \u2192 '+ilStr+'</td>'
+        +'<td>'+t.gidisUlasim+'</td>'
+        +'<td style="font-size:13pt;font-weight:900;text-align:center;color:#1a1a2e">'+(t.gidisSaat||'\u2014')+'</td>'
+        +'<td style="color:#1d4ed8;font-weight:700">'+( gFirma||t.gidisUcusNo||'')+'</td>'
+        +'</tr>');
+    }
   }
   if(t.donusUlasim){
-    var df='',dt='';
-    var dr=t.donusSurucu||''; var dmf=dr.match(/\|FIRMA:([^|]*)/); var dmt=dr.match(/\|TEL:([^|]*)/);
-    if(dmf)df=dmf[1]; if(dmt)dt=dmt[1];
-    var dFirma=(df?'<strong>'+df+'</strong>':'')+( dt?(df?' &middot; ':'')+dt:'');
-    ucusRows.push('<tr style="background:#fdf4ff">'
-      +'<td style="font-weight:700;white-space:nowrap">'+_fk(t.bitisTarih||t.tarih)+'</td>'
-      +'<td style="font-weight:700">'+ilStr+' \u2192 \u0130zmir</td>'
-      +'<td>'+t.donusUlasim+'</td>'
-      +'<td style="font-size:13pt;font-weight:900;text-align:center;color:#1a1a2e">'+(t.donusSaat||'\u2014')+'</td>'
-      +'<td style="color:#1d4ed8;font-weight:700">'+( dFirma||t.donusUcusNo||'')+'</td>'
-      +'</tr>');
+    var dBacaklar=[];
+    try{if(t.donusUcusBacakJSON)dBacaklar=JSON.parse(t.donusUcusBacakJSON);}catch(e){}
+    if(dBacaklar.length){
+      dBacaklar.forEach(function(b,bi){
+        var nereden=b.nereden||ilStr; var nereye=b.nereye||'\u0130zmir';
+        var saat=(b.kalkis||'\u2014')+(b.inis?' \u2192 '+b.inis:'');
+        var firma=b.firma||b.havayolu||t.donusUlasim||'';
+        var hat=[firma,b.ucusNo].filter(Boolean).join(' \u00b7 ');
+        ucusRows.push('<tr style="background:'+(bi===0?'#fdf4ff':'#fff9fe')+'">'
+          +'<td style="font-weight:700;white-space:nowrap">'+(bi===0?_fk(t.bitisTarih||t.tarih):'\u21b3 Aktarma')+'</td>'
+          +'<td style="font-weight:700">'+nereden+' \u2192 '+nereye+'</td>'
+          +'<td>'+( b.havayolu||t.donusUlasim||'')+'</td>'
+          +'<td style="font-size:13pt;font-weight:900;text-align:center;color:#1a1a2e">'+saat+'</td>'
+          +'<td style="color:#1d4ed8;font-weight:700">'+hat+'</td>'
+          +'</tr>');
+      });
+    } else {
+      var df='',dt='';
+      var dr=t.donusSurucu||''; var dmf=dr.match(/\|FIRMA:([^|]*)/); var dmt=dr.match(/\|TEL:([^|]*)/);
+      if(dmf)df=dmf[1]; if(dmt)dt=dmt[1];
+      var dFirma=(df?'<strong>'+df+'</strong>':'')+( dt?(df?' &middot; ':'')+dt:'');
+      ucusRows.push('<tr style="background:#fdf4ff">'
+        +'<td style="font-weight:700;white-space:nowrap">'+_fk(t.bitisTarih||t.tarih)+'</td>'
+        +'<td style="font-weight:700">'+ilStr+' \u2192 \u0130zmir</td>'
+        +'<td>'+t.donusUlasim+'</td>'
+        +'<td style="font-size:13pt;font-weight:900;text-align:center;color:#1a1a2e">'+(t.donusSaat||'\u2014')+'</td>'
+        +'<td style="color:#1d4ed8;font-weight:700">'+( dFirma||t.donusUcusNo||'')+'</td>'
+        +'</tr>');
+    }
   }
 
   // Bölge ilgili kişiler tablosu
