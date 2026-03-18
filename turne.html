@@ -2970,7 +2970,7 @@ flex-shrink:0;
         <div style="flex-shrink:0;padding:10px 14px;background:var(--background);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
           <div><span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--primary)">Seçili Katılımcılar</span><div style="font-size:9px;color:var(--muted-foreground);margin-top:1px">Görev değişiklikleri <strong>sadece bu turne için</strong> geçerlidir</div></div>
           <span id="kisi-count-label" style="font-size:11px;color:var(--muted-foreground)"></span>
-          <button onclick="if(kisiModalSecili.length&&window.confirm('Tüm katılımcılar listeden kaldırılsın mı?'){kisiModalSecili=[];renderSelectedPills();updateKisiCount();}" style="height:22px;padding:0 8px;border:1px solid #fca5a5;border-radius:4px;background:transparent;color:#ef4444;font-size:10px;font-weight:700;cursor:pointer;font-family:Poppins,sans-serif;white-space:nowrap">Tümünü Sil</button>
+          
         </div>
         <div id="selected-pills-wrap" style="flex:1;overflow-y:auto;padding:8px 10px"></div>
       </div>
@@ -5749,11 +5749,12 @@ function _konaklamaSekmesiHTML(t, rowIdx) {
   }
 
   // Tümü = atanmamışlar (odaTip yok), Tek = tek, Çift = cift
-  var tekler    = kat.filter(function(p){ return p.odaTip === 'tek'; });
-  var ciftler   = kat.filter(function(p){ return p.odaTip === 'cift'; });
+  var tekler    = kat.filter(function(p){ return p.odaTip === 'tek' && !p.munferit; });
+  var ciftler   = kat.filter(function(p){ return p.odaTip === 'cift' && !p.munferit; });
   var atanmamis = kat.filter(function(p){ return !p.odaTip; });
   // Tümü sekmesinde gösterilecek = atanmamış + çift seçilmiş ama eşi yok
-  var tumListeSay = kat.filter(function(p){ return !p.odaTip || (p.odaTip === 'cift' && !p.odaEsi); }).length;
+  var munferitler = kat.filter(function(p){ return p.munferit; });
+  var tumListeSay = kat.filter(function(p){ return !p.munferit && (!p.odaTip || (p.odaTip === 'cift' && !p.odaEsi)); }).length;
   var ciftOdaSay = Math.ceil(ciftler.length / 2);
   var aktif = _konaklamaAktifSekme;
 
@@ -5790,6 +5791,7 @@ function _konaklamaSekmesiHTML(t, rowIdx) {
     { id:'tumü', label:'⏳ Atanmamış', say: tumListeSay, birim: 'kişi' },
     { id:'cift', label:'🛏🛏 Çift',   say: ciftGruplar.length, birim: 'oda' },
     { id:'tek',  label:'🛏 Tek',       say: tekler.length, birim: 'oda' },
+    { id:'munferit', label:'🚪 Münferit', say: munferitler.length, birim: 'kişi' },
   ];
   html += '<div style="display:flex;border-bottom:2px solid var(--border)">';
   sekmeler.forEach(function(s) {
@@ -5825,6 +5827,11 @@ function _konaklamaSekmesiHTML(t, rowIdx) {
           + 'style="height:26px;padding:0 9px;border:1.5px solid ' + (!isCiftSecildi?'var(--border)':'var(--border)') + ';border-radius:5px;'
           + 'background:transparent;color:var(--muted-foreground);'
           + 'font-size:10px;font-weight:700;cursor:pointer;font-family:Poppins,sans-serif">Tek</button>'
+          + '<button onclick="_konaklamaMunferitSec(' + t._rowIdx + ',' + i + ')" '
+          + 'title="Kendi konaklama ayarını yapar" '
+          + 'style="height:26px;padding:0 9px;border:1.5px solid ' + (p.munferit?'#6b1b1b':'var(--border)') + ';border-radius:5px;'
+          + 'background:' + (p.munferit?'#6b1b1b':'transparent') + ';color:' + (p.munferit?'#fff':'var(--muted-foreground)') + ';'
+          + 'font-size:10px;font-weight:700;cursor:pointer;font-family:Poppins,sans-serif">Münferit</button>'
           + '<button onclick="_konaklamaOdaTipSec(' + t._rowIdx + ',' + i + ',\'cift\')" '
           + 'style="height:26px;padding:0 9px;border:1.5px solid ' + (isCiftSecildi?'#6b1b1b':'var(--border)') + ';border-radius:5px;'
           + 'background:' + (isCiftSecildi?'#6b1b1b':'transparent') + ';color:' + (isCiftSecildi?'#fff':'var(--muted-foreground)') + ';'
@@ -5967,6 +5974,9 @@ function _konaklamaSekmesiHTML(t, rowIdx) {
           + '<button onclick="_konaklamaAyrilisToggle(' + t._rowIdx + ',' + i + ',\'gec\')" '
           + 'style="height:18px;padding:0 5px;border:1px solid ' + (tkAyrilis==='gec'?'#2563eb':'#e0c8c8') + ';border-radius:3px;background:' + (tkAyrilis==='gec'?'#2563eb':'#fff') + ';color:' + (tkAyrilis==='gec'?'#fff':'#999') + ';font-size:8.5px;cursor:pointer;white-space:nowrap;font-weight:700;font-family:Poppins,sans-serif">'
           + (tkAyrilis==='gec'?'Gec [x]':'Gec') + '</button>'
+          + '<button onclick="_konaklamaMunferitSec(' + t._rowIdx + ',' + i + ')" '
+          + 'title="Münferit konaklama" '
+          + 'style="flex-shrink:0;height:18px;padding:0 5px;border:1px solid ' + (p.munferit?'#6b1b1b':'#e0c8c8') + ';border-radius:3px;background:' + (p.munferit?'#6b1b1b':'#fff') + ';color:' + (p.munferit?'#fff':'#999') + ';font-size:8.5px;font-weight:700;cursor:pointer;white-space:nowrap">' + (p.munferit?'Mnf':'Mnf') + '</button>'
           + '<button onclick="_konaklamaOdaTipSec(' + t._rowIdx + ',' + i + ',\'\')" '
           + 'title="Atamay\u0131 kald\u0131r" '
           + 'style="flex-shrink:0;height:18px;width:18px;border:1px solid #e0c8c8;border-radius:3px;background:#fff;color:#999;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;line-height:1">x</button>'
@@ -5975,6 +5985,32 @@ function _konaklamaSekmesiHTML(t, rowIdx) {
           + '<input type="text" placeholder="not / tarih" value="' + (p.odaNot||'').replace(/"/g,'&quot;') + '"'
           + ' onblur="_konaklamaNotKaydet(' + t._rowIdx + ',' + i + ',this.value)"'
           + ' style="margin-top:6px;width:100%;height:24px;padding:0 7px;border:1px solid #e0c8c8;border-radius:5px;font-size:9.5px;font-family:Poppins,sans-serif;background:#fff;color:#555;box-sizing:border-box">'
+          + '</div>';
+      });
+      html += '</div>';
+    }
+  }
+
+  // ── MÜNFERİT SEKMESİ
+  if (aktif === 'munferit') {
+    html += '<div style="padding:8px 14px;background:#6b1b1b;color:#fff">'
+      + '<span style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.3px">🚪 MÜNFERİT</span>'
+      + '&nbsp;<span style="font-size:10.5px;font-weight:700;background:rgba(255,255,255,.18);padding:1px 8px;border-radius:20px;border:1px solid rgba(255,255,255,.25);vertical-align:middle">' + munferitler.length + ' kişi</span>'
+      + '</div>';
+    if (!munferitler.length) {
+      html += '<div style="padding:24px 16px;text-align:center;color:var(--muted-foreground);font-size:12px">Münferit kimse yok.</div>';
+    } else {
+      html += '<div style="padding:10px 12px;display:flex;flex-direction:column;gap:6px">';
+      munferitler.forEach(function(p) {
+        var i = kat.indexOf(p);
+        html += '<div style="border:1.5px solid #6b1b1b;border-radius:8px;padding:10px 12px;background:#fdf5f5;display:flex;align-items:center;gap:8px">'
+          + '<div style="flex:1;min-width:0">'
+          + '<div style="font-size:11.5px;font-weight:700;color:#1a1a1a">' + p.kisi + '</div>'
+          + '<div style="font-size:10px;color:#6b1b1b;font-weight:600">' + (p.gorev||p.kategori||'') + '</div>'
+          + (p.odaNot ? '<div style="font-size:10px;color:#555;font-style:italic">(' + p.odaNot + ')</div>' : '')
+          + '</div>'
+          + '<button onclick="_konaklamaMunferitSec(' + t._rowIdx + ',' + i + ')" '
+          + 'style="height:24px;padding:0 8px;border:1px solid #6b1b1b;border-radius:4px;background:#fff;color:#6b1b1b;font-size:9px;font-weight:700;cursor:pointer">Geri Al</button>'
           + '</div>';
       });
       html += '</div>';
@@ -6194,6 +6230,25 @@ function _konaklamaEsiSecGecimiyle(rowIdx, kisiIdx, esiIdxStr) {
   _renderCardDetail(rowIdx);
 }
 
+function _konaklamaMunferitSec(rowIdx, kisiIdx) {
+  var t = turneler.find(function(x){ return x._rowIdx === rowIdx; });
+  if (!t || !t.katilimcilar || !t.katilimcilar[kisiIdx]) return;
+  var p = t.katilimcilar[kisiIdx];
+  p.munferit = !p.munferit;
+  // Münferit seçilince oda atamasını temizle
+  if (p.munferit) {
+    if (p.odaEsi) {
+      var esi = t.katilimcilar.find(function(x){ return x.kisi === p.odaEsi; });
+      if (esi) { esi.odaEsi = ''; }
+      p.odaEsi = '';
+    }
+    delete p.odaTip;
+  }
+  _konaklamaSheetKaydet(t);
+  _cdAktifTab = 'konaklama';
+  _renderCardDetail(rowIdx);
+}
+
 function _konaklamaNotKaydet(rowIdx, kisiIdx, not) {
   var t = turneler.find(function(x){ return x._rowIdx === rowIdx; });
   if (!t || !t.katilimcilar || !t.katilimcilar[kisiIdx]) return;
@@ -6229,7 +6284,8 @@ function _konaklamaPdfIndir(rowIdx) {
 
   // ── Yardımcı: sayfa HTML'i üret (filtreli kadro ile)
   function sayfaUret(kadro, baslik2, altBaslik, degismisList) {
-    var tekler  = kadro.filter(function(p){ return p.odaTip==='tek'; });
+    var munferitPdf = kadro.filter(function(p){ return p.munferit; });
+    var tekler  = kadro.filter(function(p){ return p.odaTip==='tek' && !p.munferit; });
     var ciftler = kadro.filter(function(p){ return p.odaTip==='cift'||!p.odaTip; });
     var isl = {};
     var ciftGr = [];
@@ -6245,8 +6301,8 @@ function _konaklamaPdfIndir(rowIdx) {
     });
 
     var toplamKart = tekler.length + ciftGr.length;
-    var yogun    = toplamKart > 18;
-    var cokYogun = toplamKart > 28;
+    var yogun    = toplamKart > 12;
+    var cokYogun = toplamKart > 20;
     var tekKol  = tekler.length  <= 3 ? (tekler.length||1) : tekler.length  <= 8 ? 4 : tekler.length  <= 12 ? 5 : tekler.length  <= 18 ? 6 : 7;
     var ciftKol = ciftGr.length <= 2 ? (ciftGr.length||1) : ciftGr.length <= 6 ? 3 : ciftGr.length <= 9 ? 4 : ciftGr.length <= 12 ? 5 : 6;
     var kartPad  = cokYogun ? '3pt 5pt'   : yogun ? '5pt 7pt'   : '8pt 10pt';
@@ -6306,6 +6362,8 @@ function _konaklamaPdfIndir(rowIdx) {
       + (tekKartlar?'<div class="grid" style="grid-template-columns:repeat('+tekKol+',1fr);gap:'+gridGap+'">'+tekKartlar+'</div>':'')
       + '<div class="bolum"><span class="bl">CIFT ODA</span><span class="bs">' + ciftGr.length + ' oda</span></div>'
       + (ciftKartlar?'<div class="grid" style="grid-template-columns:repeat('+ciftKol+',1fr);gap:'+gridGap+'">'+ciftKartlar+'</div>':'')
+      + (munferitPdf.length ? '<div class="bolum"><span class="bl">MUNFERİT</span><span class="bs">' + munferitPdf.length + ' kişi</span></div>' : '')
+      + (munferitPdf.length ? '<div class="grid" style="grid-template-columns:repeat('+Math.min(munferitPdf.length,4)+',1fr);gap:'+gridGap+'">' + munferitPdf.map(function(p){ return '<div class="kart"><div class="k-ad">'+p.kisi+'</div><div class="k-kat">'+(p.gorev||p.kategori||'')+'</div>'+(p.odaNot?'<div class="k-not-inline">('+p.odaNot+')</div>':'')+'</div>'; }).join('') + '</div>' : '')
       + '</div>';
   }
 
@@ -6359,7 +6417,8 @@ function _konaklamaPdfIndir(rowIdx) {
     + '.k-not-inline{font-size:7.5pt;color:#1a1a1a;font-weight:700;margin-left:2pt}'
     + '.k-erken{font-size:7pt;color:#b45309;font-weight:800;margin-left:3pt}'
     + '.k-gec{font-size:7pt;color:#1d4ed8;font-weight:800;margin-left:3pt}'
-    + '@media print{@page{size:A4 landscape!important;margin:7mm 9mm}html,body{height:auto!important}}';
+    + '@media print{@page{size:A4 landscape!important;margin:5mm 7mm}html,body{height:auto!important}'
+    + '.sayfa{page-break-after:avoid!important;page-break-inside:avoid!important}}';
 
   var html = '<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Konaklama</title>'
     + '<style>' + css + '</style></head><body>'
