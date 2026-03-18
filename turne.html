@@ -2998,7 +2998,7 @@ flex-shrink:0;
     <!-- FOOTER -->
     <div class="modal-footer" style="flex-shrink:0;border-top:1px solid var(--border)">
       <div style="display:flex;gap:8px">
-        <button class="btn btn-outline" style="font-size:11px;padding:0 12px" onclick="_kisiModalOyunKadrosuYukle()">↺ Oyun Kadrosu</button>
+        <button class="btn btn-outline" style="font-size:11px;padding:0 12px" onclick="_kisiModalOyunKadrosuYukle()">↺ Ana Kadro</button>
         <button class="btn btn-outline" style="font-size:11px;padding:0 12px;display:inline-flex;align-items:center;gap:5px" onclick="_kisiModalTopluDuzenle()" title="Bu oyunun ana kadrosunu toplu düzenle">
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
           Toplu Düzenle
@@ -5243,16 +5243,15 @@ function openKisiModal(rowIdx, _durakOyunAdi) {
     window._kisiModalCoklu = null;
     var anaKadro = getPersonelForOyun(oyunAdi);
     if (t.katilimcilar && t.katilimcilar.length > 0) {
-      // Mevcut katılımcıları normalize et ve sakla — modal boş açılır
+      // Mevcut kadroyu normalize ederek sağ listeye yükle
       var OYUNCU_K = ['Oyuncu','Sanatçı','Koro','Koro/Dans Ekibi','Koro/Dans','Solist','Dansçı','Figüran','Müzisyen','Orkestra','Kurumdan Emekli Sanatçı'];
-      window._kisiModalMevcutKadro = JSON.parse(JSON.stringify(t.katilimcilar)).map(function(k) {
+      kisiModalSecili = JSON.parse(JSON.stringify(t.katilimcilar)).map(function(k) {
         var personelKayit = (tumPersonel || []).find(function(p){ return p.kisi === k.kisi; });
         var gercekKat = (personelKayit ? personelKayit.kategori : '') || k.kategori || '';
         var katGoster = OYUNCU_K.indexOf(gercekKat) >= 0 ? 'Sanatçı' : (gercekKat || '');
         return Object.assign({}, k, { gorev: katGoster, kategori: gercekKat });
       });
-      kisiModalSecili = []; // Sağ liste boş başlar
-      var kayitliAdlar = new Set(window._kisiModalMevcutKadro.map(function(k){ return k.kisi.trim().toLowerCase(); }));
+      var kayitliAdlar = new Set(kisiModalSecili.map(function(k){ return k.kisi.trim().toLowerCase(); }));
       var eksikler = anaKadro.filter(function(p){ return p.kisi && !kayitliAdlar.has(p.kisi.trim().toLowerCase()); });
       if (eksikler.length > 0) _eksikKisilerSecimGoster(eksikler);
     } else {
@@ -5267,14 +5266,7 @@ function openKisiModal(rowIdx, _durakOyunAdi) {
   document.getElementById('kisi-modal-title').textContent = (t.il || 'Turne') + ' – Katılımcılar';
   document.getElementById('kisi-modal-sure').textContent = formatTarih(t.baslangicTarih || t.tarih) + ' · ' + t.il;
   document.getElementById('kisi-filter-input').value = '';
-  // Sol liste boş başlar — kullanıcı 'Oyun Kadrosunu Ekle' butonuna basar
-  var _listEl = document.getElementById('kisi-modal-list');
-  if (_listEl) {
-    _listEl.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:12px;color:var(--muted-foreground);padding:20px">'
-      + '<div style="font-size:13px;text-align:center">Oyun kadrosunu yüklemek için aşağıdaki butona basın</div>'
-      + '<button onclick="_kisiModalOyunKadrosuYukle()" style="height:34px;padding:0 16px;background:var(--primary);color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;font-family:Poppins,sans-serif">+ Oyun Kadrosunu Ekle</button>'
-      + '</div>';
-  }
+  renderKisiModalList(oyunAdi, '');
   renderSelectedPills();
   document.getElementById('kisi-modal-overlay').classList.add('on');
 }
@@ -6291,10 +6283,12 @@ function _konaklamaPdfIndir(rowIdx) {
     var tekKartlar = tekler.map(function(p) {
       var degisti = degismisList && degismisList[p.kisi];
       var markerStyle = degisti ? 'border-left:2pt solid #bbb;padding-left:6pt;' : '';
+      var tkAyrilisEtiketi = p.erkenAyrildi ? '<span class="k-erken">(Erken)</span>' : (p.gecAyrildi ? '<span class="k-gec">(Gec)</span>' : '');
       return '<div class="kart" style="' + markerStyle + '">'
         + '<div style="display:flex;align-items:baseline;gap:4pt;flex-wrap:wrap">'
         + '<div class="k-ad">' + p.kisi + '</div>'
         + (p.odaNot ? '<span class="k-not-inline">(' + p.odaNot + ')</span>' : '')
+        + tkAyrilisEtiketi
         + '</div>'
         + '<div class="k-kat">' + (p.gorev||p.kategori||'') + '</div>'
         + '</div>';
@@ -6305,10 +6299,12 @@ function _konaklamaPdfIndir(rowIdx) {
       var grMarker = grDegisti ? 'border-left:2pt solid #bbb;padding-left:6pt;' : '';
       return '<div class="kart" style="' + grMarker + '">'
         + gr.map(function(p,pi){
+            var cAyrilisEtiketi = p.erkenAyrildi ? '<span class="k-erken">(Erken)</span>' : (p.gecAyrildi ? '<span class="k-gec">(Gec)</span>' : '');
             return (pi>0?'<div class="esi-sep">':'<div>')
               + '<div style="display:flex;align-items:baseline;gap:4pt;flex-wrap:wrap">'
               + '<div class="k-ad">'+p.kisi+'</div>'
               + (p.odaNot ? '<span class="k-not-inline">('+p.odaNot+')</span>' : '')
+              + cAyrilisEtiketi
               + '</div>'
               + '<div class="k-kat">'+(p.gorev||p.kategori||'')+'</div>'
               + '</div>';
@@ -6377,6 +6373,9 @@ function _konaklamaPdfIndir(rowIdx) {
     + '.k-not-inline{font-size:8pt;color:#1a1a1a;font-weight:700;margin-left:2pt}'
     + '.esi-sep{margin-top:5pt;padding-top:5pt;border-top:1pt dashed #dab8b8}'
     + '.e-bos{font-size:7pt;color:#ccc;font-style:italic}'
+    + '.k-not-inline{font-size:7.5pt;color:#1a1a1a;font-weight:700;margin-left:2pt}'
+    + '.k-erken{font-size:7pt;color:#b45309;font-weight:800;margin-left:3pt}'
+    + '.k-gec{font-size:7pt;color:#1d4ed8;font-weight:800;margin-left:3pt}'
     + '@media print{@page{size:A4 landscape!important;margin:7mm 9mm}html,body{height:auto!important}}';
 
   var html = '<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Konaklama</title>'
@@ -6900,18 +6899,6 @@ function _kisiCokluSync() {
 function _kisiModalOyunKadrosuYukle() {
   var oyunAdi = window._kisiModalOyunAdi || '';
   renderKisiModalList(oyunAdi, '');
-  // Mevcut kayıtlı kadro varsa sağ listeye yükle
-  // Güvenlik: _kisiModalMevcutKadro bu turneye ait mi kontrol et
-  var t = turneler.find(function(x){ return x._rowIdx === kisiModalRowIdx; });
-  var mevcutGecerli = window._kisiModalMevcutKadro
-    && window._kisiModalMevcutKadro.length
-    && kisiModalSecili.length === 0
-    && t && t.katilimcilar && t.katilimcilar.length > 0;
-  if (mevcutGecerli) {
-    kisiModalSecili = JSON.parse(JSON.stringify(window._kisiModalMevcutKadro));
-    renderSelectedPills();
-    updateKisiCount();
-  }
   var fi = document.getElementById('kisi-filter-input');
   if (fi) fi.focus();
 }
@@ -7497,13 +7484,7 @@ async function saveKisiModal() {
     ? Object.values(window._kisiModalCoklu).reduce(function(s,a){ return s+(a||[]).length; },0)
     : kisiModalSecili.length;
   if (_toplamSecili === 0) {
-    var _t0 = turneler.find(function(x){ return x._rowIdx === (turneler.find ? kisiModalRowIdx : -1); });
-    var _mevcutVar = _t0 && _t0.katilimcilar && _t0.katilimcilar.length > 0;
-    if (_mevcutVar) {
-      showToast('Önce "Oyun Kadrosu" butonuna basarak kadroyu yükleyin', 'warn', 3500);
-      return;
-    }
-    if (!window.confirm('Katılımcı listesi boş. Yeni bir turne için devam edilsin mi?')) return;
+    if (!window.confirm('Katılımcı listesi boş. Kaydetmek tüm mevcut kadroyu silecek.\n\nDevam edilsin mi?')) return;
   }
   _saveKisiModalCalisiyor = true;
   var _kaydetBtn = document.getElementById('save-kisi-btn');
