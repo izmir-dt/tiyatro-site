@@ -14549,8 +14549,14 @@ function renderDuraklar() {
       + '</div>'
       // Satır 3: Bölge ilgili kişi | Telefon
       + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;min-width:0">'
+        + '<div style="position:relative">'
         + '<input class="form-input" type="text" placeholder="Bölge ilgili kişi (ops.)" value="' + (d.ilgiliKisi||'') + '" '
-          + 'oninput="duraklar[' + i + '].ilgiliKisi=this.value" style="width:100%;font-size:12px">'
+          + 'oninput="duraklar[' + i + '].ilgiliKisi=this.value;ilgiliKisiOneri(this,\'\','+i+')" '
+          + 'onfocus="ilgiliKisiOneri(this,\'\','+i+')" '
+          + 'onblur="setTimeout(function(){var dd=document.getElementById(\'ilgili-dd-'+i+'\');if(dd)dd.style.display=\'none\'},200)" '
+          + 'style="width:100%;font-size:12px">'
+        + '<div id="ilgili-dd-' + i + '" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:700;background:var(--card);border:1px solid var(--border);border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.15);max-height:200px;overflow-y:auto"></div>'
+        + '</div>'
         + '<input class="form-input" type="tel" placeholder="Telefonu" value="' + (d.ilgiliTel||'') + '" '
           + 'oninput="duraklar[' + i + '].ilgiliTel=this.value" style="width:100%;font-size:12px;font-weight:600">'
       + '</div>'
@@ -17142,6 +17148,60 @@ function _pdfTurneDosyasiIcerik(t) {
 
   return CSS + kapak + sayfa2 + sayfa3 + sayfa4 + sayfa5;
 }
+
+// ── İLGİLİ KİŞİ ÖNERİ FONKSİYONU ──────────────────────────
+function ilgiliKisiOneri(input, ilceVal, durakIdx) {
+  var val = input.value.trim().toLowerCase();
+  var dd = document.getElementById('ilgili-dd-' + durakIdx);
+  if (!dd) return;
+
+  // Mevcut turnelerden il bazlı ilgili kişileri topla
+  var il = (duraklar[durakIdx] && duraklar[durakIdx].il) ? duraklar[durakIdx].il.toLowerCase() : '';
+  var oneriMap = {};
+  (typeof turneler !== 'undefined' ? turneler : []).forEach(function(t) {
+    (t.duraklar || []).forEach(function(d) {
+      if (!d.ilgiliKisi || !d.ilgiliKisi.trim()) return;
+      // Il eşleşmesi varsa öncelikli, yoksa da göster
+      var key = d.ilgiliKisi.trim().toLowerCase();
+      if (!oneriMap[key]) oneriMap[key] = { kisi: d.ilgiliKisi.trim(), tel: d.ilgiliTel || '', il: d.il || '', count: 0 };
+      oneriMap[key].count++;
+      if (!oneriMap[key].tel && d.ilgiliTel) oneriMap[key].tel = d.ilgiliTel;
+    });
+  });
+
+  var onerilier = Object.values(oneriMap)
+    .filter(function(o) { return !val || o.kisi.toLowerCase().includes(val) || (o.il||'').toLowerCase().includes(val); })
+    .sort(function(a, b) {
+      // İl eşleşenleri üste al, sonra kullanım sıklığına göre
+      var aIl = (a.il||'').toLowerCase().includes(il) ? 1 : 0;
+      var bIl = (b.il||'').toLowerCase().includes(il) ? 1 : 0;
+      if (bIl !== aIl) return bIl - aIl;
+      return b.count - a.count;
+    })
+    .slice(0, 6);
+
+  if (!onerilier.length || !val) { dd.style.display = 'none'; return; }
+
+  dd.innerHTML = onerilier.map(function(o) {
+    return '<div onclick="ilgiliKisiSec(' + durakIdx + ','' + o.kisi.replace(/'/g, "\'") + '','' + (o.tel||'').replace(/'/g, "\'") + '')" '
+      + 'style="padding:7px 10px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;font-size:12px;font-family:Poppins,sans-serif">'
+      + '<div><strong>' + o.kisi + '</strong>'
+      + (o.il ? '<span style="font-size:10px;color:var(--muted-foreground);margin-left:6px">' + o.il + '</span>' : '')
+      + '</div>'
+      + (o.tel ? '<span style="font-size:11px;font-weight:700;color:var(--primary)">' + o.tel + '</span>' : '')
+      + '</div>';
+  }).join('');
+  dd.style.display = 'block';
+}
+
+function ilgiliKisiSec(idx, kisi, tel) {
+  duraklar[idx].ilgiliKisi = kisi;
+  duraklar[idx].ilgiliTel  = tel;
+  renderDuraklar();
+  var dd = document.getElementById('ilgili-dd-' + idx);
+  if (dd) dd.style.display = 'none';
+}
+
 
 
 
