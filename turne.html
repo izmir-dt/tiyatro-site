@@ -6204,7 +6204,7 @@ function _konaklamaPdfIndir(rowIdx) {
     + (t.bitisTarih&&t.bitisTarih!==t.baslangicTarih?' - '+fmtTarih(t.bitisTarih):'');
 
   // ── Yardımcı: sayfa HTML'i üret (filtreli kadro ile)
-  function sayfaUret(kadro, baslik2, altBaslik) {
+  function sayfaUret(kadro, baslik2, altBaslik, degismisList) {
     var tekler  = kadro.filter(function(p){ return p.odaTip==='tek'; });
     var ciftler = kadro.filter(function(p){ return p.odaTip==='cift'||!p.odaTip; });
     var isl = {};
@@ -6240,7 +6240,9 @@ function _konaklamaPdfIndir(rowIdx) {
     var bMB      = cokYogun ? '4pt'       : yogun ? '6pt'       : '10pt';
 
     var tekKartlar = tekler.map(function(p) {
-      return '<div class="kart">'
+      var degisti = degismisList && degismisList[p.kisi];
+      var markerStyle = degisti ? 'border-left:2pt solid #bbb;padding-left:6pt;' : '';
+      return '<div class="kart" style="' + markerStyle + '">'
         + '<div style="display:flex;align-items:baseline;gap:4pt;flex-wrap:wrap">'
         + '<div class="k-ad">' + p.kisi + '</div>'
         + (p.odaNot ? '<span class="k-not-inline">(' + p.odaNot + ')</span>' : '')
@@ -6250,7 +6252,9 @@ function _konaklamaPdfIndir(rowIdx) {
     }).join('');
 
     var ciftKartlar = ciftGr.map(function(gr) {
-      return '<div class="kart">'
+      var grDegisti = degismisList && gr.some(function(p){ return degismisList[p.kisi]; });
+      var grMarker = grDegisti ? 'border-left:2pt solid #bbb;padding-left:6pt;' : '';
+      return '<div class="kart" style="' + grMarker + '">'
         + gr.map(function(p,pi){
             return (pi>0?'<div class="esi-sep">':'<div>')
               + '<div style="display:flex;align-items:baseline;gap:4pt;flex-wrap:wrap">'
@@ -6293,15 +6297,17 @@ function _konaklamaPdfIndir(rowIdx) {
         return ayrilanMi ? Object.assign({}, p, {odaEsi: ''}) : p;
       });
 
-    // Alt başlık: kim, ne zaman (not varsa)
-    var ayrilisNotu = ayrilanlar.map(function(p){
-      var tip = p.erkenAyrildi ? 'Erken' : 'Gec';
-      return p.kisi + (p.odaNot ? ' (' + p.odaNot + ')' : '') + ' — ' + tip;
-    }).join(' | ');
-
+    // Değişmiş kişiler: oda arkadaşı ayrılanlardan etkilenenler
+    var degismisList = {};
+    kalanKadro.forEach(function(p) {
+      // Oda arkadaşı ayrılmışsa bu kişi etkilendi
+      var eskiEsi = t.katilimcilar.find(function(o){ return o.kisi === p.kisi; });
+      if (eskiEsi && eskiEsi.odaEsi !== p.odaEsi) degismisList[p.kisi] = true;
+    });
     sayfa2 = sayfaUret(kalanKadro,
-      ilStr.toUpperCase() + ' TURNESİ — GUNCEL LISTE',
-      ayrilisNotu);
+      ilStr.toUpperCase() + ' TURNESİ KONAKLAMA — GÜNCEL LİSTE',
+      tarihStr,
+      degismisList);
   }
 
   // ── CSS (paylaşımlı)
