@@ -3533,17 +3533,18 @@ let turneler    = [];
 var oyunAfisler = (function(){try{return JSON.parse(localStorage.getItem('_oyunAfisler')||'{}');}catch(e){return {};}})();
 // Oyun adı -> index map (renderOyunMgmt sonrası dolar)
 var _oyunMgmtAfisMap = {};
-function oyunAfisKaydetById(idx) {
+function _oyunAfisKaydetIdx(idx) {
   var oyun = _oyunMgmtAfisMap[idx];
-  if (!oyun) return;
-  var inp = document.getElementById('afis-oyun-' + idx);
-  if (!inp) return;
-  oyunAfisKaydet(oyun, inp.value.trim());
+  if (!oyun) { showToast('error','Oyun bulunamadı'); return; }
+  var inps = document.querySelectorAll('.afis-url-inp[data-idx="'+idx+'"]');
+  var url = inps.length ? inps[0].value.trim() : '';
+  oyunAfisKaydet(oyun, url);
 }
 function oyunAfisKaydet(oyun,url){
+  if(!oyun){return;}
   oyunAfisler[oyun]=url;
   try{localStorage.setItem('_oyunAfisler',JSON.stringify(oyunAfisler));}catch(e){}
-  if(typeof showToast==='function') showToast('success','\u2713 Afi\u015f kaydedildi \u2014 Yedek al\'\u0131nca JSON\'a i\u015flenecek');
+  showToast('success','✓ Afiş kaydedildi');
 }
 let calYear, calMonth, calSelectedDay = null;
 var calNotes = {}; // key: 'YYYY-MM-DD' → not metni (localStorage'dan yüklenir)
@@ -9465,21 +9466,16 @@ function renderOyunMgmt() {
       + '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Kişi Ekle'
       + '</button>';
     html += '</div>';
-    // Afiş URL satırı — ID üzerinden kaydet, JSON kullanma
+    // Afiş URL - data attribute ile oyun adını sakla
     var _afisIdx = filtreli.indexOf(oyun);
-    var _afisId = 'afis-oyun-' + _afisIdx;
-    var _afisVal2 = (oyunAfisler[oyun]||'').replace(/"/g,'&quot;');
+    var _afisVal2 = (oyunAfisler[oyun]||'').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
     html += '<div style="padding:6px 10px 8px;border-top:1px solid var(--border);display:flex;align-items:center;gap:6px">';
-    html += '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;color:var(--muted-foreground)"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/></svg>';
-    html += '<input type="text" id="'+_afisId+'" data-oyun-afis="1" value="'+_afisVal2+'" placeholder="Afiş URL (PDF kapağı)" '
-      + 'style="flex:1;padding:4px 7px;border:1px solid var(--border);border-radius:5px;font-size:10px;background:var(--muted);color:var(--foreground);font-family:Poppins,sans-serif;min-width:0">';
-    html += '<button onclick="oyunAfisKaydetById('+_afisIdx+')" '
-      + 'style="padding:4px 10px;background:var(--primary);color:#fff;border:none;border-radius:5px;font-size:10px;font-weight:700;cursor:pointer;font-family:Poppins,sans-serif;flex-shrink:0">Kaydet</button>';
+    html += '<input type="text" class="afis-url-inp" data-idx="'+_afisIdx+'" value="'+_afisVal2+'" placeholder="Afiş URL" style="flex:1;padding:4px 7px;border:1px solid var(--border);border-radius:5px;font-size:10px;background:var(--muted);color:var(--foreground);font-family:Poppins,sans-serif;min-width:0">';
+    html += '<button onclick="_oyunAfisKaydetIdx('+_afisIdx+')" style="padding:4px 10px;background:var(--primary);color:#fff;border:none;border-radius:5px;font-size:10px;font-weight:700;cursor:pointer;font-family:Poppins,sans-serif;flex-shrink:0">Kaydet</button>';
     html += '</div>';
     html += '</div>';
   });
   html += '</div>';
-  // Map'i doldur
   _oyunMgmtAfisMap = {};
   filtreli.forEach(function(o,i){ _oyunMgmtAfisMap[i] = o; });
   el.innerHTML = html;
