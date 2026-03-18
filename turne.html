@@ -2307,7 +2307,7 @@ flex-shrink:0;
         </button>
       </div>
       <!-- İKİ SÜTUN: Sol oyun kartları, Sağ kadro paneli -->
-      <div style="flex:1;display:grid;grid-template-columns:1fr 520px;overflow:hidden;min-height:0">
+      <div style="flex:1;display:grid;grid-template-columns:1fr 400px;overflow:hidden;min-height:0">
         <!-- Sol: Oyun kartları -->
         <div class="scroll-area" style="padding:14px 16px;border-right:2px solid var(--border)">
           <div id="oyun-mgmt-content"></div>
@@ -9392,7 +9392,7 @@ function renderOyunMgmt() {
     return;
   }
 
-  var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px;max-width:1000px">';
+  var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px">';
   filtreli.forEach(function(oyun) {
     var kadroSayisi = getPersonelForOyun(oyun).length;
     var turneListesi = turneler.filter(function(t){ return t.oyun === oyun; });
@@ -10135,7 +10135,18 @@ function _oyunYendenAdlandir(eskiAd) {
   function doRename() {
     var yeniAd = inp.value.trim();
     if (!yeniAd) { err.textContent = 'Oyun adı boş bırakılamaz.'; inp.focus(); return; }
-    if (yeniAd === eskiAd) { overlay.remove(); return; }
+    if (yeniAd === eskiAd) {
+      // Ad değişmedi ama afiş/sezon kaydet
+      var sezonInpE = document.getElementById('_rename-sezon');
+      var yeniSezonE = sezonInpE ? sezonInpE.value.trim() : '';
+      var _afisVE = afisInp ? afisInp.value.trim() : '';
+      if (_afisVE) { oyunAfisler[yeniAd] = _afisVE; }
+      if (yeniSezonE) { turneler.forEach(function(t){ if (t.oyun === yeniAd) t._oyunSezon = yeniSezonE; }); }
+      try{localStorage.setItem('_oyunAfisler',JSON.stringify(oyunAfisler));}catch(e){}
+      if (_afisVE || yeniSezonE) showToast('✓ Değişiklikler kaydedildi', 'success', 2500);
+      overlay.remove();
+      return;
+    }
     var mevcutOyunlar = Array.from(new Set(
       tumPersonel.map(function(p){ return (p.oyun||'').trim(); })
         .concat(turneler.map(function(t){ return (t.oyun||'').trim(); }))
@@ -10165,6 +10176,34 @@ function _oyunYendenAdlandir(eskiAd) {
     if (eskiAd !== yeniAd) delete oyunAfisler[eskiAd];
     try{localStorage.setItem('_oyunAfisler',JSON.stringify(oyunAfisler));}catch(e){}
     showToast('"' + eskiAd + '" → "' + yeniAd + '" olarak güncellendi', 'success', 3500);
+    // ── Backend'e yaz ──
+    (async function _renameFlush() {
+      try {
+        var promiseler = [];
+        turneler.forEach(function(t) {
+          if (t.oyun !== yeniAd || t._rowIdx == null) return;
+          var sheetRow = t._rowIdx + 2;
+          promiseler.push(apiFetch('/' + encodeURIComponent(TURNE_SHEET) + '/cell', {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ row: sheetRow, col: 1, value: yeniAd })
+          }).catch(function(e){ console.warn('[rename turne]', e); }));
+        });
+        var perSeen = {};
+        tumPersonel.forEach(function(p) {
+          if (p.oyun !== yeniAd || !p._sheetRow || perSeen[p._sheetRow]) return;
+          perSeen[p._sheetRow] = true;
+          promiseler.push(apiFetch('/' + encodeURIComponent(PERSONEL_SHEET) + '/cell', {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ row: p._sheetRow, col: 1, value: yeniAd })
+          }).catch(function(e){ console.warn('[rename personel]', e); }));
+        });
+        await Promise.all(promiseler);
+        try { sessionStorage.removeItem('cache_turneler'); sessionStorage.removeItem('cache_personel'); } catch(e) {}
+        if (promiseler.length) showToast('✓ Sheets\'e kaydedildi (' + promiseler.length + ' satır)', 'success', 2500);
+      } catch(e) {
+        showToast('⚠ Sheets\'e yazılamadı, yedek alın', 'warn', 5000);
+      }
+    })();
   }
   okBtn.addEventListener('click', doRename);
   inp.addEventListener('keydown', function(e){ if(e.key==='Enter') doRename(); });
