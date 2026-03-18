@@ -9466,18 +9466,9 @@ function renderOyunMgmt() {
       + '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Kişi Ekle'
       + '</button>';
     html += '</div>';
-    // Afiş URL - data attribute ile oyun adını sakla
-    var _afisIdx = filtreli.indexOf(oyun);
-    var _afisVal2 = (oyunAfisler[oyun]||'').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-    html += '<div style="padding:6px 10px 8px;border-top:1px solid var(--border);display:flex;align-items:center;gap:6px">';
-    html += '<input type="text" class="afis-url-inp" data-idx="'+_afisIdx+'" value="'+_afisVal2+'" placeholder="Afiş URL" style="flex:1;padding:4px 7px;border:1px solid var(--border);border-radius:5px;font-size:10px;background:var(--muted);color:var(--foreground);font-family:Poppins,sans-serif;min-width:0">';
-    html += '<button onclick="_oyunAfisKaydetIdx('+_afisIdx+')" style="padding:4px 10px;background:var(--primary);color:#fff;border:none;border-radius:5px;font-size:10px;font-weight:700;cursor:pointer;font-family:Poppins,sans-serif;flex-shrink:0">Kaydet</button>';
-    html += '</div>';
     html += '</div>';
   });
   html += '</div>';
-  _oyunMgmtAfisMap = {};
-  filtreli.forEach(function(o,i){ _oyunMgmtAfisMap[i] = o; });
   el.innerHTML = html;
 }
 
@@ -10119,6 +10110,10 @@ function _oyunYendenAdlandir(eskiAd) {
     + '<input id="_rename-sezon" type="text" placeholder="2025-26" '
     + 'style="width:100%;height:40px;padding:0 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-weight:600;font-family:Poppins,sans-serif;background:var(--card);color:var(--foreground);outline:none;box-sizing:border-box" '
     + 'onfocus="this.style.borderColor=\'var(--primary)\'" onblur="this.style.borderColor=\'var(--border)\'">'
+    + '<label style="font-size:11px;font-weight:700;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.4px;display:block;margin-top:12px;margin-bottom:6px">Oyun Afi\u015fi URL <span style="font-size:9px;font-weight:400;opacity:.7">(PDF kapa\u011f\u0131 i\u00e7in)</span></label>'
+    + '<input id="_rename-afis" type="text" value="' + (oyunAfisler[eskiAd]||'').replace(/"/g,'&quot;') + '" placeholder="https://i.ibb.co/..." '
+    + 'style="width:100%;height:40px;padding:0 12px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;font-family:Poppins,sans-serif;background:var(--card);color:var(--foreground);outline:none;box-sizing:border-box" '
+    + 'onfocus="this.style.borderColor=\'var(--primary)\'" onblur="this.style.borderColor=\'var(--border)\'">'
     + '<div id="_rename-err" style="font-size:11px;color:hsl(0,70%,45%);margin-top:5px;min-height:16px"></div>'
     + '<div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end">'
     + '<button onclick="this.closest(\'[data-rename-overlay]\').remove()" style="height:36px;padding:0 16px;border:1.5px solid var(--border);border-radius:8px;background:transparent;cursor:pointer;font-size:12px;font-weight:600;color:var(--muted-foreground);font-family:Poppins,sans-serif">İptal</button>'
@@ -10136,6 +10131,7 @@ function _oyunYendenAdlandir(eskiAd) {
   var okBtn = document.getElementById('_rename-ok');
   inp.focus(); inp.select();
 
+  var afisInp = document.getElementById('_rename-afis');
   function doRename() {
     var yeniAd = inp.value.trim();
     if (!yeniAd) { err.textContent = 'Oyun adı boş bırakılamaz.'; inp.focus(); return; }
@@ -10163,6 +10159,11 @@ function _oyunYendenAdlandir(eskiAd) {
     renderKisiAra();
     renderTumPersonel();
     renderIstatistik();
+    // Afiş URL kaydet
+    var _afisV = afisInp ? afisInp.value.trim() : '';
+    if (_afisV) { oyunAfisler[yeniAd] = _afisV; } else if (eskiAd !== yeniAd && oyunAfisler[eskiAd]) { oyunAfisler[yeniAd] = oyunAfisler[eskiAd]; }
+    if (eskiAd !== yeniAd) delete oyunAfisler[eskiAd];
+    try{localStorage.setItem('_oyunAfisler',JSON.stringify(oyunAfisler));}catch(e){}
     showToast('"' + eskiAd + '" → "' + yeniAd + '" olarak güncellendi', 'success', 3500);
   }
   okBtn.addEventListener('click', doRename);
