@@ -14320,12 +14320,16 @@ function gorevlendirmePdf(rowIdx, mod) {
 
   // ── TURNE DOSYASI: özel pencere (afis URL girişli) ──────────
   if (mod === 'dosya') {
-    var _afisUrl3 = t.afisUrl || '';
+    // Önce turne objesinden, yoksa form alanından oku
+    var _afElMain = document.getElementById('m-afis-url');
+    var _afisUrl3 = t.afisUrl || (_afElMain ? _afElMain.value.trim() : '') || '';
     function _acDosya(afisData) {
       var _tc = JSON.parse(JSON.stringify(t));
-      if (afisData) _tc.afisUrl = afisData;
+      // afisData varsa kullan, yoksa _afisUrl3'ü kullan
+      var _aktifAfis = afisData || _afisUrl3 || '';
+      if (_aktifAfis) _tc.afisUrl = _aktifAfis;
       var _html2 = _pdfTurneDosyasiIcerik(_tc);
-      var _afisVal = (_afisUrl3||'').replace(/"/g,'&quot;');
+      var _afisVal = (_aktifAfis).replace(/"/g,'&quot;');
 
       var _oyunKisa = (t.oyun||'Turne').replace(/[^a-zA-Z0-9 ]/g,'').trim().replace(/\s+/g,'_').slice(0,20);
       var _tarihKisa = (t.baslangicTarih||t.tarih||'').replace(/-/g,'');
@@ -14379,17 +14383,30 @@ function gorevlendirmePdf(rowIdx, mod) {
           var afisBtn = _w3.document.getElementById('afisbtn3');
           if (afisBtn) afisBtn.addEventListener('click', function() {
             var url = _w3.document.getElementById('afis3').value.trim();
-            _w3.document.querySelectorAll('.afis-bg').forEach(function(el) {
+            var bgDiv = _w3.document.getElementById('kapak-bg-div');
+            var karatmaDiv = _w3.document.getElementById('kapak-karatma-div');
+            if (bgDiv) {
               if (url) {
-                el.style.backgroundImage = 'url("' + url + '")';
-                el.style.backgroundSize = 'cover';
-                el.style.backgroundPosition = 'center';
-                el.style.filter = 'brightness(.42)';
+                // Arka planı URL ile güncelle
+                bgDiv.style.cssText = 'position:absolute;inset:0;'
+                  + 'background-color:#1a0505;'
+                  + 'background-image:url("' + url + '");'
+                  + 'background-size:cover;'
+                  + 'background-position:center top;'
+                  + 'background-repeat:no-repeat;'
+                  + '-webkit-print-color-adjust:exact!important;'
+                  + 'print-color-adjust:exact!important;'
+                  + 'color-adjust:exact!important';
+                if (karatmaDiv) karatmaDiv.style.background = 'rgba(0,0,0,0.55)';
               } else {
-                el.style.backgroundImage = 'none';
-                el.style.filter = 'none';
+                // Afiş yok — degrade
+                bgDiv.style.cssText = 'position:absolute;inset:0;'
+                  + 'background:linear-gradient(160deg,#3d0a0a 0%,#6b1b1b 35%,#8b2a1a 60%,#2a0505 100%);'
+                  + '-webkit-print-color-adjust:exact!important;'
+                  + 'print-color-adjust:exact!important';
+                if (karatmaDiv) karatmaDiv.style.background = 'rgba(0,0,0,0)';
               }
-            });
+            }
           });
 
           // PDF İndir: title'ı dosya adına set et, print() çağır
@@ -16835,11 +16852,11 @@ function _pdfTurneDosyasiIcerik(t) {
   var oyunFontPt=oyunAdi.length>20?Math.max(26,44-Math.floor((oyunAdi.length-20)*0.7))+'pt':'44pt';
 
   var kapak='<div class="sayfa-kapak" style="-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important">'
-    // Tek katman arka plan — filter kullanılmıyor, daha güvenilir
-    +'<div style="position:absolute;inset:0;'+bgStyle+';-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important"></div>'
-    // Afiş varsa hafif karartma (afiş okunabilsin diye)
-    +(afisUrl?'<div style="position:absolute;inset:0;background:rgba(0,0,0,0.55);-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important"></div>':'')
-    // Alt kısım koyu degrade (metin okunabilirliği için)
+    // Arka plan div — id ile JS'den hedeflenebilir
+    +'<div id="kapak-bg-div" class="afis-bg" style="position:absolute;inset:0;'+bgStyle+';-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important"></div>'
+    // Karartma overlay — afiş varsa göster, id ile JS'den açılıp kapatılabilir
+    +'<div id="kapak-karatma-div" style="position:absolute;inset:0;background:rgba(0,0,0,'+(afisUrl?'0.55':'0')+');-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important"></div>'
+    // Alt kısım koyu degrade (metin okunabilirliği için — her zaman aktif)
     +'<div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.08) 0%,rgba(0,0,0,.15) 45%,rgba(0,0,0,.85) 100%);-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important"></div>'
     // İçerik katmanı
     +'<div style="position:relative;z-index:1;width:100%;height:100%;display:flex;flex-direction:column">'
