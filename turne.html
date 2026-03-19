@@ -14322,32 +14322,38 @@ function gorevlendirmePdf(rowIdx, mod) {
       var _tarihKisa = (t.baslangicTarih||t.tarih||'').replace(/-/g,'');
       var _dosyaAdi = (_oyunKisa||'Turne') + '_' + _tarihKisa + '_TurneDosyasi';
 
-      // Tam Görevlendirme ile birebir aynı yaklaşım
       var _w3 = window.open('', '_blank');
       if (!_w3) { alert('Pop-up engelleyiciyi kapatın.'); return; }
 
+      // Tam Görevlendirme ile birebir aynı: body'e padding, @page margin, window.print()
+      // Fark: kapak sayfa-kapak div'i ayrı, onun altındaki .sayfa'lar akıyor
       var _docHTML = '<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8">'
         + '<title>' + _dosyaAdi + '</title>'
         + '<style>'
-        + 'body{font-family:Arial,Helvetica,sans-serif;font-size:10pt;color:#111;margin:0;padding:0}'
-        /* Kapak: sadece sayfa-kapak class'ı, page-break ile sonraki sayfaya geç */
-        + '.sayfa-kapak{page-break-after:always;break-after:page}'
-        /* Diğer sayfalar: Tam Görevlendirme gibi, sadece page-break */
-        + '.sayfa{page-break-after:always;break-after:page}'
-        + '.sayfa:last-child{page-break-after:auto;break-after:auto}'
+        // İç CSS (_pdfTurneDosyasiIcerik) zaten font/tablo stillerini getiriyor
+        // Sadece sayfa düzeni burada
         + '@media print{'
-        +   '@page{size:A4 portrait;margin:12mm}'
-        +   'body{background:#fff}'
-        +   '.no-print{display:none!important}'
+        +   '@page { size:A4 portrait; margin:0 }'
+        +   'body { margin:0; padding:0 }'
+        +   '.no-print { display:none!important }'
+        // Kapak tam A4, margin sıfır
+        +   '.sayfa-kapak { width:210mm; height:297mm; page-break-after:always; break-after:page; overflow:hidden }'
+        // Diğer sayfalar: margin 12mm, içerik ne kadarsa o kadar
+        +   '.sayfa { padding:12mm 14mm; page-break-after:always; break-after:page }'
+        +   '.sayfa:last-child { page-break-after:auto; break-after:auto }'
         + '}'
+        + 'body { margin:0; padding:16px; background:#888; font-family:Arial,sans-serif }'
+        + '.sayfa-kapak { width:210mm; height:297mm; display:block; margin:0 auto 16px; overflow:hidden; position:relative }'
+        + '.sayfa { width:210mm; display:block; margin:0 auto 16px; background:#fff; padding:12mm 14mm; box-sizing:border-box }'
+        + '.no-print { position:sticky; top:0; background:#1a1a1a; padding:10px 16px; display:flex; align-items:center; gap:10px; z-index:9999; margin:-16px -16px 16px }'
         + '</style>'
         + '</head><body>'
-        + '<div class="no-print" style="position:sticky;top:0;background:#1a1a1a;padding:10px 16px;display:flex;align-items:center;gap:10px;z-index:9999;box-shadow:0 2px 8px rgba(0,0,0,.5)">'
+        + '<div class="no-print">'
         + '<span style="color:#e8c84a;font-weight:900;font-size:14px;font-family:sans-serif">&#128193; Turne Dosyas&#305;</span>'
-        + '<span style="color:#aaa;font-size:11px;font-family:sans-serif">Afi&#351; URL:</span>'
-        + '<input id="afis3" type="url" value="' + _afisVal + '" placeholder="https://..." style="flex:1;max-width:380px;padding:6px 10px;border:1px solid #444;border-radius:5px;background:#2a2a2a;color:#fff;font-size:12px;font-family:sans-serif">'
-        + '<button id="afisbtn3" style="padding:6px 14px;background:#7c3aed;color:#fff;border:none;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer;font-family:sans-serif">Uygula</button>'
-        + '<button onclick="window.print()" style="padding:6px 18px;background:#6b1b1b;color:#fff;border:none;border-radius:5px;font-size:13px;font-weight:700;cursor:pointer;font-family:sans-serif">&#128424; PDF &#304;ndir</button>'
+        + '<span style="color:#aaa;font-size:11px;">Afi&#351; URL:</span>'
+        + '<input id="afis3" type="url" value="' + _afisVal + '" placeholder="https://..." style="flex:1;max-width:380px;padding:6px 10px;border:1px solid #444;border-radius:5px;background:#2a2a2a;color:#fff;font-size:12px;">'
+        + '<button id="afisbtn3" style="padding:6px 14px;background:#7c3aed;color:#fff;border:none;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer;">Uygula</button>'
+        + '<button onclick="window.print()" style="padding:6px 18px;background:#6b1b1b;color:#fff;border:none;border-radius:5px;font-size:13px;font-weight:700;cursor:pointer;">&#128424; PDF &#304;ndir</button>'
         + '</div>'
         + '<div id="d3wrap"></div>'
         + '</body></html>';
