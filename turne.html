@@ -14318,19 +14318,17 @@ function gorevlendirmePdf(rowIdx, mod) {
   // Mod belirsizse seçim dialogu aç
   if (!mod) { _pdfModSec(rowIdx); return; }
 
-  // ── TURNE DOSYASI: özel pencere (afis URL girişli) ──────────
+  // ── TURNE DOSYASI: html2canvas + jsPDF ile doğrudan PDF indir ──
   if (mod === 'dosya') {
-    // Önce turne objesinden, yoksa form alanından oku
     var _afElMain = document.getElementById('m-afis-url');
     var _afisUrl3 = t.afisUrl || (_afElMain ? _afElMain.value.trim() : '') || '';
+
     function _acDosya(afisData) {
       var _tc = JSON.parse(JSON.stringify(t));
-      // afisData varsa kullan, yoksa _afisUrl3'ü kullan
       var _aktifAfis = afisData || _afisUrl3 || '';
       if (_aktifAfis) _tc.afisUrl = _aktifAfis;
       var _html2 = _pdfTurneDosyasiIcerik(_tc);
       var _afisVal = (_aktifAfis).replace(/"/g,'&quot;');
-
       var _oyunKisa = (t.oyun||'Turne').replace(/[^a-zA-Z0-9 ]/g,'').trim().replace(/\s+/g,'_').slice(0,20);
       var _tarihKisa = (t.baslangicTarih||t.tarih||'').replace(/-/g,'');
       var _dosyaAdi = (_oyunKisa||'Turne') + '_' + _tarihKisa + '_TurneDosyasi';
@@ -14338,43 +14336,39 @@ function gorevlendirmePdf(rowIdx, mod) {
       var _w3 = window.open('', '_blank');
       if (!_w3) { alert('Pop-up engelleyiciyi kapatın.'); return; }
 
+      // A4 px boyutları 96dpi'de: 794 x 1123
+      var A4W = 794, A4H = 1123;
+
       var _docHTML = '<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8">'
         + '<title>' + _dosyaAdi + '</title>'
+        + '<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"><\/script>'
+        + '<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"><\/script>'
         + '<style>'
-        // Ekran görünümü
-        + 'body{margin:0;padding:16px;background:#666;font-family:Arial,sans-serif}'
-        + '.no-print{position:sticky;top:0;background:#1a1a1a;padding:10px 16px;'
-        +   'display:flex;align-items:center;gap:8px;z-index:9999;margin:-16px -16px 16px;flex-wrap:wrap}'
-        + '.sayfa-kapak{width:210mm;height:297mm;display:block;margin:0 auto 16px;'
-        +   'overflow:hidden;position:relative;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
-        + '.sayfa-icerik{width:210mm;display:block;margin:0 auto 0;background:#fff;'
-        +   'padding:14mm 16mm;box-sizing:border-box}'
-        // Print
-        + '@media print{'
-        +   '*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}'
-        +   '.no-print{display:none!important}'
-        // Kapak: margin sıfır, tam A4
-        +   '.sayfa-kapak{width:100%;height:100vh;margin:0;padding:0;'
-        +     'page-break-after:always;break-after:page;overflow:hidden}'
-        // İçerik sayfaları: 15mm margin
-        +   '@page{size:A4 portrait;margin:0}'
-        +   '.sayfa-icerik{width:100%;margin:0;padding:15mm;box-sizing:border-box}'
-        +   '.sayfa-icerik+.sayfa-icerik{page-break-before:always;break-before:page}'
-        +   'thead{display:table-header-group}'
-        +   'tr{page-break-inside:avoid;break-inside:avoid}'
-        + '}'
+        + '*{box-sizing:border-box;margin:0;padding:0}'
+        + 'body{background:#444;font-family:Arial,sans-serif;padding:0}'
+        // Araç çubuğu
+        + '#toolbar{position:sticky;top:0;z-index:999;background:#1a1a1a;padding:10px 16px;'
+        +   'display:flex;align-items:center;gap:8px;flex-wrap:wrap}'
+        // Her sayfa tam A4 genişliğinde, scroll eder
+        + '.sayfa-kapak{width:'+A4W+'px;min-height:'+A4H+'px;display:block;margin:16px auto;'
+        +   'overflow:hidden;position:relative;background:#1a0505}'
+        + '.sayfa-icerik{width:'+A4W+'px;display:block;margin:0 auto 0;background:#fff;'
+        +   'padding:56px 60px;box-sizing:border-box}'  // 56px ≈ 15mm at 96dpi
+        + '.sayfa-icerik+.sayfa-icerik{margin-top:16px}'
+        + '#d3wrap{padding-bottom:32px}'
         + '</style>'
         + '</head><body>'
-        + '<div class="no-print">'
+        + '<div id="toolbar">'
         + '<span style="color:#e8c84a;font-weight:900;font-size:13px">📁 Turne Dosyası</span>'
         + '<span style="color:#888;font-size:11px">Afiş URL:</span>'
         + '<input id="afis3" type="url" value="' + _afisVal + '" placeholder="https://..." '
-        +   'style="flex:1;min-width:180px;max-width:340px;padding:5px 9px;border:1px solid #444;'
+        +   'style="flex:1;min-width:150px;max-width:320px;padding:5px 9px;border:1px solid #444;'
         +   'border-radius:5px;background:#2a2a2a;color:#fff;font-size:12px">'
         + '<button id="afisbtn3" style="padding:5px 12px;background:#7c3aed;color:#fff;border:none;'
-        +   'border-radius:5px;font-size:12px;font-weight:700;cursor:pointer">Uygula</button>'
-        + '<button onclick="window.print()" style="padding:5px 16px;background:#6b1b1b;color:#fff;'
-        +   'border:none;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer">🖨 PDF Yazdır</button>'
+        +   'border-radius:5px;font-size:11px;font-weight:700;cursor:pointer">Uygula</button>'
+        + '<button id="pdfBtn" style="padding:5px 16px;background:#6b1b1b;color:#fff;border:none;'
+        +   'border-radius:5px;font-size:11px;font-weight:700;cursor:pointer">📥 PDF İndir</button>'
+        + '<span id="durum" style="color:#aaa;font-size:11px;min-width:120px"></span>'
         + '</div>'
         + '<div id="d3wrap"></div>'
         + '</body></html>';
@@ -14384,10 +14378,11 @@ function gorevlendirmePdf(rowIdx, mod) {
 
       setTimeout(function() {
         try {
+          // İçeriği yerleştir
           var wrap = _w3.document.getElementById('d3wrap');
           if (wrap) wrap.innerHTML = _html2;
 
-          // ── Afiş "Uygula" — sadece arka plan style'ını güncelle ──
+          // Afiş Uygula
           var afisBtn = _w3.document.getElementById('afisbtn3');
           if (afisBtn) afisBtn.addEventListener('click', function() {
             var url = _w3.document.getElementById('afis3').value.trim();
@@ -14408,10 +14403,102 @@ function gorevlendirmePdf(rowIdx, mod) {
             }
           });
 
+          // PDF İndir butonu
+          var pdfBtn = _w3.document.getElementById('pdfBtn');
+          if (pdfBtn) pdfBtn.addEventListener('click', function() {
+            var durum = _w3.document.getElementById('durum');
+            var h2c = _w3.html2canvas;
+            var jspdf = _w3.jspdf || (_w3.window && _w3.window.jspdf);
+            if (!h2c || !jspdf) {
+              durum.textContent = '⚠ Kütüphane yükleniyor...';
+              setTimeout(function(){ _w3.document.getElementById('pdfBtn').click(); }, 1000);
+              return;
+            }
+
+            pdfBtn.disabled = true;
+            durum.textContent = 'PDF hazırlanıyor...';
+
+            // Sayfaları sırayla bul: önce kapak, sonra sayfa-icerik'ler
+            var sayfalar = Array.from(_w3.document.querySelectorAll('.sayfa-kapak, .sayfa-icerik'));
+            if (!sayfalar.length) { durum.textContent = '⚠ Sayfa bulunamadı'; pdfBtn.disabled=false; return; }
+
+            var pdf = new jspdf.jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+            var A4mm_W = 210, A4mm_H = 297;
+            var idx = 0;
+
+            function renderSayfa() {
+              if (idx >= sayfalar.length) {
+                // Tüm sayfalar render edildi — PDF indir
+                pdf.save(_dosyaAdi + '.pdf');
+                durum.textContent = '✓ İndirildi';
+                pdfBtn.disabled = false;
+                setTimeout(function(){ durum.textContent=''; }, 3000);
+                return;
+              }
+              var el = sayfalar[idx];
+              durum.textContent = (idx+1) + '/' + sayfalar.length + ' sayfa...';
+
+              // Her sayfayı tam genişlikte, dinamik yükseklikte render et
+              var elW = el.offsetWidth || A4W;
+              var elH = el.scrollHeight || A4H;
+              var scale = A4W / elW * 2; // 2x kalite
+
+              h2c(el, {
+                scale: scale,
+                useCORS: true,
+                allowTaint: true,
+                backgroundColor: el.classList.contains('sayfa-kapak') ? '#1a0505' : '#ffffff',
+                width: elW,
+                height: elH,
+                windowWidth: elW,
+                logging: false
+              }).then(function(canvas) {
+                var imgData = canvas.toDataURL('image/jpeg', 0.92);
+                var canvasH_mm = (elH / elW) * A4mm_W; // Gerçek içerik yüksekliği mm
+
+                if (idx > 0) pdf.addPage();
+
+                if (el.classList.contains('sayfa-kapak')) {
+                  // Kapak: tam A4 doldur
+                  pdf.addImage(imgData, 'JPEG', 0, 0, A4mm_W, A4mm_H);
+                } else {
+                  // İçerik: gerçek yükseklikte, sığmazsa çok sayfa
+                  if (canvasH_mm <= A4mm_H) {
+                    pdf.addImage(imgData, 'JPEG', 0, 0, A4mm_W, canvasH_mm);
+                  } else {
+                    // Uzun sayfa — dilimle
+                    var dilimH_px = Math.floor(elH * (A4mm_H / canvasH_mm));
+                    var totalSlices = Math.ceil(elH / dilimH_px);
+                    for (var s = 0; s < totalSlices; s++) {
+                      if (s > 0) pdf.addPage();
+                      var tmpCanvas = _w3.document.createElement('canvas');
+                      tmpCanvas.width = canvas.width;
+                      tmpCanvas.height = Math.min(dilimH_px * scale, canvas.height - s * dilimH_px * scale);
+                      var ctx = tmpCanvas.getContext('2d');
+                      ctx.drawImage(canvas, 0, s * dilimH_px * scale, tmpCanvas.width, tmpCanvas.height, 0, 0, tmpCanvas.width, tmpCanvas.height);
+                      pdf.addImage(tmpCanvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, A4mm_W, A4mm_H);
+                    }
+                    idx++;
+                    renderSayfa();
+                    return;
+                  }
+                }
+                idx++;
+                // Kısa gecikme ile sıradaki sayfayı render et (tarayıcı donmasını önler)
+                setTimeout(renderSayfa, 50);
+              }).catch(function(e) {
+                console.error('html2canvas hata:', e);
+                idx++;
+                setTimeout(renderSayfa, 50);
+              });
+            }
+
+            renderSayfa();
+          });
+
         } catch(e) { console.error(e); }
-      }, 400);
+      }, 500);
     }
-    // Direkt URL kullan - fetch yok (CORS sorunu)
     _acDosya(_afisUrl3 || '');
     return;
   }
