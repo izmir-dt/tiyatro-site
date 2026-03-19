@@ -14338,37 +14338,45 @@ function gorevlendirmePdf(rowIdx, mod) {
       var _w3 = window.open('', '_blank');
       if (!_w3) { alert('Pop-up engelleyiciyi kapatın.'); return; }
 
-      // Tam Görevlendirme ile birebir aynı: body'e padding, @page margin, window.print()
-      // Fark: kapak sayfa-kapak div'i ayrı, onun altındaki .sayfa'lar akıyor
       var _docHTML = '<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8">'
         + '<title>' + _dosyaAdi + '</title>'
+        // html2canvas ve jsPDF CDN
+        + '<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"><\/script>'
+        + '<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"><\/script>'
         + '<style>'
+        // ── EKRAN GÖRÜNÜMÜ ──
+        + 'body{margin:0;padding:0;background:#555;font-family:Arial,sans-serif}'
+        + '.no-print{position:sticky;top:0;background:#1a1a1a;padding:10px 16px;display:flex;align-items:center;gap:8px;z-index:9999;flex-wrap:wrap}'
+        + '.sayfa-kapak{width:210mm;height:297mm;display:block;margin:0 auto 16px;overflow:hidden;position:relative}'
+        + '.sayfa-icerik{width:210mm;display:block;margin:0 auto 0;background:#fff;padding:12mm 14mm;box-sizing:border-box}'
+        + '#d3wrap{padding:16px}'
+        // ── YAZDIR CSS — tüm arka planlar görünsün ──
         + '@media print{'
-        /* Kapak için margin 0, içerik sayfalar için margin 12mm */
-        /* named page desteklenmediği için kapağı wrapper ile çözüyoruz */
-        +   '@page { size:A4 portrait; margin:0 }'
-        +   'body { margin:0; padding:0; background:#fff }'
-        +   '* { -webkit-print-color-adjust:exact!important; print-color-adjust:exact!important }'
-        +   '.no-print { display:none!important }'
-        /* Kapak: tam A4, margin yok */
-        +   '.sayfa-kapak { width:100%; height:100vh; page-break-after:always; break-after:page; overflow:hidden }'
-        /* İçerik sayfalar: margin'i padding ile simüle et */
-        +   '.sayfa-icerik { padding:12mm 14mm; width:100%; box-sizing:border-box }'
-        +   '.sayfa-icerik + .sayfa-icerik { page-break-before:always; break-before:page }'
+        +   '*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}'
+        +   '@page{size:A4 portrait;margin:0}'
+        +   'body{margin:0;padding:0;background:#fff}'
+        +   '.no-print{display:none!important}'
+        +   '#d3wrap{padding:0}'
+        +   '.sayfa-kapak{width:100%;height:100vh;margin:0;page-break-after:always;break-after:page}'
+        +   '.kapak-img{width:100%;height:100%;object-fit:cover;display:block}'
+        +   '.sayfa-icerik{width:100%;margin:0;padding:14mm 15mm;box-sizing:border-box}'
+        +   '.sayfa-icerik+.sayfa-icerik{page-break-before:always;break-before:page}'
+        +   'thead{display:table-header-group}'
+        +   'tr{page-break-inside:avoid;break-inside:avoid}'
         + '}'
-        + 'body { margin:0; padding:16px; background:#888; font-family:Arial,sans-serif }'
-        + '.sayfa-kapak { width:210mm; height:297mm; display:block; margin:0 auto 16px; overflow:hidden; position:relative }'
-        + '.sayfa-icerik { width:210mm; display:block; margin:0 auto; background:#fff; padding:12mm 14mm; box-sizing:border-box }'
-        + '.no-print { position:sticky; top:0; background:#1a1a1a; padding:10px 16px; display:flex; align-items:center; gap:10px; z-index:9999; margin:-16px -16px 16px }'
         + '</style>'
         + '</head><body>'
+
+        // ── ÜST ARAÇ ÇUBUĞU ──
         + '<div class="no-print">'
-        + '<span style="color:#e8c84a;font-weight:900;font-size:14px;font-family:sans-serif">&#128193; Turne Dosyas&#305;</span>'
-        + '<span style="color:#aaa;font-size:11px;">Afi&#351; URL:</span>'
-        + '<input id="afis3" type="url" value="' + _afisVal + '" placeholder="https://..." style="flex:1;max-width:380px;padding:6px 10px;border:1px solid #444;border-radius:5px;background:#2a2a2a;color:#fff;font-size:12px;">'
-        + '<button id="afisbtn3" style="padding:6px 14px;background:#7c3aed;color:#fff;border:none;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer;">Uygula</button>'
-        + '<button id="pdfindrbtn" style="padding:6px 18px;background:#6b1b1b;color:#fff;border:none;border-radius:5px;font-size:13px;font-weight:700;cursor:pointer;">&#128424; PDF &#304;ndir</button>'
+        + '<span style="color:#e8c84a;font-weight:900;font-size:13px">📁 Turne Dosyası</span>'
+        + '<span style="color:#888;font-size:11px">Afiş URL:</span>'
+        + '<input id="afis3" type="url" value="' + _afisVal + '" placeholder="https://..." style="flex:1;min-width:200px;max-width:360px;padding:5px 9px;border:1px solid #444;border-radius:5px;background:#2a2a2a;color:#fff;font-size:12px">'
+        + '<button id="afisbtn3" style="padding:5px 12px;background:#7c3aed;color:#fff;border:none;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer">Uygula</button>'
+        + '<button id="pdfindrbtn" style="padding:5px 16px;background:#6b1b1b;color:#fff;border:none;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer">📥 PDF İndir</button>'
+        + '<span id="pdf-durum" style="color:#aaa;font-size:11px"></span>'
         + '</div>'
+
         + '<div id="d3wrap"></div>'
         + '</body></html>';
 
@@ -14380,6 +14388,55 @@ function gorevlendirmePdf(rowIdx, mod) {
           var wrap = _w3.document.getElementById('d3wrap');
           if (wrap) wrap.innerHTML = _html2;
 
+          // ── Kapağı canvas'a çizip <img>'e dönüştür ──
+          // Bu sayede print'te "Arka plan grafikleri" gerekmez,
+          // kapak tüm tarayıcılarda/PDF motorlarında düzgün görünür
+          function renderKapak() {
+            var kapakEl = _w3.document.querySelector('.sayfa-kapak');
+            if (!kapakEl || !_w3.html2canvas) return;
+            var durum = _w3.document.getElementById('pdf-durum');
+            if (durum) durum.textContent = 'Kapak hazırlanıyor...';
+            _w3.html2canvas(kapakEl, {
+              scale: 2,
+              useCORS: true,
+              allowTaint: true,
+              backgroundColor: '#1a0505',
+              width: kapakEl.offsetWidth,
+              height: kapakEl.offsetHeight,
+              logging: false
+            }).then(function(canvas) {
+              var dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+              // Kapak div'ini tam boyutlu <img> ile değiştir
+              var imgEl = _w3.document.createElement('img');
+              imgEl.src = dataUrl;
+              imgEl.className = 'kapak-img';
+              imgEl.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block';
+              // Kapak içeriğini temizle, sadece img koy
+              kapakEl.innerHTML = '';
+              kapakEl.appendChild(imgEl);
+              if (durum) durum.textContent = '✓ Hazır';
+              setTimeout(function(){ if(durum) durum.textContent=''; }, 2000);
+            }).catch(function(e) {
+              console.warn('html2canvas hatası:', e);
+              if (durum) durum.textContent = '';
+            });
+          }
+
+          // html2canvas yüklendiğinde kapağı render et
+          if (_w3.html2canvas) {
+            setTimeout(renderKapak, 300);
+          } else {
+            // Yüklenmesini bekle (CDN gecikmesi)
+            var _checkInterval = setInterval(function() {
+              if (_w3.html2canvas) {
+                clearInterval(_checkInterval);
+                renderKapak();
+              }
+            }, 200);
+            setTimeout(function(){ clearInterval(_checkInterval); }, 8000);
+          }
+
+          // ── Afiş URL "Uygula" butonu ──
           var afisBtn = _w3.document.getElementById('afisbtn3');
           if (afisBtn) afisBtn.addEventListener('click', function() {
             var url = _w3.document.getElementById('afis3').value.trim();
@@ -14387,7 +14444,6 @@ function gorevlendirmePdf(rowIdx, mod) {
             var karatmaDiv = _w3.document.getElementById('kapak-karatma-div');
             if (bgDiv) {
               if (url) {
-                // Arka planı URL ile güncelle
                 bgDiv.style.cssText = 'position:absolute;inset:0;'
                   + 'background-color:#1a0505;'
                   + 'background-image:url("' + url + '");'
@@ -14399,7 +14455,6 @@ function gorevlendirmePdf(rowIdx, mod) {
                   + 'color-adjust:exact!important';
                 if (karatmaDiv) karatmaDiv.style.background = 'rgba(0,0,0,0.55)';
               } else {
-                // Afiş yok — degrade
                 bgDiv.style.cssText = 'position:absolute;inset:0;'
                   + 'background:linear-gradient(160deg,#3d0a0a 0%,#6b1b1b 35%,#8b2a1a 60%,#2a0505 100%);'
                   + '-webkit-print-color-adjust:exact!important;'
@@ -14407,19 +14462,48 @@ function gorevlendirmePdf(rowIdx, mod) {
                 if (karatmaDiv) karatmaDiv.style.background = 'rgba(0,0,0,0)';
               }
             }
+            // URL değişince kapağı yeniden render et
+            setTimeout(renderKapak, 500);
           });
 
-          // PDF İndir: title'ı dosya adına set et, print() çağır
+          // ── PDF İndir butonu — jsPDF ile doğrudan PDF üret ──
           var pdfindrBtn = _w3.document.getElementById('pdfindrbtn');
           if (pdfindrBtn) pdfindrBtn.addEventListener('click', function() {
-            var oncekiBaslik = _w3.document.title;
-            _w3.document.title = _dosyaAdi;
-            _w3.print();
-            // Kısa gecikme sonra title'ı geri al
-            setTimeout(function() { _w3.document.title = oncekiBaslik; }, 2000);
+            // Kapak hazır değilse önce render et, sonra print
+            var kapakEl = _w3.document.querySelector('.sayfa-kapak');
+            var kapakHazir = kapakEl && kapakEl.querySelector('img.kapak-img');
+            var durum = _w3.document.getElementById('pdf-durum');
+
+            function doPrint() {
+              var onceki = _w3.document.title;
+              _w3.document.title = _dosyaAdi;
+              _w3.print();
+              setTimeout(function(){ _w3.document.title = onceki; }, 3000);
+            }
+
+            if (!kapakHazir && _w3.html2canvas) {
+              if (durum) durum.textContent = 'Kapak hazırlanıyor...';
+              _w3.html2canvas(kapakEl, {
+                scale: 2, useCORS: true, allowTaint: true,
+                backgroundColor: '#1a0505', logging: false
+              }).then(function(canvas) {
+                var dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+                var imgEl = _w3.document.createElement('img');
+                imgEl.src = dataUrl;
+                imgEl.className = 'kapak-img';
+                imgEl.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block';
+                kapakEl.innerHTML = '';
+                kapakEl.appendChild(imgEl);
+                if (durum) durum.textContent = '';
+                setTimeout(doPrint, 300);
+              }).catch(function(){ doPrint(); });
+            } else {
+              doPrint();
+            }
           });
+
         } catch(e) { console.error(e); }
-      }, 400);
+      }, 500);
     }
     // Direkt URL kullan - fetch yok (CORS sorunu)
     _acDosya(_afisUrl3 || '');
