@@ -14352,9 +14352,8 @@ function gorevlendirmePdf(rowIdx, mod) {
         // Her sayfa tam A4 genişliğinde, scroll eder
         + '.sayfa-kapak{width:'+A4W+'px;min-height:'+A4H+'px;display:block;margin:16px auto;'
         +   'overflow:hidden;position:relative;background:#1a0505}'
-        + '.sayfa-icerik{width:'+A4W+'px;display:block;margin:0 auto 0;background:#fff;'
-        +   'padding:56px 60px;box-sizing:border-box}'  // 56px ≈ 15mm at 96dpi
-        + '.sayfa-icerik+.sayfa-icerik{margin-top:16px}'
+        + '.sayfa-icerik{width:'+A4W+'px;display:block;margin:0 auto;background:#fff;'
+        +   'padding:56px 60px;box-sizing:border-box;border-bottom:2px dashed #999}'
         + '#d3wrap{padding-bottom:32px}'
         + '</style>'
         + '</head><body>'
@@ -14416,84 +14415,117 @@ function gorevlendirmePdf(rowIdx, mod) {
             }
 
             pdfBtn.disabled = true;
-            durum.textContent = 'PDF hazırlanıyor...';
-
-            // Sayfaları sırayla bul: önce kapak, sonra sayfa-icerik'ler
-            var sayfalar = Array.from(_w3.document.querySelectorAll('.sayfa-kapak, .sayfa-icerik'));
-            if (!sayfalar.length) { durum.textContent = '⚠ Sayfa bulunamadı'; pdfBtn.disabled=false; return; }
+            durum.textContent = 'Hazırlanıyor...';
 
             var pdf = new jspdf.jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
             var A4mm_W = 210, A4mm_H = 297;
-            var idx = 0;
+            // A4 piksel boyutu (96dpi * 2x scale = 192dpi)
+            var SCALE = 2;
+            var A4px_W = 794 * SCALE;  // ~1588px
+            var A4px_H = 1123 * SCALE; // ~2246px
 
-            function renderSayfa() {
-              if (idx >= sayfalar.length) {
-                // Tüm sayfalar render edildi — PDF indir
-                pdf.save(_dosyaAdi + '.pdf');
-                durum.textContent = '✓ İndirildi';
-                pdfBtn.disabled = false;
-                setTimeout(function(){ durum.textContent=''; }, 3000);
-                return;
-              }
-              var el = sayfalar[idx];
-              durum.textContent = (idx+1) + '/' + sayfalar.length + ' sayfa...';
+            var kapakEl = _w3.document.querySelector('.sayfa-kapak');
+            var icerikEller = Array.from(_w3.document.querySelectorAll('.sayfa-icerik'));
 
-              // Her sayfayı tam genişlikte, dinamik yükseklikte render et
-              var elW = el.offsetWidth || A4W;
-              var elH = el.scrollHeight || A4H;
-              var scale = A4W / elW * 2; // 2x kalite
-
-              h2c(el, {
-                scale: scale,
-                useCORS: true,
-                allowTaint: true,
-                backgroundColor: el.classList.contains('sayfa-kapak') ? '#1a0505' : '#ffffff',
-                width: elW,
-                height: elH,
-                windowWidth: elW,
+            // ── ADIM 1: Kapağı render et ──────────────────────────
+            function renderKapak(cb) {
+              if (!kapakEl) { cb(); return; }
+              durum.textContent = 'Kapak render...';
+              h2c(kapakEl, {
+                scale: SCALE,
+                useCORS: true, allowTaint: true,
+                backgroundColor: '#1a0505',
+                width: kapakEl.offsetWidth,
+                height: kapakEl.offsetHeight,
                 logging: false
               }).then(function(canvas) {
-                var imgData = canvas.toDataURL('image/jpeg', 0.92);
-                var canvasH_mm = (elH / elW) * A4mm_W; // Gerçek içerik yüksekliği mm
-
-                if (idx > 0) pdf.addPage();
-
-                if (el.classList.contains('sayfa-kapak')) {
-                  // Kapak: tam A4 doldur
-                  pdf.addImage(imgData, 'JPEG', 0, 0, A4mm_W, A4mm_H);
-                } else {
-                  // İçerik: gerçek yükseklikte, sığmazsa çok sayfa
-                  if (canvasH_mm <= A4mm_H) {
-                    pdf.addImage(imgData, 'JPEG', 0, 0, A4mm_W, canvasH_mm);
-                  } else {
-                    // Uzun sayfa — dilimle
-                    var dilimH_px = Math.floor(elH * (A4mm_H / canvasH_mm));
-                    var totalSlices = Math.ceil(elH / dilimH_px);
-                    for (var s = 0; s < totalSlices; s++) {
-                      if (s > 0) pdf.addPage();
-                      var tmpCanvas = _w3.document.createElement('canvas');
-                      tmpCanvas.width = canvas.width;
-                      tmpCanvas.height = Math.min(dilimH_px * scale, canvas.height - s * dilimH_px * scale);
-                      var ctx = tmpCanvas.getContext('2d');
-                      ctx.drawImage(canvas, 0, s * dilimH_px * scale, tmpCanvas.width, tmpCanvas.height, 0, 0, tmpCanvas.width, tmpCanvas.height);
-                      pdf.addImage(tmpCanvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, A4mm_W, A4mm_H);
-                    }
-                    idx++;
-                    renderSayfa();
-                    return;
-                  }
-                }
-                idx++;
-                // Kısa gecikme ile sıradaki sayfayı render et (tarayıcı donmasını önler)
-                setTimeout(renderSayfa, 50);
-              }).catch(function(e) {
-                console.error('html2canvas hata:', e);
-                idx++;
-                setTimeout(renderSayfa, 50);
-              });
+                pdf.addImage(canvas.toDataURL('image/jpeg', 0.93), 'JPEG', 0, 0, A4mm_W, A4mm_H);
+                cb();
+              }).catch(function(){ cb(); });
             }
 
-            renderSayfa();
+            // ── ADIM 2: Tüm sayfa-icerik'leri birleştir, A4 dilimle ──
+            function renderIcerik(cb) {
+              if (!icerikEller.length) { cb(); return; }
+              durum.textContent = 'İçerik render...';
+
+              // Tüm icerik elementlerinin toplam yüksekliği
+              var totalH = icerikEller.reduce(function(s, el) {
+                return s + el.scrollHeight;
+              }, 0);
+              var icerikW = icerikEller[0].offsetWidth || 794;
+
+              // Büyük birleşik canvas oluştur
+              var bigCanvas = _w3.document.createElement('canvas');
+              bigCanvas.width = icerikW * SCALE;
+              bigCanvas.height = totalH * SCALE;
+              var bigCtx = bigCanvas.getContext('2d');
+              bigCtx.fillStyle = '#ffffff';
+              bigCtx.fillRect(0, 0, bigCanvas.width, bigCanvas.height);
+
+              // Her icerik'i sırayla render edip büyük canvas'a yapıştır
+              var yOffset = 0;
+              var i = 0;
+              function renderNext() {
+                if (i >= icerikEller.length) {
+                  // Büyük canvas hazır — A4 dilimlerine böl
+                  sliceToA4(bigCanvas, icerikW, totalH, cb);
+                  return;
+                }
+                var el = icerikEller[i];
+                durum.textContent = 'Sayfa ' + (i+1) + '/' + icerikEller.length + '...';
+                h2c(el, {
+                  scale: SCALE,
+                  useCORS: true, allowTaint: true,
+                  backgroundColor: '#ffffff',
+                  width: icerikW,
+                  height: el.scrollHeight,
+                  logging: false
+                }).then(function(canvas) {
+                  bigCtx.drawImage(canvas, 0, yOffset * SCALE);
+                  yOffset += el.scrollHeight;
+                  i++;
+                  setTimeout(renderNext, 30);
+                }).catch(function() { i++; setTimeout(renderNext, 30); });
+              }
+              renderNext();
+            }
+
+            // Büyük canvas'ı A4 yüksekliğinde dilimlere böl
+            function sliceToA4(bigCanvas, contentW, totalH, cb) {
+              // Kaç A4 sayfası lazım?
+              var mmPerPx = A4mm_W / contentW; // mm / px dönüşümü
+              var a4H_px = A4mm_H / mmPerPx;   // A4 yüksekliği px cinsinden
+              var pageCount = Math.ceil(totalH / a4H_px);
+
+              for (var p = 0; p < pageCount; p++) {
+                var srcY = p * a4H_px * SCALE;
+                var srcH = Math.min(a4H_px * SCALE, bigCanvas.height - srcY);
+                if (srcH <= 0) break;
+
+                var sliceCanvas = _w3.document.createElement('canvas');
+                sliceCanvas.width = bigCanvas.width;
+                sliceCanvas.height = a4H_px * SCALE; // Her zaman tam A4 yüksekliği
+                var ctx = sliceCanvas.getContext('2d');
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
+                ctx.drawImage(bigCanvas, 0, srcY, bigCanvas.width, srcH, 0, 0, bigCanvas.width, srcH);
+
+                pdf.addPage();
+                pdf.addImage(sliceCanvas.toDataURL('image/jpeg', 0.93), 'JPEG', 0, 0, A4mm_W, A4mm_H);
+              }
+              cb();
+            }
+
+            // ── Sıralı çalıştır ──────────────────────────────────
+            renderKapak(function() {
+              renderIcerik(function() {
+                durum.textContent = '⬇ İndiriliyor...';
+                pdf.save(_dosyaAdi + '.pdf');
+                pdfBtn.disabled = false;
+                setTimeout(function(){ durum.textContent = ''; }, 3000);
+              });
+            });
           });
 
         } catch(e) { console.error(e); }
