@@ -13228,11 +13228,11 @@ function _pdfCSS() {
   return '@charset "UTF-8";'
     // TEMEL
     + '*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}'
-    + 'body{font-family:Arial,Helvetica,sans-serif;font-size:11pt;margin:0;padding:14mm 16mm 14mm;color:#1a1a1a;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;line-height:1.45}'
+    + 'body{font-family:Arial,Helvetica,sans-serif;font-size:11pt;margin:0;padding:10mm 12mm 10mm;color:#1a1a1a;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;line-height:1.4}'
     + '*{box-sizing:border-box}'
     + '.rapor-wrap{max-width:100%}'
     // ── ÜST BAŞLIK ──
-    + '.rapor-header{display:flex;align-items:stretch;justify-content:space-between;padding-bottom:10pt;border-bottom:3pt solid #6b1b1b;margin-bottom:14pt}'
+    + '.rapor-header{display:flex;align-items:stretch;justify-content:space-between;padding-bottom:8pt;border-bottom:3pt solid #6b1b1b;margin-bottom:10pt}'
     + '.rapor-kurulus{display:flex;align-items:center;gap:10pt}'
     + '.rapor-amblem{width:44pt;height:44pt;background:#6b1b1b;border-radius:6pt;display:flex;align-items:center;justify-content:center;color:#e8c84a;font-weight:900;font-size:13pt;flex-shrink:0;letter-spacing:.5pt}'
     + '.rapor-kurulus-metin{}'
@@ -13243,7 +13243,7 @@ function _pdfCSS() {
     + '.rapor-tarih-bilgi .deger{font-size:11.5pt;font-weight:800;color:#1a1a1a;line-height:1.2}'
     + '.rapor-tarih-bilgi .sezon{font-size:9.5pt;font-weight:700;color:#6b1b1b;background:#f5ede0;border-radius:4pt;padding:1.5pt 8pt;margin-top:3pt;border:1pt solid #e0cdb8}'
     // ── TURNE BAŞLIĞI ──
-    + '.turne-baslik-blok{background:linear-gradient(135deg,#6b1b1b 0%,#8b2020 100%);color:#fff;border-radius:8pt;padding:14pt 16pt;margin-bottom:14pt}'
+    + '.turne-baslik-blok{background:linear-gradient(135deg,#6b1b1b 0%,#8b2020 100%);color:#fff;border-radius:8pt;padding:10pt 14pt;margin-bottom:10pt}'
     + '.turne-oyun-adi{font-size:22pt;font-weight:900;letter-spacing:.3pt;line-height:1.15;margin-bottom:5pt}'
     + '.turne-alt-satir{display:flex;align-items:center;gap:12pt;flex-wrap:wrap}'
     + '.turne-sehir{font-size:12pt;font-weight:700;letter-spacing:1.2pt;opacity:.9}'
@@ -13260,7 +13260,7 @@ function _pdfCSS() {
     + '.bilgi-deger{font-size:12pt;font-weight:800;color:#1a1a1a;line-height:1.25}'
     + '.bilgi-deger.kucuk{font-size:11.5pt}'
     // ── BÖLÜM BAŞLIKLARI ──
-    + '.bolum{margin-bottom:12pt}'
+    + '.bolum{margin-bottom:8pt}'
     + '.bolum-baslik{font-size:10.5pt;font-weight:800;text-transform:uppercase;letter-spacing:.6pt;color:#5a0f0f;border-bottom:2pt solid #c0a0a0;padding-bottom:5pt;margin-bottom:8pt}'
     // ── TABLOLAR ──
     + 'table{width:100%;border-collapse:collapse;font-size:10pt}'
@@ -13304,7 +13304,7 @@ function _pdfCSS() {
     + '.alt-cubuk{margin-top:18pt;padding-top:8pt;border-top:1pt solid #e5ddd5;display:flex;justify-content:space-between;align-items:center}'
     + '.alt-cubuk-sol{font-size:9pt;font-weight:700;color:#888}'
     // ── SAYFA NUMARASI ──
-    + '@page{size:A4;margin:14mm 16mm;@bottom-right{content:"Sayfa " counter(page) " / " counter(pages);font-size:7.5pt;color:#666;font-family:Arial,sans-serif}}'
+    + '@page{size:A4;margin:10mm 12mm;@bottom-right{content:"Sayfa " counter(page) " / " counter(pages);font-size:7.5pt;color:#666;font-family:Arial,sans-serif}}'
     + '@media print{body{padding:0}}'
     // ── SAYFA KIRMA ──
     + '.personel-tablosu tr{page-break-inside:avoid}'
@@ -14327,7 +14327,32 @@ function gorevlendirmePdf(rowIdx, mod) {
       var _css3 = '*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;box-sizing:border-box}'
         + 'body{margin:0;padding:0;background:#ddd}'
         + '@media print{body{background:#fff}.no-print{display:none!important}@page{size:A4 portrait;margin:0}}';
-      var _full3 = '<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Turne Dosyasi</title><style>'+_css3+'</style></head><body>'+_bar+'<div id="d3wrap">'+_html2+'</div></body></html>';
+      var _full3 = '<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Turne Dosyasi</title><style>'+_css3+'</style></head><body>'+_bar+'<div id="d3wrap">'+_html2+'</div>'
+        + '<script>'
+        + '(function(){'
+        /* Afis görselini canvas üzerinden sıkıştır (PDF boyutunu küçültür) */
+        + 'function sikistirAfis(el){'
+        + '  var url=(el.style.backgroundImage||"").replace(/^url\\(["\']/,"").replace(/["\']\\)$/,"");'
+        + '  if(!url||url.startsWith("data:"))return;'
+        + '  var img=new Image();img.crossOrigin="anonymous";'
+        + '  img.onload=function(){'
+        + '    try{'
+        + '      var W=794,H=Math.round(img.naturalHeight*(794/img.naturalWidth));'
+        + '      var c=document.createElement("canvas");c.width=W;c.height=H;'
+        + '      var ctx=c.getContext("2d");ctx.drawImage(img,0,0,W,H);'
+        + '      var data=c.toDataURL("image/jpeg",0.55);'
+        + '      el.style.backgroundImage="url("+data+")";'
+        + '    }catch(e){}'
+        + '  };'
+        + '  img.onerror=function(){};'
+        + '  img.src=url;'
+        + '}'
+        + 'window.addEventListener("load",function(){'
+        + '  document.querySelectorAll(".afis-bg").forEach(sikistirAfis);'
+        + '});'
+        + '})();'
+        + '<\/script>'
+        + '</body></html>';
       var _w3 = window.open(URL.createObjectURL(new Blob([_full3],{type:'text/html;charset=utf-8'})),'_blank');
       if(!_w3){alert('Pop-up engelleyiciyi kapatın.');return;}
       setTimeout(function(){
@@ -14339,11 +14364,33 @@ function gorevlendirmePdf(rowIdx, mod) {
             var url=_w3.document.getElementById('afis3').value.trim();
             _w3.document.querySelectorAll('.afis-bg').forEach(function(el){
               if(url){
-                el.style.backgroundImage='url("'+url+'")';
-                el.style.backgroundSize='cover';
-                el.style.backgroundRepeat='no-repeat';
-                el.style.backgroundPosition='center';
-                el.style.filter='brightness(.42)';
+                // Önce URL'yi canvas üzerinden sıkıştır
+                var img=new _w3.Image();
+                img.crossOrigin='anonymous';
+                img.onload=function(){
+                  try{
+                    var W=794, H=Math.round(img.naturalHeight*(794/img.naturalWidth));
+                    var c=_w3.document.createElement('canvas');c.width=W;c.height=H;
+                    var ctx=c.getContext('2d');ctx.drawImage(img,0,0,W,H);
+                    var data=c.toDataURL('image/jpeg',0.55);
+                    el.style.backgroundImage='url('+data+')';
+                  }catch(e){
+                    // CORS hatası — direkt URL kullan
+                    el.style.backgroundImage='url("'+url+'")';
+                  }
+                  el.style.backgroundSize='cover';
+                  el.style.backgroundRepeat='no-repeat';
+                  el.style.backgroundPosition='center';
+                  el.style.filter='brightness(.42)';
+                };
+                img.onerror=function(){
+                  el.style.backgroundImage='url("'+url+'")';
+                  el.style.backgroundSize='cover';
+                  el.style.backgroundRepeat='no-repeat';
+                  el.style.backgroundPosition='center';
+                  el.style.filter='brightness(.42)';
+                };
+                img.src=url;
               } else {
                 el.style.backgroundImage='none';
                 el.style.filter='none';
@@ -16663,40 +16710,45 @@ function _pdfTurneDosyasiIcerik(t) {
   // ── CSS ─────────────────────────────────────────────────────
   var CSS='<style>'
     +'*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;box-sizing:border-box;margin:0;padding:0}'
-    +'body{font-family:Arial,Helvetica,sans-serif;font-size:10.5pt;color:#111;background:#e8e8e8}'
-    +'.sayfa{width:210mm;background:#fff;display:block;page-break-after:always;padding:12mm 14mm}'
-    +'.sayfa-kapak{width:210mm;height:297mm;position:relative;overflow:hidden;display:block;page-break-after:always;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}'
-    +'.sayfa-header{border-bottom:2pt solid #6b1b1b;margin-bottom:10pt;padding-bottom:6pt;display:flex;justify-content:space-between;align-items:flex-end}'
-    +'.sayfa-header-oyun{font-size:12pt;font-weight:900;text-transform:uppercase;letter-spacing:.5pt;color:#111}'
-    +'.sayfa-header-bilgi{font-size:8.5pt;color:#6b1b1b;font-weight:700;text-transform:uppercase;letter-spacing:.4pt;text-align:right}'
-    +'.bolum-baslik{font-size:10pt;font-weight:800;color:#5a0f0f;border-bottom:1.5pt solid #c0a0a0;padding-bottom:4pt;margin:12pt 0 7pt;text-transform:uppercase;letter-spacing:.4pt}'
-    +'table{width:100%;border-collapse:collapse;font-size:10pt;border:1pt solid #d0c8c0}'
+    +'body{font-family:Arial,Helvetica,sans-serif;font-size:10pt;color:#111;background:#e8e8e8}'
+    +'@media screen{.sayfa{width:210mm;background:#fff;display:block;margin:8px auto;padding:12mm 14mm}}'
+    +'.sayfa-kapak{width:210mm;height:297mm;position:relative;overflow:hidden;display:block;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}'
+    /* Afis bg: boyut küçültmek için CSS only — görsel hâlâ URL ama tarayıcı küçük boyut kullanır */
+    +'.afis-bg{background-size:cover!important;background-position:center center!important;image-rendering:-webkit-optimize-contrast;image-rendering:crisp-edges}'
+    +'.sayfa-header{border-bottom:2pt solid #6b1b1b;margin-bottom:8pt;padding-bottom:5pt;display:flex;justify-content:space-between;align-items:flex-end}'
+    +'.sayfa-header-oyun{font-size:11.5pt;font-weight:900;text-transform:uppercase;letter-spacing:.5pt;color:#111}'
+    +'.sayfa-header-bilgi{font-size:8pt;color:#6b1b1b;font-weight:700;text-transform:uppercase;letter-spacing:.4pt;text-align:right}'
+    +'.bolum-baslik{font-size:9.5pt;font-weight:800;color:#5a0f0f;border-bottom:1.5pt solid #c0a0a0;padding-bottom:3pt;margin:8pt 0 5pt;text-transform:uppercase;letter-spacing:.4pt;page-break-after:avoid;break-after:avoid}'
+    /* Oda/bölüm blokları: sayfa ortasında bölünmesin */
+    +'.bolum-blok{page-break-inside:avoid;break-inside:avoid}'
+    +'table{width:100%;border-collapse:collapse;font-size:9.5pt;border:1pt solid #d0c8c0}'
     +'thead tr{background:#6b1b1b;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}'
-    +'th{color:#fff;padding:6pt 8pt;font-weight:700;text-align:left;border:1pt solid #5a1717;font-size:9.5pt;white-space:nowrap}'
-    +'td{padding:5pt 8pt;border:1pt solid #d0c8c0;vertical-align:middle;font-size:10pt}'
+    +'thead{display:table-header-group;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}'
+    +'th{color:#fff;padding:5pt 7pt;font-weight:700;text-align:left;border:1pt solid #5a1717;font-size:9pt;white-space:nowrap}'
+    +'td{padding:4pt 7pt;border:1pt solid #d0c8c0;vertical-align:middle;font-size:9.5pt}'
+    +'tr{page-break-inside:avoid;break-inside:avoid}'
     +'tbody tr:nth-child(even){background:#faf8f6}'
-    +'tbody tr:hover{background:#f0ebe4}'
     +'.prog-yol td{background:#fff7ed!important;border-left:3pt solid #ea580c!important}'
     +'.prog-donus td{background:#faf5ff!important;border-left:3pt solid #7c3aed!important}'
     +'.prog-oyun td{background:#f0fdf4!important;border-left:3pt solid #16a34a!important}'
     +'.prog-prova td{background:#eff6ff!important;border-left:3pt solid #0369a1!important}'
     +'.prog-diger td{background:#f9fafb!important;border-left:3pt solid #6b7280!important}'
-    +'.saat-td{font-size:14pt!important;font-weight:900!important;color:#1a1a2e;text-align:center;white-space:nowrap}'
-    +'.tel-td{font-weight:800;color:#1d4ed8;font-size:11pt;white-space:nowrap}'
-    +'.sayfa-no{font-size:8pt;color:#bbb;text-align:right;margin-top:8pt}'
-    +'thead{display:table-header-group}'
-    +'.bolum-baslik{page-break-after:avoid}'
+    +'.saat-td{font-size:13pt!important;font-weight:900!important;color:#1a1a2e;text-align:center;white-space:nowrap}'
+    +'.tel-td{font-weight:800;color:#1d4ed8;font-size:10.5pt;white-space:nowrap}'
+    +'.sayfa-no{font-size:7.5pt;color:#bbb;text-align:right;margin-top:5pt}'
     +'@media print{'
     +'  body{background:#fff}'
-    +'  .sayfa,.sayfa-kapak{box-shadow:none}'
+    +'  .sayfa-kapak{page-break-after:always;break-after:page}'
+    +'  .sayfa{page-break-before:always;break-before:page;padding:10mm 12mm}'
     +'  @page{size:A4 portrait;margin:0}'
-    +'  .sayfa{padding:12mm 14mm;height:auto;min-height:0}'
-    +'  table{border:1pt solid #d0c8c0!important;border-collapse:collapse!important;border-spacing:0!important;margin-bottom:0!important}'
-    +'  tr{page-break-inside:avoid!important;break-inside:avoid!important;border-spacing:0!important}'
-    +'  td,th{border:1pt solid #d0c8c0!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;padding:5pt 8pt!important}'
-    +'  thead{display:table-header-group;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}'
-    +'  .bolum-baslik{page-break-after:avoid;break-after:avoid;margin-top:8pt!important}'
-    +'  table[style]{margin-bottom:0!important}'
+    +'  table{border:1pt solid #d0c8c0!important;border-collapse:collapse!important;border-spacing:0!important}'
+    +'  tr{page-break-inside:avoid!important;break-inside:avoid!important}'
+    +'  td,th{border:1pt solid #d0c8c0!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}'
+    +'  thead{display:table-header-group!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}'
+    +'  .bolum-baslik{page-break-after:avoid!important;break-after:avoid!important}'
+    +'  .bolum-blok{page-break-inside:avoid!important;break-inside:avoid!important}'
+    /* Başlık sonrası ilk tablo satırı aynı sayfada kalsın */
+    +'  .bolum-baslik + div,.bolum-baslik + table{page-break-before:avoid;break-before:avoid}'
     +'}'
     +'</style>';
 
@@ -17016,7 +17068,7 @@ function _pdfTurneDosyasiIcerik(t) {
         +'</tr>';
     }).join('');
     tekOdaHTML=''
-      +'<div style="margin-bottom:14pt">'
+      +'<div style="margin-bottom:14pt;page-break-inside:avoid;break-inside:avoid">'
       +'<div style="background:#1e3a5f;color:#fff;padding:7pt 10pt;font-size:10pt;font-weight:700;display:flex;justify-content:space-between;align-items:center">'
       +'<span>\ud83d\udecf Tek Oda</span>'
       +'<span style="background:rgba(255,255,255,.2);border-radius:12pt;padding:2pt 10pt;font-size:9pt">'+tekler.length+' ki\u015fi</span>'
@@ -17051,7 +17103,7 @@ function _pdfTurneDosyasiIcerik(t) {
         +'</tr>';
     }).join('');
     ciftOdaHTML=''
-      +'<div style="margin-bottom:14pt">'
+      +'<div style="margin-bottom:14pt;page-break-inside:avoid;break-inside:avoid">'
       +'<div style="background:#15803d;color:#fff;padding:7pt 10pt;font-size:10pt;font-weight:700;display:flex;justify-content:space-between;align-items:center">'
       +'<span>\ud83d\udecc \u00c7ift Oda</span>'
       +'<span style="background:rgba(255,255,255,.2);border-radius:12pt;padding:2pt 10pt;font-size:9pt">'+ciftGruplar.length+' oda &nbsp;\u2022&nbsp; '+(ciftGruplar.length*2)+' ki\u015fi</span>'
@@ -17075,7 +17127,7 @@ function _pdfTurneDosyasiIcerik(t) {
         +'</tr>';
     }).join('');
     munferitHTML=''
-      +'<div style="margin-bottom:14pt">'
+      +'<div style="margin-bottom:14pt;page-break-inside:avoid;break-inside:avoid">'
       +'<div style="background:#92400e;color:#fff;padding:7pt 10pt;font-size:10pt;font-weight:700;display:flex;justify-content:space-between">'
       +'<span>\ud83d\udeb6 M\u00fcnferit</span>'
       +'<span style="background:rgba(255,255,255,.2);border-radius:12pt;padding:2pt 10pt;font-size:9pt">'+munferit.length+' ki\u015fi</span>'
@@ -17097,7 +17149,7 @@ function _pdfTurneDosyasiIcerik(t) {
         +'</tr>';
     }).join('');
     atanmamisHTML=''
-      +'<div style="margin-bottom:14pt">'
+      +'<div style="margin-bottom:14pt;page-break-inside:avoid;break-inside:avoid">'
       +'<div style="background:#dc2626;color:#fff;padding:7pt 10pt;font-size:10pt;font-weight:700;display:flex;justify-content:space-between">'
       +'<span>\u26a0 Oda Atanmam\u0131\u015f</span>'
       +'<span style="background:rgba(255,255,255,.2);border-radius:12pt;padding:2pt 10pt;font-size:9pt">'+atanmamis.length+' ki\u015fi</span>'
