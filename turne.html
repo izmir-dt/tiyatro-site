@@ -14389,13 +14389,18 @@ function gorevlendirmePdf(rowIdx, mod) {
           if (wrap) wrap.innerHTML = _html2;
 
           // ── Kapağı canvas'a çizip <img>'e dönüştür ──
-          // Bu sayede print'te "Arka plan grafikleri" gerekmez,
-          // kapak tüm tarayıcılarda/PDF motorlarında düzgün görünür
+          // Bu sayede print'te "Arka plan grafikleri" gerekmez
+          var _kapakOriginalHTML = ''; // Orijinal kapak HTML'ini sakla
+
           function renderKapak() {
             var kapakEl = _w3.document.querySelector('.sayfa-kapak');
             if (!kapakEl || !_w3.html2canvas) return;
             var durum = _w3.document.getElementById('pdf-durum');
             if (durum) durum.textContent = 'Kapak hazırlanıyor...';
+            // Orijinal HTML'i sakla (ilk renderda)
+            if (!_kapakOriginalHTML) {
+              _kapakOriginalHTML = kapakEl.innerHTML;
+            }
             _w3.html2canvas(kapakEl, {
               scale: 2,
               useCORS: true,
@@ -14406,12 +14411,10 @@ function gorevlendirmePdf(rowIdx, mod) {
               logging: false
             }).then(function(canvas) {
               var dataUrl = canvas.toDataURL('image/jpeg', 0.92);
-              // Kapak div'ini tam boyutlu <img> ile değiştir
               var imgEl = _w3.document.createElement('img');
               imgEl.src = dataUrl;
               imgEl.className = 'kapak-img';
               imgEl.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block';
-              // Kapak içeriğini temizle, sadece img koy
               kapakEl.innerHTML = '';
               kapakEl.appendChild(imgEl);
               if (durum) durum.textContent = '✓ Hazır';
@@ -14424,22 +14427,31 @@ function gorevlendirmePdf(rowIdx, mod) {
 
           // html2canvas yüklendiğinde kapağı render et
           if (_w3.html2canvas) {
-            setTimeout(renderKapak, 300);
+            setTimeout(renderKapak, 400);
           } else {
-            // Yüklenmesini bekle (CDN gecikmesi)
             var _checkInterval = setInterval(function() {
               if (_w3.html2canvas) {
                 clearInterval(_checkInterval);
                 renderKapak();
               }
             }, 200);
-            setTimeout(function(){ clearInterval(_checkInterval); }, 8000);
+            setTimeout(function(){ clearInterval(_checkInterval); }, 10000);
           }
 
           // ── Afiş URL "Uygula" butonu ──
           var afisBtn = _w3.document.getElementById('afisbtn3');
           if (afisBtn) afisBtn.addEventListener('click', function() {
             var url = _w3.document.getElementById('afis3').value.trim();
+            var kapakEl = _w3.document.querySelector('.sayfa-kapak');
+            if (!kapakEl) return;
+            var durum = _w3.document.getElementById('pdf-durum');
+
+            // Kapak img ile değiştirildiyse orijinal HTML'i geri yükle
+            if (_kapakOriginalHTML && kapakEl.querySelector('img.kapak-img')) {
+              kapakEl.innerHTML = _kapakOriginalHTML;
+            }
+
+            // Arka plan div'ini güncelle
             var bgDiv = _w3.document.getElementById('kapak-bg-div');
             var karatmaDiv = _w3.document.getElementById('kapak-karatma-div');
             if (bgDiv) {
@@ -14462,8 +14474,23 @@ function gorevlendirmePdf(rowIdx, mod) {
                 if (karatmaDiv) karatmaDiv.style.background = 'rgba(0,0,0,0)';
               }
             }
-            // URL değişince kapağı yeniden render et
-            setTimeout(renderKapak, 500);
+            // Afiş yüklenmesini bekleyip yeniden render et
+            if (durum) durum.textContent = 'Afiş yükleniyor...';
+            setTimeout(function() {
+              // Eğer URL varsa resmin yüklenmesini bekle
+              if (url) {
+                var testImg = new _w3.Image();
+                testImg.onload = function() { renderKapak(); };
+                testImg.onerror = function() {
+                  if (durum) durum.textContent = '⚠ Afiş yüklenemedi';
+                  setTimeout(function(){ if(durum) durum.textContent=''; }, 3000);
+                  renderKapak(); // Yine de render et (belki CORS sorunu ama görünebilir)
+                };
+                testImg.src = url;
+              } else {
+                renderKapak();
+              }
+            }, 100);
           });
 
           // ── PDF İndir butonu — jsPDF ile doğrudan PDF üret ──
@@ -17212,8 +17239,9 @@ function _pdfTurneDosyasiIcerik(t) {
         +'</tr>';
     }).join('');
     tekOdaHTML=''
-      +'<div style="margin-bottom:14pt;page-break-inside:avoid;break-inside:avoid">'
-      +'<div style="background:#1e3a5f;color:#fff;padding:8pt 12pt;font-size:10.5pt;font-weight:800;display:flex;justify-content:space-between;align-items:center">'
+      // page-break-inside:avoid SADECE başlık satırında — tablo serbest akar
+      +'<div style="margin-bottom:14pt">'
+      +'<div style="background:#1e3a5f;color:#fff;padding:8pt 12pt;font-size:10.5pt;font-weight:800;display:flex;justify-content:space-between;align-items:center;page-break-after:avoid;break-after:avoid">'
       +'<span>\ud83d\udecf Tek Oda</span>'
       +'<span style="background:rgba(255,255,255,.2);border-radius:12pt;padding:2pt 12pt;font-size:10pt">'+tekler.length+' ki\u015fi</span>'
       +'</div>'
@@ -17253,9 +17281,9 @@ function _pdfTurneDosyasiIcerik(t) {
         +'</tr>';
     }).join('');
     ciftOdaHTML=''
-      +'<div style="margin-bottom:14pt;page-break-inside:avoid;break-inside:avoid">'
+      +'<div style="margin-bottom:14pt">'
       +eksikEsUyari
-      +'<div style="background:#15803d;color:#fff;padding:8pt 12pt;font-size:10.5pt;font-weight:800;display:flex;justify-content:space-between;align-items:center">'
+      +'<div style="background:#15803d;color:#fff;padding:8pt 12pt;font-size:10.5pt;font-weight:800;display:flex;justify-content:space-between;align-items:center;page-break-after:avoid;break-after:avoid">'
       +'<span>\ud83d\udecc \u00c7ift Oda</span>'
       +'<span style="background:rgba(255,255,255,.2);border-radius:12pt;padding:2pt 12pt;font-size:10pt">'+ciftGruplar.length+' oda</span>'
       +'</div>'
@@ -17278,8 +17306,8 @@ function _pdfTurneDosyasiIcerik(t) {
         +'</tr>';
     }).join('');
     munferitHTML=''
-      +'<div style="margin-bottom:14pt;page-break-inside:avoid;break-inside:avoid">'
-      +'<div style="background:#92400e;color:#fff;padding:8pt 12pt;font-size:10.5pt;font-weight:800;display:flex;justify-content:space-between;align-items:center">'
+      +'<div style="margin-bottom:14pt">'
+      +'<div style="background:#92400e;color:#fff;padding:8pt 12pt;font-size:10.5pt;font-weight:800;display:flex;justify-content:space-between;align-items:center;page-break-after:avoid;break-after:avoid">'
       +'<span>\ud83d\udeb6 M\u00fcnferit</span>'
       +'<span style="background:rgba(255,255,255,.2);border-radius:12pt;padding:2pt 12pt;font-size:10pt">'+munferit.length+' ki\u015fi</span>'
       +'</div>'
@@ -17300,8 +17328,8 @@ function _pdfTurneDosyasiIcerik(t) {
         +'</tr>';
     }).join('');
     atanmamisHTML=''
-      +'<div style="margin-bottom:14pt;page-break-inside:avoid;break-inside:avoid">'
-      +'<div style="background:#fef2f2;border:2pt solid #dc2626;padding:8pt 12pt;font-size:10.5pt;color:#991b1b;font-weight:800;display:flex;justify-content:space-between;align-items:center">'
+      +'<div style="margin-bottom:14pt">'
+      +'<div style="background:#fef2f2;border:2pt solid #dc2626;padding:8pt 12pt;font-size:10.5pt;color:#991b1b;font-weight:800;display:flex;justify-content:space-between;align-items:center;page-break-after:avoid;break-after:avoid">'
       +'<span>\u26a0\ufe0f Oda Atanmam\u0131\u015f — Bu ki\u015filere oda atamas\u0131 yap\u0131lmal\u0131d\u0131r</span>'
       +'<span style="background:#dc2626;color:#fff;border-radius:12pt;padding:2pt 12pt;font-size:10pt">'+atanmamis.length+' ki\u015fi</span>'
       +'</div>'
