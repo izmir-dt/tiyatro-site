@@ -14323,28 +14323,24 @@ function gorevlendirmePdf(rowIdx, mod) {
       var _tarihKisa = (t.baslangicTarih||t.tarih||'').replace(/-/g,'');
       var _dosyaAdi = (_oyunKisa||'Turne') + '_' + _tarihKisa + '_TurneDosyasi';
 
-      // CSS — sadece screen layout, JS render için px cinsinden
+      // Her sayfa tam A4: 794x1123px (96dpi)
+      // Kapak zaten 794x1123, diğer sayfalar da aynı boyutta olacak
       var _css3 = [
         '*{box-sizing:border-box;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}',
-        'html,body{margin:0;padding:16px;background:#888;font-family:Arial,Helvetica,sans-serif}',
+        'html,body{margin:0;padding:16px;background:#555;font-family:Arial,Helvetica,sans-serif}',
         '#toolbar{position:sticky;top:0;background:#1a1a1a;padding:10px 16px;display:flex;align-items:center;gap:10px;z-index:9999;box-shadow:0 2px 8px rgba(0,0,0,.5);margin:-16px -16px 16px -16px}',
-        '.sayfa-kapak{width:794px;height:1123px;position:relative;overflow:hidden;display:block;margin:0 auto 16px}',
-        /* Sayfa: sabit 794px, tablo taşmasın */
-        '.sayfa{width:794px;min-height:400px;padding:45px 53px;display:block;margin:0 auto 16px;background:#fff;overflow:hidden}',
-        'table{width:100% !important;max-width:100% !important;table-layout:fixed;word-break:break-word}',
-        'td,th{overflow:hidden;text-overflow:ellipsis}'
+        /* Kapak tam A4 */
+        '.sayfa-kapak{width:794px;height:1123px;position:relative;overflow:hidden;display:block;margin:0 auto 16px;background:#000}',
+        /* Diğer sayfalar da tam A4 yüksekliğinde, içerik az olsa da */
+        '.sayfa{width:794px;height:1123px;padding:45px 53px;display:block;margin:0 auto 16px;background:#fff;overflow:hidden;position:relative}',
+        'table{width:100%;border-collapse:collapse;font-size:9.5pt;border:1pt solid #d0c8c0}',
+        'th{color:#fff;padding:5pt 7pt;font-weight:700;text-align:left;border:1pt solid #5a1717;font-size:9pt}',
+        'td{padding:4pt 7pt;border:1pt solid #d0c8c0;vertical-align:middle;font-size:9.5pt}'
       ].join('');
 
-      // İçerik HTML — ayrı değişkende tut, string birleştirme yok
-      var _contentDiv = document.createElement('div');
-      _contentDiv.id = 'd3wrap';
-      _contentDiv.innerHTML = _html2;
-
-      // Yeni pencereyi aç
       var _w3 = window.open('', '_blank');
       if (!_w3) { alert('Pop-up engelleyiciyi kapatın.'); return; }
 
-      // Pencereye doğrudan DOM yaz — string escaping sorunu yok
       _w3.document.open();
       _w3.document.write('<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8">');
       _w3.document.write('<title>Turne Dosyasi</title>');
@@ -14363,9 +14359,9 @@ function gorevlendirmePdf(rowIdx, mod) {
       _w3.document.write('</body></html>');
       _w3.document.close();
 
-      // İçeriği DOM ile yerleştir — string escaping yok
       setTimeout(function() {
         try {
+          // İçeriği DOM ile yerleştir
           var wrap = _w3.document.getElementById('d3wrap');
           if (wrap) wrap.innerHTML = _html2;
 
@@ -14386,7 +14382,7 @@ function gorevlendirmePdf(rowIdx, mod) {
             });
           });
 
-          // PDF indir butonu
+          // PDF indir — her sayfa tam 794x1123px olarak yakalanır
           var pdfBtn = _w3.document.getElementById('pdfbtn3');
           if (pdfBtn) pdfBtn.addEventListener('click', async function() {
             var btn = this;
@@ -14397,21 +14393,23 @@ function gorevlendirmePdf(rowIdx, mod) {
             try {
               var sayfalar = _w3.document.querySelectorAll('.sayfa-kapak, .sayfa');
               var jsPDF = _w3.jspdf ? _w3.jspdf.jsPDF : window.jspdf.jsPDF;
+              // PDF boyutu A4 px: 794x1123
               var pdf = new jsPDF({ orientation: 'portrait', unit: 'px', format: [794, 1123] });
               for (var i = 0; i < sayfalar.length; i++) {
                 var el = sayfalar[i];
-                var isKapak = el.classList.contains('sayfa-kapak');
-                var elH = isKapak ? 1123 : el.scrollHeight;
+                // Her eleman tam 794x1123 — sabit boyut
                 var canvas = await _w3.html2canvas(el, {
-                  scale: 2, useCORS: true, allowTaint: true,
+                  scale: 2,
+                  useCORS: true,
+                  allowTaint: true,
                   backgroundColor: '#ffffff',
-                  width: 794, height: elH,
-                  windowWidth: 794, scrollX: 0, scrollY: 0
+                  width: 794,
+                  height: 1123,
+                  windowWidth: 826  /* 794 + 2*16px padding */
                 });
                 var imgData = canvas.toDataURL('image/jpeg', 0.92);
-                var pdfH = Math.round(794 * canvas.height / canvas.width);
-                if (i > 0) pdf.addPage([794, pdfH]);
-                pdf.addImage(imgData, 'JPEG', 0, 0, 794, pdfH);
+                if (i > 0) pdf.addPage([794, 1123], 'portrait');
+                pdf.addImage(imgData, 'JPEG', 0, 0, 794, 1123);
               }
               pdf.save(_dosyaAdi + '.pdf');
             } catch(e) {
