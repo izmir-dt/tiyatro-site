@@ -17057,27 +17057,41 @@ function _pdfTurneDosyasiIcerik(t) {
 
   // Durak şehir → mekan eşleştirme tablosu
   // Türkçe normalize: İ→i, Ş→s vb. — hem büyük hem küçük harfle eşleşsin
-  function _normTr(s){ return (s||'').toLowerCase().replace(/\u0131/g,'i').replace(/\u015f/g,'s').replace(/\u00e7/g,'c').replace(/\u00f6/g,'o').replace(/\u00fc/g,'u').replace(/\u011f/g,'g').replace(/i/g,'i'); }
+  function _normTr(s){ 
+    return (s||'')
+      .replace(/İ/g,'i').replace(/I/g,'i')
+      .replace(/Ş/g,'s').replace(/ş/g,'s')
+      .replace(/Ç/g,'c').replace(/ç/g,'c')
+      .replace(/Ö/g,'o').replace(/ö/g,'o')
+      .replace(/Ü/g,'u').replace(/ü/g,'u')
+      .replace(/Ğ/g,'g').replace(/ğ/g,'g')
+      .replace(/ı/g,'i')
+      .toLowerCase();
+  }
   var _durakMekanMap={};
   var _duraklar2=(t.duraklar&&t.duraklar.length)?t.duraklar:(t.il?[{il:t.il,mekan:t.mekan||''}]:[]);
-  // DEBUG
-  console.log('DURAKLAR:', JSON.stringify(_duraklar2.map(function(d){return {il:d.il,mekan:d.mekan,oyun:d.oyun};})));
-  console.log('PROG SATIRLAR sehir:', JSON.stringify((t.programSatirlar||[]).map(function(s){return {sehir:s.sehir,program:s.program};})));
   _duraklar2.forEach(function(d){
     if(d.mekan&&d.mekan.trim()){
-      // hem orijinal il adı hem normalize edilmiş haliyle kaydet
-      var ilOri=(d.il||'').trim();
-      var ilNorm=_normTr(ilOri);
-      _durakMekanMap[ilOri]=d.mekan.trim();
-      _durakMekanMap[ilNorm]=d.mekan.trim();
-      _durakMekanMap[ilOri.toLowerCase()]=d.mekan.trim();
-      _durakMekanMap[ilOri.toUpperCase()]=d.mekan.trim();
-      // /MERKEZ varsa temizlenmiş hali de ekle
-      var ilTemiz=_temizleIlPdf(ilOri);
-      _durakMekanMap[ilTemiz]=d.mekan.trim();
-      _durakMekanMap[_normTr(ilTemiz)]=d.mekan.trim();
+      var ilTemiz=_temizleIlPdf(d.il||'').trim();
+      // Birden fazla key ile kaydet — tüm varyantlar
+      [d.il, ilTemiz, (d.il||'').split('/')[0].trim()].forEach(function(k){
+        if(!k) return;
+        _durakMekanMap[_normTr(k)]=d.mekan.trim();
+      });
     }
   });
+  // Şehir adından mekan bul — kısmi eşleşme de dene
+  function _mekanBul(sehir){
+    if(!sehir) return '';
+    var sNorm=_normTr(sehir);
+    if(_durakMekanMap[sNorm]) return _durakMekanMap[sNorm];
+    // kısmi: durak ilinde şehir adı geçiyor mu
+    var keys=Object.keys(_durakMekanMap);
+    for(var ki=0;ki<keys.length;ki++){
+      if(keys[ki].indexOf(sNorm)>=0||sNorm.indexOf(keys[ki])>=0) return _durakMekanMap[keys[ki]];
+    }
+    return '';
+  }
 
   var progRows=progSatirlar.map(function(s){
     var bc=PROG_RENK[s.program]||'#6b7280';
@@ -17094,7 +17108,9 @@ function _pdfTurneDosyasiIcerik(t) {
     }
     // Şehir + Sahne parantez içinde tek hücre
     var sehirH=(s.sehir||'');
-    var _sahneVal=s.mekan||_durakMekanMap[sehirH]||_durakMekanMap[_normTr(sehirH)]||_durakMekanMap[sehirH.toUpperCase()]||_durakMekanMap[sehirH.toLowerCase()]||'';
+    var _sahneRaw=s.mekan||_mekanBul(sehirH)||'';
+    // Sahne adı çok uzunsa kısalt (PDF'de taşmayı önle)
+    var _sahneVal=_sahneRaw.length>45?_sahneRaw.substring(0,43)+'\u2026':_sahneRaw;
     var sahneH=_sahneVal&&_sahneVal!==sehirH
       ?'<span style="font-weight:400;color:#555;font-size:9pt"> · '+_sahneVal+'</span>':'';
     // Program adı
