@@ -14318,74 +14318,45 @@ function gorevlendirmePdf(rowIdx, mod) {
       var _html2 = _pdfTurneDosyasiIcerik(_tc);
       var _afisVal = (_afisUrl3||'').replace(/"/g,'&quot;');
 
-      // Dosya adı (ASCII güvenli)
       var _oyunKisa = (t.oyun||'Turne').replace(/[^a-zA-Z0-9 ]/g,'').trim().replace(/\s+/g,'_').slice(0,20);
       var _tarihKisa = (t.baslangicTarih||t.tarih||'').replace(/-/g,'');
       var _dosyaAdi = (_oyunKisa||'Turne') + '_' + _tarihKisa + '_TurneDosyasi';
 
-      // Her sayfa tam A4: 794x1123px (96dpi @ 100% zoom)
-      // 1pt = 1.333px @ 96dpi → 12pt = 16px, 10pt = 13.3px
-      var _css3 = [
-        '*{box-sizing:border-box;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}',
-        'html,body{margin:0;padding:16px;background:#555;font-family:Arial,Helvetica,sans-serif;font-size:13px}',
-        '#toolbar{position:sticky;top:0;background:#1a1a1a;padding:10px 16px;display:flex;align-items:center;gap:10px;z-index:9999;box-shadow:0 2px 8px rgba(0,0,0,.5);margin:-16px -16px 16px -16px}',
-        '.sayfa-kapak{width:794px;height:1123px;position:relative;overflow:hidden;display:block;margin:0 auto 16px;background:#000}',
-        '.sayfa{width:794px;height:1123px;padding:46px 53px 46px 53px;display:block;margin:0 auto 16px;background:#fff;overflow:hidden;position:relative}',
-        /* Sayfa başlığı */
-        '.sayfa-header{border-bottom:2px solid #6b1b1b;margin-bottom:11px;padding-bottom:7px;display:flex;justify-content:space-between;align-items:flex-end}',
-        '.sayfa-header-oyun{font-size:15px;font-weight:900;text-transform:uppercase;letter-spacing:.5px;color:#111}',
-        '.sayfa-header-bilgi{font-size:11px;color:#6b1b1b;font-weight:700;text-transform:uppercase;letter-spacing:.4px;text-align:right;line-height:1.4}',
-        '.bolum-baslik{font-size:12px;font-weight:800;color:#5a0f0f;border-bottom:2px solid #c0a0a0;padding-bottom:4px;margin:11px 0 7px;text-transform:uppercase;letter-spacing:.4px}',
-        /* Tablolar */
-        'table{width:100%;border-collapse:collapse;font-size:12px;border:1px solid #d0c8c0}',
-        'thead tr{background:#6b1b1b !important}',
-        'th{color:#fff !important;padding:7px 9px;font-weight:700;text-align:left;border:1px solid #5a1717;font-size:11px}',
-        'td{padding:6px 9px;border:1px solid #d0c8c0;vertical-align:middle;font-size:12px}',
-        'tbody tr:nth-child(even){background:#faf8f6}',
-        /* Program satır renkleri */
-        '.prog-yol td{background:#fff7ed !important;border-left:3px solid #ea580c !important}',
-        '.prog-donus td{background:#faf5ff !important;border-left:3px solid #7c3aed !important}',
-        '.prog-oyun td{background:#f0fdf4 !important;border-left:3px solid #16a34a !important}',
-        '.prog-prova td{background:#eff6ff !important;border-left:3px solid #0369a1 !important}',
-        '.prog-diger td{background:#f9fafb !important;border-left:3px solid #6b7280 !important}',
-        '.saat-td{font-size:17px !important;font-weight:900 !important;color:#1a1a2e;text-align:center}',
-        '.tel-td{font-weight:800;color:#1d4ed8;font-size:14px}',
-        '.sayfa-no{font-size:10px;color:#bbb;text-align:right;position:absolute;bottom:18px;right:53px}',
-        /* Oda blokları */
-        'div[style*="margin-bottom:14pt"]{margin-bottom:14px !important}',
-        /* Genel metin */
-        'p{font-size:12px}',
-        'strong{font-weight:700}',
-        /* Oda blok başlıkları inline pt stillerini override et */
-        '#d3wrap [style*="font-size:10pt"]{font-size:13px !important}',
-        '#d3wrap [style*="font-size:9pt"]{font-size:12px !important}',
-        '#d3wrap [style*="font-size:11pt"]{font-size:14px !important}',
-        '#d3wrap [style*="font-size:12pt"]{font-size:16px !important}',
-        '#d3wrap [style*="font-size:13pt"]{font-size:17px !important}',
-        '#d3wrap [style*="font-size:9.5pt"]{font-size:13px !important}',
-        '#d3wrap [style*="padding:7pt"]{padding:9px !important}',
-        '#d3wrap [style*="padding:5pt"]{padding:7px !important}',
-        '#d3wrap [style*="padding:6pt"]{padding:8px !important}',
-        '#d3wrap [style*="margin-bottom:14pt"]{margin-bottom:16px !important}',
-        '#d3wrap [style*="margin-bottom:16pt"]{margin-bottom:18px !important}'
-      ].join('');
-
       var _w3 = window.open('', '_blank');
       if (!_w3) { alert('Pop-up engelleyiciyi kapatın.'); return; }
 
+      // Tam Görevlendirme ile aynı yaklaşım: window.print()
+      // @page margin:0 sadece kapak için, diğer sayfalar margin:12mm
+      var _printCSS = [
+        '@page { size: A4 portrait; margin: 12mm }',
+        '@page :first { margin: 0 }',  /* Kapak sayfası margin sıfır */
+        'body { margin: 0; padding: 0; background: #fff }',
+        '.no-print { display: none !important }',
+        '.sayfa-kapak { page-break-after: always; break-after: page }',
+        '.sayfa { page-break-after: always; break-after: page }',
+        '.sayfa:last-child { page-break-after: auto; break-after: auto }'
+      ].join(' ');
+
+      var _screenCSS = [
+        'body { margin: 0; padding: 16px; background: #888 }',
+        '.sayfa-kapak { width: 210mm; height: 297mm; display: block; margin: 0 auto 16px }',
+        '.sayfa { width: 210mm; display: block; margin: 0 auto 16px; background: #fff; padding: 12mm 14mm }',
+        '#toolbar { position: sticky; top: 0; background: #1a1a1a; padding: 10px 16px; display: flex; align-items: center; gap: 10px; z-index: 9999; margin: -16px -16px 16px }'
+      ].join(' ');
+
       _w3.document.open();
       _w3.document.write('<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8">');
-      _w3.document.write('<title>Turne Dosyasi</title>');
-      _w3.document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"><\/script>');
-      _w3.document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"><\/script>');
-      _w3.document.write('<style>' + _css3 + '</style>');
-      _w3.document.write('</head><body>');
-      _w3.document.write('<div id="toolbar">');
+      _w3.document.write('<title>' + _dosyaAdi + '</title>');
+      _w3.document.write('<style>');
+      _w3.document.write(_screenCSS);
+      _w3.document.write('@media print {' + _printCSS + '}');
+      _w3.document.write('</style></head><body>');
+      _w3.document.write('<div id="toolbar" class="no-print">');
       _w3.document.write('<span style="color:#e8c84a;font-weight:900;font-size:14px;font-family:sans-serif">&#128193; Turne Dosyas&#305;</span>');
       _w3.document.write('<span style="color:#aaa;font-size:11px;font-family:sans-serif">Afi&#351; URL:</span>');
       _w3.document.write('<input id="afis3" type="url" value="' + _afisVal + '" placeholder="https://..." style="flex:1;max-width:380px;padding:6px 10px;border:1px solid #444;border-radius:5px;background:#2a2a2a;color:#fff;font-size:12px;font-family:sans-serif">');
       _w3.document.write('<button id="afisbtn3" style="padding:6px 14px;background:#7c3aed;color:#fff;border:none;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer;font-family:sans-serif">Uygula</button>');
-      _w3.document.write('<button id="pdfbtn3" style="padding:6px 18px;background:#15803d;color:#fff;border:none;border-radius:5px;font-size:13px;font-weight:700;cursor:pointer;font-family:sans-serif">&#11015; PDF &#304;ndir</button>');
+      _w3.document.write('<button id="printbtn3" style="padding:6px 18px;background:#6b1b1b;color:#fff;border:none;border-radius:5px;font-size:13px;font-weight:700;cursor:pointer;font-family:sans-serif">&#128424; PDF &#304;ndir</button>');
       _w3.document.write('</div>');
       _w3.document.write('<div id="d3wrap"></div>');
       _w3.document.write('</body></html>');
@@ -14393,11 +14364,9 @@ function gorevlendirmePdf(rowIdx, mod) {
 
       setTimeout(function() {
         try {
-          // İçeriği DOM ile yerleştir
           var wrap = _w3.document.getElementById('d3wrap');
           if (wrap) wrap.innerHTML = _html2;
 
-          // Afis butonu
           var afisBtn = _w3.document.getElementById('afisbtn3');
           if (afisBtn) afisBtn.addEventListener('click', function() {
             var url = _w3.document.getElementById('afis3').value.trim();
@@ -14414,46 +14383,12 @@ function gorevlendirmePdf(rowIdx, mod) {
             });
           });
 
-          // PDF indir — her sayfa tam 794x1123px olarak yakalanır
-          var pdfBtn = _w3.document.getElementById('pdfbtn3');
-          if (pdfBtn) pdfBtn.addEventListener('click', async function() {
-            var btn = this;
-            btn.textContent = 'Hazirlaniyor...';
-            btn.disabled = true;
-            var toolbar = _w3.document.getElementById('toolbar');
-            toolbar.style.display = 'none';
-            try {
-              var sayfalar = _w3.document.querySelectorAll('.sayfa-kapak, .sayfa');
-              var jsPDF = _w3.jspdf ? _w3.jspdf.jsPDF : window.jspdf.jsPDF;
-              // PDF boyutu A4 px: 794x1123
-              var pdf = new jsPDF({ orientation: 'portrait', unit: 'px', format: [794, 1123] });
-              for (var i = 0; i < sayfalar.length; i++) {
-                var el = sayfalar[i];
-                // Her eleman tam 794x1123 — sabit boyut
-                var canvas = await _w3.html2canvas(el, {
-                  scale: 2,
-                  useCORS: true,
-                  allowTaint: true,
-                  backgroundColor: '#ffffff',
-                  width: 794,
-                  height: 1123,
-                  windowWidth: 826  /* 794 + 2*16px padding */
-                });
-                var imgData = canvas.toDataURL('image/jpeg', 0.92);
-                if (i > 0) pdf.addPage([794, 1123], 'portrait');
-                pdf.addImage(imgData, 'JPEG', 0, 0, 794, 1123);
-              }
-              pdf.save(_dosyaAdi + '.pdf');
-            } catch(e) {
-              alert('PDF olusturulamadi: ' + e.message);
-              console.error(e);
-            }
-            toolbar.style.display = '';
-            btn.textContent = 'PDF Indir';
-            btn.disabled = false;
+          var printBtn = _w3.document.getElementById('printbtn3');
+          if (printBtn) printBtn.addEventListener('click', function() {
+            _w3.print();
           });
         } catch(e) { console.error('Init error:', e); }
-      }, 600);
+      }, 400);
     }
     // Direkt URL kullan - fetch yok (CORS sorunu)
     _acDosya(_afisUrl3 || '');
