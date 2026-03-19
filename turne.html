@@ -14345,16 +14345,19 @@ function gorevlendirmePdf(rowIdx, mod) {
         + '<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"><\/script>'
         + '<style>'
         + '*{box-sizing:border-box;margin:0;padding:0}'
+        + 'html,body{overflow-x:hidden;max-width:100vw}'
         + 'body{background:#444;font-family:Arial,sans-serif;padding:0}'
-        // Araç çubuğu
         + '#toolbar{position:sticky;top:0;z-index:999;background:#1a1a1a;padding:10px 16px;'
         +   'display:flex;align-items:center;gap:8px;flex-wrap:wrap}'
-        // Her sayfa tam A4 genişliğinde, scroll eder
+        + '#d3wrap{padding-bottom:32px;overflow-x:hidden}'
         + '.sayfa-kapak{width:'+A4W+'px;min-height:'+A4H+'px;display:block;margin:16px auto;'
-        +   'overflow:hidden;position:relative;background:#1a0505}'
+        +   'overflow:hidden;position:relative;background:#1a0505;transform-origin:top center}'
         + '.sayfa-icerik{width:'+A4W+'px;display:block;margin:0 auto;background:#fff;'
-        +   'padding:56px 60px;box-sizing:border-box;border-bottom:2px dashed #999}'
-        + '#d3wrap{padding-bottom:32px}'
+        +   'padding:56px 60px;box-sizing:border-box;border-bottom:2px dashed #999;transform-origin:top center}'
+        + '@media(max-width:830px){'
+        +   'html,body,#d3wrap{overflow-x:hidden}'
+        +   '.sayfa-kapak,.sayfa-icerik{transform:scale(var(--pg-scale,1));margin-left:var(--pg-ml,auto);}'
+        + '}'
         + '</style>'
         + '</head><body>'
         + '<div id="toolbar">'
@@ -14381,6 +14384,28 @@ function gorevlendirmePdf(rowIdx, mod) {
           var wrap = _w3.document.getElementById('d3wrap');
           if (wrap) wrap.innerHTML = _html2;
 
+          // ── MOBİL SCALE: 794px'den küçük ekranlarda sayfaları küçült ──
+          function applyMobileScale() {
+            var vw = _w3.innerWidth || _w3.document.documentElement.clientWidth;
+            if (vw < 794) {
+              var scale = vw / 794;
+              var ml = 0;
+              var sayfalar = _w3.document.querySelectorAll('.sayfa-kapak,.sayfa-icerik');
+              sayfalar.forEach(function(el) {
+                el.style.transform = 'scale(' + scale + ')';
+                el.style.transformOrigin = 'top left';
+                el.style.marginLeft = '0';
+                el.style.marginRight = '0';
+                // Ölçeklenince element gerçek boyutunu korur, negatif margin ile boşluk kapatılır
+                var scaledH = el.offsetHeight * scale;
+                el.style.marginBottom = (scaledH - el.offsetHeight) + 'px';
+              });
+              _w3.document.body.style.overflowX = 'hidden';
+            }
+          }
+          setTimeout(applyMobileScale, 50);
+          _w3.addEventListener('resize', applyMobileScale);
+
           // Afiş Uygula
           var afisBtn = _w3.document.getElementById('afisbtn3');
           if (afisBtn) afisBtn.addEventListener('click', function() {
@@ -14394,7 +14419,7 @@ function gorevlendirmePdf(rowIdx, mod) {
               bgDiv.style.backgroundPosition = 'center top';
               bgDiv.style.backgroundRepeat = 'no-repeat';
               bgDiv.style.backgroundColor = '#1a0505';
-              if (karatmaDiv) karatmaDiv.style.background = 'rgba(0,0,0,0.55)';
+              if (karatmaDiv) karatmaDiv.style.background = 'rgba(0,0,0,0.38)';
             } else {
               bgDiv.style.backgroundImage = 'none';
               bgDiv.style.background = 'linear-gradient(160deg,#3d0a0a 0%,#6b1b1b 35%,#8b2a1a 60%,#2a0505 100%)';
@@ -16935,20 +16960,16 @@ function _pdfTurneDosyasiIcerik(t) {
   if(_kf||_aracTurKapak){
     _nakKapak+='<div style="margin-bottom:6pt;line-height:1.35">'
       +(_aracTurKapak?'<div style="color:rgba(255,255,255,.5);font-size:8pt;margin-bottom:1pt">'+_aracTurKapak+'</div>':'')
-      +'<div style="display:flex;align-items:baseline;gap:6pt;flex-wrap:nowrap">'
-        +(_kf?'<strong style="color:#fff;font-size:10pt;white-space:nowrap">'+_kf+'</strong>':'')
-        +(_kt?'<span style="color:#e8c84a;font-weight:700;font-size:10pt;white-space:nowrap;flex-shrink:0">'+_kt+'</span>':'')
-      +'</div>'
+      +(_kf?'<strong style="color:#fff;font-size:10pt;display:block;word-break:break-word">'+_kf+'</strong>':'')
+      +(_kt?'<span style="color:#e8c84a;font-weight:700;font-size:10pt;display:block">'+_kt+'</span>':'')
       +'</div>';
   }
   if(_sehirFirmaKapak||_sehirTelKapak||t.sehirTel){
     var _sTel=_sehirTelKapak||t.sehirTel||'';
     _nakKapak+='<div style="margin-bottom:6pt;line-height:1.35">'
       +'<div style="color:rgba(255,255,255,.5);font-size:8pt;margin-bottom:1pt">\u015eehir \u0130\u00e7i Servis</div>'
-      +'<div style="display:flex;align-items:baseline;gap:6pt;flex-wrap:nowrap">'
-        +(_sehirFirmaKapak?'<strong style="color:#fff;font-size:10pt;white-space:nowrap">'+_sehirFirmaKapak+'</strong>':'')
-        +(_sTel?'<span style="color:#e8c84a;font-weight:700;font-size:10pt;white-space:nowrap;flex-shrink:0">'+_sTel+'</span>':'')
-      +'</div>'
+      +(_sehirFirmaKapak?'<strong style="color:#fff;font-size:10pt;display:block;word-break:break-word">'+_sehirFirmaKapak+'</strong>':'')
+      +(_sTel?'<span style="color:#e8c84a;font-weight:700;font-size:10pt;display:block">'+_sTel+'</span>':'')
       +'</div>';
   }
 
@@ -16963,7 +16984,7 @@ function _pdfTurneDosyasiIcerik(t) {
     // Arka plan div — id ile JS'den hedeflenebilir
     +'<div id="kapak-bg-div" class="afis-bg" style="position:absolute;inset:0;'+bgStyle+';-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important"></div>'
     // Karartma overlay — afiş varsa göster, id ile JS'den açılıp kapatılabilir
-    +'<div id="kapak-karatma-div" style="position:absolute;inset:0;background:rgba(0,0,0,'+(afisUrl?'0.55':'0')+');-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important"></div>'
+    +'<div id="kapak-karatma-div" style="position:absolute;inset:0;background:rgba(0,0,0,'+(afisUrl?'0.38':'0')+');-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important"></div>'
     // Alt kısım koyu degrade (metin okunabilirliği için — her zaman aktif)
     +'<div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.08) 0%,rgba(0,0,0,.15) 45%,rgba(0,0,0,.85) 100%);-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important"></div>'
     // İçerik katmanı
@@ -16996,10 +17017,8 @@ function _pdfTurneDosyasiIcerik(t) {
     +ttp.map(function(p){
       return '<div style="margin-bottom:6pt;line-height:1.35">'
         +'<div style="color:rgba(255,255,255,.5);font-size:8pt;margin-bottom:1pt">'+p.u+'</div>'
-        +'<div style="display:flex;align-items:baseline;gap:6pt;flex-wrap:nowrap">'
-          +'<strong style="color:#fff;font-size:10pt;white-space:nowrap">'+p.a+'</strong>'
-          +(p.tel?'<span style="color:#e8c84a;font-weight:700;font-size:10pt;white-space:nowrap;flex-shrink:0">'+p.tel+'</span>':'')
-        +'</div>'
+        +'<strong style="color:#fff;font-size:10pt;display:block;word-break:break-word">'+p.a+'</strong>'
+        +(p.tel?'<span style="color:#e8c84a;font-weight:700;font-size:10pt;display:block">'+p.tel+'</span>':'')
         +'</div>';
     }).join('')
     +'</div>'
@@ -17011,10 +17030,8 @@ function _pdfTurneDosyasiIcerik(t) {
         +bolge.map(function(d){
           return '<div style="margin-bottom:6pt;line-height:1.35">'
             +'<div style="color:rgba(255,255,255,.5);font-size:8pt;margin-bottom:1pt">'+_temizleIlPdf(d.il||'')+'</div>'
-            +'<div style="display:flex;align-items:baseline;gap:6pt;flex-wrap:nowrap">'
-              +'<strong style="color:#fff;font-size:10pt;white-space:nowrap">'+(d.ilgiliKisi||'')+'</strong>'
-              +(d.ilgiliTel?'<span style="color:#e8c84a;font-weight:700;font-size:10pt;white-space:nowrap;flex-shrink:0">'+d.ilgiliTel+'</span>':'')
-            +'</div>'
+            +'<strong style="color:#fff;font-size:10pt;display:block;word-break:break-word">'+(d.ilgiliKisi||'')+'</strong>'
+            +(d.ilgiliTel?'<span style="color:#e8c84a;font-weight:700;font-size:10pt;display:block">'+d.ilgiliTel+'</span>':'')
             +'</div>';
         }).join('')
         +'</div>'
