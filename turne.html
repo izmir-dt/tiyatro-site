@@ -16944,102 +16944,62 @@ function _pdfTurneDosyasiIcerik(t) {
   var bolge=((t.duraklar&&t.duraklar.length)?t.duraklar:[]).filter(function(d){return d.ilgiliKisi&&d.ilgiliKisi.trim();});
 
   // Nakliye kapak verisi
-  // notlar JSON ise icindeki 'not' alanini al, degilse t.not'u kullan
+  // notlar JSON ise içindeki 'not' alanını al
   var _lojN='';
   try{
     var _notlarRaw=t.notlar||'';
-    if(_notlarRaw.startsWith('{')){
-      var _notlarObj=JSON.parse(_notlarRaw);
-      _lojN=_notlarObj.not||'';
-    } else {
-      _lojN=t.not||'';
-    }
-  }catch(e){ _lojN=t.not||''; }
+    if(_notlarRaw.startsWith('{')){var _nObj=JSON.parse(_notlarRaw);_lojN=_nObj.not||'';}
+    else{_lojN=t.not||'';}
+  }catch(e){_lojN=t.not||'';}
+
   var _nakKapak='';
-  console.log('[KAPAK DEBUG]', {
-    gidisUlasim: t.gidisUlasim,
-    gidisPlaka: t.gidisPlaka,
-    gidisSurucu: t.gidisSurucu,
-    aracTur: t.aracTur,
-    notlar: t.notlar,
-    not: t.not
-  });
   var _lojPKapak={}; try{if((t.notlar||'').startsWith('{'))_lojPKapak=JSON.parse(t.notlar);}catch(e){}
   var _aracTurKapak=_lojPKapak.aracTur||t.aracTur||'';
-  var _kf='',_kt='';
-  if(_lojN&&_lojN.length>2){
-    var _kl=_lojN.split('\n')[0];
-    // Bas emojisi/ikonu varsa kaldir (ilk kelime 2 harften kisaysa ve bosluk varsa)
-    _kl=_kl.replace(/^[\uD800-\uDFFF\u2600-\u27FF\u{1F000}-\u{1FFFF}]+\s*/u,'').trim();
-    var _kp=_kl.split(' \u00b7 ');_kf=_kp[0]||'';_kt=_kp[1]||'';
-  }
-  // Otobüs/araç bilgileri: önce gidisPlaka/gidisSurucu alanlarından, yoksa notlardan parse edilenden
-  var _gidisPlaka=t.gidisPlaka||'';
-  var _gidisSurucu=t.gidisSurucu||'';
-  var _gidisUlasimTur=t.gidisUlasim||'';
-  // ── TÜM ULAŞIM BİLGİLERİ (uçak hariç) ──
-  // Yardımcı: nakiye satırı HTML üret
-  function _nakSatir(label, firma, tel){
-    if(!firma&&!label) return '';
-    return '<div style="margin-bottom:6pt;line-height:1.35">'
-      +(label?'<div style="color:rgba(255,255,255,.5);font-size:8pt;margin-bottom:1pt">'+label+'</div>':'')
-      +(firma?'<strong style="color:#fff;font-size:10pt;display:block;word-break:break-word">'+firma+'</strong>':'')
-      +(tel?'<span style="color:#e8c84a;font-weight:700;font-size:10pt;display:block">'+tel+'</span>':'')
-      +'</div>';
-  }
+  var _sehirFirmaKapak=t.sehirAracDetay||'';
+  var _sehirTelKapak=t.sehirTel||'';
 
-  // 1. notlar.not alanından (🚌/🚛 format) — kamyon/ana taşıt
-  var _notSatirlar=(_lojN||'').split('\n').filter(function(l){return l.trim().length>2;});
-  var _notFirmalar=[];
-  _notSatirlar.forEach(function(satir){
+  // _lojN'deki her satırı ayrı nakliye firması olarak işle
+  var _nakFirmalar=[];
+  (_lojN||'').split('\n').forEach(function(satir){
     var s=satir.replace(/^[\uD800-\uDFFF\u2600-\u27FF\u{1F000}-\u{1FFFF}]+\s*/u,'').trim();
+    if(!s)return;
     var p=s.split(' \u00b7 ');
-    var f=(p[0]||'').trim(), t2=(p[1]||'').trim();
-    if(f) _notFirmalar.push({firma:f,tel:t2});
+    if(p[0].trim())_nakFirmalar.push({firma:p[0].trim(),tel:(p[1]||'').trim()});
   });
 
-  // 2. gidisSurucu → |FIRMA:|TEL:
-  var _suruFirma2='',_suruTel2='';
-  if(_gidisSurucu){
-    var _mfx=_gidisSurucu.match(/\|FIRMA:([^|]*)/);
-    var _mtx=_gidisSurucu.match(/\|TEL:([^|]*)/);
-    if(_mfx)_suruFirma2=_mfx[1].trim();
-    if(_mtx)_suruTel2=_mtx[1].trim();
+  // gidisSurucu: 'kalkis|FIRMA:x|TEL:y'
+  var _suruFirma='',_suruTel='';
+  var _gs=t.gidisSurucu||'';
+  if(_gs){
+    var _mf=_gs.match(/\|FIRMA:([^|]*)/);var _mt=_gs.match(/\|TEL:([^|]*)/);
+    if(_mf)_suruFirma=_mf[1].trim();
+    if(_mt)_suruTel=_mt[1].trim();
   }
-
-  // 3. gidisPlaka → firma adı (telefonsuz)
+  // gidisPlaka: firma adı
   var _plakaFirma='';
-  if(_gidisPlaka){
-    try{ var _pj=JSON.parse(_gidisPlaka); _plakaFirma=(_pj[0]&&_pj[0].firma)||''; }
-    catch(e){ _plakaFirma=_gidisPlaka.trim(); }
-  }
+  if(t.gidisPlaka){try{var _pj=JSON.parse(t.gidisPlaka);_plakaFirma=(_pj[0]&&_pj[0].firma)||'';}catch(e){_plakaFirma=t.gidisPlaka.trim();}}
 
   // Ulaşım türü etiketi (uçak değilse)
-  var _ulasimLabel=_aracTurKapak||(_gidisUlasimTur&&!/u[\u00e7c]ak/i.test(_gidisUlasimTur)?_gidisUlasimTur:'');
+  var _ulasimLabel=_aracTurKapak||((t.gidisUlasim||'')&&!/u[\u00e7c]ak/i.test(t.gidisUlasim||'')?t.gidisUlasim:'');
 
-  // Tüm firma listesi — tekrar olmayanları ekle
-  var _tumFirmalar=[];
-  _notFirmalar.forEach(function(x){ _tumFirmalar.push(x); });
+  // Tüm firmaları topla — tekrar olmayanları ekle
+  if(_suruFirma&&!_nakFirmalar.some(function(x){return x.firma===_suruFirma;}))
+    _nakFirmalar.push({firma:_suruFirma,tel:_suruTel});
+  if(_plakaFirma&&!_nakFirmalar.some(function(x){return x.firma===_plakaFirma;}))
+    _nakFirmalar.push({firma:_plakaFirma,tel:''});
 
-  // gidisSurucu'dan gelen nota zaten eklenmediyse ekle
-  if(_suruFirma2 && !_tumFirmalar.some(function(x){return x.firma===_suruFirma2;})){
-    _tumFirmalar.push({firma:_suruFirma2,tel:_suruTel2});
-  }
-  // gidisPlaka'dan gelen nota/surucu'ya eklenmedi ise ekle
-  if(_plakaFirma && !_tumFirmalar.some(function(x){return x.firma===_plakaFirma;})){
-    _tumFirmalar.push({firma:_plakaFirma,tel:''});
-  }
-
-  // HTML üret — ilk firmaya label ekle
-  _tumFirmalar.forEach(function(x,xi){
-    _nakKapak+=_nakSatir(xi===0?_ulasimLabel:'',x.firma,x.tel);
+  // HTML üret
+  _nakFirmalar.forEach(function(x,xi){
+    _nakKapak+='<div style="margin-bottom:6pt;line-height:1.35">'
+      +(xi===0&&_ulasimLabel?'<div style="color:rgba(255,255,255,.5);font-size:8pt;margin-bottom:1pt">'+_ulasimLabel+'</div>':'')
+      +'<strong style="color:#fff;font-size:10pt;display:block;word-break:break-word">'+x.firma+'</strong>'
+      +(x.tel?'<span style="color:#e8c84a;font-weight:700;font-size:10pt;display:block">'+x.tel+'</span>':'')
+      +'</div>';
   });
 
   // Şehir içi servis
-  var _sehirFirmaKapak=t.sehirAracDetay||'';
-  var _sehirTelKapak=t.sehirTel||'';
-  if(_sehirFirmaKapak||_sehirTelKapak){
-    var _sTel=_sehirTelKapak||'';
+  if(_sehirFirmaKapak||_sehirTelKapak||t.sehirTel){
+    var _sTel=_sehirTelKapak||t.sehirTel||'';
     _nakKapak+='<div style="margin-bottom:6pt;line-height:1.35">'
       +'<div style="color:rgba(255,255,255,.5);font-size:8pt;margin-bottom:1pt">\u015eehir \u0130\u00e7i Servis</div>'
       +(_sehirFirmaKapak?'<strong style="color:#fff;font-size:10pt;display:block;word-break:break-word">'+_sehirFirmaKapak+'</strong>':'')
@@ -17198,8 +17158,8 @@ function _pdfTurneDosyasiIcerik(t) {
       +'<td style="width:4pt;padding:0;background:'+bc+';border:none"></td>'
       +'<td style="padding:5pt 8pt;border:1pt solid #e5ddd5;border-left:none;white-space:nowrap;font-size:10pt;font-weight:700;width:100pt">'+tarihGoster+'</td>'
       +'<td style="padding:5pt 8pt;border:1pt solid #e5ddd5;font-size:10.5pt;font-weight:700"><span style="white-space:nowrap">'+sehirH+'</span>'+sahneH+'</td>'
-      +'<td style="padding:5pt 8pt;border:1pt solid #e5ddd5;font-size:10.5pt;font-weight:700;color:'+bc+';word-wrap:break-word;overflow-wrap:break-word;max-width:180pt">'+progH+'</td>'
-      +'<td style="padding:5pt 8pt;border:1pt solid #e5ddd5;text-align:center;white-space:nowrap;width:55pt;min-width:55pt">'+saatH+'</td>'
+      +'<td style="padding:5pt 8pt;border:1pt solid #e5ddd5;font-size:10.5pt;font-weight:700;color:'+bc+';white-space:nowrap;width:185pt">'+progH+'</td>'
+      +'<td style="padding:5pt 8pt;border:1pt solid #e5ddd5;text-align:center;white-space:nowrap;width:50pt">'+saatH+'</td>'
       +'</tr>';
     // Program adı
     var progH=(s.program||'')+(s.oyun&&s.program==='Oyun'?' \u2013 <strong style="color:#111">'+s.oyun+'</strong>':'');
@@ -17227,8 +17187,8 @@ function _pdfTurneDosyasiIcerik(t) {
         +'<th style="width:4pt;padding:0;background:#6b1b1b;border:none"></th>'
         +'<th style="white-space:nowrap;width:100pt">Tarih</th>'
         +'<th>&#350;ehir / Sahne</th>'
-        +'<th>Program</th>'
-        +'<th style="text-align:center;width:55pt;min-width:55pt">Saat</th>'
+        +'<th style="width:200pt">Program</th>'
+        +'<th style="text-align:center;width:55pt">Saat</th>'
         +'</tr></thead><tbody>'+progRows+'</tbody></table>'
       :'<p style="color:#999;font-style:italic;margin-top:10pt">Program girilmemi\u015ftir.</p>'
     )
