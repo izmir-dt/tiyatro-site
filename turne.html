@@ -14370,6 +14370,8 @@ function gorevlendirmePdf(rowIdx, mod) {
         +   'border-radius:5px;font-size:11px;font-weight:700;cursor:pointer">Uygula</button>'
         + '<button id="pdfBtn" style="padding:5px 16px;background:#6b1b1b;color:#fff;border:none;'
         +   'border-radius:5px;font-size:11px;font-weight:700;cursor:pointer">📥 PDF İndir</button>'
+        + '<button id="mobilPdfBtn" style="padding:5px 16px;background:#0369a1;color:#fff;border:none;'
+        +   'border-radius:5px;font-size:11px;font-weight:700;cursor:pointer">📱 Mobil PDF</button>'
         + '<span id="durum" style="color:#aaa;font-size:11px;min-width:120px"></span>'
         + '</div>'
         + '<div id="d3wrap"></div>'
@@ -14551,6 +14553,116 @@ function gorevlendirmePdf(rowIdx, mod) {
                 setTimeout(function(){ durum.textContent = ''; }, 3000);
               });
             });
+          });
+
+          // ── MOBİL PDF BUTONU ──────────────────────────────────
+          var mobilPdfBtn = _w3.document.getElementById('mobilPdfBtn');
+          if (mobilPdfBtn) mobilPdfBtn.addEventListener('click', function() {
+            var durum = _w3.document.getElementById('durum');
+            var h2c = _w3.html2canvas;
+            var jspdf = _w3.jspdf || (_w3.window && _w3.window.jspdf);
+            if (!h2c || !jspdf) {
+              durum.textContent = '⚠ Kütüphane yükleniyor...';
+              setTimeout(function(){ _w3.document.getElementById('mobilPdfBtn').click(); }, 1000);
+              return;
+            }
+
+            mobilPdfBtn.disabled = true;
+            durum.textContent = 'Mobil PDF hazırlanıyor...';
+
+            // Mobil için sayfa genişliğini 480px'e daralt — tablo otomatik sığar
+            var MOBIL_W = 480;
+            var icerikEls = Array.from(_w3.document.querySelectorAll('.sayfa-icerik'));
+            icerikEls.forEach(function(el) {
+              el.style.width = MOBIL_W + 'px';
+              el.style.fontSize = '11pt';
+              el.style.lineHeight = '1.5';
+              el.style.padding = '20px 16px';
+              el.style.boxSizing = 'border-box';
+            });
+            _w3.document.querySelectorAll('.sayfa-icerik td, .sayfa-icerik th').forEach(function(el) {
+              el.style.padding = '4pt 6pt';
+              el.style.fontSize = '10pt';
+              el.style.whiteSpace = 'normal';
+              el.style.width = 'auto';
+              el.style.minWidth = '';
+              el.style.maxWidth = '';
+            });
+            _w3.document.querySelectorAll('.sayfa-icerik table').forEach(function(tbl) {
+              tbl.style.tableLayout = 'auto';
+              tbl.style.width = '100%';
+              tbl.style.fontSize = '10pt';
+            });
+            // Saat strong font
+            _w3.document.querySelectorAll('.sayfa-icerik td strong').forEach(function(el) {
+              el.style.fontSize = '12pt';
+              el.style.whiteSpace = 'nowrap';
+            });
+
+            // Mobil PDF: genişlik = 480px, mm oranı ile
+            var pdf2 = new jspdf.jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+            var A4mm_W2 = 210, A4mm_H2 = 297;
+            var SCALE2 = 2;
+            var icerikW2 = MOBIL_W;
+
+            var kapakEl2 = _w3.document.querySelector('.sayfa-kapak');
+            if (kapakEl2) {
+              // Kapağı da 480px genişliğe daralt
+              kapakEl2.style.width = MOBIL_W + 'px';
+              kapakEl2.style.minHeight = Math.round(MOBIL_W * 1.414) + 'px'; // A4 oranı
+              // Kapak font boyutlarını küçült
+              kapakEl2.querySelectorAll('[style*="font-size"]').forEach(function(el) {
+                var fs = parseFloat(el.style.fontSize);
+                if (fs > 20) el.style.fontSize = Math.round(fs * 0.6) + 'pt';
+                else if (fs > 10) el.style.fontSize = Math.round(fs * 0.75) + 'pt';
+              });
+              var kapakH = kapakEl2.scrollHeight;
+              var kapakH_mm = (kapakH / MOBIL_W) * A4mm_W2;
+              h2c(kapakEl2, {
+                scale: SCALE2, useCORS: true, allowTaint: true,
+                backgroundColor: '#1a0505', width: MOBIL_W, height: kapakH, logging: false
+              }).then(function(canvas) {
+                  pdf2.addPage([A4mm_W2, kapakH_mm], 'p');
+                  pdf2.addImage(canvas.toDataURL('image/jpeg', 0.93), 'JPEG', 0, 0, A4mm_W2, kapakH_mm);
+                  // Kapağı geri al
+                  kapakEl2.style.width = '';
+                  kapakEl2.style.minHeight = '';
+                  renderMobilIcerik(0);
+                }).catch(function(){
+                  kapakEl2.style.width = '';
+                  kapakEl2.style.minHeight = '';
+                  renderMobilIcerik(0);
+                });
+            } else {
+              renderMobilIcerik(0);
+            }
+
+            function renderMobilIcerik(idx) {
+              if (idx >= icerikEls.length) {
+                durum.textContent = '⬇ İndiriliyor...';
+                pdf2.save(_dosyaAdi + '_mobil.pdf');
+                mobilPdfBtn.disabled = false;
+                // Fontları geri al
+                icerikEls.forEach(function(el){ el.style.width=''; el.style.fontSize=''; el.style.lineHeight=''; el.style.padding=''; el.style.boxSizing=''; });
+                _w3.document.querySelectorAll('.sayfa-icerik td,.sayfa-icerik th').forEach(function(el){ el.style.padding=''; el.style.fontSize=''; el.style.whiteSpace=''; el.style.width=''; });
+                _w3.document.querySelectorAll('.sayfa-icerik table').forEach(function(tbl){ tbl.style.tableLayout=''; tbl.style.fontSize=''; });
+                _w3.document.querySelectorAll('.sayfa-icerik td strong').forEach(function(el){ el.style.fontSize=''; el.style.whiteSpace=''; });
+                setTimeout(function(){ durum.textContent = ''; }, 3000);
+                return;
+              }
+              var el = icerikEls[idx];
+              durum.textContent = 'Sayfa ' + (idx+2) + '/' + (icerikEls.length+1) + '...';
+              h2c(el, {
+                scale: SCALE2, useCORS: true, allowTaint: true,
+                backgroundColor: '#ffffff', width: icerikW2, height: el.scrollHeight, logging: false
+              }).then(function(canvas) {
+                // İçeriğin tam yüksekliğini mm'e çevir — boşluk yok
+                var elH_mm = (el.scrollHeight / icerikW2) * A4mm_W2;
+                pdf2.addPage([A4mm_W2, elH_mm], 'p');
+                pdf2.addImage(canvas.toDataURL('image/jpeg', 0.93), 'JPEG', 0, 0, A4mm_W2, elH_mm);
+                setTimeout(function(){ renderMobilIcerik(idx+1); }, 30);
+              }).catch(function(){ setTimeout(function(){ renderMobilIcerik(idx+1); }, 30); });
+            }
           });
 
         } catch(e) { console.error(e); }
