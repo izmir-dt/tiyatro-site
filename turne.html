@@ -16944,8 +16944,17 @@ function _pdfTurneDosyasiIcerik(t) {
   var bolge=((t.duraklar&&t.duraklar.length)?t.duraklar:[]).filter(function(d){return d.ilgiliKisi&&d.ilgiliKisi.trim();});
 
   // Nakliye kapak verisi
-  var _lojN=t.not||t.notlar||'';
-  try{if(_lojN.startsWith('{'))_lojN=JSON.parse(_lojN).not||'';}catch(e){_lojN='';}
+  // notlar JSON ise icindeki 'not' alanini al, degilse t.not'u kullan
+  var _lojN='';
+  try{
+    var _notlarRaw=t.notlar||'';
+    if(_notlarRaw.startsWith('{')){
+      var _notlarObj=JSON.parse(_notlarRaw);
+      _lojN=_notlarObj.not||'';
+    } else {
+      _lojN=t.not||'';
+    }
+  }catch(e){ _lojN=t.not||''; }
   var _nakKapak='';
   console.log('[KAPAK DEBUG]', {
     gidisUlasim: t.gidisUlasim,
@@ -16962,21 +16971,21 @@ function _pdfTurneDosyasiIcerik(t) {
   var _kf='',_kt='';
   if(_lojN&&_lojN.length>2){
     var _kl=_lojN.split('\n')[0];
-    if(_kl.length>3)_kl=_kl.slice(3);
+    // Bas emojisi/ikonu varsa kaldir (ilk kelime 2 harften kisaysa ve bosluk varsa)
+    _kl=_kl.replace(/^[\uD800-\uDFFF\u2600-\u27FF\u{1F000}-\u{1FFFF}]+\s*/u,'').trim();
     var _kp=_kl.split(' \u00b7 ');_kf=_kp[0]||'';_kt=_kp[1]||'';
   }
   // Otobüs/araç bilgileri: önce gidisPlaka/gidisSurucu alanlarından, yoksa notlardan parse edilenden
   var _gidisPlaka=t.gidisPlaka||'';
   var _gidisSurucu=t.gidisSurucu||'';
   var _gidisUlasimTur=t.gidisUlasim||'';
-  // Nakliye firma/tel: gidisSurucu -> |FIRMA:x|TEL:y, gidisPlaka -> firma adi
-  // gidisPlaka: firma adi (telefonsuz) - _araclarToLegacy'den
+  // gidisPlaka: karaAraclar'dan gelen firma adi
   var _plakaFirma='';
   if(_gidisPlaka){
     try{ var _pj=JSON.parse(_gidisPlaka); _plakaFirma=(_pj[0]&&_pj[0].firma)||''; }
     catch(e){ _plakaFirma=_gidisPlaka.trim(); }
   }
-  // gidisSurucu: 'kalkis|FIRMA:x|TEL:y' - firma ve tel ayri cek
+  // gidisSurucu: 'kalkis|FIRMA:x|TEL:y'
   var _suruFirma2='',_suruTel2='';
   if(_gidisSurucu){
     var _mfx=_gidisSurucu.match(/\|FIRMA:([^|]*)/);
@@ -16984,16 +16993,27 @@ function _pdfTurneDosyasiIcerik(t) {
     if(_mfx)_suruFirma2=_mfx[1].trim();
     if(_mtx)_suruTel2=_mtx[1].trim();
   }
-  // Tel yoksa gidisPlaka'yi gidisSurucu |TEL: ile birlestirebiliriz
-  // Oncelik: notlardan kf/kt > surucu firma/tel > plaka firma > ulasim tur
-  var _anaFirma=_kf||_suruFirma2||_plakaFirma||'';
-  var _anaTel=_kt||_suruTel2||'';
-    var _anaLabel=_aracTurKapak||(_gidisUlasimTur&&!/u[\u00e7c]ak/i.test(_gidisUlasimTur)?_gidisUlasimTur:'');
-  if(_anaFirma||_anaLabel){
+  // notlardan gelen (_kf/_kt) ayri satir, gidisSurucu da ayri satir
+  var _anaLabel=_aracTurKapak||(_gidisUlasimTur&&!/u[\u00e7c]ak/i.test(_gidisUlasimTur)?_gidisUlasimTur:'');
+  // 1. Notlardan gelen ana tasit (ornek: BARIS UYANIK NAKLIYE)
+  if(_kf){
     _nakKapak+='<div style="margin-bottom:6pt;line-height:1.35">'
       +(_anaLabel?'<div style="color:rgba(255,255,255,.5);font-size:8pt;margin-bottom:1pt">'+_anaLabel+'</div>':'')
-      +(_anaFirma?'<strong style="color:#fff;font-size:10pt;display:block;word-break:break-word">'+_anaFirma+'</strong>':'')
-      +(_anaTel?'<span style="color:#e8c84a;font-weight:700;font-size:10pt;display:block">'+_anaTel+'</span>':'')
+      +'<strong style="color:#fff;font-size:10pt;display:block;word-break:break-word">'+_kf+'</strong>'
+      +(_kt?'<span style="color:#e8c84a;font-weight:700;font-size:10pt;display:block">'+_kt+'</span>':'')
+      +'</div>';
+  }
+  // 2. Ulaşım formundan gelen tasit (ornek: ULUSOY CSK)
+  if(_suruFirma2&&_suruFirma2!==_kf){
+    _nakKapak+='<div style="margin-bottom:6pt;line-height:1.35">'
+      +(!_kf&&_anaLabel?'<div style="color:rgba(255,255,255,.5);font-size:8pt;margin-bottom:1pt">'+_anaLabel+'</div>':'')
+      +'<strong style="color:#fff;font-size:10pt;display:block;word-break:break-word">'+_suruFirma2+'</strong>'
+      +(_suruTel2?'<span style="color:#e8c84a;font-weight:700;font-size:10pt;display:block">'+_suruTel2+'</span>':'')
+      +'</div>';
+  } else if(!_kf&&_plakaFirma&&_plakaFirma!==_suruFirma2){
+    _nakKapak+='<div style="margin-bottom:6pt;line-height:1.35">'
+      +(_anaLabel?'<div style="color:rgba(255,255,255,.5);font-size:8pt;margin-bottom:1pt">'+_anaLabel+'</div>':'')
+      +'<strong style="color:#fff;font-size:10pt;display:block;word-break:break-word">'+_plakaFirma+'</strong>'
       +'</div>';
   }
   if(_sehirFirmaKapak||_sehirTelKapak||t.sehirTel){
