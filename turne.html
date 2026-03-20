@@ -14646,7 +14646,6 @@ function gorevlendirmePdf(rowIdx, mod) {
                 durum.textContent = '⬇ İndiriliyor...';
                 pdf2.save(_dosyaAdi + '_mobil.pdf');
                 mobilPdfBtn.disabled = false;
-                // Fontları geri al
                 icerikEls.forEach(function(el){ el.style.width=''; el.style.fontSize=''; el.style.lineHeight=''; el.style.padding=''; el.style.boxSizing=''; });
                 _w3.document.querySelectorAll('.sayfa-icerik td,.sayfa-icerik th').forEach(function(el){ el.style.padding=''; el.style.fontSize=''; el.style.whiteSpace=''; el.style.width=''; });
                 _w3.document.querySelectorAll('.sayfa-icerik table').forEach(function(tbl){ tbl.style.tableLayout=''; tbl.style.fontSize=''; });
@@ -14656,16 +14655,48 @@ function gorevlendirmePdf(rowIdx, mod) {
               }
               var el = icerikEls[idx];
               durum.textContent = 'Sayfa ' + (idx+2) + '/' + (icerikEls.length+1) + '...';
+
+              // Elementi 480px off-screen wrapper'a taşı — parent 794px etkisini keser
+              var origParent = el.parentNode;
+              var origNext = el.nextSibling;
+              var origPadding = el.style.padding;
+              var origWidth = el.style.width;
+              var box = _w3.document.createElement('div');
+              box.style.cssText = 'position:fixed;left:-9999px;top:0;width:'+icerikW2+'px;max-width:'+icerikW2+'px;overflow:hidden;background:#fff';
+              el.style.setProperty('width', icerikW2+'px', 'important');
+              el.style.setProperty('max-width', icerikW2+'px', 'important');
+              el.style.setProperty('padding', '20px 16px', 'important');
+              el.style.setProperty('box-sizing', 'border-box', 'important');
+              box.appendChild(el);
+              _w3.document.body.appendChild(box);
+              void el.offsetWidth;
+
+              var elH = el.scrollHeight;
               h2c(el, {
                 scale: SCALE2, useCORS: true, allowTaint: true,
-                backgroundColor: '#ffffff', width: icerikW2, height: el.scrollHeight, logging: false
+                backgroundColor: '#ffffff', width: icerikW2, height: elH, logging: false
               }).then(function(canvas) {
-                // İçeriğin tam yüksekliğini mm'e çevir — boşluk yok
-                var elH_mm = (el.scrollHeight / icerikW2) * A4mm_W2;
+                if (origNext) origParent.insertBefore(el, origNext);
+                else origParent.appendChild(el);
+                el.style.removeProperty('width');
+                el.style.removeProperty('max-width');
+                el.style.removeProperty('padding');
+                el.style.removeProperty('box-sizing');
+                _w3.document.body.removeChild(box);
+                var elH_mm = (elH / icerikW2) * A4mm_W2;
                 pdf2.addPage([A4mm_W2, elH_mm], 'p');
                 pdf2.addImage(canvas.toDataURL('image/jpeg', 0.93), 'JPEG', 0, 0, A4mm_W2, elH_mm);
                 setTimeout(function(){ renderMobilIcerik(idx+1); }, 30);
-              }).catch(function(){ setTimeout(function(){ renderMobilIcerik(idx+1); }, 30); });
+              }).catch(function(){
+                if (origNext) origParent.insertBefore(el, origNext);
+                else origParent.appendChild(el);
+                el.style.removeProperty('width');
+                el.style.removeProperty('max-width');
+                el.style.removeProperty('padding');
+                el.style.removeProperty('box-sizing');
+                try { _w3.document.body.removeChild(box); } catch(e){}
+                setTimeout(function(){ renderMobilIcerik(idx+1); }, 30);
+              });
             }
           });
 
@@ -17350,12 +17381,21 @@ function _pdfTurneDosyasiIcerik(t) {
       var gf='',gt='';
       var gr=t.gidisSurucu||''; var gmf=gr.match(/\|FIRMA:([^|]*)/); var gmt=gr.match(/\|TEL:([^|]*)/);
       if(gmf)gf=gmf[1]; if(gmt)gt=gmt[1];
-      ucusGidisRows.push('<tr style="background:#f0f7ff">'
-        +'<td style="font-weight:700;white-space:nowrap;padding:4pt 7pt;font-size:10pt">'+_fk(t.baslangicTarih||t.tarih)+'</td>'
-        +'<td style="font-weight:700;padding:4pt 7pt;font-size:10pt;white-space:nowrap">\u0130zmir \u2192 '+ilStr+'</td>'
-        +'<td style="font-size:12pt;font-weight:900;text-align:center;color:#1a1a2e;white-space:nowrap;padding:4pt 7pt">'+(t.gidisSaat||'\u2014')+'</td>'
-        +'<td style="color:#1d4ed8;font-weight:700;padding:4pt 7pt;font-size:10pt;white-space:nowrap">'+_sadeceFirma(t.gidisUlasim,t.gidisUcusNo||gf)+'</td>'
-        +'</tr>');
+      var df2=''; var dr2=t.donusSurucu||''; var dmf2=dr2.match(/\|FIRMA:([^|]*)/); if(dmf2)df2=dmf2[1];
+      ucusGidisRows.push(
+        '<tr style="background:#f0f7ff">'
+        +'<td style="font-weight:700;padding:4pt 7pt;font-size:10pt">'+_fk(t.baslangicTarih||t.tarih)+'</td>'
+        +'<td style="font-weight:700;padding:4pt 7pt;font-size:10pt">\u0130zmir \u2192 '+ilStr+'</td>'
+        +'<td style="font-size:12pt;font-weight:900;text-align:center;color:#1a1a2e;padding:4pt 7pt">'+(t.gidisSaat||'\u2014')+'</td>'
+        +'<td style="color:#1d4ed8;font-weight:700;padding:4pt 7pt;font-size:10pt">'+_sadeceFirma(t.gidisUlasim,t.gidisUcusNo||gf)+'</td>'
+        +'</tr>'
+        +'<tr style="background:#fdf4ff">'
+        +'<td style="font-weight:700;padding:4pt 7pt;font-size:10pt">'+_fk(t.bitisTarih||t.tarih)+'</td>'
+        +'<td style="font-weight:700;padding:4pt 7pt;font-size:10pt">'+ilStr+' \u2192 \u0130zmir</td>'
+        +'<td style="font-size:12pt;font-weight:900;text-align:center;color:#1a1a2e;padding:4pt 7pt">'+(t.donusSaat||'\u2014')+'</td>'
+        +'<td style="color:#1d4ed8;font-weight:700;padding:4pt 7pt;font-size:10pt">'+_sadeceFirma(t.donusUlasim,t.donusUcusNo||df2)+'</td>'
+        +'</tr>'
+      );
     }
   }
   if(t.donusUlasim){
@@ -17375,15 +17415,7 @@ function _pdfTurneDosyasiIcerik(t) {
           +'</tr>');
       });
     } else {
-      var df='',dt='';
-      var dr=t.donusSurucu||''; var dmf=dr.match(/\|FIRMA:([^|]*)/); var dmt=dr.match(/\|TEL:([^|]*)/);
-      if(dmf)df=dmf[1]; if(dmt)dt=dmt[1];
-      ucusDonusRows.push('<tr style="background:#fdf4ff">'
-        +'<td style="font-weight:700;white-space:nowrap;padding:4pt 7pt;font-size:10pt">'+_fk(t.bitisTarih||t.tarih)+'</td>'
-        +'<td style="font-weight:700;padding:4pt 7pt;font-size:10pt;white-space:nowrap">'+ilStr+' \u2192 \u0130zmir</td>'
-        +'<td style="font-size:12pt;font-weight:900;text-align:center;color:#1a1a2e;white-space:nowrap;padding:4pt 7pt">'+(t.donusSaat||'\u2014')+'</td>'
-        +'<td style="color:#1d4ed8;font-weight:700;padding:4pt 7pt;font-size:10pt;white-space:nowrap">'+_sadeceFirma(t.donusUlasim,t.donusUcusNo||df)+'</td>'
-        +'</tr>');
+      // Otobüs/diğer: dönüş satırı gidiş tablosuna eklendi
     }
   }
 
@@ -17416,10 +17448,10 @@ function _pdfTurneDosyasiIcerik(t) {
   }).join('');
 
   var _thRow='<thead><tr>'
-    +'<th style="white-space:nowrap;width:85pt">Tarih</th>'
-    +'<th style="white-space:nowrap">G\u00fczerg\u00e2h</th>'
-    +'<th style="text-align:center;white-space:nowrap;width:100pt">Saat</th>'
-    +'<th style="width:80pt">Firma</th>'
+    +'<th style="width:25%">Tarih</th>'
+    +'<th style="width:35%">G\u00fczerg\u00e2h</th>'
+    +'<th style="text-align:center;width:20%">Saat</th>'
+    +'<th style="width:20%">Firma</th>'
     +'</tr></thead>';
 
   // Gidiş/dönüş aktarma etiketi — belirgin badge
@@ -17443,11 +17475,11 @@ function _pdfTurneDosyasiIcerik(t) {
     +'</div>'
     +(ucusGidisRows.length
       ?'<div class="bolum-baslik">'+_gidisIkon+' Gidi\u015f'+_gidisEtiket+'</div>'
-        +'<div class="bolum-blok"><table style="margin-bottom:8pt">'+_thRow+'<tbody>'+ucusGidisRows.join('')+'</tbody></table></div>'
+        +'<div class="bolum-blok"><table style="margin-bottom:8pt;width:100%;table-layout:fixed">'+_thRow+'<tbody>'+ucusGidisRows.join('')+'</tbody></table></div>'
       :'')
     +(ucusDonusRows.length
       ?'<div class="bolum-baslik">'+_donusIkon+' D\u00f6n\u00fc\u015f'+_donusEtiket+'</div>'
-        +'<div class="bolum-blok"><table style="margin-bottom:8pt">'+_thRow+'<tbody>'+ucusDonusRows.join('')+'</tbody></table></div>'
+        +'<div class="bolum-blok"><table style="margin-bottom:8pt;width:100%;table-layout:fixed">'+_thRow+'<tbody>'+ucusDonusRows.join('')+'</tbody></table></div>'
       :'')
     +(bolge.length
       ?'<div class="bolum-baslik">\ud83d\udccd B\u00f6lge \u0130lgili Ki\u015filer</div>'
