@@ -14527,21 +14527,52 @@ function gorevlendirmePdf(rowIdx, mod) {
               renderNext();
             }
 
-            // Büyük canvas'ı A4 yüksekliğinde dilimlere böl
+            // Büyük canvas'ı akıllı kırılım noktalarına böl
             function sliceToA4(bigCanvas, contentW, totalH, cb) {
-              // Kaç A4 sayfası lazım?
-              var mmPerPx = A4mm_W / contentW; // mm / px dönüşümü
-              var a4H_px = A4mm_H / mmPerPx;   // A4 yüksekliği px cinsinden
-              var pageCount = Math.ceil(totalH / a4H_px);
+              var mmPerPx = A4mm_W / contentW;
+              var a4H_px = A4mm_H / mmPerPx;
 
-              for (var p = 0; p < pageCount; p++) {
-                var srcY = p * a4H_px * SCALE;
-                var srcH = Math.min(a4H_px * SCALE, bigCanvas.height - srcY);
-                if (srcH <= 0) break;
+              // tr elementlerinin Y pozisyonlarını topla — kırılım noktası olarak kullan
+              var breakPoints = [0];
+              var allRows = Array.from(_w3.document.querySelectorAll('.sayfa-icerik tr, .sayfa-icerik h2, .sayfa-icerik .bolum-baslik'));
+              var wrapTop = 0;
+              var firstIcerik = _w3.document.querySelector('.sayfa-icerik');
+              if (firstIcerik) wrapTop = firstIcerik.getBoundingClientRect().top + _w3.scrollY;
+
+              allRows.forEach(function(el) {
+                var rect = el.getBoundingClientRect();
+                var elY = rect.top + _w3.scrollY - wrapTop;
+                if (elY > 0) breakPoints.push(Math.floor(elY));
+              });
+              breakPoints.push(totalH);
+
+              // A4 yüksekliğini geçmeden en son kırılım noktasını bul
+              var pageStarts = [0];
+              var curStart = 0;
+              while (curStart < totalH) {
+                var maxEnd = curStart + a4H_px;
+                // Bu aralıkta en son kırılım noktasını bul
+                var bestBreak = maxEnd;
+                for (var bi = breakPoints.length - 1; bi >= 0; bi--) {
+                  if (breakPoints[bi] > curStart && breakPoints[bi] <= maxEnd) {
+                    bestBreak = breakPoints[bi];
+                    break;
+                  }
+                }
+                if (bestBreak <= curStart) bestBreak = maxEnd; // Çıkış yok, zorla kes
+                pageStarts.push(bestBreak);
+                curStart = bestBreak;
+                if (curStart >= totalH) break;
+              }
+
+              for (var p = 0; p < pageStarts.length - 1; p++) {
+                var srcY = pageStarts[p] * SCALE;
+                var srcH = (pageStarts[p+1] - pageStarts[p]) * SCALE;
+                if (srcH <= 0) continue;
 
                 var sliceCanvas = _w3.document.createElement('canvas');
                 sliceCanvas.width = bigCanvas.width;
-                sliceCanvas.height = a4H_px * SCALE; // Her zaman tam A4 yüksekliği
+                sliceCanvas.height = a4H_px * SCALE;
                 var ctx = sliceCanvas.getContext('2d');
                 ctx.fillStyle = '#ffffff';
                 ctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
@@ -14567,7 +14598,20 @@ function gorevlendirmePdf(rowIdx, mod) {
         } catch(e) { console.error(e); }
       }, 500);
     }
-    _acDosya(_afisUrl3 || '');
+    // Afiş varsa base64'e çevir, CORS sorununu önle
+    if (_afisUrl3) {
+      fetch(_afisUrl3)
+        .then(function(r){ return r.blob(); })
+        .then(function(blob){
+          var reader = new FileReader();
+          reader.onload = function(e){ _acDosya(e.target.result); };
+          reader.onerror = function(){ _acDosya(_afisUrl3); };
+          reader.readAsDataURL(blob);
+        })
+        .catch(function(){ _acDosya(_afisUrl3); });
+    } else {
+      _acDosya('');
+    }
     return;
   }
   var oyunAdi = t.oyun || (t.duraklar ? [...new Set(t.duraklar.map(function(d){return d.oyun||'';}).filter(Boolean))].join(' / ') : 'Rapor');
