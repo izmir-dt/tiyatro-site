@@ -16966,8 +16966,6 @@ function _pdfTurneDosyasiIcerik(t) {
   });
   var _lojPKapak={}; try{if((t.notlar||'').startsWith('{'))_lojPKapak=JSON.parse(t.notlar);}catch(e){}
   var _aracTurKapak=_lojPKapak.aracTur||t.aracTur||'';
-  var _sehirFirmaKapak=t.sehirAracDetay||'';
-  var _sehirTelKapak=t.sehirTel||'';
   var _kf='',_kt='';
   if(_lojN&&_lojN.length>2){
     var _kl=_lojN.split('\n')[0];
@@ -16979,13 +16977,28 @@ function _pdfTurneDosyasiIcerik(t) {
   var _gidisPlaka=t.gidisPlaka||'';
   var _gidisSurucu=t.gidisSurucu||'';
   var _gidisUlasimTur=t.gidisUlasim||'';
-  // gidisPlaka: karaAraclar'dan gelen firma adi
-  var _plakaFirma='';
-  if(_gidisPlaka){
-    try{ var _pj=JSON.parse(_gidisPlaka); _plakaFirma=(_pj[0]&&_pj[0].firma)||''; }
-    catch(e){ _plakaFirma=_gidisPlaka.trim(); }
+  // ── TÜM ULAŞIM BİLGİLERİ (uçak hariç) ──
+  // Yardımcı: nakiye satırı HTML üret
+  function _nakSatir(label, firma, tel){
+    if(!firma&&!label) return '';
+    return '<div style="margin-bottom:6pt;line-height:1.35">'
+      +(label?'<div style="color:rgba(255,255,255,.5);font-size:8pt;margin-bottom:1pt">'+label+'</div>':'')
+      +(firma?'<strong style="color:#fff;font-size:10pt;display:block;word-break:break-word">'+firma+'</strong>':'')
+      +(tel?'<span style="color:#e8c84a;font-weight:700;font-size:10pt;display:block">'+tel+'</span>':'')
+      +'</div>';
   }
-  // gidisSurucu: 'kalkis|FIRMA:x|TEL:y'
+
+  // 1. notlar.not alanından (🚌/🚛 format) — kamyon/ana taşıt
+  var _notSatirlar=(_lojN||'').split('\n').filter(function(l){return l.trim().length>2;});
+  var _notFirmalar=[];
+  _notSatirlar.forEach(function(satir){
+    var s=satir.replace(/^[\uD800-\uDFFF\u2600-\u27FF\u{1F000}-\u{1FFFF}]+\s*/u,'').trim();
+    var p=s.split(' \u00b7 ');
+    var f=(p[0]||'').trim(), t2=(p[1]||'').trim();
+    if(f) _notFirmalar.push({firma:f,tel:t2});
+  });
+
+  // 2. gidisSurucu → |FIRMA:|TEL:
   var _suruFirma2='',_suruTel2='';
   if(_gidisSurucu){
     var _mfx=_gidisSurucu.match(/\|FIRMA:([^|]*)/);
@@ -16993,31 +17006,40 @@ function _pdfTurneDosyasiIcerik(t) {
     if(_mfx)_suruFirma2=_mfx[1].trim();
     if(_mtx)_suruTel2=_mtx[1].trim();
   }
-  // notlardan gelen (_kf/_kt) ayri satir, gidisSurucu da ayri satir
-  var _anaLabel=_aracTurKapak||(_gidisUlasimTur&&!/u[\u00e7c]ak/i.test(_gidisUlasimTur)?_gidisUlasimTur:'');
-  // 1. Notlardan gelen ana tasit (ornek: BARIS UYANIK NAKLIYE)
-  if(_kf){
-    _nakKapak+='<div style="margin-bottom:6pt;line-height:1.35">'
-      +(_anaLabel?'<div style="color:rgba(255,255,255,.5);font-size:8pt;margin-bottom:1pt">'+_anaLabel+'</div>':'')
-      +'<strong style="color:#fff;font-size:10pt;display:block;word-break:break-word">'+_kf+'</strong>'
-      +(_kt?'<span style="color:#e8c84a;font-weight:700;font-size:10pt;display:block">'+_kt+'</span>':'')
-      +'</div>';
+
+  // 3. gidisPlaka → firma adı (telefonsuz)
+  var _plakaFirma='';
+  if(_gidisPlaka){
+    try{ var _pj=JSON.parse(_gidisPlaka); _plakaFirma=(_pj[0]&&_pj[0].firma)||''; }
+    catch(e){ _plakaFirma=_gidisPlaka.trim(); }
   }
-  // 2. Ulaşım formundan gelen tasit (ornek: ULUSOY CSK)
-  if(_suruFirma2&&_suruFirma2!==_kf){
-    _nakKapak+='<div style="margin-bottom:6pt;line-height:1.35">'
-      +(!_kf&&_anaLabel?'<div style="color:rgba(255,255,255,.5);font-size:8pt;margin-bottom:1pt">'+_anaLabel+'</div>':'')
-      +'<strong style="color:#fff;font-size:10pt;display:block;word-break:break-word">'+_suruFirma2+'</strong>'
-      +(_suruTel2?'<span style="color:#e8c84a;font-weight:700;font-size:10pt;display:block">'+_suruTel2+'</span>':'')
-      +'</div>';
-  } else if(!_kf&&_plakaFirma&&_plakaFirma!==_suruFirma2){
-    _nakKapak+='<div style="margin-bottom:6pt;line-height:1.35">'
-      +(_anaLabel?'<div style="color:rgba(255,255,255,.5);font-size:8pt;margin-bottom:1pt">'+_anaLabel+'</div>':'')
-      +'<strong style="color:#fff;font-size:10pt;display:block;word-break:break-word">'+_plakaFirma+'</strong>'
-      +'</div>';
+
+  // Ulaşım türü etiketi (uçak değilse)
+  var _ulasimLabel=_aracTurKapak||(_gidisUlasimTur&&!/u[\u00e7c]ak/i.test(_gidisUlasimTur)?_gidisUlasimTur:'');
+
+  // Tüm firma listesi — tekrar olmayanları ekle
+  var _tumFirmalar=[];
+  _notFirmalar.forEach(function(x){ _tumFirmalar.push(x); });
+
+  // gidisSurucu'dan gelen nota zaten eklenmediyse ekle
+  if(_suruFirma2 && !_tumFirmalar.some(function(x){return x.firma===_suruFirma2;})){
+    _tumFirmalar.push({firma:_suruFirma2,tel:_suruTel2});
   }
-  if(_sehirFirmaKapak||_sehirTelKapak||t.sehirTel){
-    var _sTel=_sehirTelKapak||t.sehirTel||'';
+  // gidisPlaka'dan gelen nota/surucu'ya eklenmedi ise ekle
+  if(_plakaFirma && !_tumFirmalar.some(function(x){return x.firma===_plakaFirma;})){
+    _tumFirmalar.push({firma:_plakaFirma,tel:''});
+  }
+
+  // HTML üret — ilk firmaya label ekle
+  _tumFirmalar.forEach(function(x,xi){
+    _nakKapak+=_nakSatir(xi===0?_ulasimLabel:'',x.firma,x.tel);
+  });
+
+  // Şehir içi servis
+  var _sehirFirmaKapak=t.sehirAracDetay||'';
+  var _sehirTelKapak=t.sehirTel||'';
+  if(_sehirFirmaKapak||_sehirTelKapak){
+    var _sTel=_sehirTelKapak||'';
     _nakKapak+='<div style="margin-bottom:6pt;line-height:1.35">'
       +'<div style="color:rgba(255,255,255,.5);font-size:8pt;margin-bottom:1pt">\u015eehir \u0130\u00e7i Servis</div>'
       +(_sehirFirmaKapak?'<strong style="color:#fff;font-size:10pt;display:block;word-break:break-word">'+_sehirFirmaKapak+'</strong>':'')
