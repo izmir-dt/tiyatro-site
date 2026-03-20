@@ -5817,7 +5817,7 @@ function _konaklamaSekmesiHTML(t, rowIdx) {
   // Tümü = atanmamışlar (odaTip yok), Tek = tek, Çift = cift
   var tekler    = kat.filter(function(p){ return p.odaTip === 'tek' && !p.munferit; });
   var ciftler   = kat.filter(function(p){ return p.odaTip === 'cift' && !p.munferit; });
-  var atanmamis = kat.filter(function(p){ return !p.odaTip && !p.munferit; });
+  var atanmamis = kat.filter(function(p){ return !p.odaTip; });
   // Tümü sekmesinde gösterilecek = atanmamış + çift seçilmiş ama eşi yok
   var munferitler = kat.filter(function(p){ return p.munferit; });
   var tumListeSay = kat.filter(function(p){ return !p.munferit && (!p.odaTip || (p.odaTip === 'cift' && !p.odaEsi)); }).length;
@@ -6010,7 +6010,7 @@ function _konaklamaSekmesiHTML(t, rowIdx) {
     }
 
   // ── TEK ODA SEKMESİ
-  } else if (aktif === 'tek') {
+  } else {
     html += '<div style="padding:8px 14px;background:#6b1b1b;color:#fff">'
       + '<span style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.3px">🛏 TEK ODA</span>'
       + '&nbsp;<span style="font-size:10.5px;font-weight:700;background:rgba(255,255,255,.18);padding:1px 8px;border-radius:20px;border:1px solid rgba(255,255,255,.25);vertical-align:middle">' + tekler.length + ' oda</span>'
@@ -6055,9 +6055,10 @@ function _konaklamaSekmesiHTML(t, rowIdx) {
       });
       html += '</div>';
     }
+  }
 
   // ── MÜNFERİT SEKMESİ
-  } else if (aktif === 'munferit') {
+  if (aktif === 'munferit') {
     html += '<div style="padding:8px 14px;background:#6b1b1b;color:#fff">'
       + '<span style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.3px">🚪 MÜNFERİT</span>'
       + '&nbsp;<span style="font-size:10.5px;font-weight:700;background:rgba(255,255,255,.18);padding:1px 8px;border-radius:20px;border:1px solid rgba(255,255,255,.25);vertical-align:middle">' + munferitler.length + ' kişi</span>'
@@ -6487,19 +6488,7 @@ function _konaklamaPdfIndir(rowIdx) {
     + '<style>' + css + '</style></head><body>'
     + sayfa1
     + sayfa2
-    + '<script>window.onload=function(){'
-    + '  var bg=document.getElementById("kapak-bg-div");'
-    + '  var style=bg?bg.style.backgroundImage:"";'
-    + '  var url=style.replace(/^url\\(["\']?/,"").replace(/["\']?\\)$/,"");'
-    + '  if(url&&url.length>4){'
-    + '    var img=new Image();'
-    + '    img.onload=function(){setTimeout(function(){window.print();},200);};'
-    + '    img.onerror=function(){setTimeout(function(){window.print();},200);};'
-    + '    img.src=url;'
-    + '  } else {'
-    + '    setTimeout(function(){window.print();},300);'
-    + '  }'
-    + '};<\/script>'
+    + '<script>window.onload=function(){setTimeout(function(){window.print();},120);};<\/script>'
     + '</body></html>';
 
   var win = window.open('','_blank');
@@ -14527,52 +14516,21 @@ function gorevlendirmePdf(rowIdx, mod) {
               renderNext();
             }
 
-            // Büyük canvas'ı akıllı kırılım noktalarına böl
+            // Büyük canvas'ı A4 yüksekliğinde dilimlere böl
             function sliceToA4(bigCanvas, contentW, totalH, cb) {
-              var mmPerPx = A4mm_W / contentW;
-              var a4H_px = A4mm_H / mmPerPx;
+              // Kaç A4 sayfası lazım?
+              var mmPerPx = A4mm_W / contentW; // mm / px dönüşümü
+              var a4H_px = A4mm_H / mmPerPx;   // A4 yüksekliği px cinsinden
+              var pageCount = Math.ceil(totalH / a4H_px);
 
-              // tr elementlerinin Y pozisyonlarını topla — kırılım noktası olarak kullan
-              var breakPoints = [0];
-              var allRows = Array.from(_w3.document.querySelectorAll('.sayfa-icerik tr, .sayfa-icerik h2, .sayfa-icerik .bolum-baslik'));
-              var wrapTop = 0;
-              var firstIcerik = _w3.document.querySelector('.sayfa-icerik');
-              if (firstIcerik) wrapTop = firstIcerik.getBoundingClientRect().top + _w3.scrollY;
-
-              allRows.forEach(function(el) {
-                var rect = el.getBoundingClientRect();
-                var elY = rect.top + _w3.scrollY - wrapTop;
-                if (elY > 0) breakPoints.push(Math.floor(elY));
-              });
-              breakPoints.push(totalH);
-
-              // A4 yüksekliğini geçmeden en son kırılım noktasını bul
-              var pageStarts = [0];
-              var curStart = 0;
-              while (curStart < totalH) {
-                var maxEnd = curStart + a4H_px;
-                // Bu aralıkta en son kırılım noktasını bul
-                var bestBreak = maxEnd;
-                for (var bi = breakPoints.length - 1; bi >= 0; bi--) {
-                  if (breakPoints[bi] > curStart && breakPoints[bi] <= maxEnd) {
-                    bestBreak = breakPoints[bi];
-                    break;
-                  }
-                }
-                if (bestBreak <= curStart) bestBreak = maxEnd; // Çıkış yok, zorla kes
-                pageStarts.push(bestBreak);
-                curStart = bestBreak;
-                if (curStart >= totalH) break;
-              }
-
-              for (var p = 0; p < pageStarts.length - 1; p++) {
-                var srcY = pageStarts[p] * SCALE;
-                var srcH = (pageStarts[p+1] - pageStarts[p]) * SCALE;
-                if (srcH <= 0) continue;
+              for (var p = 0; p < pageCount; p++) {
+                var srcY = p * a4H_px * SCALE;
+                var srcH = Math.min(a4H_px * SCALE, bigCanvas.height - srcY);
+                if (srcH <= 0) break;
 
                 var sliceCanvas = _w3.document.createElement('canvas');
                 sliceCanvas.width = bigCanvas.width;
-                sliceCanvas.height = a4H_px * SCALE;
+                sliceCanvas.height = a4H_px * SCALE; // Her zaman tam A4 yüksekliği
                 var ctx = sliceCanvas.getContext('2d');
                 ctx.fillStyle = '#ffffff';
                 ctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
@@ -14598,20 +14556,7 @@ function gorevlendirmePdf(rowIdx, mod) {
         } catch(e) { console.error(e); }
       }, 500);
     }
-    // Afiş varsa base64'e çevir, CORS sorununu önle
-    if (_afisUrl3) {
-      fetch(_afisUrl3)
-        .then(function(r){ return r.blob(); })
-        .then(function(blob){
-          var reader = new FileReader();
-          reader.onload = function(e){ _acDosya(e.target.result); };
-          reader.onerror = function(){ _acDosya(_afisUrl3); };
-          reader.readAsDataURL(blob);
-        })
-        .catch(function(){ _acDosya(_afisUrl3); });
-    } else {
-      _acDosya('');
-    }
+    _acDosya(_afisUrl3 || '');
     return;
   }
   var oyunAdi = t.oyun || (t.duraklar ? [...new Set(t.duraklar.map(function(d){return d.oyun||'';}).filter(Boolean))].join(' / ') : 'Rapor');
@@ -17476,13 +17421,12 @@ function _pdfTurneDosyasiIcerik(t) {
         +'</tr>';
     }).join('');
     tekOdaHTML=''
-      +'<div style="margin-bottom:8pt">'
-      +'<table style="border-top:none"><thead style="display:table-header-group">'
-      +'<tr style="background:#1e3a5f"><th colspan="3" style="padding:5pt 10pt;font-size:10pt;font-weight:800;text-align:left">'
-      +'\ud83d\udecf Tek Oda'
-      +'<span style="float:right;background:rgba(255,255,255,.2);border-radius:10pt;padding:1pt 10pt;font-size:9.5pt">'+tekler.length+' ki\u015fi</span>'
-      +'</th></tr>'
-      +'<tr style="background:#2d5282">'
+      +'<div style="margin-bottom:8pt;page-break-inside:avoid;break-inside:avoid">'
+      +'<div style="background:#1e3a5f;color:#fff;padding:5pt 10pt;font-size:10pt;font-weight:800;display:flex;justify-content:space-between;align-items:center;page-break-after:avoid;break-after:avoid">'
+      +'<span>\ud83d\udecf Tek Oda</span>'
+      +'<span style="background:rgba(255,255,255,.2);border-radius:10pt;padding:1pt 10pt;font-size:9.5pt">'+tekler.length+' ki\u015fi</span>'
+      +'</div>'
+      +'<table style="border-top:none"><thead><tr style="background:#2d5282">'
       +'<th style="width:24pt;text-align:center;padding:4pt 6pt">No</th>'
       +'<th style="padding:4pt 6pt">Ad Soyad</th>'
       +'<th style="padding:4pt 6pt">G\u00f6rev / Unvan</th>'
@@ -17520,12 +17464,11 @@ function _pdfTurneDosyasiIcerik(t) {
     ciftOdaHTML=''
       +'<div style="margin-bottom:8pt">'
       +eksikEsUyari
-      +'<table style="border-top:none"><thead style="display:table-header-group">'
-      +'<tr style="background:#15803d"><th colspan="3" style="padding:5pt 10pt;font-size:10pt;font-weight:800;text-align:left">'
-      +'\ud83d\udecc \u00c7ift Oda'
-      +'<span style="float:right;background:rgba(255,255,255,.2);border-radius:10pt;padding:1pt 10pt;font-size:9.5pt">'+ciftGruplar.length+' oda</span>'
-      +'</th></tr>'
-      +'<tr style="background:#166534">'
+      +'<div style="background:#15803d;color:#fff;padding:5pt 10pt;font-size:10pt;font-weight:800;display:flex;justify-content:space-between;align-items:center;page-break-after:avoid;break-after:avoid">'
+      +'<span>\ud83d\udecc \u00c7ift Oda</span>'
+      +'<span style="background:rgba(255,255,255,.2);border-radius:10pt;padding:1pt 10pt;font-size:9.5pt">'+ciftGruplar.length+' oda</span>'
+      +'</div>'
+      +'<table style="border-top:none;page-break-inside:avoid;break-inside:avoid"><thead><tr style="background:#166534">'
       +'<th style="width:24pt;text-align:center;padding:4pt 6pt">Oda</th>'
       +'<th style="padding:4pt 6pt">Ki\u015filer</th>'
       +'<th style="padding:4pt 6pt">G\u00f6rev / Unvan</th>'
@@ -17544,12 +17487,11 @@ function _pdfTurneDosyasiIcerik(t) {
     }).join('');
     munferitHTML=''
       +'<div style="margin-bottom:8pt">'
-      +'<table style="border-top:none"><thead style="display:table-header-group">'
-      +'<tr style="background:#92400e"><th colspan="3" style="padding:5pt 10pt;font-size:10pt;font-weight:800;text-align:left">'
-      +'\ud83d\udeb6 M\u00fcnferit'
-      +'<span style="float:right;background:rgba(255,255,255,.2);border-radius:10pt;padding:1pt 10pt;font-size:9.5pt">'+munferit.length+' ki\u015fi</span>'
-      +'</th></tr>'
-      +'<tr style="background:#b45309">'
+      +'<div style="background:#92400e;color:#fff;padding:5pt 10pt;font-size:10pt;font-weight:800;display:flex;justify-content:space-between;align-items:center;page-break-after:avoid;break-after:avoid">'
+      +'<span>\ud83d\udeb6 M\u00fcnferit</span>'
+      +'<span style="background:rgba(255,255,255,.2);border-radius:10pt;padding:1pt 10pt;font-size:9.5pt">'+munferit.length+' ki\u015fi</span>'
+      +'</div>'
+      +'<table style="border-top:none"><thead><tr style="background:#b45309">'
       +'<th style="width:24pt;text-align:center;padding:4pt 5pt">No</th><th style="padding:4pt 6pt">Ad Soyad</th><th style="padding:4pt 6pt">G\u00f6rev / Unvan</th>'
       +'</tr></thead><tbody>'+munRows+'</tbody></table>'
       +'</div>';
@@ -17571,7 +17513,7 @@ function _pdfTurneDosyasiIcerik(t) {
       +'<span>\u26a0\ufe0f Oda Atanmam\u0131\u015f</span>'
       +'<span style="background:#dc2626;color:#fff;border-radius:10pt;padding:1pt 10pt;font-size:9.5pt">'+atanmamis.length+' ki\u015fi</span>'
       +'</div>'
-      +'<table style="border-top:none;border:1.5pt solid #dc2626"><thead style="display:table-header-group"><tr style="background:#b91c1c">'
+      +'<table style="border-top:none;border:1.5pt solid #dc2626"><thead><tr style="background:#b91c1c">'
       +'<th style="width:24pt;text-align:center;padding:4pt 5pt">No</th><th style="padding:4pt 6pt">Ad Soyad</th><th style="padding:4pt 6pt">G\u00f6rev / Unvan</th>'
       +'</tr></thead><tbody>'+atRows+'</tbody></table>'
       +'</div>';
