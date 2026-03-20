@@ -14607,32 +14607,36 @@ function gorevlendirmePdf(rowIdx, mod) {
 
             var kapakEl2 = _w3.document.querySelector('.sayfa-kapak');
             if (kapakEl2) {
-              // Kapağı da 480px genişliğe daralt
-              kapakEl2.style.width = MOBIL_W + 'px';
-              kapakEl2.style.minHeight = Math.round(MOBIL_W * 1.414) + 'px'; // A4 oranı
-              // Kapak font boyutlarını küçült
-              kapakEl2.querySelectorAll('[style*="font-size"]').forEach(function(el) {
-                var fs = parseFloat(el.style.fontSize);
-                if (fs > 20) el.style.fontSize = Math.round(fs * 0.6) + 'pt';
-                else if (fs > 10) el.style.fontSize = Math.round(fs * 0.75) + 'pt';
+              // Kapak alt bant fontlarını büyüt — numaralar net görünsün
+              kapakEl2.querySelectorAll('[style*="font-size:10pt"]').forEach(function(el){
+                el.style.fontSize = '13pt';
               });
-              var kapakH = kapakEl2.scrollHeight;
-              var kapakH_mm = (kapakH / MOBIL_W) * A4mm_W2;
+              kapakEl2.querySelectorAll('[style*="font-size:8pt"]').forEach(function(el){
+                el.style.fontSize = '11pt';
+              });
+              kapakEl2.querySelectorAll('[style*="font-size:7.5pt"]').forEach(function(el){
+                el.style.fontSize = '10pt';
+              });
+              kapakEl2.querySelectorAll('[style*="font-size:9pt"]').forEach(function(el){
+                el.style.fontSize = '12pt';
+              });
+              // Kapağı orijinal genişlikte render et — afiş bozulmasın
+              var kapakW = kapakEl2.offsetWidth || 794;
+              var kapakH = kapakEl2.scrollHeight || 680;
+              // PDF'deki mm yüksekliği: genişlik A4mm_W2'ye scale edilince yükseklik de orantılı
+              var kapakH_mm = (kapakH / kapakW) * A4mm_W2;
+              var pdf2tmp = new jspdf.jsPDF({ orientation:'portrait', unit:'mm', format:[A4mm_W2, kapakH_mm] });
               h2c(kapakEl2, {
                 scale: SCALE2, useCORS: true, allowTaint: true,
-                backgroundColor: '#1a0505', width: MOBIL_W, height: kapakH, logging: false
+                backgroundColor: '#1a0505', width: kapakW, height: kapakH, logging: false
               }).then(function(canvas) {
-                  pdf2.addPage([A4mm_W2, kapakH_mm], 'p');
-                  pdf2.addImage(canvas.toDataURL('image/jpeg', 0.93), 'JPEG', 0, 0, A4mm_W2, kapakH_mm);
-                  // Kapağı geri al
-                  kapakEl2.style.width = '';
-                  kapakEl2.style.minHeight = '';
-                  renderMobilIcerik(0);
-                }).catch(function(){
-                  kapakEl2.style.width = '';
-                  kapakEl2.style.minHeight = '';
-                  renderMobilIcerik(0);
-                });
+                pdf2 = pdf2tmp;
+                pdf2.addImage(canvas.toDataURL('image/jpeg', 0.93), 'JPEG', 0, 0, A4mm_W2, kapakH_mm);
+                renderMobilIcerik(0);
+              }).catch(function(){
+                pdf2 = pdf2tmp;
+                renderMobilIcerik(0);
+              });
             } else {
               renderMobilIcerik(0);
             }
