@@ -7624,6 +7624,9 @@ async function saveKisiModal() {
   const katJSON2 = JSON.stringify(_birlesikListe); // closeKisiModal'dan ÖNCE al
   const katSayisi = _birlesikListe.length; // log için closeKisiModal'dan ÖNCE al
 
+  console.log('[KAYDET] rowIdx:', rowIdxKayit, '| sheet row:', rowIdxKayit + 2, '| kisi sayisi:', katSayisi);
+  console.log('[KAYDET] ilk 3 kisi:', _birlesikListe.slice(0,3).map(function(k){ return k.kisi + ' → ' + k.gorev; }));
+
   // 2. Modal'ı kapat, ekranı güncelle
   closeKisiModal();
   renderListe();
@@ -7632,17 +7635,21 @@ async function saveKisiModal() {
   // 4. Arka planda sadece katilimcilar sütununu yaz (/cell endpoint — backend'de mevcut)
   try {
     const KAT_COL = 39; // yeni yapıda index 39 = katilimcilar sütunu
+    console.log('[KAYDET] API isteği gönderiliyor → row:', rowIdxKayit + 2, 'col:', KAT_COL);
     const cellRes = await apiFetch('/' + encodeURIComponent(TURNE_SHEET) + '/cell', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ row: rowIdxKayit + 2, col: KAT_COL, value: katJSON2 })
     });
+    console.log('[KAYDET] API yanıtı:', cellRes.status, cellRes.ok ? 'OK' : 'HATA');
     if (!cellRes.ok) {
       var errBody = '';
       try { errBody = await cellRes.text(); } catch(ex) { errBody = String(cellRes.status); }
       console.error('[saveKisiModal] CELL hata:', errBody);
       _gosterKayitHatasi('⚠️ Katılımcılar kaydedilemedi (Hata: ' + errBody + ')');
     } else {
+      var resText = ''; try { resText = await cellRes.text(); } catch(ex) {}
+      console.log('[KAYDET] API başarılı, yanıt:', resText);
       showToast(katSayisi + ' katılımcı kaydedildi', 'success', 3000);
       try {
         _cacheSil('cache_turneler');
@@ -7650,10 +7657,18 @@ async function saveKisiModal() {
         // fetchTurneler turneler array'ini yeniden oluşturur — sheet henüz güncel
         // olmayabilir (race condition). Yerel kaydettiğimiz listeyi geri yaz.
         var tYeni = turneler.find(function(x){ return x._rowIdx === rowIdxKayit; });
-        if (tYeni) tYeni.katilimcilar = JSON.parse(katJSON2);
+        if (tYeni) {
+          tYeni.katilimcilar = JSON.parse(katJSON2);
+          console.log('[KAYDET] fetchTurneler sonrası yerel veri geri yazıldı:', tYeni.katilimcilar.length, 'kişi');
+        } else {
+          console.warn('[KAYDET] fetchTurneler sonrası rowIdx', rowIdxKayit, 'bulunamadı!');
+        }
         renderListe();
         renderIstatistik();
-      } catch(e) { /* fetch hatası — yerel veri korunur */ }
+      } catch(e) {
+        console.warn('[KAYDET] fetchTurneler hatası:', e);
+        /* fetch hatası — yerel veri korunur */
+      }
     }
   } catch(e) {
     console.error('[saveKisiModal] Beklenmeyen hata:', e);
