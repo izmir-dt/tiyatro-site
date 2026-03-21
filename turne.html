@@ -5275,10 +5275,9 @@ function openKisiModal(rowIdx, _durakOyunAdi) {
   // window._kisiModalCoklu: { 'OYUN_ADI': [{kisi,gorev,kategori,oyun},...], ... }
   if (_tumDurakOyunlar.length > 1) {
     window._kisiModalCoklu = {};
-    var _ilkOyun = _tumDurakOyunlar[0];
     _tumDurakOyunlar.forEach(function(o) {
       // Kayıtlı katılımcılardan bu oyuna ait olanları al
-      var kayitli = (t.katilimcilar || []).filter(function(k){ return k.oyun ? k.oyun === o : o === _ilkOyun; });
+      var kayitli = (t.katilimcilar || []).filter(function(k){ return !k.oyun || k.oyun === o; });
       if (kayitli.length > 0) {
         window._kisiModalCoklu[o] = JSON.parse(JSON.stringify(kayitli));
         // Eksik kontrolü
@@ -6326,7 +6325,7 @@ function _konaklamaNotKaydet(rowIdx, kisiIdx, not) {
 function _konaklamaSheetKaydet(t) {
   if (!t || t._rowIdx === undefined || !t.katilimcilar) return;
   apiFetch('/' + encodeURIComponent(TURNE_SHEET) + '/cell', {
-    method: 'POST',
+    method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ row: t._rowIdx + 2, col: 39, value: JSON.stringify(t.katilimcilar) })
   }).then(function(res){
@@ -7224,12 +7223,12 @@ function renderSelectedPills(scrollToIdx) {
     el.tabIndex = 0;
     el.style.outline = 'none';
     el.addEventListener('keydown', function(e) {
-      if (e.target.matches('input, select, textarea')) return;
       var n2 = kisiModalSecili.length;
       if (!n2) return;
-      if (e.key === 'ArrowUp')   { e.preventDefault(); if (_aktifPillIdx > 0) _pillMove(_aktifPillIdx, -1); }
-      if (e.key === 'ArrowDown') { e.preventDefault(); if (_aktifPillIdx < n2-1) _pillMove(_aktifPillIdx, 1); }
-      if ((e.key==='Delete'||e.key==='Backspace') && _aktifPillIdx >= 0) {
+      if (_aktifPillIdx < 0) { _aktifPillIdx = 0; renderSelectedPills(0); return; }
+      if (e.key === 'ArrowUp')   { e.preventDefault(); _pillMove(_aktifPillIdx, -1); }
+      if (e.key === 'ArrowDown') { e.preventDefault(); _pillMove(_aktifPillIdx,  1); }
+      if ((e.key==='Delete'||e.key==='Backspace') && !e.target.matches('input')) {
         e.preventDefault();
         var k = kisiModalSecili[_aktifPillIdx];
         if (k) kaldir(k.kisi);
@@ -7634,9 +7633,9 @@ async function saveKisiModal() {
   try {
     const KAT_COL = 39; // yeni yapıda index 39 = katilimcilar sütunu
     const cellRes = await apiFetch('/' + encodeURIComponent(TURNE_SHEET) + '/cell', {
-      method: 'POST',
+      method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ row: rowIdxKayit, col: KAT_COL, value: katJSON2 })
+      body: JSON.stringify({ row: rowIdxKayit + 2, col: KAT_COL, value: katJSON2 })
     });
     if (!cellRes.ok) {
       var errBody = '';
@@ -7645,9 +7644,12 @@ async function saveKisiModal() {
       _gosterKayitHatasi('⚠️ Katılımcılar kaydedilemedi (Hata: ' + errBody + ')');
     } else {
       showToast(katSayisi + ' katılımcı kaydedildi', 'success', 3000);
-      _cacheSil('cache_turneler');
-      renderListe();
-      renderIstatistik();
+      try {
+        _cacheSil('cache_turneler');
+        await fetchTurneler(true);
+        renderListe();
+        renderIstatistik();
+      } catch(e) { /* fetch hatası — yerel veri korunur */ }
     }
   } catch(e) {
     console.error('[saveKisiModal] Beklenmeyen hata:', e);
