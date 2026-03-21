@@ -7228,12 +7228,13 @@ function renderSelectedPills(scrollToIdx) {
     el.tabIndex = 0;
     el.style.outline = 'none';
     el.addEventListener('keydown', function(e) {
+      // Input odaklanmışsa klavye olaylarını yoksay — sadece wrapper odaklandığında çalış
+      if (e.target.matches('input, select, textarea')) return;
       var n2 = kisiModalSecili.length;
       if (!n2) return;
-      if (_aktifPillIdx < 0) { _aktifPillIdx = 0; renderSelectedPills(0); return; }
-      if (e.key === 'ArrowUp')   { e.preventDefault(); _pillMove(_aktifPillIdx, -1); }
-      if (e.key === 'ArrowDown') { e.preventDefault(); _pillMove(_aktifPillIdx,  1); }
-      if ((e.key==='Delete'||e.key==='Backspace') && !e.target.matches('input')) {
+      if (e.key === 'ArrowUp')   { e.preventDefault(); if (_aktifPillIdx > 0) _pillMove(_aktifPillIdx, -1); }
+      if (e.key === 'ArrowDown') { e.preventDefault(); if (_aktifPillIdx < n2-1) _pillMove(_aktifPillIdx, 1); }
+      if ((e.key==='Delete'||e.key==='Backspace') && _aktifPillIdx >= 0) {
         e.preventDefault();
         var k = kisiModalSecili[_aktifPillIdx];
         if (k) kaldir(k.kisi);
@@ -7629,7 +7630,6 @@ async function saveKisiModal() {
   const katJSON2 = JSON.stringify(_birlesikListe); // closeKisiModal'dan ÖNCE al
   const katSayisi = _birlesikListe.length; // log için closeKisiModal'dan ÖNCE al
 
-  console.log('[KAYDET] ilk 3 kisi:', _birlesikListe.slice(0,3).map(function(k){ return k.kisi + ' → ' + k.gorev + ' (oyun:' + k.oyun + ')'; }));
 
   // 2. Modal'ı kapat, ekranı güncelle
   closeKisiModal();
@@ -7639,22 +7639,18 @@ async function saveKisiModal() {
   // 4. Arka planda sadece katilimcilar sütununu yaz (/cell endpoint — backend'de mevcut)
   try {
     const KAT_COL = 39; // yeni yapıda index 39 = katilimcilar sütunu
-    console.log('[KAYDET] API isteği gönderiliyor → row:', rowIdxKayit + 2, 'col:', KAT_COL);
-    const cellRes = await apiFetch('/' + encodeURIComponent(TURNE_SHEET) + '/cell', {
+      const cellRes = await apiFetch('/' + encodeURIComponent(TURNE_SHEET) + '/cell', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ row: rowIdxKayit + 2, col: KAT_COL, value: katJSON2 })
     });
-    console.log('[KAYDET] API yanıtı:', cellRes.status, cellRes.ok ? 'OK' : 'HATA');
-    if (!cellRes.ok) {
+      if (!cellRes.ok) {
       var errBody = '';
       try { errBody = await cellRes.text(); } catch(ex) { errBody = String(cellRes.status); }
       console.error('[saveKisiModal] CELL hata:', errBody);
       _gosterKayitHatasi('⚠️ Katılımcılar kaydedilemedi (Hata: ' + errBody + ')');
     } else {
-      var resText = ''; try { resText = await cellRes.text(); } catch(ex) {}
-      console.log('[KAYDET] API başarılı, yanıt:', resText);
-      showToast(katSayisi + ' katılımcı kaydedildi', 'success', 3000);
+              showToast(katSayisi + ' katılımcı kaydedildi', 'success', 3000);
       // fetchTurneler(true) YAPILMIYOR — sheet yazma/okuma arasında race condition oluşur.
       // Yerel t.katilimcilar zaten güncellendi. Cache'i geçersiz kıl, sonraki açılışta taze gelsin.
       _cacheSil('cache_turneler');
