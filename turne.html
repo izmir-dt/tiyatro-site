@@ -5275,9 +5275,12 @@ function openKisiModal(rowIdx, _durakOyunAdi) {
   // window._kisiModalCoklu: { 'OYUN_ADI': [{kisi,gorev,kategori,oyun},...], ... }
   if (_tumDurakOyunlar.length > 1) {
     window._kisiModalCoklu = {};
+    // Oyun alanı olmayan eski kayıtları ilk oyuna ata (bir kez, çoğaltma)
+    var _ilkOyun = _tumDurakOyunlar[0];
     _tumDurakOyunlar.forEach(function(o) {
       // Kayıtlı katılımcılardan bu oyuna ait olanları al
-      var kayitli = (t.katilimcilar || []).filter(function(k){ return !k.oyun || k.oyun === o; });
+      // !k.oyun olan eski kayıtlar SADECE ilk oyuna gider, diğer sekmelere çoğaltılmaz
+      var kayitli = (t.katilimcilar || []).filter(function(k){ return k.oyun ? k.oyun === o : o === _ilkOyun; });
       if (kayitli.length > 0) {
         window._kisiModalCoklu[o] = JSON.parse(JSON.stringify(kayitli));
         // Eksik kontrolü
@@ -7627,7 +7630,8 @@ async function saveKisiModal() {
   const katSayisi = _birlesikListe.length; // log için closeKisiModal'dan ÖNCE al
 
   console.log('[KAYDET] rowIdx:', rowIdxKayit, '| sheet row:', rowIdxKayit + 2, '| kisi sayisi:', katSayisi);
-  console.log('[KAYDET] ilk 3 kisi:', _birlesikListe.slice(0,3).map(function(k){ return k.kisi + ' → ' + k.gorev; }));
+  console.log('[KAYDET] ilk 3 kisi:', _birlesikListe.slice(0,3).map(function(k){ return k.kisi + ' → ' + k.gorev + ' (oyun:' + k.oyun + ')'; }));
+  console.log('[KAYDET] _kisiModalCoklu mod:', !!window._kisiModalCoklu, '| oyunlar:', window._kisiModalCoklu ? Object.keys(window._kisiModalCoklu) : 'yok');
 
   // 2. Modal'ı kapat, ekranı güncelle
   closeKisiModal();
