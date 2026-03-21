@@ -5314,12 +5314,8 @@ function openKisiModal(rowIdx, _durakOyunAdi) {
         // Figüran kendi adıyla kalsın, diğer oyuncu kategorileri → Sanatçı
         var _sanatcilar = OYUNCU_K.filter(function(x){ return x !== 'Figüran'; });
         var _varsayilan = _sanatcilar.indexOf(gercekKat) >= 0 ? 'Sanatçı' : (gercekKat || '');
-        // Manuel girilmiş özel görev varsa koru (standart kategori adı değilse)
-        var _tumKategoriler = OYUNCU_K.concat(['Sahne Amiri','Kondüvit','Ses – Kondüvit','Ses','Mutemet',
-          'Sahne Terzisi','Dekor/Aksesuar','Sahne Makinisti','Işık Kontrol','Işık Tasarımı',
-          'Sanatçı','Figüran','Turne Ekstra Kadrosu']);
-        var _gorevManuel = k.gorev && k.gorev.trim() && _tumKategoriler.indexOf(k.gorev.trim()) < 0;
-        var katGoster = _gorevManuel ? k.gorev.trim() : _varsayilan;
+        // Kaydedilmiş görev varsa her zaman koru — normalize etme
+        var katGoster = (k.gorev && k.gorev.trim()) ? k.gorev.trim() : _varsayilan;
         return Object.assign({}, k, { gorev: katGoster, kategori: gercekKat });
       });
       var kayitliAdlar = new Set(kisiModalSecili.map(function(k){ return k.kisi.trim().toLowerCase(); }));
@@ -7225,12 +7221,12 @@ function renderSelectedPills(scrollToIdx) {
     el.tabIndex = 0;
     el.style.outline = 'none';
     el.addEventListener('keydown', function(e) {
+      if (e.target.matches('input, select, textarea')) return;
       var n2 = kisiModalSecili.length;
       if (!n2) return;
-      if (_aktifPillIdx < 0) { _aktifPillIdx = 0; renderSelectedPills(0); return; }
-      if (e.key === 'ArrowUp')   { e.preventDefault(); _pillMove(_aktifPillIdx, -1); }
-      if (e.key === 'ArrowDown') { e.preventDefault(); _pillMove(_aktifPillIdx,  1); }
-      if ((e.key==='Delete'||e.key==='Backspace') && !e.target.matches('input')) {
+      if (e.key === 'ArrowUp')   { e.preventDefault(); if (_aktifPillIdx > 0) _pillMove(_aktifPillIdx, -1); }
+      if (e.key === 'ArrowDown') { e.preventDefault(); if (_aktifPillIdx < n2-1) _pillMove(_aktifPillIdx, 1); }
+      if ((e.key==='Delete'||e.key==='Backspace') && _aktifPillIdx >= 0) {
         e.preventDefault();
         var k = kisiModalSecili[_aktifPillIdx];
         if (k) kaldir(k.kisi);
