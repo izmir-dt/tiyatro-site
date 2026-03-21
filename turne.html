@@ -7629,9 +7629,7 @@ async function saveKisiModal() {
   const katJSON2 = JSON.stringify(_birlesikListe); // closeKisiModal'dan ÖNCE al
   const katSayisi = _birlesikListe.length; // log için closeKisiModal'dan ÖNCE al
 
-  console.log('[KAYDET] rowIdx:', rowIdxKayit, '| sheet row:', rowIdxKayit + 2, '| kisi sayisi:', katSayisi);
   console.log('[KAYDET] ilk 3 kisi:', _birlesikListe.slice(0,3).map(function(k){ return k.kisi + ' → ' + k.gorev + ' (oyun:' + k.oyun + ')'; }));
-  console.log('[KAYDET] _kisiModalCoklu mod:', !!window._kisiModalCoklu, '| oyunlar:', window._kisiModalCoklu ? Object.keys(window._kisiModalCoklu) : 'yok');
 
   // 2. Modal'ı kapat, ekranı güncelle
   closeKisiModal();
@@ -7657,24 +7655,11 @@ async function saveKisiModal() {
       var resText = ''; try { resText = await cellRes.text(); } catch(ex) {}
       console.log('[KAYDET] API başarılı, yanıt:', resText);
       showToast(katSayisi + ' katılımcı kaydedildi', 'success', 3000);
-      try {
-        _cacheSil('cache_turneler');
-        await fetchTurneler(true);
-        // fetchTurneler turneler array'ini yeniden oluşturur — sheet henüz güncel
-        // olmayabilir (race condition). Yerel kaydettiğimiz listeyi geri yaz.
-        var tYeni = turneler.find(function(x){ return x._rowIdx === rowIdxKayit; });
-        if (tYeni) {
-          tYeni.katilimcilar = JSON.parse(katJSON2);
-          console.log('[KAYDET] fetchTurneler sonrası yerel veri geri yazıldı:', tYeni.katilimcilar.length, 'kişi');
-        } else {
-          console.warn('[KAYDET] fetchTurneler sonrası rowIdx', rowIdxKayit, 'bulunamadı!');
-        }
-        renderListe();
-        renderIstatistik();
-      } catch(e) {
-        console.warn('[KAYDET] fetchTurneler hatası:', e);
-        /* fetch hatası — yerel veri korunur */
-      }
+      // fetchTurneler(true) YAPILMIYOR — sheet yazma/okuma arasında race condition oluşur.
+      // Yerel t.katilimcilar zaten güncellendi. Cache'i geçersiz kıl, sonraki açılışta taze gelsin.
+      _cacheSil('cache_turneler');
+      renderListe();
+      renderIstatistik();
     }
   } catch(e) {
     console.error('[saveKisiModal] Beklenmeyen hata:', e);
