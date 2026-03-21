@@ -14578,17 +14578,32 @@ function gorevlendirmePdf(rowIdx, mod) {
             }
 
             mobilPdfBtn.disabled = true;
-            durum.textContent = 'Mobil PDF hazırlanıyor...';
+            durum.textContent = 'Mobil PDF haz\u0131rlan\u0131yor...';
 
             var MOBIL_W = 480;
             var SCALE2 = 2;
             var A4mm_W2 = 210;
 
-            // Tüm icerik sayfalarını tek wrapper'da birleştir
+            var h2c = _w3.html2canvas;
+            var jspdf = _w3.jspdf || (_w3.window && _w3.window.jspdf);
+            if (!h2c || !jspdf) {
+              durum.textContent = '\u26a0 K\u00fct\u00fcphane y\u00fckleniyor...';
+              setTimeout(function(){ _w3.document.getElementById('mobilPdfBtn').click(); }, 1000);
+              mobilPdfBtn.disabled = false;
+              return;
+            }
+
             var icerikEls = Array.from(_w3.document.querySelectorAll('.sayfa-icerik'));
 
-            // Mobil CSS override
-            _w3.document.querySelectorAll('.sayfa-icerik td, .sayfa-icerik th').forEach(function(el) {
+            // Her elementi 480px'e ayarla
+            icerikEls.forEach(function(el) {
+              el.style.setProperty('width', MOBIL_W+'px', 'important');
+              el.style.setProperty('max-width', MOBIL_W+'px', 'important');
+              el.style.setProperty('min-height', '0', 'important');
+              el.style.setProperty('padding', '16px 14px', 'important');
+              el.style.setProperty('box-sizing', 'border-box', 'important');
+            });
+            _w3.document.querySelectorAll('.sayfa-icerik td,.sayfa-icerik th').forEach(function(el) {
               el.style.padding = '4pt 5pt';
               el.style.fontSize = '9pt';
               el.style.whiteSpace = 'normal';
@@ -14601,83 +14616,86 @@ function gorevlendirmePdf(rowIdx, mod) {
               tbl.style.width = '100%';
               tbl.style.fontSize = '9pt';
             });
-
-            var h2c = _w3.html2canvas;
-            var jspdf = _w3.jspdf || (_w3.window && _w3.window.jspdf);
-            if (!h2c || !jspdf) {
-              durum.textContent = '⚠ Kütüphane yükleniyor...';
-              setTimeout(function(){ _w3.document.getElementById('mobilPdfBtn').click(); }, 1000);
-              mobilPdfBtn.disabled = false;
-              return;
-            }
-
-            // Wrapper: tüm icerik sayfaları alt alta
-            var wrapper = _w3.document.createElement('div');
-            wrapper.style.cssText = 'position:fixed;left:-9999px;top:0;width:'+MOBIL_W+'px;background:#fff;overflow:visible;box-sizing:border-box';
-
-            var origPositions = [];
-            icerikEls.forEach(function(el) {
-              origPositions.push({ parent: el.parentNode, next: el.nextSibling });
-              el.style.setProperty('width', MOBIL_W+'px', 'important');
-              el.style.setProperty('max-width', MOBIL_W+'px', 'important');
-              el.style.setProperty('min-height', '0', 'important');
-              el.style.setProperty('padding', '16px 14px', 'important');
-              el.style.setProperty('box-sizing', 'border-box', 'important');
-              el.style.borderTop = '2px solid #e5e5e5';
-              wrapper.appendChild(el);
-            });
-            _w3.document.body.appendChild(wrapper);
-            void wrapper.offsetHeight;
-
-            var totalH = wrapper.scrollHeight;
-            durum.textContent = 'İçerik render ediliyor...';
+            void _w3.document.body.offsetHeight;
 
             function restoreEls() {
-              icerikEls.forEach(function(el, i) {
-                var op = origPositions[i];
+              icerikEls.forEach(function(el) {
                 el.style.removeProperty('width');
                 el.style.removeProperty('max-width');
                 el.style.removeProperty('min-height');
                 el.style.removeProperty('padding');
                 el.style.removeProperty('box-sizing');
-                el.style.borderTop = '';
-                if (op.next) op.parent.insertBefore(el, op.next);
-                else op.parent.appendChild(el);
               });
-              try { _w3.document.body.removeChild(wrapper); } catch(e) {}
-              // Stilleri geri al
               _w3.document.querySelectorAll('.sayfa-icerik td,.sayfa-icerik th').forEach(function(el){ el.style.padding=''; el.style.fontSize=''; el.style.whiteSpace=''; el.style.width=''; });
               _w3.document.querySelectorAll('.sayfa-icerik table').forEach(function(tbl){ tbl.style.tableLayout=''; tbl.style.fontSize=''; });
             }
 
-            // Kapağı render et, sonra icerik
-            var kapakEl2 = _w3.document.querySelector('.sayfa-kapak');
-            var pdf2;
-
-            function renderIcerikVeKaydet() {
-              h2c(wrapper, {
+            // Her icerik'i sırayla render et, canvas'ları birleştir
+            var canvasList = [];
+            function renderSiradaki(i) {
+              if (i >= icerikEls.length) {
+                birlestiripKaydet();
+                return;
+              }
+              var el = icerikEls[i];
+              durum.textContent = 'B\u00f6l\u00fcm ' + (i+1) + '/' + icerikEls.length + '...';
+              // Off-screen box — parent etkisini kes
+              var box = _w3.document.createElement('div');
+              box.style.cssText = 'position:fixed;left:-9999px;top:0;width:'+MOBIL_W+'px;overflow:visible;background:#fff';
+              var origParent = el.parentNode;
+              var origNext = el.nextSibling;
+              box.appendChild(el);
+              _w3.document.body.appendChild(box);
+              void el.offsetHeight;
+              var elH = el.scrollHeight;
+              h2c(el, {
                 scale: SCALE2, useCORS: true, allowTaint: true,
-                backgroundColor: '#ffffff', width: MOBIL_W, height: totalH, logging: false
+                backgroundColor: '#ffffff', width: MOBIL_W, height: elH, logging: false
               }).then(function(canvas) {
-                restoreEls();
-                var icerikH_mm = (totalH / MOBIL_W) * A4mm_W2;
-                pdf2.addPage([A4mm_W2, icerikH_mm], 'p');
-                pdf2.addImage(canvas.toDataURL('image/jpeg', 0.93), 'JPEG', 0, 0, A4mm_W2, icerikH_mm);
-                durum.textContent = '⬇ İndiriliyor...';
-                pdf2.save(_dosyaAdi + '_mobil.pdf');
-                mobilPdfBtn.disabled = false;
-                setTimeout(function(){ durum.textContent = ''; }, 3000);
+                if (origNext) origParent.insertBefore(el, origNext);
+                else origParent.appendChild(el);
+                _w3.document.body.removeChild(box);
+                canvasList.push(canvas);
+                setTimeout(function(){ renderSiradaki(i+1); }, 20);
               }).catch(function() {
-                restoreEls();
-                mobilPdfBtn.disabled = false;
-                durum.textContent = 'Hata oluştu.';
+                if (origNext) origParent.insertBefore(el, origNext);
+                else origParent.appendChild(el);
+                try { _w3.document.body.removeChild(box); } catch(e) {}
+                setTimeout(function(){ renderSiradaki(i+1); }, 20);
               });
             }
 
+            function birlestiripKaydet() {
+              durum.textContent = 'PDF olu\u015fturuluyor...';
+              restoreEls();
+              // Tüm canvas'ları tek büyük canvas'a birleştir
+              var totalH = canvasList.reduce(function(s, c) { return s + c.height; }, 0);
+              var bigCanvas = _w3.document.createElement('canvas');
+              bigCanvas.width = MOBIL_W * SCALE2;
+              bigCanvas.height = totalH;
+              var ctx = bigCanvas.getContext('2d');
+              ctx.fillStyle = '#fff';
+              ctx.fillRect(0, 0, bigCanvas.width, bigCanvas.height);
+              var yOff = 0;
+              canvasList.forEach(function(c) {
+                ctx.drawImage(c, 0, yOff);
+                yOff += c.height;
+              });
+              var icerikH_mm = (totalH / SCALE2 / MOBIL_W) * A4mm_W2;
+              pdf2.addPage([A4mm_W2, icerikH_mm], 'p');
+              pdf2.addImage(bigCanvas.toDataURL('image/jpeg', 0.90), 'JPEG', 0, 0, A4mm_W2, icerikH_mm);
+              durum.textContent = '\u2b07 \u0130ndiriliyor...';
+              pdf2.save(_dosyaAdi + '_mobil.pdf');
+              mobilPdfBtn.disabled = false;
+              setTimeout(function(){ durum.textContent = ''; }, 3000);
+            }
+
+            // Kapak render, sonra icerik
+            var kapakEl2 = _w3.document.querySelector('.sayfa-kapak');
+            var pdf2;
             if (kapakEl2) {
               kapakEl2.style.setProperty('width', MOBIL_W+'px', 'important');
               kapakEl2.style.setProperty('min-height', '0', 'important');
-              // Oyun adı font boyutunu küçült
               kapakEl2.querySelectorAll('div[style*="font-weight:900"]').forEach(function(el) {
                 var fs = parseFloat(getComputedStyle(el).fontSize) || 44;
                 if (fs > 28) el.style.setProperty('font-size', '22pt', 'important');
@@ -14693,15 +14711,15 @@ function gorevlendirmePdf(rowIdx, mod) {
                 kapakEl2.style.removeProperty('width');
                 kapakEl2.style.removeProperty('min-height');
                 pdf2.addImage(canvas.toDataURL('image/jpeg', 0.93), 'JPEG', 0, 0, A4mm_W2, kapakH_mm);
-                renderIcerikVeKaydet();
+                renderSiradaki(0);
               }).catch(function() {
                 kapakEl2.style.removeProperty('width');
                 kapakEl2.style.removeProperty('min-height');
-                renderIcerikVeKaydet();
+                renderSiradaki(0);
               });
             } else {
               pdf2 = new jspdf.jsPDF({ orientation:'portrait', unit:'mm', format:[A4mm_W2, 100] });
-              renderIcerikVeKaydet();
+              renderSiradaki(0);
             }
           });
 
