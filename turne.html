@@ -4,6 +4,14 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
   <script>
+// Tarih string'ini timezone-safe parse et (YYYY-MM-DD → local time)
+function parseLocalDate(str) {
+  if (!str) return null;
+  var p = str.split('-');
+  if (p.length !== 3) return new Date(str);
+  return new Date(parseInt(p[0]), parseInt(p[1])-1, parseInt(p[2]));
+}
+
     // Sadece gerçek mobil cihazlarda yönlendir (masaüstü pencere küçültülünce değil)
     var _isMobile = /Android|iPhone|iPad|iPod|Mobile|IEMobile|BlackBerry|Opera Mini/i.test(navigator.userAgent)
       && !(/iPad/i.test(navigator.userAgent) && window.innerWidth >= 768);
@@ -3900,7 +3908,7 @@ function statuRenk(val) {
 function turneSuresi(t) {
   try {
     if (t.baslangicTarih && t.bitisTarih && t.bitisTarih >= t.baslangicTarih) {
-      return Math.max(1, Math.round((new Date(t.bitisTarih) - new Date(t.baslangicTarih)) / 86400000) + 1);
+      return Math.max(1, Math.round((parseLocalDate(t.bitisTarih) - parseLocalDate(t.baslangicTarih)) / 86400000) + 1);
     }
     return 1;
   } catch { return 1; }
@@ -4708,7 +4716,7 @@ function hesaplaSure() {
   const text = document.getElementById('sure-text');
   const titleSure = document.getElementById('modal-sure');
   if (bas && bit && bit >= bas) {
-    const diff = Math.round((new Date(bit) - new Date(bas)) / 86400000) + 1;
+    const diff = Math.round((parseLocalDate(bit) - parseLocalDate(bas)) / 86400000) + 1;
     if (diff > 1) {
       text.textContent = diff + ' günlük turne · ' + formatTarih(bas) + ' – ' + formatTarih(bit);
       info.style.display = 'flex';
@@ -5090,8 +5098,8 @@ function turneCard(t) {
 
   // Kalan gün hesapla
   var bugunDate = new Date();
-  var basDate = t.baslangicTarih ? new Date(t.baslangicTarih) : null;
-  var bitDate  = t.bitisTarih    ? new Date(t.bitisTarih)    : null;
+  var basDate = t.baslangicTarih ? parseLocalDate(t.baslangicTarih) : null;
+  var bitDate  = t.bitisTarih    ? parseLocalDate(t.bitisTarih)    : null;
   var kalanGunStr = '';
   var kalanGunRenk = 'var(--muted-foreground)';
   if (basDate && !isNaN(basDate)) {
@@ -6836,8 +6844,8 @@ function _veriKontrolHesapla() {
       kisiTurneleri[key].push({
         kisi: k.kisi,
         turne: t,
-        bas: new Date(t.baslangicTarih + 'T00:00:00'),
-        bit: new Date(t.bitisTarih + 'T23:59:59')
+        bas: parseLocalDate(t.baslangicTarih),
+        bit: parseLocalDate(t.bitisTarih)
       });
     });
   });
@@ -12110,7 +12118,7 @@ function _renderCalHafta() {
 
   const bugun = new Date();
   // Bu haftanın Pazartesi'sini bul
-  var baseDate = calSelectedDay ? new Date(calSelectedDay) : new Date(calYear, calMonth, bugun.getDate());
+  var baseDate = calSelectedDay ? parseLocalDate(calSelectedDay) : new Date(calYear, calMonth, bugun.getDate());
   var dayOfWeek = (baseDate.getDay() + 6) % 7; // 0=Pzt
   var monday = new Date(baseDate);
   monday.setDate(baseDate.getDate() - dayOfWeek);
@@ -12706,7 +12714,7 @@ function iCalIndir() {
       var bit = icsDate(t.bitisTarih||t.baslangicTarih||t.tarih||'');
       if (!bas) return;
       // DTEND iCal standardında bitiş günü +1 olmalı (exclusive)
-      var bitDate = new Date(t.bitisTarih||t.baslangicTarih||t.tarih||'');
+      var bitDate = parseLocalDate(t.bitisTarih||t.baslangicTarih||t.tarih||'');
       bitDate.setDate(bitDate.getDate() + 1);
       var bitPlus = bitDate.getFullYear()
         + ('0'+(bitDate.getMonth()+1)).slice(-2)
@@ -13342,7 +13350,7 @@ function _pdfIcerik(t) {
   function _formatTarihGunlu(tarih) {
     if (!tarih) return '\u2014';
     try {
-      var d = new Date(tarih + 'T00:00:00');
+      var d = parseLocalDate(tarih);
       var gun = _gunler[d.getDay()];
       var aylarTam = ['Ocak','\u015eubat','Mart','Nisan','May\u0131s','Haziran','Temmuz','A\u011fustos','Eyl\u00fcl','Ekim','Kas\u0131m','Aral\u0131k'];
       var parts = tarih.split('-');
@@ -13795,7 +13803,7 @@ function _pdfProgramPersonelIcerik(t) {
   function fmtTarih(tarih) {
     if (!tarih) return '\u2014';
     try {
-      var d = new Date(tarih + 'T00:00:00');
+      var d = parseLocalDate(tarih);
       var parts = tarih.split('-');
       return parts[2] + ' ' + AYLAR[parseInt(parts[1])-1] + ' ' + parts[0] + ' ' + _gunler[d.getDay()];
     } catch(e) { return tarih; }
@@ -13907,7 +13915,7 @@ function _pdfPersonelIcerik(t) {
   function _formatTarihGunlu(tarih) {
     if (!tarih) return '\u2014';
     try {
-      var d = new Date(tarih + 'T00:00:00');
+      var d = parseLocalDate(tarih);
       var gun = _gunler[d.getDay()];
       var aylarTam = ['Ocak','\u015eubat','Mart','Nisan','May\u0131s','Haziran','Temmuz','A\u011fustos','Eyl\u00fcl','Ekim','Kas\u0131m','Aral\u0131k'];
       var parts = tarih.split('-');
@@ -14033,7 +14041,7 @@ function _wordIcerik(t) {
   function _formatTarihGunlu(tarih) {
     if (!tarih) return '\u2014';
     try {
-      var d = new Date(tarih + 'T00:00:00');
+      var d = parseLocalDate(tarih);
       var gun = _gunler[d.getDay()];
       var aylarTam = ['Ocak','\u015eubat','Mart','Nisan','May\u0131s','Haziran','Temmuz','A\u011fustos','Eyl\u00fcl','Ekim','Kas\u0131m','Aral\u0131k'];
       var parts = tarih.split('-');
@@ -14252,7 +14260,7 @@ function _wordPersonelIcerik(t) {
   function _formatTarihGunlu(tarih) {
     if (!tarih) return '\u2014';
     try {
-      var d = new Date(tarih + 'T00:00:00');
+      var d = parseLocalDate(tarih);
       var gun = _gunler[d.getDay()];
       var aylarTam = ['Ocak','\u015eubat','Mart','Nisan','May\u0131s','Haziran','Temmuz','A\u011fustos','Eyl\u00fcl','Ekim','Kas\u0131m','Aral\u0131k'];
       var parts = tarih.split('-');
