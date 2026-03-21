@@ -5275,11 +5275,9 @@ function openKisiModal(rowIdx, _durakOyunAdi) {
   // window._kisiModalCoklu: { 'OYUN_ADI': [{kisi,gorev,kategori,oyun},...], ... }
   if (_tumDurakOyunlar.length > 1) {
     window._kisiModalCoklu = {};
-    // Oyun alanı olmayan eski kayıtları ilk oyuna ata (bir kez, çoğaltma)
     var _ilkOyun = _tumDurakOyunlar[0];
     _tumDurakOyunlar.forEach(function(o) {
       // Kayıtlı katılımcılardan bu oyuna ait olanları al
-      // !k.oyun olan eski kayıtlar SADECE ilk oyuna gider, diğer sekmelere çoğaltılmaz
       var kayitli = (t.katilimcilar || []).filter(function(k){ return k.oyun ? k.oyun === o : o === _ilkOyun; });
       if (kayitli.length > 0) {
         window._kisiModalCoklu[o] = JSON.parse(JSON.stringify(kayitli));
@@ -5299,8 +5297,6 @@ function openKisiModal(rowIdx, _durakOyunAdi) {
     });
     // Aktif sekmenin listesini kisiModalSecili'ye yansıt
     kisiModalSecili = window._kisiModalCoklu[oyunAdi] || [];
-    console.log('[MODAL AÇILDI] _kisiModalCoklu oyunlar:', Object.keys(window._kisiModalCoklu), '| aktif oyun:', oyunAdi, '| kisi sayisi:', kisiModalSecili.length);
-    console.log('[MODAL AÇILDI] ilk 3 kisi:', kisiModalSecili.slice(0,3).map(function(k){ return k.kisi + ' → ' + k.gorev; }));
     _kisiModalSekmelerRender();
   } else {
     // Tek oyun — mevcut davranış
@@ -6330,9 +6326,9 @@ function _konaklamaNotKaydet(rowIdx, kisiIdx, not) {
 function _konaklamaSheetKaydet(t) {
   if (!t || t._rowIdx === undefined || !t.katilimcilar) return;
   apiFetch('/' + encodeURIComponent(TURNE_SHEET) + '/cell', {
-    method: 'PUT',
+    method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ row: t._rowIdx, col: 39, value: JSON.stringify(t.katilimcilar) })
+    body: JSON.stringify({ row: t._rowIdx + 2, col: 39, value: JSON.stringify(t.katilimcilar) })
   }).then(function(res){
     if (res && !res.ok) throw new Error('HTTP ' + res.status);
     showToast('Not kaydedildi ✓', 'success', 1200);
@@ -7228,7 +7224,6 @@ function renderSelectedPills(scrollToIdx) {
     el.tabIndex = 0;
     el.style.outline = 'none';
     el.addEventListener('keydown', function(e) {
-      // Input odaklanmışsa klavye olaylarını yoksay — sadece wrapper odaklandığında çalış
       if (e.target.matches('input, select, textarea')) return;
       var n2 = kisiModalSecili.length;
       if (!n2) return;
@@ -7630,7 +7625,6 @@ async function saveKisiModal() {
   const katJSON2 = JSON.stringify(_birlesikListe); // closeKisiModal'dan ÖNCE al
   const katSayisi = _birlesikListe.length; // log için closeKisiModal'dan ÖNCE al
 
-
   // 2. Modal'ı kapat, ekranı güncelle
   closeKisiModal();
   renderListe();
@@ -7639,23 +7633,18 @@ async function saveKisiModal() {
   // 4. Arka planda sadece katilimcilar sütununu yaz (/cell endpoint — backend'de mevcut)
   try {
     const KAT_COL = 39; // yeni yapıda index 39 = katilimcilar sütunu
-      var _payload = { row: rowIdxKayit, col: KAT_COL, value: katJSON2 };
-    console.log('[KAYDET] Gönderilen payload → row:', _payload.row, '| col:', _payload.col, '| kisi sayisi:', JSON.parse(katJSON2).length, '| ilk kisi:', JSON.parse(katJSON2)[0] && (JSON.parse(katJSON2)[0].kisi + ' → ' + JSON.parse(katJSON2)[0].gorev));
     const cellRes = await apiFetch('/' + encodeURIComponent(TURNE_SHEET) + '/cell', {
-      method: 'PUT',
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(_payload)
+      body: JSON.stringify({ row: rowIdxKayit, col: KAT_COL, value: katJSON2 })
     });
-    console.log('[KAYDET] API yanıt:', cellRes.status, cellRes.ok ? 'OK' : 'HATA');
-      if (!cellRes.ok) {
+    if (!cellRes.ok) {
       var errBody = '';
       try { errBody = await cellRes.text(); } catch(ex) { errBody = String(cellRes.status); }
       console.error('[saveKisiModal] CELL hata:', errBody);
       _gosterKayitHatasi('⚠️ Katılımcılar kaydedilemedi (Hata: ' + errBody + ')');
     } else {
-              showToast(katSayisi + ' katılımcı kaydedildi', 'success', 3000);
-      // fetchTurneler(true) YAPILMIYOR — sheet yazma/okuma arasında race condition oluşur.
-      // Yerel t.katilimcilar zaten güncellendi. Cache'i geçersiz kıl, sonraki açılışta taze gelsin.
+      showToast(katSayisi + ' katılımcı kaydedildi', 'success', 3000);
       _cacheSil('cache_turneler');
       renderListe();
       renderIstatistik();
@@ -8700,7 +8689,7 @@ async function saveTurne() {
       // Önce tek seferlik row PUT dene; başarısız olursa cell-by-cell paralel yedekle
       var rowPutBasarili = false;
       try {
-        var rowPutR = await apiFetch('/' + encodeURIComponent(TURNE_SHEET) + '/row/' + idx, {
+        var rowPutR = await apiFetch('/' + encodeURIComponent(TURNE_SHEET) + '/row/' + (idx + 2), {
           method:'PUT', headers:{'Content-Type':'application/json'},
           body: JSON.stringify({ values: values })
         });
@@ -8712,7 +8701,7 @@ async function saveTurne() {
         var cellPromises = values.map(function(val, ci) {
           return apiFetch('/' + encodeURIComponent(TURNE_SHEET) + '/cell', {
             method:'PUT', headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({ row: idx, col: ci, value: val })
+            body: JSON.stringify({ row: idx + 2, col: ci, value: val })
           }).then(function(r){ return r.ok ? 0 : 1; }).catch(function(){ return 1; });
         });
         var sonuclar = await Promise.all(cellPromises);
@@ -8754,12 +8743,6 @@ async function saveTurne() {
         try {
           _cacheSil('cache_turneler');
           await fetchTurneler(true);
-          // fetchTurneler katilimcilar dahil tüm veriyi yeniden yükler.
-          // saveTurne katilimcilari dokunmadan bırakmalı — yerel değeri geri yaz.
-          if (editIdx !== '') {
-            var _tGeri = turneler.find(function(x){ return x._rowIdx === parseInt(editIdx); });
-            if (_tGeri && _katMevcut) _tGeri.katilimcilar = _katMevcut;
-          }
           tumUIGuncelle();
         } catch(e) { /* fetch hatası — mevcut veri korunur */ }
       }
@@ -9733,7 +9716,7 @@ async function topluKaydet() {
                   await apiFetch('/' + encodeURIComponent(TURNE_SHEET) + '/cell', {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ row: turneObj._rowIdx, col: 39, value: JSON.stringify(turneObj.katilimcilar) })
+                    body: JSON.stringify({ row: turneObj._rowIdx + 2, col: 39, value: JSON.stringify(turneObj.katilimcilar) })
                   });
                 } catch(te) { console.warn('Turne katılımcı silme hatası:', te); }
               }
@@ -9807,7 +9790,7 @@ async function topluKaydet() {
                   try {
                     await apiFetch('/' + encodeURIComponent(TURNE_SHEET) + '/cell', {
                       method: 'PUT', headers: {'Content-Type':'application/json'},
-                      body: JSON.stringify({ row: turneObj._rowIdx, col: 39, value: JSON.stringify(turneObj.katilimcilar) })
+                      body: JSON.stringify({ row: turneObj._rowIdx + 2, col: 39, value: JSON.stringify(turneObj.katilimcilar) })
                     });
                   } catch(te) { console.warn('Turne isim güncelleme hatası:', te); }
                 }
@@ -10709,7 +10692,7 @@ async function _kadroKisiSilDevam(silIdx) {
             await apiFetch('/' + encodeURIComponent(TURNE_SHEET) + '/cell', {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ row: turneObj._rowIdx, col: 39, value: JSON.stringify(turneObj.katilimcilar) })
+              body: JSON.stringify({ row: turneObj._rowIdx + 2, col: 39, value: JSON.stringify(turneObj.katilimcilar) })
             });
           } catch(te) { console.warn('Turne katılımcı silme hatası:', te); }
         }
@@ -15721,9 +15704,6 @@ function _pollingYap() {
 
   Promise.all([fetchTurneler(), fetchPersonel(), fetchDisPersonel(), calNotYukle()])
     .then(function() {
-      // TANI LOGU — rowIdx ve sheet row değerlerini göster
-      console.log('[TANI] Turneler yüklendi:');
-      turneler.forEach(function(t){ console.log('  ' + (t.oyun||'?') + ' | ' + (t.il||'?') + ' → _rowIdx:' + t._rowIdx + ' | sheet row:' + (t._rowIdx+2) + ' | katilimci:' + (t.katilimcilar||[]).length); });
       tumUIGuncelle();
       // Aktif sekmeye göre ek güncellemeler
       var aktifSekme = localStorage.getItem('_sonSekme') || 'liste';
