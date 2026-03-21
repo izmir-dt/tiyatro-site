@@ -14581,7 +14581,7 @@ function gorevlendirmePdf(rowIdx, mod) {
             durum.textContent = 'Mobil PDF haz\u0131rlan\u0131yor...';
 
             var MOBIL_W = 480;
-            var SCALE2 = 2;
+            var SCALE2 = 3;
             var A4mm_W2 = 210;
 
             var h2c = _w3.html2canvas;
@@ -14696,12 +14696,22 @@ function gorevlendirmePdf(rowIdx, mod) {
             if (kapakEl2) {
               kapakEl2.style.setProperty('width', MOBIL_W+'px', 'important');
               kapakEl2.style.setProperty('min-height', '0', 'important');
+              // Afiş background: cover yerine contain — mobilde fazla zoom olmasın
+              var bgDiv2 = kapakEl2.querySelector('#kapak-bg-div');
+              if (bgDiv2 && bgDiv2.style.backgroundImage && bgDiv2.style.backgroundImage !== 'none') {
+                bgDiv2.style.backgroundSize = 'contain';
+                bgDiv2.style.backgroundPosition = 'center top';
+                bgDiv2.style.backgroundRepeat = 'no-repeat';
+              }
               kapakEl2.querySelectorAll('div[style*="font-weight:900"]').forEach(function(el) {
                 var fs = parseFloat(getComputedStyle(el).fontSize) || 44;
                 if (fs > 28) el.style.setProperty('font-size', '22pt', 'important');
               });
               void kapakEl2.offsetHeight;
-              var kapakH = kapakEl2.scrollHeight || 480;
+              // Afiş varsa minimum yükseklik garantisi — afiş kırpılmasın
+              var _hasAfis = bgDiv2 && bgDiv2.style.backgroundImage && bgDiv2.style.backgroundImage !== 'none';
+              // Afiş varsa kapak en az MOBIL_W * 1.5 olsun — alt bant görünsün
+              var kapakH = Math.max(kapakEl2.scrollHeight, _hasAfis ? Math.round(MOBIL_W * 1.5) : 0) || 480;
               var kapakH_mm = (kapakH / MOBIL_W) * A4mm_W2;
               pdf2 = new jspdf.jsPDF({ orientation:'portrait', unit:'mm', format:[A4mm_W2, kapakH_mm] });
               h2c(kapakEl2, {
