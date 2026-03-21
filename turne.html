@@ -7639,11 +7639,14 @@ async function saveKisiModal() {
   // 4. Arka planda sadece katilimcilar sütununu yaz (/cell endpoint — backend'de mevcut)
   try {
     const KAT_COL = 39; // yeni yapıda index 39 = katilimcilar sütunu
-      const cellRes = await apiFetch('/' + encodeURIComponent(TURNE_SHEET) + '/cell', {
+      var _payload = { row: rowIdxKayit + 2, col: KAT_COL, value: katJSON2 };
+    console.log('[KAYDET] Gönderilen payload → row:', _payload.row, '| col:', _payload.col, '| kisi sayisi:', JSON.parse(katJSON2).length, '| ilk kisi:', JSON.parse(katJSON2)[0] && (JSON.parse(katJSON2)[0].kisi + ' → ' + JSON.parse(katJSON2)[0].gorev));
+    const cellRes = await apiFetch('/' + encodeURIComponent(TURNE_SHEET) + '/cell', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ row: rowIdxKayit + 2, col: KAT_COL, value: katJSON2 })
+      body: JSON.stringify(_payload)
     });
+    console.log('[KAYDET] API yanıt:', cellRes.status, cellRes.ok ? 'OK' : 'HATA');
       if (!cellRes.ok) {
       var errBody = '';
       try { errBody = await cellRes.text(); } catch(ex) { errBody = String(cellRes.status); }
@@ -8751,6 +8754,12 @@ async function saveTurne() {
         try {
           _cacheSil('cache_turneler');
           await fetchTurneler(true);
+          // fetchTurneler katilimcilar dahil tüm veriyi yeniden yükler.
+          // saveTurne katilimcilari dokunmadan bırakmalı — yerel değeri geri yaz.
+          if (editIdx !== '') {
+            var _tGeri = turneler.find(function(x){ return x._rowIdx === parseInt(editIdx); });
+            if (_tGeri && _katMevcut) _tGeri.katilimcilar = _katMevcut;
+          }
           tumUIGuncelle();
         } catch(e) { /* fetch hatası — mevcut veri korunur */ }
       }
@@ -15712,6 +15721,9 @@ function _pollingYap() {
 
   Promise.all([fetchTurneler(), fetchPersonel(), fetchDisPersonel(), calNotYukle()])
     .then(function() {
+      // TANI LOGU — rowIdx ve sheet row değerlerini göster
+      console.log('[TANI] Turneler yüklendi:');
+      turneler.forEach(function(t){ console.log('  ' + (t.oyun||'?') + ' | ' + (t.il||'?') + ' → _rowIdx:' + t._rowIdx + ' | sheet row:' + (t._rowIdx+2) + ' | katilimci:' + (t.katilimcilar||[]).length); });
       tumUIGuncelle();
       // Aktif sekmeye göre ek güncellemeler
       var aktifSekme = localStorage.getItem('_sonSekme') || 'liste';
