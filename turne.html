@@ -3531,6 +3531,7 @@ const STATU_OPTS = [
 
 let tumPersonel = [];
 let turneler    = [];
+let _turneYukleniyor = true;
 let calYear, calMonth, calSelectedDay = null;
 var calNotes = {}; // key: 'YYYY-MM-DD' → not metni (localStorage'dan yüklenir)
 var calStatuFiltre = ''; // takvim statü filtresi
@@ -4353,7 +4354,7 @@ function _cacheSil(key) { try { sessionStorage.removeItem(key); } catch(e) {} }
 async function fetchTurneler(zorlaYenile) {
   if (!zorlaYenile) {
     var _cached = _cacheOku('cache_turneler');
-    if (_cached && _cached.length) { turneler = _cached; return; }
+    if (_cached && _cached.length) { turneler = _cached; _turneYukleniyor = false; return; }
   }
   try {
     const res  = await apiFetch('/' + encodeURIComponent(TURNE_SHEET));
@@ -4484,7 +4485,8 @@ async function fetchTurneler(zorlaYenile) {
       };
     }).filter(r => r.oyun || r.il || r.baslangicTarih || (r.duraklar && r.duraklar.length));
   _cacheYaz('cache_turneler', turneler);
-  } catch(e) { console.warn('Turne verisi çekilemedi:', e); }
+  _turneYukleniyor = false;
+  } catch(e) { _turneYukleniyor = false; console.warn('Turne verisi çekilemedi:', e); }
 }
 
 // ============================================================
@@ -4854,7 +4856,12 @@ function renderListe() {
   filtered.sort((a,b) => new Date(b.baslangicTarih||b.tarih||0) - new Date(a.baslangicTarih||a.tarih||0));
   const el = document.getElementById('liste-content');
   if (!filtered.length) {
-    var bosHtml = turneler.length === 0
+    var bosHtml = turneler.length === 0 && _turneYukleniyor
+      ? '<div style="max-width:460px;margin:48px auto;text-align:center;padding:0 20px">'
+        + '<div style="margin-bottom:16px"><div style="width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:spin .6s linear infinite;margin:0 auto"></div></div>'
+        + '<div style="font-size:14px;font-weight:600;color:var(--muted-foreground)">Turneler yükleniyor...</div>'
+        + '</div>'
+      : turneler.length === 0
       ? '<div style="max-width:460px;margin:48px auto;text-align:center;padding:0 20px">'
         + '<div style="font-size:48px;margin-bottom:12px">🎭</div>'
         + '<div style="font-size:17px;font-weight:800;margin-bottom:8px">Henüz turne eklenmemiş</div>'
