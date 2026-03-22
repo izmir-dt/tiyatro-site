@@ -1439,8 +1439,19 @@ function openDetail(rowIdx) {
     // Şehir içi
     if (t.sehirAracTur) {
       var sStr = 'Şehir içi: ' + esc(t.sehirAracTur);
-      if (t.sehirAracDetay) sStr += ' · ' + esc(t.sehirAracDetay);
+      if (t.sehirAracDetay) {
+        // Format: 'FIRMA|TEL:0555...' veya düz metin
+        var sDetay = t.sehirAracDetay;
+        if (sDetay.includes('|TEL:')) {
+          var sParts = sDetay.split('|TEL:');
+          sStr += ' · ' + esc(sParts[0].trim());
+          sStr += ' · <a href="tel:' + esc(sParts[1].trim()) + '" style="color:var(--primary)">' + esc(sParts[1].trim()) + '</a>';
+        } else {
+          sStr += ' · ' + esc(sDetay);
+        }
+      }
       if (t.sehirKisiSayisi) sStr += ' · ' + esc(t.sehirKisiSayisi) + ' kişi';
+      if (t.sehirTel && !t.sehirAracDetay.includes('|TEL:')) sStr += ' · <a href="tel:' + esc(t.sehirTel) + '" style="color:var(--primary)">' + esc(t.sehirTel) + '</a>';
       body += '<div class="sheet-row"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>' + sStr + '</div>';
     }
     // Aktarma
@@ -1453,6 +1464,35 @@ function openDetail(rowIdx) {
     if (t.otelAdi) body += '<div class="sheet-row"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>' + esc(t.otelAdi) + '</div>';
     if (t.otelAdres) body += '<div class="sheet-row"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>' + esc(t.otelAdres) + '</div>';
     if (t.otelTelefon) body += '<div class="sheet-row"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.56 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg><a href="tel:' + esc(t.otelTelefon) + '" style="color:var(--primary)">' + esc(t.otelTelefon) + '</a></div>';
+    body += '</div>';
+  }
+
+  // Lojistik bölümü
+  var _lojRaw = t.notlarDuz || t.notlar || '';
+  var _kamyonFirma = '', _kamyonTel = '', _lojNot = '';
+  if (_lojRaw.indexOf('\u{1F69B}') === 0 || _lojRaw.charAt(0) === '\uD83D') {
+    var _llines = _lojRaw.split('\n');
+    var _kline = _llines[0].replace(/^[\uD83D][\uDE9B]\s*/, '').replace(/^\u{1F69B}\s*/u, '');
+    var _kparts = _kline.split(' · ');
+    _kamyonFirma = _kparts[0] || '';
+    _kamyonTel = _kparts[1] || '';
+    _lojNot = _llines.slice(1).join('\n').trim();
+  } else {
+    _lojNot = _lojRaw;
+  }
+  var hasLojistik = t.kamyonSayisi || _kamyonFirma || _kamyonTel || t.aracTur || t.sahneKapasitesi || _lojNot;
+  if (hasLojistik) {
+    body += '<div class="sheet-section"><div class="sheet-section-title">Lojistik</div>';
+    if (t.aracTur || t.kamyonSayisi) {
+      var lStr = '';
+      if (t.aracTur) lStr += esc(t.aracTur);
+      if (t.kamyonSayisi) lStr += (lStr ? ' · ' : '') + esc(t.kamyonSayisi) + ' adet';
+      body += '<div class="sheet-row"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="1" y="3" width="15" height="13" rx="1"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>' + lStr + '</div>';
+    }
+    if (_kamyonFirma) body += '<div class="sheet-row"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 7H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/><circle cx="12" cy="13" r="2"/></svg>' + esc(_kamyonFirma) + '</div>';
+    if (_kamyonTel) body += '<div class="sheet-row"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.56 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg><a href="tel:' + esc(_kamyonTel) + '" style="color:var(--primary)">' + esc(_kamyonTel) + '</a></div>';
+    if (t.sahneKapasitesi) body += '<div class="sheet-row"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>Kapasite: ' + esc(t.sahneKapasitesi) + ' kişi</div>';
+    if (_lojNot) body += '<div class="sheet-row" style="align-items:flex-start"><svg width="14" height="14" style="margin-top:2px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><span style="font-size:12px;color:var(--muted-fg);line-height:1.5">' + esc(_lojNot) + '</span></div>';
     body += '</div>';
   }
 
