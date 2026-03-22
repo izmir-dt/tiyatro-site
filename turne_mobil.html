@@ -1271,50 +1271,12 @@ async function apiFetch(path, options) {
   return fetch(url, opts);
 }
 
-async function fetchTurneler() {
-  try {
-    var res = await apiFetch('/' + encodeURIComponent(TURNE_SHEET));
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    var data = await res.json();
-    var rows = data.rows || [];
-    var rowNumbers = data.rowNumbers || [];
-    if (!rows.length) { _yukleniyor = false; return; }
-    turneler = rows.map(function(r, i) {
-      var parsedDuraklar = null;
-      try { if (r[19]) parsedDuraklar = JSON.parse(r[19]); } catch(e) {}
-      var katilimcilar = [];
-      try { if ((r[39]||'').startsWith('[')) katilimcilar = JSON.parse(r[39]); } catch(e) {}
-      return {
-        _rowIdx: rowNumbers[i] != null ? rowNumbers[i] - 2 : i,
-        oyun:           (r[0]  || '').trim(),
-        il:             (r[1]  || '').trim(),
-        baslangicTarih: (r[2]  || '').trim(),
-        bitisTarih:     (r[3]  || '').trim(),
-        mekan:          (r[4]  || '').trim(),
-        sayi:           parseInt(r[5]) || 1,
-        not:            (r[6]  || '').trim(),
-        statu:          (r[7]  || 'taslak').trim(),
-        otelAdi:        (r[8]  || '').trim(),
-        gidisUlasim:    (r[11] || '').trim(),
-        gidisSaat:      (r[12] || '').trim(),
-        donusUlasim:    (r[13] || '').trim(),
-        donusSaat:      (r[14] || '').trim(),
-        kamyonSayisi:   (r[16] || '').trim(),
-        duraklar:       parsedDuraklar,
-        katilimcilar:   katilimcilar,
-      };
-    }).filter(function(r) { return r.oyun || r.il || r.baslangicTarih; });
-    _yukleniyor = false;
-  } catch(e) {
-    _yukleniyor = false;
-    console.warn('fetchTurneler hata:', e);
-  }
-}
+
 
 async function yenile() {
   var ico = document.getElementById('refresh-ico');
   if (ico) ico.style.animation = 'spin .6s linear infinite';
-  _yukleniyor = true;
+  _turneYukleniyor = true;
   renderListe();
   await fetchTurneler();
   renderListe();
@@ -1346,7 +1308,7 @@ function renderListe() {
   var el = document.getElementById('turne-list');
   if (!el) return;
 
-  if (_yukleniyor) {
+  if (_turneYukleniyor) {
     el.innerHTML = '<div class="empty"><div class="spinner"></div><div class="empty-title">Turneler yükleniyor...</div></div>';
     return;
   }
