@@ -248,6 +248,13 @@ let turneler = [];
 let tumPersonel = [];
 let _turneYukleniyor = true;
 
+// ── Mobil değişkenler ──
+var TR_MONTHS = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
+var TR_DAYS   = ['Pzt','Sal','Çar','Per','Cum','Cmt','Paz'];
+var _mobStatuFiltre = '';
+var _calYear = new Date().getFullYear();
+var _calMonth = new Date().getMonth();
+
 const API            = 'https://turne-backend.vercel.app/api/sheets';
 const TURNE_SHEET    = 'TURNE_KAYITLARI';
 const PERSONEL_SHEET = 'TURNE_PERSONEL';
@@ -876,7 +883,7 @@ function guncelleSonSenkron() {
   el.textContent = h + ':' + m;
   el.title = 'Son güncelleme: ' + now.toLocaleString('tr-TR');
   // Misafir modunda son senkron zamanını kart badge'lerine de yansıt
-  if (window._goruntuleme_modu) {
+  if (false) { // mobilde goruntuleme modu yok
     var label = '\u2713 G\u00fcncel · ' + h + ':' + m;
     document.querySelectorAll('._sync-badge').forEach(function(b){
       b.style.background = 'hsl(142,50%,94%)';
@@ -886,86 +893,6 @@ function guncelleSonSenkron() {
     });
   }
 }
-
-// ============================================================
-// ŞİFRE
-// ============================================================
-(function(){
-  const getSifre = () => localStorage.getItem(SK) || VARSAYILAN_SIFRE;
-  const overlay = document.getElementById('sp-overlay');
-  const inp     = document.getElementById('sp-inp');
-  const errmsg  = document.getElementById('sp-errmsg');
-  const btn     = document.getElementById('sp-login-btn');
-
-  // Seçili kart tipi
-  var _spSeciliKart = 'editor';
-  window.spSecKart = function(tip) {
-    _spSeciliKart = tip;
-    document.getElementById('sp-card-editor').classList.toggle('selected', tip === 'editor');
-    document.getElementById('sp-card-viewer').classList.toggle('selected', tip === 'viewer');
-    document.getElementById('sp-inp-label').textContent = tip === 'editor' ? 'Koordinatör Şifresi' : 'Misafir Şifresi';
-    inp.value = '';
-    errmsg.textContent = '';
-  };
-
-  if (sessionStorage.getItem('turne_erisim') === 'true') {
-    // Zaten giriş yapılmış — rol flag'ini de uygula
-    if (sessionStorage.getItem('turne_rol') === 'viewer') {
-      window._goruntuleme_modu = true;
-    }
-  } else {
-    overlay.classList.add('on');
-    setTimeout(() => inp.focus(), 100);
-  }
-
-  var adimAd = document.getElementById('sp-adim-ad');
-  var adInp  = document.getElementById('sp-ad-inp');
-
-  function tryLogin() {
-    var val = inp.value;
-    if (adimAd.style.display !== 'none') {
-      // Ad adımı
-      var ad = (adInp.value || '').trim().replace(/[^a-zA-Z0-9ğüşöçıİĞÜŞÖÇ_\-]/g, '_').slice(0, 20) || 'kullanici';
-      localStorage.setItem('calKullanici_idt', ad);
-      sessionStorage.setItem('turne_erisim', 'true');
-      sessionStorage.setItem('turne_rol', 'editor');
-      overlay.classList.remove('on');
-      init();
-      navKullaniciBilgi();
-      return;
-    }
-    if (val === getSifre()) {
-      // Koordinatör girişi — ad var mı?
-      var mevcutAd = localStorage.getItem('calKullanici_idt');
-      if (!mevcutAd) {
-        adimAd.style.display = 'block';
-        adInp.focus();
-      } else {
-        sessionStorage.setItem('turne_erisim', 'true');
-        sessionStorage.setItem('turne_rol', 'editor');
-        window._goruntuleme_modu = false;
-        overlay.classList.remove('on');
-        init();
-        navKullaniciBilgi();
-      }
-    } else if (val === GORUNTULEYICI_SIFRE) {
-      // Misafir girişi
-      sessionStorage.setItem('turne_erisim', 'true');
-      sessionStorage.setItem('turne_rol', 'viewer');
-      window._goruntuleme_modu = true;
-      overlay.classList.remove('on');
-      init();
-      navKullaniciBilgi();
-    } else {
-      inp.style.outline = '2px solid #e05c5c';
-      errmsg.textContent = 'Hatalı şifre!';
-      setTimeout(() => { inp.style.outline = ''; errmsg.textContent = ''; }, 2000);
-    }
-  }
-  btn.addEventListener('click', tryLogin);
-  inp.addEventListener('keydown', e => { if (e.key === 'Enter') tryLogin(); });
-  if (adInp) adInp.addEventListener('keydown', e => { if (e.key === 'Enter') tryLogin(); });
-})();
 
 // ============================================================
 // VERİ YÜKLEMELERİ
@@ -1408,7 +1335,7 @@ function switchTab(tab) {
 
 // ── STATU FILTER ──
 function setStatuFiltre(val, btn) {
-  _statuFiltre = val;
+  _mobStatuFiltre = val;
   document.querySelectorAll('#statu-chips .fchip').forEach(function(b) { b.classList.remove('active'); });
   if (btn) btn.classList.add('active');
   renderListe();
@@ -1426,7 +1353,7 @@ function renderListe() {
 
   var q = (document.getElementById('search-inp').value || '').toLowerCase().trim();
   var list = turneler.filter(function(t) {
-    if (_statuFiltre && t.statu !== _statuFiltre) return false;
+    if (_mobStatuFiltre && t.statu !== _mobStatuFiltre) return false;
     if (q && !t.oyun.toLowerCase().includes(q) && !t.il.toLowerCase().includes(q)) return false;
     return true;
   });
