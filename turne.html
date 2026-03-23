@@ -13238,6 +13238,29 @@ function _tumRaporlarDevam(turneler) {
 
 // ============================================================
 // PDF CSS + IÇERIK
+// PDF'de görev/unvan alanındaki konaklama notunu temizle (tire veya parantez sonrası tarih/not)
+function _temizleGorev(gorev) {
+  if (!gorev) return gorev;
+  // Parantez içindeki notu kaldır: "Görev (not)" → "Görev"
+  var g = gorev.replace(/\s*\([^)]*\)\s*/g, '').trim();
+  // Tire sonrası tarih/not kaldır (sadece tarih içeriyorsa): "Görev-25-29 Mart" → "Görev"
+  // Tarih kalıbı: rakam + ay adı içeriyorsa
+  g = g.replace(/[-–]\s*(\d[\d\s\w]*(?:Ocak|\u015eubat|Mart|Nisan|May\u0131s|Haziran|Temmuz|A\u011fustos|Eyl\u00fcl|Ekim|Kas\u0131m|Aral\u0131k)[\d\s\w]*)$/i, '').trim();
+  // Sondaki tire/çizgi kalıntısını temizle
+  g = g.replace(/[-–\s]+$/, '').trim();
+  return g || gorev;
+}
+
+// PDF personel listesinde parantez içi notu gizle: "Görev (not)" → "Görev"
+function _temizleGorev(gorev) {
+  if (!gorev) return gorev;
+  // Parantez içini kaldır
+  var g = gorev.replace(/\s*\([^)]*\)\s*/g, '').trim();
+  // Sondaki tire, nokta, virgül, boşluk kalıntılarını temizle
+  g = g.replace(/[\-–—.,;:\s]+$/, '').trim();
+  return g || gorev;
+}
+
 function _pdfCSS() {
   return '@charset "UTF-8";'
     // TEMEL
@@ -13392,7 +13415,7 @@ function _pdfIcerik(t) {
     var kat = (p.kategori || '');
     var unvan = OYUNCU_KATS_PDF.indexOf(kat) >= 0 && !(p.gorev||'').includes('-')
       ? kat
-      : ((p.gorev && p.gorev !== p.kategori && p.gorev.trim()) ? p.gorev : kat);
+      : ((p.gorev && p.gorev !== p.kategori && p.gorev.trim()) ? _temizleGorev(p.gorev) : kat);
     return '<tr>'
       + '<td class="per-no">' + (i+1) + '</td>'
       + '<td class="per-ad">' + (p.kisi||'') + '</td>'
@@ -13836,7 +13859,7 @@ function _pdfProgramPersonelIcerik(t) {
   var perSatirlar = katilimcilar.map(function(p, i) {
     var kat = p.kategori || '';
     var unvan = OYUNCU_KATS.indexOf(kat) >= 0 && !(p.gorev||'').includes('-')
-      ? kat : ((p.gorev && p.gorev !== p.kategori) ? p.gorev : kat);
+      ? kat : ((p.gorev && p.gorev !== p.kategori) ? _temizleGorev(p.gorev) : kat);
     var bg = i % 2 === 0 ? '#ffffff' : '#f9f5f0';
     return '<tr style="background:' + bg + '">'
       + '<td style="padding:5px 8px;border:1px solid #e5ddd5;font-size:10px;text-align:center;color:#999;width:26px">' + (i+1) + '</td>'
@@ -13992,7 +14015,7 @@ function _pdfPersonelIcerik(t) {
     var kat = p.kategori || '';
     var unvan = OYUNCU_KATS.indexOf(kat)>=0 && !(p.gorev||'').includes('-')
       ? kat
-      : ((p.gorev&&p.gorev!==p.kategori&&p.gorev.trim())?p.gorev:kat);
+      : ((p.gorev&&p.gorev!==p.kategori&&p.gorev.trim())?_temizleGorev(p.gorev):kat);
     var bg = i%2===0?'#f9f5f0':'#ffffff';
     return '<tr bgcolor="' + bg + '">'
       + '<td style="padding:5pt 8pt;border:1pt solid #dddddd;text-align:center;width:28px;color:#555;font-size:10pt">' + (i+1) + '</td>'
@@ -14019,7 +14042,7 @@ function _pdfPersonelIcerik(t) {
           var grpSatir = og.liste.map(function(p, i){
             var kat = p.kategori || '';
             var unvan = OYUNCU_KATS.indexOf(kat)>=0 && !(p.gorev||'').includes('-')
-              ? kat : ((p.gorev&&p.gorev!==p.kategori&&p.gorev.trim())?p.gorev:kat);
+              ? kat : ((p.gorev&&p.gorev!==p.kategori&&p.gorev.trim())?_temizleGorev(p.gorev):kat);
             return '<tr bgcolor="' + (i%2===0?'#f9f5f0':'#ffffff') + '">'
               + '<td style="padding:5pt 8pt;border:1pt solid #dddddd;text-align:center;width:28px;color:#555;font-size:10pt">'+(i+1)+'</td>'
               + '<td style="padding:5pt 8pt;border:1pt solid #dddddd;font-weight:bold;font-size:11pt;color:#1a1a1a;white-space:nowrap;min-width:110pt">'+(p.kisi||'')+'</td>'
@@ -14083,7 +14106,7 @@ function _wordIcerik(t) {
   var OYUNCU_KATS = ['Sanat\u00e7\u0131','Fig\u00fcran','Koro','Solist','Dans\u00e7\u0131','Koro/Dans Ekibi'];
   var personelRows = katilimcilar.map(function(p,i){
     var kat=p.kategori||'';
-    var unvan=OYUNCU_KATS.indexOf(kat)>=0&&!(p.gorev||'').includes('-')?kat:((p.gorev&&p.gorev!==p.kategori&&p.gorev.trim())?p.gorev:kat);
+    var unvan=OYUNCU_KATS.indexOf(kat)>=0&&!(p.gorev||'').includes('-')?kat:((p.gorev&&p.gorev!==p.kategori&&p.gorev.trim())?_temizleGorev(p.gorev):kat);
     return '<tr bgcolor="'+(i%2===0?'#f9f5f0':'#ffffff')+'">'
       +'<td width="28" style="padding:5pt 8pt;border:1pt solid #dddddd;text-align:center;font-size:10pt;color:#555">'+(i+1)+'</td>'
       +'<td style="padding:5pt 8pt;border:1pt solid #dddddd;font-weight:bold;font-size:11pt;color:#1a1a1a;white-space:nowrap;min-width:110pt">'+(p.kisi||'')+'</td>'
@@ -14297,7 +14320,7 @@ function _wordPersonelIcerik(t) {
   var OYUNCU_KATS = ['Sanat\u00e7\u0131','Fig\u00fcran','Koro','Solist','Dans\u00e7\u0131','Koro/Dans Ekibi'];
   var satirlar = tumListe.map(function(p,i){
     var kat=p.kategori||'';
-    var unvan=OYUNCU_KATS.indexOf(kat)>=0&&!(p.gorev||'').includes('-')?kat:((p.gorev&&p.gorev!==p.kategori&&p.gorev.trim())?p.gorev:kat);
+    var unvan=OYUNCU_KATS.indexOf(kat)>=0&&!(p.gorev||'').includes('-')?kat:((p.gorev&&p.gorev!==p.kategori&&p.gorev.trim())?_temizleGorev(p.gorev):kat);
     return '<tr bgcolor="'+(i%2===0?'#f9f5f0':'#ffffff')+'">'
       +'<td width="32" align="center" style="padding:5pt 8pt;border:1pt solid #dddddd;font-size:10pt;color:#555">'+(i+1)+'</td>'
       +'<td style="padding:5pt 8pt;border:1pt solid #dddddd;font-weight:bold;font-size:11pt;color:#1a1a1a;white-space:nowrap;min-width:110pt">'+(p.kisi||'')+'</td>'
@@ -17584,7 +17607,7 @@ function _pdfTurneDosyasiIcerik(t) {
   var munferit=katilimcilar.filter(function(p){return p.munferit;});
   var atanmamis=katilimcilar.filter(function(p){return !p.odaTip&&!p.munferit;});
   var OYUNCU_KATS=['Sanat\u00e7\u0131','Fig\u00fcran','Koro','Solist','Dans\u00e7\u0131'];
-  function unvan(p){var k=p.kategori||'';return OYUNCU_KATS.indexOf(k)>=0&&!(p.gorev||'').includes('-')?k:((p.gorev&&p.gorev!==p.kategori)?p.gorev:k);}
+  function unvan(p){var k=p.kategori||'';return OYUNCU_KATS.indexOf(k)>=0&&!(p.gorev||'').includes('-')?k:((p.gorev&&p.gorev!==p.kategori)?_temizleGorev(p.gorev):k);}
 
   // Çift odaları eşli grupla
   var ciftGruplar=[]; var ciftGoruldu={};
