@@ -1871,10 +1871,10 @@ flex-shrink:0;
        ════════════════════════════════════════════ */
 
     /* ── 1. NAVBAR overflow fix (768px-1200px) ── */
-    nav { overflow: hidden; }
+    nav { overflow: visible; }
     .nav-right { 
       flex-wrap: wrap; 
-      overflow: hidden; 
+      overflow: visible; 
       max-width: 100%;
     }
     @media (max-width: 1200px) and (min-width: 769px) {
@@ -4497,6 +4497,11 @@ function tumUIGuncelle() {
   if (haritaPanel && haritaPanel.classList.contains('active')) {
     renderHarita();
   }
+  // Takvim açıksa notu hemen göster
+  var takvimPanel = document.getElementById('tab-takvim');
+  if (takvimPanel && takvimPanel.classList.contains('active')) {
+    _calGununSenaryosuGuncelle();
+  }
   guncelleSonSenkron();
 }
 
@@ -4939,7 +4944,19 @@ function switchTab(tab) {
   if (tab === 'kisi')       renderKisiAra();
   if (tab === 'dispersonel') renderDisPersonel();
   if (tab === 'harita')     renderHarita();
-  if (tab === 'takvim')     renderCalendar();
+  if (tab === 'takvim') {
+    renderCalendar();
+    if (turneler && turneler.length) {
+      _calGununSenaryosuGuncelle();
+    } else {
+      var _bekle = setInterval(function() {
+        if (turneler && turneler.length) {
+          clearInterval(_bekle);
+          _calGununSenaryosuGuncelle();
+        }
+      }, 100);
+    }
+  }
   if (tab === 'istatistik') renderIstatistik();
   var geriBar = document.getElementById('istatistik-geri-bar');
   if (geriBar) {
@@ -5501,7 +5518,7 @@ function turneCard(t) {
           ? durakMekanlar.map(function(d){
               var ilKisa = temizIl(d.il||'').split(' ')[0];
               return '<div style="margin-bottom:3px;min-width:0">'
-                + '<span style="font-size:10.5px;font-weight:800;color:var(--primary)">' + ilKisa.toLocaleUpperCase('tr-TR') + '</span>'
+                + '<span style="font-size:11px;font-weight:900;color:hsl(38,72%,22%);letter-spacing:0.08em;background:hsl(42,80%,88%);padding:2px 7px;border-radius:4px;border-left:3px solid hsl(38,70%,45%)">' + ilKisa.toLocaleUpperCase('tr-TR') + '</span>'
                 + '<div style="font-size:10.5px;color:var(--muted-foreground);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + d.mekan.replace(/"/g,'&quot;') + '">' + d.mekan + '</div>'
                 + '</div>';
             }).join('')
@@ -12313,9 +12330,14 @@ function _calGununSenaryosuGuncelle() {
 
   var metin = satirlar.join('   ·   ');
   txt.textContent = metin;
-  // Metin uzunluğuna göre hız: her 10 karakter ~1s, min 12s max 40s
   var hiz = Math.min(40, Math.max(12, Math.round(metin.length * 0.18)));
-  txt.style.animationDuration = hiz + 's';
+  // Önce animasyonsuz göster
+  txt.style.animation = 'none';
+  el.style.display = 'flex';
+  // 1 saniye sonra animasyona gir
+  setTimeout(function() {
+    txt.style.animation = 'cal-marquee ' + hiz + 's linear infinite';
+  }, 1000);
 }
 
 
@@ -16011,6 +16033,7 @@ async function init() {
     populateFilters();
     renderListe();
     renderCalendar();
+    _calGununSenaryosuGuncelle();
   } else {
     // Cache yoksa spinner + "Veriler yükleniyor" placeholder göster (boş gibi görünmesin)
     var _lcEl = document.getElementById('liste-content');
@@ -16031,6 +16054,7 @@ async function init() {
   populateFilters();
   renderListe();
   renderCalendar();
+  _calGununSenaryosuGuncelle();
   setLoading(false);
   guncelleSonSenkron();
 
