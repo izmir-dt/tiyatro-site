@@ -8664,6 +8664,7 @@ function turneCopyala(rowIdx) {
 }
 
 function editTurne(rowIdx) {
+  rowIdx = typeof rowIdx === 'string' ? parseInt(rowIdx) : rowIdx;
   var t = turneler.find(x => x._rowIdx === rowIdx);
   if (!t) return;
   _aktifModalIdx = 0;
@@ -12826,14 +12827,22 @@ function _gorevKontroller(t) {
   var kadro = (t.katilimcilar && t.katilimcilar.length > 0) ? t.katilimcilar : (typeof getPersonelForOyun==='function' ? getPersonelForOyun(t.oyun) : []);
   return [
     { baslik: '🎭 Sanatçılar & Kadro', maddeler: [
-      { label: 'Katılımcı eklendi', kontrol: function(){ return kadro.length > 0; }, detay: function(){ return kadro.length > 0 ? kadro.length + ' kişi' : 'Henüz eklenmedi'; } },
+      { label: 'Katılımcı eklendi', kontrol: function(){ return kadro.length > 0; }, detay: function(){ return kadro.length > 0 ? kadro.length + ' kişi var' : 'Henüz eklenmedi'; } },
       { label: 'Oyun adı girildi', kontrol: function(){ return !!(t.oyun && t.oyun.trim()); }, detay: function(){ return t.oyun || '—'; } },
     ]},
     { baslik: '🚌 Ulaşım', maddeler: [
       { label: 'Gidiş ulaşım girildi', kontrol: function(){ return !!(t.gidisUlasim && t.gidisUlasim.trim()); }, detay: function(){ return t.gidisUlasim || 'Girilmedi'; } },
       { label: 'Dönüş ulaşım girildi', kontrol: function(){ return !!(t.donusUlasim && t.donusUlasim.trim()); }, detay: function(){ return t.donusUlasim || 'Girilmedi'; } },
-      { label: 'Gidiş saati girildi', kontrol: function(){ return !!(t.gidisSaat && t.gidisSaat.trim()); }, detay: function(){ return t.gidisSaat || 'Girilmedi'; } },
-      { label: 'Kamyon sayısı girildi', kontrol: function(){ return !!(t.kamyonSayisi && String(t.kamyonSayisi).trim()); }, detay: function(){ return t.kamyonSayisi ? t.kamyonSayisi + ' kamyon' : 'Girilmedi'; } },
+      { label: 'Gidiş saati girildi', kontrol: function(){
+        if (t.gidisSaat && t.gidisSaat.trim()) return true;
+        try { var gb=JSON.parse(t.gidisUcusBacakJSON||'[]'); if(gb.length&&gb[0].kalkis) return true; } catch(e){}
+        return false;
+      }, detay: function(){
+        if (t.gidisSaat) return t.gidisSaat;
+        try { var gb=JSON.parse(t.gidisUcusBacakJSON||'[]'); if(gb.length&&gb[0].kalkis) return gb[0].kalkis; } catch(e){}
+        return 'Girilmedi';
+      } },
+      { label: 'Kamyon sayısı girildi', kontrol: function(){ var v=String(t.kamyonSayisi||'').trim(); return !!(v && v !== '0'); }, detay: function(){ return (t.kamyonSayisi && String(t.kamyonSayisi).trim() !== '0') ? t.kamyonSayisi + ' kamyon' : 'Girilmedi'; } },
       { label: 'Telefon girildi', kontrol: function(){ var s=t.gidisSurucu||''; var tel=''; if(s.indexOf('|TEL:')>-1){var p=s.split('|');p.forEach(function(x){if(x.startsWith('TEL:'))tel=x.slice(4);});} return !!(tel && tel.trim()); }, detay: function(){ var s=t.gidisSurucu||''; var tel=''; if(s.indexOf('|TEL:')>-1){var p=s.split('|');p.forEach(function(x){if(x.startsWith('TEL:'))tel=x.slice(4);});} return tel||'Girilmedi'; } },
       { label: 'Sürüçü / Firma girildi', kontrol: function(){ var s=t.gidisSurucu||''; if(!s.trim()) return false; var kalkis=s.split('|')[0].trim(); var firma=''; if(s.indexOf('|FIRMA:')>-1){var p=s.split('|');p.forEach(function(x){if(x.startsWith('FIRMA:'))firma=x.slice(6);});} return !!(kalkis||firma); }, detay: function(){ var s=t.gidisSurucu||''; if(!s.trim()) return 'Girilmedi'; var kalkis=s.split('|')[0].trim(); var firma=''; if(s.indexOf('|FIRMA:')>-1){var p=s.split('|');p.forEach(function(x){if(x.startsWith('FIRMA:'))firma=x.slice(6);});} return (kalkis||firma)||'Girilmedi'; } },
     ]},
@@ -12893,7 +12902,7 @@ function renderGorevler() {
   var oran = Math.round(tamam / toplamToplam * 100);
   var renk = oran === 100 ? 'hsl(141,55%,40%)' : oran >= 60 ? 'hsl(38,75%,45%)' : 'hsl(0,65%,50%)';
   var banner = '<div style="margin-bottom:14px;padding:12px 16px;border-radius:10px;background:' + renk + ';color:#fff;display:flex;align-items:center;justify-content:space-between;gap:12px">'
-    + '<div><div style="font-size:14px;font-weight:900;cursor:pointer;text-decoration:underline;text-underline-offset:3px;opacity:.95" onclick="openModal(' + t._rowIdx + ')" title="Turneyi düzenle">' + t.oyun + ' ✏️</div>'
+    + '<div><div style="font-size:14px;font-weight:900;cursor:pointer;text-decoration:underline;text-underline-offset:3px;opacity:.95" onclick="editTurne(parseInt(' + t._rowIdx + '))" title="Turneyi düzenle">' + t.oyun + ' ✏️</div>'
     + '<div style="font-size:11px;opacity:.75;margin-top:2px">' + (oran===100 ? 'Tüm görevler tamamlandı! 🎉' : toplamEksik + ' eksik madde var') + '</div></div>'
     + '<div style="text-align:right"><div style="font-size:26px;font-weight:900;line-height:1">' + oran + '%</div>'
     + '<div style="font-size:10px;opacity:.75">' + tamam + '/' + toplamToplam + '</div></div></div>';
