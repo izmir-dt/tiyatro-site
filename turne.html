@@ -2825,6 +2825,16 @@ flex-shrink:0;
             <button onclick="calGenelRaporPdf()" style="height:24px;padding:0 10px;border-radius:12px;border:1.5px solid rgba(255,255,255,.3);background:rgba(255,255,255,.1);color:#fff;font-size:10px;font-weight:700;cursor:pointer;font-family:Poppins,sans-serif;display:inline-flex;align-items:center;gap:4px;transition:background .15s" onmouseenter="this.style.background='rgba(255,255,255,.2)'" onmouseleave="this.style.background='rgba(255,255,255,.1)'"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg> Genel Rapor</button>
           </div>
         </div>
+        <!-- TİP FİLTRE BARI -->
+        <div class="cal-statu-row" id="cal-tip-filtre-row" style="border-top:1px solid rgba(255,255,255,.1);padding-top:4px">
+          <span style="font-size:11px;font-weight:700;color:rgba(255,255,255,.45);letter-spacing:.3px">TİP:</span>
+          <button class="cal-statu-btn" data-tip="" onclick="calTipFiltre='';renderCalendar()" style="background:rgba(255,255,255,.18);color:#fff;border-color:rgba(255,255,255,.35)">Tümü</button>
+          <button class="cal-statu-btn" data-tip="Oyun" onclick="calTipFiltre='Oyun';renderCalendar()" style="background:hsl(141,42%,92%);color:hsl(141,55%,22%);border-color:hsl(141,55%,40%)"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polygon points="5 3 19 12 5 21 5 3"/></svg> Oyun</button>
+          <button class="cal-statu-btn" data-tip="Yol" onclick="calTipFiltre='Yol';renderCalendar()" style="background:hsl(38,65%,92%);color:hsl(32,60%,22%);border-color:hsl(38,70%,50%)"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg> Yol</button>
+          <button class="cal-statu-btn" data-tip="Prova" onclick="calTipFiltre='Prova';renderCalendar()" style="background:hsl(220,70%,93%);color:hsl(220,60%,30%);border-color:hsl(220,60%,60%)"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 8 12 12 14 14"/></svg> Prova</button>
+          <button class="cal-statu-btn" data-tip="Dönüş" onclick="calTipFiltre='Dönüş';renderCalendar()" style="background:hsl(0,70%,93%);color:hsl(0,60%,30%);border-color:hsl(0,60%,60%)"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/></svg> Dönüş</button>
+          <button class="cal-statu-btn" data-tip="Tatil" onclick="calTipFiltre='Tatil';renderCalendar()" style="background:hsl(50,70%,93%);color:hsl(50,60%,28%);border-color:hsl(50,60%,55%)"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg> Tatil</button>
+        </div>
         <!-- HAFTANIN GÜNLERİ -->
         <div class="cal-weekdays">
           <div class="cal-weekday">Pzt</div>
@@ -3876,6 +3886,7 @@ let _turneYukleniyor = true;
 let calYear, calMonth, calSelectedDay = null;
 var calNotes = {}; // key: 'YYYY-MM-DD' → not metni (localStorage'dan yüklenir)
 var calStatuFiltre = ''; // takvim statü filtresi
+var calTipFiltre = ''; // takvim tip filtresi (Oyun, Yol, vs.)
 
 // Türkiye Resmi Tatilleri (sabit tarihler)
 var SABIT_TATILLER = {
@@ -12174,7 +12185,10 @@ function _calGunEvents(key) {
     var bas = t.baslangicTarih || t.tarih || '';
     var bit = t.bitisTarih || t.tarih || '';
     if (t.programSatirlar && t.programSatirlar.length > 0) {
-      return t.programSatirlar.some(function(s){ return s.tarih === key; });
+      var gunSat = t.programSatirlar.filter(function(s){ return s.tarih === key; });
+      if (!gunSat.length) return false;
+      if (calTipFiltre) return gunSat.some(function(s){ return s.program === calTipFiltre; });
+      return true;
     }
     if (bas && bit) return key >= bas && key <= bit;
     return false;
@@ -12389,6 +12403,14 @@ function renderCalendar() {
   var calFilterBtns = document.querySelectorAll('#cal-statu-filtre-row button');
   calFilterBtns.forEach(function(btn) {
     var isActive = (calStatuFiltre === '' && btn.dataset.filtre === '') || btn.dataset.filtre === calStatuFiltre;
+    btn.style.opacity = isActive ? '1' : '0.5';
+    btn.style.fontWeight = isActive ? '800' : '600';
+    btn.style.boxShadow = isActive ? '0 0 0 2.5px rgba(255,255,255,.35)' : 'none';
+  });
+  // Tip filtre buton vurgusu
+  var calTipBtns = document.querySelectorAll('#cal-tip-filtre-row button');
+  calTipBtns.forEach(function(btn) {
+    var isActive = (calTipFiltre === '' && btn.dataset.tip === '') || btn.dataset.tip === calTipFiltre;
     btn.style.opacity = isActive ? '1' : '0.5';
     btn.style.fontWeight = isActive ? '800' : '600';
     btn.style.boxShadow = isActive ? '0 0 0 2.5px rgba(255,255,255,.35)' : 'none';
@@ -14791,9 +14813,8 @@ function gorevlendirmePdf(rowIdx, mod) {
       if (_aktifAfis) _tc.afisUrl = _aktifAfis;
       var _html2 = _pdfTurneDosyasiIcerik(_tc);
       var _afisVal = (_aktifAfis).replace(/"/g,'&quot;');
-      var _oyunKisa = (t.oyun||'Turne').replace(/[^a-zA-Z0-9 ]/g,'').trim().replace(/\s+/g,'_').slice(0,20);
-      var _tarihKisa = (t.baslangicTarih||t.tarih||'').replace(/-/g,'');
-      var _dosyaAdi = (_oyunKisa||'Turne') + '_' + _tarihKisa + '_TurneDosyasi';
+      var _oyunBuyuk = (t.oyun||'TURNE').toUpperCase().replace(/[^A-Z\u00c7\u011e\u0130\u00d6\u015e\u00dc0-9 ]/g,'').trim().replace(/\s+/g,'_');
+      var _dosyaAdi = _oyunBuyuk + '_TURNE_DOSYASI';
 
       var _w3 = window.open('', '_blank');
       if (!_w3) { alert('Pop-up engelleyiciyi kapatın.'); return; }
