@@ -12734,7 +12734,6 @@ function calTooltipGoster(e, encodedData) {
       pin:'<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>'
     };
 
-    // Yol/Dönüş günlerinde başlık her zaman oyun adı olsun
     var _ttBaslik = d.oyun || (d.oyunAdi || '\u2014');
     var _ttSubInfo = (d.progTip === 'yol' && d.oyunAdi && d.oyunAdi !== d.oyun)
       ? '<div style="font-size:10px;color:rgba(255,255,255,.5);margin-top:2px">&#128205; ' + d.oyunAdi + '</div>'
@@ -12787,9 +12786,9 @@ function calPrev()  { calMonth--; if(calMonth<0){calMonth=11;calYear--;}  calSel
 function calNext()  { calMonth++; if(calMonth>11){calMonth=0;calYear++;}  calSelectedDay=null; renderCalendar(); }
 function calToday() { const n=new Date(); calYear=n.getFullYear(); calMonth=n.getMonth(); calSelectedDay=null; renderCalendar(); }
 
-// =====================================================
+// ===================================================
 // GOREVLER SISTEMI
-// =====================================================
+// ===================================================
 function calSubSekme(sekme) {
   var isTakvim = sekme === 'takvim';
   var tDiv = document.getElementById('cal-sub-takvim');
@@ -12824,41 +12823,83 @@ function _gorevOyunSecDoldur() {
 
 function _gorevKontroller(t) {
   if (!t) return [];
-  var kadro = (t.katilimcilar && t.katilimcilar.length > 0) ? t.katilimcilar : (typeof getPersonelForOyun==='function' ? getPersonelForOyun(t.oyun) : []);
+  var kadro = (t.katilimcilar && t.katilimcilar.length > 0)
+    ? t.katilimcilar
+    : (typeof getPersonelForOyun === 'function' ? getPersonelForOyun(t.oyun) : []);
+  var aktifDuraklar = (t.duraklar || []).filter(function(d){ return d.il && d.il.trim(); });
+  function _gidisSaat() {
+    if (t.gidisSaat && t.gidisSaat.trim()) return t.gidisSaat;
+    try { var gb = JSON.parse(t.gidisUcusBacakJSON||'[]'); if (gb.length && gb[0].kalkis) return gb[0].kalkis; } catch(e){}
+    return '';
+  }
+  function _parsePipe(raw, key) {
+    var val = '';
+    (raw||'').split('|').forEach(function(x){ if (x.startsWith(key+':')) val = x.slice(key.length+1); });
+    return val;
+  }
+  var _gTel   = _parsePipe(t.gidisSurucu||'', 'TEL');
+  var _gFirma = _parsePipe(t.gidisSurucu||'', 'FIRMA') || (t.gidisSurucu||'').split('|')[0].trim();
+  var konDuraklar = aktifDuraklar.filter(function(d){ return d.otelAdi && d.otelAdi.trim(); });
+  var otelVar = konDuraklar.length > 0 || !!(t.otelAdi && t.otelAdi.trim());
+  var otelDetay = konDuraklar.length > 0
+    ? konDuraklar.map(function(d){ return d.il.replace('/MERKEZ','').split('/')[0].trim() + ': ' + d.otelAdi; }).join(' | ')
+    : (t.otelAdi || 'Girilmedi');
+  var durakDetay = aktifDuraklar.length > 0
+    ? aktifDuraklar.map(function(d){ return d.il.replace('/MERKEZ','').split('/')[0].trim(); }).join(' › ')
+    : 'Girilmedi';
   return [
-    { baslik: '🎭 Sanatçılar & Kadro', maddeler: [
-      { label: 'Katılımcı eklendi', kontrol: function(){ return kadro.length > 0; }, detay: function(){ return kadro.length > 0 ? kadro.length + ' kişi var' : 'Henüz eklenmedi'; } },
-      { label: 'Oyun adı girildi', kontrol: function(){ return !!(t.oyun && t.oyun.trim()); }, detay: function(){ return t.oyun || '—'; } },
+    { baslik: '🎭 Kadro', maddeler: [
+      { label: 'Katılımcı eklendi',
+        kontrol: function(){ return kadro.length > 0; },
+        detay:   function(){ return kadro.length > 0 ? kadro.length + ' kişi' : 'Henüz eklenmedi'; } },
     ]},
     { baslik: '🚌 Ulaşım', maddeler: [
-      { label: 'Gidiş ulaşım girildi', kontrol: function(){ return !!(t.gidisUlasim && t.gidisUlasim.trim()); }, detay: function(){ return t.gidisUlasim || 'Girilmedi'; } },
-      { label: 'Dönüş ulaşım girildi', kontrol: function(){ return !!(t.donusUlasim && t.donusUlasim.trim()); }, detay: function(){ return t.donusUlasim || 'Girilmedi'; } },
-      { label: 'Gidiş saati girildi', kontrol: function(){
-        if (t.gidisSaat && t.gidisSaat.trim()) return true;
-        try { var gb=JSON.parse(t.gidisUcusBacakJSON||'[]'); if(gb.length&&gb[0].kalkis) return true; } catch(e){}
-        return false;
-      }, detay: function(){
-        if (t.gidisSaat) return t.gidisSaat;
-        try { var gb=JSON.parse(t.gidisUcusBacakJSON||'[]'); if(gb.length&&gb[0].kalkis) return gb[0].kalkis; } catch(e){}
-        return 'Girilmedi';
-      } },
-      { label: 'Kamyon sayısı girildi', kontrol: function(){ var v=String(t.kamyonSayisi||'').trim(); return !!(v && v !== '0'); }, detay: function(){ return (t.kamyonSayisi && String(t.kamyonSayisi).trim() !== '0') ? t.kamyonSayisi + ' kamyon' : 'Girilmedi'; } },
-      { label: 'Telefon girildi', kontrol: function(){ var s=t.gidisSurucu||''; var tel=''; if(s.indexOf('|TEL:')>-1){var p=s.split('|');p.forEach(function(x){if(x.startsWith('TEL:'))tel=x.slice(4);});} return !!(tel && tel.trim()); }, detay: function(){ var s=t.gidisSurucu||''; var tel=''; if(s.indexOf('|TEL:')>-1){var p=s.split('|');p.forEach(function(x){if(x.startsWith('TEL:'))tel=x.slice(4);});} return tel||'Girilmedi'; } },
-      { label: 'Sürüçü / Firma girildi', kontrol: function(){ var s=t.gidisSurucu||''; if(!s.trim()) return false; var kalkis=s.split('|')[0].trim(); var firma=''; if(s.indexOf('|FIRMA:')>-1){var p=s.split('|');p.forEach(function(x){if(x.startsWith('FIRMA:'))firma=x.slice(6);});} return !!(kalkis||firma); }, detay: function(){ var s=t.gidisSurucu||''; if(!s.trim()) return 'Girilmedi'; var kalkis=s.split('|')[0].trim(); var firma=''; if(s.indexOf('|FIRMA:')>-1){var p=s.split('|');p.forEach(function(x){if(x.startsWith('FIRMA:'))firma=x.slice(6);});} return (kalkis||firma)||'Girilmedi'; } },
+      { label: 'Gidiş ulaşım',
+        kontrol: function(){ return !!(t.gidisUlasim && t.gidisUlasim.trim()); },
+        detay:   function(){ return t.gidisUlasim || 'Girilmedi'; } },
+      { label: 'Dönüş ulaşım',
+        kontrol: function(){ return !!(t.donusUlasim && t.donusUlasim.trim()); },
+        detay:   function(){ return t.donusUlasim || 'Girilmedi'; } },
+      { label: 'Gidiş saati',
+        kontrol: function(){ return !!_gidisSaat(); },
+        detay:   function(){ return _gidisSaat() || 'Girilmedi'; } },
+      { label: 'Kamyon',
+        kontrol: function(){ var v = String(t.kamyonSayisi||'').trim(); return !!(v && v !== '0'); },
+        detay:   function(){ var v = String(t.kamyonSayisi||'').trim(); return (v && v !== '0') ? v + ' kamyon' : 'Girilmedi'; } },
+      { label: 'Telefon',
+        kontrol: function(){ return !!_gTel; },
+        detay:   function(){ return _gTel || 'Girilmedi'; } },
+      { label: 'Sürücü / Firma',
+        kontrol: function(){ return !!_gFirma; },
+        detay:   function(){ return _gFirma || 'Girilmedi'; } },
     ]},
     { baslik: '🏨 Konaklama', maddeler: [
-      { label: 'Otel adı girildi', kontrol: function(){ return !!(t.otelAdi && t.otelAdi.trim()) || !!(t.duraklar && t.duraklar.some(function(d){ return d.otelAdi && d.otelAdi.trim(); })); }, detay: function(){ if(t.otelAdi) return t.otelAdi; var o=(t.duraklar||[]).map(function(d){return d.otelAdi;}).filter(Boolean); return o.length?o[0]+(o.length>1?' +'+(o.length-1):''):'Girilmedi'; } },
-      { label: 'Oda sayısı girildi', kontrol: function(){ return !!(t.duraklar && t.duraklar.some(function(d){ return d.odaSayisi && String(d.odaSayisi).trim(); })); }, detay: function(){ var o=(t.duraklar||[]).filter(function(d){return d.odaSayisi;}); return o.length?o[0].odaSayisi+' oda':'Girilmedi'; } },
+      { label: 'Otel / Konaklama',
+        kontrol: function(){ return otelVar; },
+        detay:   function(){ return otelDetay; } },
     ]},
     { baslik: '📅 Program', maddeler: [
-      { label: 'Program satırları girildi', kontrol: function(){ return !!(t.programSatirlar && t.programSatirlar.length > 0); }, detay: function(){ return t.programSatirlar ? t.programSatirlar.length + ' satır' : 'Girilmedi'; } },
-      { label: 'Başlangıç tarihi girildi', kontrol: function(){ return !!(t.baslangicTarih && t.baslangicTarih.trim()); }, detay: function(){ return t.baslangicTarih || 'Girilmedi'; } },
-      { label: 'Bitiş tarihi girildi', kontrol: function(){ return !!(t.bitisTarih && t.bitisTarih.trim()); }, detay: function(){ return t.bitisTarih || 'Girilmedi'; } },
-      { label: 'Durak sayısı girildi', kontrol: function(){ return !!(t.duraklar && t.duraklar.length > 0); }, detay: function(){ return t.duraklar ? t.duraklar.length + ' durak' : 'Girilmedi'; } },
+      { label: 'Duraklar',
+        kontrol: function(){ return aktifDuraklar.length > 0; },
+        detay:   function(){ return durakDetay; } },
+      { label: 'Tarih aralığı',
+        kontrol: function(){ return !!(t.baslangicTarih && t.bitisTarih); },
+        detay:   function(){ return (t.baslangicTarih && t.bitisTarih) ? t.baslangicTarih + ' — ' + t.bitisTarih : 'Girilmedi'; } },
+      { label: 'Program satırları',
+        kontrol: function(){ return !!(t.programSatirlar && t.programSatirlar.length > 0); },
+        detay:   function(){ return t.programSatirlar ? t.programSatirlar.length + ' satır' : 'Girilmedi'; } },
     ]},
-    { baslik: '🎭 Sahne & Tanıtım', maddeler: [
-      { label: 'Mekan girildi', kontrol: function(){ return !!(t.mekan && t.mekan.trim()) || !!(t.duraklar && t.duraklar.some(function(d){ return d.mekan && d.mekan.trim(); })); }, detay: function(){ if(t.mekan) return t.mekan; var m=(t.duraklar||[]).map(function(d){return d.mekan;}).filter(Boolean); return m.length?m[0]:'Girilmedi'; } },
-      { label: 'Afiş URL girildi', kontrol: function(){ return !!(t.afisUrl && t.afisUrl.trim()); }, detay: function(){ return t.afisUrl ? 'Mevcut' : 'Girilmedi'; } },
+    { baslik: '🎭 Sahne', maddeler: [
+      { label: 'Mekan',
+        kontrol: function(){ return !!(t.mekan&&t.mekan.trim()) || aktifDuraklar.some(function(d){ return d.mekan&&d.mekan.trim(); }); },
+        detay:   function(){
+          if (t.mekan) return t.mekan;
+          var m = aktifDuraklar.filter(function(d){return d.mekan;}).map(function(d){ return d.il.replace('/MERKEZ','').split('/')[0].trim()+': '+d.mekan; });
+          return m.length ? m.join(' | ') : 'Girilmedi';
+        } },
+      { label: 'Afiş URL',
+        kontrol: function(){ return !!(t.afisUrl && t.afisUrl.trim()); },
+        detay:   function(){ return t.afisUrl ? 'Mevcut' : 'Girilmedi'; } },
     ]},
   ];
 }
@@ -12870,43 +12911,37 @@ function renderGorevler() {
   var rowIdx = sel ? parseInt(sel.value) : NaN;
   var t = isNaN(rowIdx) ? null : turneler.find(function(x){ return x._rowIdx === rowIdx; });
   if (!t) { container.innerHTML = '<div style="padding:40px 0;text-align:center;color:var(--muted-foreground);font-size:13px">Yukarıdan bir turne seçin</div>'; _gorevBadgeGuncelle(0); return; }
-
   var kategoriler = _gorevKontroller(t);
-  var toplamEksik = 0, toplamToplam = 0;
-  var html = '';
-
+  var toplamEksik = 0, toplamToplam = 0, html = '';
   kategoriler.forEach(function(kat) {
-    var tamamlanan = kat.maddeler.filter(function(m){ return m.kontrol(); }).length;
-    var toplam = kat.maddeler.length;
-    toplamToplam += toplam; toplamEksik += (toplam - tamamlanan);
-    var hepsiOk = tamamlanan === toplam;
+    var tam = kat.maddeler.filter(function(m){ return m.kontrol(); }).length;
+    var top = kat.maddeler.length;
+    toplamToplam += top; toplamEksik += (top - tam);
+    var hepsi = tam === top;
     html += '<div style="margin-bottom:12px;border:1.5px solid var(--border);border-radius:10px;overflow:hidden;background:var(--card)">';
-    html += '<div style="padding:10px 14px;display:flex;align-items:center;justify-content:space-between;background:' + (hepsiOk ? 'hsl(141,35%,95%)' : 'var(--muted)') + '">';
+    html += '<div style="padding:10px 14px;display:flex;align-items:center;justify-content:space-between;background:' + (hepsi?'hsl(141,35%,95%)':'var(--muted)') + '">';
     html += '<div style="font-size:12px;font-weight:800;color:var(--foreground)">' + kat.baslik + '</div>';
-    html += '<div style="font-size:11px;font-weight:700;color:' + (hepsiOk ? 'hsl(141,55%,28%)' : 'hsl(38,70%,35%)') + '">' + tamamlanan + '/' + toplam + '</div>';
-    html += '</div>';
+    html += '<div style="font-size:11px;font-weight:700;color:' + (hepsi?'hsl(141,55%,28%)':'hsl(38,70%,35%)') + '">' + tam + '/' + top + '</div></div>';
     kat.maddeler.forEach(function(m) {
       var ok = m.kontrol();
       html += '<div style="padding:9px 14px;display:flex;align-items:center;gap:10px;border-top:1px solid var(--border)">';
-      if (ok) { html += '<div style="width:20px;height:20px;border-radius:50%;background:hsl(141,55%,40%);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg></div>'; }
-      else { html += '<div style="width:20px;height:20px;border-radius:50%;background:hsl(0,65%,55%);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></div>'; }
+      if (ok) html += '<div style="width:20px;height:20px;border-radius:50%;background:hsl(141,55%,40%);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg></div>';
+      else html += '<div style="width:20px;height:20px;border-radius:50%;background:hsl(0,65%,55%);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></div>';
       html += '<div style="flex:1;min-width:0">';
-      html += '<div style="font-size:12px;font-weight:600;color:' + (ok ? 'var(--foreground)' : 'hsl(0,55%,40%)') + '">' + m.label + '</div>';
+      html += '<div style="font-size:12px;font-weight:600;color:' + (ok?'var(--foreground)':'hsl(0,55%,40%)') + '">' + m.label + '</div>';
       html += '<div style="font-size:10px;color:var(--muted-foreground);margin-top:1px">' + m.detay() + '</div>';
       html += '</div></div>';
     });
     html += '</div>';
   });
-
   var tamam = toplamToplam - toplamEksik;
   var oran = Math.round(tamam / toplamToplam * 100);
-  var renk = oran === 100 ? 'hsl(141,55%,40%)' : oran >= 60 ? 'hsl(38,75%,45%)' : 'hsl(0,65%,50%)';
+  var renk = oran===100 ? 'hsl(141,55%,40%)' : oran>=60 ? 'hsl(38,75%,45%)' : 'hsl(0,65%,50%)';
   var banner = '<div style="margin-bottom:14px;padding:12px 16px;border-radius:10px;background:' + renk + ';color:#fff;display:flex;align-items:center;justify-content:space-between;gap:12px">'
-    + '<div><div style="font-size:14px;font-weight:900;cursor:pointer;text-decoration:underline;text-underline-offset:3px;opacity:.95" onclick="editTurne(parseInt(' + t._rowIdx + '))" title="Turneyi düzenle">' + t.oyun + ' ✏️</div>'
-    + '<div style="font-size:11px;opacity:.75;margin-top:2px">' + (oran===100 ? 'Tüm görevler tamamlandı! 🎉' : toplamEksik + ' eksik madde var') + '</div></div>'
+    + '<div><div style="font-size:14px;font-weight:900;cursor:pointer;text-decoration:underline;text-underline-offset:3px" onclick="editTurne(parseInt(' + t._rowIdx + '))" title="Düzenle">' + t.oyun + ' ✏️</div>'
+    + '<div style="font-size:11px;opacity:.75;margin-top:2px">' + (oran===100?'Tüm görevler tamamlandı! 🎉':toplamEksik+' eksik madde var') + '</div></div>'
     + '<div style="text-align:right"><div style="font-size:26px;font-weight:900;line-height:1">' + oran + '%</div>'
     + '<div style="font-size:10px;opacity:.75">' + tamam + '/' + toplamToplam + '</div></div></div>';
-
   container.innerHTML = banner + html;
   _gorevBadgeGuncelle(toplamEksik);
 }
