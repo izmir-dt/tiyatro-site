@@ -2116,36 +2116,24 @@ flex-shrink:0;
 
     <!-- Body -->
     <div id="sp-body">
-      <div id="sp-erisim-baslik">Erişim Türü</div>
-      <div class="sp-cards">
-        <div class="sp-card selected" id="sp-card-editor" onclick="spSecKart('editor')">
-          <span class="sp-card-badge editor">TAM ERİŞİM</span>
-          <div class="sp-card-icon">🛠️</div>
-          <div class="sp-card-title">Koordinatör</div>
-          <div class="sp-card-desc">Turne oluşturma, düzenleme ve tüm yönetim işlemleri</div>
-        </div>
-        <div class="sp-card" id="sp-card-viewer" onclick="spSecKart('viewer')">
-          <span class="sp-card-badge viewer">SALT OKUMA</span>
-          <div class="sp-card-icon">👁️</div>
-          <div class="sp-card-title">Misafir</div>
-          <div class="sp-card-desc">Turne kartları ve haritayı görüntüleme, PDF alma</div>
-        </div>
-      </div>
+      <div id="sp-erisim-baslik">Koordinatör Girişi</div>
 
       <form id="sp-form" onsubmit="return false;" novalidate>
+        <div class="sp-inp-wrap">
+          <label class="sp-label" for="sp-eposta">E-posta Adresi</label>
+          <input class="sp-inp" type="email" id="sp-eposta" name="email" placeholder="ornek@idt.gov.tr" maxlength="80" autocomplete="email" style="letter-spacing:0" />
+        </div>
         <div class="sp-inp-wrap" style="margin-bottom:0">
-          <label class="sp-label" for="sp-inp" id="sp-inp-label">Koordinatör Şifresi</label>
-          <input class="sp-inp" type="password" id="sp-inp" name="password" placeholder="Şifrenizi girin" maxlength="30" autocomplete="current-password" aria-required="true" aria-describedby="sp-errmsg" />
+          <label class="sp-label" for="sp-inp" id="sp-inp-label">Şifre</label>
+          <input class="sp-inp" type="password" id="sp-inp" name="password" placeholder="Şifrenizi girin" maxlength="50" autocomplete="current-password" />
         </div>
-
-        <div id="sp-adim-ad" style="display:none;margin-top:10px">
-          <div class="sp-inp-wrap">
-            <label class="sp-label" for="sp-ad-inp">Ad Soyad</label>
-            <input class="sp-inp" type="text" id="sp-ad-inp" name="username" placeholder="örn: Ayşe Kaya, Mehmet Demir" maxlength="20" autocomplete="username" aria-required="true" style="letter-spacing:0" />
+        <div id="sp-sifre-belirle-wrap" style="display:none;margin-top:8px">
+          <div class="sp-inp-wrap" style="margin-bottom:4px">
+            <label class="sp-label" for="sp-sifre-tekrar">Şifrenizi Tekrar Girin</label>
+            <input class="sp-inp" type="password" id="sp-sifre-tekrar" placeholder="Şifrenizi tekrarlayın" maxlength="50" autocomplete="new-password" style="letter-spacing:0" />
           </div>
-          <div style="font-size:9.5px;color:rgba(255,255,255,.25);margin-top:6px;text-align:center;letter-spacing:.2px">Takvimdeki notlarınızda görünecek</div>
+          <div style="font-size:9.5px;color:rgba(255,255,255,.35);margin-top:2px;text-align:center">İlk girişiniz — şifrenizi belirleyin (en az 6 karakter)</div>
         </div>
-
         <div id="sp-errmsg" role="alert" aria-live="polite"></div>
         <button id="sp-login-btn" type="submit">Sisteme Giriş Yap</button>
       </form>
@@ -3810,9 +3798,9 @@ const PERSONEL_SHEET = 'TURNE_PERSONEL';
 const DIS_PERSONEL_SHEET = 'DIS_KATILIMCILAR';
 let tumDisPersonel = []; // {kisi, kategori, gorev, _sheetRow}
 const NOTLAR_SHEET   = 'TAKVIM_NOTLARI';
+const KULLANICI_SHEET = 'KULLANICILAR';
 const SK             = 'tiyatro_sifre';
-const VARSAYILAN_SIFRE = '525327';
-const GORUNTULEYICI_SIFRE = '2626';
+// Eski sabit şifreler kaldırıldı — KULLANICILAR sheet kullanılıyor
 
 // ============================================================
 // APPS SCRIPT FETCH YARDIMCISI
@@ -4460,83 +4448,134 @@ function guncelleSonSenkron() {
 }
 
 // ============================================================
-// ŞİFRE
+// GİRİŞ SİSTEMİ — E-posta + Şifre (KULLANICILAR sheet)
 // ============================================================
 (function(){
-  const getSifre = () => localStorage.getItem(SK) || VARSAYILAN_SIFRE;
-  const overlay = document.getElementById('sp-overlay');
-  const inp     = document.getElementById('sp-inp');
-  const errmsg  = document.getElementById('sp-errmsg');
-  const btn     = document.getElementById('sp-login-btn');
+  const overlay  = document.getElementById('sp-overlay');
+  const epostaEl = document.getElementById('sp-eposta');
+  const sifreEl  = document.getElementById('sp-inp');
+  const tekrarEl = document.getElementById('sp-sifre-tekrar');
+  const belirleW = document.getElementById('sp-sifre-belirle-wrap');
+  const errmsg   = document.getElementById('sp-errmsg');
+  const btn      = document.getElementById('sp-login-btn');
 
-  // Seçili kart tipi
-  var _spSeciliKart = 'editor';
-  window.spSecKart = function(tip) {
-    _spSeciliKart = tip;
-    document.getElementById('sp-card-editor').classList.toggle('selected', tip === 'editor');
-    document.getElementById('sp-card-viewer').classList.toggle('selected', tip === 'viewer');
-    document.getElementById('sp-inp-label').textContent = tip === 'editor' ? 'Koordinatör Şifresi' : 'Misafir Şifresi';
-    inp.value = '';
+  var _ilkGiris = false; // şifre belirleme modunda mı
+
+  // SHA-256 hash
+  async function sha256(str) {
+    var buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+    return Array.from(new Uint8Array(buf)).map(function(b){ return b.toString(16).padStart(2,'0'); }).join('');
+  }
+
+  function showErr(msg) {
+    errmsg.textContent = msg;
+    sifreEl.style.outline = '2px solid #e05c5c';
+    setTimeout(function(){ sifreEl.style.outline = ''; errmsg.textContent = ''; }, 3000);
+  }
+
+  function girisBasarili(eposta, adSoyad) {
+    sessionStorage.setItem('turne_erisim', 'true');
+    sessionStorage.setItem('turne_rol', 'editor');
+    sessionStorage.setItem('turne_eposta', eposta);
+    sessionStorage.setItem('turne_ad', adSoyad || eposta.split('@')[0]);
+    localStorage.setItem('calKullanici_idt', adSoyad || eposta.split('@')[0]);
+    window._goruntuleme_modu = false;
+    overlay.classList.remove('on');
+    init();
+    navKullaniciBilgi();
+  }
+
+  async function tryLogin() {
+    var eposta = (epostaEl.value || '').trim().toLowerCase();
+    var sifre  = sifreEl.value;
+
+    if (!eposta) { epostaEl.focus(); showErr('E-posta adresi gerekli'); return; }
+    if (!sifre)  { sifreEl.focus();  showErr('Şifre gerekli'); return; }
+
+    btn.disabled = true;
+    btn.textContent = 'Kontrol ediliyor...';
     errmsg.textContent = '';
-  };
 
-  if (sessionStorage.getItem('turne_erisim') === 'true') {
-    // Zaten giriş yapılmış — rol flag'ini de uygula
-    if (sessionStorage.getItem('turne_rol') === 'viewer') {
-      window._goruntuleme_modu = true;
+    try {
+      // KULLANICILAR sheet'inden kullanıcıları çek
+      var res = await apiFetch('/' + encodeURIComponent(KULLANICI_SHEET));
+      var data = await res.json();
+      var rows = (data.values || []).slice(1); // başlık satırını atla
+
+      // E-posta eşleşmesi ara (col 0 = eposta, col 1 = sifre_hash, col 2 = ad_soyad, col 3 = aktif)
+      var kullanici = null;
+      for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        if ((r[0] || '').trim().toLowerCase() === eposta) {
+          kullanici = { eposta: r[0], sifreHash: (r[1]||'').trim(), adSoyad: (r[2]||'').trim(), aktif: (r[3]||'').trim(), _row: i + 2 };
+          break;
+        }
+      }
+
+      if (!kullanici) { showErr('Bu e-posta kayıtlı değil. Koordinatörünüzle iletişime geçin.'); btn.disabled=false; btn.textContent='Sisteme Giriş Yap'; return; }
+      if (kullanici.aktif && kullanici.aktif.toUpperCase() === 'FALSE') { showErr('Hesabınız pasif. Koordinatörünüzle iletişime geçin.'); btn.disabled=false; btn.textContent='Sisteme Giriş Yap'; return; }
+
+      // İlk giriş — şifre hash'i boş
+      if (!kullanici.sifreHash) {
+        if (!_ilkGiris) {
+          // Şifre belirleme moduna geç
+          _ilkGiris = true;
+          belirleW.style.display = 'block';
+          document.getElementById('sp-inp-label').textContent = 'Yeni Şifre Belirleyin';
+          sifreEl.placeholder = 'En az 6 karakter';
+          sifreEl.value = '';
+          tekrarEl.value = '';
+          btn.textContent = 'Şifremi Belirle';
+          btn.disabled = false;
+          errmsg.textContent = '';
+          sifreEl.focus();
+          return;
+        }
+        // Şifre belirleme adımı
+        if (sifre.length < 6) { showErr('Şifre en az 6 karakter olmalı'); btn.disabled=false; btn.textContent='Şifremi Belirle'; return; }
+        var tekrar = tekrarEl.value;
+        if (sifre !== tekrar) { showErr('Şifreler eşleşmiyor'); btn.disabled=false; btn.textContent='Şifremi Belirle'; return; }
+        // Hash'i Sheets'e kaydet
+        var hash = await sha256(sifre);
+        await apiFetch('/' + encodeURIComponent(KULLANICI_SHEET) + '/cell', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ row: kullanici._row, col: 1, value: hash })
+        });
+        girisBasarili(kullanici.eposta, kullanici.adSoyad);
+        return;
+      }
+
+      // Normal giriş — hash karşılaştır
+      var girilenHash = await sha256(sifre);
+      if (girilenHash !== kullanici.sifreHash) {
+        showErr('Hatalı şifre!');
+        btn.disabled = false;
+        btn.textContent = 'Sisteme Giriş Yap';
+        return;
+      }
+      girisBasarili(kullanici.eposta, kullanici.adSoyad);
+
+    } catch(e) {
+      console.error(e);
+      showErr('Bağlantı hatası. Tekrar deneyin.');
+      btn.disabled = false;
+      btn.textContent = 'Sisteme Giriş Yap';
     }
+  }
+
+  // Zaten giriş yapılmışsa
+  if (sessionStorage.getItem('turne_erisim') === 'true') {
+    window._goruntuleme_modu = false;
   } else {
     overlay.classList.add('on');
-    setTimeout(() => inp.focus(), 100);
+    setTimeout(function(){ epostaEl.focus(); }, 150);
   }
 
-  var adimAd = document.getElementById('sp-adim-ad');
-  var adInp  = document.getElementById('sp-ad-inp');
-
-  function tryLogin() {
-    var val = inp.value;
-    if (adimAd.style.display !== 'none') {
-      // Ad adımı
-      var ad = (adInp.value || '').trim().replace(/[^a-zA-Z0-9ğüşöçıİĞÜŞÖÇ_\-]/g, '_').slice(0, 20) || 'kullanici';
-      localStorage.setItem('calKullanici_idt', ad);
-      sessionStorage.setItem('turne_erisim', 'true');
-      sessionStorage.setItem('turne_rol', 'editor');
-      overlay.classList.remove('on');
-      init();
-      navKullaniciBilgi();
-      return;
-    }
-    if (val === getSifre()) {
-      // Koordinatör girişi — ad var mı?
-      var mevcutAd = localStorage.getItem('calKullanici_idt');
-      if (!mevcutAd) {
-        adimAd.style.display = 'block';
-        adInp.focus();
-      } else {
-        sessionStorage.setItem('turne_erisim', 'true');
-        sessionStorage.setItem('turne_rol', 'editor');
-        window._goruntuleme_modu = false;
-        overlay.classList.remove('on');
-        init();
-        navKullaniciBilgi();
-      }
-    } else if (val === GORUNTULEYICI_SIFRE) {
-      // Misafir girişi
-      sessionStorage.setItem('turne_erisim', 'true');
-      sessionStorage.setItem('turne_rol', 'viewer');
-      window._goruntuleme_modu = true;
-      overlay.classList.remove('on');
-      init();
-      navKullaniciBilgi();
-    } else {
-      inp.style.outline = '2px solid #e05c5c';
-      errmsg.textContent = 'Hatalı şifre!';
-      setTimeout(() => { inp.style.outline = ''; errmsg.textContent = ''; }, 2000);
-    }
-  }
   btn.addEventListener('click', tryLogin);
-  inp.addEventListener('keydown', e => { if (e.key === 'Enter') tryLogin(); });
-  if (adInp) adInp.addEventListener('keydown', e => { if (e.key === 'Enter') tryLogin(); });
+  sifreEl.addEventListener('keydown', function(e){ if (e.key === 'Enter') tryLogin(); });
+  epostaEl.addEventListener('keydown', function(e){ if (e.key === 'Enter') sifreEl.focus(); });
+  tekrarEl && tekrarEl.addEventListener('keydown', function(e){ if (e.key === 'Enter') tryLogin(); });
 })();
 
 // ============================================================
@@ -16814,7 +16853,7 @@ async function init() {
 // ============================================================
 // GÖRÜNTÜLEME MODU — Misafir erişimi kısıtlamaları
 // ============================================================
-window._goruntuleme_modu = (sessionStorage.getItem('turne_rol') === 'viewer');
+window._goruntuleme_modu = false; // Tek rol: Koordinatör
 
 function _goruntulemeModuUygula() {
   // Body'e class ekle — CSS kuralları devreye girer
@@ -16854,27 +16893,20 @@ function _goruntulemeModuUygula() {
 if (sessionStorage.getItem('turne_erisim') === 'true') { init(); }
 
 // ── Kullanıcı adını navbar'da göster ──────────────────────────
-(function navKullaniciBilgi() {
-  var chip = document.getElementById('nav-kullanici-ad');
-  if (!chip) return;
-  var rol = sessionStorage.getItem('turne_rol');
-  var ad  = localStorage.getItem('calKullanici_idt');
-  if (rol === 'viewer') {
-    chip.textContent = 'Misafir';
-  } else if (ad && ad !== 'kullanici' && ad !== 'varsayilan') {
-    chip.textContent = ad;
-  } else {
-    chip.textContent = 'Koordinatör';
-  }
-})();
 function navKullaniciBilgi() {
+  var ad = sessionStorage.getItem('turne_ad') || localStorage.getItem('calKullanici_idt') || 'Koordinatör';
+  var eposta = sessionStorage.getItem('turne_eposta') || '';
   var chip = document.getElementById('nav-kullanici-ad');
-  if (!chip) return;
-  var rol = sessionStorage.getItem('turne_rol');
-  var ad  = localStorage.getItem('calKullanici_idt');
-  if (rol === 'viewer') { chip.textContent = 'Misafir'; }
-  else if (ad && ad !== 'kullanici' && ad !== 'varsayilan') { chip.textContent = ad; }
-  else { chip.textContent = 'Koordinatör'; }
+  if (chip) { chip.textContent = ad; }
+  var navBrand = document.querySelector('.nav-brand');
+  if (navBrand && !document.getElementById('_koor-rozet')) {
+    var rozet = document.createElement('span');
+    rozet.id = '_koor-rozet';
+    rozet.title = eposta;
+    rozet.style.cssText = 'font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;background:hsl(38,80%,92%);color:hsl(38,60%,28%);border:1px solid hsl(38,60%,78%);margin-left:8px;cursor:default;white-space:nowrap';
+    rozet.textContent = '👤 ' + ad;
+    navBrand.appendChild(rozet);
+  }
 }
 function cikisYap() {
   sessionStorage.removeItem('turne_erisim');
