@@ -6023,7 +6023,7 @@ function _renderCardDetail(rowIdx) {
     +     '<div style="font-size:17px;font-weight:900;letter-spacing:-.3px;line-height:1.2">' + (t.oyun||'—') + '</div>'
     +     '<div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:6px;align-items:center">'
     +       (!t.anaGrupId ? '<span style="font-size:10px;font-weight:700;padding:2px 9px;border-radius:20px;background:rgba(255,255,255,.22);border:1px solid rgba(255,255,255,.3)">' + st.label + '</span>' : '')
-    +       (t.anaGrupId ? '<span style="font-size:10px;font-weight:700;opacity:.75">⛓ EK GRUP</span>' : '')
+    +       (t.anaGrupId ? '<span style="font-size:10px;font-weight:700;opacity:.75">🔗 EK GRUP</span>' : '')
     +       '<span style="font-size:11px;font-weight:700;opacity:.9">' + illerUst + '</span>'
     +       '<span style="font-size:11px;opacity:.75">' + tarihStr + (sure > 1 ? ' · ' + sure + ' gün' : '') + '</span>'
     +     '</div>'
@@ -14866,23 +14866,8 @@ function _pdfPersonelIcerik(t) {
     ? t.katilimcilar
     : personel.map(function(p){ return { kisi:p.kisi, gorev:p.gorev||p.kategori, kategori:p.kategori }; });
 
-  // Çok oyunlu mod: katılımcılarda oyun alanı varsa gruplu göster
-  var _oyunGruplari = [];
-  var _oyunAlanVar = baseList.some(function(k){ return k.oyun && k.oyun.trim(); });
-  if (_oyunAlanVar) {
-    // Oyunlara göre grupla (sıra: ilk görülen oyun önce)
-    var _oyunSira = [];
-    baseList.forEach(function(k){ if (k.oyun && !_oyunSira.includes(k.oyun)) _oyunSira.push(k.oyun); });
-    _oyunGruplari = _oyunSira.map(function(o) {
-      var seen2 = {};
-      return {
-        oyun: o,
-        liste: baseList.filter(function(k){ return k.oyun === o; }).filter(function(p){
-          var key = (p.kisi||'').trim().toLowerCase(); if (!key || seen2[key]) return false; seen2[key]=true; return true;
-        })
-      };
-    });
-  }
+  // Tek liste — oyun ayrımı yapılmaz, tüm katılımcılar tek listede
+  var _oyunGruplari = []; // boş bırak → tek liste dalı kullanılır
 
   var seen = {};
   var tumListe = baseList.filter(function(p){
@@ -15322,6 +15307,37 @@ function gorevlendirmePdf(rowIdx, mod, overrideTurne) {
       _w3.document.write(_docHTML);
       _w3.document.close();
 
+      // Ek gruplar varsa _html2'ye ekle
+      if (t._ekGruplar && t._ekGruplar.length) {
+        t._ekGruplar.forEach(function(eg) {
+          if (!eg.katilimcilar || !eg.katilimcilar.length) return;
+          var _ekSayfa = '<div class="sayfa-icerik" style="page-break-before:always">'
+            + '<div style="background:#f3f0ff;border-left:6px solid hsl(270,50%,55%);padding:14px 18px;margin-bottom:16px;border-radius:0 8px 8px 0">'
+            + '<div style="font-size:16px;font-weight:900;color:hsl(270,45%,30%)">🔗 EK GRUP: ' + eg.oyun + '</div>'
+            + (eg.baslangicTarih ? '<div style="font-size:11px;color:hsl(270,30%,50%);margin-top:3px">' + eg.baslangicTarih.split('-').reverse().join('.') + (eg.bitisTarih && eg.bitisTarih!==eg.baslangicTarih?' – '+eg.bitisTarih.split('-').reverse().join('.'):'') + '</div>' : '')
+            + '</div>'
+            + '<div style="font-size:13px;font-weight:800;color:#333;margin:12px 0 6px;padding-bottom:4px;border-bottom:2px solid hsl(270,40%,75%)">👥 Katılımcı Listesi (' + eg.katilimcilar.length + ' kişi)</div>'
+            + '<table style="width:100%;border-collapse:collapse;font-size:11px">'
+            + '<thead><tr style="background:#6b1b1b"><th style="padding:6px 8px;color:#fff;width:30px;text-align:center">No</th><th style="padding:6px 8px;color:#fff;text-align:left">Adı Soyadı</th><th style="padding:6px 8px;color:#fff;text-align:left">Görevi</th></tr></thead>'
+            + '<tbody>' + eg.katilimcilar.map(function(p,i){
+                return '<tr style="background:' + (i%2===0?'#fff':'#f9f5ff') + '"><td style="padding:5px 8px;text-align:center;color:#666">' + (i+1) + '</td><td style="padding:5px 8px;font-weight:600">' + p.kisi + '</td><td style="padding:5px 8px;color:#555">' + (p.gorev||p.kategori||'') + '</td></tr>';
+              }).join('') + '</tbody></table>'
+            + (function(){
+                var atanmislar = eg.katilimcilar.filter(function(p){ return p.odaTip; });
+                if (!atanmislar.length) return '';
+                return '<div style="font-size:13px;font-weight:800;color:#333;margin:14px 0 6px;padding-bottom:4px;border-bottom:2px solid hsl(142,40%,65%)">🛏 Konaklama Listesi</div>'
+                  + '<table style="width:100%;border-collapse:collapse;font-size:11px">'
+                  + '<thead><tr style="background:hsl(142,50%,35%)"><th style="padding:6px 8px;color:#fff;text-align:left">Adı Soyadı</th><th style="padding:6px 8px;color:#fff;text-align:left">Oda Tipi</th><th style="padding:6px 8px;color:#fff;text-align:left">Oda Eşi</th></tr></thead>'
+                  + '<tbody>' + atanmislar.map(function(p,i){
+                      var tip = p.munferit ? 'Münferit' : p.odaTip==='tek' ? 'Tek' : 'Çift';
+                      return '<tr style="background:' + (i%2===0?'#fff':'#f0fff4') + '"><td style="padding:5px 8px;font-weight:600">' + p.kisi + '</td><td style="padding:5px 8px">' + tip + '</td><td style="padding:5px 8px;color:#555">' + (p.odaEsi||'—') + '</td></tr>';
+                    }).join('') + '</tbody></table>';
+              })()
+            + '</div>';
+          _html2 += _ekSayfa;
+        });
+      }
+
       setTimeout(function() {
         try {
           // İçeriği yerleştir
@@ -15702,12 +15718,12 @@ function gorevlendirmePdf(rowIdx, mod, overrideTurne) {
       if (!eg.katilimcilar || !eg.katilimcilar.length) return;
       icerik += '<div style="page-break-before:always"></div>'
         + '<div style="background:#f3f0ff;border-left:6px solid hsl(270,50%,55%);padding:16px 20px;margin-bottom:16px;border-radius:0 8px 8px 0">'
-        + '<div style="font-size:16px;font-weight:900;color:hsl(270,45%,30%)">⛓ EK GRUP: ' + eg.oyun + '</div>'
+        + '<div style="font-size:16px;font-weight:900;color:hsl(270,45%,30%)">🔗 EK GRUP: ' + eg.oyun + '</div>'
         + (eg.baslangicTarih ? '<div style="font-size:11px;color:hsl(270,30%,50%);margin-top:3px">' + eg.baslangicTarih.split('-').reverse().join('.') + (eg.bitisTarih && eg.bitisTarih!==eg.baslangicTarih?' – '+eg.bitisTarih.split('-').reverse().join('.'):'') + '</div>' : '')
         + '</div>'
         + '<div style="font-size:13px;font-weight:800;color:#333;margin:12px 0 6px;padding-bottom:4px;border-bottom:2px solid hsl(270,40%,75%)">👥 Katılımcı Listesi (' + eg.katilimcilar.length + ' kişi)</div>'
         + '<table style="width:100%;border-collapse:collapse;font-size:11px">'
-        + '<thead><tr style="background:hsl(270,30%,90%)"><th style="padding:5px 8px;text-align:left;font-weight:700">#</th><th style="padding:5px 8px;text-align:left;font-weight:700">Adı Soyadı</th><th style="padding:5px 8px;text-align:left;font-weight:700">Görevi</th></tr></thead>'
+        + '<thead><tr style="background:hsl(270,30%,90%)"><th style="padding:5px 8px;text-align:center;font-weight:700;width:28px">No</th><th style="padding:5px 8px;text-align:left;font-weight:700">Adı Soyadı</th><th style="padding:5px 8px;text-align:left;font-weight:700">Görevi</th></tr></thead>'
         + '<tbody>' + eg.katilimcilar.map(function(p, i) {
             return '<tr style="background:' + (i%2===0?'#fff':'#f9f5ff') + '"><td style="padding:4px 8px">' + (i+1) + '</td><td style="padding:4px 8px;font-weight:600">' + p.kisi + '</td><td style="padding:4px 8px;color:#555">' + (p.gorev||p.kategori||'') + '</td></tr>';
           }).join('') + '</tbody></table>'
