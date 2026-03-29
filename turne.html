@@ -2121,7 +2121,7 @@ flex-shrink:0;
       <form id="sp-form" onsubmit="return false;" novalidate>
         <div class="sp-inp-wrap">
           <label class="sp-label" for="sp-eposta">E-posta Adresi</label>
-          <input class="sp-inp" type="email" id="sp-eposta" name="email" placeholder="kullanici veya eposta" maxlength="80" autocomplete="email" style="letter-spacing:0" />
+          <input class="sp-inp" type="email" id="sp-eposta" name="email" placeholder="kullanici adi veya e-posta" maxlength="80" autocomplete="email" style="letter-spacing:0" />
         </div>
         <div class="sp-inp-wrap" style="margin-bottom:0">
           <label class="sp-label" for="sp-inp" id="sp-inp-label">Şifre</label>
@@ -4462,9 +4462,9 @@ function guncelleSonSenkron() {
 
   var _ilkGiris = false;
 
-  // E-posta/kullanıcı adı hatırla
-  var kayitliEposta = localStorage.getItem('turne_son_eposta');
-  if (kayitliEposta && epostaEl) { epostaEl.value = kayitliEposta; }
+  // Kullanıcı adı/e-posta hatırla
+  var _kayitli = localStorage.getItem('turne_son_eposta');
+  if (_kayitli && epostaEl) { epostaEl.value = _kayitli; }
 
   // SHA-256 hash
   async function sha256(str) {
@@ -4506,19 +4506,24 @@ function guncelleSonSenkron() {
       // KULLANICILAR sheet'inden kullanıcıları çek
       var res = await apiFetch('/' + encodeURIComponent(KULLANICI_SHEET));
       var data = await res.json();
+      // Backend {headers, rows} formatında döndürüyor
       var rows = data.rows || [];
 
-      // E-posta eşleşmesi ara (col 0 = eposta, col 1 = sifre_hash, col 2 = ad_soyad, col 3 = aktif)
+      // E-posta VEYA kullanıcı adı ile eşleştir
+      // col 0=eposta, col 1=sifre_hash, col 2=ad_soyad, col 3=aktif, col 4=kullanici_adi
       var kullanici = null;
+      var aranan = (eposta || '').trim().toLowerCase();
       for (var i = 0; i < rows.length; i++) {
         var r = rows[i];
-        if ((r[0] || '').trim().toLowerCase() === eposta) {
+        var kayitliEposta    = (r[0] || '').trim().toLowerCase();
+        var kayitliKullanici = (r[4] || '').trim().toLowerCase();
+        if (kayitliEposta === aranan || (kayitliKullanici && kayitliKullanici === aranan)) {
           kullanici = { eposta: r[0], sifreHash: (r[1]||'').trim(), adSoyad: (r[2]||'').trim(), aktif: (r[3]||'').trim(), _row: i + 2 };
           break;
         }
       }
 
-      if (!kullanici) { showErr('Bu e-posta kayıtlı değil. Koordinatörünüzle iletişime geçin.'); btn.disabled=false; btn.textContent='Sisteme Giriş Yap'; return; }
+      if (!kullanici) { showErr('Kullanıcı bulunamadı. Koordinatörünüzle iletişime geçin.'); btn.disabled=false; btn.textContent='Sisteme Giriş Yap'; return; }
       if (kullanici.aktif && kullanici.aktif.toUpperCase() === 'FALSE') { showErr('Hesabınız pasif. Koordinatörünüzle iletişime geçin.'); btn.disabled=false; btn.textContent='Sisteme Giriş Yap'; return; }
 
       // İlk giriş — şifre hash'i boş
@@ -4576,8 +4581,8 @@ function guncelleSonSenkron() {
   } else {
     overlay.classList.add('on');
     setTimeout(function(){
-      if (epostaEl.value) { sifreEl.focus(); }
-      else { epostaEl.focus(); }
+      if (epostaEl && epostaEl.value) { sifreEl.focus(); }
+      else if (epostaEl) { epostaEl.focus(); }
     }, 150);
   }
 
