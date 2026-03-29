@@ -4459,7 +4459,13 @@ function guncelleSonSenkron() {
   const errmsg   = document.getElementById('sp-errmsg');
   const btn      = document.getElementById('sp-login-btn');
 
-  var _ilkGiris = false; // şifre belirleme modunda mı
+  var _ilkGiris = false;
+
+  // E-posta hatırla
+  var kayitliEposta = localStorage.getItem('turne_son_eposta');
+  if (kayitliEposta && epostaEl) {
+    epostaEl.value = kayitliEposta;
+  }
 
   // SHA-256 hash
   async function sha256(str) {
@@ -4474,6 +4480,7 @@ function guncelleSonSenkron() {
   }
 
   function girisBasarili(eposta, adSoyad) {
+    localStorage.setItem('turne_son_eposta', eposta);
     sessionStorage.setItem('turne_erisim', 'true');
     sessionStorage.setItem('turne_rol', 'editor');
     sessionStorage.setItem('turne_eposta', eposta);
@@ -4500,7 +4507,8 @@ function guncelleSonSenkron() {
       // KULLANICILAR sheet'inden kullanıcıları çek
       var res = await apiFetch('/' + encodeURIComponent(KULLANICI_SHEET));
       var data = await res.json();
-      var rows = (data.values || []).slice(1); // başlık satırını atla
+      // Backend {headers, rows} formatında döndürüyor
+      var rows = data.rows || [];
 
       // E-posta eşleşmesi ara (col 0 = eposta, col 1 = sifre_hash, col 2 = ad_soyad, col 3 = aktif)
       var kullanici = null;
@@ -4518,7 +4526,6 @@ function guncelleSonSenkron() {
       // İlk giriş — şifre hash'i boş
       if (!kullanici.sifreHash) {
         if (!_ilkGiris) {
-          // Şifre belirleme moduna geç
           _ilkGiris = true;
           belirleW.style.display = 'block';
           document.getElementById('sp-inp-label').textContent = 'Yeni Şifre Belirleyin';
@@ -4531,11 +4538,9 @@ function guncelleSonSenkron() {
           sifreEl.focus();
           return;
         }
-        // Şifre belirleme adımı
         if (sifre.length < 6) { showErr('Şifre en az 6 karakter olmalı'); btn.disabled=false; btn.textContent='Şifremi Belirle'; return; }
         var tekrar = tekrarEl.value;
         if (sifre !== tekrar) { showErr('Şifreler eşleşmiyor'); btn.disabled=false; btn.textContent='Şifremi Belirle'; return; }
-        // Hash'i Sheets'e kaydet
         var hash = await sha256(sifre);
         await apiFetch('/' + encodeURIComponent(KULLANICI_SHEET) + '/cell', {
           method: 'PUT',
@@ -4569,7 +4574,11 @@ function guncelleSonSenkron() {
     window._goruntuleme_modu = false;
   } else {
     overlay.classList.add('on');
-    setTimeout(function(){ epostaEl.focus(); }, 150);
+    // E-posta dolu ise direkt şifreye odaklan
+    setTimeout(function(){
+      if (epostaEl.value) { sifreEl.focus(); }
+      else { epostaEl.focus(); }
+    }, 150);
   }
 
   btn.addEventListener('click', tryLogin);
