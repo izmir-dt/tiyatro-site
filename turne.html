@@ -4152,7 +4152,6 @@ function festivalToggle() {
   if (!cb.checked) {
     var adInp = document.getElementById('m-festival-ad');
     if (adInp) adInp.value = '';
-    // Nottan festival bilgisini temizle
     _festivalNotGuncelle();
   }
 }
@@ -4166,18 +4165,23 @@ function _festivalNotGuncelle() {
   // Festival etiketini temizle
   mevcutNot = mevcutNot.replace(/\[Festival:[^\]]*\]\s*/g, '').trim();
   if (cb && cb.checked) {
-    var festAd = (adInp && adInp.value.trim()) ? adInp.value.trim() : 'Festival';
-    notEl.value = ('[Festival: ' + festAd + '] ' + mevcutNot).trim();
+    var festAd = (adInp && adInp.value.trim()) ? adInp.value.trim() : '';
+    // "Festival:" veya "[Festival:" ile başlıyorsa temizle
+    festAd = festAd.replace(/^\[?festival:\s*/i, '').replace(/\]$/, '').trim();
+    while (/^festival:\s*/i.test(festAd)) {
+      festAd = festAd.replace(/^festival:\s*/i, '').trim();
+    }
+    if (festAd) {
+      notEl.value = ('[Festival: ' + festAd + '] ' + mevcutNot).trim();
+    } else {
+      notEl.value = mevcutNot; // Boşsa nota yazma
+    }
   } else {
     notEl.value = mevcutNot;
   }
 }
 
-// Festival ad girişi değişince notu güncelle
-document.addEventListener('DOMContentLoaded', function() {
-  var adInp = document.getElementById('m-festival-ad');
-  if (adInp) adInp.addEventListener('input', _festivalNotGuncelle);
-});
+// Festival ad girişi değişince notu güncelle — kaldırıldı, kayıtta güncellenir
 
 // Modal açıldığında not alanından festival bilgisini oku — MutationObserver ile izle
 (function() {
@@ -4207,11 +4211,19 @@ function _festivalModalYukle() {
   var lbl   = document.getElementById('festival-label');
   if (!notEl || !cb) return;
   var m = (notEl.value || '').match(/\[Festival:\s*([^\]]*)\]/);
+  var notRow = document.getElementById('notlar-row');
   if (m) {
     cb.checked = true;
-    if (adInp) adInp.value = m[1].trim();
+    var _festYuklenen = m[1].trim();
+    while (/^festival:\s*/i.test(_festYuklenen)) {
+      _festYuklenen = _festYuklenen.replace(/^festival:\s*/i, '').trim();
+    }
+    if (adInp) adInp.value = _festYuklenen;
     if (row) row.style.display = '';
     if (lbl) lbl.style.borderColor = 'var(--primary)';
+    // Not alanında [Festival:...] kısmını gizle — kullanıcı sadece gerçek notu görsün
+    var notEl2 = document.getElementById('m-not');
+    if (notEl2) notEl2.value = (notEl2.value || '').replace(/\[Festival:[^\]]*\]\s*/g, '').trim();
   } else {
     cb.checked = false;
     if (adInp) adInp.value = '';
@@ -9091,6 +9103,13 @@ async function saveTurne() {
   }
   var statu       = document.getElementById('m-statu').value || 'taslak';
   var not_        = document.getElementById('m-not').value.trim();
+  // Festival işaretliyse not'a [Festival: ...] tag'ini ekle
+  var _festCb = document.getElementById('m-festival');
+  var _festAd2 = (document.getElementById('m-festival-ad')||{}).value || '';
+  _festAd2 = _festAd2.replace(/^\[?festival:\s*/i,'').replace(/\]$/,'').trim();
+  if (_festCb && _festCb.checked && _festAd2) {
+    not_ = ('[Festival: ' + _festAd2 + '] ' + not_).trim();
+  }
   var grup        = document.getElementById('m-grup').value.trim();
   var promiyerTarih = (document.getElementById('m-premiyer')||{value:''}).value.trim();
   var afisUrl = (document.getElementById('m-afis-url')||{value:''}).value.trim();
