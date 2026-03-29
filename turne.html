@@ -2120,8 +2120,8 @@ flex-shrink:0;
 
       <form id="sp-form" onsubmit="return false;" novalidate>
         <div class="sp-inp-wrap">
-          <label class="sp-label" for="sp-eposta">Kullanıcı Adı veya E-posta</label>
-          <input class="sp-inp" type="text" id="sp-eposta" name="username" placeholder="kullaniciadi veya eposta@idt.gov.tr" maxlength="80" autocomplete="username" style="letter-spacing:0" />
+          <label class="sp-label" for="sp-eposta">E-posta Adresi</label>
+          <input class="sp-inp" type="email" id="sp-eposta" name="email" placeholder="kullanici veya eposta" maxlength="80" autocomplete="email" style="letter-spacing:0" />
         </div>
         <div class="sp-inp-wrap" style="margin-bottom:0">
           <label class="sp-label" for="sp-inp" id="sp-inp-label">Şifre</label>
@@ -2138,7 +2138,8 @@ flex-shrink:0;
         <button id="sp-login-btn" type="submit">Sisteme Giriş Yap</button>
       </form>
 
-      <div id="sp-footer">
+      <div id="sp-footer" style="display:flex;flex-direction:column;align-items:center;gap:8px">
+        <button id="sp-misafir-btn" type="button" style="background:none;border:1px solid rgba(255,255,255,.15);color:rgba(255,255,255,.4);font-size:10px;padding:5px 16px;border-radius:20px;cursor:pointer;letter-spacing:.3px;transition:all .15s" onmouseover="this.style.color='rgba(255,255,255,.7)';this.style.borderColor='rgba(255,255,255,.35)'" onmouseout="this.style.color='rgba(255,255,255,.4)';this.style.borderColor='rgba(255,255,255,.15)'">👁️ Salt Okunur Görüntüle</button>
         <a href="index.html" style="font-size:10px;color:rgba(255,255,255,.25);text-decoration:none;letter-spacing:.3px;transition:color .15s" onmouseover="this.style.color='rgba(255,255,255,.5)'" onmouseout="this.style.color='rgba(255,255,255,.25)'">← Ana Sayfaya Dön</a>
       </div>
     </div>
@@ -4459,7 +4460,11 @@ function guncelleSonSenkron() {
   const errmsg   = document.getElementById('sp-errmsg');
   const btn      = document.getElementById('sp-login-btn');
 
-  var _ilkGiris = false; // şifre belirleme modunda mı
+  var _ilkGiris = false;
+
+  // E-posta/kullanıcı adı hatırla
+  var kayitliEposta = localStorage.getItem('turne_son_eposta');
+  if (kayitliEposta && epostaEl) { epostaEl.value = kayitliEposta; }
 
   // SHA-256 hash
   async function sha256(str) {
@@ -4474,6 +4479,7 @@ function guncelleSonSenkron() {
   }
 
   function girisBasarili(eposta, adSoyad) {
+    localStorage.setItem('turne_son_eposta', eposta);
     sessionStorage.setItem('turne_erisim', 'true');
     sessionStorage.setItem('turne_rol', 'editor');
     sessionStorage.setItem('turne_eposta', eposta);
@@ -4486,10 +4492,10 @@ function guncelleSonSenkron() {
   }
 
   async function tryLogin() {
-    var eposta = (epostaEl.value || '').trim();
+    var eposta = (epostaEl.value || '').trim().toLowerCase();
     var sifre  = sifreEl.value;
 
-    if (!eposta) { epostaEl.focus(); showErr('Kullanıcı adı veya e-posta gerekli'); return; }
+    if (!eposta) { epostaEl.focus(); showErr('E-posta adresi gerekli'); return; }
     if (!sifre)  { sifreEl.focus();  showErr('Şifre gerekli'); return; }
 
     btn.disabled = true;
@@ -4500,23 +4506,19 @@ function guncelleSonSenkron() {
       // KULLANICILAR sheet'inden kullanıcıları çek
       var res = await apiFetch('/' + encodeURIComponent(KULLANICI_SHEET));
       var data = await res.json();
-      var rows = (data.values || []).slice(1); // başlık satırını atla
+      var rows = data.rows || [];
 
       // E-posta eşleşmesi ara (col 0 = eposta, col 1 = sifre_hash, col 2 = ad_soyad, col 3 = aktif)
       var kullanici = null;
-      var aranan = eposta.toLowerCase();
       for (var i = 0; i < rows.length; i++) {
         var r = rows[i];
-        // A sütunu: e-posta, E sütunu (opsiyonel): kullanıcı adı
-        var kayitliEposta = (r[0] || '').trim().toLowerCase();
-        var kayitliKullanici = (r[4] || '').trim().toLowerCase();
-        if (kayitliEposta === aranan || (kayitliKullanici && kayitliKullanici === aranan)) {
+        if ((r[0] || '').trim().toLowerCase() === eposta) {
           kullanici = { eposta: r[0], sifreHash: (r[1]||'').trim(), adSoyad: (r[2]||'').trim(), aktif: (r[3]||'').trim(), _row: i + 2 };
           break;
         }
       }
 
-      if (!kullanici) { showErr('Kullanıcı bulunamadı. Koordinatörünüzle iletişime geçin.'); btn.disabled=false; btn.textContent='Sisteme Giriş Yap'; return; }
+      if (!kullanici) { showErr('Bu e-posta kayıtlı değil. Koordinatörünüzle iletişime geçin.'); btn.disabled=false; btn.textContent='Sisteme Giriş Yap'; return; }
       if (kullanici.aktif && kullanici.aktif.toUpperCase() === 'FALSE') { showErr('Hesabınız pasif. Koordinatörünüzle iletişime geçin.'); btn.disabled=false; btn.textContent='Sisteme Giriş Yap'; return; }
 
       // İlk giriş — şifre hash'i boş
@@ -4542,7 +4544,7 @@ function guncelleSonSenkron() {
         // Hash'i Sheets'e kaydet
         var hash = await sha256(sifre);
         await apiFetch('/' + encodeURIComponent(KULLANICI_SHEET) + '/cell', {
-          method: 'POST',
+          method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ row: kullanici._row, col: 1, value: hash })
         });
@@ -4573,13 +4575,35 @@ function guncelleSonSenkron() {
     window._goruntuleme_modu = false;
   } else {
     overlay.classList.add('on');
-    setTimeout(function(){ epostaEl.focus(); }, 150);
+    setTimeout(function(){
+      if (epostaEl.value) { sifreEl.focus(); }
+      else { epostaEl.focus(); }
+    }, 150);
   }
 
   btn.addEventListener('click', tryLogin);
   sifreEl.addEventListener('keydown', function(e){ if (e.key === 'Enter') tryLogin(); });
   epostaEl.addEventListener('keydown', function(e){ if (e.key === 'Enter') sifreEl.focus(); });
   tekrarEl && tekrarEl.addEventListener('keydown', function(e){ if (e.key === 'Enter') tryLogin(); });
+
+  // Misafir (salt okunur) girişi
+  var misafirBtn = document.getElementById('sp-misafir-btn');
+  if (misafirBtn) {
+    misafirBtn.addEventListener('click', function() {
+      var sifre = prompt('Salt okunur görüntüleme şifresi:');
+      if (!sifre) return;
+      if (sifre.trim() === '2626') {
+        sessionStorage.setItem('turne_erisim', 'true');
+        sessionStorage.setItem('turne_rol', 'viewer');
+        window._goruntuleme_modu = true;
+        overlay.classList.remove('on');
+        init();
+        _goruntulemeModuUygula();
+      } else {
+        alert('Hatalı şifre.');
+      }
+    });
+  }
 })();
 
 // ============================================================
