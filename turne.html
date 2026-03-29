@@ -9400,32 +9400,46 @@ function deleteTurneOnay(rowIdx, oyunAdi) {
 }
 
 async function deleteTurne(rowIdx) {
-  // Eğer zaten bekleyen bir silme varsa, onu iptal et
   if (_silUndoTimer !== null) {
     clearTimeout(_silUndoTimer);
     _silUndoTimer = null;
     _silUndoRowIdx = null;
     _silUndoBarGizle();
   }
-  // Turneyi bul ve adını al
   var t = turneler.find(function(x){ return x._rowIdx === rowIdx; });
   var turneAdi = t ? ((t.oyun || '') + (t.il ? ' – ' + t.il : '')) : 'Turne';
 
-  // Listeyi geçici olarak güncelle (optimistic)
+  // Ek turne ise direkt sil (undo yok)
+  if (t && t.anaGrupId) {
+    if (!confirm('"' + turneAdi + '" ek turnesini silmek istediğinizden emin misiniz?')) return;
+    turneler = turneler.filter(function(x){ return x._rowIdx !== rowIdx; });
+    renderListe(); renderCalendar();
+    await _turneSilDevam(rowIdx);
+    return;
+  }
+
+  // Ana turne — bağlı ek turne var mı?
+  var ekGruplar = turneler.filter(function(x){ return String(x.anaGrupId) === String(rowIdx); });
+
   _silUndoRowIdx = rowIdx;
   var oncekiTurneler = turneler.slice();
-  turneler = turneler.filter(function(x){ return x._rowIdx !== rowIdx; });
+  // Ana turne + tüm ek turneleri listeden kaldır
+  var silinecekIdxler = [rowIdx].concat(ekGruplar.map(function(e){ return e._rowIdx; }));
+  turneler = turneler.filter(function(x){ return silinecekIdxler.indexOf(x._rowIdx) < 0; });
   renderListe();
   renderCalendar();
 
-  // Geri al barını göster
-  _silUndoBarGoster(turneAdi, oncekiTurneler);
+  var ekBilgi = ekGruplar.length ? ' (+ ' + ekGruplar.length + ' ek grup)' : '';
+  _silUndoBarGoster(turneAdi + ekBilgi, oncekiTurneler);
 
-  // 5 saniye sonra gerçekten sil
   _silUndoTimer = setTimeout(async function() {
     _silUndoTimer = null;
     _silUndoRowIdx = null;
     _silUndoBarGizle();
+    // Önce ek grupları sil, sonra ana turneyi
+    for (var i = 0; i < ekGruplar.length; i++) {
+      await _turneSilDevam(ekGruplar[i]._rowIdx);
+    }
     await _turneSilDevam(rowIdx);
   }, 5000);
 }
