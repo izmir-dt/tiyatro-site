@@ -8183,7 +8183,11 @@ function renderOyunDetay() {
   if (!oyun) {
     stat.textContent = '';
     var oyunSet = new Set(tumPersonel.map(function(p){ return p.oyun; }).filter(Boolean));
-    turneler.forEach(function(t){ if(t.oyun) oyunSet.add(t.oyun); });
+    // Turne durak bazlı oyunları da ayrı ayrı ekle
+    turneler.forEach(function(t){
+      if (t.duraklar) t.duraklar.forEach(function(d){ if(d.oyun && d.oyun.trim()) oyunSet.add(d.oyun.trim()); });
+      if (t.oyun) t.oyun.split('/').forEach(function(o){ var ot=o.trim(); if(ot) oyunSet.add(ot); });
+    });
     // Turne sayısına göre sırala (en çok turneye giden en başta)
     var tumOyunlar = [...oyunSet].sort(function(a,b){
       var aT = turneler.filter(function(t){ return t.oyun===a||(t.duraklar&&t.duraklar.some(function(d){return d.oyun===a;})); }).length;
@@ -13666,12 +13670,23 @@ function renderIstatistik() {
     });
   });
 
-  // Oyun bazli
+  // Oyun bazli — durak bazlı oyunları da ayrı ayrı say
   var oyunMap = {};
   turneler.forEach(function(t){
-    if (!t.oyun) return;
-    if (!oyunMap[t.oyun]) oyunMap[t.oyun] = [];
-    oyunMap[t.oyun].push(t);
+    // Durak bazlı oyunları topla
+    var oyunlar = [];
+    if (t.duraklar && t.duraklar.length) {
+      t.duraklar.forEach(function(d){ if (d.oyun && d.oyun.trim() && oyunlar.indexOf(d.oyun.trim()) < 0) oyunlar.push(d.oyun.trim()); });
+    }
+    // Durakta oyun yoksa t.oyun'u "/" ile ayır
+    if (!oyunlar.length && t.oyun) {
+      t.oyun.split('/').forEach(function(o){ var ot=o.trim(); if(ot && oyunlar.indexOf(ot)<0) oyunlar.push(ot); });
+    }
+    oyunlar.forEach(function(o){
+      if (!oyunMap[o]) oyunMap[o] = [];
+      // Aynı turneyi iki kez ekleme
+      if (oyunMap[o].indexOf(t) < 0) oyunMap[o].push(t);
+    });
   });
 
   // Top 5
