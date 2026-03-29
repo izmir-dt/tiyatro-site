@@ -5516,7 +5516,16 @@ function turneCard(t) {
   // Yardımcılar
   function temizIl(s){ return (s||'').replace(/\/MERKEZ/gi,'').replace(/\/Merkez/g,'').trim(); }
 
-  var personel   = getPersonelForOyun(t.oyun);
+  // Çok oyunlu turne desteği — tüm durak oyunlarının kadrosunu birleştir
+  var _tumOyunlarKart = [];
+  if (t.duraklar) t.duraklar.forEach(function(d){ if(d.oyun&&d.oyun.trim()&&_tumOyunlarKart.indexOf(d.oyun.trim())<0) _tumOyunlarKart.push(d.oyun.trim()); });
+  if (!_tumOyunlarKart.length && t.oyun) t.oyun.split('/').forEach(function(o){ var ot=o.trim(); if(ot&&_tumOyunlarKart.indexOf(ot)<0) _tumOyunlarKart.push(ot); });
+  var personel = (function(){
+    if (_tumOyunlarKart.length <= 1) return getPersonelForOyun(_tumOyunlarKart[0] || t.oyun || '');
+    var _hepsi = []; var _seen = {};
+    _tumOyunlarKart.forEach(function(o){ getPersonelForOyun(o).forEach(function(p){ var k=(p.kisi||'').toLowerCase(); if(!_seen[k]){_seen[k]=true;_hepsi.push(p);} }); });
+    return _hepsi;
+  })();
   var sure       = turneSuresi(t);
   var tarihStr   = formatTarihKart(t.baslangicTarih||t.tarih, t.bitisTarih, sure);
   var gunStr = sure > 1 ? sure + ' gün' : '';
