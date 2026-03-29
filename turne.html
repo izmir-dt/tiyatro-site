@@ -5756,49 +5756,6 @@ function openKisiModal(rowIdx, _durakOyunAdi) {
   const t = turneler.find(x => x._rowIdx === rowIdx);
   if (!t) return;
 
-  // Turnede kaç farklı oyun var?
-  // Farklı oyunları bul: önce durakları tara, t.oyun zaten birleşik olabilir
-  var tumOyunlar = [];
-  if (t.duraklar) t.duraklar.forEach(function(d){ if (d.oyun && !tumOyunlar.includes(d.oyun)) tumOyunlar.push(d.oyun); });
-  // Durakta oyun yoksa t.oyun'u kullan
-  if (!tumOyunlar.length && t.oyun) tumOyunlar.push(t.oyun);
-
-  // Birden fazla farklı oyun varsa ve hangisi seçileceği belirtilmemişse → seçim dialog'u göster
-  if (tumOyunlar.length > 1 && !_durakOyunAdi) {
-    var _selOv = document.createElement('div');
-    _selOv.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:19500;display:flex;align-items:center;justify-content:center;padding:20px';
-    // Oyun listesini global'e al — Türkçe karakter sorununu önlemek için index kullan
-    window._oyunSelList = tumOyunlar;
-    window._oyunSelRowIdx = rowIdx;
-    _selOv.innerHTML = '<div style="background:var(--card);border:1.5px solid var(--border);border-radius:14px;padding:0;width:100%;max-width:400px;box-shadow:0 20px 60px rgba(0,0,0,.3);font-family:Poppins,sans-serif;overflow:hidden">'
-      + '<div style="padding:16px 20px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">'
-      +   '<div style="width:34px;height:34px;border-radius:9px;background:hsl(42,70%,90%);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0">🎭</div>'
-      +   '<div><div style="font-size:14px;font-weight:800;color:var(--foreground)">Hangi oyunun kadrosu?</div>'
-      +   '<div style="font-size:11px;color:var(--muted-foreground);margin-top:1px">Bu turnede birden fazla oyun var</div></div>'
-      + '</div>'
-      + '<div style="padding:12px 20px;display:flex;flex-direction:column;gap:8px">'
-      + tumOyunlar.map(function(o, oi) {
-          var kadroSay = getPersonelForOyun(o).length;
-          return '<button onclick="_oyunSelSec(' + oi + ')" '
-            + 'style="text-align:left;padding:10px 14px;border:1.5px solid var(--border);border-radius:9px;background:var(--card);cursor:pointer;font-family:Poppins,sans-serif;transition:border-color .15s,background .15s" '
-            + 'onmouseenter="this.style.borderColor=\'var(--primary)\';this.style.background=\'var(--muted)\'" '
-            + 'onmouseleave="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--card)\'">'
-            +   '<div style="font-size:13px;font-weight:700;color:var(--foreground)">' + o + '</div>'
-            +   '<div style="font-size:11px;color:var(--muted-foreground);margin-top:2px">' + kadroSay + ' kişi</div>'
-            + '</button>';
-        }).join('')
-      + '</div>'
-      + '<div style="padding:10px 20px 14px;display:flex;justify-content:flex-end">'
-      +   '<button onclick="_oyunSelKapat()" style="height:34px;padding:0 16px;border:1.5px solid var(--border);border-radius:8px;background:transparent;cursor:pointer;font-size:12px;font-weight:600;color:var(--muted-foreground);font-family:Poppins,sans-serif">İptal</button>'
-      + '</div>'
-      + '</div>';
-    _selOv.id = '_oyunsel-overlay';
-    _selOv.setAttribute('data-oyunsel-ov','1');
-    _selOv.addEventListener('click', function(e){ if(e.target===_selOv) _oyunSelKapat(); });
-    document.body.appendChild(_selOv);
-    return;
-  }
-
   kisiModalRowIdx = rowIdx;
 
   // Tüm durak oyunlarını bul (tekrarsız)
@@ -5807,71 +5764,54 @@ function openKisiModal(rowIdx, _durakOyunAdi) {
   if (!_tumDurakOyunlar.length && t.oyun) _tumDurakOyunlar.push(t.oyun);
   window._kisiModalTumOyunlar = _tumDurakOyunlar;
 
-  // Başlangıç oyunu — parametre verilmişse onu kullan
+  // Başlangıç oyunu — parametre verilmişse onu kullan, yoksa ilk oyun
   var oyunAdi = _durakOyunAdi || _tumDurakOyunlar[0] || t.oyun || '';
   window._kisiModalOyunAdi = oyunAdi;
 
-  // Çok oyunlu mod: sekmeli yapı — her oyun için ayrı katilimci listesi
-  // window._kisiModalCoklu: { 'OYUN_ADI': [{kisi,gorev,kategori,oyun},...], ... }
-  if (_tumDurakOyunlar.length > 1) {
-    window._kisiModalCoklu = {};
-    _tumDurakOyunlar.forEach(function(o) {
-      // Kayıtlı katılımcılardan bu oyuna ait olanları al
-      var kayitli = (t.katilimcilar || []).filter(function(k){ return !k.oyun || k.oyun === o; });
-      if (kayitli.length > 0) {
-        window._kisiModalCoklu[o] = JSON.parse(JSON.stringify(kayitli));
-        // Eksik kontrolü
-        var anaKadroO = getPersonelForOyun(o);
-        var kayitliAdlar = new Set(kayitli.map(function(k){ return k.kisi.trim().toLowerCase(); }));
-        var eksikler = anaKadroO.filter(function(p){ return p.kisi && !kayitliAdlar.has(p.kisi.trim().toLowerCase()); });
-        if (eksikler.length > 0 && o === oyunAdi) _eksikKisilerSecimGoster(eksikler);
-      } else {
-        // Hiç kayıt yoksa ana kadroyu otomatik yükle
-        var anaKadroO = getPersonelForOyun(o);
-        window._kisiModalCoklu[o] = anaKadroO.map(function(p) {
-          var gorev = p.kategori === 'Oyuncu' ? 'Sanatçı' : (p.gorev || p.kategori || '');
-          return { kisi: p.kisi, gorev: gorev, kategori: p.kategori, oyun: o };
-        });
-      }
+  // Tek mod — oyun ayrımı olmaksızın tüm katılımcılar tek listede
+  window._kisiModalCoklu = null;
+  var anaKadro = _durakOyunAdi ? getPersonelForOyun(oyunAdi) : (function(){
+    // Tüm durakların personelini birleştir
+    var hepsi = [];
+    var seen = {};
+    _tumDurakOyunlar.forEach(function(o){
+      getPersonelForOyun(o).forEach(function(p){
+        var k = (p.kisi||'').trim().toLowerCase();
+        if (!seen[k]) { seen[k] = true; hepsi.push(p); }
+      });
     });
-    // Aktif sekmenin listesini kisiModalSecili'ye yansıt
-    kisiModalSecili = window._kisiModalCoklu[oyunAdi] || [];
-    _kisiModalSekmelerRender();
+    return hepsi;
+  })();
+  if (t.katilimcilar && t.katilimcilar.length > 0) {
+    // Mevcut kadroyu normalize et
+    var OYUNCU_K = ['Oyuncu','Sanatçı','Koro','Koro/Dans Ekibi','Koro/Dans','Solist','Dansçı','Figüran','Müzisyen','Orkestra','Kurumdan Emekli Sanatçı'];
+    kisiModalSecili = JSON.parse(JSON.stringify(t.katilimcilar)).map(function(k) {
+      var personelKayit = (tumPersonel || []).find(function(p){ return p.kisi === k.kisi; });
+      var gercekKat = (personelKayit ? personelKayit.kategori : '') || k.kategori || '';
+      var _sanatcilar = OYUNCU_K.filter(function(x){ return x !== 'Figüran'; });
+      var _varsayilan = _sanatcilar.indexOf(gercekKat) >= 0 ? 'Sanatçı' : (gercekKat || '');
+      var katGoster = (k.gorev && k.gorev.trim()) ? k.gorev.trim() : _varsayilan;
+      return Object.assign({}, k, { gorev: katGoster, kategori: gercekKat });
+    });
+    var kayitliAdlar = new Set(kisiModalSecili.map(function(k){ return k.kisi.trim().toLowerCase(); }));
+    var eksikler = anaKadro.filter(function(p){ return p.kisi && !kayitliAdlar.has(p.kisi.trim().toLowerCase()); });
+    if (eksikler.length > 0) _eksikKisilerSecimGoster(eksikler);
   } else {
-    // Tek oyun — mevcut davranış
-    window._kisiModalCoklu = null;
-    var anaKadro = getPersonelForOyun(oyunAdi);
-    if (t.katilimcilar && t.katilimcilar.length > 0) {
-      // Mevcut kadroyu normalize et — eski karakter isimlerini kategori adıyla değiştir
-      var OYUNCU_K = ['Oyuncu','Sanatçı','Koro','Koro/Dans Ekibi','Koro/Dans','Solist','Dansçı','Figüran','Müzisyen','Orkestra','Kurumdan Emekli Sanatçı'];
-      kisiModalSecili = JSON.parse(JSON.stringify(t.katilimcilar)).map(function(k) {
-        // tumPersonel'den gerçek kategoriyi bul
-        var personelKayit = (tumPersonel || []).find(function(p){ return p.kisi === k.kisi; });
-        var gercekKat = (personelKayit ? personelKayit.kategori : '') || k.kategori || '';
-        // Sanatçı kategorileri → 'Sanatçı', diğerleri kendi adıyla, fallback k.gorev
-        // Figüran kendi adıyla kalsın, diğer oyuncu kategorileri → Sanatçı
-        var _sanatcilar = OYUNCU_K.filter(function(x){ return x !== 'Figüran'; });
-        var _varsayilan = _sanatcilar.indexOf(gercekKat) >= 0 ? 'Sanatçı' : (gercekKat || '');
-        // Kaydedilmiş görev varsa her zaman koru — normalize etme
-        var katGoster = (k.gorev && k.gorev.trim()) ? k.gorev.trim() : _varsayilan;
-        return Object.assign({}, k, { gorev: katGoster, kategori: gercekKat });
-      });
-      var kayitliAdlar = new Set(kisiModalSecili.map(function(k){ return k.kisi.trim().toLowerCase(); }));
-      var eksikler = anaKadro.filter(function(p){ return p.kisi && !kayitliAdlar.has(p.kisi.trim().toLowerCase()); });
-      if (eksikler.length > 0) _eksikKisilerSecimGoster(eksikler);
-    } else {
-      kisiModalSecili = anaKadro.map(function(p) {
-        var gorev = p.kategori === 'Oyuncu' ? 'Sanatçı' : (p.gorev || p.kategori || '');
-        return { kisi: p.kisi, gorev: gorev, kategori: p.kategori };
-      });
-    }
-    _kisiModalSekmelerGizle();
+    kisiModalSecili = anaKadro.map(function(p) {
+      var gorev = p.kategori === 'Oyuncu' ? 'Sanatçı' : (p.gorev || p.kategori || '');
+      return { kisi: p.kisi, gorev: gorev, kategori: p.kategori };
+    });
   }
+  _kisiModalSekmelerGizle();
 
-  document.getElementById('kisi-modal-title').textContent = (t.il || 'Turne') + ' – Katılımcılar';
-  document.getElementById('kisi-modal-sure').textContent = formatTarih(t.baslangicTarih || t.tarih) + ' · ' + t.il;
+  // Başlık: çok oyunlu → oyun adları, tek oyunlu → il adı temizlenmiş
+  var _ilTemiz = _temizleIlPdf ? _temizleIlPdf(t.il || '') : (t.il || 'Turne');
+  var _modalBaslik = _tumDurakOyunlar.length > 1 ? _tumDurakOyunlar.join(' / ') : _ilTemiz;
+  document.getElementById('kisi-modal-title').textContent = _modalBaslik + ' – Katılımcılar';
+  document.getElementById('kisi-modal-sure').textContent = formatTarih(t.baslangicTarih || t.tarih) + (_ilTemiz ? ' · ' + _ilTemiz : '');
   document.getElementById('kisi-filter-input').value = '';
-  renderKisiModalList(oyunAdi, '');
+  // Sol panel: çok oyunlu turnede tüm oyunların kadrosunu göster (filtresiz)
+  renderKisiModalList(_tumDurakOyunlar.length > 1 ? '' : oyunAdi, '');
   renderSelectedPills();
   document.getElementById('kisi-modal-overlay').classList.add('on');
 }
@@ -6025,9 +5965,10 @@ function _eksikKisilerSecimGoster(eksikler) {
 }
 
 function kisiModalAnaKadroyuSec() {
-  // Sol listeyi sıfırlayıp yenile — sağ panele dokunma
   document.getElementById('kisi-filter-input').value = '';
-  var oyunAdi = window._kisiModalOyunAdi || '';
+  var _tumOyunlar = window._kisiModalTumOyunlar || [];
+  // Çok oyunlu → boş string geçerek renderKisiModalList'in hepsini birleştirmesini sağla
+  var oyunAdi = _tumOyunlar.length > 1 ? '' : (window._kisiModalOyunAdi || '');
   renderKisiModalList(oyunAdi, '');
 }
 
@@ -7558,7 +7499,22 @@ function filterKisiList() {
 }
 
 function renderKisiModalList(oyunAdi, q) {
-  const personel = getPersonelForOyun(oyunAdi).filter(p => !q || p.kisi.toLowerCase().includes(q) || (p.gorev||'').toLowerCase().includes(q) || (p.kategori||'').toLowerCase().includes(q));
+  // Çok oyunlu modda (oyunAdi boş ama tumOyunlar var) → tüm oyunların kadrosunu birleştir
+  var _tumOyunlar = window._kisiModalTumOyunlar || [];
+  var personelHam;
+  if (!oyunAdi && _tumOyunlar.length > 1) {
+    var _seen = {};
+    personelHam = [];
+    _tumOyunlar.forEach(function(o) {
+      getPersonelForOyun(o).forEach(function(p) {
+        var k = (p.kisi||'').trim().toLowerCase();
+        if (!_seen[k]) { _seen[k] = true; personelHam.push(p); }
+      });
+    });
+  } else {
+    personelHam = getPersonelForOyun(oyunAdi);
+  }
+  const personel = personelHam.filter(p => !q || p.kisi.toLowerCase().includes(q) || (p.gorev||'').toLowerCase().includes(q) || (p.kategori||'').toLowerCase().includes(q));
   const el = document.getElementById('kisi-modal-list');
   if (!personel.length) {
     el.innerHTML = '<div style="padding:14px;text-align:center;font-size:12px;color:var(--muted-foreground)">Oyun kadrosunda kişi bulunamadı — aşağıdan manuel ekleyin</div>';
