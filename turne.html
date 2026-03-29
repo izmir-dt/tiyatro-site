@@ -2261,7 +2261,7 @@ flex-shrink:0;
 <button onclick="document.getElementById('yedek-bilgi').style.display='none'" style="margin-top:6px;width:100%;border:none;background:var(--muted);border-radius:6px;padding:5px;font-size:11px;cursor:pointer;font-family:Poppins,sans-serif">Kapat</button>
       </div>
     </div>
-    <label class="btn btn-outline" style="cursor:pointer;font-size:11px;display:inline-flex;align-items:center;gap:5px;height:30px;padding:0 12px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg> Geri Yükle<input type="file" accept=".json" onchange="geriYukle(event)" style="display:none"></label>
+    <label class="btn btn-outline" style="cursor:pointer;font-size:11px;display:inline-flex;align-items:center;gap:5px;height:30px;padding:0 12px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg> Geri Yükle<input type="file" accept=".tcbak,.json" onchange="geriYukle(event)" style="display:none"></label>
     <a href="/tiyatro-site/" class="nav-back" style="display:inline-flex;align-items:center;gap:5px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> Ana Sayfa</a>
     <!-- VERİ TUTARLILIK PANELİ BUTONU -->
     <div style="position:relative;display:inline-flex">
@@ -15049,41 +15049,92 @@ function _tcListesiModalAc(t) {
     _tcListesiPdfIndir(t, katilimcilar);
   };
 
-  // Yedek Al
-  overlay.querySelector('#_tc_yedek_al').onclick = function() {
+  // ── ŞİFRELİ YEDEK AL ──
+  overlay.querySelector('#_tc_yedek_al').onclick = async function() {
     var data = _tcVeriOku();
-    var json = JSON.stringify(data, null, 2);
-    var blob = new Blob([json], {type: 'application/json'});
-    var url = URL.createObjectURL(blob);
-    var a = document.createElement('a');
-    var bugun = new Date().toISOString().slice(0,10);
-    a.href = url;
-    a.download = 'tc_listesi_yedek_' + bugun + '.json';
-    a.click();
-    URL.revokeObjectURL(url);
+    if (!Object.keys(data).length) { showToast('Kaydedilmiş veri yok.', 'error', 3000); return; }
+    var sifre = prompt('Yedeği şifrelemek için bir şifre girin:\n(Bu şifre olmadan yedek açılamaz, unutmayın!)');
+    if (!sifre) return;
+    var sifre2 = prompt('Şifreyi tekrar girin:');
+    if (sifre !== sifre2) { alert('Şifreler eşleşmedi. Yedek alınmadı.'); return; }
+    try {
+      var json = JSON.stringify(data);
+      var enc = new TextEncoder();
+      var salt = crypto.getRandomValues(new Uint8Array(16));
+      var iv   = crypto.getRandomValues(new Uint8Array(12));
+      var keyMaterial = await crypto.subtle.importKey('raw', enc.encode(sifre), 'PBKDF2', false, ['deriveKey']);
+      var key = await crypto.subtle.deriveKey(
+        { name:'PBKDF2', salt:salt, iterations:310000, hash:'SHA-256' },
+        keyMaterial, { name:'AES-GCM', length:256 }, false, ['encrypt']
+      );
+      var encrypted = await crypto.subtle.encrypt({ name:'AES-GCM', iv:iv }, key, enc.encode(json));
+      var payload = {
+        v: 1,
+        salt: Array.from(salt),
+        iv:   Array.from(iv),
+        data: Array.from(new Uint8Array(encrypted))
+      };
+      var blob = new Blob([JSON.stringify(payload)], {type:'application/json'});
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      var bugun = new Date().toISOString().slice(0,10);
+      a.href = url;
+      a.download = 'tc_yedek_' + bugun + '.tcbak';
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast('Yedek şifreli olarak alındı ✓', 'success', 3000);
+    } catch(err) {
+      alert('Yedek alınamadı: ' + err.message);
+    }
   };
 
-  // Yedek Yükle
-  overlay.querySelector('#_tc_yedek_input').onchange = function(e) {
+  // ── ŞİFRELİ YEDEK YÜKLE ──
+  overlay.querySelector('#_tc_yedek_input').onchange = async function(e) {
     var file = e.target.files[0];
     if (!file) return;
+    e.target.value = '';
     var reader = new FileReader();
-    reader.onload = function(ev) {
+    reader.onload = async function(ev) {
       try {
-        var parsed = JSON.parse(ev.target.result);
-        if (typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Geçersiz format');
-        // Mevcut veriyle birleştir (üzerine yaz)
+        var payload = JSON.parse(ev.target.result);
+        if (!payload.v || !payload.salt || !payload.iv || !payload.data) {
+          // Eski şifresiz format desteği
+          if (typeof payload === 'object' && !Array.isArray(payload)) {
+            var mevcut0 = _tcVeriOku();
+            Object.keys(payload).forEach(function(k){ mevcut0[k] = Object.assign(mevcut0[k]||{}, payload[k]); });
+            _tcVeriYaz(mevcut0);
+            document.body.removeChild(overlay);
+            _tcListesiModalAc(t);
+            setTimeout(function(){ showToast('Yedek yüklendi ✓', 'success', 3000); }, 200);
+            return;
+          }
+          throw new Error('Geçersiz dosya formatı');
+        }
+        var sifre = prompt('Yedeğin şifresini girin:');
+        if (!sifre) return;
+        var enc2 = new TextEncoder();
+        var salt2 = new Uint8Array(payload.salt);
+        var iv2   = new Uint8Array(payload.iv);
+        var encData = new Uint8Array(payload.data);
+        var keyMat2 = await crypto.subtle.importKey('raw', enc2.encode(sifre), 'PBKDF2', false, ['deriveKey']);
+        var key2 = await crypto.subtle.deriveKey(
+          { name:'PBKDF2', salt:salt2, iterations:310000, hash:'SHA-256' },
+          keyMat2, { name:'AES-GCM', length:256 }, false, ['decrypt']
+        );
+        var decrypted = await crypto.subtle.decrypt({ name:'AES-GCM', iv:iv2 }, key2, encData);
+        var parsed = JSON.parse(new TextDecoder().decode(decrypted));
         var mevcut = _tcVeriOku();
-        Object.keys(parsed).forEach(function(k) {
-          mevcut[k] = Object.assign(mevcut[k] || {}, parsed[k]);
-        });
+        Object.keys(parsed).forEach(function(k){ mevcut[k] = Object.assign(mevcut[k]||{}, parsed[k]); });
         _tcVeriYaz(mevcut);
-        // Modalı yenile
         document.body.removeChild(overlay);
         _tcListesiModalAc(t);
         setTimeout(function(){ showToast('Yedek başarıyla yüklendi ✓', 'success', 3000); }, 200);
       } catch(err) {
-        alert('Geçersiz yedek dosyası. Lütfen doğru JSON dosyasını seçin.');
+        if (err.name === 'OperationError') {
+          alert('Şifre hatalı veya dosya bozuk. Lütfen tekrar deneyin.');
+        } else {
+          alert('Yedek yüklenemedi: ' + err.message);
+        }
       }
     };
     reader.readAsText(file);
