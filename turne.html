@@ -4893,8 +4893,9 @@ function populateFilters() {
   // Hem personel kaydından hem turne kaydındaki oyun adlarını topla
   const oyunSet = new Set(tumPersonel.map(p => p.oyun).filter(Boolean));
   turneler.forEach(function(t) {
-    if (t.oyun) oyunSet.add(t.oyun);
-    if (t.duraklar) t.duraklar.forEach(function(d){ if (d.oyun) oyunSet.add(d.oyun); });
+    // t.oyun "/" ile ayrılmış olabilir — her oyunu ayrı ekle
+    if (t.oyun) t.oyun.split('/').forEach(function(o){ var ot=o.trim(); if(ot) oyunSet.add(ot); });
+    if (t.duraklar) t.duraklar.forEach(function(d){ if (d.oyun && d.oyun.trim()) oyunSet.add(d.oyun.trim()); });
   });
   const oyunlar = [...oyunSet].sort(function(a,b){ return a.localeCompare(b,'tr'); });
   const iller = [...new Set([...turneler.map(t => t.il), ...turneler.flatMap(t => (t.duraklar||[]).map(d => d.il))])].filter(Boolean).sort();
@@ -5246,7 +5247,19 @@ function renderListe() {
   const _bn = new Date();
   const bugun  = _bn.getFullYear() + '-' + String(_bn.getMonth()+1).padStart(2,'0') + '-' + String(_bn.getDate()).padStart(2,'0');
   let filtered = turneler.filter(t => {
-    if (fOyun && t.oyun !== fOyun) return false;
+    if (fOyun) {
+      // t.oyun direkt eşleşme
+      var _oyunEsles = t.oyun === fOyun;
+      // t.oyun "/" ile ayrılmış içinde geçiyor mu
+      if (!_oyunEsles && t.oyun) {
+        _oyunEsles = t.oyun.split('/').some(function(o){ return o.trim() === fOyun; });
+      }
+      // durak bazlı oyunlar
+      if (!_oyunEsles && t.duraklar) {
+        _oyunEsles = t.duraklar.some(function(d){ return d.oyun === fOyun; });
+      }
+      if (!_oyunEsles) return false;
+    }
     if (fIl && t.il !== fIl && !(t.duraklar||[]).some(d => d.il === fIl)) return false;
     if (statuFiltre !== 'tum' && t.statu !== statuFiltre) return false;
     const tBas = t.baslangicTarih || t.tarih || '';
