@@ -4770,7 +4770,7 @@ function exportExcel() {
       t.baslangicTarih || t.tarih || '',
       t.bitisTarih     || t.tarih || '',
       turneSuresi(t),
-      Number(t.sayi) || 1,
+      (typeof durakToplamTemsil==='function' ? durakToplamTemsil(t) : (Number(t.sayi)||1)),
       sr.label || '',
       t.grup || '',
       t.gidisUlasim || '',
@@ -9571,6 +9571,16 @@ async function saveTurne() {
   var _katMevcut = editIdx !== '' ? (turneler.find(x=>x._rowIdx===parseInt(editIdx))||{}).katilimcilar : null;
   var katJSON = JSON.stringify(_katMevcut !== null && _katMevcut !== undefined ? _katMevcut : (kisiModalSecili || []));
   var programSatirlarJSON = programSatirlar.length ? JSON.stringify(programSatirlar) : '';
+  // Uyarı4 düzeltmesi: programSatirlar elle değiştirildiyse duraklar[].sayi'yı güncelle
+  if (programSatirlar.length && gecerliDuraklar.length) {
+    gecerliDuraklar.forEach(function(dur) {
+      var oyunGunSayisi = programSatirlar.filter(function(ps) {
+        return ps.sehir === dur.il && ps.program === 'Oyun';
+      }).length;
+      if (oyunGunSayisi > 0) dur.sayi = oyunGunSayisi;
+    });
+    duraklarJSON = JSON.stringify(gecerliDuraklar);
+  }
   // YENİ Sheets TURNE_KAYITLARI sütun sırası (41 eleman, 0-tabanlı) — Otel Rez No YOK:
   // [0-7]  oyun,il,basTarih,bitTarih,mekan,sayi,not,statu
   // [8-10] otelAdi,otelAdres,otelTel
@@ -18928,9 +18938,10 @@ function calAylikRaporPdf() {
       var ps = t.programSatirlar ? t.programSatirlar.find(function(s){return s.tarih===key;}) : null;
       var st = _calEvStyle(ps, t);
       var renk = tipRenk[st.tip]||'#333';
+      var gunTemsil = (ps && ps.program==='Oyun') ? (ps.saat2 ? 2 : 1) : 0;
       var temsil = typeof durakToplamTemsil==='function' ? durakToplamTemsil(t) : 0;
       var kadro = t.katilimcilar ? t.katilimcilar.length : 0;
-      if (st.tip==='oyun') toplamTemsil += temsil;
+      if (st.tip==='oyun') toplamTemsil += gunTemsil;
       toplamKadro = Math.max(toplamKadro, kadro);
       var notStr = (idx===events.length-1 && gunNotu)
         ? '<br><span style="color:#444;font-size:8.5pt;font-style:italic">'+gunNotu+'</span>' : '';
