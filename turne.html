@@ -379,6 +379,14 @@ function parseLocalDate(str) {
     }
     .turne-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.09); transform: translateY(-1px); transition: box-shadow .15s, transform .15s; }
     .turne-card:hover .card-hint { opacity: 1 !important; }
+    .turne-card[data-statu="tamamlandi"] { background: hsl(215,55%,95%) !important; }
+    .turne-card[data-statu="iptal"]      { background: hsl(0,55%,96%) !important; }
+    .turne-card[data-statu="onaylandi"]  { background: hsl(142,45%,95%) !important; }
+    .turne-card[data-statu="onay-bekliyor"] { background: hsl(38,80%,95%) !important; }
+    [data-theme="dark"] .turne-card[data-statu="tamamlandi"] { background: hsl(215,30%,13%) !important; }
+    [data-theme="dark"] .turne-card[data-statu="iptal"]      { background: hsl(0,25%,13%) !important; }
+    [data-theme="dark"] .turne-card[data-statu="onaylandi"]  { background: hsl(142,20%,12%) !important; }
+    [data-theme="dark"] .turne-card[data-statu="onay-bekliyor"] { background: hsl(38,25%,12%) !important; }
     .turne-card-footer { border-top: 1px solid var(--border); padding: 7px 12px; display: flex; align-items: center; gap: 4px; flex-wrap: nowrap; min-width: 0; margin-top: auto; overflow: hidden; }
     [data-theme="dark"] .turne-card { box-shadow: 0 2px 8px rgba(0,0,0,.4); border-color: hsl(220,13%,22%); }
     /* Accordion: kart başlığı tıklanabilir */
@@ -2427,7 +2435,6 @@ flex-shrink:0;
           </div>
         </div>
       </div>
-      <!-- ZAMAN / AY — her zaman -->
       <select class="filter-select" id="filter-zaman" onchange="zamanFiltre=this.value;renderListe()" style="flex:1;min-width:105px">
         <option value="tum" selected>Tüm Zamanlar</option>
         <option value="gelecek">Yaklaşan</option>
@@ -5486,7 +5493,10 @@ function renderListe() {
       } else {
         key = '0000-00'; label = 'Tarih Belirsiz';
       }
-      if (!ayGruplar[key]) ayGruplar[key] = { label: label, items: [] };
+      if (!ayGruplar[key]) ayGruplar[key] = { label: label, items: [], tumItems: [] };
+      ayGruplar[key].tumItems.push(t);
+      // Ay bazlı tamamlandı gizleme
+      if ((window._ayTamamlandiGizli||{})[key] && t.statu === 'tamamlandi') return;
       ayGruplar[key].items.push(t);
     });
 
@@ -5504,6 +5514,10 @@ function renderListe() {
         ayDurumBadge = ' <span style="font-size:11px;padding:2px 8px;border-radius:10px;background:hsl(142,60%,40%);color:#fff;font-weight:700;vertical-align:middle;line-height:1.4">Yaklaşan</span>';
       }
 
+      var tamamlandiSay = g.tumItems.filter(function(t){ return t.statu === 'tamamlandi'; }).length;
+      var ayGizliKey = '__tamamlandi_gizli__' + key;
+      var ayGizli = (window._ayTamamlandiGizli||{})[key];
+
       html += '<div class="cards-group">'
         + '<div class="cards-group-header" onclick="grupToggle(\'__ay__' + key + '\')" style="border-left:3px solid var(--primary)">'
         + '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="transition:.2s;transform:rotate(' + (collapsed?'-90':'0') + 'deg)"><polyline points="6,9 12,15 18,9"/></svg>'
@@ -5511,6 +5525,21 @@ function renderListe() {
         +   '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2.5"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>'
         +   g.label + ayDurumBadge
         + '</span>'
+        + (tamamlandiSay > 0
+          ? '<button onclick="event.stopPropagation();if(!window._ayTamamlandiGizli)window._ayTamamlandiGizli={};window._ayTamamlandiGizli[\'' + key + '\']=!window._ayTamamlandiGizli[\'' + key + '\'];renderListe()" '
+            + 'title="' + (ayGizli ? 'Tamamlananları göster' : 'Tamamlananları gizle') + '" '
+            + 'style="height:22px;padding:0 8px;border-radius:5px;border:1px solid ' + (ayGizli ? 'hsl(215,60%,60%)' : 'var(--border)') + ';'
+            + 'background:' + (ayGizli ? 'hsl(215,60%,92%)' : 'transparent') + ';'
+            + 'color:' + (ayGizli ? 'hsl(215,60%,30%)' : 'var(--muted-foreground)') + ';'
+            + 'font-size:10px;font-weight:700;cursor:pointer;font-family:Poppins,sans-serif;display:inline-flex;align-items:center;gap:4px;flex-shrink:0;transition:all .15s">'
+            + '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">'
+            + (ayGizli
+              ? '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>'
+              : '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/>')
+            + '</svg>'
+            + tamamlandiSay + ' tamamlandı'
+            + '</button>'
+          : '')
         + '<span class="cards-group-count">' + g.items.length + ' turne</span>'
         + '</div>'
         + (collapsed ? '' : (_turneListeGorunum==='liste'
@@ -5831,7 +5860,7 @@ function turneCard(t) {
     'iptal':         { bg:'#fee2e2', fg:'#991b1b', dot:'#ef4444', label:'❌ İptal',         border:'#ef4444' }
   };
 
-  return '<div class="turne-card" data-rowIdx="' + t._rowIdx + '" style="border-left:4px solid ' + st.dot + ';cursor:pointer" onclick="openCardDetail(' + t._rowIdx + ')">'
+  return '<div class="turne-card" data-rowIdx="' + t._rowIdx + '" data-statu="' + (t.statu||'taslak') + '" style="border-left:4px solid ' + st.dot + ';cursor:pointer" onclick="openCardDetail(' + t._rowIdx + ')">'
 
     // ── BAŞLIK — Oyun adı en büyük, en önce
     + '<div style="padding:10px 13px 7px;border-bottom:1px solid var(--border);flex-shrink:0">'
@@ -7152,7 +7181,7 @@ function _konaklamaPdfIndir(rowIdx) {
     + '.kart{border:1.5pt solid #9a5858;border-radius:4pt;padding:6pt 8pt;background:#fdf5f5;min-width:0;overflow:hidden;box-shadow:0 0.5pt 2pt rgba(107,27,27,.10)}'
     + '.k-ad{font-size:8.5pt;font-weight:800;line-height:1.2;overflow-wrap:anywhere;word-break:break-word}'
     + '.k-kat{font-size:7.5pt;color:#8b3030;font-weight:600;margin-top:1.5pt;overflow-wrap:break-word}'
-    + '.k-not-inline{font-size:7pt;color:#b45309;font-weight:900;margin-left:3pt;background:#fff7ed;padding:0 3pt;border-radius:2pt}'
+    + '.k-not-inline{font-size:7.5pt;color:#92400e;font-weight:900;margin-top:2pt;display:block;background:#fef3c7;padding:1pt 4pt;border-radius:2pt;border-left:2pt solid #d97706}'
     + '.esi-sep{margin-top:4pt;padding-top:4pt;border-top:1pt dashed #dab8b8}'
     + '.e-bos{font-size:6pt;color:#ccc;font-style:italic}'
     + '.k-erken{font-size:6.5pt;color:#b45309;font-weight:800;margin-left:3pt}'
@@ -15571,7 +15600,7 @@ function _ekTurnePdfKonaklama(t) {
     + '.kart{border:1.5pt solid #a07070;border-radius:4pt;padding:'+kartPad+';background:#fdf5f5;min-width:0;overflow:hidden;box-shadow:0 1pt 2pt rgba(107,27,27,.10)}'
     + '.k-ad{font-size:'+adFont+';font-weight:800;line-height:1.25;overflow-wrap:anywhere;word-break:break-word}'
     + '.k-kat{font-size:'+katFont+';color:#8b3030;font-weight:600;margin-top:1pt;overflow-wrap:break-word}'
-    + '.k-not{font-size:'+katFont+';color:#b45309;font-weight:900;background:#fff7ed;padding:0 3pt;border-radius:2pt;margin-top:2pt;display:inline-block}'
+    + '.k-not{font-size:'+katFont+';color:#92400e;font-weight:900;background:#fef3c7;padding:1pt 4pt;border-radius:2pt;border-left:2pt solid #d97706;margin-top:2pt;display:block}'
     + '.esi-sep{margin-top:'+( cokCokYogun?'1pt':cokYogun?'2pt':yogun?'3pt':'5pt' )+';padding-top:'+( cokCokYogun?'1pt':cokYogun?'2pt':yogun?'3pt':'5pt' )+';border-top:1pt dashed #dab8b8}'
     + '.e-bos{font-size:6pt;color:#ccc;font-style:italic}'
     + '@media print{@page{size:A4 landscape!important;margin:4mm 6mm}html,body{height:auto!important}.sayfa{page-break-after:avoid!important;page-break-inside:avoid!important}.no-print{display:none}}';
