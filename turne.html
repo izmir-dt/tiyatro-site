@@ -853,6 +853,8 @@ function parseLocalDate(str) {
     [data-theme="dark"] .cards-group-header:hover { background: hsl(222,14%,22%); }
     .cards-group-title { font-size:13px; font-weight:700; color:var(--foreground); flex:1; }
     .cards-group-count { font-size:11px; color:var(--muted-foreground); }
+    .harita-tablo-row { cursor:pointer; transition:background .15s; }
+    .harita-tablo-row:hover { background: hsl(38,50%,97%); }
     .harita-leaflet-tip { font-family:'Poppins',sans-serif!important; font-size:12px!important; border-radius:6px!important; border:1px solid var(--border)!important; box-shadow:0 4px 12px rgba(0,0,0,.15)!important; padding:5px 10px!important; }
     .leaflet-container { font-family:'Poppins',sans-serif; }
     .leaflet-control-attribution { font-size:9px!important; }
@@ -2810,9 +2812,9 @@ flex-shrink:0;
           <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 14px;border-top:1px solid var(--border);background:var(--background);border-radius:0 0 10px 10px">
             <span style="font-size:11px;font-weight:700;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.5px">Yoğunluk:</span>
             <div style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--muted-foreground)"><div style="width:12px;height:12px;border-radius:50%;background:#e0e0e0;border:2px solid #bbb"></div>Gidilmedi</div>
-            <div style="display:flex;align-items:center;gap:5px;font-size:10px"><div style="width:12px;height:12px;border-radius:50%;background:hsl(350,60%,75%);border:2px solid hsl(350,60%,45%)"></div>1 kez</div>
-            <div style="display:flex;align-items:center;gap:5px;font-size:10px"><div style="width:12px;height:12px;border-radius:50%;background:hsl(350,68%,55%);border:2px solid hsl(350,68%,30%)"></div>2-3 kez</div>
-            <div style="display:flex;align-items:center;gap:5px;font-size:10px"><div style="width:12px;height:12px;border-radius:50%;background:hsl(350,76%,30%);border:2px solid hsl(350,76%,15%)"></div>4+ kez</div>
+            <div style="display:flex;align-items:center;gap:5px;font-size:10px"><div style="width:12px;height:12px;border-radius:50%;background:#f59e0b;border:2px solid #b45309"></div>1 kez</div>
+            <div style="display:flex;align-items:center;gap:5px;font-size:10px"><div style="width:12px;height:12px;border-radius:50%;background:#ef4444;border:2px solid #b91c1c"></div>2-3 kez</div>
+            <div style="display:flex;align-items:center;gap:5px;font-size:10px"><div style="width:12px;height:12px;border-radius:50%;background:#1e1b4b;border:2px solid #0f0a2e"></div>4+ kez</div>
           </div>
         </div>
         <div class="section-wrap" id="harita-detay" style="min-height:180px">
@@ -12247,37 +12249,45 @@ function renderHarita() {
 
     var r, fillColor, strokeColor, textColor, opacity;
     if (sayi === 0) {
-      r = 7; fillColor = '#e0e0e0'; strokeColor = '#aaa'; textColor = '#777'; opacity = 0.7;
+      r = 5; fillColor = '#d1d5db'; strokeColor = '#9ca3af'; textColor = '#6b7280'; opacity = 0.5;
     } else if (sayi === 1) {
-      r = 11; fillColor = 'hsl(350,60%,75%)'; strokeColor = 'hsl(350,60%,40%)'; textColor = '#fff'; opacity = 1;
+      r = 7; fillColor = '#f59e0b'; strokeColor = '#92400e'; textColor = '#fff'; opacity = 1;
     } else if (sayi <= 3) {
-      r = 14; fillColor = 'hsl(350,68%,52%)'; strokeColor = 'hsl(350,68%,28%)'; textColor = '#fff'; opacity = 1;
+      r = 8; fillColor = '#ef4444'; strokeColor = '#991b1b'; textColor = '#fff'; opacity = 1;
     } else {
-      r = 18; fillColor = 'hsl(350,76%,30%)'; strokeColor = 'hsl(350,76%,15%)'; textColor = '#fff'; opacity = 1;
+      r = 9; fillColor = '#1e1b4b'; strokeColor = '#0f0a2e'; textColor = '#c7d2fe'; opacity = 1;
     }
 
     var isSecili = seciliIl === il;
-    if (isSecili) { strokeColor = '#f59e0b'; r = Math.max(r + 3, 14); }
+    var isIzmir = il === 'İzmir';
+    if (isSecili) { strokeColor = '#f59e0b'; r = Math.max(r + 4, 16); }
 
-    // SVG circle marker
-    var svgHtml = '<svg width="' + (r*2+6) + '" height="' + (r*2+6) + '" viewBox="0 0 ' + (r*2+6) + ' ' + (r*2+6) + '" xmlns="http://www.w3.org/2000/svg">'
-      + (isSecili ? '<circle cx="' + (r+3) + '" cy="' + (r+3) + '" r="' + (r+2) + '" fill="' + fillColor + '" opacity="0.25"/>' : '')
-      + '<circle cx="' + (r+3) + '" cy="' + (r+3) + '" r="' + r + '" fill="' + fillColor + '" stroke="' + strokeColor + '" stroke-width="' + (isSecili ? 2.5 : 1.5) + '" opacity="' + opacity + '"/>'
-      + (sayi > 0 ? '<text x="' + (r+3) + '" y="' + (r+7) + '" text-anchor="middle" font-size="' + (r > 12 ? 9 : 8) + '" font-weight="800" fill="' + textColor + '" font-family="Poppins,Arial,sans-serif">' + sayi + '</text>' : '')
+    // SVG circle marker — sayı içinde, şehir adı tam
+    var dotR = sayi === 0 ? 4 : sayi === 1 ? 8 : sayi <= 3 ? 10 : 12;
+    var selRing = isSecili
+      ? '<circle cx=\"' + (dotR+5) + '\" cy=\"' + (dotR+5) + '\" r=\"' + (dotR+4) + '\" fill=\"none\" stroke=\"#f59e0b\" stroke-width=\"2.5\" opacity=\"0.9\"/>'
+      : '';
+    var countText = (sayi > 0 && !isIzmir)
+      ? '<text x=\"' + (dotR+5) + '\" y=\"' + (dotR+9) + '\" text-anchor=\"middle\" font-size=\"' + (dotR > 9 ? 9 : 8) + '\" font-weight=\"800\" fill=\"' + textColor + '\" font-family=\"Poppins,Arial,sans-serif\">' + sayi + '</text>'
+      : '';
+    var svgDot = '<svg width=\"' + (dotR*2+10) + '\" height=\"' + (dotR*2+10) + '\" viewBox=\"0 0 ' + (dotR*2+10) + ' ' + (dotR*2+10) + '\" xmlns=\"http://www.w3.org/2000/svg\" style=\"overflow:visible\">'
+      + selRing
+      + '<circle cx=\"' + (dotR+5) + '\" cy=\"' + (dotR+5) + '\" r=\"' + dotR + '\" fill=\"' + fillColor + '\" stroke=\"' + strokeColor + '\" stroke-width=\"1.5\" opacity=\"' + opacity + '\"/>'
+      + (isIzmir ? '<circle cx=\"' + (dotR+5) + '\" cy=\"' + (dotR+5) + '\" r=\"3\" fill=\"#fff\" opacity=\"0.85\"/>' : '')
+      + countText
       + '</svg>';
 
-    // Isı modunda etiket rengi: koyu background üzerinde okunabilir olsun
-    var labelColor = (_haritaMod === 'heatmap' && sayi > 0)
-      ? '#fff'
-      : (sayi > 0 ? 'hsl(350,45%,15%)' : '#666');
-    var labelShadow = (_haritaMod === 'heatmap' && sayi > 0)
-      ? '0 0 4px rgba(0,0,0,.8),0 0 4px rgba(0,0,0,.8)'
-      : '0 0 3px #fff,0 0 3px #fff';
+    var labelColor = sayi > 3 ? '#1e1b4b' : sayi > 1 ? '#991b1b' : sayi === 1 ? '#92400e' : '#adb5bd';
+    var labelWeight = sayi > 0 ? 700 : 400;
+    var labelSize = sayi > 0 ? 10 : 9;
+    var labelShadow = '0 0 3px #fff, 0 0 4px #fff';
+
     var icon = L.divIcon({
-      html: svgHtml + '<div style="text-align:center;font-size:' + (sayi > 0 ? 9 : 8) + 'px;font-weight:' + (sayi > 0 ? 700 : 500) + ';color:' + labelColor + ';white-space:nowrap;font-family:Poppins,Arial,sans-serif;margin-top:-1px;text-shadow:' + labelShadow + ';max-width:80px;overflow:hidden;text-overflow:ellipsis">' + il + '</div>',
+      html: svgDot
+        + '<div style=\"text-align:center;font-size:' + labelSize + 'px;font-weight:' + labelWeight + ';color:' + labelColor + ';white-space:nowrap;font-family:Poppins,Arial,sans-serif;margin-top:1px;text-shadow:' + labelShadow + '\">' + il + '</div>',
       className: '',
-      iconSize: [(r*2+6), (r*2+20)],
-      iconAnchor: [(r+3), (r+3)],
+      iconSize: [(dotR*2+10), (dotR*2+22)],
+      iconAnchor: [(dotR+5), (dotR+5)],
     });
 
     var marker = L.marker(latlon, { icon: icon }).addTo(_leafletMap);
@@ -12455,21 +12465,31 @@ function haritaIlDetay(il, ilSayilar) {
     }
   }
   const rows = ilT.map(function(t) {
-    const sr=statuRenk(t.statu); const sure=turneSuresi(t);
+    const sr = statuRenk(t.statu);
+    const sure = turneSuresi(t);
     var ridx = t._rowIdx;
-    return '<tr style="cursor:pointer;transition:background .12s"'
-      +' onmouseenter="this.style.background=\'var(--muted)\'"'
-      +' onmouseleave="this.style.background=\'\'\"'
-      +' onclick="_haritaIlDetayGit(' + ridx + ')">'
-      +'<td style="padding:7px 10px;border-bottom:1px solid var(--border)">'
-      +'<div style="font-size:12px;font-weight:700">'+t.oyun+'</div>'
-      +'<div style="font-size:10px;color:hsl(220,60%,45%);margin-top:2px;display:flex;align-items:center;gap:3px">'
-      +'<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>'
-      +'Detaya git</div></td>'
-      +'<td style="padding:7px 10px;border-bottom:1px solid var(--border);font-size:11px;white-space:nowrap;width:90px">'+formatTarih(t.baslangicTarih||t.tarih)+(sure>1?'<br><span style="color:var(--muted-foreground)">'+sure+' gün</span>':'')+'</td>'
-      +'<td style="padding:7px 10px;border-bottom:1px solid var(--border);white-space:nowrap;width:1px"><span class="badge-statu" style="display:inline-flex;align-items:center;gap:5px;padding:2px 8px 2px 6px;background:'+sr.bg+';color:'+sr.fg+';border:1.5px solid '+sr.border+';border-radius:20px;font-weight:700;white-space:nowrap">'+(sr.svg||'')+'<span style="white-space:nowrap">'+sr.label+'</span></span></td>'
-      +'<td style="padding:7px 10px;border-bottom:1px solid var(--border);width:32px"><button class="btn btn-outline" style="height:22px;font-size:10px;padding:0 6px" onclick="event.stopPropagation();editTurne('+t._rowIdx+')">✏️</button></td>'
-      +'</tr>';
+    var kadro = t.katilimcilar ? t.katilimcilar.length : 0;
+    var tarihStr = formatTarih(t.baslangicTarih||t.tarih);
+    var bitisTarihStr = (t.bitisTarih && t.bitisTarih !== (t.baslangicTarih||t.tarih)) ? formatTarih(t.bitisTarih) : '';
+    var kadroHtml = kadro > 0
+      ? '<span style="font-size:10px;font-weight:600;color:#6b7280;display:inline-flex;align-items:center;gap:2px">'
+        + '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>'
+        + kadro + ' kişi</span>'
+      : '';
+    return '<tr class="harita-tablo-row" data-ridx="' + ridx + '" onclick="_haritaIlDetayGit(' + ridx + ')">'
+      + '<td style="padding:10px 12px;border-bottom:1px solid var(--border)">'
+        + '<div style="font-size:12.5px;font-weight:800;color:var(--foreground);line-height:1.3">' + t.oyun + '</div>'
+        + (kadroHtml ? '<div style="margin-top:4px">' + kadroHtml + '</div>' : '')
+      + '</td>'
+      + '<td style="padding:10px 12px;border-bottom:1px solid var(--border);white-space:nowrap;min-width:95px">'
+        + '<div style="font-size:11px;font-weight:700;color:var(--foreground)">' + tarihStr + '</div>'
+        + (bitisTarihStr ? '<div style="font-size:10px;color:var(--muted-foreground);margin-top:1px">' + bitisTarihStr + '</div>' : '')
+        + (sure > 1 ? '<div style="font-size:10px;font-weight:700;color:var(--primary);margin-top:2px">' + sure + ' gün</div>' : '')
+      + '</td>'
+      + '<td style="padding:10px 12px;border-bottom:1px solid var(--border);white-space:nowrap">'
+        + '<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;background:' + sr.bg + ';color:' + sr.fg + ';border:1.5px solid ' + sr.border + ';border-radius:20px;font-size:10.5px;font-weight:700">' + (sr.svg||'') + sr.label + '</span>'
+      + '</td>'
+      + '</tr>';
   }).join('');
   el.innerHTML = '<div class="section-header" style="border-radius:10px 10px 0 0">'
     +'<div style="display:flex;flex-direction:column"><span style="font-size:13px;font-weight:700"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="vertical-align:-2px;margin-right:4px;flex-shrink:0"><path d="M12 21s7-6.5 7-11a7 7 0 1 0-14 0c0 4.5 7 11 7 11z"/><circle cx="12" cy="10" r="2"/></svg>'+il+'</span><span style="font-size:10px;font-weight:500;color:var(--muted-foreground)">'+sayi+' turne · '+toplamGun+' gün'+kmStr+'</span></div>'
@@ -12498,7 +12518,7 @@ function _haritaIlDetayGit(rowIdx) {
   var kadroSay = t.katilimcilar ? t.katilimcilar.length : 0;
 
   panel.innerHTML =
-    '<div style="background:var(--sidebar);padding:16px 18px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:1">'    + '<div style="color:#fff">'    +   '<div style="font-size:14px;font-weight:800;line-height:1.3">' + (t.oyun || '—') + '</div>'    +   '<div style="font-size:10px;opacity:.7;margin-top:2px">' + (iller || '') + '</div>'    + '</div>'    + '<button onclick="document.getElementById(\'harita-turne-detay-panel\').style.right=\'-420px\'" style="background:rgba(255,255,255,.15);border:none;color:#fff;cursor:pointer;border-radius:8px;width:30px;height:30px;font-size:16px;display:flex;align-items:center;justify-content:center">×</button>'    + '</div>'    + '<div style="padding:16px 18px;display:flex;flex-direction:column;gap:14px">'    + '<div style="display:flex;gap:8px;flex-wrap:wrap">'    +   (sure > 0 ? '<span style="padding:4px 12px;border-radius:20px;background:hsl(220,60%,96%);color:hsl(220,60%,35%);font-size:11px;font-weight:700;border:1px solid hsl(220,60%,85%)">📅 ' + sure + ' gün</span>' : '')    +   (temsil > 0 ? '<span style="padding:4px 12px;border-radius:20px;background:hsl(141,60%,95%);color:hsl(141,60%,25%);font-size:11px;font-weight:700;border:1px solid hsl(141,60%,80%)">▶ ' + temsil + ' temsil</span>' : '')    +   (kadroSay > 0 ? '<span style="padding:4px 12px;border-radius:20px;background:hsl(38,90%,95%);color:hsl(38,70%,28%);font-size:11px;font-weight:700;border:1px solid hsl(38,85%,80%)">👥 ' + kadroSay + ' kişi</span>' : '')    +   '<span style="padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700;background:' + sr.bg + ';color:' + sr.fg + ';border:1px solid ' + sr.border + '">' + (sr.label || '') + '</span>'    + '</div>'    + '<div style="background:var(--muted);border-radius:10px;padding:12px 14px">'    +   '<div style="font-size:10px;font-weight:700;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">📍 Turne Güzergahı</div>'    +   (iller ? '<div style="font-size:12px;font-weight:600;color:var(--foreground)">' + iller + '</div>' : '<div style="font-size:11px;color:var(--muted-foreground)">Güzergah belirtilmemiş</div>')    + '</div>'    + '<div style="display:flex;gap:8px">'    +   '<button onclick="editTurne(' + rowIdx + ')" style="flex:1;height:36px;border:1.5px solid var(--border);border-radius:8px;background:var(--card);color:var(--foreground);cursor:pointer;font-size:12px;font-weight:700;font-family:Poppins,sans-serif;display:flex;align-items:center;justify-content:center;gap:5px">✏️ Düzenle</button>'    +   '<button onclick="document.getElementById(\'harita-turne-detay-panel\').style.right=\'-420px\';switchTab(\'liste\');setTimeout(function(){openCardDetail(' + rowIdx + ');},200)" style="flex:1;height:36px;border:none;border-radius:8px;background:var(--primary);color:#fff;cursor:pointer;font-size:12px;font-weight:700;font-family:Poppins,sans-serif;display:flex;align-items:center;justify-content:center;gap:5px">→ Tam Detay</button>'    + '</div>'    + '</div>';
+    '<div style="background:var(--sidebar);padding:16px 18px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:1">'    + '<div style="color:#fff">'    +   '<div style="font-size:14px;font-weight:800;line-height:1.3">' + (t.oyun || '—') + '</div>'    +   '<div style="font-size:10px;opacity:.7;margin-top:2px">' + (iller || '') + '</div>'    + '</div>'    + '<button onclick="document.getElementById(\'harita-turne-detay-panel\').style.right=\'-420px\'" style="background:rgba(255,255,255,.15);border:none;color:#fff;cursor:pointer;border-radius:8px;width:30px;height:30px;font-size:16px;display:flex;align-items:center;justify-content:center">×</button>'    + '</div>'    + '<div style="padding:16px 18px;display:flex;flex-direction:column;gap:14px">'    + '<div style="display:flex;gap:8px;flex-wrap:wrap">'    +   (sure > 0 ? '<span style="padding:4px 12px;border-radius:20px;background:hsl(220,60%,96%);color:hsl(220,60%,35%);font-size:11px;font-weight:700;border:1px solid hsl(220,60%,85%)">📅 ' + sure + ' gün</span>' : '')    +   (temsil > 0 ? '<span style="padding:4px 12px;border-radius:20px;background:hsl(141,60%,95%);color:hsl(141,60%,25%);font-size:11px;font-weight:700;border:1px solid hsl(141,60%,80%)">▶ ' + temsil + ' temsil</span>' : '')    +   (kadroSay > 0 ? '<span style="padding:4px 12px;border-radius:20px;background:hsl(38,90%,95%);color:hsl(38,70%,28%);font-size:11px;font-weight:700;border:1px solid hsl(38,85%,80%)">👥 ' + kadroSay + ' kişi</span>' : '')    +   '<span style="padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700;background:' + sr.bg + ';color:' + sr.fg + ';border:1px solid ' + sr.border + '">' + (sr.label || '') + '</span>'    + '</div>'    + '<div style="background:var(--muted);border-radius:10px;padding:12px 14px">'    +   '<div style="font-size:10px;font-weight:700;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">📍 Turne Güzergahı</div>'    +   (iller ? '<div style="font-size:12px;font-weight:600;color:var(--foreground)">' + iller + '</div>' : '<div style="font-size:11px;color:var(--muted-foreground)">Güzergah belirtilmemiş</div>')    + '</div>'    + '<div style="display:flex;gap:8px">'    +   '<button onclick="editTurne(' + rowIdx + ')" style="flex:1;height:36px;border:1.5px solid var(--border);border-radius:8px;background:var(--card);color:var(--foreground);cursor:pointer;font-size:12px;font-weight:700;font-family:Poppins,sans-serif;display:flex;align-items:center;justify-content:center;gap:5px">✏️ Düzenle</button>'    +   '<button onclick="document.getElementById(\'harita-turne-detay-panel\').style.right=\'-420px\';switchTab(\'liste\');setTimeout(function(){openCardDetail(' + rowIdx + ');},200)" style="flex:1;height:40px;border:none;border-radius:10px;background:linear-gradient(135deg,hsl(38,90%,42%),hsl(38,85%,35%));color:#fff;cursor:pointer;font-size:13px;font-weight:800;font-family:Poppins,sans-serif;display:flex;align-items:center;justify-content:center;gap:6px;letter-spacing:-.2px;box-shadow:0 2px 8px rgba(180,110,0,.35)">Tam Detay →</button>'    + '</div>'    + '</div>';
 
   // Aç
   setTimeout(function(){ panel.style.right = '0'; }, 10);
@@ -12542,11 +12562,24 @@ function haritaModSec(mod) {
 function haritaRotaCiz(turnelerFiltreli) {
   if (!_leafletMap) return;
 
-  // Önceki rotayı temizle
   if (_haritaRotaLayer) { _haritaRotaLayer.forEach(function(l){ l.remove(); }); }
   _haritaRotaLayer = [];
 
-  // Her turne için durak → durak çizgisi
+  // İl bazlı toplam turne sayısını hesapla (renk + kesik çizgi için)
+  var ilSayilar = {};
+  turnelerFiltreli.forEach(function(t) {
+    var iller = [];
+    if (t.duraklar && t.duraklar.length) {
+      iller = t.duraklar.map(function(d){ return (d.il||'').split('/')[0].trim(); }).filter(Boolean);
+    } else if (t.il) {
+      iller = [t.il.split('/')[0].trim()];
+    }
+    iller.forEach(function(il) {
+      ilSayilar[il] = (ilSayilar[il] || 0) + 1;
+    });
+  });
+
+  // Her turne için çizgi çiz
   turnelerFiltreli.forEach(function(t) {
     var iller = [];
     if (t.duraklar && t.duraklar.length) {
@@ -12555,7 +12588,6 @@ function haritaRotaCiz(turnelerFiltreli) {
       iller = [t.il.split('/')[0].trim()];
     }
 
-    // İzmir'den başlat (gidiş) ve İzmir'e bitir (dönüş)
     var rota = ['İzmir'].concat(iller).concat(['İzmir']);
     var latLons = rota.map(function(il){
       return IL_LATLON[il] || IL_LATLON[Object.keys(IL_LATLON).find(function(k){ return k.toLocaleLowerCase('tr-TR') === il.toLocaleLowerCase('tr-TR'); })] || null;
@@ -12563,33 +12595,59 @@ function haritaRotaCiz(turnelerFiltreli) {
 
     if (latLons.length < 2) return;
 
-    var sr = statuRenk(t.statu || 'tamamlandi');
-    var line = L.polyline(latLons, {
-      color: sr.dot || 'hsl(350,68%,45%)',
-      weight: 2.5,
-      opacity: 0.7,
-      dashArray: t.statu === 'taslak' ? '6,4' : null,
-      smoothFactor: 1.5
-    }).addTo(_leafletMap);
+    // Her segment için il yoğunluğuna göre renk ve stil
+    for (var si = 0; si < latLons.length - 1; si++) {
+      var segIl = rota[si + 1] || rota[si]; // varış ili
+      var segSayi = ilSayilar[segIl] || 1;
 
-    line.bindTooltip('<strong>' + t.oyun + '</strong> · ' + (iller.join(' → ') || t.il), {
-      sticky: true, opacity: 0.92
-    });
+      // Yoğunluğa göre renk — marker renkleriyle uyumlu
+      var segRenk, segKalinlik, segOpacity;
+      if (segSayi >= 4) {
+        segRenk = '#1e1b4b'; segKalinlik = 2; segOpacity = 0.75;
+      } else if (segSayi >= 2) {
+        segRenk = '#ef4444'; segKalinlik = 1.8; segOpacity = 0.65;
+      } else {
+        segRenk = '#f59e0b'; segKalinlik = 1.5; segOpacity = 0.6;
+      }
 
-    // Ok başları — bitiş noktasına
-    if (latLons.length >= 2) {
-      var son = latLons[latLons.length - 2];
-      var bitis = latLons[latLons.length - 1];
-      var arrowIcon = L.divIcon({
-        html: '<div style="width:8px;height:8px;background:' + (sr.dot||'hsl(350,68%,45%)') + ';border-radius:50%;opacity:.8"></div>',
-        className: '', iconSize: [8,8], iconAnchor: [4,4]
-      });
-      // Başlangıç noktasına küçük daire
-      var startMarker = L.marker(latLons[0], { icon: arrowIcon }).addTo(_leafletMap);
-      _haritaRotaLayer.push(startMarker);
+      // Statü override: taslak/iptal soluklaştır
+      if (t.statu === 'iptal') { segOpacity = 0.2; }
+      else if (t.statu === 'taslak') { segOpacity *= 0.6; }
+
+      // Turne birden fazla ile gidiyorsa kesik çizgi
+      var dashArr = iller.length > 1 ? '6,4' : null;
+
+      var seg = L.polyline([latLons[si], latLons[si+1]], {
+        color: segRenk,
+        weight: segKalinlik,
+        opacity: segOpacity,
+        dashArray: dashArr,
+        lineCap: 'round', lineJoin: 'round',
+        smoothFactor: 1.5
+      }).addTo(_leafletMap);
+
+      seg.bindTooltip(
+        '<div style="font-family:Poppins,sans-serif">'
+        + '<div style="font-size:11px;font-weight:700">' + t.oyun + '</div>'
+        + '<div style="font-size:10px;color:#6b7280">' + (iller.join(' → ') || t.il) + '</div>'
+        + '</div>',
+        { sticky: true, opacity: 0.95, className: 'harita-leaflet-tip' }
+      );
+      _haritaRotaLayer.push(seg);
     }
 
-    _haritaRotaLayer.push(line);
+    // Durak noktaları
+    latLons.forEach(function(ll, llIdx) {
+      if (llIdx === 0 || llIdx === latLons.length - 1) return;
+      var dIl = rota[llIdx] || '';
+      var dSayi = ilSayilar[dIl] || 1;
+      var dRenk = dSayi >= 4 ? '#1e1b4b' : dSayi >= 2 ? '#ef4444' : '#f59e0b';
+      var dotIcon = L.divIcon({
+        html: '<div style="width:6px;height:6px;background:' + dRenk + ';border-radius:50%;border:1.5px solid #fff;box-shadow:0 0 0 1px ' + dRenk + '"></div>',
+        className: '', iconSize: [6,6], iconAnchor: [3,3]
+      });
+      _haritaRotaLayer.push(L.marker(ll, { icon: dotIcon }).addTo(_leafletMap));
+    });
   });
 }
 
