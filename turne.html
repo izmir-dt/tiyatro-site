@@ -2798,7 +2798,13 @@ flex-shrink:0;
               <button id="hf-istatistik" onclick="haritaIstatistikGoster()" title="Harita istatistikleri" style="padding:2px 8px;border-radius:12px;border:1px solid var(--border);background:var(--card);color:var(--foreground);font-size:10px;font-weight:600;cursor:pointer;font-family:Poppins,sans-serif">📊 İstatistik</button>
             </div>
           </div>
+          <div style="position:relative">
           <div id="leaflet-map" style="height:480px;width:100%;border-radius:0 0 10px 10px"></div>
+          <div id="harita-spinner" style="display:none;position:absolute;inset:0;background:rgba(255,255,255,.75);z-index:500;align-items:center;justify-content:center;border-radius:0 0 10px 10px;flex-direction:column;gap:10px">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2.5" stroke-linecap="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"><animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur=".8s" repeatCount="indefinite"/></path></svg>
+            <span style="font-size:11px;font-weight:600;color:var(--muted-foreground)">Harita yükleniyor...</span>
+          </div>
+        </div>
           <!-- İstatistik paneli -->
           <div id="harita-istatistik-panel" style="display:none;padding:14px 16px;border-top:1px solid var(--border);background:var(--background)"></div>
           <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 14px;border-top:1px solid var(--border);background:var(--background);border-radius:0 0 10px 10px">
@@ -4141,7 +4147,7 @@ function _turneListeSatiri(t) {
   var turneKadroSay = (t.katilimcilar && t.katilimcilar.length) ? t.katilimcilar.length : 0;
   var anaKadroSay   = getPersonelForOyun(t.oyun).length;
   var _tarSezon = tarihSezon ? tarihSezon(t.baslangicTarih || t.tarih) : null;
-  return '<tr data-rowIdx="' + t._rowIdx + '" data-row-idx="' + t._rowIdx + '" onclick="_topluSecModuAktif ? topluKartToggle(' + t._rowIdx + ', event) : openCardDetail(' + t._rowIdx + ')" title="Detay için tıkla">'
+  return '<tr data-rowIdx="' + t._rowIdx + '" onclick="openCardDetail(' + t._rowIdx + ')" title="Detay için tıkla">'
     + '<td style="padding:0"><span class="tlt-statu-dot" style="background:'+st.dot+'"></span></td>'
     + '<td style="font-weight:700;font-size:12.5px;max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + (t.oyun||'—') + '</td>'
     + '<td style="max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--muted-foreground)">' + sehirler + '</td>'
@@ -4910,7 +4916,6 @@ async function fetchPersonel() {
       return Object.assign({}, p, { gorev: p._gorevler.join(' / ') });
     });
   } catch(e) {
-    console.warn('Personel çekilemedi, mevcut veri korundu:', e);
     // Hata durumunda mevcut tumPersonel korunur, STATIK_PERSONEL'e düşmez
   }
 }
@@ -4938,13 +4943,11 @@ async function fetchTurneler(zorlaYenile) {
   try {
     const res  = await apiFetch('/' + encodeURIComponent(TURNE_SHEET));
     if (!res.ok) {
-      console.warn('fetchTurneler: API hata', res.status, '— mevcut veri korundu');
       return; // turneler = [] YAPMA
     }
     const data = await res.json();
     const allRows = data.rows || [];
     if (!allRows.length) {
-      console.warn('fetchTurneler: boş yanıt — mevcut veri korundu');
       return; // turneler = [] YAPMA
     }
     const h = (data.headers || []).map(x => (x||'').trim().toLowerCase());
@@ -5405,33 +5408,20 @@ var _aktifHizliFiltre = null;
 function hizliFiltreSec(filtre) {
   var chips = document.querySelectorAll('.hizli-filtre-chip');
   if (_aktifHizliFiltre === filtre) {
-    // Aynı çipe tekrar tıklandı → temizle
     _aktifHizliFiltre = null;
     chips.forEach(function(c){ c.style.background='rgba(255,255,255,.08)'; c.style.color='rgba(255,255,255,.75)'; c.style.borderColor='rgba(255,255,255,.3)'; });
-    // Filtreleri sıfırla
-    statuFiltre = 'tum';
-    zamanFiltre = 'tum';
-    window._hizliEksikKadro = false;
-    renderListe();
-    return;
+    statuFiltre = 'tum'; zamanFiltre = 'tum'; window._hizliEksikKadro = false;
+    renderListe(); return;
   }
   _aktifHizliFiltre = filtre;
   chips.forEach(function(c){ c.style.background='rgba(255,255,255,.08)'; c.style.color='rgba(255,255,255,.75)'; c.style.borderColor='rgba(255,255,255,.3)'; });
   var aktifChip = document.getElementById('hf-' + filtre);
   if (aktifChip) { aktifChip.style.background='rgba(255,255,255,.25)'; aktifChip.style.color='#fff'; aktifChip.style.borderColor='rgba(255,255,255,.8)'; }
-  // Filtreleri uygula
-  statuFiltre = 'tum';
-  zamanFiltre = 'tum';
-  window._hizliEksikKadro = false;
-  if (filtre === 'taslaklar') {
-    statuFiltre = 'taslak';
-  } else if (filtre === 'bu-hafta') {
-    zamanFiltre = 'bu-hafta';
-  } else if (filtre === 'yaklasan') {
-    zamanFiltre = 'yaklasan';
-  } else if (filtre === 'eksik-kadro') {
-    window._hizliEksikKadro = true;
-  }
+  statuFiltre = 'tum'; zamanFiltre = 'tum'; window._hizliEksikKadro = false;
+  if (filtre === 'taslaklar') { statuFiltre = 'taslak'; }
+  else if (filtre === 'bu-hafta') { zamanFiltre = 'bu-hafta'; }
+  else if (filtre === 'yaklasan') { zamanFiltre = 'yaklasan'; }
+  else if (filtre === 'eksik-kadro') { window._hizliEksikKadro = true; }
   renderListe();
 }
 
@@ -5453,8 +5443,7 @@ function topluSecModu() {
   renderListe();
 }
 function topluSecIptal() {
-  _topluSecModuAktif = false;
-  _secilenTurneler = [];
+  _topluSecModuAktif = false; _secilenTurneler = [];
   var btn = document.getElementById('toplu-sec-btn');
   var bar = document.getElementById('toplu-action-bar');
   if (btn) { btn.style.background='rgba(255,255,255,.08)'; btn.style.borderColor='rgba(255,255,255,.3)'; btn.style.color='var(--sidebar-foreground)'; }
@@ -5468,13 +5457,11 @@ function topluKartToggle(rowIdx, e) {
   else { _secilenTurneler.splice(idx, 1); }
   var sayiEl = document.getElementById('toplu-sec-sayi');
   if (sayiEl) sayiEl.textContent = _secilenTurneler.length + ' turne seçildi';
-  // Kartın görsel durumu - doğrudan DOM'dan bul
   var kart = document.querySelector('.turne-card[data-row-idx="' + rowIdx + '"]');
   if (kart) {
     var secili = _secilenTurneler.indexOf(rowIdx) !== -1;
     kart.style.outline = secili ? '2.5px solid #d4a017' : '';
     kart.style.boxShadow = secili ? '0 0 0 3px rgba(212,160,23,.25)' : '';
-    // Checkbox işareti
     var cbEl = kart.querySelector('.toplu-cb-icon');
     if (cbEl) {
       cbEl.style.background = secili ? '#d4a017' : 'rgba(0,0,0,.15)';
@@ -5487,12 +5474,10 @@ function topluOnayKapat() {
   var m = document.getElementById('toplu-onay-modal');
   if (m) m.style.display = 'none';
 }
-
-async function topluStatuGuncelle() {
+function topluStatuGuncelle() {
   var yeniStatu = document.getElementById('toplu-statu-select').value;
   if (!yeniStatu) { showToast('Lütfen bir durum seçin', 'error', 2500); return; }
   if (!_secilenTurneler.length) { showToast('Hiç turne seçilmedi', 'error', 2500); return; }
-  // Site içi onay modalı
   var modal = document.getElementById('toplu-onay-modal');
   var mesajEl = document.getElementById('toplu-onay-mesaj');
   var altEl = document.getElementById('toplu-onay-alt');
@@ -5500,7 +5485,6 @@ async function topluStatuGuncelle() {
   if (mesajEl) mesajEl.textContent = _secilenTurneler.length + ' turnenin durumu güncellenecek';
   if (altEl) altEl.textContent = 'Yeni durum: ' + (statuLabels[yeniStatu] || yeniStatu);
   if (modal) modal.style.display = 'flex';
-  // Tamam butonuna handler bağla
   var tamamBtn = document.getElementById('toplu-onay-tamam');
   if (tamamBtn) {
     tamamBtn.onclick = async function() {
@@ -5509,40 +5493,25 @@ async function topluStatuGuncelle() {
     };
   }
 }
-
 async function _topluStatuKaydet(yeniStatu) {
-  var hatalar = [];
-  var basarili = 0;
-  // Her turne için sadece statu hücresini güncelle (col index 7)
+  var hatalar = [], basarili = 0;
   var promises = _secilenTurneler.map(function(rowIdx) {
     var t = turneler.find(function(x){ return x._rowIdx === rowIdx; });
     if (!t) return Promise.resolve();
     var oncekiStatu = t.statu;
-    t.statu = yeniStatu; // optimistik güncelle
+    t.statu = yeniStatu;
     return apiFetch('/' + encodeURIComponent(TURNE_SHEET) + '/cell', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ row: rowIdx + 2, col: 7, value: yeniStatu })
     }).then(function(res) {
-      if (!res.ok) {
-        t.statu = oncekiStatu; // geri al
-        hatalar.push(t.oyun || ('Satır ' + rowIdx));
-      } else {
-        basarili++;
-      }
-    }).catch(function(e) {
-      t.statu = oncekiStatu;
-      hatalar.push(t.oyun || ('Satır ' + rowIdx));
-    });
+      if (!res.ok) { t.statu = oncekiStatu; hatalar.push(t.oyun || ('Satır ' + rowIdx)); }
+      else { basarili++; }
+    }).catch(function() { t.statu = oncekiStatu; hatalar.push(t.oyun || ('Satır ' + rowIdx)); });
   });
   await Promise.all(promises);
-  if (hatalar.length) {
-    showToast(hatalar.length + ' turne kaydedilemedi', 'error', 3500);
-  } else {
-    showToast(basarili + ' turne güncellendi ✓', 'success', 3000);
-  }
-  topluSecIptal();
-  renderListe();
+  if (hatalar.length) { showToast(hatalar.length + ' turne kaydedilemedi', 'error', 3500); }
+  else { showToast(basarili + ' turne güncellendi ✓', 'success', 3000); }
+  topluSecIptal(); renderListe();
 }
 
 function renderListe() {
@@ -9748,12 +9717,21 @@ async function saveTurne() {
   if (bitisTarih && bitisTarih < basTarih) { document.getElementById('err-bitis').textContent='Bitiş başlangıçtan önce olamaz'; hatalar=true; } else { document.getElementById('err-bitis').textContent=''; }
   if (hatalar) { switchModalTab('genel', 0); _saveTurneCalisiyor = false; var _sbErr = document.getElementById('save-turne-btn'); if (_sbErr) { _sbErr.disabled = false; _sbErr.textContent = 'Kaydet'; } return; }
 
-  // Geçmiş tarih uyarısı
+  // Geçmiş tarih uyarısı — site içi modal
   if (basTarih) {
     var bugunStr = new Date().toISOString().slice(0,10);
     if (basTarih < bugunStr) {
-      var onay = confirm('⚠️ Dikkat: Girilen başlangıç tarihi (' + basTarih + ') geçmişte kalıyor.\n\nYanlışlıkla eski yıl girmiş olabilirsiniz. Yine de kaydetmek istiyor musunuz?');
-      if (!onay) { _saveTurneCalisiyor = false; var _sbGecmis = document.getElementById('save-turne-btn'); if (_sbGecmis) { _sbGecmis.disabled = false; _sbGecmis.textContent = 'Kaydet'; } return; }
+      _saveTurneCalisiyor = false;
+      var _sbGecmis = document.getElementById('save-turne-btn');
+      if (_sbGecmis) { _sbGecmis.disabled = false; _sbGecmis.textContent = 'Kaydet'; }
+      onayGoster({
+        baslik: 'Geçmiş tarih girildi',
+        mesaj: 'Başlangıç tarihi (' + basTarih + ') geçmişte kalıyor. Yanlışlıkla eski yıl girilmiş olabilir. Yine de kaydedilsin mi?',
+        ikon: '⚠️', ikonBg: 'hsl(42,90%,94%)',
+        tamamRenk: 'hsl(42,60%,38%)', tamamYazi: 'Evet, Kaydet',
+        onOnay: function() { _saveTurneCalisiyor = false; saveTurne(); }
+      });
+      return;
     }
   }
 
@@ -9902,7 +9880,6 @@ async function saveTurne() {
       } else {
         var errText = '';
         try { var errJson = await postR2.json(); errText = errJson.error || postR2.status; } catch(e) { errText = postR2.status; }
-        console.warn('POST başarısız:', errText);
         _gosterKayitHatasi('Turne kaydedilemedi (Hata: ' + errText + ')');
       }
     }
@@ -9918,7 +9895,6 @@ async function saveTurne() {
       }
     }
   } catch(e) {
-    console.warn('API kayıt hatası:', e);
     _gosterKayitHatasi('Bağlantı hatası: ' + (e.message||'bilinmiyor'));
   } finally {
     _saveTurneCalisiyor = false;
@@ -9966,10 +9942,17 @@ async function deleteTurne(rowIdx) {
 
   // Ek turne ise direkt sil (undo yok)
   if (t && t.anaGrupId) {
-    if (!confirm('"' + turneAdi + '" ek turnesini silmek istediğinizden emin misiniz?')) return;
-    turneler = turneler.filter(function(x){ return x._rowIdx !== rowIdx; });
-    renderListe(); renderCalendar();
-    await _turneSilDevam(rowIdx);
+    onayGoster({
+      baslik: 'Ek turne silinsin mi?',
+      mesaj: '"' + turneAdi + '" ek turnesi kalıcı olarak silinecek.',
+      ikon: '🗑️', ikonBg: 'hsl(0,90%,96%)',
+      tamamRenk: 'hsl(0,65%,42%)', tamamYazi: 'Evet, Sil',
+      onOnay: async function() {
+        turneler = turneler.filter(function(x){ return x._rowIdx !== rowIdx; });
+        renderListe(); renderCalendar();
+        await _turneSilDevam(rowIdx);
+      }
+    });
     return;
   }
 
@@ -10281,7 +10264,7 @@ async function disPersonelKaydet() {
       }
     }
   } catch(e) {
-    alert('Kayıt hatası: ' + e.message);
+    showToast('Kayıt hatası: ' + (e.message||'Bilinmeyen hata'), 'error', 4000);
   } finally {
     if (btn) { btn.disabled=false; btn.textContent='Kaydet'; }
   }
@@ -11786,7 +11769,7 @@ async function kadroKisiKaydet() {
       else tumPersonel.push(yeniKayit);
     }
   } catch(e) {
-    alert('Kayıt sırasında hata: ' + e.message);
+    showToast('Kayıt sırasında hata: ' + (e.message||'Bilinmeyen hata'), 'error', 4000);
   } finally {
     if (btnKaydet) { btnKaydet.disabled = false; btnKaydet.textContent = 'Kaydet'; }
   }
@@ -11839,7 +11822,7 @@ async function _kadroKisiSilDevam(silIdx) {
     tumPersonel.splice(silIdx, 1);
     if (kadroEditIdx === silIdx) kadroEditIdx = null;
   } catch(e) {
-    alert('Silme sırasında hata: ' + e.message);
+    showToast('Silme sırasında hata: ' + (e.message||'Bilinmeyen hata'), 'error', 4000);
     if (btnSil) { btnSil.disabled = false; btnSil.textContent = 'Sil'; }
     return;
   }
@@ -12617,23 +12600,30 @@ var _ilGeoJSONLoading = false;
 var _ilGeoJSONCallbacks = [];
 var _haritaGeoJSONLayer = null;
 
+function _haritaSpinner(goster) {
+  var sp = document.getElementById('harita-spinner');
+  if (sp) sp.style.display = goster ? 'flex' : 'none';
+}
+
 function _ilGeoJSONYukle(callback) {
   if (_ilGeoJSON) { callback(_ilGeoJSON); return; }
   _ilGeoJSONCallbacks.push(callback);
   if (_ilGeoJSONLoading) return;
   _ilGeoJSONLoading = true;
+  _haritaSpinner(true);
   fetch('https://raw.githubusercontent.com/cihadturhan/tr-geojson/master/geo/tr-cities-utf8.json')
     .then(function(r){ return r.json(); })
     .then(function(data){
       _ilGeoJSON = data;
       _ilGeoJSONLoading = false;
+      _haritaSpinner(false);
       var cbs = _ilGeoJSONCallbacks.slice();
       _ilGeoJSONCallbacks = [];
       cbs.forEach(function(cb){ cb(data); });
     })
     .catch(function(err){
-      console.warn('GeoJSON yuklenemedi, daire fallback:', err);
       _ilGeoJSONLoading = false;
+      _haritaSpinner(false);
       var cbs = _ilGeoJSONCallbacks.slice();
       _ilGeoJSONCallbacks = [];
       cbs.forEach(function(cb){ cb(null); });
