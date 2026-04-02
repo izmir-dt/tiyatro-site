@@ -1902,9 +1902,10 @@ flex-shrink:0;
     /* ── 1. NAVBAR overflow fix (768px-1200px) ── */
     nav { overflow: visible; }
     .nav-right { 
-      flex-wrap: wrap; 
+      flex-wrap: nowrap; 
       overflow: visible; 
       max-width: 100%;
+      flex-shrink: 1;
     }
     @media (max-width: 1200px) and (min-width: 769px) {
       .nav-right { gap: 4px !important; }
@@ -2329,6 +2330,10 @@ flex-shrink:0;
         </div>
       </div>
     </div>
+    <!-- SORUN BİLDİR -->
+    <button onclick="sorunBildirAc()" style="width:32px;height:30px;border:none;background:transparent;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;border-radius:6px;color:rgba(253,230,138,.75);transition:all .15s;flex-shrink:0" title="Sorun Bildir" onmouseenter="this.style.background='rgba(255,255,255,.12)';this.style.color='#fff'" onmouseleave="this.style.background='transparent';this.style.color='rgba(253,230,138,.75)'">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+    </button>
     <!-- KULLANICI & ÇIKIŞ -->
     <div id="nav-kullanici-alan" style="display:inline-flex;align-items:center;gap:6px;padding:0 2px">
       <span id="nav-kullanici-chip" style="display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);border-radius:20px;padding:3px 10px 3px 7px;font-size:11px;font-weight:600;color:rgba(255,255,255,.8)">
@@ -18019,18 +18024,8 @@ if (sessionStorage.getItem('turne_erisim') === 'true') { init(); navKullaniciBil
 // ── Kullanıcı adını navbar'da göster ──────────────────────────
 function navKullaniciBilgi() {
   var ad = sessionStorage.getItem('turne_ad') || localStorage.getItem('calKullanici_idt') || 'Koordinatör';
-  var eposta = sessionStorage.getItem('turne_eposta') || '';
   var chip = document.getElementById('nav-kullanici-ad');
   if (chip) { chip.textContent = ad; }
-  var navBrand = document.querySelector('.nav-brand');
-  if (navBrand && !document.getElementById('_koor-rozet')) {
-    var rozet = document.createElement('span');
-    rozet.id = '_koor-rozet';
-    rozet.title = eposta;
-    rozet.style.cssText = 'font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;background:hsl(38,80%,92%);color:hsl(38,60%,28%);border:1px solid hsl(38,60%,78%);margin-left:8px;cursor:default;white-space:nowrap';
-    rozet.textContent = '👤 ' + ad;
-    navBrand.appendChild(rozet);
-  }
 }
 function cikisYap() {
   sessionStorage.removeItem('turne_erisim');
@@ -20136,6 +20131,62 @@ function _pdfTurneDosyasiIcerik(t) {
   return CSS + kapak + sayfa2 + sayfa3 + sayfa4 + sayfa5;
 }
 
+// ── SORUN BİLDİR ────────────────────────────────────────────
+function sorunBildirAc() {
+  var modal = document.getElementById('sorun-bildir-modal');
+  if (!modal) return;
+  // Hata log'larını otomatik doldur
+  var logAlan = document.getElementById('sorun-log-alan');
+  if (logAlan && window._sorunLog && window._sorunLog.length) {
+    logAlan.value = window._sorunLog.join('\n');
+  }
+  // Kullanıcı adını doldur
+  var adInput = document.getElementById('sorun-kullanici-ad');
+  if (adInput) {
+    var ad = sessionStorage.getItem('turne_ad') || 'Bilinmiyor';
+    var ep = sessionStorage.getItem('turne_eposta') || '';
+    adInput.value = ad + (ep ? ' <' + ep + '>' : '');
+  }
+  modal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+function sorunBildirKapat() {
+  var modal = document.getElementById('sorun-bildir-modal');
+  if (modal) modal.style.display = 'none';
+  document.body.style.overflow = '';
+}
+function sorunBildirGonder() {
+  var baslik  = (document.getElementById('sorun-baslik')  || {}).value || '';
+  var aciklama= (document.getElementById('sorun-aciklama')|| {}).value || '';
+  var adres   = 'alper.cam@ktb.gov.tr';
+  var konu    = encodeURIComponent('[Turne Yönetimi] Sorun Bildirimi: ' + baslik);
+  var adSoyad = (document.getElementById('sorun-kullanici-ad') || {}).value || '';
+  var log     = (document.getElementById('sorun-log-alan')     || {}).value || '';
+  var body    = encodeURIComponent(
+    'Gönderen: ' + adSoyad + '\n\n'
+    + 'Sorun Başlığı: ' + baslik + '\n\n'
+    + 'Açıklama:\n' + aciklama
+    + (log ? '\n\n--- Hata Kaydı ---\n' + log : '')
+  );
+  window.location.href = 'mailto:' + adres + '?subject=' + konu + '&body=' + body;
+  sorunBildirKapat();
+}
+// Hata kayıtlarını tut (konsol hataları)
+window._sorunLog = [];
+(function(){
+  var origError = console.error;
+  console.error = function() {
+    var msg = Array.prototype.slice.call(arguments).join(' ');
+    window._sorunLog.push('[HATA] ' + new Date().toLocaleTimeString('tr-TR') + ': ' + msg);
+    if (window._sorunLog.length > 30) window._sorunLog.shift();
+    origError.apply(console, arguments);
+  };
+  window.addEventListener('error', function(e) {
+    window._sorunLog.push('[JS HATA] ' + new Date().toLocaleTimeString('tr-TR') + ': ' + e.message + ' (' + e.filename + ':' + e.lineno + ')');
+    if (window._sorunLog.length > 30) window._sorunLog.shift();
+  });
+})();
+
 // ── İLGİLİ KİŞİ ÖNERİ ─────────────────────────────────────
 function ilgiliKisiSec(idx, kisi, tel) {
   duraklar[idx].ilgiliKisi = kisi;
@@ -20202,5 +20253,55 @@ function ilgiliKisiOneri(input, _unused, durakIdx) {
 
 
 
+<!-- SORUN BİLDİR MODALI -->
+<div id="sorun-bildir-modal" onclick="if(event.target===this)sorunBildirKapat()" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.55);align-items:center;justify-content:center;padding:16px">
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;box-shadow:0 12px 48px rgba(0,0,0,.35);width:100%;max-width:520px;overflow:hidden">
+    <!-- Başlık -->
+    <div style="background:hsl(38,60%,18%);padding:16px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)">
+      <div style="display:flex;align-items:center;gap:10px">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="hsl(38,90%,70%)" stroke-width="2.5" stroke-linecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <span style="font-size:15px;font-weight:800;color:hsl(38,90%,78%)">Sorun Bildir</span>
+      </div>
+      <button onclick="sorunBildirKapat()" style="background:none;border:none;cursor:pointer;color:hsl(38,50%,65%);font-size:20px;line-height:1;padding:0 4px" title="Kapat">×</button>
+    </div>
+    <!-- İçerik -->
+    <div style="padding:20px 20px 8px">
+      <p style="font-size:12px;color:var(--muted-foreground);margin-bottom:16px;line-height:1.6">
+        Karşılaştığınız sorunu aşağıdaki formu doldurarak bildirin.<br>
+        Bildirilen sorunlar <strong style="color:var(--foreground)">alper.cam@ktb.gov.tr</strong> adresine iletilecektir.
+      </p>
+      <div style="margin-bottom:12px">
+        <label style="font-size:11px;font-weight:700;color:var(--muted-foreground);display:block;margin-bottom:4px">Gönderen</label>
+        <input id="sorun-kullanici-ad" type="text" readonly style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px;background:var(--muted);color:var(--foreground);outline:none">
+      </div>
+      <div style="margin-bottom:12px">
+        <label style="font-size:11px;font-weight:700;color:var(--muted-foreground);display:block;margin-bottom:4px">Sorun Başlığı <span style="color:var(--destructive)">*</span></label>
+        <input id="sorun-baslik" type="text" placeholder="Kısaca sorun ne?" maxlength="120" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px;background:var(--card);color:var(--foreground);outline:none;transition:border-color .15s" onfocus="this.style.borderColor='var(--primary)'" onblur="this.style.borderColor='var(--border)'">
+      </div>
+      <div style="margin-bottom:12px">
+        <label style="font-size:11px;font-weight:700;color:var(--muted-foreground);display:block;margin-bottom:4px">Açıklama</label>
+        <textarea id="sorun-aciklama" placeholder="Sorunu adım adım açıklayın; hangi ekranda, ne yaparken oluştu?" rows="4" maxlength="2000" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px;background:var(--card);color:var(--foreground);outline:none;resize:vertical;font-family:inherit;line-height:1.5;transition:border-color .15s" onfocus="this.style.borderColor='var(--primary)'" onblur="this.style.borderColor='var(--border)'"></textarea>
+      </div>
+      <div style="margin-bottom:16px">
+        <label style="font-size:11px;font-weight:700;color:var(--muted-foreground);display:block;margin-bottom:4px;display:flex;align-items:center;justify-content:space-between">
+          <span>Hata Kaydı <span style="font-weight:400;opacity:.7">(otomatik)</span></span>
+          <button onclick="document.getElementById('sorun-log-alan').value=''" style="background:none;border:none;font-size:10px;color:var(--destructive);cursor:pointer;padding:0">Temizle</button>
+        </label>
+        <textarea id="sorun-log-alan" placeholder="Hata kaydı yok." rows="3" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:10px;font-family:'DM Mono',monospace;background:var(--muted);color:var(--muted-foreground);outline:none;resize:vertical;line-height:1.6"></textarea>
+      </div>
+    </div>
+    <!-- Alt butonlar -->
+    <div style="padding:12px 20px 16px;display:flex;gap:10px;border-top:1px solid var(--border)">
+      <button onclick="sorunBildirKapat()" style="flex:1;padding:9px;border:1px solid var(--border);border-radius:8px;background:transparent;color:var(--muted-foreground);font-size:12px;font-weight:700;cursor:pointer">İptal</button>
+      <button onclick="sorunBildirGonder()" style="flex:2;padding:9px;border:none;border-radius:8px;background:var(--primary);color:#fff;font-size:12px;font-weight:800;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        E-posta ile Gönder
+      </button>
+    </div>
+    <div style="padding:0 20px 14px;font-size:10px;color:var(--muted-foreground);text-align:center">
+      İletişim: <a href="mailto:alper.cam@ktb.gov.tr" style="color:var(--primary);text-decoration:none;font-weight:700">alper.cam@ktb.gov.tr</a>
+    </div>
+  </div>
+</div>
 </body>
 </html>
