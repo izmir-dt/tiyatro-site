@@ -12308,7 +12308,7 @@ function renderHarita() {
       maxBoundsViscosity: 0.7,
     });
     _leafletMap.fitBounds([[36.0, 26.0], [42.0, 45.0]]);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}{r}.png', {
       maxZoom: 14,
       subdomains: 'abcd',
     }).addTo(_leafletMap);
@@ -12338,13 +12338,13 @@ function renderHarita() {
     // ── Renk hiyerarşisi ────────────────────────────
     var cfg;
     if (sayi === 0) {
-      cfg = { dot: 5, halo: 9,  fill: '#c8ccd2', haloFill: 'rgba(200,204,210,0.18)', text: '#fff', label: '#9ca3af', labelW: 400, labelSz: 9  };
+      cfg = { dot: 5, halo: 9,  fill: '#c8ccd2', haloFill: 'rgba(200,204,210,0.0)',  text: '#fff', label: '#9ca3af', labelW: 400, labelSz: 9  };
     } else if (sayi === 1) {
-      cfg = { dot: 7, halo: 14, fill: '#f59e0b', haloFill: 'rgba(245,158,11,0.25)', text: '#fff', label: '#92400e', labelW: 700, labelSz: 10 };
+      cfg = { dot:10, halo: 18, fill: '#f59e0b', haloFill: 'rgba(245,158,11,0.28)', text: '#fff', label: '#92400e', labelW: 700, labelSz: 10 };
     } else if (sayi <= 3) {
-      cfg = { dot: 9, halo: 17, fill: '#ef4444', haloFill: 'rgba(239,68,68,0.22)',  text: '#fff', label: '#991b1b', labelW: 700, labelSz: 11 };
+      cfg = { dot:13, halo: 22, fill: '#ef4444', haloFill: 'rgba(239,68,68,0.25)',  text: '#fff', label: '#991b1b', labelW: 700, labelSz: 11 };
     } else {
-      cfg = { dot:11, halo: 20, fill: '#7c3aed', haloFill: 'rgba(124,58,237,0.22)', text: '#fff', label: '#4c1d95', labelW: 800, labelSz: 11 };
+      cfg = { dot:16, halo: 26, fill: '#7c3aed', haloFill: 'rgba(124,58,237,0.25)', text: '#fff', label: '#4c1d95', labelW: 800, labelSz: 11 };
     }
 
     var dotR = isSecili ? cfg.dot + 3 : cfg.dot;
@@ -12378,10 +12378,10 @@ function renderHarita() {
 
     var icon = L.divIcon({
       html: svgDot
-        + '<div style=\"text-align:center;font-size:' + cfg.labelSz + 'px;font-weight:' + cfg.labelW + ';color:' + cfg.label + ';white-space:nowrap;margin-top:2px;text-shadow:' + labelShadow + ';letter-spacing:.02em\">' + il + '</div>',
+        + '<div style="text-align:center;font-size:' + (sayi > 0 || isIzmir ? '9' : '8') + 'px;font-weight:' + (sayi > 0 || isIzmir ? '700' : '500') + ';color:' + (sayi > 0 || isIzmir ? '#3d2e1a' : '#888') + ';white-space:nowrap;margin-top:2px;background:' + (sayi > 0 || isIzmir ? 'rgba(255,255,255,0.88)' : 'rgba(255,255,255,0.55)') + ';border-radius:8px;padding:1px 5px;display:inline-block;max-width:90px;overflow:hidden;text-overflow:ellipsis;' + (sayi > 0 || isIzmir ? 'box-shadow:0 1px 3px rgba(0,0,0,.12);' : '') + 'letter-spacing:.01em">' + il + '</div>',
       className: '',
-      iconSize: [svgSize, svgSize + 16],
-      iconAnchor: [cx, cy],
+      iconSize: [svgSize, svgSize + 18],
+      iconAnchor: [cx, cy + 1],
     });
 
         var marker = L.marker(latlon, { icon: icon }).addTo(_leafletMap);
@@ -12404,14 +12404,15 @@ function renderHarita() {
       : _haritaTurneler;
     haritaRotaCiz(_rotaTurneler);
   } else {
-    if (_haritaRotaLayer) { _haritaRotaLayer.forEach(function(l){ l.remove(); }); _haritaRotaLayer = []; }
+    if (_haritaRotaLayer && _haritaRotaLayer.length) { _haritaRotaLayer.forEach(function(l){ try{l.remove();}catch(e){} }); _haritaRotaLayer = []; }
   }
   if (_haritaMod === 'heatmap') {
     haritaHeatmapCiz(ilSayilar);
   } else {
-    // Normal ve rota modda GeoJSON boyama yok — sadece marker'lar görünür
-    if (_haritaGeoJSONLayer) { _haritaGeoJSONLayer.remove(); _haritaGeoJSONLayer = null; }
     _haritaHeatLayers.forEach(function(l){ l.remove(); }); _haritaHeatLayers = [];
+    // Normal ve rota modda sadece ince il sınırları göster (dolgu yok)
+    if (_haritaGeoJSONLayer) { _haritaGeoJSONLayer.remove(); _haritaGeoJSONLayer = null; }
+    haritaIlSinirGoster(ilSayilar);
   }
   if (seciliIl) haritaIlDetay(seciliIl, ilSayilar);
   else document.getElementById('harita-detay').innerHTML =
@@ -12657,7 +12658,7 @@ function haritaModSec(mod) {
 function haritaRotaCiz(turnelerFiltreli) {
   if (!_leafletMap) return;
 
-  if (_haritaRotaLayer) { _haritaRotaLayer.forEach(function(l){ l.remove(); }); }
+  if (_haritaRotaLayer && _haritaRotaLayer.length) { _haritaRotaLayer.forEach(function(l){ try{ l.remove(); }catch(e){} }); }
   _haritaRotaLayer = [];
 
   // İl bazlı toplam turne sayısını hesapla (renk + kesik çizgi için)
@@ -12848,13 +12849,13 @@ function haritaHeatmapCiz(ilSayilar) {
         var sayi = key ? (ilSayilar[key] || 0) : 0;
         var ratio = sayi > 0 ? sayi / maxSayi : 0;
         if (sayi === 0) {
-          return { fillColor: '#e8e8e8', fillOpacity: 0.4, color: '#ccc', weight: 0.5 };
+          return { fillColor: '#ededea', fillOpacity: 0.35, color: 'rgba(100,80,50,0.35)', weight: 1.2 };
         }
         return {
           fillColor: _heatmapRenk(ratio),
           fillOpacity: 0.68,
-          color: 'rgba(255,255,255,0.6)',
-          weight: 1.2,
+          color: 'rgba(80,30,0,0.5)',
+          weight: 1.8,
         };
       },
       onEachFeature: function(feature, layer) {
@@ -12894,6 +12895,39 @@ function haritaHeatmapCiz(ilSayilar) {
   });
 }
 
+function haritaIlSinirGoster(ilSayilar) {
+  // Sadece sınır çizgisi — gidilen iller amber kenarlı, gidilmeyenler gri
+  _ilGeoJSONYukle(function(geojson) {
+    if (!geojson) return;
+    if (_haritaGeoJSONLayer) { _haritaGeoJSONLayer.remove(); _haritaGeoJSONLayer = null; }
+    _haritaGeoJSONLayer = L.geoJSON(geojson, {
+      smoothFactor: 0.5,
+      style: function(feature) {
+        var ilAdi = feature.properties && (feature.properties.name || feature.properties.Name || feature.properties.NAME || feature.properties.il || '');
+        var key = Object.keys(IL_LATLON).find(function(k){ return k.toLocaleLowerCase('tr-TR') === (ilAdi||'').toLocaleLowerCase('tr-TR'); });
+        var sayi = key ? (ilSayilar[key] || 0) : 0;
+        if (sayi === 0) {
+          return { fillColor: 'transparent', fillOpacity: 0, color: 'rgba(120,100,70,0.28)', weight: 1 };
+        }
+        var maxSayi = Math.max.apply(null, Object.values(ilSayilar).filter(function(v){ return v > 0; }).concat([1]));
+        var ratio = sayi / maxSayi;
+        var fillOp = 0.12 + ratio * 0.22;
+        return { fillColor: 'hsl(38,85%,50%)', fillOpacity: fillOp, color: 'hsl(38,65%,35%)', weight: 1.8 };
+      },
+      onEachFeature: function(feature, layer) {
+        var ilAdi = feature.properties && (feature.properties.name || feature.properties.Name || feature.properties.NAME || feature.properties.il || '');
+        var key = Object.keys(IL_LATLON).find(function(k){ return k.toLocaleLowerCase('tr-TR') === (ilAdi||'').toLocaleLowerCase('tr-TR'); });
+        var sayi = key ? (ilSayilar[key] || 0) : 0;
+        if (sayi > 0) {
+          layer.on('mouseover', function() { layer.setStyle({ fillOpacity: 0.45, weight: 2.5 }); layer.bringToFront(); });
+          layer.on('mouseout',  function() { var maxS = Math.max.apply(null, Object.values(ilSayilar).filter(function(v){ return v > 0; }).concat([1])); layer.setStyle({ fillOpacity: 0.12 + (sayi/maxS)*0.22, weight: 1.8 }); });
+          layer.on('click', function() { if (key) haritaIlTikla(key); });
+        }
+      }
+    }).addTo(_leafletMap);
+  });
+}
+
 function haritaIlBoyaNormal(ilSayilar) {
   // GeoJSON ile il sınırlarını boya: gidilen iller amber, gidilmeyenler çok soluk
   _ilGeoJSONYukle(function(geojson) {
@@ -12911,7 +12945,7 @@ function haritaIlBoyaNormal(ilSayilar) {
         });
         var sayi = key ? (ilSayilar[key] || 0) : 0;
         if (sayi === 0) {
-          return { fillColor: 'transparent', fillOpacity: 0, color: 'transparent', weight: 0 };
+          return { fillColor: 'transparent', fillOpacity: 0, color: 'rgba(100,80,50,0.35)', weight: 1.2 };
         }
         // Amber tonu — turne sayısına göre yoğunluk
         var maxSayi = Math.max.apply(null, Object.values(ilSayilar).filter(function(v){ return v > 0; }).concat([1]));
@@ -12920,8 +12954,8 @@ function haritaIlBoyaNormal(ilSayilar) {
         return {
           fillColor: 'hsl(38,85%,50%)',
           fillOpacity: opacity,
-          color: 'hsl(38,70%,35%)',
-          weight: 1,
+          color: 'hsl(38,60%,28%)',
+          weight: 1.8,
         };
       },
       onEachFeature: function(feature, layer) {
@@ -20135,12 +20169,10 @@ function _pdfTurneDosyasiIcerik(t) {
 function sorunBildirAc() {
   var modal = document.getElementById('sorun-bildir-modal');
   if (!modal) return;
-  // Hata log'larını otomatik doldur
   var logAlan = document.getElementById('sorun-log-alan');
   if (logAlan && window._sorunLog && window._sorunLog.length) {
     logAlan.value = window._sorunLog.join('\n');
   }
-  // Kullanıcı adını doldur
   var adInput = document.getElementById('sorun-kullanici-ad');
   if (adInput) {
     var ad = sessionStorage.getItem('turne_ad') || 'Bilinmiyor';
@@ -20156,13 +20188,13 @@ function sorunBildirKapat() {
   document.body.style.overflow = '';
 }
 function sorunBildirGonder() {
-  var baslik  = (document.getElementById('sorun-baslik')  || {}).value || '';
-  var aciklama= (document.getElementById('sorun-aciklama')|| {}).value || '';
-  var adres   = 'alper.cam@ktb.gov.tr';
-  var konu    = encodeURIComponent('[Turne Yönetimi] Sorun Bildirimi: ' + baslik);
-  var adSoyad = (document.getElementById('sorun-kullanici-ad') || {}).value || '';
-  var log     = (document.getElementById('sorun-log-alan')     || {}).value || '';
-  var body    = encodeURIComponent(
+  var baslik   = (document.getElementById('sorun-baslik')  || {}).value || '';
+  var aciklama = (document.getElementById('sorun-aciklama')|| {}).value || '';
+  var adres    = 'alper.cam@ktb.gov.tr';
+  var konu     = encodeURIComponent('[Turne Yönetimi] Sorun Bildirimi: ' + baslik);
+  var adSoyad  = (document.getElementById('sorun-kullanici-ad') || {}).value || '';
+  var log      = (document.getElementById('sorun-log-alan')     || {}).value || '';
+  var body     = encodeURIComponent(
     'Gönderen: ' + adSoyad + '\n\n'
     + 'Sorun Başlığı: ' + baslik + '\n\n'
     + 'Açıklama:\n' + aciklama
@@ -20171,7 +20203,6 @@ function sorunBildirGonder() {
   window.location.href = 'mailto:' + adres + '?subject=' + konu + '&body=' + body;
   sorunBildirKapat();
 }
-// Hata kayıtlarını tut (konsol hataları)
 window._sorunLog = [];
 (function(){
   var origError = console.error;
@@ -20256,7 +20287,6 @@ function ilgiliKisiOneri(input, _unused, durakIdx) {
 <!-- SORUN BİLDİR MODALI -->
 <div id="sorun-bildir-modal" onclick="if(event.target===this)sorunBildirKapat()" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.55);align-items:center;justify-content:center;padding:16px">
   <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;box-shadow:0 12px 48px rgba(0,0,0,.35);width:100%;max-width:520px;overflow:hidden">
-    <!-- Başlık -->
     <div style="background:hsl(38,60%,18%);padding:16px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)">
       <div style="display:flex;align-items:center;gap:10px">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="hsl(38,90%,70%)" stroke-width="2.5" stroke-linecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
@@ -20264,7 +20294,6 @@ function ilgiliKisiOneri(input, _unused, durakIdx) {
       </div>
       <button onclick="sorunBildirKapat()" style="background:none;border:none;cursor:pointer;color:hsl(38,50%,65%);font-size:20px;line-height:1;padding:0 4px" title="Kapat">×</button>
     </div>
-    <!-- İçerik -->
     <div style="padding:20px 20px 8px">
       <p style="font-size:12px;color:var(--muted-foreground);margin-bottom:16px;line-height:1.6">
         Karşılaştığınız sorunu aşağıdaki formu doldurarak bildirin.<br>
@@ -20283,14 +20312,13 @@ function ilgiliKisiOneri(input, _unused, durakIdx) {
         <textarea id="sorun-aciklama" placeholder="Sorunu adım adım açıklayın; hangi ekranda, ne yaparken oluştu?" rows="4" maxlength="2000" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px;background:var(--card);color:var(--foreground);outline:none;resize:vertical;font-family:inherit;line-height:1.5;transition:border-color .15s" onfocus="this.style.borderColor='var(--primary)'" onblur="this.style.borderColor='var(--border)'"></textarea>
       </div>
       <div style="margin-bottom:16px">
-        <label style="font-size:11px;font-weight:700;color:var(--muted-foreground);display:block;margin-bottom:4px;display:flex;align-items:center;justify-content:space-between">
+        <label style="font-size:11px;font-weight:700;color:var(--muted-foreground);display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
           <span>Hata Kaydı <span style="font-weight:400;opacity:.7">(otomatik)</span></span>
           <button onclick="document.getElementById('sorun-log-alan').value=''" style="background:none;border:none;font-size:10px;color:var(--destructive);cursor:pointer;padding:0">Temizle</button>
         </label>
         <textarea id="sorun-log-alan" placeholder="Hata kaydı yok." rows="3" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:10px;font-family:'DM Mono',monospace;background:var(--muted);color:var(--muted-foreground);outline:none;resize:vertical;line-height:1.6"></textarea>
       </div>
     </div>
-    <!-- Alt butonlar -->
     <div style="padding:12px 20px 16px;display:flex;gap:10px;border-top:1px solid var(--border)">
       <button onclick="sorunBildirKapat()" style="flex:1;padding:9px;border:1px solid var(--border);border-radius:8px;background:transparent;color:var(--muted-foreground);font-size:12px;font-weight:700;cursor:pointer">İptal</button>
       <button onclick="sorunBildirGonder()" style="flex:2;padding:9px;border:none;border-radius:8px;background:var(--primary);color:#fff;font-size:12px;font-weight:800;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px">
