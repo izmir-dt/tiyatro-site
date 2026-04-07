@@ -15522,6 +15522,7 @@ function _pdfModSec(rowIdx) {
       + '<div style="display:flex;flex-direction:column;gap:10px">'
       + '<button id="_ekspdf_kat" style="padding:11px 14px;background:hsl(220,60%,45%);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;text-align:left">👥 Katılımcı Listesi<div style=\'font-size:10px;font-weight:400;margin-top:2px;opacity:.85\'>Tarihleri ile birlikte katılımcıların listesi</div></button>'
       + '<button id="_ekspdf_kon" style="padding:11px 14px;background:hsl(142,50%,35%);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;text-align:left">🛏 Konaklama Listesi<div style=\'font-size:10px;font-weight:400;margin-top:2px;opacity:.85\'>Oda atamaları ve konaklama planı</div></button>'
+      + '<button id="_ekspdf_tc" style="padding:11px 14px;background:#6b1b1b;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;text-align:left">📋 T.C. Listesi<div style=\'font-size:10px;font-weight:400;margin-top:2px;opacity:.85\'>TC + doğum tarihi — yalnızca tarayıcıda saklanır</div></button>'
       + '<button id="_ekspdf_iptal" style="padding:8px 14px;background:#f3f4f6;color:#333;border:none;border-radius:8px;font-size:12px;cursor:pointer">İptal</button>'
       + '</div></div>';
     document.body.appendChild(overlay);
@@ -15533,6 +15534,10 @@ function _pdfModSec(rowIdx) {
     overlay.querySelector('#_ekspdf_kon').onclick = function() {
       document.body.removeChild(overlay);
       _ekTurnePdfKonaklama(t);
+    };
+    overlay.querySelector('#_ekspdf_tc').onclick = function() {
+      document.body.removeChild(overlay);
+      _tcListesiModalAc(t);
     };
     overlay.querySelector('#_ekspdf_iptal').onclick = function() { document.body.removeChild(overlay); };
     overlay.addEventListener('click', function(e){ if(e.target===overlay) document.body.removeChild(overlay); });
@@ -15877,26 +15882,51 @@ function _tcListesiPdfIndir(t, katilimcilar) {
     durakIller = iller.join(' / ');
   } catch(e) {}
 
-  var satirlar2 = katilimcilar.map(function(p, i) {
+  var satirlar2_unused = null; // eski kod kaldırıldı — satirlarDinamik kullanılıyor
+
+  var bugun = new Date().toLocaleDateString('tr-TR', {day:'numeric',month:'long',year:'numeric'});
+
+  // ── Dinamik ölçekleme: kişi sayısına göre satır yüksekliği ve font küçülür
+  var n = katilimcilar.length;
+  // A4 portrait kullanılabilir alan ~247mm (297 - 2×8mm margin - ~34mm başlık - ~10mm footer)
+  // Hedef: tüm satırlar 1 sayfaya sığsın
+  var tdPad, tdFont, thPad, thFont, baslikMb, baslikPb, oyunFs, kurulusFs, badgeFs;
+  if (n <= 20) {
+    tdPad = '6pt 9pt'; tdFont = '9pt'; thPad = '7pt 9pt'; thFont = '7.5pt';
+    baslikMb = '18pt'; baslikPb = '16pt'; oyunFs = '20pt'; kurulusFs = '8.5pt'; badgeFs = '7.5pt';
+  } else if (n <= 30) {
+    tdPad = '4pt 7pt'; tdFont = '8.5pt'; thPad = '5pt 7pt'; thFont = '7pt';
+    baslikMb = '12pt'; baslikPb = '10pt'; oyunFs = '16pt'; kurulusFs = '7.5pt'; badgeFs = '7pt';
+  } else if (n <= 40) {
+    tdPad = '3pt 6pt'; tdFont = '7.5pt'; thPad = '4pt 6pt'; thFont = '6.5pt';
+    baslikMb = '8pt'; baslikPb = '7pt'; oyunFs = '13pt'; kurulusFs = '7pt'; badgeFs = '6.5pt';
+  } else if (n <= 55) {
+    tdPad = '2pt 5pt'; tdFont = '6.5pt'; thPad = '3pt 5pt'; thFont = '6pt';
+    baslikMb = '6pt'; baslikPb = '5pt'; oyunFs = '11pt'; kurulusFs = '6pt'; badgeFs = '6pt';
+  } else {
+    tdPad = '1.5pt 4pt'; tdFont = '5.5pt'; thPad = '2pt 4pt'; thFont = '5.5pt';
+    baslikMb = '4pt'; baslikPb = '4pt'; oyunFs = '9pt'; kurulusFs = '5.5pt'; badgeFs = '5.5pt';
+  }
+
+  // satırları yeniden oluştur (dinamik padding/font ile)
+  var satirlarDinamik = katilimcilar.map(function(p, i) {
     var kisi = p.kisi || '';
     var gorevAsil2 = (p.gorev && p.gorev.trim()) ? p.gorev : (p.kategori || '');
     var key = kisi.trim().toLowerCase().replace(/\s+/g, '_');
     var kayit = stored[key] || {};
     var gorevHam = (kayit.gorev !== undefined && kayit.gorev !== null) ? kayit.gorev : gorevAsil2;
-    var gorev = gorevHam.replace(/\s*\([^)]*\)\s*/g, '').replace(/\s*[-–]\s*\d[^,]*/g, '').replace(/\s*[-–]+\s*$/g, '').trim() || gorevHam;
-    var tc = kayit.tc || '—';
-    var dogum = kayit.dogum || '—';
+    var gorev = gorevHam.replace(/\s*\([^)]*\)\s*/g, '').replace(/\s*[-\u2013]\s*\d[^,]*/g, '').replace(/\s*[-\u2013]+\s*$/g, '').trim() || gorevHam;
+    var tc = kayit.tc || '\u2014';
+    var dogum = kayit.dogum || '\u2014';
     var bg = i % 2 === 0 ? '#ffffff' : '#faf7f2';
     return '<tr style="background:' + bg + '">'
-      + '<td style="padding:6pt 9pt;text-align:center;color:#777;font-size:9pt;width:26pt;white-space:nowrap;border-bottom:1pt solid #e0d8ce;border-right:1pt solid #ede5d8">' + (i+1) + '</td>'
-      + '<td style="padding:6pt 9pt;font-weight:600;color:#1a1a1a;white-space:nowrap;border-bottom:1pt solid #e0d8ce;border-right:1pt solid #ede5d8">' + kisi + '</td>'
-      + '<td style="padding:6pt 9pt;color:#444;white-space:nowrap;border-bottom:1pt solid #e0d8ce;border-right:1pt solid #ede5d8">' + gorev + '</td>'
-      + '<td style="padding:6pt 9pt;text-align:center;width:72pt;color:#333;white-space:nowrap;border-bottom:1pt solid #e0d8ce;border-right:1pt solid #ede5d8">' + dogum + '</td>'
-      + '<td style="padding:6pt 9pt;text-align:center;width:88pt;font-weight:600;color:#1a1a1a;white-space:nowrap;letter-spacing:.5pt;border-bottom:1pt solid #e0d8ce;border-right:1pt solid #ede5d8">' + tc + '</td>'
+      + '<td style="padding:' + tdPad + ';text-align:center;color:#777;font-size:' + tdFont + ';width:26pt;white-space:nowrap;border-bottom:1pt solid #e0d8ce;border-right:1pt solid #ede5d8">' + (i+1) + '</td>'
+      + '<td style="padding:' + tdPad + ';font-weight:600;color:#1a1a1a;white-space:nowrap;border-bottom:1pt solid #e0d8ce;border-right:1pt solid #ede5d8;font-size:' + tdFont + '">' + kisi + '</td>'
+      + '<td style="padding:' + tdPad + ';color:#444;white-space:nowrap;border-bottom:1pt solid #e0d8ce;border-right:1pt solid #ede5d8;font-size:' + tdFont + '">' + gorev + '</td>'
+      + '<td style="padding:' + tdPad + ';text-align:center;width:72pt;color:#333;white-space:nowrap;border-bottom:1pt solid #e0d8ce;border-right:1pt solid #ede5d8;font-size:' + tdFont + '">' + dogum + '</td>'
+      + '<td style="padding:' + tdPad + ';text-align:center;width:88pt;font-weight:600;color:#1a1a1a;white-space:nowrap;letter-spacing:.5pt;border-bottom:1pt solid #e0d8ce;border-right:1pt solid #ede5d8;font-size:' + tdFont + '">' + tc + '</td>'
       + '</tr>';
   }).join('');
-
-  var bugun = new Date().toLocaleDateString('tr-TR', {day:'numeric',month:'long',year:'numeric'});
 
   var html = '<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8">'
     + '<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">'
@@ -15907,17 +15937,16 @@ function _tcListesiPdfIndir(t, katilimcilar) {
     + '@media print{@page{size:A4 portrait;margin:0}body{padding:8mm 10mm}}'
     + 'table{width:100%;border-collapse:collapse;outline:1.5pt solid #a08060;border-radius:4pt}'
     + 'thead tr{background:#5e0f0f;color:#fff}'
-    + 'thead th{padding:7pt 9pt;font-size:7.5pt;font-weight:700;letter-spacing:.5pt;font-family:\'DM Sans\',Arial,sans-serif}'
-    + 'tbody td{padding:6pt 9pt;border-bottom:1pt solid #e0d8ce;border-right:1pt solid #ede5d8;font-size:9pt;font-family:\'DM Sans\',Arial,sans-serif}'
-    + 'tfoot td{padding:6pt 9pt;background:#f5f0e8;font-size:8pt;font-family:\'DM Sans\',Arial,sans-serif}'
+    + 'thead th{padding:' + thPad + ';font-size:' + thFont + ';font-weight:700;letter-spacing:.5pt;font-family:\'DM Sans\',Arial,sans-serif}'
+    + 'tfoot td{padding:' + thPad + ';background:#f5f0e8;font-size:' + thFont + ';font-family:\'DM Sans\',Arial,sans-serif}'
     + '</style></head><body>'
-    + '<div style="text-align:center;margin-bottom:18pt;padding-bottom:16pt;border-bottom:2.5pt solid #5e0f0f">'
-    + '<div style="font-size:8.5pt;font-weight:700;letter-spacing:2.5pt;color:#666;text-transform:uppercase;margin-bottom:8pt;font-family:\'DM Sans\',Arial,sans-serif">\u0130zmir Devlet Tiyatrosu</div>'
-    + '<div style="font-size:20pt;font-weight:700;color:#111;letter-spacing:.5pt;line-height:1.15;font-family:\'DM Sans\',Arial,sans-serif">' + (t.oyun || 'TURNE') + '</div>'
-    + '<div style="font-size:9pt;color:#555;margin-top:6pt;font-family:\'DM Sans\',Arial,sans-serif">' + (durakIller ? durakIller + ' TURNESİ' : '') + '</div>'
-    + '<div style="font-size:8.5pt;color:#444;margin-top:3pt;font-weight:600;font-family:\'DM Sans\',Arial,sans-serif">' + tarihStr2 + '</div>'
-    + '<div style="margin-top:12pt">'
-    + '<span style="display:inline-block;background:#5e0f0f;color:#fff;font-size:7.5pt;font-weight:700;letter-spacing:2pt;padding:4pt 16pt;border-radius:3pt;font-family:\'DM Sans\',Arial,sans-serif">G\u00d6REVL\u0130 PERSONEL T.C. L\u0130STES\u0130</span>'
+    + '<div style="text-align:center;margin-bottom:' + baslikMb + ';padding-bottom:' + baslikPb + ';border-bottom:2.5pt solid #5e0f0f">'
+    + '<div style="font-size:' + kurulusFs + ';font-weight:700;letter-spacing:2.5pt;color:#666;text-transform:uppercase;margin-bottom:' + (n>30?'4pt':'8pt') + ';font-family:\'DM Sans\',Arial,sans-serif">\u0130zmir Devlet Tiyatrosu</div>'
+    + '<div style="font-size:' + oyunFs + ';font-weight:700;color:#111;letter-spacing:.5pt;line-height:1.15;font-family:\'DM Sans\',Arial,sans-serif">' + (t.oyun || 'TURNE') + '</div>'
+    + '<div style="font-size:' + kurulusFs + ';color:#555;margin-top:' + (n>30?'3pt':'6pt') + ';font-family:\'DM Sans\',Arial,sans-serif">' + (durakIller ? durakIller + ' TURNES\u0130' : '') + '</div>'
+    + '<div style="font-size:' + kurulusFs + ';color:#444;margin-top:2pt;font-weight:600;font-family:\'DM Sans\',Arial,sans-serif">' + tarihStr2 + '</div>'
+    + '<div style="margin-top:' + (n>30?'6pt':'12pt') + '">'
+    + '<span style="display:inline-block;background:#5e0f0f;color:#fff;font-size:' + badgeFs + ';font-weight:700;letter-spacing:2pt;padding:3pt 14pt;border-radius:3pt;font-family:\'DM Sans\',Arial,sans-serif">G\u00d6REVL\u0130 PERSONEL T.C. L\u0130STES\u0130</span>'
     + '</div>'
     + '</div>'
     + '<table>'
@@ -15928,7 +15957,7 @@ function _tcListesiPdfIndir(t, katilimcilar) {
     + '<th style="text-align:center;width:88pt">DO\u011eUM TAR\u0130H\u0130</th>'
     + '<th style="text-align:center;width:106pt;border-right:1pt solid rgba(255,255,255,.3)">T.C. K\u0130ML\u0130K NO</th>'
     + '</tr></thead>'
-    + '<tbody>' + satirlar2 + '</tbody>'
+    + '<tbody>' + satirlarDinamik + '</tbody>'
     + '<tfoot><tr>'
     + '<td colspan="3" style="color:#666;border-top:2pt solid #5e0f0f;border-right:1pt solid #ede5d8">Toplam <strong>' + katilimcilar.length + '</strong> ki\u015fi</td>'
     + '<td colspan="2" style="color:#5e0f0f;font-weight:700;text-align:right;border-top:2pt solid #5e0f0f;border-right:1pt solid #ede5d8">D\u00fczenlenme: ' + bugun + '</td>'
@@ -20297,7 +20326,7 @@ function ilgiliKisiOneri(input, _unused, durakIdx) {
     <div style="padding:20px 20px 8px">
       <p style="font-size:12px;color:var(--muted-foreground);margin-bottom:16px;line-height:1.6">
         Karşılaştığınız sorunu aşağıdaki formu doldurarak bildirin.<br>
-        Bildirilen sorunlar <strong style="color:var(--foreground)">alper.cam@ktb.gov.tr</strong> adresine iletilecektir.
+        Bildirilen sorunlar <strong style="color:var(--foreground)"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="6c0d001c091e420f0d012c07180e420b031a42181e">[email&#160;protected]</a></strong> adresine iletilecektir.
       </p>
       <div style="margin-bottom:12px">
         <label style="font-size:11px;font-weight:700;color:var(--muted-foreground);display:block;margin-bottom:4px">Gönderen</label>
@@ -20327,9 +20356,4 @@ function ilgiliKisiOneri(input, _unused, durakIdx) {
       </button>
     </div>
     <div style="padding:0 20px 14px;font-size:10px;color:var(--muted-foreground);text-align:center">
-      İletişim: <a href="mailto:alper.cam@ktb.gov.tr" style="color:var(--primary);text-decoration:none;font-weight:700">alper.cam@ktb.gov.tr</a>
-    </div>
-  </div>
-</div>
-</body>
-</html>
+      İletişim: <a href="/cdn-cgi/l/email-protection#4b2a273b2e39
