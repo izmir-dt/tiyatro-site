@@ -3310,6 +3310,10 @@ flex-shrink:0;
                   <label class="form-label">Kalkış Noktası</label>
                   <input class="form-input" type="text" id="m-gidis-surucu" placeholder="Tiyatro önü, otogar...">
                 </div>
+                <div class="form-group" style="margin:0">
+                  <label class="form-label">Varış Noktası</label>
+                  <input class="form-input" type="text" id="m-gidis-varis" placeholder="Salon, terminal...">
+                </div>
               </div>
               <div style="display:flex;gap:6px;margin-top:6px">
                 <div class="form-group" style="flex:1;margin:0">
@@ -3362,6 +3366,10 @@ flex-shrink:0;
                 <div class="form-group" style="margin:0">
                   <label class="form-label">Kalkış Noktası</label>
                   <input class="form-input" type="text" id="m-donus-surucu" placeholder="Tiyatro önü, otogar...">
+                </div>
+                <div class="form-group" style="margin:0">
+                  <label class="form-label">Varış Noktası</label>
+                  <input class="form-input" type="text" id="m-donus-varis" placeholder="Salon, terminal...">
                 </div>
               </div>
               <div style="display:flex;gap:6px;margin-top:6px">
@@ -9321,12 +9329,12 @@ function openModal(rowIdx) {
   if (rowIdx === undefined) {
     if (!_taslakModu) document.getElementById('modal-title').textContent = 'Yeni Turne Ekle';
     document.getElementById('edit-rowidx').value = '';
-    ['m-oyun','m-tarih','m-bitis','m-not','m-afis-url','m-premiyer','m-gidis-ulasim','m-gidis-saat','m-gidis-plaka','m-gidis-surucu','m-gidis-kisi-sayisi','m-donus-ulasim','m-donus-saat','m-donus-plaka','m-donus-surucu','m-donus-kisi-sayisi','m-sehir-arac-tur','m-sehir-arac-detay','m-sehir-kisi-sayisi','m-sehir-surucu','m-sehir-tel','m-aktarma','m-otel-adi','m-otel-adr','m-otel-tel','m-kamyon','m-kapasite','m-lojistik-not','m-grup','m-arac-tur','m-ana-turne-id'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    ['m-oyun','m-tarih','m-bitis','m-not','m-afis-url','m-premiyer','m-gidis-ulasim','m-gidis-saat','m-gidis-plaka','m-gidis-surucu','m-gidis-varis','m-gidis-kisi-sayisi','m-donus-ulasim','m-donus-saat','m-donus-plaka','m-donus-surucu','m-donus-varis','m-donus-kisi-sayisi','m-sehir-arac-tur','m-sehir-arac-detay','m-sehir-kisi-sayisi','m-sehir-surucu','m-sehir-tel','m-aktarma','m-otel-adi','m-otel-adr','m-otel-tel','m-kamyon','m-kapasite','m-lojistik-not','m-grup','m-arac-tur','m-ana-turne-id'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
     var liftliEl = document.getElementById('m-arac-liftli'); if (liftliEl) liftliEl.checked = false;
     window._yukBoslar = [];
     _yukBosRender();
     ucusBacaklar = { gidis: [], donus: [] };
-    karaAraclar  = { gidis: [{firma:'',kisi:''}], donus: [{firma:'',kisi:''}] };
+    karaAraclar  = { gidis: [{firma:'',kisi:'',kalkis:'',varis:''}], donus: [{firma:'',kisi:'',kalkis:'',varis:''}] };
     sehirAraclar = [{tur:'',firma:'',kisi:'',tel:''}];
     ['gidis-ucak-bacaklar','gidis-kara-row','donus-ucak-bacaklar','donus-kara-row','gidis-bacak-ekle-btn','donus-bacak-ekle-btn','gidis-ucak-trigger','donus-ucak-trigger'].forEach(id => { var el=document.getElementById(id); if(el) el.style.display='none'; });
     ['gidis-ucak-row','gidis-arac-row','donus-ucak-row','donus-arac-row'].forEach(id => { var el=document.getElementById(id); if(el) el.style.display='none'; });
@@ -9603,13 +9611,18 @@ function editTurne(rowIdx) {
   (function() {
     var raw = t.gidisSurucu || '';
     var kalkis = raw, firma = '', tel = '';
-    if (raw.indexOf('|FIRMA:') > -1 || raw.indexOf('|TEL:') > -1) {
+    if (raw.indexOf('|FIRMA:') > -1 || raw.indexOf('|TEL:') > -1 || raw.indexOf('|KALKIS:') > -1 || raw.indexOf('|VARIS:') > -1) {
       var parts = raw.split('|');
       kalkis = parts[0];
+      var kalkisN = '', varisN = '';
       parts.slice(1).forEach(function(p) {
         if (p.startsWith('FIRMA:')) firma = p.slice(6);
         if (p.startsWith('TEL:'))   tel   = p.slice(4);
+        if (p.startsWith('KALKIS:')) kalkisN = p.slice(7);
+        if (p.startsWith('VARIS:'))  varisN  = p.slice(6);
       });
+      if (!kalkis && kalkisN) kalkis = kalkisN;
+      var _gVaris = document.getElementById('m-gidis-varis'); if (_gVaris && varisN) _gVaris.value = varisN;
     }
     var gSr = document.getElementById('m-gidis-surucu'); if (gSr) gSr.value = kalkis;
     var gFr = document.getElementById('m-gidis-firma');  if (gFr) gFr.value = firma;
@@ -9620,13 +9633,18 @@ function editTurne(rowIdx) {
   (function() {
     var raw2 = t.donusSurucu || '';
     var kalkis2 = raw2, firma2 = '', tel2 = '';
-    if (raw2.indexOf('|FIRMA:') > -1 || raw2.indexOf('|TEL:') > -1) {
+    if (raw2.indexOf('|FIRMA:') > -1 || raw2.indexOf('|TEL:') > -1 || raw2.indexOf('|KALKIS:') > -1 || raw2.indexOf('|VARIS:') > -1) {
       var parts2 = raw2.split('|');
       kalkis2 = parts2[0];
+      var kalkisN2 = '', varisN2 = '';
       parts2.slice(1).forEach(function(p2) {
         if (p2.startsWith('FIRMA:')) firma2 = p2.slice(6);
         if (p2.startsWith('TEL:'))   tel2   = p2.slice(4);
+        if (p2.startsWith('KALKIS:')) kalkisN2 = p2.slice(7);
+        if (p2.startsWith('VARIS:'))  varisN2  = p2.slice(6);
       });
+      if (!kalkis2 && kalkisN2) kalkis2 = kalkisN2;
+      var _dVaris = document.getElementById('m-donus-varis'); if (_dVaris && varisN2) _dVaris.value = varisN2;
     }
     var dSr = document.getElementById('m-donus-surucu'); if (dSr) dSr.value = kalkis2;
     var dFr = document.getElementById('m-donus-firma');  if (dFr) dFr.value = firma2;
@@ -9779,10 +9797,13 @@ async function saveTurne() {
   var _gidisFirmaTel  = (document.getElementById('m-gidis-firma-tel')||{}).value||'';
   // Firma/tel varsa birleştir: 'kalkış|FIRMA:x|TEL:y'
   var gidisSurucu = _gidisSurucuHam;
-  if (_gidisFirma || _gidisFirmaTel) {
+  var _gidisVaris = (document.getElementById('m-gidis-varis')||{}).value||'';
+  if (_gidisFirma || _gidisFirmaTel || _gidisSurucuHam || _gidisVaris) {
     gidisSurucu = _gidisSurucuHam
       + (_gidisFirma ? '|FIRMA:' + _gidisFirma : '')
-      + (_gidisFirmaTel ? '|TEL:' + _gidisFirmaTel : '');
+      + (_gidisFirmaTel ? '|TEL:' + _gidisFirmaTel : '')
+      + (_gidisSurucuHam ? '|KALKIS:' + _gidisSurucuHam : '')
+      + (_gidisVaris ? '|VARIS:' + _gidisVaris : '');
   }
   var gidisKisiSayisi = (document.getElementById('m-gidis-kisi-sayisi')||{}).value||'';
   // Geriye dönük uyum için gidisInis/ucusNo - ilk bacaktan al
@@ -9796,10 +9817,13 @@ async function saveTurne() {
   var _donusFirma     = (document.getElementById('m-donus-firma')||{}).value||'';
   var _donusFirmaTel  = (document.getElementById('m-donus-firma-tel')||{}).value||'';
   var donusSurucu = _donusSurucuHam;
-  if (_donusFirma || _donusFirmaTel) {
+  var _donusVaris = (document.getElementById('m-donus-varis')||{}).value||'';
+  if (_donusFirma || _donusFirmaTel || _donusSurucuHam || _donusVaris) {
     donusSurucu = _donusSurucuHam
       + (_donusFirma ? '|FIRMA:' + _donusFirma : '')
-      + (_donusFirmaTel ? '|TEL:' + _donusFirmaTel : '');
+      + (_donusFirmaTel ? '|TEL:' + _donusFirmaTel : '')
+      + (_donusSurucuHam ? '|KALKIS:' + _donusSurucuHam : '')
+      + (_donusVaris ? '|VARIS:' + _donusVaris : '');
   }
   var donusKisiSayisi = (document.getElementById('m-donus-kisi-sayisi')||{}).value||'';
   var donusInis   = (ucusBacaklar.donus[0]||{}).inis||'';
@@ -12389,18 +12413,15 @@ function renderHarita() {
   // İl normalize fonksiyonu — büyük/küçük harf duyarsız, trim
   function normalizeIl(ilAdi) {
     if (!ilAdi) return '';
-    // Türkçe büyük harf normalizasyonu
     return ilAdi.trim()
       .replace(/^(.)/, function(m, c) { return c.toUpperCase(); })
       .replace(/i/g, 'İ').toUpperCase()
       .replace(/İ/g, 'İ')
-      // Geri al — sadece ilk harf büyük yap
       .split('').map(function(c,i){
         if (i===0) return c;
         return c.toLowerCase().replace('İ'.toLowerCase(),'i');
       }).join('');
   }
-  // Türkçe aware capitalize
   function trCapitalize(s) {
     if (!s) return '';
     var chars = s.trim().split('');
@@ -12413,6 +12434,35 @@ function renderHarita() {
   var _haritaTurneler = (_haritaOyun
     ? turneler.filter(function(t){ return (t.oyun||'').toLowerCase().trim() === _haritaOyun.toLowerCase().trim(); })
     : turneler).filter(function(t){ return !t.anaGrupId; });
+
+  // Yarıda Kesildi şehir durumları: kesilen (kırmızı X) / sonraki (gri-dash)
+  var ykHaritaDurum = {}; // { il: { kesilen:true|false, sonraki:true|false } }
+  function _haritaEslesenIlAdi(ilHam) {
+    if (!ilHam) return '';
+    var ilAdi = (ilHam.split('/')[0] || '').trim();
+    var normalized = trCapitalize(ilAdi);
+    return Object.keys(IL_LATLON).find(function(k){
+      return k.toLocaleLowerCase('tr-TR') === ilAdi.toLocaleLowerCase('tr-TR');
+    }) || normalized;
+  }
+  _haritaTurneler.forEach(function(t) {
+    if ((t.statu || '') !== 'yarida-kesildi') return;
+    var ykAnaliz = _yaridaKesildiKesimAnalizi(t);
+    if (!ykAnaliz || ykAnaliz.kesilenIndex < 0) return;
+
+    var kesilenIl = _haritaEslesenIlAdi(ykAnaliz.sehirler[ykAnaliz.kesilenIndex] || ykAnaliz.kesilenSehir || '');
+    if (kesilenIl) {
+      if (!ykHaritaDurum[kesilenIl]) ykHaritaDurum[kesilenIl] = { kesilen:false, sonraki:false };
+      ykHaritaDurum[kesilenIl].kesilen = true;
+    }
+
+    ykAnaliz.sonrakiSehirler.forEach(function(s) {
+      var sonrakiIl = _haritaEslesenIlAdi(s);
+      if (!sonrakiIl) return;
+      if (!ykHaritaDurum[sonrakiIl]) ykHaritaDurum[sonrakiIl] = { kesilen:false, sonraki:false };
+      if (!ykHaritaDurum[sonrakiIl].kesilen) ykHaritaDurum[sonrakiIl].sonraki = true;
+    });
+  });
 
   const ilSayilar = {};
   _haritaTurneler.forEach(function(t) {
@@ -12427,13 +12477,12 @@ function renderHarita() {
   const ziyaretIlSayisi = Object.keys(ilSayilar).length;
   var _haritaBaslik = _haritaOyun ? (_haritaOyun + ' · ') : '';
   document.getElementById('harita-ozet').textContent = _haritaBaslik + ziyaretIlSayisi + ' ilde ' + _haritaTurneler.length + ' turne';
-  // Oyuna Dön barını güncel tut
+
   var _hBar = document.getElementById('harita-oyuna-don-bar');
   var _hLabel = document.getElementById('harita-oyuna-don-label');
   if (_hBar) _hBar.style.display = _haritaOyun ? 'flex' : 'none';
   if (_hLabel && _haritaOyun) _hLabel.textContent = _haritaOyun + ' oyunundan geliyorsunuz';
 
-  // Leaflet harita başlatma
   var mapDiv = document.getElementById('leaflet-map');
   if (!mapDiv) return;
 
@@ -12453,16 +12502,13 @@ function renderHarita() {
     L.control.attribution({prefix: '© OpenStreetMap, CartoDB'}).addTo(_leafletMap);
   }
 
-  // Tüm markerları temizle
   Object.values(_leafletMarkers).forEach(function(m) { m.remove(); });
   _leafletMarkers = {};
 
-  // GeoJSON layer temizle
   if (_haritaGeoJSONLayer) { _haritaGeoJSONLayer.remove(); _haritaGeoJSONLayer = null; }
   _haritaHeatLayers.forEach(function(l){ l.remove(); });
   _haritaHeatLayers = [];
 
-  // Filtreye göre hangi illeri göster
   Object.entries(IL_LATLON).forEach(function(entry) {
     var il = entry[0], latlon = entry[1];
     var sayi = ilSayilar[il] || 0;
@@ -12473,16 +12519,29 @@ function renderHarita() {
     var isSecili = seciliIl === il;
     var isIzmir = il === 'İzmir';
 
-    // ── Renk hiyerarşisi ────────────────────────────
+    var ykDurum = ykHaritaDurum[il] || null;
+    var ykMarkerCfg = null;
+    if (ykDurum && ykDurum.kesilen) ykMarkerCfg = { color:'#dc2626', icon:'✕', dashArray:'' };
+    else if (ykDurum && ykDurum.sonraki) ykMarkerCfg = { color:'#9ca3af', icon:'', dashArray:'5,5' };
+
     var cfg;
-    if (sayi === 0) {
-      cfg = { dot: 5, halo: 9,  fill: '#c8ccd2', haloFill: 'rgba(200,204,210,0.0)',  text: '#fff', label: '#9ca3af', labelW: 400, labelSz: 9  };
+    if (ykMarkerCfg) {
+      cfg = {
+        dot: sayi > 0 ? 11 : 8,
+        halo: sayi > 0 ? 19 : 12,
+        fill: ykMarkerCfg.color,
+        haloFill: ykMarkerCfg.color === '#dc2626' ? 'rgba(220,38,38,0.20)' : 'rgba(156,163,175,0.18)',
+        text: '#fff',
+        label: ykMarkerCfg.color === '#dc2626' ? '#991b1b' : '#6b7280',
+      };
+    } else if (sayi === 0) {
+      cfg = { dot: 5, halo: 9,  fill: '#c8ccd2', haloFill: 'rgba(200,204,210,0.0)',  text: '#fff', label: '#9ca3af' };
     } else if (sayi === 1) {
-      cfg = { dot:10, halo: 18, fill: '#f59e0b', haloFill: 'rgba(245,158,11,0.28)', text: '#fff', label: '#92400e', labelW: 700, labelSz: 10 };
+      cfg = { dot:10, halo: 18, fill: '#f59e0b', haloFill: 'rgba(245,158,11,0.28)', text: '#fff', label: '#92400e' };
     } else if (sayi <= 3) {
-      cfg = { dot:13, halo: 22, fill: '#ef4444', haloFill: 'rgba(239,68,68,0.25)',  text: '#fff', label: '#991b1b', labelW: 700, labelSz: 11 };
+      cfg = { dot:13, halo: 22, fill: '#ef4444', haloFill: 'rgba(239,68,68,0.25)',  text: '#fff', label: '#991b1b' };
     } else {
-      cfg = { dot:16, halo: 26, fill: '#7c3aed', haloFill: 'rgba(124,58,237,0.25)', text: '#fff', label: '#4c1d95', labelW: 800, labelSz: 11 };
+      cfg = { dot:16, halo: 26, fill: '#7c3aed', haloFill: 'rgba(124,58,237,0.25)', text: '#fff', label: '#4c1d95' };
     }
 
     var dotR = isSecili ? cfg.dot + 3 : cfg.dot;
@@ -12491,43 +12550,48 @@ function renderHarita() {
     var svgSize = (haloR + 2) * 2;
 
     var selRing = isSecili
-      ? '<circle cx=\"' + cx + '\" cy=\"' + cy + '\" r=\"' + (haloR + 3) + '\" fill=\"none\" stroke=\"#f59e0b\" stroke-width=\"2\" stroke-dasharray=\"4,2\" opacity=\"0.9\"/>'
+      ? '<circle cx="' + cx + '" cy="' + cy + '" r="' + (haloR + 3) + '" fill="none" stroke="#f59e0b" stroke-width="2" stroke-dasharray="4,2" opacity="0.9"/>'
       : '';
-
     var haloCircle = sayi > 0
-      ? '<circle cx=\"' + cx + '\" cy=\"' + cy + '\" r=\"' + haloR + '\" fill=\"' + cfg.haloFill + '\" stroke=\"none\"/>'
+      ? '<circle cx="' + cx + '" cy="' + cy + '" r="' + haloR + '" fill="' + cfg.haloFill + '" stroke="none"/>'
       : '';
 
-    var mainDot = '<circle cx=\"' + cx + '\" cy=\"' + cy + '\" r=\"' + dotR + '\" fill=\"' + cfg.fill + '\" stroke=\"#fff\" stroke-width=\"1.5\"/>';
-
+    var _mainStrokeDash = (ykMarkerCfg && ykMarkerCfg.dashArray) ? (' stroke-dasharray="' + ykMarkerCfg.dashArray + '"') : '';
+    var mainDot = '<circle cx="' + cx + '" cy="' + cy + '" r="' + dotR + '" fill="' + cfg.fill + '" stroke="#fff" stroke-width="1.5"' + _mainStrokeDash + '/>';
     var izHalka = isIzmir
-      ? '<circle cx=\"' + cx + '\" cy=\"' + cy + '\" r=\"' + Math.max(dotR-4,2) + '\" fill=\"none\" stroke=\"rgba(255,255,255,0.7)\" stroke-width=\"1.5\"/>'
+      ? '<circle cx="' + cx + '" cy="' + cy + '" r="' + Math.max(dotR-4,2) + '" fill="none" stroke="rgba(255,255,255,0.7)" stroke-width="1.5"/>'
       : '';
 
-    var countText = (sayi > 0 && !isIzmir)
-      ? '<text x=\"' + cx + '\" y=\"' + (cy + 4) + '\" text-anchor=\"middle\" font-size=\"' + (dotR > 9 ? 10 : 9) + '\" font-weight=\"800\" fill=\"#fff\" font-family=\"DM Sans,Arial,sans-serif\">' + sayi + '</text>'
-      : '';
+    var countText = '';
+    if (ykMarkerCfg && ykMarkerCfg.icon) {
+      countText = '<text x="' + cx + '" y="' + (cy + 4) + '" text-anchor="middle" font-size="' + (dotR > 9 ? 13 : 11) + '" font-weight="900" fill="#fff" font-family="DM Sans,Arial,sans-serif">' + ykMarkerCfg.icon + '</text>';
+    } else if (sayi > 0 && !isIzmir) {
+      countText = '<text x="' + cx + '" y="' + (cy + 4) + '" text-anchor="middle" font-size="' + (dotR > 9 ? 10 : 9) + '" font-weight="800" fill="#fff" font-family="DM Sans,Arial,sans-serif">' + sayi + '</text>';
+    }
 
-    var svgDot = '<svg width=\"' + svgSize + '\" height=\"' + svgSize + '\" viewBox=\"0 0 ' + svgSize + ' ' + svgSize + '\" xmlns=\"http://www.w3.org/2000/svg\" style=\"overflow:visible;display:block\">'
+    var svgDot = '<svg width="' + svgSize + '" height="' + svgSize + '" viewBox="0 0 ' + svgSize + ' ' + svgSize + '" xmlns="http://www.w3.org/2000/svg" style="overflow:visible;display:block">'
       + selRing + haloCircle + mainDot + izHalka + countText
       + '</svg>';
 
-    var labelShadow = '0 1px 3px rgba(255,255,255,0.95),0 0 8px rgba(255,255,255,0.8)';
-
+    var _isYkSpecial = !!ykMarkerCfg;
     var icon = L.divIcon({
       html: svgDot
-        + '<div style="text-align:center;font-size:' + (sayi > 0 || isIzmir ? '9' : '8') + 'px;font-weight:' + (sayi > 0 || isIzmir ? '700' : '500') + ';color:' + (sayi > 0 || isIzmir ? '#3d2e1a' : '#888') + ';white-space:nowrap;margin-top:2px;background:' + (sayi > 0 || isIzmir ? 'rgba(255,255,255,0.88)' : 'rgba(255,255,255,0.55)') + ';border-radius:8px;padding:1px 5px;display:inline-block;max-width:90px;overflow:hidden;text-overflow:ellipsis;' + (sayi > 0 || isIzmir ? 'box-shadow:0 1px 3px rgba(0,0,0,.12);' : '') + 'letter-spacing:.01em">' + il + '</div>',
+        + '<div style="text-align:center;font-size:' + (_isYkSpecial ? '8.5' : (sayi > 0 || isIzmir ? '9' : '8')) + 'px;font-weight:' + (_isYkSpecial ? '700' : (sayi > 0 || isIzmir ? '700' : '500')) + ';color:' + (_isYkSpecial ? (ykMarkerCfg.color === '#dc2626' ? '#7f1d1d' : '#6b7280') : (sayi > 0 || isIzmir ? '#3d2e1a' : '#888')) + ';white-space:nowrap;margin-top:2px;background:' + (_isYkSpecial ? 'rgba(255,255,255,0.82)' : (sayi > 0 || isIzmir ? 'rgba(255,255,255,0.88)' : 'rgba(255,255,255,0.55)')) + ';border-radius:8px;padding:1px 5px;display:inline-block;max-width:90px;overflow:hidden;text-overflow:ellipsis;' + (_isYkSpecial || sayi > 0 || isIzmir ? 'box-shadow:0 1px 3px rgba(0,0,0,.12);' : '') + 'letter-spacing:.01em">' + il + '</div>',
       className: '',
       iconSize: [svgSize, svgSize + 18],
       iconAnchor: [cx, cy + 1],
     });
 
-        var marker = L.marker(latlon, { icon: icon }).addTo(_leafletMap);
+    var marker = L.marker(latlon, { icon: icon }).addTo(_leafletMap);
     var kmTip = '';
     var kmTip2 = izmirenKm(il);
     if (kmTip2 !== null) { kmTip = ' · ' + kmTip2 + ' km karayolu'; }
     else { var llIlTip = IL_LATLON[il]; if (llIlTip) { var kmV = hesaplaKm(IZMIR_LATLON[0], IZMIR_LATLON[1], llIlTip[0], llIlTip[1]); kmTip = ' · ~' + kmV + ' km (kuş uçuşu)'; } }
-    marker.bindTooltip('<strong>' + il + '</strong>' + (sayi > 0 ? ' · <span style="color:hsl(350,68%,40%);font-weight:700">' + sayi + ' turne</span>' : ' · henüz gidilmedi') + '<span style="color:#6b7280">' + kmTip + '</span>', {
+
+    var _ykTip = ykMarkerCfg ? (ykMarkerCfg.color === '#dc2626'
+      ? ' · <span style="color:#dc2626;font-weight:800">Yarıda Kesildi (Kesilen Şehir)</span>'
+      : ' · <span style="color:#6b7280;font-weight:700">Yarıda Kesildi Sonrası</span>') : '';
+    marker.bindTooltip('<strong>' + il + '</strong>' + (sayi > 0 ? ' · <span style="color:hsl(350,68%,40%);font-weight:700">' + sayi + ' turne</span>' : ' · henüz gidilmedi') + _ykTip + '<span style="color:#6b7280">' + kmTip + '</span>', {
       direction: 'top', offset: [0, -(dotR+8)], opacity: 0.95,
       className: 'harita-leaflet-tip'
     });
@@ -12535,7 +12599,6 @@ function renderHarita() {
     _leafletMarkers[il] = marker;
   });
 
-  // Aktif görselleştirme modu
   if (_haritaMod === 'rota') {
     var _rotaTurneler = _haritaZamanFiltre
       ? _haritaTurneler.filter(function(t){ return (t.baslangicTarih||t.tarih||'') <= _haritaZamanFiltre; })
@@ -12548,7 +12611,6 @@ function renderHarita() {
     haritaHeatmapCiz(ilSayilar);
   } else {
     _haritaHeatLayers.forEach(function(l){ l.remove(); }); _haritaHeatLayers = [];
-    // Normal ve rota modda sadece ince il sınırları göster (dolgu yok)
     if (_haritaGeoJSONLayer) { _haritaGeoJSONLayer.remove(); _haritaGeoJSONLayer = null; }
     haritaIlSinirGoster(ilSayilar);
   }
@@ -13380,6 +13442,56 @@ function _calGunEvents(key) {
 }
 
 // ── Tek bir event HTML'i (ay görünümü) ────────────────────
+function _normIlAdi(v) {
+  return (v || '').replace(/\/MERKEZ/gi, '').trim().toLocaleLowerCase('tr-TR');
+}
+
+function _yaridaKesildiInfoFromTurne(t) {
+  var _rawNot = (t && t.not) || '';
+  var _m = _rawNot.match(/\[Yarıda Kesildi:\s*([^\]]*)\]/);
+  if (!_m) return null;
+  var info = {};
+  _m[1].split('|').forEach(function(p) {
+    var i = p.indexOf(':');
+    if (i > -1) info[p.substring(0, i).trim()] = p.substring(i + 1).trim();
+  });
+  return info;
+}
+
+function _yaridaKesildiKesimAnalizi(t) {
+  if (!t) return null;
+  var info = _yaridaKesildiInfoFromTurne(t);
+  if (!info || !info['Şehir']) return null;
+  var sehirler = [];
+  if (t.duraklar && t.duraklar.length) {
+    sehirler = t.duraklar.map(function(d){ return ((d.il || '').split('/')[0] || '').trim(); }).filter(Boolean);
+  } else if (t.il) {
+    sehirler = t.il.split(',').map(function(x){ return ((x || '').split('/')[0] || '').trim(); }).filter(Boolean);
+  }
+  if (!sehirler.length) return null;
+
+  var normSehirler = sehirler.map(_normIlAdi);
+  var kesilenNorm = _normIlAdi(info['Şehir']);
+  var kesilenIndex = normSehirler.indexOf(kesilenNorm);
+
+  if (kesilenIndex < 0) {
+    var kesilenIlkKelime = kesilenNorm.split(' ')[0] || '';
+    kesilenIndex = normSehirler.findIndex(function(n){
+      var nIlk = (n || '').split(' ')[0] || '';
+      return n === kesilenNorm || n.indexOf(kesilenIlkKelime) === 0 || kesilenNorm.indexOf(nIlk) === 0;
+    });
+  }
+
+  return {
+    info: info,
+    sehirler: sehirler,
+    normSehirler: normSehirler,
+    kesilenSehir: info['Şehir'] || '',
+    kesilenIndex: kesilenIndex,
+    sonrakiSehirler: kesilenIndex >= 0 ? sehirler.slice(kesilenIndex + 1) : []
+  };
+}
+
 function _calEventHTML(t, key) {
   var progSatir = null;
   if (t.programSatirlar) progSatir = t.programSatirlar.find(function(s){ return s.tarih === key; });
@@ -13387,6 +13499,23 @@ function _calEventHTML(t, key) {
   var sure   = typeof turneSuresi === 'function' ? turneSuresi(t) : 0;
   var temsil = typeof durakToplamTemsil === 'function' ? durakToplamTemsil(t) : 0;
   var sr     = typeof statuRenk === 'function' ? statuRenk(t.statu||'tamamlandi') : {};
+
+  // Yarıda Kesildi: kesilen şehirden sonra gelen şehirler takvimde üstü çizili/soluk
+  var _calStrike = false;
+  if ((t.statu || '') === 'yarida-kesildi') {
+    var _ykKesim = _yaridaKesildiKesimAnalizi(t);
+    if (_ykKesim && _ykKesim.kesilenIndex > -1) {
+      var _eventSehir = progSatir ? (progSatir.sehir || '') : st.oyunAdi;
+      var _eventSehirNorm = _normIlAdi(_eventSehir);
+      var _eventIdx = _ykKesim.normSehirler.findIndex(function(n){
+        var nIlk = (n || '').split(' ')[0] || '';
+        var eIlk = (_eventSehirNorm || '').split(' ')[0] || '';
+        return n === _eventSehirNorm || n.indexOf(eIlk) === 0 || _eventSehirNorm.indexOf(nIlk) === 0;
+      });
+      _calStrike = _eventIdx > _ykKesim.kesilenIndex;
+    }
+  }
+  var _eventTextStyle = _calStrike ? 'text-decoration:line-through;opacity:0.4;' : '';
 
   // Tooltip — gün tipine göre özel veriler
   var _progTipX = progSatir ? progSatir.program : 'genel';
@@ -13469,7 +13598,7 @@ function _calEventHTML(t, key) {
       + 'onclick="event.stopPropagation();calGunTikla(\'' + key + '\')" '
       + 'style="border-left-color:hsl(270,55%,55%);background:hsl(270,40%,94%);color:hsl(270,55%,30%);font-style:italic">'
       + '<span class="cal-event-icon">⛓</span>'
-      + '<span class="cal-event-text">' + (t.oyun || 'Ek Grup') + '</span>'
+      + '<span class="cal-event-text" style="' + _eventTextStyle + '">' + (t.oyun || 'Ek Grup') + '</span>'
       + '</div>';
   }
 
@@ -13480,7 +13609,7 @@ function _calEventHTML(t, key) {
     + 'onclick="event.stopPropagation();calGunTikla(\'' + key + '\')" '
     + 'style="border-left-color:' + st.border + ';background:' + st.bg + ';color:' + st.fg + '">'
     + '<span class="cal-event-icon">' + st.ikon + '</span>'
-    + '<span class="cal-event-text">' + st.oyunAdi + '</span>'
+    + '<span class="cal-event-text" style="' + _eventTextStyle + '">' + st.oyunAdi + '</span>'
     + (st.saat ? '<span class="cal-event-saat">' + st.saat + '</span>' : '')
     + '</div>';
 }
@@ -14662,18 +14791,23 @@ function renderIstatistik() {
   // Durum chips
   html += '<div style="margin-left:auto;display:flex;gap:4px;align-items:center;flex-wrap:wrap">';
   var durumChips = [
-    { val:aktifSayisi,   lbl:'Aktif',       dot:'hsl(142,55%,42%)' },
-    { val:tamamlandi,    lbl:'Tamamland\u0131',   dot:'hsl(220,65%,50%)' },
-    { val:onayBekliyor,  lbl:'Onay',         dot:'hsl(38,78%,50%)' },
-    { val:taslak,        lbl:'Taslak',       dot:'hsl(220,10%,55%)' },
-    { val:iptal,         lbl:'\u0130ptal',        dot:'hsl(0,65%,50%)' },
+    { val:aktifSayisi,   lbl:'Aktif',          dot:'hsl(142,55%,42%)' },
+    { val:tamamlandi,    lbl:'Tamamlandı',     dot:'hsl(220,65%,50%)' },
+    { val:onayBekliyor,  lbl:'Onay',           dot:'hsl(38,78%,50%)' },
+    { val:taslak,        lbl:'Taslak',         dot:'hsl(220,10%,55%)' },
+    { val:iptal,         lbl:'İptal',          dot:'hsl(0,65%,50%)' },
+    { val:yaridaKesildi, lbl:'Yarıda Kesildi', dot:'#dc2626', icon:'✂', bg:'rgba(220,38,38,.08)' }
   ];
   durumChips.forEach(function(d){
-    if (d.val === 0 && d.lbl === '\u0130ptal') return;
-    html += '<div style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;background:var(--muted);border-radius:6px;font-size:10px;font-weight:700;color:var(--foreground);white-space:nowrap">'
-      + '<span style="width:7px;height:7px;border-radius:50%;background:'+d.dot+';flex-shrink:0"></span>'
+    if (d.val === 0 && d.lbl === 'İptal') return;
+    var _chipBg = d.bg || 'var(--muted)';
+    var _chipDot = d.dot || 'hsl(220,10%,55%)';
+    var _chipLbl = d.lbl || '';
+    html += '<div style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;background:'+_chipBg+';border-radius:6px;font-size:10px;font-weight:700;color:var(--foreground);white-space:nowrap">'
+      + '<span style="width:7px;height:7px;border-radius:50%;background:'+_chipDot+';flex-shrink:0"></span>'
+      + (d.icon ? '<span style="font-size:11px">'+d.icon+'</span>' : '')
       + '<span style="font-size:14px;font-weight:900">'+d.val+'</span>'
-      + '<span style="color:var(--muted-foreground)">'+d.lbl+'</span>'
+      + '<span style="color:var(--muted-foreground)">'+_chipLbl+'</span>'
       + '</div>';
   });
   html += '</div></div>';
@@ -17551,13 +17685,13 @@ function syncIlFromDuraklar() {
 var ucusBacaklar = { gidis: [], donus: [] };
 
 // ── Çok araç desteği: gidiş / dönüş / şehir içi ────────────────────────────
-var karaAraclar  = { gidis: [], donus: [] }; // [{firma:'', kisi:''}]
+var karaAraclar  = { gidis: [], donus: [] }; // [{firma:'', kisi:'', kalkis:'', varis:''}]
 var sehirAraclar = [];                        // [{tur:'', firma:'', kisi:'', tel:''}]
 
 var _KARA_ARAC_OPTIONS = ['Otobüs','Minibüs','Servis','Kiralık Araç','Kiralık Minibüs','Kiralık Otobüs','Tren','Diğer'];
 var _SEHIR_ARAC_OPTIONS = ['Kiralık Minibüs','Kiralık Otobüs','Kiralık Araç','Kamyon (Dekor)','Kamyon + Minibüs','Servis','Taksi / Transfer','Diğer'];
 
-function _aracSatirHTML(listAdı, idx, firma, kisi, tur, showTur, showSil) {
+function _aracSatirHTML(listAdı, idx, firma, kisi, tur, showTur, showSil, kalkis, varis, showRota) {
   var turSel = '';
   if (showTur) {
     var opts = _SEHIR_ARAC_OPTIONS.map(function(o){
@@ -17576,28 +17710,52 @@ function _aracSatirHTML(listAdı, idx, firma, kisi, tur, showTur, showSil) {
       'background:transparent;color:var(--destructive);cursor:pointer;font-size:15px;line-height:1;'+
       'display:flex;align-items:center;justify-content:center;padding:0">×</button>'
     : '<div style="width:20px"></div>';
-  var cols = showTur ? '2fr 1.2fr 2fr 20px' : '2fr 1.2fr 20px';
-  var cells = showTur ? turSel+firmaInp+kisiInp+silBtn : firmaInp+kisiInp+silBtn;
+  var kalkisInp = '<input class="form-input" type="text" value="'+(kalkis||'')+'" placeholder="Kalkış" style="font-size:11px;padding:4px 6px" oninput="'+listAdı+'['+idx+'].kalkis=this.value">';
+  var varisInp  = '<input class="form-input" type="text" value="'+(varis||'')+'" placeholder="Varış" style="font-size:11px;padding:4px 6px" oninput="'+listAdı+'['+idx+'].varis=this.value">';
+  var cols = showTur ? '2fr 1.2fr 2fr 20px' : (showRota ? '1.4fr 1.4fr 1.8fr 1fr 20px' : '2fr 1.2fr 20px');
+  var cells = showTur ? turSel+firmaInp+kisiInp+silBtn : (showRota ? kalkisInp+varisInp+firmaInp+kisiInp+silBtn : firmaInp+kisiInp+silBtn);
   return '<div style="display:grid;grid-template-columns:'+cols+';gap:5px;align-items:center;margin-bottom:4px">'+cells+'</div>';
 }
 
-function karaAraclarRender(yon) {
+function karaAraclarRender(yon, showRota) {
   var wrap = document.getElementById(yon+'-arac-listesi');
   if (!wrap) return;
   var liste = karaAraclar[yon];
-  if (!liste || !liste.length) { karaAraclar[yon] = [{firma:'',kisi:''}]; liste = karaAraclar[yon]; }
+  if (!liste || !liste.length) { karaAraclar[yon] = [{firma:'',kisi:'',kalkis:'',varis:''}]; liste = karaAraclar[yon]; }
+  liste.forEach(function(a){ if (a.kalkis === undefined) a.kalkis=''; if (a.varis === undefined) a.varis=''; });
   // başlık satırı
-  var head = '<div style="display:grid;grid-template-columns:2fr 1.2fr 20px;gap:5px;margin-bottom:2px;padding:0 1px">' +
-    '<div style="font-size:9px;font-weight:700;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.4px">Firma</div>' +
-    '<div style="font-size:9px;font-weight:700;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.4px">Kişi</div>' +
-    '<div></div></div>';
+  var head = showRota
+    ? '<div style="display:grid;grid-template-columns:1.4fr 1.4fr 1.8fr 1fr 20px;gap:5px;margin-bottom:2px;padding:0 1px">'
+      + '<div style="font-size:9px;font-weight:700;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.4px">Kalkış</div>'
+      + '<div style="font-size:9px;font-weight:700;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.4px">Varış</div>'
+      + '<div style="font-size:9px;font-weight:700;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.4px">Firma</div>'
+      + '<div style="font-size:9px;font-weight:700;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.4px">Kişi</div>'
+      + '<div></div></div>'
+    : '<div style="display:grid;grid-template-columns:2fr 1.2fr 20px;gap:5px;margin-bottom:2px;padding:0 1px">'
+      + '<div style="font-size:9px;font-weight:700;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.4px">Firma</div>'
+      + '<div style="font-size:9px;font-weight:700;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.4px">Kişi</div>'
+      + '<div></div></div>';
   wrap.innerHTML = head + liste.map(function(a,i){
-    return _aracSatirHTML('karaAraclar.'+yon, i, a.firma, a.kisi, '', false, liste.length > 1);
+    return _aracSatirHTML('karaAraclar.'+yon, i, a.firma, a.kisi, '', false, liste.length > 1, a.kalkis, a.varis, !!showRota);
   }).join('');
   // oninput referans düzeltmesi — doğrudan data-bind ile çalışıyor
-  wrap.querySelectorAll('input[type="text"]').forEach(function(el, i){
-    el.oninput = (function(idx){ return function(){ karaAraclar[yon][idx].firma = this.value; }; })(i);
-  });
+  var textInputs = wrap.querySelectorAll('input[type="text"]');
+  if (showRota) {
+    textInputs.forEach(function(el, idx){
+      var row = Math.floor(idx / 3);
+      var mod = idx % 3; // 0=kalkis,1=varis,2=firma
+      el.oninput = function(){
+        if (!karaAraclar[yon][row]) return;
+        if (mod === 0) karaAraclar[yon][row].kalkis = this.value;
+        else if (mod === 1) karaAraclar[yon][row].varis = this.value;
+        else karaAraclar[yon][row].firma = this.value;
+      };
+    });
+  } else {
+    textInputs.forEach(function(el, i){
+      el.oninput = (function(idx){ return function(){ karaAraclar[yon][idx].firma = this.value; }; })(i);
+    });
+  }
   wrap.querySelectorAll('input[type="number"]').forEach(function(el, i){
     el.oninput = (function(idx){ return function(){ karaAraclar[yon][idx].kisi = this.value; }; })(i);
   });
@@ -17606,16 +17764,19 @@ function karaAraclarRender(yon) {
   });
 }
 
+
 function karaAracEkle(yon) {
   if (!karaAraclar[yon]) karaAraclar[yon] = [];
-  karaAraclar[yon].push({firma:'', kisi:''});
-  karaAraclarRender(yon);
+  karaAraclar[yon].push({firma:'', kisi:'', kalkis:'', varis:''});
+  var tur = (document.getElementById('m-' + yon + '-ulasim') || {}).value || '';
+  karaAraclarRender(yon, tur.includes('Otobüs'));
 }
 
 function karaAraclarSil(yon, idx) {
   karaAraclar[yon].splice(idx, 1);
-  if (!karaAraclar[yon].length) karaAraclar[yon] = [{firma:'',kisi:''}];
-  karaAraclarRender(yon);
+  if (!karaAraclar[yon].length) karaAraclar[yon] = [{firma:'',kisi:'',kalkis:'',varis:''}];
+  var tur = (document.getElementById('m-' + yon + '-ulasim') || {}).value || '';
+  karaAraclarRender(yon, tur.includes('Otobüs'));
 }
 
 function sehirAraclarRender() {
@@ -17668,19 +17829,23 @@ function sehirAracSil(idx) {
 // Araçlar JSON → eski tekli alan uyumu
 function _araclarToLegacy(liste) {
   if (!liste || !liste.length) return '';
-  var dolu = liste.filter(function(a){ return a.firma || a.kisi; });
+  var dolu = liste.filter(function(a){ return a.firma || a.kisi || a.kalkis || a.varis; });
   if (!dolu.length) return '';
-  if (dolu.length === 1) return dolu[0].firma || '';
-  return JSON.stringify(dolu);
+  if (dolu.length === 1 && !(dolu[0].kisi || dolu[0].kalkis || dolu[0].varis)) return dolu[0].firma || '';
+  return JSON.stringify(dolu.map(function(a){ return { firma:a.firma||'', kisi:a.kisi||'', kalkis:a.kalkis||'', varis:a.varis||'' }; }));
 }
 
 function _legacyToAraclar(val) {
-  if (!val) return [{firma:'',kisi:''}];
+  if (!val) return [{firma:'',kisi:'',kalkis:'',varis:''}];
   try {
     var p = JSON.parse(val);
-    if (Array.isArray(p)) return p.length ? p : [{firma:'',kisi:''}];
+    if (Array.isArray(p)) {
+      return (p.length ? p : [{firma:'',kisi:'',kalkis:'',varis:''}]).map(function(a){
+        return { firma:(a&&a.firma)||'', kisi:(a&&a.kisi)||'', kalkis:(a&&a.kalkis)||'', varis:(a&&a.varis)||'' };
+      });
+    }
   } catch(e) {}
-  return [{firma: val, kisi:''}];
+  return [{firma: val, kisi:'',kalkis:'',varis:''}];
 }
 
 function _sehirToLegacy(liste) {
@@ -17705,6 +17870,7 @@ function ulasimTuruDegisti(yon) {
   var isUcak   = tur.includes('Uçak');
   var isAktarm = tur === 'Uçak (Aktarmalı)';
   var isKara   = !isUcak && tur !== '';
+  var isOtobus = tur.includes('Otobüs');
   var isKapasiteli = ['Otobüs','Şehirlerarası Otobüs','Servis','Minibüs','Kiralık Araç','Kiralık Minibüs','Kiralık Otobüs'].some(x => tur.includes(x));
 
   var ucakTrigger = document.getElementById(yon + '-ucak-trigger');
@@ -17722,7 +17888,7 @@ function ulasimTuruDegisti(yon) {
   if (kisiCol)     kisiCol.style.display     = (isKara && isKapasiteli) ? '' : 'none';
 
   // Kara araç listesini render et
-  if (isKara) { karaAraclarRender(yon); }
+  if (isKara) { karaAraclarRender(yon, isOtobus); }
 
   // Uçak seçilince bacakları oluştur (ilk kez)
   if (isUcak && !ucusBacaklar[yon].length) {
