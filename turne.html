@@ -13263,7 +13263,25 @@ function _calEventHTML(t, key) {
     });
   }
   var _gunOtel  = (_progTipX !== 'Yol' && _progTipX !== 'Dönüş') ? (_gunDurak ? (_gunDurak.otelAdi||'') : (t.otelAdi||'')) : '';
-  var _gunMekan = (_progTipX === 'Oyun' || _progTipX === 'Prova') ? (_gunDurak ? (_gunDurak.mekan||t.mekan||'') : (t.mekan||'')) : '';
+  var _gunMekan = '';
+  if (_progTipX === 'Oyun' || _progTipX === 'Prova') {
+    if (progSatir && progSatir.mekan) {
+      _gunMekan = progSatir.mekan;
+    } else if (_gunDurak) {
+      _gunMekan = _gunDurak.mekan || t.mekan || '';
+    } else if (_gunSehir && t.duraklar) {
+      var _sNormM = _gunSehir.replace(/\/MERKEZ/gi,'').trim().toLowerCase();
+      var _ayniIlM = t.duraklar.filter(function(d){ return (d.il||'').replace(/\/MERKEZ/gi,'').trim().toLowerCase() === _sNormM && d.mekan; });
+      if (_ayniIlM.length === 1) {
+        _gunMekan = _ayniIlM[0].mekan;
+      } else if (_ayniIlM.length > 1 && progSatir && progSatir.oyun) {
+        var _eslM = _ayniIlM.find(function(d){ return (d.oyun||'').toLowerCase() === (progSatir.oyun||'').toLowerCase(); });
+        if (_eslM) _gunMekan = _eslM.mekan;
+      }
+    } else {
+      _gunMekan = t.mekan || '';
+    }
+  }
   // YOL günü alanları
   var _gidisBilgi = (_progTipX === 'Yol') ? (t.gidisUlasim||'') : '';
   var _gidisSaat  = (_progTipX === 'Yol') ? (t.gidisSaat||'') : '';
@@ -13672,8 +13690,21 @@ function _renderCalListe() {
           var temsil = typeof durakToplamTemsil==='function' ? durakToplamTemsil(t) : 0;
           var _gunMekan = '';
           if (progSatir && progSatir.sehir && t.duraklar) {
-            var _dd = t.duraklar.find(function(d){ return (d.il||'').replace(/\/MERKEZ/gi,'').trim().toLowerCase() === (progSatir.sehir||'').replace(/\/MERKEZ/gi,'').trim().toLowerCase(); });
-            if (_dd) _gunMekan = _dd.mekan || '';
+            var _sehirNormL = (progSatir.sehir||'').replace(/\/MERKEZ/gi,'').trim().toLowerCase();
+            // Önce program satırında mekan varsa onu kullan
+            if (progSatir.mekan) {
+              _gunMekan = progSatir.mekan;
+            } else {
+              // Aynı ildeki durakları bul
+              var _ayniIlD = t.duraklar.filter(function(d){ return (d.il||'').replace(/\/MERKEZ/gi,'').trim().toLowerCase() === _sehirNormL; });
+              if (_ayniIlD.length === 1) {
+                _gunMekan = _ayniIlD[0].mekan || '';
+              } else if (_ayniIlD.length > 1 && progSatir.oyun) {
+                // Oyun adıyla eşleştir
+                var _eslD = _ayniIlD.find(function(d){ return (d.oyun||'').toLowerCase() === (progSatir.oyun||'').toLowerCase(); });
+                if (_eslD) _gunMekan = _eslD.mekan || '';
+              }
+            }
           } else if (t.mekan) { _gunMekan = t.mekan; }
           return '<div style="display:flex;align-items:stretch;gap:0;border-radius:10px;border:1px solid hsl(220,13%,88%);overflow:hidden;cursor:pointer;background:#fff;transition:box-shadow .12s" onclick="calGunTikla(\''+item.key+'\',event)" onmouseenter="this.style.boxShadow=\'0 2px 12px rgba(0,0,0,.1)\'" onmouseleave="this.style.boxShadow=\'\'">'
             + '<div style="width:5px;flex-shrink:0;background:'+st.border+'"></div>'
@@ -17780,8 +17811,8 @@ var programSatirlar = [];
 
 function programGunOtoDoldur(idx, tarihStr) {
   var GUNLER = ['Pazar','Pazartesi','Salı','Çarşamba','Perşembe','Cuma','Cumartesi'];
-  var d = new Date(tarihStr);
-  if (!isNaN(d.getTime()) && programSatirlar[idx]) {
+  var d = parseLocalDate(tarihStr);
+  if (d && !isNaN(d.getTime()) && programSatirlar[idx]) {
     programSatirlar[idx].gun = GUNLER[d.getDay()];
   }
 }
@@ -17852,7 +17883,7 @@ function renderProgramGunler() {
         + '<select onchange="programSatirlar[' + i + '].program=this.value;if(this.value===\'Dönüş\'&&!programSatirlar[' + i + '].sehir)programSatirlar[' + i + '].sehir=\'İzmir\';renderProgramGunler()" style="border:2px solid ' + progRenk + ';border-radius:5px;padding:4px 5px;font-size:11px;background:' + (isOyun?'#f0fdf4':'var(--card)') + ';font-weight:700;color:' + progRenk + ';width:100%;box-sizing:border-box">'
         + PROGRAMLAR.map(function(p){ return '<option value="' + p + '"' + (s.program===p?' selected':'') + '>' + p + '</option>'; }).join('')
         + '</select>'
-        + '<select onchange="programSatirlar[' + i + '].sehir=this.value" style="' + SEL + '">'
+        + '<select onchange="programSatirlar[' + i + '].sehir=this.value;programSatirlar[' + i + '].mekan=\'\';renderProgramGunler()" style="' + SEL + '">'
         + sehirSecenekleri.map(function(sh){ return '<option value="' + sh + '"' + ((s.sehir||'')===sh?' selected':'') + '>' + sh + '</option>'; }).join('')
         + (s.sehir && sehirSecenekleri.indexOf(s.sehir) < 0 ? '<option value="' + s.sehir + '" selected>' + s.sehir + '</option>' : '')
         + '</select>'
@@ -17863,6 +17894,28 @@ function renderProgramGunler() {
         + '</select>'
         + '<button onclick="programSatirSil(' + i + ')" title="Sil" style="width:26px;height:26px;border-radius:5px;border:1px solid var(--border);background:transparent;cursor:pointer;font-size:15px;color:var(--destructive);display:flex;align-items:center;justify-content:center;flex-shrink:0">×</button>'
         + '</div>';
+
+      // Mekan satırı — Oyun/Prova günü VE seçili şehirde birden fazla mekan varsa göster
+      var _mekanSatiri = '';
+      if ((s.program === 'Oyun' || s.program === 'Prova') && s.sehir) {
+        var _sehirNorm = (s.sehir||'').replace(/\/MERKEZ/gi,'').trim().toLowerCase();
+        var _mekanSeçenekleri = gecerliDuraklar
+          .filter(function(d){ return (d.il||'').replace(/\/MERKEZ/gi,'').trim().toLowerCase() === _sehirNorm && d.mekan && d.mekan.trim(); })
+          .map(function(d){ return d.mekan.trim(); })
+          .filter(function(m,idx,arr){ return arr.indexOf(m) === idx; });
+        if (_mekanSeçenekleri.length > 1) {
+          _mekanSatiri = '<div style="display:flex;align-items:center;gap:8px;padding:3px 10px 5px 16px;border-left:' + borderLeft + ';background:' + rowBg + '">'
+            + '<span style="font-size:10px;font-weight:700;color:#555;flex-shrink:0">🎭 Sahne:</span>'
+            + '<select onchange="programSatirlar[' + i + '].mekan=this.value" style="border:1px solid #d1d5db;border-radius:5px;padding:3px 6px;font-size:11px;background:#fff;min-width:180px">'
+            + '<option value="">— Sahne seçin —</option>'
+            + _mekanSeçenekleri.map(function(m){ return '<option value="' + m + '"' + ((s.mekan||'')===m?' selected':'') + '>' + m + '</option>'; }).join('')
+            + '</select>'
+            + '</div>';
+        } else if (_mekanSeçenekleri.length === 1 && !s.mekan) {
+          // Tek mekan varsa otomatik ata
+          programSatirlar[i].mekan = _mekanSeçenekleri[0];
+        }
+      }
 
       // Saat satırı - SADECE Oyun VE oyun ismi dolu ise göster
       var hasOyunIsmi = isOyun && s.oyun;
@@ -17875,7 +17928,7 @@ function renderProgramGunler() {
           + '</div>'
         : (i < programSatirlar.length-1 ? '<div style="border-left:' + borderLeft + ';border-bottom:1px solid var(--border);background:' + rowBg + ';height:1px"></div>' : '');
 
-      return row1 + row2;
+      return row1 + _mekanSatiri + row2;
     }).join('')
     + '</div>';
 }
@@ -17887,8 +17940,12 @@ function programTarihlerOtoDoldur() {
   programSatirlar = [];
   var GUNLER = ['Pazar','Pazartesi','Salı','Çarşamba','Perşembe','Cuma','Cumartesi'];
   var gecerliDuraklar = duraklar.filter(function(d){ return d.il && d.il.trim(); });
-  var d = new Date(bas);
-  var endD = new Date(bit);
+  // Timezone-safe: parseLocalDate kullan, toISOString yerine yerel format
+  function _localStr(d) {
+    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  }
+  var d = parseLocalDate(bas);
+  var endD = parseLocalDate(bit);
   var sure = Math.round((endD-d)/86400000)+1;
 
   var mOyunVal = (document.getElementById('m-oyun') && document.getElementById('m-oyun').value) || '';
@@ -17899,8 +17956,8 @@ function programTarihlerOtoDoldur() {
   if (gecerliDuraklar.length > 1 && sure >= minGun) {
     // Durak bazlı otomatik program: her durak için 1 oyun günü, aralarında yol
     // Gidiş günü
-    var dt0 = new Date(bas);
-    programSatirlar.push({ tarih: dt0.toISOString().slice(0,10), gun: GUNLER[dt0.getDay()],
+    var dt0 = parseLocalDate(bas);
+    programSatirlar.push({ tarih: _localStr(dt0), gun: GUNLER[dt0.getDay()],
       program: 'Yol', saat: '', sehir: gecerliDuraklar[0].il + (gecerliDuraklar[0].ilce ? '/' + gecerliDuraklar[0].ilce : ''), oyun: '' });
     // Her durak için
     var gunSayaci = 1;
@@ -17910,34 +17967,34 @@ function programTarihlerOtoDoldur() {
       var temsilSayisi = dur.sayi || 1;
       var durakOyun = dur.oyun || mOyunVal || '';
       for (var ti=0; ti<temsilSayisi; ti++) {
-        var dtX = new Date(bas); dtX.setDate(dtX.getDate() + gunSayaci);
+        var dtX = parseLocalDate(bas); dtX.setDate(dtX.getDate() + gunSayaci);
         if (dtX > endD) break;
-        programSatirlar.push({ tarih: dtX.toISOString().slice(0,10), gun: GUNLER[dtX.getDay()],
+        programSatirlar.push({ tarih: _localStr(dtX), gun: GUNLER[dtX.getDay()],
           program: 'Oyun', saat: '20:30', sehir: dur.il + (dur.ilce ? '/' + dur.ilce : ''), oyun: durakOyun });
         gunSayaci++;
       }
       // Sonraki durağa geçiş günü (son durak değilse)
       if (di < gecerliDuraklar.length - 1) {
-        var dtY = new Date(bas); dtY.setDate(dtY.getDate() + gunSayaci);
+        var dtY = parseLocalDate(bas); dtY.setDate(dtY.getDate() + gunSayaci);
         if (dtY <= endD) {
-          programSatirlar.push({ tarih: dtY.toISOString().slice(0,10), gun: GUNLER[dtY.getDay()],
+          programSatirlar.push({ tarih: _localStr(dtY), gun: GUNLER[dtY.getDay()],
             program: 'Yol', saat: '', sehir: gecerliDuraklar[di+1].il + (gecerliDuraklar[di+1].ilce ? '/' + gecerliDuraklar[di+1].ilce : ''), oyun: '' });
           gunSayaci++;
         }
       }
     }
     // Dönüş günü
-    var dtSon = new Date(bit);
-    programSatirlar.push({ tarih: dtSon.toISOString().slice(0,10), gun: GUNLER[dtSon.getDay()],
+    var dtSon = parseLocalDate(bit);
+    programSatirlar.push({ tarih: _localStr(dtSon), gun: GUNLER[dtSon.getDay()],
       program: 'Dönüş', saat: '', sehir: 'İzmir', oyun: '' });
   } else {
     // Tekli durak veya eski format
     for (var i=0; i<sure; i++) {
-      var dtI = new Date(bas); dtI.setDate(dtI.getDate()+i);
+      var dtI = parseLocalDate(bas); dtI.setDate(dtI.getDate()+i);
       var prog = sure===1 ? 'Oyun' : (i===0 ? 'Yol' : (i===sure-1 ? 'Dönüş' : 'Oyun'));
       var sehirI = gecerliDuraklar.length ? gecerliDuraklar[0].il + (gecerliDuraklar[0].ilce ? '/' + gecerliDuraklar[0].ilce : '') : '';
       if (sure > 1 && i===sure-1) sehirI = 'İzmir';
-      programSatirlar.push({ tarih: dtI.toISOString().slice(0,10), gun: GUNLER[dtI.getDay()],
+      programSatirlar.push({ tarih: _localStr(dtI), gun: GUNLER[dtI.getDay()],
         program: prog, saat: prog==='Oyun'?'20:30':'', sehir: sehirI, oyun: prog==='Oyun'?mOyunVal:'' });
     }
   }
@@ -19789,7 +19846,27 @@ function _pdfTurneDosyasiIcerik(t) {
     }
     // Şehir + Sahne parantez içinde tek hücre
     var sehirH=(s.sehir||'').toLocaleUpperCase('tr-TR');
-    var _sahneRaw=s.mekan||_mekanBul(sehirH)||'';
+    var _sahneRaw=s.mekan||(function(){
+      // Aynı il'de birden fazla durak varsa, oyun adıyla eşleştirmeyi dene
+      var _sNorm=_normTr(sehirH.replace(/\/MERKEZ/gi,'').trim());
+      var _ayniIlDuraklar=_duraklar2.filter(function(d){
+        var k=_normTr((_temizleIlPdf(d.il||'')).trim());
+        return (k===_sNorm||k.indexOf(_sNorm)>=0||_sNorm.indexOf(k)>=0) && d.mekan && d.mekan.trim();
+      });
+      if(_ayniIlDuraklar.length===1) return _ayniIlDuraklar[0].mekan.trim();
+      // Birden fazla: oyun adıyla eşleştir
+      if(_ayniIlDuraklar.length>1 && s.oyun){
+        var _oNorm=_normTr(s.oyun);
+        var _eslesen=_ayniIlDuraklar.find(function(d){ return _normTr(d.oyun||'')===_oNorm; });
+        if(_eslesen) return _eslesen.mekan.trim();
+      }
+      // Tek mekan tüm duraklarda aynıysa göster
+      if(_ayniIlDuraklar.length>1){
+        var _mekanlar=_ayniIlDuraklar.map(function(d){return d.mekan.trim();}).filter(function(m,i,a){return a.indexOf(m)===i;});
+        if(_mekanlar.length===1) return _mekanlar[0];
+      }
+      return '';
+    })()||'';
     // Sahne sadece oyun/prova günlerinde gösterilsin
     var _gosterSahne=/oyun|prova/i.test(s.program||'');
     var _sahneVal=(_gosterSahne&&_sahneRaw)?_sahneRaw:'';
