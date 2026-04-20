@@ -4002,8 +4002,16 @@ async function apiFetch(path, options) {
     fetchOpts.headers = options.headers || { 'Content-Type': 'application/json' };
     fetchOpts.body = options.body;
   }
-  var res = await fetch(url, fetchOpts);
-  return res;
+  // 15 saniyelik zaman aşımı — buton "Kontrol ediliyor..." takılmasını önler
+  var controller = new AbortController();
+  var timer = setTimeout(function(){ controller.abort(); }, 15000);
+  fetchOpts.signal = controller.signal;
+  try {
+    var res = await fetch(url, fetchOpts);
+    return res;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 const DAHIL_KATEGORILER = ['Sanatçı','Oyuncu','Koro','Koro/Dans','Müzisyen','Orkestra','Solist','Figüran','Figüran/Müzisyen','Dansçı','Koro/Dans Ekibi','Kurumdan Emekli Sanatçı','Turne Başkanı','Sahne Amiri','Kondüvit','Ses – Kondüvit','Ses','Mutemet','Sahne Işıkçısı','Işık Kontrol','Işık – Tasarım','Sahne Makinisti','Aksesuar Memuru','Aksesuar Sorumlusu','Dekor/Aksesuar','Sahne Dekor (Sorumlu)','Sahne Terzisi','Sahne Terzisi/Kostüm','Kostüm','Perukacı','Peruk – Makyaj','Peruk Sorumlusu','Sahne Uzmanı','Dekorcu','Dekor Sorumlusu','Kostümcü','Kostüm Sorumlusu','Makyajcı','Ses Teknisyeni','Işık Teknisyeni','Sahne Görevlisi','Teknik Direktör','Sahne Yöneticisi','Reji Yardımcısı (Sahne)','Video / Görüntü'];
 
@@ -4809,7 +4817,11 @@ function _misafirGiris() {
 
     } catch(e) {
       console.error(e);
-      showErr('Bağlantı hatası. Tekrar deneyin.');
+      if (e && e.name === 'AbortError') {
+        showErr('Bağlantı zaman aşımına uğradı. İnternet bağlantınızı kontrol edin.');
+      } else {
+        showErr('Bağlantı hatası. Tekrar deneyin.');
+      }
       btn.disabled = false;
       btn.textContent = 'Sisteme Giriş Yap';
     }
@@ -5041,6 +5053,7 @@ async function fetchPersonel() {
     });
   } catch(e) {
     // Hata durumunda mevcut tumPersonel korunur, STATIK_PERSONEL'e düşmez
+    console.error('fetchPersonel hata:', e);
   }
 }
 
@@ -15625,7 +15638,7 @@ function _pdfIcerik(t) {
         + '<td class="td-bold" style="white-space:nowrap">'+(s.tarih?s.tarih.split('-').reverse().join('/'):'—')+'</td>'
         + '<td class="td-std">'+(s.gun||'—')+'</td>'
         + '<td class="td-bold">'+(s.sehir ? s.sehir.toLocaleUpperCase('tr-TR') : '—')+'</td>'
-        + '<td style="font-size:10.5px;font-weight:600;color:#1a1a1a">'+(s.mekan||'—')+'</td>'
+        + '<td style="font-size:10px;color:#555">'+(s.mekan||'—')+'</td>'
         + '<td style="font-size:11px;font-weight:700;color:'+bc+'">'+programLabel+oyunHtml+'</td>'
         + '<td class="td-saat">'
         + (s.saat ? '<strong>'+s.saat+'</strong>' : '—')
@@ -16502,7 +16515,7 @@ function _pdfProgramPersonelIcerik(t) {
         + '<td style="padding:5px 9px;border:1px solid #e0d8d0;font-size:10.5px;font-weight:700;white-space:nowrap">' + (s.tarih ? s.tarih.split('-').reverse().join('/') : '\u2014') + '</td>'
         + '<td style="padding:5px 9px;border:1px solid #e0d8d0;font-size:12px;color:#111;font-weight:700">' + (s.gun||'\u2014') + '</td>'
         + '<td style="padding:5px 9px;border:1px solid #e0d8d0;font-size:11px;font-weight:700">' + (s.sehir ? s.sehir.toLocaleUpperCase('tr-TR') : '\u2014') + '</td>'
-        + '<td style="padding:5px 9px;border:1px solid #e0d8d0;font-size:10.5px;font-weight:600;color:#1a1a1a">' + (s.mekan||'\u2014') + '</td>'
+        + '<td style="padding:5px 9px;border:1px solid #e0d8d0;font-size:10px;color:#555">' + (s.mekan||'\u2014') + '</td>'
         + '<td style="padding:5px 9px;border:1px solid #e0d8d0;font-size:10.5px;font-weight:700;color:' + bc + '">' + (s.program||'') + oyunHtml + '</td>'
         + '<td style="padding:5px 9px;border:1px solid #e0d8d0;font-size:11px;text-align:center">' + saatHtml + '</td>'
         + '</tr>';
@@ -18352,7 +18365,7 @@ async function init() {
   try { _cacheP = JSON.parse(localStorage.getItem('turne_cache_personel')||'null'); } catch(e){}
   if (_cacheT && _cacheT.length) {
     turneler = _cacheT;
-    if (_cacheP && _cacheP.length) personelListesi = _cacheP;
+    if (_cacheP && _cacheP.length) tumPersonel = _cacheP;
     populateFilters();
     renderListe();
     renderCalendar();
@@ -18372,7 +18385,7 @@ async function init() {
 
   // Cache güncelle
   try { localStorage.setItem('turne_cache_data', JSON.stringify(turneler)); } catch(e){}
-  try { localStorage.setItem('turne_cache_personel', JSON.stringify(personelListesi)); } catch(e){}
+  try { localStorage.setItem('turne_cache_personel', JSON.stringify(tumPersonel)); } catch(e){}
 
   populateFilters();
   renderListe();
