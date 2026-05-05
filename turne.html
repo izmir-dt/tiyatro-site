@@ -4263,6 +4263,7 @@ function _turneListeSatiri(t) {
   };
   var sk = (t.statu||'taslak').toLowerCase().replace(/\s/g,'-');
   var st = STATU[sk] || STATU.taslak;
+  var sure = typeof turneSuresi === 'function' ? turneSuresi(t) : 0;
   var tarihStr = formatTarihKart(t.baslangicTarih||t.tarih, t.bitisTarih, sure);
   var sehirler = '';
   if (t.duraklar && t.duraklar.length > 1) {
@@ -5202,6 +5203,11 @@ async function fetchTurneler(zorlaYenile) {
       })(),
       afisUrl:        (r[41] || '').trim(),
       anaGrupId:      (r[42] || '').trim(),
+      odaPlanlari:    (() => {
+        var raw = (r[43]||'').trim();
+        if (raw.startsWith('[')) { try { var op = JSON.parse(raw); if (Array.isArray(op)) return op; } catch(e){} }
+        return [];
+      })(),
       };
     }).filter(r => r.oyun || r.il || r.baslangicTarih || (r.duraklar && r.duraklar.length));
   _cacheYaz('cache_turneler', turneler);
@@ -6908,11 +6914,13 @@ function _konaklamaSekmesiHTML(t, rowIdx) {
     + '</div>';
 
   // 3 sekme — Tümü artık "atanmamışlar"
+  var odaPlanlari = t.odaPlanlari || [];
   var sekmeler = [
     { id:'tumü', label:'⏳ Atanmamış', say: tumListeSay, birim: 'kişi' },
     { id:'cift', label:'🛏🛏 Çift',   say: ciftGruplar.length, birim: 'oda' },
     { id:'tek',  label:'🛏 Tek',       say: tekler.length, birim: 'oda' },
     { id:'munferit', label:'🚪 Münferit', say: munferitler.length, birim: 'kişi' },
+    { id:'planlar', label:'📋 Planlar', say: odaPlanlari.length, birim: 'plan' },
   ];
   html += '<div style="display:flex;border-bottom:2px solid var(--border)">';
   sekmeler.forEach(function(s) {
@@ -7065,7 +7073,7 @@ function _konaklamaSekmesiHTML(t, rowIdx) {
     }
 
   // ── TEK ODA SEKMESİ
-  } else {
+  } else if (aktif === 'tek') {
     html += '<div style="padding:8px 14px;background:#6b1b1b;color:#fff">'
       + '<span style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.3px">🛏 TEK ODA</span>'
       + '&nbsp;<span style="font-size:10.5px;font-weight:700;background:rgba(255,255,255,.18);padding:1px 8px;border-radius:20px;border:1px solid rgba(255,255,255,.25);vertical-align:middle">' + tekler.length + ' oda</span>'
@@ -7138,8 +7146,270 @@ function _konaklamaSekmesiHTML(t, rowIdx) {
     }
   }
 
+  // ── ODA PLANLARI SEKMESİ ──────────────────────────────────────────────
+  if (aktif === 'planlar') {
+    html += '<div style="padding:8px 14px;background:#1e3a8a;color:#fff;display:flex;align-items:center;justify-content:space-between">'
+      + '<span style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.3px">📋 ODA PLANLARI</span>'
+      + '&nbsp;<span style="font-size:10.5px;font-weight:700;background:rgba(255,255,255,.18);padding:1px 8px;border-radius:20px;border:1px solid rgba(255,255,255,.25)">' + odaPlanlari.length + ' plan</span>'
+      + '<button onclick="_odaPlanEkle(' + t._rowIdx + ')" '
+      + 'style="margin-left:auto;height:26px;padding:0 10px;border:1.5px solid rgba(255,255,255,.4);border-radius:6px;background:rgba(255,255,255,.15);color:#fff;font-size:10.5px;font-weight:700;cursor:pointer">+ Yeni Plan</button>'
+      + '</div>';
+    if (!odaPlanlari.length) {
+      html += '<div style="padding:28px 16px;text-align:center;color:var(--muted-foreground);font-size:12px">'
+        + '<div style="font-size:24px;margin-bottom:8px">📋</div>'
+        + '<div style="font-weight:600;margin-bottom:6px">Henüz oda planı yok</div>'
+        + '<div style="font-size:11px;margin-bottom:14px">Farklı ayaklar için münferit/oda düzenlemelerini ayrı planlar olarak kaydedin.</div>'
+        + '<button onclick="_odaPlanEkle(' + t._rowIdx + ')" '
+        + 'style="height:34px;padding:0 16px;border:none;border-radius:8px;background:#1e3a8a;color:#fff;font-size:11.5px;font-weight:700;cursor:pointer">📋 İlk Planı Oluştur</button>'
+        + '</div>';
+    } else {
+      html += '<div style="padding:10px 12px;display:flex;flex-direction:column;gap:10px">';
+      odaPlanlari.forEach(function(plan, planIdx) {
+        var planKat = kat; // tüm katılımcılar
+        var planTek = planKat.filter(function(p){ return (plan.odaTipleri||{})[p.kisi] === 'tek'; });
+        var planCift = planKat.filter(function(p){ return (plan.odaTipleri||{})[p.kisi] === 'cift'; });
+        var planMunf = planKat.filter(function(p){ return !!(plan.munferitler||{})[p.kisi]; });
+        var planAtanmamis = planKat.filter(function(p){ return !(plan.odaTipleri||{})[p.kisi] && !(plan.munferitler||{})[p.kisi]; });
+        // Çift gruplar (plan bazlı)
+        var islP = {};
+        var ciftGrP = [];
+        planCift.forEach(function(p) {
+          if (islP[p.kisi]) return;
+          islP[p.kisi] = true;
+          var gr = [p];
+          var esiAdi = (plan.odaEsleri||{})[p.kisi];
+          if (esiAdi) {
+            var e = planCift.find(function(x){ return x.kisi === esiAdi; });
+            if (e && !islP[e.kisi]) { islP[e.kisi] = true; gr.push(e); }
+          }
+          ciftGrP.push(gr);
+        });
+
+        html += '<div style="border:1.5px solid #1e3a8a;border-radius:10px;overflow:hidden;background:var(--card)">';
+        // Plan başlık satırı
+        html += '<div style="background:#1e3a8a;padding:10px 12px;display:flex;align-items:center;gap:8px">'
+          + '<input type="text" value="' + (plan.baslik||'Plan '+(planIdx+1)).replace(/"/g,'&quot;') + '" '
+          + 'onblur="_odaPlanBaslikGuncelle(' + t._rowIdx + ',' + planIdx + ',this.value)" '
+          + 'onclick="event.stopPropagation()" '
+          + 'style="flex:1;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);border-radius:5px;height:26px;padding:0 8px;color:#fff;font-size:12px;font-weight:700;min-width:0">'
+          + '<button onclick="_odaPlanSil(' + t._rowIdx + ',' + planIdx + ')" '
+          + 'style="height:26px;width:26px;border:1px solid rgba(255,255,255,.3);border-radius:5px;background:rgba(255,0,0,.25);color:#fff;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0" title="Planı sil">×</button>'
+          + '</div>';
+        // Plan notu
+        html += '<div style="padding:6px 10px;border-bottom:1px solid var(--border)">'
+          + '<input type="text" placeholder="Açıklama / Ayak bilgisi (isteğe bağlı)" value="' + (plan.not||'').replace(/"/g,'&quot;') + '" '
+          + 'onblur="_odaPlanNotGuncelle(' + t._rowIdx + ',' + planIdx + ',this.value)" '
+          + 'onclick="event.stopPropagation()" '
+          + 'style="width:100%;background:transparent;border:none;font-size:10.5px;color:var(--muted-foreground);padding:0;outline:none">'
+          + '</div>';
+        // Özet istatistik
+        html += '<div style="display:flex;gap:12px;padding:7px 12px;background:var(--muted);border-bottom:1px solid var(--border);font-size:10.5px;font-weight:700">'
+          + '<span>🛏 Tek: ' + planTek.length + '</span>'
+          + '<span>🛏🛏 Çift: ' + ciftGrP.length + ' oda</span>'
+          + '<span>🚪 Münferit: ' + planMunf.length + '</span>'
+          + (planAtanmamis.length ? '<span style="color:#d97706">⏳ Atanmamış: ' + planAtanmamis.length + '</span>' : '')
+          + '</div>';
+        // Kişi listesi
+        html += '<div style="padding:8px 10px;display:flex;flex-direction:column;gap:4px;max-height:280px;overflow-y:auto">';
+        planKat.forEach(function(p, pi) {
+          var pTip = (plan.odaTipleri||{})[p.kisi] || '';
+          var pMunf = !!(plan.munferitler||{})[p.kisi];
+          var pEsi = (plan.odaEsleri||{})[p.kisi] || '';
+          var bgColor = pMunf ? '#fef3c7' : pTip==='tek' ? '#f0fdf4' : pTip==='cift' ? '#eff6ff' : 'var(--card)';
+          var borderColor = pMunf ? '#d97706' : pTip==='tek' ? '#16a34a' : pTip==='cift' ? '#2563eb' : 'var(--border)';
+          html += '<div style="border:1px solid ' + borderColor + ';border-radius:6px;padding:6px 8px;background:' + bgColor + '">';
+          html += '<div style="display:flex;align-items:center;gap:6px">'
+            + '<div style="flex:1;min-width:0">'
+            + '<div style="font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + p.kisi + '</div>'
+            + '<div style="font-size:9.5px;color:var(--muted-foreground)">' + (p.gorev||p.kategori||'') + '</div>'
+            + '</div>'
+            + '<div style="display:flex;gap:3px;flex-shrink:0">'
+            + '<button onclick="_odaPlanKisiTip(' + t._rowIdx + ',' + planIdx + ',' + pi + ',\'tek\')" '
+            + 'style="height:22px;padding:0 7px;border:1.5px solid ' + (pTip==='tek'&&!pMunf?'#16a34a':'var(--border)') + ';border-radius:4px;'
+            + 'background:' + (pTip==='tek'&&!pMunf?'#16a34a':'transparent') + ';color:' + (pTip==='tek'&&!pMunf?'#fff':'var(--muted-foreground)') + ';'
+            + 'font-size:9.5px;font-weight:700;cursor:pointer">Tek</button>'
+            + '<button onclick="_odaPlanKisiMunferit(' + t._rowIdx + ',' + planIdx + ',' + pi + ')" '
+            + 'style="height:22px;padding:0 7px;border:1.5px solid ' + (pMunf?'#d97706':'var(--border)') + ';border-radius:4px;'
+            + 'background:' + (pMunf?'#d97706':'transparent') + ';color:' + (pMunf?'#fff':'var(--muted-foreground)') + ';'
+            + 'font-size:9.5px;font-weight:700;cursor:pointer">Mnf</button>'
+            + '<button onclick="_odaPlanKisiTip(' + t._rowIdx + ',' + planIdx + ',' + pi + ',\'cift\')" '
+            + 'style="height:22px;padding:0 7px;border:1.5px solid ' + (pTip==='cift'&&!pMunf?'#2563eb':'var(--border)') + ';border-radius:4px;'
+            + 'background:' + (pTip==='cift'&&!pMunf?'#2563eb':'transparent') + ';color:' + (pTip==='cift'&&!pMunf?'#fff':'var(--muted-foreground)') + ';'
+            + 'font-size:9.5px;font-weight:700;cursor:pointer">Çift</button>'
+            + '</div></div>';
+          // Çift seçilmişse oda arkadaşı dropdown
+          if (pTip === 'cift' && !pMunf) {
+            var esiOpts = '<option value="">— Oda arkadaşı seç —</option>';
+            planKat.forEach(function(q, qi) {
+              if (qi === pi) return;
+              if ((plan.odaTipleri||{})[q.kisi] === 'tek') return;
+              if (!!(plan.munferitler||{})[q.kisi]) return;
+              var qEsi = (plan.odaEsleri||{})[q.kisi];
+              if (qEsi && qEsi !== p.kisi) return;
+              esiOpts += '<option value="' + qi + '"' + (pEsi===q.kisi?' selected':'') + '>' + q.kisi + '</option>';
+            });
+            html += '<div style="display:flex;align-items:center;gap:6px;margin-top:4px">'
+              + '<span style="font-size:9.5px;color:var(--muted-foreground);flex-shrink:0">Oda ark.:</span>'
+              + '<select onchange="_odaPlanEsiSec(' + t._rowIdx + ',' + planIdx + ',' + pi + ',this.value)" '
+              + 'style="flex:1;height:24px;padding:0 6px;border:1.5px solid #2563eb;border-radius:5px;font-size:10px;font-weight:600;background:var(--card);color:var(--foreground);cursor:pointer">'
+              + esiOpts + '</select>'
+              + '</div>';
+          }
+          html += '</div>';
+        });
+        html += '</div>';
+        html += '</div>';
+      });
+      html += '</div>';
+    }
+  }
+
   html += '</div>';
   return html;
+}
+
+// ── ODA PLANI YÖNETİM FONKSİYONLARI ──────────────────────────────────
+
+function _odaPlanSheetKaydet(t) {
+  if (!t || t._rowIdx === undefined) return;
+  // odaPlanlari'nı katilimcilar sütununun yanındaki bir sütuna kaydet (col 40)
+  apiFetch('/' + encodeURIComponent(TURNE_SHEET) + '/cell', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ row: t._rowIdx + 2, col: 43, value: JSON.stringify(t.odaPlanlari||[]) })
+  }).then(function(res){
+    if (res && !res.ok) throw new Error('HTTP ' + res.status);
+    showToast('Plan kaydedildi ✓', 'success', 1200);
+  }).catch(function(e){ console.warn('Plan kayıt hatası:', e); showToast('Kayıt hatası — tekrar deneyin', 'error', 3000); });
+}
+
+function _odaPlanEkle(rowIdx) {
+  var t = turneler.find(function(x){ return x._rowIdx === rowIdx; });
+  if (!t) return;
+  t.odaPlanlari = t.odaPlanlari || [];
+  var planNo = t.odaPlanlari.length + 1;
+  // Mevcut turne durak adlarından öneri oluştur
+  var ayaklar = (t.duraklar||[]).map(function(d){ return d.il||''; }).filter(Boolean);
+  var baslik = ayaklar.length > 0 ? (ayaklar[Math.min(planNo-1, ayaklar.length-1)] + ' Ayağı') : ('Plan ' + planNo);
+  t.odaPlanlari.push({ baslik: baslik, not: '', odaTipleri: {}, munferitler: {}, odaEsleri: {} });
+  _konaklamaAktifSekme = 'planlar';
+  _odaPlanSheetKaydet(t);
+  _cdAktifTab = 'konaklama';
+  _renderCardDetail(rowIdx);
+}
+
+function _odaPlanSil(rowIdx, planIdx) {
+  var t = turneler.find(function(x){ return x._rowIdx === rowIdx; });
+  if (!t || !t.odaPlanlari || !t.odaPlanlari[planIdx]) return;
+  if (!confirm('Bu planı silmek istediğinizden emin misiniz?')) return;
+  t.odaPlanlari.splice(planIdx, 1);
+  _konaklamaAktifSekme = 'planlar';
+  _odaPlanSheetKaydet(t);
+  _cdAktifTab = 'konaklama';
+  _renderCardDetail(rowIdx);
+}
+
+function _odaPlanBaslikGuncelle(rowIdx, planIdx, deger) {
+  var t = turneler.find(function(x){ return x._rowIdx === rowIdx; });
+  if (!t || !t.odaPlanlari || !t.odaPlanlari[planIdx]) return;
+  t.odaPlanlari[planIdx].baslik = deger.trim() || ('Plan ' + (planIdx+1));
+  _odaPlanSheetKaydet(t);
+}
+
+function _odaPlanNotGuncelle(rowIdx, planIdx, deger) {
+  var t = turneler.find(function(x){ return x._rowIdx === rowIdx; });
+  if (!t || !t.odaPlanlari || !t.odaPlanlari[planIdx]) return;
+  t.odaPlanlari[planIdx].not = deger.trim();
+  _odaPlanSheetKaydet(t);
+}
+
+function _odaPlanKisiTip(rowIdx, planIdx, kisiIdx, tip) {
+  var t = turneler.find(function(x){ return x._rowIdx === rowIdx; });
+  if (!t || !t.odaPlanlari || !t.odaPlanlari[planIdx]) return;
+  var plan = t.odaPlanlari[planIdx];
+  var p = (t.katilimcilar||[])[kisiIdx];
+  if (!p) return;
+  plan.odaTipleri = plan.odaTipleri || {};
+  plan.munferitler = plan.munferitler || {};
+  plan.odaEsleri = plan.odaEsleri || {};
+  // Önce münferit bayrağını kaldır
+  delete plan.munferitler[p.kisi];
+  // Mevcut eşi varsa bağı kaldır
+  var eskiEsi = plan.odaEsleri[p.kisi];
+  if (eskiEsi) {
+    delete plan.odaEsleri[eskiEsi];
+    delete plan.odaEsleri[p.kisi];
+  }
+  if (plan.odaTipleri[p.kisi] === tip) {
+    // Toggle: aynı tipe basılınca sıfırla
+    delete plan.odaTipleri[p.kisi];
+  } else {
+    plan.odaTipleri[p.kisi] = tip;
+  }
+  _konaklamaAktifSekme = 'planlar';
+  _odaPlanSheetKaydet(t);
+  _cdAktifTab = 'konaklama';
+  _renderCardDetail(rowIdx);
+}
+
+function _odaPlanKisiMunferit(rowIdx, planIdx, kisiIdx) {
+  var t = turneler.find(function(x){ return x._rowIdx === rowIdx; });
+  if (!t || !t.odaPlanlari || !t.odaPlanlari[planIdx]) return;
+  var plan = t.odaPlanlari[planIdx];
+  var p = (t.katilimcilar||[])[kisiIdx];
+  if (!p) return;
+  plan.odaTipleri = plan.odaTipleri || {};
+  plan.munferitler = plan.munferitler || {};
+  plan.odaEsleri = plan.odaEsleri || {};
+  if (plan.munferitler[p.kisi]) {
+    delete plan.munferitler[p.kisi];
+  } else {
+    // Münferit yapılınca oda tipini ve eşini temizle
+    delete plan.odaTipleri[p.kisi];
+    var eskiEsi = plan.odaEsleri[p.kisi];
+    if (eskiEsi) { delete plan.odaEsleri[eskiEsi]; delete plan.odaEsleri[p.kisi]; }
+    plan.munferitler[p.kisi] = true;
+  }
+  _konaklamaAktifSekme = 'planlar';
+  _odaPlanSheetKaydet(t);
+  _cdAktifTab = 'konaklama';
+  _renderCardDetail(rowIdx);
+}
+
+function _odaPlanEsiSec(rowIdx, planIdx, kisiIdx, esiIdxStr) {
+  var t = turneler.find(function(x){ return x._rowIdx === rowIdx; });
+  if (!t || !t.odaPlanlari || !t.odaPlanlari[planIdx]) return;
+  var plan = t.odaPlanlari[planIdx];
+  var kat = t.katilimcilar || [];
+  var p = kat[kisiIdx];
+  if (!p) return;
+  plan.odaEsleri = plan.odaEsleri || {};
+  plan.odaTipleri = plan.odaTipleri || {};
+  // Önce eski eşin bağını kaldır
+  var eskiEsi = plan.odaEsleri[p.kisi];
+  if (eskiEsi) { delete plan.odaEsleri[eskiEsi]; delete plan.odaEsleri[p.kisi]; }
+  if (esiIdxStr === '') {
+    _konaklamaAktifSekme = 'planlar';
+    _odaPlanSheetKaydet(t);
+    _cdAktifTab = 'konaklama';
+    _renderCardDetail(rowIdx);
+    return;
+  }
+  var esi = kat[parseInt(esiIdxStr)];
+  if (!esi) return;
+  // Eşin eski bağını kaldır
+  var esiEski = plan.odaEsleri[esi.kisi];
+  if (esiEski) { delete plan.odaEsleri[esiEski]; delete plan.odaEsleri[esi.kisi]; }
+  plan.odaEsleri[p.kisi] = esi.kisi;
+  plan.odaEsleri[esi.kisi] = p.kisi;
+  plan.odaTipleri[p.kisi] = 'cift';
+  plan.odaTipleri[esi.kisi] = 'cift';
+  delete (plan.munferitler||{})[p.kisi];
+  delete (plan.munferitler||{})[esi.kisi];
+  _konaklamaAktifSekme = 'planlar';
+  _odaPlanSheetKaydet(t);
+  _cdAktifTab = 'konaklama';
+  _renderCardDetail(rowIdx);
 }
 
 function _konaklamaSekmeGec(rowIdx, sekme) {
