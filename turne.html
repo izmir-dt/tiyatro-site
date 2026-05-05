@@ -2919,6 +2919,7 @@ flex-shrink:0;
         <div class="cal-statu-row" id="cal-statu-filtre-row">
           <span style="font-size:11px;font-weight:700;color:rgba(255,255,255,.45);letter-spacing:.3px">STATÜ:</span>
           <button class="cal-statu-btn" data-filtre="" onclick="calStatuFiltre=&#39;&#39;;renderCalendar()" style="background:rgba(255,255,255,.18);color:#fff;border-color:rgba(255,255,255,.35)">Tümü</button>
+          <button class="cal-statu-btn" data-filtre="noiptal" onclick="calStatuFiltre=&#39;noiptal&#39;;renderCalendar()" style="background:rgba(255,255,255,.12);color:#fde68a;border-color:rgba(253,230,138,.45)">İptal Hariç</button>
           <button class="cal-statu-btn" data-filtre="taslak" onclick="calStatuFiltre=&#39;taslak&#39;;renderCalendar()" style="background:#f1f0f5;color:#5b5675;border-color:#c4c1d8"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg> Taslak</button>
           <button class="cal-statu-btn" data-filtre="onay-bekliyor" onclick="calStatuFiltre=&#39;onay-bekliyor&#39;;renderCalendar()" style="background:#fef8ec;color:#92570a;border-color:#f5c842"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg> Onay Bekliyor</button>
           <button class="cal-statu-btn" data-filtre="onaylandi" onclick="calStatuFiltre=&#39;onaylandi&#39;;renderCalendar()" style="background:#edfaf3;color:#146c38;border-color:#6ee0a0"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg> Onaylandı</button>
@@ -4089,7 +4090,7 @@ let turneler    = [];
 let _turneYukleniyor = true;
 let calYear, calMonth, calSelectedDay = null;
 var calNotes = {}; // key: 'YYYY-MM-DD' → not metni (localStorage'dan yüklenir)
-var calStatuFiltre = ''; // takvim statü filtresi
+var calStatuFiltre = 'noiptal'; // takvim statü filtresi (iptal hariç başlat)
 var calTipFiltre = ''; // takvim tip filtresi
 
 // Türkiye Resmi Tatilleri (sabit tarihler)
@@ -5958,7 +5959,7 @@ function _ekTurneKartMini(t) {
           + '<button onclick="event.stopPropagation();openCardDetail(' + t._rowIdx + ');_cdAktifTab=\'katilimcilar\'" style="height:28px;padding:0 10px;border-radius:6px;border:1px solid hsl(220,50%,70%);background:hsl(220,60%,95%);color:hsl(220,60%,30%);font-size:11px;font-weight:700;cursor:pointer">👥 Katılımcılar</button>'
           + '<button onclick="event.stopPropagation();openCardDetail(' + t._rowIdx + ');_cdAktifTab=\'konaklama\'" style="height:28px;padding:0 10px;border-radius:6px;border:1px solid hsl(142,40%,65%);background:hsl(142,40%,93%);color:hsl(142,50%,25%);font-size:11px;font-weight:700;cursor:pointer">🛏 Konaklama</button>'
           + '<button onclick="event.stopPropagation();editTurne(' + t._rowIdx + ')" style="height:28px;padding:0 10px;border-radius:6px;border:1px solid var(--border);background:var(--muted);color:var(--muted-foreground);font-size:11px;font-weight:600;cursor:pointer">✎ Düzenle</button>'
-          + '<button onclick="event.stopPropagation();gorevlendirmePdf(' + t._rowIdx + ')" style="height:28px;padding:0 10px;border-radius:6px;border:1px solid hsl(0,50%,75%);background:hsl(0,50%,95%);color:hsl(0,55%,35%);font-size:11px;font-weight:700;cursor:pointer">📄 PDF</button>'
+          + '<button onclick="event.stopPropagation();_ekTurnePdfSec(' + t._rowIdx + ')" style="height:28px;padding:0 10px;border-radius:6px;border:1px solid hsl(0,50%,75%);background:hsl(0,50%,95%);color:hsl(0,55%,35%);font-size:11px;font-weight:700;cursor:pointer">📄 PDF</button>'
           + '<div style="flex:1"></div>'
           + '<button onclick="event.stopPropagation();deleteTurneOnay(' + t._rowIdx + ',\'' + (t.oyun||'Ek Grup').replace(/'/g,'\\x27') + '\')" style="height:28px;width:28px;border-radius:6px;border:1px solid hsl(0,50%,85%);background:hsl(0,80%,97%);color:hsl(0,65%,45%);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0">'
           + '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="3,6 5,6 21,6"/><path d="M19,6l-1,14a2,2,0,0,1-2,2H8a2,2,0,0,1-2-2L5,6"/></svg>'
@@ -6574,7 +6575,8 @@ function _renderCardDetail(rowIdx) {
         { id:'bilgi',        label:'📋 Bilgiler' },
         { id:'katilimcilar', label:'👥 Katılımcılar' },
         { id:'lojistik',     label:'📦 Lojistik' },
-        { id:'konaklama',    label:'🏨 Konaklama' }
+        { id:'konaklama',    label:'🏨 Konaklama' },
+        { id:'memnuniyet',   label:'⭐ Değerlendirme' }
       ];
   if (t.anaGrupId && (_cdAktifTab === 'bilgi' || _cdAktifTab === 'lojistik')) {
     _cdAktifTab = 'katilimcilar';
@@ -6819,9 +6821,16 @@ function _renderCardDetail(rowIdx) {
     konaklamaHtml = _konaklamaSekmesiHTML(t, rowIdx);
   }
 
+  // ── MEMNUNİYET SEKMESİ ──
+  var memnuniyetHtml = '';
+  if (_cdAktifTab === 'memnuniyet') {
+    memnuniyetHtml = _memnuniyetSekmesiHTML(t, rowIdx);
+  }
+
   var bodyContent = _cdAktifTab === 'bilgi' ? bilgiHtml
     : _cdAktifTab === 'katilimcilar' ? katilimciHtml
     : _cdAktifTab === 'konaklama' ? konaklamaHtml
+    : _cdAktifTab === 'memnuniyet' ? memnuniyetHtml
     : lojistikHtml;
 
   var footerHtml = '<div class="cd-footer">'
@@ -6846,6 +6855,168 @@ function _renderCardDetail(rowIdx) {
 // ════════════════════════════════════════════════════════════
 
 var _konaklamaAktifSekme = 'tumü';
+
+function _memnuniyetSekmesiHTML(t, rowIdx) {
+  var m = t.memnuniyet || {};
+  var notlar = (m.notlar || '').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  var puanlar = [
+    { key: 'otel',   label: '\ud83c\udfe8 Otel',             aciklama: 'Konaklama kalitesi, temizlik, hizmet' },
+    { key: 'otobus', label: '\ud83d\ude8c Otob\u00fcs',       aciklama: 'Ula\u015f\u0131m konforu, s\u00fcr\u00fcc\u00fc, s\u00fcre' },
+    { key: 'kamyon', label: '\ud83d\ude9b Kamyon / Lojistik', aciklama: 'Y\u00fck ta\u015f\u0131ma, zamanlama, ekipman' }
+  ];
+  // Tüm turnelerdeki memnuniyet değerlendirmelerini topla (yapışkan not arama için)
+  var tumDegerl = [];
+  if (typeof turneler !== 'undefined') {
+    turneler.forEach(function(tr) {
+      if (!tr.memnuniyet) return;
+      var mm = tr.memnuniyet;
+      var baslik = (tr.oyun || '') + (tr.il ? ' / ' + tr.il : '') + (tr.basTarih ? ' (' + tr.basTarih + ')' : '');
+      ['otel','otobus','kamyon'].forEach(function(key) {
+        var puan = mm[key + 'Puan'] || 0;
+        var not  = mm[key + 'Not']  || '';
+        if (puan || not) {
+          tumDegerl.push({ turne: baslik, key: key, puan: puan, not: not, rowIdx: tr._rowIdx });
+        }
+      });
+      if (mm.notlar) {
+        tumDegerl.push({ turne: baslik, key: 'genel', puan: 0, not: mm.notlar, rowIdx: tr._rowIdx });
+      }
+    });
+  }
+
+  var keyLabel = { otel: '🏨 Otel', otobus: '🚌 Otobüs', kamyon: '🚛 Kamyon', genel: '📝 Genel' };
+
+  var html = '<div style="padding:12px 16px 8px">';
+
+  // Yapışkan arama paneli
+  if (tumDegerl.length > 0) {
+    html += '<details style="margin-bottom:12px;border:1px solid var(--border);border-radius:8px;overflow:hidden">';
+    html += '<summary style="padding:8px 12px;background:var(--muted);cursor:pointer;font-size:11px;font-weight:700;user-select:none;list-style:none;display:flex;align-items:center;gap:6px">'
+      + '🔍 <span>Tüm Turne Değerlendirmeleri</span> <span style="background:var(--primary);color:#fff;border-radius:10px;padding:0 7px;font-size:10px;font-weight:700;margin-left:auto">' + tumDegerl.length + '</span>'
+      + '</summary>';
+    html += '<div style="padding:8px 10px;background:var(--card)">';
+    html += '<input type="text" id="_mem_arama" placeholder="Turne adı, not veya kategori ara..." oninput="_memArama()" '
+      + 'style="width:100%;height:28px;padding:0 8px;border:1px solid var(--border);border-radius:6px;font-size:11px;background:var(--card);color:var(--foreground);outline:none;font-family:inherit;margin-bottom:8px">';
+    html += '<div id="_mem_arama_sonuc" style="display:flex;flex-direction:column;gap:4px;max-height:200px;overflow-y:auto">';
+    tumDegerl.forEach(function(d, di) {
+      var yildiz = d.puan ? '⭐'.repeat(d.puan) + ' (' + d.puan + '/5)' : '';
+      html += '<div class="_mem_satir" data-ara="' + (d.turne + ' ' + keyLabel[d.key] + ' ' + d.not).toLowerCase().replace(/"/g,'') + '" '
+        + 'style="border:1px solid var(--border);border-radius:6px;padding:6px 8px;font-size:10.5px;cursor:pointer" '
+        + 'onclick="_renderCardDetail(' + d.rowIdx + ')" title="Bu turnede aç">'
+        + '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
+        + '<span style="font-weight:700;color:var(--primary);font-size:10px">' + keyLabel[d.key] + '</span>'
+        + '<span style="flex:1;color:var(--muted-foreground);font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + d.turne + '</span>'
+        + (yildiz ? '<span style="font-size:10px;white-space:nowrap">' + yildiz + '</span>' : '')
+        + '</div>'
+        + (d.not ? '<div style="color:var(--foreground);margin-top:3px;font-style:italic;line-height:1.4">' + d.not.replace(/</g,'&lt;') + '</div>' : '')
+        + '</div>';
+    });
+    html += '</div></div>';
+    html += '</details>';
+  }
+
+  html += '<div style="font-size:11px;color:var(--muted-foreground);margin-bottom:12px;line-height:1.5">';
+  html += 'Turneden sonra değerlendirme notları ve memnuniyet puanları girin. Bu bilgiler PDF\'e eklenmez, yalnızca kayıt amaçlıdır.';
+  html += '</div>';
+
+  html += '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px">';
+  puanlar.forEach(function(p) {
+    var puan = m[p.key + 'Puan'] || 0;
+    var pNot = (m[p.key + 'Not'] || '').replace(/"/g, '&quot;');
+    html += '<div style="border:1px solid var(--border);border-radius:10px;overflow:hidden">';
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:var(--muted);gap:8px">';
+    html += '<div>';
+    html += '<div style="font-size:12px;font-weight:700">' + p.label + '</div>';
+    html += '<div style="font-size:10px;color:var(--muted-foreground)">' + p.aciklama + '</div>';
+    html += '</div>';
+    // Yildiz konteyneri — id ile yerinde güncelleme için
+    html += '<div id="_mem_yildiz_' + p.key + '" style="display:flex;gap:3px;flex-shrink:0">';
+    for (var s = 1; s <= 5; s++) {
+      var op = s <= puan ? '1' : '.25';
+      html += '<button onclick="_memnuniyetPuanKaydet(' + rowIdx + ',\'' + p.key + '\',' + s + ')"';
+      html += ' style="width:28px;height:28px;border:none;background:none;cursor:pointer;font-size:20px;line-height:1;padding:0;opacity:' + op + '"';
+      html += ' onmouseenter="this.style.opacity=\'1\'"';
+      html += ' onmouseleave="this.style.opacity=\'' + op + '\'">';
+      html += '⭐</button>';
+    }
+    html += '</div></div>';
+    html += '<div style="padding:8px 12px;border-top:1px solid var(--border)">';
+    html += '<input type="text" placeholder="Not ekle (opsiyonel)..." value="' + pNot + '"';
+    html += ' oninput="_memnuniyetNotKaydet(' + rowIdx + ',\'' + p.key + '\',this.value)"';
+    html += ' style="width:100%;height:28px;padding:0 8px;border:1px solid var(--border);border-radius:6px;font-size:11px;background:var(--card);color:var(--foreground);outline:none;font-family:inherit"';
+    html += ' onfocus="this.style.borderColor=\'var(--primary)\'"';
+    html += ' onblur="this.style.borderColor=\'var(--border)\'">';
+    html += '</div></div>';
+  });
+  html += '</div>';
+
+  html += '<div style="margin-bottom:12px">';
+  html += '<div style="font-size:11.5px;font-weight:700;color:var(--foreground);margin-bottom:6px">\ud83d\udcdd Genel Turne Notu</div>';
+  html += '<textarea placeholder="Turne genel de\u011flendirmesi, dikkat edilmesi gereken hususlar..."';
+  html += ' oninput="_memnuniyetGenelNotKaydet(' + rowIdx + ',this.value)"';
+  html += ' style="width:100%;min-height:90px;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;font-family:inherit;line-height:1.6;resize:vertical;background:var(--card);color:var(--foreground);outline:none"';
+  html += ' onfocus="this.style.borderColor=\'var(--primary)\'"';
+  html += ' onblur="this.style.borderColor=\'var(--border)\'">'; 
+  html += notlar;
+  html += '</textarea>';
+  html += '</div></div>';
+  return html;
+}
+
+// Memnuniyet verisini localStorage'a kaydeder (offline HTML için)
+function _memnuniyetLocalKaydet() {
+  try {
+    localStorage.setItem('turne_memnuniyet', JSON.stringify(
+      (turneler || []).map(function(t) { return { _rowIdx: t._rowIdx, memnuniyet: t.memnuniyet || {} }; })
+    ));
+  } catch(e) { console.warn('Memnuniyet kayıt hatası:', e); }
+}
+
+// Yapışkan not araması — tüm turne değerlendirmelerinde filtrele
+function _memArama() {
+  var inp = document.getElementById('_mem_arama');
+  if (!inp) return;
+  var q = inp.value.trim().toLowerCase();
+  var satirlar = document.querySelectorAll('._mem_satir');
+  satirlar.forEach(function(el) {
+    var metin = (el.getAttribute('data-ara') || '').toLowerCase();
+    el.style.display = (!q || metin.indexOf(q) !== -1) ? '' : 'none';
+  });
+}
+
+function _memnuniyetPuanKaydet(rowIdx, tip, puan) {
+  var t = turneler[rowIdx];
+  if (!t) return;
+  if (!t.memnuniyet) t.memnuniyet = {};
+  t.memnuniyet[tip + 'Puan'] = puan;
+  _memnuniyetLocalKaydet();
+  // Yildizlari yerinde guncelle — sekmeyi DEGISTIRME
+  var container = document.getElementById('_mem_yildiz_' + tip);
+  if (container) {
+    var btns = container.querySelectorAll('button');
+    btns.forEach(function(btn, i) {
+      var op = (i + 1) <= puan ? '1' : '.25';
+      btn.style.opacity = op;
+      btn.onmouseleave = (function(o){ return function(){ this.style.opacity = o; }; })(op);
+    });
+  }
+}
+
+function _memnuniyetNotKaydet(rowIdx, tip, not) {
+  var t = turneler[rowIdx];
+  if (!t) return;
+  if (!t.memnuniyet) t.memnuniyet = {};
+  t.memnuniyet[tip + 'Not'] = not;
+  _memnuniyetLocalKaydet();
+}
+
+function _memnuniyetGenelNotKaydet(rowIdx, not) {
+  var t = turneler[rowIdx];
+  if (!t) return;
+  if (!t.memnuniyet) t.memnuniyet = {};
+  t.memnuniyet.notlar = not;
+  _memnuniyetLocalKaydet();
+}
 
 function _konaklamaSekmesiHTML(t, rowIdx) {
   var kat = t.katilimcilar || [];
@@ -6881,19 +7052,12 @@ function _konaklamaSekmesiHTML(t, rowIdx) {
 
   var html = '<div>';
 
-  // Özet + PDF
-  html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:var(--muted);border-bottom:1px solid var(--border);flex-wrap:wrap;gap:8px">'
-    + '<div style="display:flex;gap:14px">'
-    + '<span style="font-size:12px;font-weight:700">🛏 Tek: <strong>' + tekler.length + '</strong></span>'
-    + '<span style="font-size:12px;font-weight:700">🛏🛏 Çift Oda: <strong>' + ciftGruplar.length + '</strong></span>'
-    + (tumListeSay ? '<span style="font-size:12px;font-weight:700;color:#d97706">⏳ Atanmamış: <strong>' + tumListeSay + '</strong></span>' : '')
-    + '</div>'
-    + '<div style="display:flex;gap:6px">'
+  // PDF butonu — üstteki tekrarlayan pill butonlar kaldırıldı, sadece PDF kalır
+  html += '<div style="display:flex;align-items:center;justify-content:flex-end;padding:6px 12px;background:var(--muted);border-bottom:1px solid var(--border)">'
     + '<button onclick="_konaklamaPdfIndir(' + rowIdx + ')" style="height:28px;padding:0 12px;border:none;border-radius:6px;background:#6b1b1b;font-size:10.5px;font-weight:700;cursor:pointer;color:#fff">&#128196; PDF</button>'
-    + '</div>'
     + '</div>';
 
-  // 3 sekme — Tümü artık "atanmamışlar"
+  // Sekmeler
   var odaPlanlari = t.odaPlanlari || [];
   var sekmeler = [
     { id:'tumü', label:'⏳ Atanmamış', say: tumListeSay, birim: 'kişi' },
@@ -6930,6 +7094,7 @@ function _konaklamaSekmesiHTML(t, rowIdx) {
           + '<div style="flex:1;min-width:0">'
           + '<div style="font-size:11.5px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--foreground)">' + p.kisi + '</div>'
           + '<div style="font-size:10px;color:var(--muted-foreground);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (p.gorev||p.kategori||'') + '</div>'
+          + (p.odaNot ? '<div style="font-size:10px;color:#b45309;font-style:italic;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">📝 ' + p.odaNot + '</div>' : '')
           + '</div>'
           + '<div style="display:flex;gap:4px;flex-shrink:0">'
           + '<button onclick="_konaklamaOdaTipSec(' + t._rowIdx + ',' + i + ',\'tek\')" '
@@ -6965,7 +7130,8 @@ function _konaklamaSekmesiHTML(t, rowIdx) {
             + '<span style="font-size:10px;color:#d97706;flex-shrink:0">?</span>'
             + '</div>';
         }
-        html += '</div>';
+        // Not input satırı
+        html += '<div style="margin-top:5px;padding:0 0 2px 0;display:flex;align-items:center;gap:6px">'          + '<span style="font-size:10px;color:var(--muted-foreground);flex-shrink:0">📝</span>'          + '<input type="text" placeholder="Kişi notu (oda tercihi, sağlık vb.)" value="' + (p.odaNot||'').replace(/"/g,'&quot;') + '"'          + ' oninput="_konaklamaNotKaydet(' + t._rowIdx + ',' + i + ',this.value)"'          + ' style="flex:1;height:24px;padding:0 8px;border:1px solid var(--border);border-radius:6px;font-size:10.5px;background:var(--card);color:var(--foreground);outline:none;font-family:inherit"'          + ' onfocus="this.style.borderColor=\'#b45309\'" onblur="this.style.borderColor=\'var(--border)\'">';        html += '</div>';        html += '</div>';
       });
     }
 
@@ -7167,22 +7333,38 @@ function _konaklamaSekmesiHTML(t, rowIdx) {
         });
         var kadroAcik = !!(window._odaPlanKadroAcik && window._odaPlanKadroAcik[t._rowIdx + '_' + planIdx]);
 
+        var planAcik = !(window._odaPlanKapali && window._odaPlanKapali[t._rowIdx + '_' + planIdx]);
+        var tekSay = planTek.length, ciftSay = ciftGrP.length, munfSay = planMunf.length, atanSay = planAtanmamis.length;
+
         html += '<div style="border:1.5px solid #1e3a8a;border-radius:10px;overflow:hidden;background:var(--card)">';
-        // Plan başlık satırı + butonlar
-        html += '<div style="background:#1e3a8a;padding:10px 12px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
+        // Plan başlık satırı — tıklanabilir accordion toggle
+        html += '<div onclick="event.stopPropagation();_odaPlanAccToggle(' + t._rowIdx + ',' + planIdx + ')" '
+          + 'style="background:#1e3a8a;padding:10px 12px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;cursor:pointer;user-select:none">'
+          + '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.8)" stroke-width="2.5" style="transition:.2s;transform:rotate(' + (planAcik?'0':'-90') + 'deg);flex-shrink:0"><polyline points="6,9 12,15 18,9"/></svg>'
           + '<input type="text" value="' + (plan.baslik||'Plan '+(planIdx+1)).replace(/"/g,'&quot;') + '" '
           + 'onblur="_odaPlanBaslikGuncelle(' + t._rowIdx + ',' + planIdx + ',this.value)" '
           + 'onclick="event.stopPropagation()" '
-          + 'style="flex:1;min-width:140px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);border-radius:5px;height:26px;padding:0 8px;color:#fff;font-size:12px;font-weight:700">'
-          + '<button onclick="_odaPlanKadroAcKapat(' + t._rowIdx + ',' + planIdx + ')" '
-          + 'style="height:26px;padding:0 9px;border:1px solid rgba(255,255,255,.4);border-radius:5px;background:' + (kadroAcik?'rgba(255,255,255,.30)':'rgba(255,255,255,.12)') + ';color:#fff;font-size:10.5px;font-weight:700;cursor:pointer;flex-shrink:0" title="Bu plana kişi seç / ek kişi ekle">👥 Kadro</button>'
-          + '<button onclick="_odaPlanPdfIndir(' + t._rowIdx + ',' + planIdx + ')" '
-          + 'style="height:26px;padding:0 9px;border:1px solid rgba(255,255,255,.4);border-radius:5px;background:rgba(255,255,255,.12);color:#fff;font-size:10.5px;font-weight:700;cursor:pointer;flex-shrink:0" title="Bu planın oda listesi PDF\'i (başlık önce sorulur)">📄 PDF</button>'
-          + '<button onclick="_odaPlanKopyala(' + t._rowIdx + ',' + planIdx + ')" '
-          + 'style="height:26px;padding:0 9px;border:1px solid rgba(255,255,255,.4);border-radius:5px;background:rgba(255,255,255,.12);color:#fff;font-size:10.5px;font-weight:700;cursor:pointer;flex-shrink:0" title="Bu planı kopyala">📋 Kopya</button>'
-          + '<button onclick="_odaPlanSil(' + t._rowIdx + ',' + planIdx + ')" '
-          + 'style="height:26px;width:26px;border:1px solid rgba(255,255,255,.3);border-radius:5px;background:rgba(255,0,0,.25);color:#fff;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0" title="Planı sil">×</button>'
+          + 'style="flex:1;min-width:120px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);border-radius:5px;height:26px;padding:0 8px;color:#fff;font-size:12px;font-weight:700">'
+          + (tekSay ? '<span onclick="event.stopPropagation()" style="font-size:9.5px;font-weight:700;padding:2px 7px;border-radius:12px;background:rgba(34,197,94,.25);color:#bbf7d0;border:1px solid rgba(134,239,172,.4);white-space:nowrap;cursor:default">🛏 ' + tekSay + ' tek</span>' : '')
+          + (ciftSay ? '<span onclick="event.stopPropagation()" style="font-size:9.5px;font-weight:700;padding:2px 7px;border-radius:12px;background:rgba(59,130,246,.25);color:#bfdbfe;border:1px solid rgba(147,197,253,.4);white-space:nowrap;cursor:default">🛏🛏 ' + ciftSay + ' çift</span>' : '')
+          + (atanSay ? '<span onclick="event.stopPropagation()" style="font-size:9.5px;font-weight:700;padding:2px 7px;border-radius:12px;background:rgba(251,191,36,.25);color:#fde68a;border:1px solid rgba(252,211,77,.4);white-space:nowrap;cursor:default">⏳ ' + atanSay + '</span>' : '')
+          + (planAcik ? (
+              '<button onclick="event.stopPropagation();_odaPlanKadroAcKapat(' + t._rowIdx + ',' + planIdx + ')" '
+              + 'style="height:26px;padding:0 9px;border:1px solid rgba(255,255,255,.4);border-radius:5px;background:' + (kadroAcik?'rgba(255,255,255,.30)':'rgba(255,255,255,.12)') + ';color:#fff;font-size:10.5px;font-weight:700;cursor:pointer;flex-shrink:0" title="Bu plana kişi seç / ek kişi ekle">👥 Kadro</button>'
+              + '<button onclick="event.stopPropagation();_odaPlanPdfIndir(' + t._rowIdx + ',' + planIdx + ')" '
+              + 'style="height:26px;padding:0 9px;border:1px solid rgba(255,255,255,.4);border-radius:5px;background:rgba(255,255,255,.12);color:#fff;font-size:10.5px;font-weight:700;cursor:pointer;flex-shrink:0">📄 PDF</button>'
+              + '<button onclick="event.stopPropagation();_odaPlanKopyala(' + t._rowIdx + ',' + planIdx + ')" '
+              + 'style="height:26px;padding:0 9px;border:1px solid rgba(255,255,255,.4);border-radius:5px;background:rgba(255,255,255,.12);color:#fff;font-size:10.5px;font-weight:700;cursor:pointer;flex-shrink:0">📋 Kopya</button>'
+              + '<button onclick="event.stopPropagation();_odaPlanSil(' + t._rowIdx + ',' + planIdx + ')" '
+              + 'style="height:26px;width:26px;border:1px solid rgba(255,255,255,.3);border-radius:5px;background:rgba(255,0,0,.25);color:#fff;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0">×</button>'
+            ) : (
+              '<span style="font-size:9.5px;color:rgba(255,255,255,.55);font-weight:600;margin-left:auto">' + planKat.length + ' kişi</span>'
+              + '<button onclick="event.stopPropagation();_odaPlanSil(' + t._rowIdx + ',' + planIdx + ')" '
+              + 'style="height:26px;width:26px;border:1px solid rgba(255,255,255,.3);border-radius:5px;background:rgba(255,0,0,.25);color:#fff;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0">×</button>'
+            ))
           + '</div>';
+        // Plan kapalıysa sadece başlığı göster
+        if (!planAcik) { html += '</div>'; return; }
         // Plan notu
         html += '<div style="padding:6px 10px;border-bottom:1px solid var(--border)">'
           + '<input type="text" placeholder="Açıklama / Ayak bilgisi (isteğe bağlı)" value="' + (plan.not||'').replace(/"/g,'&quot;') + '" '
@@ -7239,7 +7421,8 @@ function _konaklamaSekmesiHTML(t, rowIdx) {
           html += '</div>';
         }
 
-        // Özet istatistik
+        // Ozet istatistik + plan ici sekmeler
+        var planAktifSekme = (window._odaPlanAktifSekme && window._odaPlanAktifSekme[t._rowIdx + '_' + planIdx]) || 'atanmamis';
         html += '<div style="display:flex;gap:12px;padding:7px 12px;background:var(--muted);border-bottom:1px solid var(--border);font-size:10.5px;font-weight:700;flex-wrap:wrap">'
           + '<span>👥 Toplam: ' + planKat.length + '</span>'
           + '<span>🛏 Tek: ' + planTek.length + '</span>'
@@ -7247,13 +7430,41 @@ function _konaklamaSekmesiHTML(t, rowIdx) {
           + '<span>🚪 Münferit: ' + planMunf.length + '</span>'
           + (planAtanmamis.length ? '<span style="color:#d97706">⏳ Atanmamış: ' + planAtanmamis.length + '</span>' : '')
           + '</div>';
-        // Kişi listesi
-        html += '<div style="padding:8px 10px;display:flex;flex-direction:column;gap:4px;max-height:280px;overflow-y:auto">';
+        var _plSekArr = [
+          { id:'atanmamis', label:'⏳ Atanmamış', say: planAtanmamis.length, color:'#d97706' },
+          { id:'tek', label:'🛏 Tek', say: planTek.length, color:'#16a34a' },
+          { id:'cift', label:'🛏🛏 Çift', say: ciftGrP.length, color:'#2563eb' },
+          { id:'munferit', label:'🚪 Mnf', say: planMunf.length, color:'#7c3aed' },
+        ];
+        html += '<div style="display:flex;border-bottom:2px solid var(--border)">';
+        _plSekArr.forEach(function(ps) {
+          var isAktif = planAktifSekme === ps.id;
+          html += '<button onclick="_odaPlanSekmeGec(' + t._rowIdx + ',' + planIdx + ','+ JSON.stringify(ps.id) +')" '
+            + 'style="flex:1;height:32px;border:none;background:' + (isAktif?'var(--background)':'var(--muted)') + ';'
+            + 'border-bottom:2.5px solid ' + (isAktif?ps.color:'transparent') + ';margin-bottom:-2px;'
+            + 'color:' + (isAktif?ps.color:'var(--muted-foreground)') + ';font-size:10px;font-weight:700;cursor:pointer;white-space:nowrap;padding:0 2px">'
+            + ps.label + ' <span style="font-size:9px;opacity:.75">(' + ps.say + ')</span></button>';
+        });
+        html += '</div>';
+        var gostelenler = planKat.filter(function(p) {
+          var pTip = (plan.odaTipleri||{})[p.kisi] || '';
+          var pMunf = !!(plan.munferitler||{})[p.kisi];
+          if (planAktifSekme === 'atanmamis') return !pTip && !pMunf;
+          if (planAktifSekme === 'tek') return pTip === 'tek' && !pMunf;
+          if (planAktifSekme === 'cift') return pTip === 'cift' && !pMunf;
+          if (planAktifSekme === 'munferit') return pMunf;
+          return true;
+        });
+        html += '<div style="padding:8px 10px;display:flex;flex-direction:column;gap:4px;max-height:260px;overflow-y:auto">';
         if (!planKat.length) {
           html += '<div style="text-align:center;padding:20px 8px;color:var(--muted-foreground);font-size:11px">'
             + 'Bu planda kişi yok. Yukarıdaki <b>👥 Kadro</b> butonuyla kişi seçin veya ekleyin.</div>';
+        } else if (!gostelenler.length) {
+          var _sekEt = _plSekArr.find(function(s){ return s.id===planAktifSekme; });
+          html += '<div style="text-align:center;padding:20px 8px;color:var(--muted-foreground);font-size:11px">'
+            + (_sekEt?_sekEt.label:planAktifSekme) + ' sekmesinde kimse yok.</div>';
         }
-        planKat.forEach(function(p) {
+        gostelenler.forEach(function(p) {
           var pTip = (plan.odaTipleri||{})[p.kisi] || '';
           var pMunf = !!(plan.munferitler||{})[p.kisi];
           var pEsi = (plan.odaEsleri||{})[p.kisi] || '';
@@ -7325,6 +7536,18 @@ function _odaPlanSheetKaydet(t) {
     if (res && !res.ok) throw new Error('HTTP ' + res.status);
     showToast('Plan kaydedildi ✓', 'success', 1200);
   }).catch(function(e){ console.warn('Plan kayıt hatası:', e); showToast('Kayıt hatası — tekrar deneyin', 'error', 3000); });
+}
+
+window._odaPlanKapali = window._odaPlanKapali || {};
+function _odaPlanAccToggle(rowIdx, planIdx) {
+  var key = rowIdx + '_' + planIdx;
+  if (!window._odaPlanKapali) window._odaPlanKapali = {};
+  window._odaPlanKapali[key] = !window._odaPlanKapali[key];
+  // Yeni plan oluşturulduğunda varsayılan açık — kapali = true ise kapalı
+  var t = turneler.find(function(x){ return x._rowIdx === rowIdx; });
+  _cdAktifTab = 'konaklama';
+  _konaklamaAktifSekme = 'planlar';
+  _renderCardDetail(rowIdx);
 }
 
 function _odaPlanEkle(rowIdx) {
@@ -7560,23 +7783,120 @@ function _odaPlanKadroTopluSec(rowIdx, planIdx, hepsi) {
 function _odaPlanEkKisiEkle(rowIdx, planIdx) {
   var t = turneler.find(function(x){ return x._rowIdx === rowIdx; });
   if (!t || !t.odaPlanlari || !t.odaPlanlari[planIdx]) return;
-  var ad = (prompt('Ek kişinin adı soyadı:') || '').trim();
-  if (!ad) return;
-  var gorev = (prompt('Görev / rol (boş bırakılabilir):', '') || '').trim();
-  var kategori = '';
   var plan = t.odaPlanlari[planIdx];
-  plan.ekKisiler = plan.ekKisiler || [];
-  // Aynı isim ana kadroda veya ek kişilerde varsa uyar
-  var anaCakisma = (t.katilimcilar||[]).some(function(p){ return p.kisi === ad; });
-  var ekCakisma = plan.ekKisiler.some(function(e){ return e.kisi === ad; });
-  if (anaCakisma || ekCakisma) {
-    if (!confirm('Bu isim zaten mevcut. Yine de eklensin mi?')) return;
+  // Sistemdeki tüm kişileri topla (tumPersonel + bu turnenin katilimcilari)
+  var mevcutKisiler = new Set((t.katilimcilar||[]).map(function(p){ return p.kisi; }));
+  (plan.ekKisiler||[]).forEach(function(e){ mevcutKisiler.add(e.kisi); });
+  // tumPersonel'den bu turnede olmayanları bul
+  var sistemKisiler = [];
+  var gorulenIsimler = new Set();
+  tumPersonel.forEach(function(p) {
+    if (!p.kisi || gorulenIsimler.has(p.kisi)) return;
+    gorulenIsimler.add(p.kisi);
+    sistemKisiler.push({ kisi: p.kisi, gorev: p.gorev || '', kategori: p.kategori || '' });
+  });
+  sistemKisiler.sort(function(a,b){ return a.kisi.localeCompare(b.kisi,'tr'); });
+
+  // Modal oluştur
+  var ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+  ov.innerHTML = '<div style="background:var(--card);border-radius:14px;width:460px;max-width:98vw;max-height:85dvh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.3);overflow:hidden">'
+    + '<div style="background:#1e3a8a;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">'
+    +   '<div style="color:#fff;font-size:14px;font-weight:800">➕ Ek Kişi Ekle</div>'
+    +   '<button id="_ekk_kapat" style="background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:6px;width:28px;height:28px;cursor:pointer;font-size:16px">×</button>'
+    + '</div>'
+    + '<div style="padding:14px 18px;display:flex;flex-direction:column;gap:10px;overflow-y:auto;flex:1">'
+    +   '<div style="font-size:11px;font-weight:700;color:var(--muted-foreground)">Sistemdeki kişilerden seç veya manuel gir:</div>'
+    +   '<div style="position:relative">'
+    +     '<input id="_ekk_search" type="text" placeholder="İsim ara veya yeni isim gir..." autocomplete="off" '
+    +       'style="width:100%;height:36px;padding:0 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;background:var(--card);color:var(--foreground)">'
+    +     '<div id="_ekk_dropdown" style="position:absolute;top:38px;left:0;right:0;background:var(--card);border:1.5px solid var(--border);border-radius:8px;max-height:200px;overflow-y:auto;z-index:10;display:none;box-shadow:0 4px 16px rgba(0,0,0,.15)"></div>'
+    +   '</div>'
+    +   '<input id="_ekk_gorev" type="text" placeholder="Görev / rol (isteğe bağlı)" '
+    +     'style="width:100%;height:34px;padding:0 10px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;background:var(--card);color:var(--foreground)">'
+    + '</div>'
+    + '<div style="padding:12px 18px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;flex-shrink:0">'
+    +   '<button id="_ekk_iptal" style="height:36px;padding:0 16px;border:1.5px solid var(--border);border-radius:8px;background:var(--muted);color:var(--foreground);font-size:12px;font-weight:700;cursor:pointer">İptal</button>'
+    +   '<button id="_ekk_ekle" style="height:36px;padding:0 20px;border:none;border-radius:8px;background:#1e3a8a;color:#fff;font-size:13px;font-weight:800;cursor:pointer">Ekle</button>'
+    + '</div>'
+    + '</div>';
+
+  document.body.appendChild(ov);
+  var searchEl = ov.querySelector('#_ekk_search');
+  var gorevEl = ov.querySelector('#_ekk_gorev');
+  var dropdown = ov.querySelector('#_ekk_dropdown');
+  var selectedKisi = null;
+
+  function renderDropdown(q) {
+    var q2 = (q||'').trim().toLocaleLowerCase('tr-TR');
+    var filtered = q2 ? sistemKisiler.filter(function(p){ return p.kisi.toLocaleLowerCase('tr-TR').includes(q2); }) : sistemKisiler.slice(0,30);
+    if (!filtered.length) { dropdown.style.display = 'none'; return; }
+    dropdown.innerHTML = filtered.slice(0,40).map(function(p) {
+      var inTurne = mevcutKisiler.has(p.kisi);
+      return '<div class="_ekk_item" data-kisi="' + p.kisi.replace(/"/g,'&quot;') + '" data-gorev="' + (p.gorev||'').replace(/"/g,'&quot;') + '" '
+        + 'style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:6px'
+        + (inTurne ? ';opacity:.45' : '') + '">'
+        + '<div><div style="font-size:12.5px;font-weight:700;color:var(--foreground)">' + p.kisi + '</div>'
+        + (p.gorev ? '<div style="font-size:10px;color:var(--muted-foreground)">' + p.gorev + '</div>' : '') + '</div>'
+        + (inTurne ? '<span style="font-size:10px;color:#92400e;background:#fef3c7;padding:2px 7px;border-radius:10px;flex-shrink:0">Mevcut</span>' : '')
+        + '</div>';
+    }).join('');
+    dropdown.style.display = 'block';
+    dropdown.querySelectorAll('._ekk_item').forEach(function(item) {
+      item.addEventListener('mousedown', function(e) {
+        e.preventDefault();
+        var kisi = item.getAttribute('data-kisi');
+        var gorev = item.getAttribute('data-gorev');
+        selectedKisi = { kisi: kisi, gorev: gorev };
+        searchEl.value = kisi;
+        gorevEl.value = gorev || '';
+        dropdown.style.display = 'none';
+      });
+    });
   }
-  plan.ekKisiler.push({ kisi: ad, gorev: gorev, kategori: kategori });
-  _konaklamaAktifSekme = 'planlar';
-  _odaPlanSheetKaydet(t);
-  _cdAktifTab = 'konaklama';
-  _renderCardDetail(rowIdx);
+
+  searchEl.addEventListener('input', function() { selectedKisi = null; renderDropdown(searchEl.value); });
+  searchEl.addEventListener('focus', function() { renderDropdown(searchEl.value); });
+  searchEl.addEventListener('blur', function() { setTimeout(function(){ dropdown.style.display = 'none'; }, 150); });
+
+  function doEkle() {
+    var ad = searchEl.value.trim();
+    if (!ad) { searchEl.focus(); searchEl.style.borderColor='#ef4444'; return; }
+    var gorev = gorevEl.value.trim();
+    var kategori = '';
+    if (selectedKisi) { gorev = gorev || selectedKisi.gorev; }
+    plan.ekKisiler = plan.ekKisiler || [];
+    var anaCakisma = (t.katilimcilar||[]).some(function(p){ return p.kisi === ad; });
+    var ekCakisma = plan.ekKisiler.some(function(e){ return e.kisi === ad; });
+    if (anaCakisma || ekCakisma) {
+      // Zaten mevcut — sessizce uyar ama devam et
+      var uyarDiv = ov.querySelector('#_ekk_uyar');
+      if (!uyarDiv) {
+        uyarDiv = document.createElement('div');
+        uyarDiv.id = '_ekk_uyar';
+        uyarDiv.style.cssText = 'font-size:11px;color:#b45309;background:#fef3c7;border:1px solid #f59e0b;border-radius:6px;padding:6px 10px;margin:0 18px';
+        ov.querySelector('#_ekk_ekle').parentNode.before(uyarDiv);
+      }
+      uyarDiv.textContent = '⚠ Bu isim zaten mevcut. Eklemek için tekrar tıklayın.';
+      ov.querySelector('#_ekk_ekle').setAttribute('data-force', '1');
+      if (!ov.querySelector('#_ekk_ekle').getAttribute('data-force-ready')) {
+        ov.querySelector('#_ekk_ekle').setAttribute('data-force-ready','1');
+        return;
+      }
+    }
+    plan.ekKisiler.push({ kisi: ad, gorev: gorev, kategori: kategori });
+    document.body.removeChild(ov);
+    _konaklamaAktifSekme = 'planlar';
+    _odaPlanSheetKaydet(t);
+    _cdAktifTab = 'konaklama';
+    _renderCardDetail(rowIdx);
+  }
+
+  ov.querySelector('#_ekk_ekle').addEventListener('click', doEkle);
+  ov.querySelector('#_ekk_kapat').addEventListener('click', function(){ document.body.removeChild(ov); });
+  ov.querySelector('#_ekk_iptal').addEventListener('click', function(){ document.body.removeChild(ov); });
+  ov.addEventListener('click', function(e){ if(e.target===ov) document.body.removeChild(ov); });
+  setTimeout(function(){ searchEl.focus(); renderDropdown(''); }, 50);
 }
 
 // Ek kişiyi sil
@@ -7585,7 +7905,7 @@ function _odaPlanEkKisiSil(rowIdx, planIdx, ekIdx) {
   if (!t || !t.odaPlanlari || !t.odaPlanlari[planIdx]) return;
   var plan = t.odaPlanlari[planIdx];
   if (!plan.ekKisiler || !plan.ekKisiler[ekIdx]) return;
-  if (!confirm('Bu ek kişiyi plandan silmek istediğinizden emin misiniz?')) return;
+  // confirm kaldırdık — inline onay göster
   var silinen = plan.ekKisiler[ekIdx].kisi;
   plan.ekKisiler.splice(ekIdx, 1);
   // Atamalarını temizle
@@ -7616,7 +7936,17 @@ function _odaPlanKopyala(rowIdx, planIdx) {
   _renderCardDetail(rowIdx);
 }
 
-// İsim bazlı oda tipi seçimi (eski kisiIdx-bazlı _odaPlanKisiTip yerine)
+// Plan ici sekme gecisi
+window._odaPlanAktifSekme = window._odaPlanAktifSekme || {};
+function _odaPlanSekmeGec(rowIdx, planIdx, sekme) {
+  window._odaPlanAktifSekme = window._odaPlanAktifSekme || {};
+  window._odaPlanAktifSekme[rowIdx + '_' + planIdx] = sekme;
+  _konaklamaAktifSekme = 'planlar';
+  _cdAktifTab = 'konaklama';
+  _renderCardDetail(rowIdx);
+}
+
+// Isim bazlı oda tipi seçimi (eski kisiIdx-bazlı _odaPlanKisiTip yerine)
 function _odaPlanKisiTipByName(rowIdx, planIdx, kisiName, tip) {
   var t = turneler.find(function(x){ return x._rowIdx === rowIdx; });
   if (!t || !t.odaPlanlari || !t.odaPlanlari[planIdx]) return;
@@ -7629,13 +7959,18 @@ function _odaPlanKisiTipByName(rowIdx, planIdx, kisiName, tip) {
   if (eskiEsi) { delete plan.odaEsleri[eskiEsi]; delete plan.odaEsleri[kisiName]; }
   if (plan.odaTipleri[kisiName] === tip) {
     delete plan.odaTipleri[kisiName];
+    // Toggle: iptal edilince atanmamis sekmesine don
+    window._odaPlanAktifSekme = window._odaPlanAktifSekme || {};
+    window._odaPlanAktifSekme[rowIdx + '_' + planIdx] = 'atanmamis';
   } else {
     plan.odaTipleri[kisiName] = tip;
+    // Atanmamis sekmesinden secilince ilgili sekmeye gec
+    var _pkAktif = (window._odaPlanAktifSekme||{})[rowIdx + '_' + planIdx] || 'atanmamis';
+    if (_pkAktif === 'atanmamis') {
+      window._odaPlanAktifSekme = window._odaPlanAktifSekme || {};
+      window._odaPlanAktifSekme[rowIdx + '_' + planIdx] = tip === 'cift' ? 'cift' : 'tek';
+    }
   }
-  _konaklamaAktifSekme = 'planlar';
-  _odaPlanSheetKaydet(t);
-  _cdAktifTab = 'konaklama';
-  _renderCardDetail(rowIdx);
 }
 
 // İsim bazlı münferit toggle
@@ -7648,11 +7983,18 @@ function _odaPlanKisiMunferitByName(rowIdx, planIdx, kisiName) {
   plan.odaEsleri = plan.odaEsleri || {};
   if (plan.munferitler[kisiName]) {
     delete plan.munferitler[kisiName];
+    window._odaPlanAktifSekme = window._odaPlanAktifSekme || {};
+    window._odaPlanAktifSekme[rowIdx + '_' + planIdx] = 'atanmamis';
   } else {
     delete plan.odaTipleri[kisiName];
     var eskiEsi = plan.odaEsleri[kisiName];
     if (eskiEsi) { delete plan.odaEsleri[eskiEsi]; delete plan.odaEsleri[kisiName]; }
     plan.munferitler[kisiName] = true;
+    var _pmAktif = (window._odaPlanAktifSekme||{})[rowIdx + '_' + planIdx] || 'atanmamis';
+    if (_pmAktif === 'atanmamis') {
+      window._odaPlanAktifSekme = window._odaPlanAktifSekme || {};
+      window._odaPlanAktifSekme[rowIdx + '_' + planIdx] = 'munferit';
+    }
   }
   _konaklamaAktifSekme = 'planlar';
   _odaPlanSheetKaydet(t);
@@ -7736,27 +8078,50 @@ function _odaPlanPdfIndir(rowIdx, planIdx) {
   var tarihStr = fmtTarih(t.baslangicTarih||t.tarih)
     + (t.bitisTarih&&t.bitisTarih!==t.baslangicTarih?' - '+fmtTarih(t.bitisTarih):'');
 
-  // ── Başlık düzenleme: kullanıcıya sor ──
+  // ── Başlık düzenleme: modal ile sor ──
   var varsayilanBaslik = (plan.pdfBaslik && plan.pdfBaslik.trim())
     ? plan.pdfBaslik
     : (ilStr.toUpperCase() + ' TURNESİ KONAKLAMA LİSTESİ — ' + (plan.baslik || ('Plan '+(planIdx+1))).toUpperCase());
-  var yeniBaslik = prompt('PDF Başlığı (düzenleyebilirsiniz):', varsayilanBaslik);
-  if (yeniBaslik === null) return; // iptal
-  yeniBaslik = yeniBaslik.trim() || varsayilanBaslik;
 
   var varsayilanAlt = (plan.pdfAltBaslik && plan.pdfAltBaslik.trim())
     ? plan.pdfAltBaslik
     : (tarihStr + (plan.not ? '  •  ' + plan.not : ''));
-  var yeniAlt = prompt('Alt başlık (tarih / açıklama — boş bırakılabilir):', varsayilanAlt);
-  if (yeniAlt === null) return;
-  yeniAlt = yeniAlt.trim();
 
-  // Düzenlenen başlıkları plana kaydet (kullanıcı bir sonraki sefer hazır bulsun)
-  plan.pdfBaslik = yeniBaslik;
-  plan.pdfAltBaslik = yeniAlt;
-  _odaPlanSheetKaydet(t);
+  // Modal ile başlık al
+  var pdfBaslikOv = document.createElement('div');
+  pdfBaslikOv.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+  pdfBaslikOv.innerHTML = '<div style="background:var(--card);border-radius:12px;width:480px;max-width:97vw;box-shadow:0 20px 60px rgba(0,0,0,.3);overflow:hidden">'
+    + '<div style="background:#6b1b1b;padding:13px 16px;color:#fff;font-size:13px;font-weight:800">📄 PDF Başlığını Düzenle</div>'
+    + '<div style="padding:16px;display:flex;flex-direction:column;gap:10px">'
+    +   '<div><label style="font-size:11px;font-weight:700;color:var(--muted-foreground);display:block;margin-bottom:4px">Başlık</label>'
+    +     '<input id="_pdfb_bas" type="text" value="' + varsayilanBaslik.replace(/"/g,'&quot;') + '" style="width:100%;height:34px;padding:0 10px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;background:var(--card);color:var(--foreground)"></div>'
+    +   '<div><label style="font-size:11px;font-weight:700;color:var(--muted-foreground);display:block;margin-bottom:4px">Alt başlık (isteğe bağlı)</label>'
+    +     '<input id="_pdfb_alt" type="text" value="' + varsayilanAlt.replace(/"/g,'&quot;') + '" style="width:100%;height:34px;padding:0 10px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;background:var(--card);color:var(--foreground)"></div>'
+    + '</div>'
+    + '<div style="padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end">'
+    +   '<button id="_pdfb_iptal" style="height:34px;padding:0 14px;border:1.5px solid var(--border);border-radius:7px;background:var(--muted);color:var(--foreground);font-size:12px;font-weight:700;cursor:pointer">İptal</button>'
+    +   '<button id="_pdfb_tamam" style="height:34px;padding:0 18px;border:none;border-radius:7px;background:#6b1b1b;color:#fff;font-size:13px;font-weight:800;cursor:pointer">📄 PDF Oluştur</button>'
+    + '</div>'
+    + '</div>';
+  document.body.appendChild(pdfBaslikOv);
+  pdfBaslikOv.querySelector('#_pdfb_iptal').onclick = function(){ document.body.removeChild(pdfBaslikOv); };
+  pdfBaslikOv.addEventListener('click', function(e){ if(e.target===pdfBaslikOv) document.body.removeChild(pdfBaslikOv); });
+  pdfBaslikOv.querySelector('#_pdfb_tamam').onclick = function() {
+    var yeniBaslik = (pdfBaslikOv.querySelector('#_pdfb_bas').value||'').trim() || varsayilanBaslik;
+    var yeniAlt = (pdfBaslikOv.querySelector('#_pdfb_alt').value||'').trim();
+    document.body.removeChild(pdfBaslikOv);
 
-  // ── PDF HTML ÜRETİMİ (mevcut konaklama PDF ile aynı görsel format) ──
+    // Düzenlenen başlıkları plana kaydet (kullanıcı bir sonraki sefer hazır bulsun)
+    plan.pdfBaslik = yeniBaslik;
+    plan.pdfAltBaslik = yeniAlt;
+    _odaPlanSheetKaydet(t);
+
+    _odaPlanPdfGenerate(t, plan, planKat, yeniBaslik, yeniAlt);
+  };
+  return; // PDF generate, modal callback içinde çalışır
+}
+
+function _odaPlanPdfGenerate(t, plan, planKat, yeniBaslik, yeniAlt) {
   var tekler  = planKat.filter(function(p){ return p.odaTip==='tek' && !p.munferit; });
   var ciftRaw = planKat.filter(function(p){ return (p.odaTip==='cift'||!p.odaTip) && !p.munferit; });
   var isl = {};
@@ -7888,7 +8253,10 @@ function _konaklamaOdaTipSec(rowIdx, kisiIdx, tip) {
   } else {
     p.odaTip = tip;
     p.odaEsi = '';
-    // Sekmeyi DEĞİŞTİRME — kullanıcı hangi sekmededeyse orada kalsın
+    // Atanmamış sekmesinden seçilince → ilgili sekmeye geç
+    if (_konaklamaAktifSekme === 'tumü') {
+      _konaklamaAktifSekme = tip === 'cift' ? 'cift' : tip === 'tek' ? 'tek' : 'tumü';
+    }
   }
   _cdAktifTab = 'konaklama';
   _renderCardDetail(rowIdx);
@@ -8085,6 +8453,10 @@ function _konaklamaMunferitSec(rowIdx, kisiIdx) {
       p.odaEsi = '';
     }
     delete p.odaTip;
+    // Atanmamış sekmesinden seçilince münferit sekmesine geç
+    if (_konaklamaAktifSekme === 'tumü') {
+      _konaklamaAktifSekme = 'munferit';
+    }
   }
   _konaklamaSheetKaydet(t);
   _cdAktifTab = 'konaklama';
@@ -13167,7 +13539,7 @@ function renderHarita() {
   var _haritaOyun = window._haritaAktifOyun || '';
   var _haritaTurneler = (_haritaOyun
     ? turneler.filter(function(t){ return (t.oyun||'').toLowerCase().trim() === _haritaOyun.toLowerCase().trim(); })
-    : turneler).filter(function(t){ return !t.anaGrupId; });
+    : turneler).filter(function(t){ return !t.anaGrupId && t.statu !== 'iptal'; });
 
   // Yarıda Kesildi şehir durumları: haritada çarpı gösterilmiyor,
   // kesilme bilgisi sağ panelde statü badge'i olarak görünür.
@@ -14135,7 +14507,8 @@ function _calEvStyle(progSatir, turne) {
 // ── Gün için event listesi ──────────────────────────────────
 function _calGunEvents(key) {
   return turneler.filter(function(t) {
-    if (calStatuFiltre && t.statu !== calStatuFiltre) return false;
+    if (calStatuFiltre === 'noiptal' && t.statu === 'iptal') return false;
+    if (calStatuFiltre && calStatuFiltre !== 'noiptal' && t.statu !== calStatuFiltre) return false;
     // ek turneler takvimde gösterilir ama işaretlenir
     var bas = t.baslangicTarih || t.tarih || '';
     var bit = t.bitisTarih || t.tarih || '';
@@ -14455,7 +14828,7 @@ function renderCalendar() {
   // Statü filtre buton vurgusu
   var calFilterBtns = document.querySelectorAll('#cal-statu-filtre-row button');
   calFilterBtns.forEach(function(btn) {
-    var isActive = (calStatuFiltre === '' && btn.dataset.filtre === '') || btn.dataset.filtre === calStatuFiltre;
+    var isActive = btn.dataset.filtre === calStatuFiltre || (calStatuFiltre === '' && btn.dataset.filtre === '');
     btn.style.opacity = isActive ? '1' : '0.5';
     btn.style.fontWeight = isActive ? '800' : '600';
     btn.style.boxShadow = isActive ? '0 0 0 2.5px rgba(255,255,255,.35)' : 'none';
@@ -16576,7 +16949,7 @@ function _pdfModSec(rowIdx) {
     + (ekGruplar.length ? '<div style="padding:8px 10px;background:hsl(270,40%,95%);border-radius:7px;border:1px solid hsl(270,40%,80%);font-size:11px;color:hsl(270,50%,30%);font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:6px"><label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="_pdf_ek_grup_cb" style="accent-color:hsl(270,55%,55%)"> ⛓ Ek grupları PDF\'e dahil et (' + ekGruplar.length + ' ek grup)</label></div>' : '')
     + '<div style="display:flex;flex-direction:column;gap:10px">'
     + '<button id="_pdf_tam" style="padding:11px 14px;background:#6b1b1b;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;text-align:left">📋 Tam Görevlendirme Raporu<div style=\'font-size:10px;font-weight:400;margin-top:2px;opacity:.8\'>Turne bilgileri + ulaşım + konaklama + personel</div></button>'
-    + '<button id="_pdf_prog" style="padding:11px 14px;background:#0f766e;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;text-align:left">📅 Personel Listesi + Turne Programı<div style=\'font-size:10px;font-weight:400;margin-top:2px;opacity:.8\'>Günlük program tablosu + görevli personel listesi</div></button>'
+    + '<button id="_pdf_prog" style="padding:11px 14px;background:#0f766e;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;text-align:left">📅 Turne Programı + Personel Listesi<div style=\'font-size:10px;font-weight:400;margin-top:2px;opacity:.8\'>Günlük program tablosu + görevli personel listesi</div></button>'
     + '<button id="_pdf_per" style="padding:11px 14px;background:#1d4ed8;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;text-align:left"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:6px"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="10" r="2"/><path d="M2 20c0-3.5 4-6 7-6s7 2.5 7 6"/><path d="M14 20c0-2 2-3.5 4-3.5s4 1.5 4 3.5"/></svg>Sadece Personel Listesi<div style=\'font-size:10px;font-weight:400;margin-top:2px;opacity:.8\'>Kategoriye göre filtrelenebilir PDF</div></button>'
     + '<button id="_pdf_dosya" style="padding:11px 14px;background:#7c3aed;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;text-align:left">📁 Turne Dosyası<div style=\'font-size:10px;font-weight:400;margin-top:2px;opacity:.8\'>Kapak (afiş) + konaklama + personel listesi + program</div></button>'
     + '<button id="_pdf_tc" style="padding:11px 14px;background:#6b1b1b;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;text-align:left">📋 T.C. Listesi<div style=\'font-size:10px;font-weight:400;margin-top:2px;opacity:.8\'>TC + doğum tarihi — yalnızca tarayıcıda saklanır</div></button>'
@@ -16696,7 +17069,7 @@ function _tcListesiModalAc(t) {
     }
   }
 
-  overlay.innerHTML = '<div style="background:#fff;border-radius:14px;width:820px;max-width:98vw;max-height:92dvh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.3)">'    + '<div style="background:#6b1b1b;padding:16px 20px;display:flex;align-items:center;justify-content:space-between">'    + '<div>'    + '<div style="font-weight:800;font-size:15px;color:#fff">📋 T.C. Listesi</div>'    + '<div style="font-size:11px;color:rgba(255,255,255,.75);margin-top:2px">' + (t.oyun || '') + (tarihStr ? ' &nbsp;•&nbsp; ' + tarihStr : '') + '</div>'    + '</div>'    + '<button id="_tc_kapat" style="background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:7px;padding:6px 12px;cursor:pointer;font-size:12px;font-weight:600">✕ Kapat</button>'    + '</div>'    + ''    + '<div style="overflow-y:auto;flex:1;padding:12px 16px">'    + '<table style="width:100%;border-collapse:collapse">'    + '<thead><tr style="background:#6b1b1b;color:#fff">'    + '<th style="padding:8px 10px;font-size:11px;font-weight:700;color:#fff;width:28px">No</th>'    + '<th style="padding:8px 10px;font-size:11px;font-weight:700;color:#fff;text-align:left">Ad Soyad</th>'    + '<th style="padding:8px 10px;font-size:11px;font-weight:700;color:#fff;text-align:left">Görevi</th>'    + '<th style="padding:8px 10px;font-size:11px;font-weight:700;color:#fff;text-align:left">Doğum Tarihi</th>'    + '<th style="padding:8px 10px;font-size:11px;font-weight:700;color:#fff;text-align:left">TC Kimlik No</th>'    + '</tr></thead><tbody id="_tc_tbody">' + satirlar + '</tbody></table>'    + '</div>'    + '<div style="padding:12px 16px;border-top:1px solid #e5e7eb;display:flex;gap:10px;justify-content:flex-end;align-items:center">'    + '<div style="flex:1">'    + '<button id="_tc_bilgi_btn" onclick="(function(){var p=document.getElementById(\'_tc_bilgi_panel\');p.style.display=p.style.display===\'none\'?\'block\':\'none\';})()" style="background:none;border:1px solid #e5e7eb;border-radius:6px;padding:4px 10px;font-size:11px;color:#666;cursor:pointer;display:flex;align-items:center;gap:5px">ℹ️ Nasıl çalışır?</button>'    + '<div id="_tc_bilgi_panel" style="display:none;margin-top:8px;background:#fffbf0;border:1px solid #f0e0b0;border-radius:8px;padding:10px 14px;font-size:11px;color:#555;line-height:1.7">'    + '<div style="font-weight:700;color:#92400e;margin-bottom:5px">📌 Önemli Bilgiler</div>'    + '<div>✅ <strong>Otomatik kayıt:</strong> Her değişiklik anında bu tarayıcıya kaydedilir, ayrıca kaydet butonu yoktur.</div>'    + '<div>🔒 <strong>Gizlilik:</strong> TC ve doğum tarihi bilgileri <strong>yalnızca bu bilgisayarda</strong> saklanır, sunucuya gönderilmez.</div>'    + '<div>⚠️ <strong>Dikkat:</strong> Tarayıcı geçmişi/önbellek temizlenirse veriler silinir. Kritik bilgileri yedekleyin.</div>'    + '<div>🖨️ <strong>PDF:</strong> PDF İndir butonuna basınca tüm liste yazdırma ekranına açılır.</div>'    + '<div>🔄 <strong>Farklı bilgisayar:</strong> Başka bir bilgisayarda açarsanız bilgiler boş gelir, tekrar girilmesi gerekir.</div>'    + '</div>'    + '</div>'    + '<button id="_tc_yedek_al" style="padding:9px 14px;background:#fff;color:#6b1b1b;border:1px solid #6b1b1b;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">💾 Yedek Al</button>'    + '<label id="_tc_yedek_yukle_label" style="padding:9px 14px;background:#fff;color:#555;border:1px solid #ddd;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">📂 Yedek Yükle<input type="file" id="_tc_yedek_input" accept=".json" style="display:none"></label>'    + '<button id="_tc_pdf" style="padding:9px 20px;background:#6b1b1b;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">📄 PDF İndir</button>'    + '</div>'    + '</div>';
+  overlay.innerHTML = '<div style="background:#fff;border-radius:14px;width:820px;max-width:98vw;max-height:92dvh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.3)">'    + '<div style="background:#6b1b1b;padding:16px 20px;display:flex;align-items:center;justify-content:space-between">'    + '<div>'    + '<div style="font-weight:800;font-size:15px;color:#fff">📋 T.C. Listesi</div>'    + '<div style="font-size:11px;color:rgba(255,255,255,.75);margin-top:2px">' + (t.oyun || '') + (tarihStr ? ' &nbsp;•&nbsp; ' + tarihStr : '') + '</div>'    + '</div>'    + '<button id="_tc_kapat" style="background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:7px;padding:6px 12px;cursor:pointer;font-size:12px;font-weight:600">✕ Kapat</button>'    + '</div>'    + ''    + '<div style="overflow-y:auto;flex:1;padding:12px 16px">'    + '<table style="width:100%;border-collapse:collapse">'    + '<thead><tr style="background:#6b1b1b;color:#fff">'    + '<th style="padding:8px 10px;font-size:11px;font-weight:700;color:#fff;width:28px">No</th>'    + '<th style="padding:8px 10px;font-size:11px;font-weight:700;color:#fff;text-align:left">Ad Soyad</th>'    + '<th style="padding:8px 10px;font-size:11px;font-weight:700;color:#fff;text-align:left">Görevi</th>'    + '<th style="padding:8px 10px;font-size:11px;font-weight:700;color:#fff;text-align:left">Doğum Tarihi</th>'    + '<th style="padding:8px 10px;font-size:11px;font-weight:700;color:#fff;text-align:left">TC Kimlik No</th>'    + '</tr></thead><tbody id="_tc_tbody">' + satirlar + '</tbody></table>'    + '</div>'    + '<div style="padding:12px 16px;border-top:1px solid #e5e7eb;display:flex;gap:10px;justify-content:flex-end;align-items:center">'    + '<div style="flex:1">'    + '<button id="_tc_bilgi_btn" onclick="(function(){var p=document.getElementById(\'_tc_bilgi_panel\');p.style.display=p.style.display===\'none\'?\'block\':\'none\';})()" style="background:none;border:1px solid #e5e7eb;border-radius:6px;padding:4px 10px;font-size:11px;color:#666;cursor:pointer;display:flex;align-items:center;gap:5px">ℹ️ Nasıl çalışır?</button>'    + '<div id="_tc_bilgi_panel" style="display:none;margin-top:8px;background:#fffbf0;border:1px solid #f0e0b0;border-radius:8px;padding:10px 14px;font-size:11px;color:#555;line-height:1.7">'    + '<div style="font-weight:700;color:#92400e;margin-bottom:5px">📌 Önemli Bilgiler</div>'    + '<div>✅ <strong>Otomatik kayıt:</strong> Her değişiklik anında bu tarayıcıya kaydedilir, ayrıca kaydet butonu yoktur.</div>'    + '<div>🔒 <strong>Gizlilik:</strong> TC ve doğum tarihi bilgileri <strong>yalnızca bu bilgisayarda</strong> saklanır, sunucuya gönderilmez.</div>'    + '<div>⚠️ <strong>Dikkat:</strong> Tarayıcı geçmişi/önbellek temizlenirse veriler silinir. Kritik bilgileri yedekleyin.</div>'    + '<div>🖨️ <strong>PDF:</strong> PDF İndir butonuna basınca tüm liste yazdırma ekranına açılır.</div>'    + '<div>🔄 <strong>Farklı bilgisayar:</strong> Başka bir bilgisayarda açarsanız bilgiler boş gelir, tekrar girilmesi gerekir.</div>'    + '</div>'    + '</div>'    + '<button id="_tc_yedek_al" style="padding:9px 14px;background:#fff;color:#6b1b1b;border:1px solid #6b1b1b;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">💾 Yedek Al</button>'    + '<label id="_tc_yedek_yukle_label" style="padding:9px 14px;background:#fff;color:#555;border:1px solid #ddd;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">📂 Yedek Yükle<input type="file" id="_tc_yedek_input" accept=".json" style="display:none"></label>'    + '<button id="_tc_excel" style="padding:9px 14px;background:#166534;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">📊 Excel İndir</button>'    + '<button id="_tc_pdf" style="padding:9px 20px;background:#6b1b1b;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">📄 PDF İndir</button>'    + '</div>'    + '</div>';
 
   document.body.appendChild(overlay);
 
@@ -16773,6 +17146,30 @@ function _tcListesiModalAc(t) {
 
   overlay.querySelector('#_tc_pdf').onclick = function() {
     _tcListesiPdfIndir(t, katilimcilar);
+  };
+
+  overlay.querySelector('#_tc_excel').onclick = function() {
+    var data = _tcVeriOku();
+    var rows = [['No', 'Ad Soyad', 'Görevi', 'Doğum Tarihi', 'TC Kimlik No']];
+    katilimcilar.forEach(function(p, i) {
+      var key = p.kisi + '_' + (t._rowIdx || '');
+      var kayit = data[key] || {};
+      rows.push([
+        i + 1,
+        p.kisi || '',
+        (p.gorev || p.kategori || '').replace(/\s*\([^)]*\)\s*/g,'').trim(),
+        kayit.dogum || '',
+        kayit.tc || ''
+      ]);
+    });
+    var wb = XLSX.utils.book_new();
+    var ws = XLSX.utils.aoa_to_sheet(rows);
+    // Sütun genişlikleri
+    ws['!cols'] = [{wch:5},{wch:28},{wch:26},{wch:16},{wch:16}];
+    // Başlık satırı kalın
+    XLSX.utils.book_append_sheet(wb, ws, 'TC Listesi');
+    var oyunStr = (t.oyun || 'Turne').replace(/[^a-zA-Z0-9ğüşıöçĞÜŞİÖÇ\s]/g,'').trim().substring(0,30);
+    XLSX.writeFile(wb, oyunStr + '_TC_Listesi.xlsx');
   };
 
   // ── ŞİFRELİ YEDEK AL ──
@@ -16996,6 +17393,35 @@ function _tcListesiPdfIndir(t, katilimcilar) {
 
 // ── EK TURNE PDF: Katılımcı Listesi
 function _ekTurnePdfKatilimci(t) {
+  // Başlık düzenleme dialogu
+  var _varsayilanBaslik1 = 'EK KATILIMCI LİSTESİ';
+  var _varsayilanAlt1 = (t.oyun||'').toLocaleUpperCase('tr-TR');
+  var _ov1 = document.createElement('div');
+  _ov1.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+  _ov1.innerHTML = '<div style="background:var(--card);border-radius:12px;width:420px;max-width:97vw;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.3)">'
+    + '<div style="background:hsl(220,60%,40%);padding:14px 18px;color:#fff;font-weight:800;font-size:14px">📋 PDF Başlığı Düzenle</div>'
+    + '<div style="padding:16px 20px 8px">'
+    + '<label style="font-size:11px;font-weight:700;color:var(--muted-foreground);display:block;margin-bottom:4px">Başlık</label>'
+    + '<input id="_ekpdf1_bas" type="text" value="' + _varsayilanBaslik1 + '" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px;background:var(--card);color:var(--foreground);outline:none;margin-bottom:10px">'
+    + '<label style="font-size:11px;font-weight:700;color:var(--muted-foreground);display:block;margin-bottom:4px">Alt Başlık</label>'
+    + '<input id="_ekpdf1_alt" type="text" value="' + _varsayilanAlt1 + '" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px;background:var(--card);color:var(--foreground);outline:none">'
+    + '</div>'
+    + '<div style="padding:12px 20px 16px;display:flex;gap:10px">'
+    + '<button id="_ekpdf1_iptal" style="flex:1;padding:9px;border:1px solid var(--border);border-radius:8px;background:transparent;color:var(--muted-foreground);font-size:12px;font-weight:700;cursor:pointer">İptal</button>'
+    + '<button id="_ekpdf1_tamam" style="flex:2;padding:9px;border:none;border-radius:8px;background:hsl(220,60%,40%);color:#fff;font-size:12px;font-weight:800;cursor:pointer">PDF Oluştur</button>'
+    + '</div></div>';
+  document.body.appendChild(_ov1);
+  _ov1.querySelector('#_ekpdf1_iptal').onclick = function(){ document.body.removeChild(_ov1); };
+  _ov1.addEventListener('click', function(e){ if(e.target===_ov1) document.body.removeChild(_ov1); });
+  _ov1.querySelector('#_ekpdf1_tamam').onclick = function() {
+    var _bas1 = (_ov1.querySelector('#_ekpdf1_bas').value||'').trim() || _varsayilanBaslik1;
+    var _alt1 = (_ov1.querySelector('#_ekpdf1_alt').value||'').trim();
+    document.body.removeChild(_ov1);
+    _ekTurnePdfKatilimciRender(t, _bas1, _alt1);
+  };
+  return;
+}
+function _ekTurnePdfKatilimciRender(t, _pdfBaslikYazi, _pdfAltYazi) {
   var bugun = new Date().toLocaleDateString('tr-TR', { day:'numeric', month:'long', year:'numeric' });
   var oyunAdi = t.oyun || '';
   var ilStr = (typeof durakIlStr==='function' ? durakIlStr(t) : (t.il||'')).replace(/\/MERKEZ/gi,'');
@@ -17027,10 +17453,10 @@ function _ekTurnePdfKatilimci(t) {
   var icerik = ''
     + '<div style="border-bottom:2pt solid #6b1b1b;margin-bottom:10pt;padding-bottom:6pt;display:flex;justify-content:space-between;align-items:flex-end">'
     +   '<div>'
-    +     (oyunAdi ? '<div style="font-size:12pt;font-weight:900;text-transform:uppercase;letter-spacing:.5pt;color:#111">' + oyunAdi.toLocaleUpperCase('tr-TR') + '</div>' : '')
+    +     (_pdfAltYazi ? '<div style="font-size:12pt;font-weight:900;text-transform:uppercase;letter-spacing:.5pt;color:#111">' + _pdfAltYazi + '</div>' : '')
     +     '<div style="font-size:9pt;color:#555;margin-top:2pt">' + tarihStr + '</div>'
     +   '</div>'
-    +   '<div style="font-size:9pt;color:#6b1b1b;font-weight:700;text-transform:uppercase;letter-spacing:.4pt;text-align:right">' + ilStr.toLocaleUpperCase('tr-TR') + ' TURNESİ<br>EK KATILIMCI LİSTESİ</div>'
+    +   '<div style="font-size:9pt;color:#6b1b1b;font-weight:700;text-transform:uppercase;letter-spacing:.4pt;text-align:right">' + ilStr.toLocaleUpperCase('tr-TR') + ' TURNESİ<br>' + (_pdfBaslikYazi||'EK KATILIMCI LİSTESİ') + '</div>'
     + '</div>'
     + '<div style="font-size:9pt;color:#555;margin-bottom:10pt;text-align:right">Toplam: <strong>' + tumListe.length + '</strong> kişi &nbsp;·&nbsp; <span style="color:#6b1b1b"><b>' + bugun + '</b></span></div>'
     + '<table width="100%" style="border-collapse:collapse;font-size:10pt">'
@@ -17053,6 +17479,35 @@ function _ekTurnePdfKatilimci(t) {
 
 // ── EK TURNE PDF: Konaklama Listesi
 function _ekTurnePdfKonaklama(t) {
+  // Başlık düzenleme dialogu
+  var _varsayilanBaslik2 = 'EK KATILIMCI KONAKLAMA LİSTESİ';
+  var _varsayilanAlt2 = (t.oyun||'').toLocaleUpperCase('tr-TR');
+  var _ov2 = document.createElement('div');
+  _ov2.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+  _ov2.innerHTML = '<div style="background:var(--card);border-radius:12px;width:420px;max-width:97vw;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.3)">'
+    + '<div style="background:hsl(142,50%,30%);padding:14px 18px;color:#fff;font-weight:800;font-size:14px">🛏 PDF Başlığı Düzenle</div>'
+    + '<div style="padding:16px 20px 8px">'
+    + '<label style="font-size:11px;font-weight:700;color:var(--muted-foreground);display:block;margin-bottom:4px">Başlık</label>'
+    + '<input id="_ekpdf2_bas" type="text" value="' + _varsayilanBaslik2 + '" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px;background:var(--card);color:var(--foreground);outline:none;margin-bottom:10px">'
+    + '<label style="font-size:11px;font-weight:700;color:var(--muted-foreground);display:block;margin-bottom:4px">Alt Başlık</label>'
+    + '<input id="_ekpdf2_alt" type="text" value="' + _varsayilanAlt2 + '" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px;background:var(--card);color:var(--foreground);outline:none">'
+    + '</div>'
+    + '<div style="padding:12px 20px 16px;display:flex;gap:10px">'
+    + '<button id="_ekpdf2_iptal" style="flex:1;padding:9px;border:1px solid var(--border);border-radius:8px;background:transparent;color:var(--muted-foreground);font-size:12px;font-weight:700;cursor:pointer">İptal</button>'
+    + '<button id="_ekpdf2_tamam" style="flex:2;padding:9px;border:none;border-radius:8px;background:hsl(142,50%,30%);color:#fff;font-size:12px;font-weight:800;cursor:pointer">PDF Oluştur</button>'
+    + '</div></div>';
+  document.body.appendChild(_ov2);
+  _ov2.querySelector('#_ekpdf2_iptal').onclick = function(){ document.body.removeChild(_ov2); };
+  _ov2.addEventListener('click', function(e){ if(e.target===_ov2) document.body.removeChild(_ov2); });
+  _ov2.querySelector('#_ekpdf2_tamam').onclick = function() {
+    var _bas2 = (_ov2.querySelector('#_ekpdf2_bas').value||'').trim() || _varsayilanBaslik2;
+    var _alt2 = (_ov2.querySelector('#_ekpdf2_alt').value||'').trim();
+    document.body.removeChild(_ov2);
+    _ekTurnePdfKonaklamaRender(t, _bas2, _alt2);
+  };
+  return;
+}
+function _ekTurnePdfKonaklamaRender(t, _pdfBaslikYazi, _pdfAltYazi) {
   var aylar = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
   function _ft(d){ if(!d) return ''; var p=d.split('-'); try{ var _d=new Date(d+'T00:00:00'); var _gn=['Pazar','Pazartesi','Salı','Çarşamba','Perşembe','Cuma','Cumartesi']; return parseInt(p[2])+' '+aylar[parseInt(p[1])-1]+' '+p[0]+' '+_gn[_d.getDay()]; }catch(e){ return parseInt(p[2])+' '+aylar[parseInt(p[1])-1]+' '+p[0]; } }
   var tarihStr = t.baslangicTarih ? _ft(t.baslangicTarih) + (t.bitisTarih && t.bitisTarih!==t.baslangicTarih ? ' – ' + _ft(t.bitisTarih) : '') : '';
@@ -17134,9 +17589,9 @@ function _ekTurnePdfKonaklama(t) {
     + '<div class="no-print" style="position:fixed;top:10px;right:10px"><button onclick="window.print()" style="padding:8px 18px;background:#6b1b1b;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">🖨 Yazdır</button></div>'
     + '<div class="sayfa">'
     + '<div class="baslik">'
-    + '<h1>' + (t.oyun||'').toUpperCase() + '</h1>'
+    + '<h1>' + (_pdfAltYazi || (t.oyun||'').toUpperCase()) + '</h1>'
     + (tarihStr ? '<div style="font-size:' + h3Fnt + ';color:#6b1b1b;font-weight:700;margin-top:3pt;letter-spacing:.3pt">' + tarihStr + '</div>' : '')
-    + '<h2 style="font-size:' + h2Fnt + ';font-weight:600;text-transform:uppercase;letter-spacing:.5pt;color:#888;margin-top:4pt">' + (ilStr ? ilStr.toUpperCase() + ' TURNESİ KONAKLAMA LİSTESİ' : 'KONAKLAMA LİSTESİ') + ' — EK KATILIMCI</h2>'
+    + '<h2 style="font-size:' + h2Fnt + ';font-weight:600;text-transform:uppercase;letter-spacing:.5pt;color:#888;margin-top:4pt">' + (_pdfBaslikYazi || (ilStr ? ilStr.toUpperCase() + ' TURNESİ KONAKLAMA LİSTESİ' : 'KONAKLAMA LİSTESİ')) + '</h2>'
     + '</div>'
     + (tekler.length ? '<div class="bolum"><span class="bl">TEK ODA</span><span class="bs">'+tekler.length+' oda</span></div>'+'<div class="grid" style="grid-template-columns:repeat('+tekKol+',1fr);gap:'+gridGap+'">'+tekKartlar+'</div>' : '')
     + (ciftGr.length ? '<div class="bolum"><span class="bl">ÇİFT ODA</span><span class="bs">'+ciftGr.length+' oda</span></div>'+'<div class="grid" style="grid-template-columns:repeat('+ciftKol+',1fr);gap:'+gridGap+'">'+ciftKartlar+'</div>' : '')
@@ -17664,6 +18119,35 @@ function _wordPersonelIcerik(t) {
     +'<tr bgcolor="#f5f0eb"><td colspan="3" align="right" style="padding:5pt 9pt;border:1pt solid #dddddd;font-size:10pt;color:#555">Toplam <b>'+tumListe.length+'</b> ki\u015fi</td></tr>'
     +'</table>';
   return html;
+}
+
+function _ekTurnePdfSec(rowIdx) {
+  var t = turneler.find(function(x){ return x._rowIdx === rowIdx; });
+  if (!t) return;
+  // Ana turne ile aynı PDF seçim menüsünü göster
+  var overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9998;display:flex;align-items:center;justify-content:center;padding:16px';
+  var oyunAdi = (t.oyun || 'Ek Grup').toUpperCase();
+  overlay.innerHTML = '<div style="background:var(--card);border-radius:14px;width:400px;max-width:96vw;box-shadow:0 20px 60px rgba(0,0,0,.3);overflow:hidden">'
+    + '<div style="background:#1a1a2e;padding:16px 18px;display:flex;align-items:center;justify-content:space-between">'
+    +   '<div><div style="font-weight:800;font-size:14px;color:#fff">📄 PDF Oluştur</div>'
+    +   '<div style="font-size:11px;color:rgba(255,255,255,.65);margin-top:2px">' + oyunAdi + '</div></div>'
+    +   '<button id="_ekpdf_kapat" style="background:rgba(255,255,255,.12);border:none;color:#fff;border-radius:6px;width:28px;height:28px;cursor:pointer;font-size:15px">×</button>'
+    + '</div>'
+    + '<div style="padding:14px;display:flex;flex-direction:column;gap:8px">'
+    +   '<button id="_ekpdf_tam" style="padding:11px 14px;background:var(--primary);color:var(--primary-foreground);border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;text-align:left">📋 Tam PDF<div style="font-size:10px;font-weight:400;margin-top:2px;opacity:.85">Görevlendirme yazısı + program + kadro</div></button>'
+    +   '<button id="_ekpdf_prog" style="padding:11px 14px;background:var(--card);color:var(--foreground);border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;text-align:left">📅 Turne Programı<div style="font-size:10px;font-weight:400;margin-top:2px;color:var(--muted-foreground)">Sadece program tablosu</div></button>'
+    +   '<button id="_ekpdf_per" style="padding:11px 14px;background:var(--card);color:var(--foreground);border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;text-align:left">👥 Kişi Listesi<div style="font-size:10px;font-weight:400;margin-top:2px;color:var(--muted-foreground)">Görev + kadro listesi</div></button>'
+    +   '<button id="_ekpdf_tc" style="padding:11px 14px;background:#6b1b1b;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;text-align:left">📋 T.C. Listesi<div style="font-size:10px;font-weight:400;margin-top:2px;opacity:.85">TC + doğum tarihi — yalnızca tarayıcıda saklanır</div></button>'
+    + '</div>'
+    + '</div>';
+  document.body.appendChild(overlay);
+  overlay.querySelector('#_ekpdf_kapat').onclick = function(){ document.body.removeChild(overlay); };
+  overlay.addEventListener('click', function(e){ if(e.target===overlay) document.body.removeChild(overlay); });
+  overlay.querySelector('#_ekpdf_tam').onclick   = function(){ document.body.removeChild(overlay); gorevlendirmePdf(rowIdx,'tam'); };
+  overlay.querySelector('#_ekpdf_prog').onclick  = function(){ document.body.removeChild(overlay); gorevlendirmePdf(rowIdx,'program'); };
+  overlay.querySelector('#_ekpdf_per').onclick   = function(){ document.body.removeChild(overlay); gorevlendirmePdf(rowIdx,'personel'); };
+  overlay.querySelector('#_ekpdf_tc').onclick    = function(){ document.body.removeChild(overlay); _tcListesiModalAc(t); };
 }
 
 function gorevlendirmePdf(rowIdx, mod, overrideTurne) {
