@@ -7322,11 +7322,14 @@ function _memnuniyetSekmesiHTML(t, rowIdx) {
       if (!tr.memnuniyet) return;
       var mm = tr.memnuniyet;
       var baslik = (tr.oyun || '') + (tr.il ? ' / ' + tr.il : '') + (tr.basTarih ? ' (' + tr.basTarih + ')' : '');
-      ['otel','otobus','kamyon'].forEach(function(key) {
-        var puan = mm[key + 'Puan'] || 0;
-        var not  = mm[key + 'Not']  || '';
-        if (puan || not) {
-          tumDegerl.push({ turne: baslik, key: key, puan: puan, not: not, rowIdx: tr._rowIdx });
+      Object.keys(mm).forEach(function(k) {
+        var match = k.match(/^(.*)(Puan|Not)$/);
+        if (!match) return;
+        var base = match[1], tip = match[2];
+        var puan = tip === 'Puan' ? mm[k] : (mm[base + 'Puan'] || 0);
+        var not  = tip === 'Not'  ? mm[k] : (mm[base + 'Not']  || '');
+        if ((puan || not) && !tumDegerl.some(function(x){ return x.rowIdx === tr._rowIdx && x.key === base; })) {
+          tumDegerl.push({ turne: baslik, key: base, puan: puan, not: not, rowIdx: tr._rowIdx });
         }
       });
       if (mm.notlar) {
@@ -7422,11 +7425,14 @@ function _memnuniyetSekmesiHTML(t, rowIdx) {
 
 function _memnuniyetDoluMu(m) {
   if (!m) return false;
-  return !!(m.otelPuan || m.otobusPuan || m.kamyonPuan ||
-    (m.otelNot && String(m.otelNot).trim()) ||
-    (m.otobusNot && String(m.otobusNot).trim()) ||
-    (m.kamyonNot && String(m.kamyonNot).trim()) ||
-    (m.notlar && String(m.notlar).trim()));
+  // Tüm Puan/Not anahtarlarını tara (otel0Puan, otel1Puan, kamyonPuan, ... dahil)
+  for (var k in m) {
+    if (!Object.prototype.hasOwnProperty.call(m, k)) continue;
+    if (/Puan$/.test(k) && m[k]) return true;
+    if (/Not$/.test(k) && m[k] && String(m[k]).trim()) return true;
+  }
+  if (m.notlar && String(m.notlar).trim()) return true;
+  return false;
 }
 
 // Memnuniyet verisini localStorage'a ve session cache'e kaydeder (yenilemede kaybolmasın)
@@ -8128,8 +8134,8 @@ function _odaPlanYildizBilgi(t) {
   if (!firmaList.some(function(f){return f.tip==='Otel';}) && t.otelAdi) ekle('Otel', t.otelAdi);
   var tgf = firmaCek(t.gidisSurucu); if (tgf) ekle('Otobüs', tgf);
   var tdf = firmaCek(t.donusSurucu); if (tdf) ekle('Otobüs', tdf);
-  // Turne seviyesinde lojNot
-  var tlf = lojFirmaCek(t.lojNot); if (tlf) ekle('Lojistik', tlf);
+  // Turne seviyesinde lojistik notu — alan adı 'notlar' veya 'lojNot' olabilir
+  var tlf = lojFirmaCek(t.lojNot) || lojFirmaCek(t.notlar); if (tlf) ekle('Lojistik', tlf);
 
   return { tarih: tarihStr, firmalar: firmaList };
 }
@@ -9667,11 +9673,11 @@ function _degerlendirmePaneliDoldur() {
     var tarih = _yld.tarih || ((t.basTarih || '') + (t.bitTarih ? ' – ' + t.bitTarih : ''));
     var firmalar = _yld.firmalar || [];
 
-    // Ortalama puan
+    // Ortalama puan — tüm *Puan anahtarlarını topla
     var puanlar = [];
-    if (m.otelPuan)  puanlar.push(m.otelPuan);
-    if (m.otobusPuan) puanlar.push(m.otobusPuan);
-    if (m.kamyonPuan) puanlar.push(m.kamyonPuan);
+    Object.keys(m).forEach(function(k){
+      if (/Puan$/.test(k) && m[k]) puanlar.push(m[k]);
+    });
     var ort = puanlar.length ? (puanlar.reduce(function(a,b){return a+b;},0)/puanlar.length) : 0;
 
     html += '<div style="border:1px solid var(--border);border-radius:10px;overflow:hidden">';
@@ -9689,15 +9695,45 @@ function _degerlendirmePaneliDoldur() {
     }
     html += '</div>';
 
-    // Detay satırları
+    // Detay satırları — tüm puan/not anahtarlarını dinamik tara (otel0, otel1, ... dahil)
     html += '<div style="padding:8px 12px;display:flex;flex-direction:column;gap:6px">';
-    ['otel','otobus','kamyon'].forEach(function(key) {
+    var _otelDuraklarPanel = (t.duraklar || []).filter(function(d){ return d.otelAdi && d.otelAdi.trim(); });
+    var _keys = [];
+    Object.keys(m).forEach(function(k){
+      var mk = k.match(/^(.*)(Puan|Not)$/);
+      if (!mk) return;
+      var base = mk[1];
+      if (_keys.indexOf(base) === -1) _keys.push(base);
+    });
+    // Sıralama: otel*, otobus, kamyon, lojistik, diğerleri
+    _keys.sort(function(a,b){
+      var ord = function(x){
+        if (x.indexOf('otel') === 0) return 0;
+        if (x === 'otobus') return 1;
+        if (x === 'kamyon') return 2;
+        if (x === 'lojistik') return 3;
+        return 4;
+      };
+      return ord(a) - ord(b);
+    });
+    _keys.forEach(function(key) {
       var puan = m[key+'Puan'] || 0;
       var not  = (m[key+'Not'] || '').trim();
       if (!puan && !not) return;
-      var firmaAdi = _firmaAdlariByKey(firmalar, key);
+      var label;
+      var firmaAdi = '';
+      var mIdx = key.match(/^otel(\d+)$/);
+      if (mIdx) {
+        var idx = parseInt(mIdx[1]);
+        var d = _otelDuraklarPanel[idx];
+        firmaAdi = d ? (d.otelAdi || '') : '';
+        label = '🏨 Otel' + (d && d.il ? ' (' + d.il + ')' : '');
+      } else {
+        label = YILDIZ_LABEL[key] || key;
+        firmaAdi = _firmaAdlariByKey(firmalar, key);
+      }
       html += '<div style="display:flex;align-items:flex-start;gap:8px">';
-      html += '<span style="font-size:11px;color:var(--muted-foreground);width:185px;flex-shrink:0;padding-top:1px;line-height:1.35">'+YILDIZ_LABEL[key] + (firmaAdi ? '<br><strong style="font-size:10.5px;color:var(--foreground);font-weight:800">' + firmaAdi.replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</strong>' : '') + '</span>';
+      html += '<span style="font-size:11px;color:var(--muted-foreground);width:185px;flex-shrink:0;padding-top:1px;line-height:1.35">'+label + (firmaAdi ? '<br><strong style="font-size:10.5px;color:var(--foreground);font-weight:800">' + firmaAdi.replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</strong>' : '') + '</span>';
       html += '<div style="flex:1;min-width:0">';
       html += '<div style="display:flex;align-items:center;gap:2px">'+yildizHtml(puan)+'</div>';
       if (not) html += '<div style="font-size:10.5px;color:var(--foreground);font-style:italic;margin-top:3px;line-height:1.4">'+not.replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</div>';
