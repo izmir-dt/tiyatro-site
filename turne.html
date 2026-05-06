@@ -6993,7 +6993,14 @@ function _memnuniyetPuanKaydet(rowIdx, tip, puan) {
   var t = turneler.find(function(x){ return String(x._rowIdx) === String(rowIdx); });
   if (!t) return;
   if (!t.memnuniyet) t.memnuniyet = {};
-  t.memnuniyet[tip + 'Puan'] = puan;
+  // Aynı yıldıza tekrar tıklarsa puanı sıfırla (iptal)
+  var mevcut = t.memnuniyet[tip + 'Puan'] || 0;
+  if (mevcut === puan) puan = 0;
+  if (puan === 0) {
+    delete t.memnuniyet[tip + 'Puan'];
+  } else {
+    t.memnuniyet[tip + 'Puan'] = puan;
+  }
   _memnuniyetSheetKaydet(t);
   if (typeof _degerlendirmeBadgeGuncelle === 'function') _degerlendirmeBadgeGuncelle();
   // Yildizlari yerinde guncelle — sekmeyi DEGISTIRME
@@ -7553,29 +7560,26 @@ function _odaPlanYildizBilgi(t) {
     firmaSet[k] = true;
     firmaList.push({ tip: label, ad: name });
   };
+  // Helper: "kalkış|FIRMA:x|TEL:y" formatından firma adı çek
+  var firmaCek = function(s) {
+    if (!s) return '';
+    var idx = s.indexOf('|FIRMA:');
+    if (idx === -1) return '';
+    var rest = s.slice(idx + 7);
+    var pipe = rest.indexOf('|');
+    return (pipe === -1 ? rest : rest.slice(0, pipe)).trim();
+  };
   // Duraklardan
   (t.duraklar || []).forEach(function(d) {
     if (d.otelAdi) ekle('Otel', d.otelAdi);
-    if (d.gidisSurucu) {
-      var s = d.gidisSurucu;
-      if (s.indexOf('|FIRMA:') > -1) {
-        s.split('|').slice(1).forEach(function(p){
-          if (p.indexOf('FIRMA:') === 0) ekle('Gidiş Otobüs', p.slice(6));
-        });
-      }
-    }
-    if (d.donusSurucu) {
-      var s2 = d.donusSurucu;
-      if (s2.indexOf('|FIRMA:') > -1) {
-        s2.split('|').slice(1).forEach(function(p){
-          if (p.indexOf('FIRMA:') === 0) ekle('Dönüş Otobüs', p.slice(6));
-        });
-      }
-    }
-    if (d.kamyonFirma) ekle('Dekor Kamyon', d.kamyonFirma);
+    var gf = firmaCek(d.gidisSurucu); if (gf) ekle('Otobüs', gf);
+    var df = firmaCek(d.donusSurucu); if (df) ekle('Otobüs', df);
+    if (d.kamyonFirma) ekle('Kamyon', d.kamyonFirma);
   });
-  // Geriye uyumluluk: ana otelAdi
+  // Geriye uyumluluk: turne seviyesi alanlar
   if (!firmaList.some(function(f){return f.tip==='Otel';}) && t.otelAdi) ekle('Otel', t.otelAdi);
+  var tgf = firmaCek(t.gidisSurucu); if (tgf) ekle('Otobüs', tgf);
+  var tdf = firmaCek(t.donusSurucu); if (tdf) ekle('Otobüs', tdf);
 
   return { tarih: tarihStr, firmalar: firmaList };
 }
@@ -8298,10 +8302,7 @@ function _odaPlanPdfGenerate(t, plan, planKat, yeniBaslik, yeniAlt) {
     icHtml += '<div class="bolum"><span class="bl">ÇİFT ODA</span><span class="bs">' + ciftGr.length + ' oda</span></div>'
       + '<div class="grid" style="grid-template-columns:repeat(' + ciftKol + ',1fr);gap:' + gap + '">' + ciftGr.map(ciftKartiHtml).join('') + '</div>';
   }
-  if (munfList.length > 0) {
-    icHtml += '<div class="bolum" style="background:#92400e"><span class="bl">MÜNFERİT</span><span class="bs">' + munfList.length + ' kişi</span></div>'
-      + '<div class="grid" style="grid-template-columns:repeat(' + munfKol + ',1fr);gap:' + gap + '">' + munfList.map(munfKartiHtml).join('') + '</div>';
-  }
+  // Not: Münferitler oda planı PDF'ine eklenmez (kullanıcı isteği).
   if (!icHtml) {
     icHtml = '<div style="padding:20pt;text-align:center;color:#888;font-size:11pt">Bu planda oda ataması yapılmamış.</div>';
   }
