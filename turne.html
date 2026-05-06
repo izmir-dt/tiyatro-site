@@ -6792,19 +6792,35 @@ function _renderCardDetail(rowIdx) {
   box.innerHTML = headerHtml + tabsHtml + '<div class="cd-scroll-wrap"><div class="cd-body">' + bodyContent + '</div></div>' + footerHtml;
   var newBody = box.querySelector('.cd-body');
   var newWrap = box.querySelector('.cd-scroll-wrap');
-  if (newBody) newBody.scrollTop = scrollTop;
-  if (newWrap) newWrap.scrollTop = scrollTop;
-  // İç scrolllar
+  // scroll-behavior:smooth scrollTop atamalarını animasyona çeviriyor — geçici olarak auto'ya al
+  var prevBodyBeh = '', prevWrapBeh = '';
+  if (newBody) { prevBodyBeh = newBody.style.scrollBehavior; newBody.style.scrollBehavior = 'auto'; }
+  if (newWrap) { prevWrapBeh = newWrap.style.scrollBehavior; newWrap.style.scrollBehavior = 'auto'; }
+  var innerPrevBeh = {};
   Object.keys(innerScrolls).forEach(function(id){
     var el = box.querySelector('#' + CSS.escape(id));
-    if (el) el.scrollTop = innerScrolls[id];
+    if (el) { innerPrevBeh[id] = el.style.scrollBehavior; el.style.scrollBehavior = 'auto'; }
   });
-  requestAnimationFrame(function(){
+  function _restoreScrolls(){
     if (newBody) newBody.scrollTop = scrollTop;
     if (newWrap) newWrap.scrollTop = scrollTop;
     Object.keys(innerScrolls).forEach(function(id){
       var el = box.querySelector('#' + CSS.escape(id));
       if (el) el.scrollTop = innerScrolls[id];
+    });
+  }
+  _restoreScrolls();
+  requestAnimationFrame(function(){
+    _restoreScrolls();
+    requestAnimationFrame(function(){
+      _restoreScrolls();
+      // Smooth davranışı geri yükle
+      if (newBody) newBody.style.scrollBehavior = prevBodyBeh;
+      if (newWrap) newWrap.style.scrollBehavior = prevWrapBeh;
+      Object.keys(innerPrevBeh).forEach(function(id){
+        var el = box.querySelector('#' + CSS.escape(id));
+        if (el) el.style.scrollBehavior = innerPrevBeh[id];
+      });
     });
   });
 }
@@ -16315,24 +16331,24 @@ function _istKisiListeHTML(liste, ara) {
   return filtreli.map(function(e){
     var ad = e[0], d = e[1];
     var initials = ad.split(' ').map(function(w){ return w[0]||''; }).slice(0,2).join('').toLocaleUpperCase('tr-TR');
-    return '<div style="border:1.5px solid var(--border);border-radius:10px;background:var(--card);margin-bottom:10px;overflow:hidden">'
-      + '<div style="display:flex;align-items:center;gap:12px;padding:12px 14px;cursor:pointer;background:var(--muted)" onclick="_istKisiToggle(this)">'
-      + '<div style="width:36px;height:36px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0">'+initials+'</div>'
+    return '<div style="border:1px solid var(--border);border-radius:10px;background:var(--card);margin-bottom:8px;overflow:hidden">'
+      + '<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;cursor:pointer;background:var(--muted)" onclick="_istKisiToggle(this)">'
+      + '<div style="width:28px;height:28px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">'+initials+'</div>'
       + '<div style="flex:1;min-width:0">'
-      + '<div style="font-size:13px;font-weight:700;color:var(--foreground)">'+ad+'</div>'
+      + '<div style="font-size:12px;font-weight:700;color:var(--foreground)">'+ad+'</div>'
       + '<div style="font-size:10px;color:var(--muted-foreground)">'+d.gorev+'</div>'
       + '</div>'
-      + '<div style="display:flex;align-items:center;gap:10px;flex-shrink:0">'
+      + '<div style="display:flex;align-items:center;gap:8px;flex-shrink:0">'
       + '<div style="text-align:right">'
-      + '<div style="font-size:20px;font-weight:900;color:var(--primary);line-height:1">'+d.turne+'</div>'
+      + '<div style="font-size:13px;font-weight:800;color:var(--primary);line-height:1.1">'+d.turne+'</div>'
       + '<div style="font-size:9px;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.3px">turne</div>'
       + '</div>'
-      + '<div style="text-align:right;padding-left:10px;border-left:1px solid var(--border)">'
-      + '<div style="font-size:18px;font-weight:900;color:hsl(220,65%,45%);line-height:1">'+d.gun+'</div>'
+      + '<div style="text-align:right;padding-left:8px;border-left:1px solid var(--border)">'
+      + '<div style="font-size:13px;font-weight:800;color:hsl(220,65%,45%);line-height:1.1">'+d.gun+'</div>'
       + '<div style="font-size:9px;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.3px">gün</div>'
       + '</div>'
       + '</div>'
-      + '<span style="color:var(--muted-foreground);font-size:14px;margin-left:4px;transition:.2s">▼</span>'
+      + '<span style="color:var(--muted-foreground);font-size:12px;margin-left:4px;transition:.2s">▼</span>'
       + '</div>'
       + '<div class="ist-detay" style="display:none;padding:10px 14px;border-top:1px solid var(--border)">'
       + d.list.map(function(t){ return _istTurneKarti(t); }).join('')
@@ -16370,18 +16386,18 @@ function _istOyunListeHTML(liste, ara) {
     });
     var ilBadges = Object.entries(oyunIller).sort(function(a,b){ return b[1]-a[1]; }).slice(0,8)
       .map(function(e){ return '<span style="display:inline-block;padding:2px 8px;border-radius:20px;background:hsl(220,60%,94%);color:hsl(220,60%,35%);font-size:10px;font-weight:600;margin:2px">'+e[0]+(e[1]>1?' ('+e[1]+')':'')+'</span>'; }).join('');
-    return '<div style="border:1.5px solid var(--border);border-radius:10px;background:var(--card);margin-bottom:10px;overflow:hidden">'
-      + '<div style="display:flex;align-items:center;gap:12px;padding:12px 14px;cursor:pointer;background:var(--muted)" onclick="_istKisiToggle(this)">'
-      + '<div style="width:36px;height:36px;border-radius:8px;background:hsl(350,60%,94%);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">🎭</div>'
+    return '<div style="border:1px solid var(--border);border-radius:10px;background:var(--card);margin-bottom:8px;overflow:hidden">'
+      + '<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;cursor:pointer;background:var(--muted)" onclick="_istKisiToggle(this)">'
+      + '<div style="width:28px;height:28px;border-radius:8px;background:hsl(350,60%,94%);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">🎭</div>'
       + '<div style="flex:1;min-width:0">'
-      + '<div style="font-size:13px;font-weight:700;color:var(--foreground)">'+oyun+'</div>'
-      + '<div style="margin-top:4px">'+ilBadges+'</div>'
+      + '<div style="font-size:12px;font-weight:700;color:var(--foreground)">'+oyun+'</div>'
+      + '<div style="margin-top:3px">'+ilBadges+'</div>'
       + '</div>'
       + '<div style="text-align:right;flex-shrink:0">'
-      + '<div style="font-size:20px;font-weight:900;color:var(--primary)">'+turneListe.length+'</div>'
+      + '<div style="font-size:13px;font-weight:800;color:var(--primary);line-height:1.1">'+turneListe.length+'</div>'
       + '<div style="font-size:9px;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.3px">turne</div>'
       + '</div>'
-      + '<span style="color:var(--muted-foreground);font-size:14px;margin-left:4px;transition:.2s">▼</span>'
+      + '<span style="color:var(--muted-foreground);font-size:12px;margin-left:4px;transition:.2s">▼</span>'
       + '</div>'
       + '<div class="ist-detay" style="display:none;padding:10px 14px;border-top:1px solid var(--border)">'
       + turneListe.map(function(t){ return _istTurneKarti(t); }).join('')
@@ -16404,18 +16420,18 @@ function _istIlListeHTML(liste, ara) {
     turneListe.forEach(function(t){ if(t.oyun) oyunlar[t.oyun]=(oyunlar[t.oyun]||0)+1; });
     var oyunBadges = Object.entries(oyunlar).sort(function(a,b){ return b[1]-a[1]; }).slice(0,6)
       .map(function(e){ return '<span style="display:inline-block;padding:2px 8px;border-radius:20px;background:hsl(38,70%,93%);color:hsl(38,70%,28%);font-size:10px;font-weight:600;margin:2px">'+e[0]+(e[1]>1?' ('+e[1]+')':'')+'</span>'; }).join('');
-    return '<div style="border:1.5px solid var(--border);border-radius:10px;background:var(--card);margin-bottom:10px;overflow:hidden">'
-      + '<div style="display:flex;align-items:center;gap:12px;padding:12px 14px;cursor:pointer;background:var(--muted)" onclick="_istKisiToggle(this)">'
-      + '<div style="width:36px;height:36px;border-radius:8px;background:hsl(142,50%,93%);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">📍</div>'
+    return '<div style="border:1px solid var(--border);border-radius:10px;background:var(--card);margin-bottom:8px;overflow:hidden">'
+      + '<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;cursor:pointer;background:var(--muted)" onclick="_istKisiToggle(this)">'
+      + '<div style="width:28px;height:28px;border-radius:8px;background:hsl(142,50%,93%);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">📍</div>'
       + '<div style="flex:1;min-width:0">'
-      + '<div style="font-size:13px;font-weight:700;color:var(--foreground)">'+il+'</div>'
-      + '<div style="margin-top:4px">'+oyunBadges+'</div>'
+      + '<div style="font-size:12px;font-weight:700;color:var(--foreground)">'+il+'</div>'
+      + '<div style="margin-top:3px">'+oyunBadges+'</div>'
       + '</div>'
       + '<div style="text-align:right;flex-shrink:0">'
-      + '<div style="font-size:20px;font-weight:900;color:var(--primary)">'+turneListe.length+'</div>'
+      + '<div style="font-size:13px;font-weight:800;color:var(--primary);line-height:1.1">'+turneListe.length+'</div>'
       + '<div style="font-size:9px;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.3px">turne</div>'
       + '</div>'
-      + '<span style="color:var(--muted-foreground);font-size:14px;margin-left:4px;transition:.2s">▼</span>'
+      + '<span style="color:var(--muted-foreground);font-size:12px;margin-left:4px;transition:.2s">▼</span>'
       + '</div>'
       + '<div class="ist-detay" style="display:none;padding:10px 14px;border-top:1px solid var(--border)">'
       + turneListe.map(function(t){ return _istTurneKarti(t); }).join('')
