@@ -2,6 +2,17 @@
 
 <!-- saved from url=(0067)https://property-management-14.preview.emergentagent.com/turne.html -->
 <html lang="tr"><head><meta content="text/html; charset=utf-8" http-equiv="Content-Type"/>
+<style>
+/* === GLOBAL FONT TUTARLILIĞI === */
+html, body, button, input, select, textarea, table, th, td, div, span, p, a, label, option, optgroup {
+  font-family: 'DM Sans', 'Segoe UI', system-ui, -apple-system, sans-serif !important;
+}
+kbd, code, pre, .stat-value, .mono { font-family: 'DM Mono', ui-monospace, monospace !important; }
+* { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; text-rendering: optimizeLegibility; }
+/* Türkçe karakter güvenliği */
+body { unicode-bidi: plaintext; }
+</style>
+
 <meta content="width=device-width, initial-scale=1.0, maximum-scale=1" name="viewport"/>
 <script>
 // Tarih string'ini timezone-safe parse et (YYYY-MM-DD → local time)
@@ -27,7 +38,7 @@ function parseLocalDate(str) {
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="./Turne Yönetimi – İzmir Devlet Tiyatrosu_files/xlsx.full.min.js.indir"></script>
 <link crossorigin="" href="https://fonts.gstatic.com/" rel="preconnect"/>
-<link href="./Turne Yönetimi – İzmir Devlet Tiyatrosu_files/css2" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap&subset=latin,latin-ext" rel="stylesheet"/>
 <style>
     /* ===== AÇIK TEMA — Tiyatro Altın & Toprak ===== */
     :root {
@@ -4972,7 +4983,12 @@ function _cacheSil(key) { try { sessionStorage.removeItem(key); } catch(e) {} }
 async function fetchTurneler(zorlaYenile) {
   if (!zorlaYenile) {
     var _cached = _cacheOku('cache_turneler');
-    if (_cached && _cached.length) { turneler = _cached; _turneYukleniyor = false; return; }
+    if (_cached && _cached.length) {
+      turneler = _cached;
+      try { if (typeof _memnuniyetLocalGeriYukle === 'function') _memnuniyetLocalGeriYukle(); } catch(e){}
+      _turneYukleniyor = false;
+      return;
+    }
   }
   try {
     const res  = await apiFetch('/' + encodeURIComponent(TURNE_SHEET));
@@ -5104,8 +5120,14 @@ async function fetchTurneler(zorlaYenile) {
         if (raw.startsWith('[')) { try { var op = JSON.parse(raw); if (Array.isArray(op)) return op; } catch(e){} }
         return [];
       })(),
+      memnuniyet: (() => {
+        var raw = (r[44]||'').trim();
+        if (raw.startsWith('{')) { try { var mm = JSON.parse(raw); if (mm && typeof mm === 'object') return mm; } catch(e){} }
+        return {};
+      })(),
       };
     }).filter(r => r.oyun || r.il || r.baslangicTarih || (r.duraklar && r.duraklar.length));
+  try { if (typeof _memnuniyetLocalGeriYukle === 'function') _memnuniyetLocalGeriYukle(); } catch(e){}
   _cacheYaz('cache_turneler', turneler);
   _turneYukleniyor = false;
   } catch(e) { _turneYukleniyor = false; console.warn('Turne verisi çekilemedi:', e); }
@@ -6760,11 +6782,20 @@ function _renderCardDetail(rowIdx) {
     + '</div>';
 
   var box = document.getElementById('card-detail-box');
-  var scrollWrap = box ? box.querySelector('.cd-scroll-wrap') : null;
-  var scrollTop = scrollWrap ? scrollWrap.scrollTop : 0;
+  // Gerçek scroll edilen element .cd-body — onun scrollTop'unu koru
+  var oldBody = box ? box.querySelector('.cd-body') : null;
+  var oldWrap = box ? box.querySelector('.cd-scroll-wrap') : null;
+  var scrollTop = (oldBody && oldBody.scrollTop) || (oldWrap && oldWrap.scrollTop) || 0;
   box.innerHTML = headerHtml + tabsHtml + '<div class="cd-scroll-wrap"><div class="cd-body">' + bodyContent + '</div></div>' + footerHtml;
-  var newScrollWrap = box.querySelector('.cd-scroll-wrap');
-  if (newScrollWrap && scrollTop) newScrollWrap.scrollTop = scrollTop;
+  if (scrollTop) {
+    var newBody = box.querySelector('.cd-body');
+    var newWrap = box.querySelector('.cd-scroll-wrap');
+    // Hem yeni body hem de wrap'ta scroll'u uygula (CSS hangisi scroll ediyorsa)
+    requestAnimationFrame(function(){
+      if (newBody) newBody.scrollTop = scrollTop;
+      if (newWrap) newWrap.scrollTop = scrollTop;
+    });
+  }
 }
 
 // ════════════════════════════════════════════════════════════
@@ -6805,20 +6836,47 @@ function _memnuniyetSekmesiHTML(t, rowIdx) {
 
   var html = '<div style="padding:12px 16px 8px">';
 
-  // Tüm turne değerlendirmeleri paneli kaldırıldı
+  // Bu turneye ait firmalar (Otel, Otobüs, Kamyon vb.) — değerlendirilen taraflar
+  var _yld = (typeof _odaPlanYildizBilgi === 'function') ? _odaPlanYildizBilgi(t) : { tarih:'', firmalar:[] };
+  if (_yld.firmalar && _yld.firmalar.length) {
+    html += '<div style="margin-bottom:12px;padding:10px 12px;background:#fffbeb;border:1px solid #fde68a;border-radius:10px">';
+    html += '<div style="font-size:10.5px;font-weight:800;color:#78350f;margin-bottom:6px;letter-spacing:.3px">🏢 DEĞERLENDİRİLEN FİRMALAR</div>';
+    html += '<div style="display:flex;flex-wrap:wrap;gap:5px">';
+    _yld.firmalar.forEach(function(f) {
+      var ikon = f.tip === 'Otel' ? '🏨' : (f.tip.indexOf('Otobüs') > -1 ? '🚌' : '🚛');
+      html += '<span title="'+f.tip+'" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;padding:3px 9px;border-radius:12px;background:#fef3c7;color:#78350f;border:1px solid #fde68a">'
+        + '<span>'+ikon+'</span>'
+        + '<span style="opacity:.7;font-weight:600">'+f.tip+':</span>'
+        + '<span>'+f.ad.replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</span>'
+        + '</span>';
+    });
+    html += '</div></div>';
+  }
 
   html += '<div style="font-size:11px;color:var(--muted-foreground);margin-bottom:12px;line-height:1.5">';
   html += 'Turneden sonra değerlendirme notları ve memnuniyet puanları girin. Bu bilgiler PDF\'e eklenmez, yalnızca kayıt amaçlıdır.';
   html += '</div>';
 
+  function _memFirmaAdlariByKey(firmalar, key) {
+    var eslesen = (firmalar || []).filter(function(f) {
+      var tip = (f.tip || '').toLowerCase();
+      if (key === 'otel') return tip.indexOf('otel') > -1;
+      if (key === 'otobus') return tip.indexOf('otobüs') > -1 || tip.indexOf('otobus') > -1;
+      if (key === 'kamyon') return tip.indexOf('kamyon') > -1 || tip.indexOf('lojistik') > -1;
+      return false;
+    }).map(function(f){ return f.ad; }).filter(Boolean);
+    return eslesen.filter(function(ad, i){ return eslesen.indexOf(ad) === i; }).join(' / ');
+  }
+
   html += '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px">';
   puanlar.forEach(function(p) {
     var puan = m[p.key + 'Puan'] || 0;
     var pNot = (m[p.key + 'Not'] || '').replace(/"/g, '&quot;');
+    var firmaAdi = _memFirmaAdlariByKey(_yld.firmalar || [], p.key);
     html += '<div style="border:1px solid var(--border);border-radius:10px;overflow:hidden">';
     html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:var(--muted);gap:8px">';
-    html += '<div>';
-    html += '<div style="font-size:12px;font-weight:700">' + p.label + '</div>';
+    html += '<div style="min-width:0">';
+    html += '<div style="font-size:12px;font-weight:700;line-height:1.35">' + p.label + (firmaAdi ? ' <span style="font-size:11px;color:var(--foreground);font-weight:800">— ' + firmaAdi.replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</span>' : '') + '</div>';
     html += '<div style="font-size:10px;color:var(--muted-foreground)">' + p.aciklama + '</div>';
     html += '</div>';
     // Yildiz konteyneri — id ile yerinde güncelleme için
@@ -6855,13 +6913,68 @@ function _memnuniyetSekmesiHTML(t, rowIdx) {
   return html;
 }
 
-// Memnuniyet verisini localStorage'a kaydeder (offline HTML için)
+function _memnuniyetDoluMu(m) {
+  if (!m) return false;
+  return !!(m.otelPuan || m.otobusPuan || m.kamyonPuan ||
+    (m.otelNot && String(m.otelNot).trim()) ||
+    (m.otobusNot && String(m.otobusNot).trim()) ||
+    (m.kamyonNot && String(m.kamyonNot).trim()) ||
+    (m.notlar && String(m.notlar).trim()));
+}
+
+// Memnuniyet verisini localStorage'a ve session cache'e kaydeder (yenilemede kaybolmasın)
 function _memnuniyetLocalKaydet() {
   try {
-    localStorage.setItem('turne_memnuniyet', JSON.stringify(
-      (turneler || []).map(function(t) { return { _rowIdx: t._rowIdx, memnuniyet: t.memnuniyet || {} }; })
-    ));
-  } catch(e) { console.warn('Memnuniyet kayıt hatası:', e); }
+    var data = (turneler || []).map(function(t) { return { _rowIdx: t._rowIdx, memnuniyet: t.memnuniyet || {} }; });
+    localStorage.setItem('turne_memnuniyet', JSON.stringify(data));
+    try { _cacheYaz('cache_turneler', turneler); } catch(e2) {}
+  } catch(e) { console.warn('Memnuniyet local kayıt hatası:', e); }
+}
+
+// Sheet'e kaydet (r[44] = memnuniyet JSON). Debounce'lu, hızlı tıklamada API spam etmesin.
+window._memnuniyetSheetTimers = window._memnuniyetSheetTimers || {};
+function _memnuniyetSheetKaydet(t) {
+  if (!t || t._rowIdx == null) return;
+  _memnuniyetLocalKaydet();
+  var key = String(t._rowIdx);
+  clearTimeout(window._memnuniyetSheetTimers[key]);
+  window._memnuniyetSheetTimers[key] = setTimeout(function() {
+    try {
+      apiFetch('/' + encodeURIComponent(TURNE_SHEET) + '/cell', {
+        method: 'PUT',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ row: t._rowIdx + 2, col: 44, value: JSON.stringify(t.memnuniyet||{}) })
+      }).then(function(res){
+        if (res && !res.ok) throw new Error('HTTP ' + res.status);
+        try { _cacheYaz('cache_turneler', turneler); } catch(e2) {}
+      }).catch(function(e){ console.warn('Memnuniyet sheet kayıt hatası:', e); });
+    } catch(e) { console.warn(e); }
+  }, 800);
+}
+
+// Sayfa açılışında localStorage'daki memnuniyet verisini turnelere geri yükle
+function _memnuniyetLocalGeriYukle() {
+  try {
+    var raw = localStorage.getItem('turne_memnuniyet');
+    if (!raw) return;
+    var arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return;
+    var map = {};
+    arr.forEach(function(x){ if (x && x._rowIdx != null) map[String(x._rowIdx)] = x.memnuniyet || {}; });
+    var degisti = false;
+    (turneler || []).forEach(function(t) {
+      var lm = map[String(t._rowIdx)];
+      if (!lm) return;
+      var sheet = t.memnuniyet || {};
+      if (!_memnuniyetDoluMu(sheet)) {
+        t.memnuniyet = lm;
+        degisti = true;
+      } else {
+        t.memnuniyet = Object.assign({}, lm, sheet);
+      }
+    });
+    if (degisti) { try { _cacheYaz('cache_turneler', turneler); } catch(e2) {} }
+  } catch(e) { console.warn('Memnuniyet local geri yükleme hatası:', e); }
 }
 
 // Yapışkan not araması — tüm turne değerlendirmelerinde filtrele
@@ -6877,11 +6990,11 @@ function _memArama() {
 }
 
 function _memnuniyetPuanKaydet(rowIdx, tip, puan) {
-  var t = turneler[rowIdx];
+  var t = turneler.find(function(x){ return String(x._rowIdx) === String(rowIdx); });
   if (!t) return;
   if (!t.memnuniyet) t.memnuniyet = {};
   t.memnuniyet[tip + 'Puan'] = puan;
-  _memnuniyetLocalKaydet();
+  _memnuniyetSheetKaydet(t);
   if (typeof _degerlendirmeBadgeGuncelle === 'function') _degerlendirmeBadgeGuncelle();
   // Yildizlari yerinde guncelle — sekmeyi DEGISTIRME
   var container = document.getElementById('_mem_yildiz_' + tip);
@@ -6896,19 +7009,19 @@ function _memnuniyetPuanKaydet(rowIdx, tip, puan) {
 }
 
 function _memnuniyetNotKaydet(rowIdx, tip, not) {
-  var t = turneler[rowIdx];
+  var t = turneler.find(function(x){ return String(x._rowIdx) === String(rowIdx); });
   if (!t) return;
   if (!t.memnuniyet) t.memnuniyet = {};
   t.memnuniyet[tip + 'Not'] = not;
-  _memnuniyetLocalKaydet();
+  _memnuniyetSheetKaydet(t);
 }
 
 function _memnuniyetGenelNotKaydet(rowIdx, not) {
-  var t = turneler[rowIdx];
+  var t = turneler.find(function(x){ return String(x._rowIdx) === String(rowIdx); });
   if (!t) return;
   if (!t.memnuniyet) t.memnuniyet = {};
   t.memnuniyet.notlar = not;
-  _memnuniyetLocalKaydet();
+  _memnuniyetSheetKaydet(t);
   if (typeof _degerlendirmeBadgeGuncelle === 'function') _degerlendirmeBadgeGuncelle();
 }
 
@@ -8944,9 +9057,7 @@ function _degerlendirmePaneliDoldur() {
   if (!icerik) return;
 
   var kayitlar = (typeof turneler !== 'undefined' ? turneler : []).filter(function(t) {
-    if (!t.memnuniyet) return false;
-    var m = t.memnuniyet;
-    return m.otelPuan || m.otobusPuan || m.kamyonPuan || (m.notlar && m.notlar.trim());
+    return t.memnuniyet && (typeof _memnuniyetDoluMu === 'function' ? _memnuniyetDoluMu(t.memnuniyet) : true);
   });
 
   // Badge güncelle
@@ -8966,6 +9077,17 @@ function _degerlendirmePaneliDoldur() {
   }
 
   var YILDIZ_LABEL = { otel: '🏨 Otel', otobus: '🚌 Otobüs', kamyon: '🚛 Kamyon / Lojistik' };
+
+  function _firmaAdlariByKey(firmalar, key) {
+    var eslesen = (firmalar || []).filter(function(f) {
+      var tip = (f.tip || '').toLowerCase();
+      if (key === 'otel') return tip.indexOf('otel') > -1;
+      if (key === 'otobus') return tip.indexOf('otobüs') > -1 || tip.indexOf('otobus') > -1;
+      if (key === 'kamyon') return tip.indexOf('kamyon') > -1 || tip.indexOf('lojistik') > -1;
+      return false;
+    }).map(function(f){ return f.ad; }).filter(Boolean);
+    return eslesen.filter(function(ad, i){ return eslesen.indexOf(ad) === i; }).join(' / ');
+  }
 
   function yildizHtml(puan) {
     if (!puan) return '<span style="font-size:10px;color:var(--muted-foreground)">—</span>';
@@ -9007,29 +9129,15 @@ function _degerlendirmePaneliDoldur() {
     }
     html += '</div>';
 
-    // Firmalar şeridi (varsa) — başlık bandının altında
-    if (firmalar.length) {
-      html += '<div style="padding:6px 12px;background:#fffbeb;border-bottom:1px solid var(--border);display:flex;flex-wrap:wrap;gap:4px">';
-      firmalar.forEach(function(f) {
-        var ikon = f.tip === 'Otel' ? '🏨' : (f.tip.indexOf('Otobüs') > -1 ? '🚌' : '🚛');
-        var kisaTip = f.tip === 'Gidiş Otobüs' ? 'Gidiş' : f.tip === 'Dönüş Otobüs' ? 'Dönüş' : f.tip === 'Dekor Kamyon' ? 'Kamyon' : f.tip;
-        html += '<span title="'+f.tip+': '+f.ad.replace(/"/g,'&quot;')+'" style="display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;background:#fef3c7;color:#78350f;border:1px solid #fde68a;white-space:nowrap;max-width:200px;overflow:hidden;text-overflow:ellipsis">'
-          + '<span>'+ikon+'</span>'
-          + '<span style="opacity:.7;font-weight:600">'+kisaTip+':</span>'
-          + '<span>'+f.ad.replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</span>'
-          + '</span>';
-      });
-      html += '</div>';
-    }
-
     // Detay satırları
     html += '<div style="padding:8px 12px;display:flex;flex-direction:column;gap:6px">';
     ['otel','otobus','kamyon'].forEach(function(key) {
       var puan = m[key+'Puan'] || 0;
       var not  = (m[key+'Not'] || '').trim();
       if (!puan && !not) return;
+      var firmaAdi = _firmaAdlariByKey(firmalar, key);
       html += '<div style="display:flex;align-items:flex-start;gap:8px">';
-      html += '<span style="font-size:11px;color:var(--muted-foreground);width:100px;flex-shrink:0;padding-top:1px">'+YILDIZ_LABEL[key]+'</span>';
+      html += '<span style="font-size:11px;color:var(--muted-foreground);width:185px;flex-shrink:0;padding-top:1px;line-height:1.35">'+YILDIZ_LABEL[key] + (firmaAdi ? '<br><strong style="font-size:10.5px;color:var(--foreground);font-weight:800">' + firmaAdi.replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</strong>' : '') + '</span>';
       html += '<div style="flex:1;min-width:0">';
       html += '<div style="display:flex;align-items:center;gap:2px">'+yildizHtml(puan)+'</div>';
       if (not) html += '<div style="font-size:10.5px;color:var(--foreground);font-style:italic;margin-top:3px;line-height:1.4">'+not.replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</div>';
@@ -9063,9 +9171,7 @@ function _degerlendirmeBadgeGuncelle() {
   var badge = document.getElementById('degerlendirme-badge');
   if (!badge || typeof turneler === 'undefined') return;
   var say = turneler.filter(function(t) {
-    if (!t.memnuniyet) return false;
-    var m = t.memnuniyet;
-    return m.otelPuan || m.otobusPuan || m.kamyonPuan || (m.notlar && m.notlar.trim());
+    return t.memnuniyet && (typeof _memnuniyetDoluMu === 'function' ? _memnuniyetDoluMu(t.memnuniyet) : true);
   }).length;
   badge.textContent = say;
   badge.style.display = say > 0 ? 'block' : 'none';
