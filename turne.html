@@ -7286,10 +7286,35 @@ function _memnuniyetSekmesiHTML(t, rowIdx) {
   var m = t.memnuniyet || {};
   var notlar = (m.notlar || '').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   var puanlar = [
-    { key: 'otel',   label: '\ud83c\udfe8 Otel',             aciklama: 'Konaklama kalitesi, temizlik, hizmet' },
-    { key: 'otobus', label: '\ud83d\ude8c Otob\u00fcs',       aciklama: 'Ula\u015f\u0131m konforu, s\u00fcr\u00fcc\u00fc, s\u00fcre' },
-    { key: 'kamyon', label: '\ud83d\ude9b Kamyon / Lojistik', aciklama: 'Y\u00fck ta\u015f\u0131ma, zamanlama, ekipman' }
+    { key: 'otel',   label: '🏨 Otel',             aciklama: 'Konaklama kalitesi, temizlik, hizmet' },
+    { key: 'otobus', label: '🚌 Otobüs',            aciklama: 'Ulaşım konforu, sürücü, süre' },
+    { key: 'kamyon', label: '🚛 Kamyon / Lojistik', aciklama: 'Yük taşıma, zamanlama, ekipman' }
   ];
+
+  // Çift ayaklı turne: birden fazla otel varsa her otel için ayrı key oluştur
+  var otelDuraklar2 = (t.duraklar || []).filter(function(d){ return d.otelAdi && d.otelAdi.trim(); });
+  if (otelDuraklar2.length > 1) {
+    // Otel genel satırını kaldır, her durak için ayrı satır ekle
+    puanlar = puanlar.filter(function(p){ return p.key !== 'otel'; });
+    otelDuraklar2.forEach(function(d, i) {
+      var ilEtiketi = d.il ? ' (' + d.il + ')' : (' #' + (i+1));
+      puanlar.unshift({
+        key: 'otel' + i,
+        // Label = sadece bu otelin adı, il etiketiyle
+        label: '🏨 ' + d.otelAdi + ilEtiketi,
+        aciklama: 'Konaklama kalitesi, temizlik, hizmet',
+        _otelIdx: i,
+        // Her satırın firma adı kendi otelinin adı
+        _firmaAdiSabit: d.otelAdi
+      });
+    });
+    puanlar.sort(function(a,b){
+      var aO = a.key.startsWith('otel'), bO = b.key.startsWith('otel');
+      if (aO && !bO) return -1;
+      if (!aO && bO) return 1;
+      return 0;
+    });
+  }
   // Tüm turnelerdeki memnuniyet değerlendirmelerini topla (yapışkan not arama için)
   var tumDegerl = [];
   if (typeof turneler !== 'undefined') {
@@ -7338,9 +7363,10 @@ function _memnuniyetSekmesiHTML(t, rowIdx) {
   function _memFirmaAdlariByKey(firmalar, key) {
     var eslesen = (firmalar || []).filter(function(f) {
       var tip = (f.tip || '').toLowerCase();
-      if (key === 'otel') return tip.indexOf('otel') > -1;
+      if (key === 'otel' || key.startsWith('otel')) return tip.indexOf('otel') > -1;
       if (key === 'otobus') return tip.indexOf('otobüs') > -1 || tip.indexOf('otobus') > -1;
       if (key === 'kamyon') return tip.indexOf('kamyon') > -1 || tip.indexOf('lojistik') > -1;
+      if (key === 'lojistik') return tip.indexOf('lojistik') > -1 || tip.indexOf('kamyon') > -1;
       return false;
     }).map(function(f){ return f.ad; }).filter(Boolean);
     return eslesen.filter(function(ad, i){ return eslesen.indexOf(ad) === i; }).join(' / ');
@@ -7350,7 +7376,10 @@ function _memnuniyetSekmesiHTML(t, rowIdx) {
   puanlar.forEach(function(p) {
     var puan = m[p.key + 'Puan'] || 0;
     var pNot = (m[p.key + 'Not'] || '').replace(/"/g, '&quot;');
-    var firmaAdi = _memFirmaAdlariByKey(_yld.firmalar || [], p.key);
+    // Çift otel: her satır kendi adını gösterir; diğerleri için firmalar listesinden çek
+    var firmaAdi = p._firmaAdiSabit !== undefined
+      ? p._firmaAdiSabit
+      : _memFirmaAdlariByKey(_yld.firmalar || [], p.key);
     html += '<div style="border:1px solid var(--border);border-radius:10px;overflow:hidden">';
     html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:var(--muted);gap:8px">';
     html += '<div style="min-width:0">';
@@ -7442,14 +7471,22 @@ function _memnuniyetLocalGeriYukle() {
     var degisti = false;
     (turneler || []).forEach(function(t) {
       var lm = map[String(t._rowIdx)];
-      if (!lm) return;
       var sheet = t.memnuniyet || {};
-      if (!_memnuniyetDoluMu(sheet)) {
+      var sheetDolu = _memnuniyetDoluMu(sheet);
+      var localDolu = lm && _memnuniyetDoluMu(lm);
+      if (!lm) {
+        // localStorage'da kayıt yok → sheet verisini koru
+        return;
+      }
+      if (!sheetDolu && localDolu) {
+        // Sheet boş, localStorage dolu → localStorage'ı kullan
         t.memnuniyet = lm;
         degisti = true;
-      } else {
+      } else if (sheetDolu && localDolu) {
+        // Her ikisi de dolu → sheet öncelikli, local ile eksikleri tamamla
         t.memnuniyet = Object.assign({}, lm, sheet);
       }
+      // Sheet dolu, local boş → sheet verisini koru (hiçbir şey yapma)
     });
     if (degisti) { try { _cacheYaz('cache_turneler', turneler); } catch(e2) {} }
   } catch(e) { console.warn('Memnuniyet local geri yükleme hatası:', e); }
@@ -8062,17 +8099,37 @@ function _odaPlanYildizBilgi(t) {
     var pipe = rest.indexOf('|');
     return (pipe === -1 ? rest : rest.slice(0, pipe)).trim();
   };
+  // lojNot'tan lojistik firma adını çek: "🚛 FİRMA ADI · TELEFON" formatı
+  var lojFirmaCek = function(lojNot) {
+    if (!lojNot) return '';
+    // JSON formatındaysa önce aç
+    var s = lojNot;
+    if (s.startsWith('{')) { try { s = JSON.parse(s).not || ''; } catch(e) { return ''; } }
+    // 🚛 ile başlıyorsa firma adını çek
+    if (s.indexOf('\uD83D\uDE9B') === 0 || s.indexOf('🚛') === 0) {
+      var satir = s.split('\n')[0];
+      // "🚛 FİRMA ADI · TEL" → "FİRMA ADI"
+      var parcalar = satir.replace(/^🚛\s*/, '').split(/\s*[·\-]\s*/);
+      return parcalar[0].trim();
+    }
+    return '';
+  };
+
   // Duraklardan
   (t.duraklar || []).forEach(function(d) {
     if (d.otelAdi) ekle('Otel', d.otelAdi);
     var gf = firmaCek(d.gidisSurucu); if (gf) ekle('Otobüs', gf);
     var df = firmaCek(d.donusSurucu); if (df) ekle('Otobüs', df);
     if (d.kamyonFirma) ekle('Kamyon', d.kamyonFirma);
+    // lojNot'tan lojistik firma adını çek
+    var lf = lojFirmaCek(d.lojNot); if (lf) ekle('Lojistik', lf);
   });
   // Geriye uyumluluk: turne seviyesi alanlar
   if (!firmaList.some(function(f){return f.tip==='Otel';}) && t.otelAdi) ekle('Otel', t.otelAdi);
   var tgf = firmaCek(t.gidisSurucu); if (tgf) ekle('Otobüs', tgf);
   var tdf = firmaCek(t.donusSurucu); if (tdf) ekle('Otobüs', tdf);
+  // Turne seviyesinde lojNot
+  var tlf = lojFirmaCek(t.lojNot); if (tlf) ekle('Lojistik', tlf);
 
   return { tarih: tarihStr, firmalar: firmaList };
 }
@@ -9578,14 +9635,15 @@ function _degerlendirmePaneliDoldur() {
     return;
   }
 
-  var YILDIZ_LABEL = { otel: '🏨 Otel', otobus: '🚌 Otobüs', kamyon: '🚛 Kamyon / Lojistik' };
+  var YILDIZ_LABEL = { otel: '🏨 Otel', otobus: '🚌 Otobüs', kamyon: '🚛 Kamyon / Lojistik', lojistik: '🚛 Lojistik' };
 
   function _firmaAdlariByKey(firmalar, key) {
     var eslesen = (firmalar || []).filter(function(f) {
       var tip = (f.tip || '').toLowerCase();
-      if (key === 'otel') return tip.indexOf('otel') > -1;
+      if (key === 'otel' || key.startsWith('otel')) return tip.indexOf('otel') > -1;
       if (key === 'otobus') return tip.indexOf('otobüs') > -1 || tip.indexOf('otobus') > -1;
       if (key === 'kamyon') return tip.indexOf('kamyon') > -1 || tip.indexOf('lojistik') > -1;
+      if (key === 'lojistik') return tip.indexOf('lojistik') > -1 || tip.indexOf('kamyon') > -1;
       return false;
     }).map(function(f){ return f.ad; }).filter(Boolean);
     return eslesen.filter(function(ad, i){ return eslesen.indexOf(ad) === i; }).join(' / ');
