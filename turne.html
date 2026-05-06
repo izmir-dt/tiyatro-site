@@ -2343,10 +2343,6 @@ flex-shrink:0;
 </div>
 </div>
 </div>
-<!-- SORUN BİLDİR -->
-<button onclick="sorunBildirAc()" onmouseenter="this.style.background='rgba(255,255,255,.12)';this.style.color='#fff'" onmouseleave="this.style.background='transparent';this.style.color='rgba(253,230,138,.75)'" style="width:32px;height:30px;border:none;background:transparent;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;border-radius:6px;color:rgba(253,230,138,.75);transition:all .15s;flex-shrink:0" title="Sorun Bildir">
-<svg fill="none" height="15" stroke="currentColor" stroke-linecap="round" stroke-width="2.5" viewbox="0 0 24 24" width="15"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" x2="12" y1="9" y2="13"></line><line x1="12" x2="12.01" y1="17" y2="17"></line></svg>
-</button>
 <!-- KULLANICI & ÇIKIŞ -->
 <div id="nav-kullanici-alan" style="display:inline-flex;align-items:center;gap:6px;padding:0 2px">
 <span id="nav-kullanici-chip" style="display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);border-radius:20px;padding:3px 10px 3px 7px;font-size:11px;font-weight:600;color:rgba(255,255,255,.8)">
@@ -6786,16 +6782,31 @@ function _renderCardDetail(rowIdx) {
   var oldBody = box ? box.querySelector('.cd-body') : null;
   var oldWrap = box ? box.querySelector('.cd-scroll-wrap') : null;
   var scrollTop = (oldBody && oldBody.scrollTop) || (oldWrap && oldWrap.scrollTop) || 0;
-  box.innerHTML = headerHtml + tabsHtml + '<div class="cd-scroll-wrap"><div class="cd-body">' + bodyContent + '</div></div>' + footerHtml;
-  if (scrollTop) {
-    var newBody = box.querySelector('.cd-body');
-    var newWrap = box.querySelector('.cd-scroll-wrap');
-    // Hem yeni body hem de wrap'ta scroll'u uygula (CSS hangisi scroll ediyorsa)
-    requestAnimationFrame(function(){
-      if (newBody) newBody.scrollTop = scrollTop;
-      if (newWrap) newWrap.scrollTop = scrollTop;
+  // İç scrollable panellerin (oda planı kişi listesi vb.) scrollTop'unu da sakla
+  var innerScrolls = {};
+  if (box) {
+    box.querySelectorAll('[data-plan-list="1"]').forEach(function(el){
+      if (el.id) innerScrolls[el.id] = el.scrollTop;
     });
   }
+  box.innerHTML = headerHtml + tabsHtml + '<div class="cd-scroll-wrap"><div class="cd-body">' + bodyContent + '</div></div>' + footerHtml;
+  var newBody = box.querySelector('.cd-body');
+  var newWrap = box.querySelector('.cd-scroll-wrap');
+  if (newBody) newBody.scrollTop = scrollTop;
+  if (newWrap) newWrap.scrollTop = scrollTop;
+  // İç scrolllar
+  Object.keys(innerScrolls).forEach(function(id){
+    var el = box.querySelector('#' + CSS.escape(id));
+    if (el) el.scrollTop = innerScrolls[id];
+  });
+  requestAnimationFrame(function(){
+    if (newBody) newBody.scrollTop = scrollTop;
+    if (newWrap) newWrap.scrollTop = scrollTop;
+    Object.keys(innerScrolls).forEach(function(id){
+      var el = box.querySelector('#' + CSS.escape(id));
+      if (el) el.scrollTop = innerScrolls[id];
+    });
+  });
 }
 
 // ════════════════════════════════════════════════════════════
@@ -7353,29 +7364,44 @@ function _konaklamaSekmesiHTML(t, rowIdx) {
         html += '<div style="border:1.5px solid #1e3a8a;border-radius:10px;overflow:hidden;background:var(--card)">';
         // Plan başlık satırı — tıklanabilir accordion toggle
         html += '<div onclick="event.stopPropagation();_odaPlanAccToggle(' + t._rowIdx + ',' + planIdx + ')" '
-          + 'style="background:#1e3a8a;padding:10px 12px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;cursor:pointer;user-select:none">'
-          + '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.8)" stroke-width="2.5" style="transition:.2s;transform:rotate(' + (planAcik?'0':'-90') + 'deg);flex-shrink:0"><polyline points="6,9 12,15 18,9"/></svg>'
+          + 'style="background:#1e3a8a;padding:10px 12px;display:flex;flex-direction:column;gap:8px;cursor:pointer;user-select:none">'
+          // ── ÜST SATIR: ok + başlık input + aksiyon butonları ──
+          + '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
+          + '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.8)" stroke-width="2.5" style="transition:.2s;transform:rotate(' + (planAcik?'0':'-90') + 'deg);flex-shrink:0" aria-label="' + (planAcik?'Daralt':'Genişlet') + '"><polyline points="6,9 12,15 18,9"/></svg>'
           + '<input type="text" value="' + (plan.baslik||'Plan '+(planIdx+1)).replace(/"/g,'&quot;') + '" '
+          + 'aria-label="Plan başlığı" '
           + 'onblur="_odaPlanBaslikGuncelle(' + t._rowIdx + ',' + planIdx + ',this.value)" '
           + 'onclick="event.stopPropagation()" '
-          + 'style="flex:1;min-width:120px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);border-radius:5px;height:26px;padding:0 8px;color:#fff;font-size:12px;font-weight:700">'
-          + (tekSay ? '<span onclick="event.stopPropagation()" style="font-size:9.5px;font-weight:700;padding:2px 7px;border-radius:12px;background:rgba(34,197,94,.25);color:#bbf7d0;border:1px solid rgba(134,239,172,.4);white-space:nowrap;cursor:default">🛏 ' + tekSay + ' tek</span>' : '')
-          + (ciftSay ? '<span onclick="event.stopPropagation()" style="font-size:9.5px;font-weight:700;padding:2px 7px;border-radius:12px;background:rgba(59,130,246,.25);color:#bfdbfe;border:1px solid rgba(147,197,253,.4);white-space:nowrap;cursor:default">🛏🛏 ' + ciftSay + ' çift</span>' : '')
-          + (atanSay ? '<span onclick="event.stopPropagation()" style="font-size:9.5px;font-weight:700;padding:2px 7px;border-radius:12px;background:rgba(251,191,36,.25);color:#fde68a;border:1px solid rgba(252,211,77,.4);white-space:nowrap;cursor:default">⏳ ' + atanSay + '</span>' : '')
+          + 'style="flex:1;min-width:120px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);border-radius:5px;height:28px;padding:0 8px;color:#fff;font-size:12px;font-weight:700">'
           + (planAcik ? (
               '<button onclick="event.stopPropagation();_odaPlanKadroAcKapat(' + t._rowIdx + ',' + planIdx + ')" '
-              + 'style="height:26px;padding:0 9px;border:1px solid rgba(255,255,255,.4);border-radius:5px;background:' + (kadroAcik?'rgba(255,255,255,.30)':'rgba(255,255,255,.12)') + ';color:#fff;font-size:10.5px;font-weight:700;cursor:pointer;flex-shrink:0" title="Bu plana kişi seç / ek kişi ekle">👥 Kadro</button>'
+              + 'aria-label="Kadro seç" title="Bu plana kişi seç / ek kişi ekle" '
+              + 'style="height:28px;padding:0 10px;border:1px solid rgba(255,255,255,.4);border-radius:5px;background:' + (kadroAcik?'rgba(255,255,255,.30)':'rgba(255,255,255,.12)') + ';color:#fff;font-size:11px;font-weight:700;cursor:pointer;flex-shrink:0">👥 Kadro</button>'
               + '<button onclick="event.stopPropagation();_odaPlanPdfIndir(' + t._rowIdx + ',' + planIdx + ')" '
-              + 'style="height:26px;padding:0 9px;border:1px solid rgba(255,255,255,.4);border-radius:5px;background:rgba(255,255,255,.12);color:#fff;font-size:10.5px;font-weight:700;cursor:pointer;flex-shrink:0">📄 PDF</button>'
+              + 'aria-label="PDF indir" title="PDF indir" '
+              + 'style="height:28px;padding:0 10px;border:1px solid rgba(255,255,255,.4);border-radius:5px;background:rgba(255,255,255,.12);color:#fff;font-size:11px;font-weight:700;cursor:pointer;flex-shrink:0">📄 PDF</button>'
               + '<button onclick="event.stopPropagation();_odaPlanKopyala(' + t._rowIdx + ',' + planIdx + ')" '
-              + 'style="height:26px;padding:0 9px;border:1px solid rgba(255,255,255,.4);border-radius:5px;background:rgba(255,255,255,.12);color:#fff;font-size:10.5px;font-weight:700;cursor:pointer;flex-shrink:0">📋 Kopya</button>'
+              + 'aria-label="Planı kopyala" title="Planı kopyala" '
+              + 'style="height:28px;padding:0 10px;border:1px solid rgba(255,255,255,.4);border-radius:5px;background:rgba(255,255,255,.12);color:#fff;font-size:11px;font-weight:700;cursor:pointer;flex-shrink:0">📋 Kopya</button>'
               + '<button onclick="event.stopPropagation();_odaPlanSil(' + t._rowIdx + ',' + planIdx + ')" '
-              + 'style="height:26px;width:26px;border:1px solid rgba(255,255,255,.3);border-radius:5px;background:rgba(255,0,0,.25);color:#fff;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0">×</button>'
+              + 'aria-label="Planı sil" title="Planı sil" '
+              + 'style="height:28px;width:28px;border:1px solid rgba(255,255,255,.3);border-radius:5px;background:rgba(255,0,0,.25);color:#fff;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0">×</button>'
             ) : (
-              '<span style="font-size:9.5px;color:rgba(255,255,255,.55);font-weight:600;margin-left:auto">' + planKat.length + ' kişi</span>'
-              + '<button onclick="event.stopPropagation();_odaPlanSil(' + t._rowIdx + ',' + planIdx + ')" '
-              + 'style="height:26px;width:26px;border:1px solid rgba(255,255,255,.3);border-radius:5px;background:rgba(255,0,0,.25);color:#fff;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0">×</button>'
+              '<button onclick="event.stopPropagation();_odaPlanSil(' + t._rowIdx + ',' + planIdx + ')" '
+              + 'aria-label="Planı sil" title="Planı sil" '
+              + 'style="height:28px;width:28px;border:1px solid rgba(255,255,255,.3);border-radius:5px;background:rgba(255,0,0,.25);color:#fff;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0">×</button>'
             ))
+          + '</div>'
+          // ── ALT SATIR: özet chip'leri ──
+          + (planAcik
+              ? '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding-left:20px">'
+                + (tekSay ? '<span onclick="event.stopPropagation()" style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:12px;background:rgba(34,197,94,.25);color:#bbf7d0;border:1px solid rgba(134,239,172,.4);white-space:nowrap;cursor:default">🛏 ' + tekSay + ' tek</span>' : '')
+                + (ciftSay ? '<span onclick="event.stopPropagation()" style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:12px;background:rgba(59,130,246,.25);color:#bfdbfe;border:1px solid rgba(147,197,253,.4);white-space:nowrap;cursor:default">🛏🛏 ' + ciftSay + ' çift</span>' : '')
+                + (munfSay ? '<span onclick="event.stopPropagation()" style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:12px;background:rgba(168,85,247,.25);color:#e9d5ff;border:1px solid rgba(196,181,253,.4);white-space:nowrap;cursor:default">🚪 ' + munfSay + ' münferit</span>' : '')
+                + (atanSay ? '<span onclick="event.stopPropagation()" style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:12px;background:rgba(251,191,36,.25);color:#fde68a;border:1px solid rgba(252,211,77,.4);white-space:nowrap;cursor:default">⏳ ' + atanSay + ' atanmamış</span>' : '')
+                + (!tekSay && !ciftSay && !munfSay && !atanSay ? '<span style="font-size:10px;color:rgba(255,255,255,.55);font-style:italic">Henüz oda dağılımı yok</span>' : '')
+                + '</div>'
+              : '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding-left:20px;font-size:10px;color:rgba(255,255,255,.7);font-weight:600">' + planKat.length + ' kişi · ' + tekSay + ' tek · ' + ciftSay + ' çift · ' + munfSay + ' mnf' + (atanSay ? ' · ⏳ ' + atanSay + ' atanmamış' : '') + '</div>')
           + '</div>';
         // Plan kapalıysa sadece başlığı göster
         if (!planAcik) { html += '</div>'; return; }
@@ -7469,7 +7495,7 @@ function _konaklamaSekmesiHTML(t, rowIdx) {
           if (planAktifSekme === 'munferit') return pMunf;
           return true;
         });
-        html += '<div style="padding:8px 10px;display:flex;flex-direction:column;gap:4px;max-height:260px;overflow-y:auto">';
+        html += '<div id="_odaPlanKisiList_' + t._rowIdx + '_' + planIdx + '" data-plan-list="1" style="padding:8px 10px;display:flex;flex-direction:column;gap:4px;max-height:260px;overflow-y:auto">';
         if (!planKat.length) {
           html += '<div style="text-align:center;padding:20px 8px;color:var(--muted-foreground);font-size:11px">'
             + 'Bu planda kişi yok. Yukarıdaki <b>👥 Kadro</b> butonuyla kişi seçin veya ekleyin.</div>';
@@ -16050,13 +16076,15 @@ function renderIstatistik() {
     var liste = (t.katilimcilar&&t.katilimcilar.length) ? t.katilimcilar
       : getPersonelForOyun(t.oyun).map(function(p){ return {kisi:p.kisi,gorev:p.gorev||p.kategori,kategori:p.kategori}; });
     var seen = {};
+    var tSure = turneSuresi(t);
     liste.forEach(function(k){
       if (!k.kisi) return;
       var ad = k.kisi.trim();
       var key = ad.toLowerCase();
       if (seen[key]) return; seen[key]=true;
-      if (!kisiMap[ad]) kisiMap[ad] = { turne:0, list:[], gorev:k.gorev||'' };
+      if (!kisiMap[ad]) kisiMap[ad] = { turne:0, gun:0, list:[], gorev:k.gorev||'' };
       kisiMap[ad].turne++;
+      kisiMap[ad].gun += tSure;
       kisiMap[ad].list.push(t);
     });
   });
@@ -16294,9 +16322,15 @@ function _istKisiListeHTML(liste, ara) {
       + '<div style="font-size:13px;font-weight:700;color:var(--foreground)">'+ad+'</div>'
       + '<div style="font-size:10px;color:var(--muted-foreground)">'+d.gorev+'</div>'
       + '</div>'
-      + '<div style="text-align:right;flex-shrink:0">'
-      + '<div style="font-size:20px;font-weight:900;color:var(--primary)">'+d.turne+'</div>'
+      + '<div style="display:flex;align-items:center;gap:10px;flex-shrink:0">'
+      + '<div style="text-align:right">'
+      + '<div style="font-size:20px;font-weight:900;color:var(--primary);line-height:1">'+d.turne+'</div>'
       + '<div style="font-size:9px;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.3px">turne</div>'
+      + '</div>'
+      + '<div style="text-align:right;padding-left:10px;border-left:1px solid var(--border)">'
+      + '<div style="font-size:18px;font-weight:900;color:hsl(220,65%,45%);line-height:1">'+d.gun+'</div>'
+      + '<div style="font-size:9px;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.3px">gün</div>'
+      + '</div>'
       + '</div>'
       + '<span style="color:var(--muted-foreground);font-size:14px;margin-left:4px;transition:.2s">▼</span>'
       + '</div>'
@@ -17227,7 +17261,40 @@ function _pdfModSec(rowIdx) {
   overlay.querySelector('#_pdf_tam').onclick   = function(){ var _t = _ekGrupBirlestir(t); document.body.removeChild(overlay); gorevlendirmePdf(rowIdx,'tam', _t); };
   overlay.querySelector('#_pdf_prog').onclick  = function(){ var _t = _ekGrupBirlestir(t); document.body.removeChild(overlay); gorevlendirmePdf(rowIdx,'program', _t); };
   overlay.querySelector('#_pdf_per').onclick   = function(){ var _t = _ekGrupBirlestir(t); document.body.removeChild(overlay); gorevlendirmePdf(rowIdx,'personel', _t); };
-  overlay.querySelector('#_pdf_dosya').onclick  = function(){ var _t = _ekGrupBirlestir(t); document.body.removeChild(overlay); gorevlendirmePdf(rowIdx,'dosya', _t); };
+  overlay.querySelector('#_pdf_dosya').onclick  = function(){
+    var _t = _ekGrupBirlestir(t);
+    document.body.removeChild(overlay);
+    // ── Sayfa seçim diyaloğu ──
+    var ov2 = document.createElement('div');
+    ov2.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:10000;display:flex;align-items:center;justify-content:center';
+    ov2.innerHTML = '<div role="dialog" aria-label="Turne Dosyası Sayfa Seçimi" style="background:var(--card,#fff);border-radius:12px;padding:22px 26px;width:360px;max-width:92vw;box-shadow:0 8px 32px rgba(0,0,0,.25)">'
+      + '<div style="font-weight:800;font-size:14px;color:#1a1a2e;margin-bottom:4px">📁 Turne Dosyası — Sayfa Seçimi</div>'
+      + '<div style="font-size:11.5px;color:#555;margin-bottom:14px">PDF\'e dahil edilecek bölümleri seçin (kapak her zaman dahildir).</div>'
+      + '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">'
+      + '<label style="display:flex;align-items:center;gap:9px;padding:9px 11px;border:1.5px solid #e5e7eb;border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:600;color:#1f2937"><input type="checkbox" id="_dpo_program" checked style="width:16px;height:16px;cursor:pointer;accent-color:#7c3aed"> 📅 Turne Programı</label>'
+      + '<label style="display:flex;align-items:center;gap:9px;padding:9px 11px;border:1.5px solid #e5e7eb;border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:600;color:#1f2937"><input type="checkbox" id="_dpo_ulasim" checked style="width:16px;height:16px;cursor:pointer;accent-color:#7c3aed"> 🚌 Ulaşım / Lojistik</label>'
+      + '<label style="display:flex;align-items:center;gap:9px;padding:9px 11px;border:1.5px solid #e5e7eb;border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:600;color:#1f2937"><input type="checkbox" id="_dpo_konaklama" checked style="width:16px;height:16px;cursor:pointer;accent-color:#7c3aed"> 🛏 Konaklama / Oda Eşlemeleri</label>'
+      + '<label style="display:flex;align-items:center;gap:9px;padding:9px 11px;border:1.5px solid #e5e7eb;border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:600;color:#1f2937"><input type="checkbox" id="_dpo_personel" checked style="width:16px;height:16px;cursor:pointer;accent-color:#7c3aed"> 👥 Personel Listesi</label>'
+      + '</div>'
+      + '<div style="display:flex;gap:8px;justify-content:flex-end">'
+      + '<button id="_dpo_iptal" style="padding:9px 16px;background:#f3f4f6;color:#333;border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer">İptal</button>'
+      + '<button id="_dpo_olustur" style="padding:9px 18px;background:#7c3aed;color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer">PDF Oluştur</button>'
+      + '</div></div>';
+    document.body.appendChild(ov2);
+    ov2.addEventListener('click', function(e){ if(e.target===ov2) document.body.removeChild(ov2); });
+    ov2.querySelector('#_dpo_iptal').onclick = function(){ document.body.removeChild(ov2); };
+    ov2.querySelector('#_dpo_olustur').onclick = function(){
+      window._dosyaPdfOpts = {
+        program:   document.getElementById('_dpo_program').checked,
+        ulasim:    document.getElementById('_dpo_ulasim').checked,
+        konaklama: document.getElementById('_dpo_konaklama').checked,
+        personel:  document.getElementById('_dpo_personel').checked
+      };
+      document.body.removeChild(ov2);
+      try { gorevlendirmePdf(rowIdx,'dosya', _t); }
+      finally { setTimeout(function(){ window._dosyaPdfOpts = null; }, 60000); }
+    };
+  };
   overlay.querySelector('#_pdf_tc').onclick    = function(){ document.body.removeChild(overlay); _tcListesiModalAc(t); };
   overlay.querySelector('#_pdf_iptal').onclick = function(){ document.body.removeChild(overlay); };
   overlay.addEventListener('click', function(e){ if(e.target===overlay) document.body.removeChild(overlay); });
@@ -18434,7 +18501,7 @@ function gorevlendirmePdf(rowIdx, mod, overrideTurne) {
       var _tc = JSON.parse(JSON.stringify(t));
       var _aktifAfis = afisData || _afisUrl3 || '';
       if (_aktifAfis) _tc.afisUrl = _aktifAfis;
-      var _html2 = _pdfTurneDosyasiIcerik(_tc);
+      var _html2 = _pdfTurneDosyasiIcerik(_tc, window._dosyaPdfOpts || null);
       var _afisVal = (_aktifAfis).replace(/"/g,'&quot;');
       var _oyunBuyuk = (t.oyun||'TURNE').toUpperCase().replace(/[^A-ZÇĞİÖŞÜ0-9 ]/g,'').trim().replace(/\s+/g,'_');
       var _dosyaAdi = _oyunBuyuk + '_TURNE_DOSYASI';
@@ -18903,7 +18970,7 @@ function gorevlendirmePdf(rowIdx, mod, overrideTurne) {
   var ilStr = _temizleIlPdf(durakIlStr(t));
   var baslik = (oyunAdi !== 'Rapor' ? oyunAdi + ' – ' : '') + ilStr + ' Turnesi';
 
-  var icerik = mod === 'personel' ? _pdfPersonelIcerik(t) : mod === 'program' ? _pdfProgramPersonelIcerik(t) : mod === 'dosya' ? _pdfTurneDosyasiIcerik(t) : _pdfIcerik(t);
+  var icerik = mod === 'personel' ? _pdfPersonelIcerik(t) : mod === 'program' ? _pdfProgramPersonelIcerik(t) : mod === 'dosya' ? _pdfTurneDosyasiIcerik(t, window._dosyaPdfOpts || null) : _pdfIcerik(t);
 
   // Ek gruplar varsa PDF'e ekle
   if (t._ekGruplar && t._ekGruplar.length && mod !== 'dosya') {
@@ -18960,7 +19027,7 @@ function gorevlendirmePdf(rowIdx, mod, overrideTurne) {
     });
   }
   // Word indirme için ayrı temiz içerik hazırla (PDF div'leri değil tablo tabanlı)
-  var wordIcerikStr = mod === 'personel' ? _wordPersonelIcerik(t) : mod === 'program' ? _pdfProgramPersonelIcerik(t) : mod === 'dosya' ? _pdfTurneDosyasiIcerik(t) : _wordIcerik(t);
+  var wordIcerikStr = mod === 'personel' ? _wordPersonelIcerik(t) : mod === 'program' ? _pdfProgramPersonelIcerik(t) : mod === 'dosya' ? _pdfTurneDosyasiIcerik(t, window._dosyaPdfOpts || null) : _wordIcerik(t);
   // Dosya adı: YYYYMMDD_OyunAdi_Il_Mod
   var _tarihKisa = (t.baslangicTarih||t.tarih||'').replace(/-/g,'');
   var _oyunKisa  = (oyunAdi||'Turne').replace(/[^a-zA-Z0-9ÇçĞğİıÖöŞşÜü ]/g,'').replace(/\s+/g,'_').slice(0,20);
@@ -21297,7 +21364,13 @@ function calAylikRaporPdf() {
   win.document.close();
 }
 // ── TURNE DOSYASI PDF ────────────────────────────────────────
-function _pdfTurneDosyasiIcerik(t) {
+function _pdfTurneDosyasiIcerik(t, opts) {
+  opts = opts || {};
+  // Sayfa seçimleri (varsayılan: hepsi açık, geriye uyum)
+  var _incProgram   = opts.program   !== false;
+  var _incUlasim    = opts.ulasim    !== false;
+  var _incKonaklama = opts.konaklama !== false;
+  var _incPersonel  = opts.personel  !== false;
   // ── YARDIMCI ────────────────────────────────────────────────
   var AYLAR=['Ocak','\u015eubat','Mart','Nisan','May\u0131s','Haziran','Temmuz','A\u011fustos','Eyl\u00fcl','Ekim','Kas\u0131m','Aral\u0131k'];
   var GUNLER=['Pazar','Pazartesi','Sal\u0131','\u00c7ar\u015famba','Per\u015fembe','Cuma','Cumartesi'];
@@ -22029,61 +22102,13 @@ function _pdfTurneDosyasiIcerik(t) {
     )
     +'</div>';
 
-  return CSS + kapak + sayfa2 + sayfa3 + sayfa4 + sayfa5;
+  return CSS + kapak
+    + (_incProgram   ? sayfa2 : '')
+    + (_incUlasim    ? sayfa3 : '')
+    + (_incKonaklama ? sayfa4 : '')
+    + (_incPersonel  ? sayfa5 : '');
 }
 
-// ── SORUN BİLDİR ────────────────────────────────────────────
-function sorunBildirAc() {
-  var modal = document.getElementById('sorun-bildir-modal');
-  if (!modal) return;
-  var logAlan = document.getElementById('sorun-log-alan');
-  if (logAlan && window._sorunLog && window._sorunLog.length) {
-    logAlan.value = window._sorunLog.join('\n');
-  }
-  var adInput = document.getElementById('sorun-kullanici-ad');
-  if (adInput) {
-    var ad = sessionStorage.getItem('turne_ad') || 'Bilinmiyor';
-    var ep = sessionStorage.getItem('turne_eposta') || '';
-    adInput.value = ad + (ep ? ' <' + ep + '>' : '');
-  }
-  modal.style.display = 'flex';
-  document.body.style.overflow = 'hidden';
-}
-function sorunBildirKapat() {
-  var modal = document.getElementById('sorun-bildir-modal');
-  if (modal) modal.style.display = 'none';
-  document.body.style.overflow = '';
-}
-function sorunBildirGonder() {
-  var baslik   = (document.getElementById('sorun-baslik')  || {}).value || '';
-  var aciklama = (document.getElementById('sorun-aciklama')|| {}).value || '';
-  var adres    = 'alper.cam@ktb.gov.tr';
-  var konu     = encodeURIComponent('[Turne Yönetimi] Sorun Bildirimi: ' + baslik);
-  var adSoyad  = (document.getElementById('sorun-kullanici-ad') || {}).value || '';
-  var log      = (document.getElementById('sorun-log-alan')     || {}).value || '';
-  var body     = encodeURIComponent(
-    'Gönderen: ' + adSoyad + '\n\n'
-    + 'Sorun Başlığı: ' + baslik + '\n\n'
-    + 'Açıklama:\n' + aciklama
-    + (log ? '\n\n--- Hata Kaydı ---\n' + log : '')
-  );
-  window.location.href = 'mailto:' + adres + '?subject=' + konu + '&body=' + body;
-  sorunBildirKapat();
-}
-window._sorunLog = [];
-(function(){
-  var origError = console.error;
-  console.error = function() {
-    var msg = Array.prototype.slice.call(arguments).join(' ');
-    window._sorunLog.push('[HATA] ' + new Date().toLocaleTimeString('tr-TR') + ': ' + msg);
-    if (window._sorunLog.length > 30) window._sorunLog.shift();
-    origError.apply(console, arguments);
-  };
-  window.addEventListener('error', function(e) {
-    window._sorunLog.push('[JS HATA] ' + new Date().toLocaleTimeString('tr-TR') + ': ' + e.message + ' (' + e.filename + ':' + e.lineno + ')');
-    if (window._sorunLog.length > 30) window._sorunLog.shift();
-  });
-})();
 
 // ── İLGİLİ KİŞİ ÖNERİ ─────────────────────────────────────
 function ilgiliKisiSec(idx, kisi, tel) {
@@ -22142,49 +22167,5 @@ function ilgiliKisiOneri(input, _unused, durakIdx) {
 // MİSAFİR ŞİFRE MODALI
 // ============================================================
 </script>
-<!-- SORUN BİLDİR MODALI -->
-<div id="sorun-bildir-modal" onclick="if(event.target===this)sorunBildirKapat()" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.55);align-items:center;justify-content:center;padding:16px">
-<div style="background:var(--card);border:1px solid var(--border);border-radius:16px;box-shadow:0 12px 48px rgba(0,0,0,.35);width:100%;max-width:520px;overflow:hidden">
-<div style="background:hsl(38,60%,18%);padding:16px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)">
-<div style="display:flex;align-items:center;gap:10px">
-<svg fill="none" height="18" stroke="hsl(38,90%,70%)" stroke-linecap="round" stroke-width="2.5" viewbox="0 0 24 24" width="18"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" x2="12" y1="9" y2="13"></line><line x1="12" x2="12.01" y1="17" y2="17"></line></svg>
-<span style="font-size:15px;font-weight:800;color:hsl(38,90%,78%)">Sorun Bildir</span>
-</div>
-<button onclick="sorunBildirKapat()" style="background:none;border:none;cursor:pointer;color:hsl(38,50%,65%);font-size:20px;line-height:1;padding:0 4px" title="Kapat">×</button>
-</div>
-<div style="padding:20px 20px 8px">
-<p style="font-size:12px;color:var(--muted-foreground);margin-bottom:16px;line-height:1.6">
-        Karşılaştığınız sorunu aşağıdaki formu doldurarak bildirin.<br/>
-        Bildirilen sorunlar <strong style="color:var(--foreground)"><a class="__cf_email__" data-cfemail="6c0d001c091e420f0d012c07180e420b031a42181e" href="https://match-builder-9.preview.emergentagent.com/cdn-cgi/l/email-protection">[email protected]</a></strong> adresine iletilecektir.
-      </p>
-<div style="margin-bottom:12px">
-<label style="font-size:11px;font-weight:700;color:var(--muted-foreground);display:block;margin-bottom:4px">Gönderen</label>
-<input id="sorun-kullanici-ad" readonly="" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px;background:var(--muted);color:var(--foreground);outline:none" type="text"/>
-</div>
-<div style="margin-bottom:12px">
-<label style="font-size:11px;font-weight:700;color:var(--muted-foreground);display:block;margin-bottom:4px">Sorun Başlığı <span style="color:var(--destructive)">*</span></label>
-<input id="sorun-baslik" maxlength="120" onblur="this.style.borderColor='var(--border)'" onfocus="this.style.borderColor='var(--primary)'" placeholder="Kısaca sorun ne?" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px;background:var(--card);color:var(--foreground);outline:none;transition:border-color .15s" type="text"/>
-</div>
-<div style="margin-bottom:12px">
-<label style="font-size:11px;font-weight:700;color:var(--muted-foreground);display:block;margin-bottom:4px">Açıklama</label>
-<textarea id="sorun-aciklama" maxlength="2000" onblur="this.style.borderColor='var(--border)'" onfocus="this.style.borderColor='var(--primary)'" placeholder="Sorunu adım adım açıklayın; hangi ekranda, ne yaparken oluştu?" rows="4" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px;background:var(--card);color:var(--foreground);outline:none;resize:vertical;font-family:inherit;line-height:1.5;transition:border-color .15s"></textarea>
-</div>
-<div style="margin-bottom:16px">
-<label style="font-size:11px;font-weight:700;color:var(--muted-foreground);display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-<span>Hata Kaydı <span style="font-weight:400;opacity:.7">(otomatik)</span></span>
-<button onclick="document.getElementById('sorun-log-alan').value=''" style="background:none;border:none;font-size:10px;color:var(--destructive);cursor:pointer;padding:0">Temizle</button>
-</label>
-<textarea id="sorun-log-alan" placeholder="Hata kaydı yok." rows="3" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:10px;font-family:'DM Mono',monospace;background:var(--muted);color:var(--muted-foreground);outline:none;resize:vertical;line-height:1.6"></textarea>
-</div>
-</div>
-<div style="padding:12px 20px 16px;display:flex;gap:10px;border-top:1px solid var(--border)">
-<button onclick="sorunBildirKapat()" style="flex:1;padding:9px;border:1px solid var(--border);border-radius:8px;background:transparent;color:var(--muted-foreground);font-size:12px;font-weight:700;cursor:pointer">İptal</button>
-<button onclick="sorunBildirGonder()" style="flex:2;padding:9px;border:none;border-radius:8px;background:var(--primary);color:#fff;font-size:12px;font-weight:800;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px">
-<svg fill="none" height="13" stroke="currentColor" stroke-linecap="round" stroke-width="2.5" viewbox="0 0 24 24" width="13"><line x1="22" x2="11" y1="2" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
-        E-posta ile Gönder
-      </button>
-</div>
-<div style="padding:0 20px 14px;font-size:10px;color:var(--muted-foreground);text-align:center">
-      İletişim: <a beacon.min.js="" crossorigin="anonymous" data-cf-beacon='{"version":"2024.11.0","token":"7f7b0fd8732c4326aae4b9d58d5c514a","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' href="https://match-builder-9.preview.emergentagent.com/cdn-cgi/l/email-protection#4b2a273b2e39%3Cscript%20defer%20src=" https:="" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" static.cloudflareinsights.com="" v8c78df7c7c0f484497ecbca7046644da1771523124516"="">
-</a></div></div></div><script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9f731bbb0976d2ef',t:'MTc3ODAxOTM3Mw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><iframe height="1" src="./Turne Yönetimi – İzmir Devlet Tiyatrosu_files/saved_resource.html" style="position: absolute; top: 0px; left: 0px; border-width: medium; border-style: none; border-color: currentcolor; border-image: initial; visibility: hidden;" width="1"></iframe><script crossorigin="anonymous" data-cf-beacon='{"version":"2024.11.0","token":"7f7b0fd8732c4326aae4b9d58d5c514a","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' defer="" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" src="./Turne Yönetimi – İzmir Devlet Tiyatrosu_files/v8c78df7c7c0f484497ecbca7046644da1771523124516"></script>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9f731bbb0976d2ef',t:'MTc3ODAxOTM3Mw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script>
 </body></html>
