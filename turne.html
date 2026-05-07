@@ -5566,7 +5566,15 @@ async function fetchTurneler(zorlaYenile) {
         try { var p = JSON.parse(raw); return Array.isArray(p) ? p : []; } catch(e) { return []; }
       })(),
       afisUrl:        (r[41] || '').trim(),
-      anaGrupId:      (r[42] || '').trim(),
+      anaGrupId:      (function(){
+        var raw = (r[42] || '').trim();
+        try {
+          var ov = JSON.parse(localStorage.getItem('_ekGrupOverride') || '{}');
+          var key = String(sheetRowIdx);
+          if (Object.prototype.hasOwnProperty.call(ov, key)) return String(ov[key] || '');
+        } catch(e){}
+        return raw;
+      })(),
       odaPlanlari:    (() => {
         var raw = (r[43]||'').trim();
         if (raw.startsWith('{')) { try { var combo = JSON.parse(raw); if (combo && combo._oda) return combo._oda; } catch(e){} }
@@ -6307,7 +6315,19 @@ function _turneCardGruplu(items, kucuk) {
   // Bağlı olup ana turnesi bu ayda olmayan turneler
   items.forEach(function(t) {
     if (!t.anaGrupId || islenmiş[t._rowIdx]) return;
-    html += _ekTurneKartMini(t);
+    // Parent hiç var mı? (tüm turneler içinde)
+    var parentVar = turneler.some(function(p){ return String(p._rowIdx) === String(t.anaGrupId) && !p.anaGrupId; });
+    if (!parentVar) {
+      html += '<div style="border:1.5px dashed hsl(0,60%,70%);border-radius:10px;background:hsl(0,60%,98%);padding:6px;margin-bottom:4px">'
+        + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 8px 6px">'
+        +   '<span style="font-size:10.5px;font-weight:800;color:hsl(0,60%,40%)">⚠ SAHİPSİZ EK LİSTE — ana turne bulunamadı (anaGrupId=' + (t.anaGrupId||'?') + ')</span>'
+        +   '<button onclick="event.stopPropagation();_ekGrupYenidenBagla(' + t._rowIdx + ')" style="height:24px;padding:0 10px;border-radius:5px;border:1px solid hsl(270,50%,65%);background:hsl(270,40%,94%);color:hsl(270,55%,30%);font-size:10.5px;font-weight:700;cursor:pointer">🔧 Yeniden Bağla</button>'
+        + '</div>'
+        + _ekTurneKartMini(t)
+        + '</div>';
+    } else {
+      html += _ekTurneKartMini(t);
+    }
   });
   html += '</div>';
   return html;
@@ -6351,6 +6371,7 @@ function _ekTurneKartMini(t) {
           + '<button onclick="event.stopPropagation();openCardDetail(' + t._rowIdx + ');_cdAktifTab=\'katilimcilar\'" style="height:28px;padding:0 10px;border-radius:6px;border:1px solid hsl(220,50%,70%);background:hsl(220,60%,95%);color:hsl(220,60%,30%);font-size:11px;font-weight:700;cursor:pointer">👥 Katılımcılar</button>'
           + '<button onclick="event.stopPropagation();openCardDetail(' + t._rowIdx + ');_cdAktifTab=\'konaklama\'" style="height:28px;padding:0 10px;border-radius:6px;border:1px solid hsl(142,40%,65%);background:hsl(142,40%,93%);color:hsl(142,50%,25%);font-size:11px;font-weight:700;cursor:pointer">🛏 Konaklama</button>'
           + '<button onclick="event.stopPropagation();editTurne(' + t._rowIdx + ')" style="height:28px;padding:0 10px;border-radius:6px;border:1px solid var(--border);background:var(--muted);color:var(--muted-foreground);font-size:11px;font-weight:600;cursor:pointer">✎ Düzenle</button>'
+          + '<button onclick="event.stopPropagation();_ekGrupYenidenBagla(' + t._rowIdx + ')" style="height:28px;padding:0 10px;border-radius:6px;border:1px solid hsl(270,50%,70%);background:hsl(270,40%,95%);color:hsl(270,55%,35%);font-size:11px;font-weight:700;cursor:pointer" title="Bu ek grubu farklı bir ana turneye bağla">🔧 Yeniden Bağla</button>'
           + '<button onclick="event.stopPropagation();_ekTurnePdfSec(' + t._rowIdx + ')" style="height:28px;padding:0 10px;border-radius:6px;border:1px solid hsl(0,50%,75%);background:hsl(0,50%,95%);color:hsl(0,55%,35%);font-size:11px;font-weight:700;cursor:pointer">📄 PDF</button>'
           + '<div style="flex:1"></div>'
           + '<button onclick="event.stopPropagation();deleteTurneOnay(' + t._rowIdx + ',\'' + (t.oyun||'Ek Grup').replace(/'/g,'\\x27') + '\')" style="height:28px;width:28px;border-radius:6px;border:1px solid hsl(0,50%,85%);background:hsl(0,80%,97%);color:hsl(0,65%,45%);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0">'
@@ -6366,6 +6387,76 @@ window._ekMiniToggle = function(rowIdx) {
   window._ekMiniAcik[rowIdx] = !window._ekMiniAcik[rowIdx];
   renderListe();
 };
+
+// === EK GRUP YENİDEN BAĞLAMA (lokal override) ===
+function _ekGrupOverrideOku(){
+  try { return JSON.parse(localStorage.getItem('_ekGrupOverride') || '{}'); } catch(e){ return {}; }
+}
+function _ekGrupOverrideYaz(rowIdx, yeniAnaGrupId){
+  var ov = _ekGrupOverrideOku();
+  ov[String(rowIdx)] = yeniAnaGrupId == null ? '' : String(yeniAnaGrupId);
+  localStorage.setItem('_ekGrupOverride', JSON.stringify(ov));
+}
+window._ekGrupYenidenBagla = function(rowIdx){
+  var t = turneler.find(function(x){ return x._rowIdx === rowIdx; });
+  if (!t) return;
+  // Aday parent'lar: anaGrupId boş olanlar (ek grup olmayanlar) — kendisi hariç
+  var adaylar = turneler.filter(function(x){
+    return !x.anaGrupId && x._rowIdx !== rowIdx;
+  }).sort(function(a,b){
+    return (b.baslangicTarih||b.tarih||'').localeCompare(a.baslangicTarih||a.tarih||'');
+  });
+  var mevcut = String(t.anaGrupId || '');
+  var opts = '<option value="">— Bağımsız (Ek grup değil) —</option>'
+    + adaylar.map(function(p){
+        var tar = (p.baslangicTarih||p.tarih||'').split('-').reverse().join('.');
+        var il  = (p.il||'').replace(/\/MERKEZ/gi,'').trim();
+        var lbl = (p.oyun||'—') + (il?' — '+il:'') + (tar?' ('+tar+')':'') + ' [#' + p._rowIdx + ']';
+        var sel = String(p._rowIdx) === mevcut ? ' selected' : '';
+        return '<option value="'+p._rowIdx+'"'+sel+'>'+lbl+'</option>';
+      }).join('');
+  var ov = _ekGrupOverrideOku();
+  var ovAktif = Object.prototype.hasOwnProperty.call(ov, String(rowIdx));
+  var ovBilgi = ovAktif
+    ? '<div style="background:hsl(38,90%,94%);border:1px solid hsl(38,70%,75%);border-radius:6px;padding:8px 10px;font-size:11px;color:hsl(28,70%,28%);margin-bottom:10px">⚠ Bu kayıt için lokal yeniden bağlama aktif. Sıfırla butonu sheet değerine geri döner.</div>'
+    : '';
+  var overlay = document.createElement('div');
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px';
+  overlay.innerHTML = '<div style="background:#fff;border-radius:12px;width:560px;max-width:96vw;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.3)">'
+    + '<div style="font-weight:800;font-size:15px;color:hsl(270,55%,30%);margin-bottom:4px">🔧 Ek Grubu Yeniden Bağla</div>'
+    + '<div style="font-size:12px;color:#666;margin-bottom:12px">"<b>'+(t.oyun||'—')+'</b>" ek grubunu hangi ana turneye bağlamak istersin?</div>'
+    + ovBilgi
+    + '<select id="_ekRebSel" style="width:100%;height:38px;padding:0 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;margin-bottom:14px">'+opts+'</select>'
+    + '<div style="font-size:10.5px;color:#888;line-height:1.5;margin-bottom:14px">Not: Değişiklik yalnızca bu tarayıcıda saklanır (localStorage). Sheet üzerindeki <code>anaGrupId</code> sütunu değişmez. Kalıcı düzeltme için kaydı düzenle.</div>'
+    + '<div style="display:flex;gap:8px;justify-content:flex-end">'
+    + (ovAktif?'<button id="_ekRebSifirla" style="height:34px;padding:0 14px;border-radius:7px;border:1px solid hsl(0,50%,75%);background:#fff;color:hsl(0,55%,40%);font-size:12px;font-weight:700;cursor:pointer">↺ Sıfırla (Sheet değerine dön)</button>':'')
+    + '<div style="flex:1"></div>'
+    + '<button id="_ekRebIptal" style="height:34px;padding:0 14px;border-radius:7px;border:1px solid var(--border);background:#fff;font-size:12px;font-weight:600;cursor:pointer">İptal</button>'
+    + '<button id="_ekRebKaydet" style="height:34px;padding:0 18px;border-radius:7px;border:none;background:hsl(270,55%,45%);color:#fff;font-size:12px;font-weight:700;cursor:pointer">✓ Kaydet</button>'
+    + '</div></div>';
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', function(e){ if(e.target===overlay) overlay.remove(); });
+  document.getElementById('_ekRebIptal').onclick = function(){ overlay.remove(); };
+  document.getElementById('_ekRebKaydet').onclick = function(){
+    var v = document.getElementById('_ekRebSel').value;
+    _ekGrupOverrideYaz(rowIdx, v);
+    var hedef = turneler.find(function(x){ return x._rowIdx === rowIdx; });
+    if (hedef) hedef.anaGrupId = v || '';
+    overlay.remove();
+    if (typeof renderListe==='function') renderListe();
+    if (typeof showToast==='function') showToast('Ek grup yeniden bağlandı ✓','success',2200);
+  };
+  var sif = document.getElementById('_ekRebSifirla');
+  if (sif) sif.onclick = function(){
+    var ov = _ekGrupOverrideOku();
+    delete ov[String(rowIdx)];
+    localStorage.setItem('_ekGrupOverride', JSON.stringify(ov));
+    overlay.remove();
+    if (typeof showToast==='function') showToast('Sıfırlandı — sayfayı yenile','info',2500);
+    setTimeout(function(){ location.reload(); }, 600);
+  };
+};
+
 
 function turneCard(t, kucuk) {
   var _kucuk = !!kucuk;
