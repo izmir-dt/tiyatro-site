@@ -4229,9 +4229,14 @@ function haritaTooltipGoster(e, encodedData) {
       }
     } else if (tip === 'oyun' || tip === 'prova') {
       // OYUN/PROVA GÜNÜ: Mekan, şehir içi servis, otel
-      if (d.sehirArac) {
-        var sStr = d.sehirArac + (d.sehirDetay?' · '+d.sehirDetay:'') + (d.sehirSurucu?' — '+d.sehirSurucu:'') + (d.sehirTel?' · <strong style="color:var(--primary)">' + d.sehirTel + '</strong>':'');
-        detayRows += '<div style="display:flex;gap:5px"><span>&#x1F68C;</span><span>Servis: ' + sStr + '</span></div>';
+      if (d.sehirArac || d.sehirDetay) {
+        var _sList = _sehirAraclarParse({sehirAracTur:d.sehirArac, sehirAracDetay:d.sehirDetay, sehirTel:d.sehirTel, sehirKisiSayisi:''});
+        var _sLines = _sehirAraclarFormatLines(_sList);
+        if (_sLines.length) {
+          _sLines.forEach(function(line, idx){
+            detayRows += '<div style="display:flex;gap:5px"><span>'+(idx===0?'&#x1F68C;':'&nbsp;')+'</span><span>'+(idx===0?'Servis: ':'')+line+'</span></div>';
+          });
+        }
       }
       if (d.otel) { d.otel.split('|').forEach(function(o){ if(o.trim()) detayRows += '<div style="display:flex;gap:5px"><span>&#x1F3E8;</span><span>' + o.trim() + '</span></div>'; }); }
     } else {
@@ -7036,9 +7041,19 @@ function _renderCardDetail(rowIdx) {
       bilgiHtml += gb || '<div style="display:grid;grid-template-columns:1fr auto;padding:5px 0;border-bottom:1px solid var(--border)"><div><div style="font-size:12px;font-weight:700">İzmir → '+ilStr5+'</div><div style="font-size:11px;color:var(--muted-foreground)">'+t.gidisUlasim+(t.gidisUcusNo?' · '+t.gidisUcusNo:'')+'</div></div><div style="font-size:13px;font-weight:900;text-align:right;white-space:nowrap">'+(t.gidisSaat||'—')+(t.gidisInis?' → '+t.gidisInis:'')+'</div></div>';
     }
     if (t.aktarma) bilgiHtml += '<div style="padding:5px 8px;background:hsl(42,80%,94%);border-radius:4px;font-size:11px;color:hsl(42,60%,30%);margin:5px 0;font-style:italic;line-height:1.45">'+t.aktarma+'</div>';
-    if (t.sehirAracTur) {
+    var _siList5 = _sehirAraclarParse(t);
+    if (_siList5.length) {
       bilgiHtml += '<div style="font-size:10.5px;font-weight:700;color:#15803d;text-transform:uppercase;letter-spacing:.5px;margin:10px 0 4px;line-height:1.4">ŞEHİR İÇİ</div>';
-      bilgiHtml += '<div style="padding:5px 0;border-bottom:1px solid var(--border)"><div style="font-size:12px;font-weight:700;color:#15803d">'+t.sehirAracTur+(t.sehirAracDetay?' – '+t.sehirAracDetay:'')+'</div>'+(t.sehirKisiSayisi?'<div style="font-size:11px;color:var(--muted-foreground)">'+t.sehirKisiSayisi+' kişi'+(t.sehirTel?' · '+t.sehirTel:'')+'</div>':'')+'</div>';
+      _siList5.forEach(function(_a){
+        var _baslik = (_a.tur||'') + (_a.firma?(_a.tur?' – ':'')+_a.firma:'');
+        var _alt = [];
+        if (_a.kisi) _alt.push(_a.kisi+' kişi');
+        if (_a.tel)  _alt.push(_a.tel);
+        bilgiHtml += '<div style="padding:5px 0;border-bottom:1px solid var(--border)">'
+          + '<div style="font-size:12px;font-weight:700;color:#15803d">'+(_baslik||'—')+'</div>'
+          + (_alt.length?'<div style="font-size:11px;color:var(--muted-foreground)">'+_alt.join(' · ')+'</div>':'')
+          + '</div>';
+      });
     }
     if (t.donusUlasim) {
       bilgiHtml += '<div style="font-size:10.5px;font-weight:700;color:#7c3aed;text-transform:uppercase;letter-spacing:.5px;margin:10px 0 4px;line-height:1.4">DÖNÜŞ · '+formatTarih(t.bitisTarih||t.tarih)+'</div>';
@@ -16612,13 +16627,16 @@ function renderIstatistik() {
 
   var bugun = new Date().toISOString().slice(0,10);
 
+  // İptal turneler istatistik sayımına dahil edilmez
+  var aktifTurneler = turneler.filter(function(t){ return t.statu !== 'iptal'; });
+
   // -- HESAPLAMALAR --
-  var toplamTurne  = turneler.length;
-  var toplamGun    = turneler.reduce(function(a,t){ return a + turneSuresi(t); }, 0);
-  var toplamTemsil = turneler.reduce(function(a,t){ return a + durakToplamTemsil(t); }, 0);
+  var toplamTurne  = aktifTurneler.length;
+  var toplamGun    = aktifTurneler.reduce(function(a,t){ return a + turneSuresi(t); }, 0);
+  var toplamTemsil = aktifTurneler.reduce(function(a,t){ return a + durakToplamTemsil(t); }, 0);
 
   var ilSet = {};
-  turneler.forEach(function(t){
+  aktifTurneler.forEach(function(t){
     durakIllerListesi(t).forEach(function(il){
       var ilAdi = (il||'').split('/')[0].trim();
       if (ilAdi) ilSet[ilAdi] = true;
@@ -16639,7 +16657,7 @@ function renderIstatistik() {
 
   // Kisi bazli
   var kisiMap = {};
-  turneler.forEach(function(t){
+  aktifTurneler.forEach(function(t){
     var liste = (t.katilimcilar&&t.katilimcilar.length) ? t.katilimcilar
       : getPersonelForOyun(t.oyun).map(function(p){ return {kisi:p.kisi,gorev:p.gorev||p.kategori,kategori:p.kategori}; });
     var seen = {};
@@ -16658,7 +16676,7 @@ function renderIstatistik() {
 
   // Il bazli
   var ilMap = {};
-  turneler.forEach(function(t){
+  aktifTurneler.forEach(function(t){
     durakIllerListesi(t).forEach(function(il){
       var ilAdi = (il||'').split('/')[0].trim();
       if (!ilAdi) return;
@@ -16669,7 +16687,7 @@ function renderIstatistik() {
 
   // Oyun bazli — durak bazlı oyunları da ayrı ayrı say
   var oyunMap = {};
-  turneler.forEach(function(t){
+  aktifTurneler.forEach(function(t){
     // Durak bazlı oyunları topla
     var oyunlar = [];
     if (t.duraklar && t.duraklar.length) {
@@ -17418,15 +17436,19 @@ function _pdfIcerik(t) {
   }
 
   // \u015eehir i\u00e7i ula\u015f\u0131m
-  if (t.sehirAracTur) {
-    var sehirStr = t.sehirAracTur
-      + (t.sehirAracDetay ? ' \u2013 ' + t.sehirAracDetay : '')
-      + (t.sehirSurucu ? ' \u00b7 S\u00fcr\u00fcr: ' + t.sehirSurucu : '')
-      + (t.sehirKisiSayisi ? ' \u00b7 ' + t.sehirKisiSayisi + ' ki\u015fi' : '')
-      + (t.sehirTel ? ' \u00b7 Tel: ' + t.sehirTel : '');
+  var _siListPdf = _sehirAraclarParse(t);
+  if (_siListPdf.length) {
+    var _siHtml = _siListPdf.map(function(_a){
+      var s = (_a.tur||'') + (_a.firma?((_a.tur?' \u2013 ':'')+_a.firma):'');
+      var ek = [];
+      if (_a.kisi) ek.push(_a.kisi+' ki\u015fi');
+      if (_a.tel)  ek.push('Tel: '+_a.tel);
+      if (ek.length) s += ' \u00b7 ' + ek.join(' \u00b7 ');
+      return '<div style="line-height:1.4">\ud83d\ude97 ' + s + '</div>';
+    }).join('');
     ucusRows.push('<tr style="background:#f0fdf4">'
       + '<td style="padding:6px 10px;border:1px solid #ddd;font-size:10px;color:#15803d;font-style:italic">Turne S\u00fcresince</td>'
-      + '<td colspan="4" style="padding:6px 10px;border:1px solid #ddd;font-size:11px;color:#15803d;font-weight:600">\ud83d\ude97 \u015eehir \u0130\u00e7i: ' + sehirStr + '</td>'
+      + '<td colspan="4" style="padding:6px 10px;border:1px solid #ddd;font-size:11px;color:#15803d;font-weight:600">' + _siHtml + '</td>'
       + '</tr>');
   }
 
@@ -20065,6 +20087,32 @@ function _legacyToSehir(tur, detay, kisi, tel) {
   return [{tur: tur||'', firma: detay||'', kisi: kisi||'', tel: tel||''}];
 }
 
+// ── Şehir içi araçları her yerde ortak parse / formatla ──────────────────────
+function _sehirAraclarParse(t){
+  if (!t) return [];
+  var raw = t.sehirAracDetay || '';
+  try {
+    var p = JSON.parse(raw);
+    if (Array.isArray(p) && p.length) {
+      return p.map(function(a){
+        return { tur:(a&&a.tur)||'', firma:(a&&a.firma)||'', kisi:(a&&a.kisi)||'', tel:(a&&a.tel)||'' };
+      });
+    }
+  } catch(e){}
+  if (!t.sehirAracTur && !raw && !t.sehirTel && !t.sehirKisiSayisi) return [];
+  return [{ tur:t.sehirAracTur||'', firma:raw||'', kisi:t.sehirKisiSayisi||'', tel:t.sehirTel||'' }];
+}
+function _sehirAraclarFormatLines(araclar){
+  return (araclar||[]).map(function(a){
+    var s = a.tur || '';
+    if (a.firma) s += (s?' – ':'') + a.firma;
+    if (a.tel)   s += (s?' · ':'') + a.tel;
+    if (a.kisi)  s += (s?' ':'') + '(' + a.kisi + ' kişi)';
+    return s;
+  }).filter(function(x){ return !!x; });
+}
+
+
 function ulasimTuruDegisti(yon) {
   var tur = (document.getElementById('m-' + yon + '-ulasim') || {}).value || '';
   var isUcak   = tur.includes('Uçak');
@@ -22183,14 +22231,18 @@ function _pdfTurneDosyasiIcerik(t, opts) {
       +'</div>';
   });
 
-  // Şehir içi servis
-  if(_sehirFirmaKapak||_sehirTelKapak||t.sehirTel){
-    var _sTel=_sehirTelKapak||t.sehirTel||'';
-    _nakKapak+='<div style="margin-bottom:6pt;line-height:1.35">'
-      +'<div style="color:rgba(255,255,255,.5);font-size:8pt;margin-bottom:1pt">\u015eehir \u0130\u00e7i Servis</div>'
-      +(_sehirFirmaKapak?'<strong style="color:#fff;font-size:10pt;display:block;word-break:break-word">'+_sehirFirmaKapak+'</strong>':'')
-      +(_sTel?'<span style="color:#e8c84a;font-weight:700;font-size:10pt;display:block">'+_sTel+'</span>':'')
-      +'</div>';
+  // Şehir içi servis — çoklu araç desteği
+  var _siKapakListe = _sehirAraclarParse(t);
+  if (_siKapakListe.length){
+    _siKapakListe.forEach(function(_a, _ai){
+      var _ad = _a.firma || _a.tur || '';
+      if (!_ad && !_a.tel) return;
+      _nakKapak+='<div style="margin-bottom:6pt;line-height:1.35">'
+        +(_ai===0?'<div style="color:rgba(255,255,255,.5);font-size:8pt;margin-bottom:1pt">\u015eehir \u0130\u00e7i Servis</div>':'')
+        +(_ad?'<strong style="color:#fff;font-size:10pt;display:block;word-break:break-word">'+_ad+'</strong>':'')
+        +(_a.tel?'<span style="color:#e8c84a;font-weight:700;font-size:10pt;display:block">'+_a.tel+'</span>':'')
+        +'</div>';
+    });
   }
 
   // Sütun sayısını belirle (max 3)
