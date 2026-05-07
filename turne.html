@@ -15617,8 +15617,8 @@ function _calEventHTML(t, key) {
     sure: sure, temsil: temsil, rowIdx: t._rowIdx,
     progTip: st.tip, oyunAdi: st.oyunAdi, saat: st.saat,
     gidisSaatSt: (st.tip==='yol' ? st.saat : ''), donusSaatSt: (st.tip==='donus' ? st.saat : ''),
-    gidisBacaklar: (function(){ try{ var g=t.gidisUcusBacakJSON?JSON.parse(t.gidisUcusBacakJSON):[]; return g.map(function(b){return {tarih:b.tarih||'',kalkis:b.kalkis||'',inis:b.inis||'',ucusNo:b.ucusNo||'',nereden:b.nereden||'',nereye:b.nereye||''};});}catch(e){return [];} })(),
-    donusBacaklar: (function(){ try{ var d2=t.donusUcusBacakJSON?JSON.parse(t.donusUcusBacakJSON):[]; return d2.map(function(b){return {tarih:b.tarih||'',kalkis:b.kalkis||'',inis:b.inis||'',ucusNo:b.ucusNo||'',nereden:b.nereden||'',nereye:b.nereye||''};});}catch(e){return [];} })()
+    gidisBacaklar: (function(){ try{ var g=t.gidisUcusBacakJSON?JSON.parse(t.gidisUcusBacakJSON):[]; return g.map(function(b){return {kalkis:b.kalkis||'',inis:b.inis||'',ucusNo:b.ucusNo||'',nereden:b.nereden||'',nereye:b.nereye||''};});}catch(e){return [];} })(),
+    donusBacaklar: (function(){ try{ var d2=t.donusUcusBacakJSON?JSON.parse(t.donusUcusBacakJSON):[]; return d2.map(function(b){return {kalkis:b.kalkis||'',inis:b.inis||'',ucusNo:b.ucusNo||'',nereden:b.nereden||'',nereye:b.nereye||''};});}catch(e){return [];} })()
   }));
 
   // Ek turne → mor/italik
@@ -20238,8 +20238,8 @@ function ulasimTuruDegisti(yon) {
 
   // Uçak seçilince bacakları oluştur (ilk kez)
   if (isUcak && !ucusBacaklar[yon].length) {
-    ucusBacaklar[yon] = [{ tarih:'', nereden:'', nereye:'', kalkis:'', inis:'', ucusNo:'' }];
-    if (isAktarm) ucusBacaklar[yon].push({ tarih:'', nereden:'', nereye:'', kalkis:'', inis:'', ucusNo:'' });
+    ucusBacaklar[yon] = [{ nereden:'', nereye:'', kalkis:'', inis:'', ucusNo:'' }];
+    if (isAktarm) ucusBacaklar[yon].push({ nereden:'', nereye:'', kalkis:'', inis:'', ucusNo:'' });
   } else if (!isUcak) {
     ucusBacaklar[yon] = [];
   }
@@ -20262,9 +20262,7 @@ function _ucusOzetGuncelle(yon) {
     return;
   }
   var ozetMetin = dolu.map(function(b){
-    var t = b.tarih ? (function(){ try{ var d=parseLocalDate(b.tarih); return d?(('0'+d.getDate()).slice(-2)+'.'+('0'+(d.getMonth()+1)).slice(-2)+' '):''; }catch(e){return '';} })() : '';
-    var s = b.kalkis ? ' ' + b.kalkis : '';
-    return t + (b.nereden||'?') + ' → ' + (b.nereye||'?') + s;
+    return (b.nereden||'?') + ' → ' + (b.nereye||'?');
   }).join('   |   ');
   ozetEl.textContent = ozetMetin;
   ozetEl.style.display = '';
@@ -20289,7 +20287,8 @@ function ucusPopupAc() {
   if (gidisTur.includes('Uçak')) {
     gBlok.style.display = '';
     document.getElementById('ucus-popup-gidis-tur').textContent = gidisTur;
-    document.getElementById('ucus-popup-gidis-ekle-btn').style.display = '';
+    document.getElementById('ucus-popup-gidis-ekle-btn').style.display =
+      gidisTur === 'Uçak (Aktarmalı)' ? '' : 'none';
   } else {
     gBlok.style.display = 'none';
   }
@@ -20299,7 +20298,8 @@ function ucusPopupAc() {
   if (donusTur.includes('Uçak')) {
     dBlok.style.display = '';
     document.getElementById('ucus-popup-donus-tur').textContent = donusTur;
-    document.getElementById('ucus-popup-donus-ekle-btn').style.display = '';
+    document.getElementById('ucus-popup-donus-ekle-btn').style.display =
+      donusTur === 'Uçak (Aktarmalı)' ? '' : 'none';
   } else {
     dBlok.style.display = 'none';
   }
@@ -20325,8 +20325,6 @@ function ucusPopupKaydet() {
       if (!ucusBacaklar[yon][i]) return;
       var timeInps = kart.querySelectorAll('input[type="time"]');
       var textInps = kart.querySelectorAll('input[type="text"].sefer-no-inp');
-      var dateInp  = kart.querySelector('input.ucus-tarih-inp');
-      if (dateInp)    ucusBacaklar[yon][i].tarih   = dateInp.value;
       if (timeInps[0]) ucusBacaklar[yon][i].kalkis = timeInps[0].value;
       if (timeInps[1]) ucusBacaklar[yon][i].inis   = timeInps[1].value;
       if (textInps[0]) ucusBacaklar[yon][i].ucusNo  = textInps[0].value;
@@ -20343,14 +20341,14 @@ function ucusPopupRender() {
     var toplam = bacaklar.length;
     var lbl = 'display:block;font-size:9px;font-weight:700;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.3px;margin-bottom:3px';
     container.innerHTML = bacaklar.map(function(b, i) {
-      var badge = '<div style="font-size:11px;font-weight:700;color:var(--primary);background:hsl(350,60%,95%);border-radius:4px;padding:1px 10px;display:inline-block;margin-bottom:8px">' + (i+1) + '. UÇUŞ</div>';
+      var badge = toplam > 1
+        ? '<div style="font-size:11px;font-weight:700;color:var(--primary);background:hsl(350,60%,95%);border-radius:4px;padding:1px 10px;display:inline-block;margin-bottom:8px">' + (i+1) + '. BACAK</div>'
+        : '';
       var silBtn = toplam > 1
-        ? '<button type="button" onclick="ucusBacakSil(\'' + yon + '\',' + i + ');ucusPopupRender()" style="margin-top:6px;width:100%;height:30px;border:1px solid var(--destructive);background:transparent;color:var(--destructive);border-radius:6px;cursor:pointer;font-size:11px;font-weight:700">— Bu Uçuşu Sil</button>'
+        ? '<button type="button" onclick="ucusBacakSil(\'' + yon + '\',' + i + ');ucusPopupRender()" style="margin-top:6px;width:100%;height:30px;border:1px solid var(--destructive);background:transparent;color:var(--destructive);border-radius:6px;cursor:pointer;font-size:11px;font-weight:700">— Bu Bacağı Sil</button>'
         : '';
       return '<div class="ucus-bacak-kart" style="background:var(--muted);border-radius:8px;padding:10px 12px;margin-bottom:8px">'
         + badge
-        + '<div style="margin-bottom:8px"><label style="' + lbl + '">Tarih</label>'
-          + '<input class="form-input ucus-tarih-inp" type="date" value="' + (b.tarih||'') + '" style="height:34px;width:100%;padding:0 8px"></div>'
         + '<div style="display:grid;grid-template-columns:1fr 28px 1fr;gap:8px;align-items:end;margin-bottom:8px">'
           + '<div><label style="' + lbl + '">Kalkış Havalimanı</label>'
             + havalimaniInputHTML(yon, i, 'nereden', b.nereden||'') + '</div>'
@@ -20364,7 +20362,7 @@ function ucusPopupRender() {
           + '<div><label style="' + lbl + '">İniş Saati</label>'
             + '<input class="form-input" type="time" value="' + (b.inis||'') + '" style="height:34px;width:100%;padding:0 8px"></div>'
           + '<div><label style="' + lbl + '">Sefer No / Firma</label>'
-            + '<input class="form-input sefer-no-inp" type="text" value="' + (b.ucusNo||'') + '" placeholder="AJET / TK1234" style="height:34px;width:100%"></div>'
+            + '<input class="form-input sefer-no-inp" type="text" value="' + (b.ucusNo||'') + '" placeholder="PC1234" style="height:34px;width:100%"></div>'
         + '</div>'
         + silBtn
       + '</div>';
@@ -20374,7 +20372,7 @@ function ucusPopupRender() {
 // ── UÇUŞ POPUP SONU ─────────────────────────────────────
 
 function ucusBacakEkle(yon) {
-  ucusBacaklar[yon].push({ tarih:'', nereden:'', nereye:'', kalkis:'', inis:'', ucusNo:'' });
+  ucusBacaklar[yon].push({ nereden:'', nereye:'', kalkis:'', inis:'', ucusNo:'' });
   renderUcusBacaklar(yon);
 }
 
@@ -21305,7 +21303,7 @@ function acBindAll() {
 <svg fill="none" height="12" stroke="currentColor" stroke-linecap="round" stroke-width="2" style="margin-right:5px;vertical-align:-1px" viewbox="0 0 24 24" width="12"><path d="M17.8 19.2L16 11l3.5-3.5C21 6 21 4 19 2c-2-2-4-2-5.5-.5L10 5 1.8 6.2c-.5.1-.7.6-.4 1l2.3 2.3c.3.3.6.4 1 .3L9 9 7.5 12.5 4 13l-1 2 4 2 2 4 2-1 .5-3.5L15 14l-.2 3.3c-.1.4.1.7.4 1l2.3 2.3c.4.4.9.2 1-.3z"></path></svg>Gidiş — <span id="ucus-popup-gidis-tur" style="font-weight:500;text-transform:none;font-size:10px;color:var(--muted-foreground)"></span>
 </div>
 <div id="ucus-popup-gidis-bacaklar"></div>
-<button id="ucus-popup-gidis-ekle-btn" onclick="ucusBacakEkle('gidis');ucusPopupRender()" style="display:none;margin-top:4px;width:100%;padding:7px;border:1.5px dashed var(--primary);border-radius:7px;background:hsl(38,40%,97%);font-size:11px;font-weight:700;color:var(--primary);cursor:pointer" type="button">+ Uçuş Ekle</button>
+<button id="ucus-popup-gidis-ekle-btn" onclick="ucusBacakEkle('gidis');ucusPopupRender()" style="display:none;margin-top:4px;width:100%;padding:7px;border:1.5px dashed var(--primary);border-radius:7px;background:hsl(38,40%,97%);font-size:11px;font-weight:700;color:var(--primary);cursor:pointer" type="button">+ Aktarma Bacağı Ekle</button>
 </div>
 <!-- DÖNÜŞ BÖLÜMÜ -->
 <div id="ucus-popup-donus-blok" style="display:none">
@@ -21313,7 +21311,7 @@ function acBindAll() {
 <svg fill="none" height="12" stroke="currentColor" stroke-linecap="round" stroke-width="2" style="margin-right:5px;vertical-align:-1px" viewbox="0 0 24 24" width="12"><path d="M17.8 19.2L16 11l3.5-3.5C21 6 21 4 19 2c-2-2-4-2-5.5-.5L10 5 1.8 6.2c-.5.1-.7.6-.4 1l2.3 2.3c.3.3.6.4 1 .3L9 9 7.5 12.5 4 13l-1 2 4 2 2 4 2-1 .5-3.5L15 14l-.2 3.3c-.1.4.1.7.4 1l2.3 2.3c.4.4.9.2 1-.3z"></path></svg>Dönüş — <span id="ucus-popup-donus-tur" style="font-weight:500;text-transform:none;font-size:10px;color:var(--muted-foreground)"></span>
 </div>
 <div id="ucus-popup-donus-bacaklar"></div>
-<button id="ucus-popup-donus-ekle-btn" onclick="ucusBacakEkle('donus');ucusPopupRender()" style="display:none;margin-top:4px;width:100%;padding:7px;border:1.5px dashed var(--primary);border-radius:7px;background:hsl(38,40%,97%);font-size:11px;font-weight:700;color:var(--primary);cursor:pointer" type="button">+ Uçuş Ekle</button>
+<button id="ucus-popup-donus-ekle-btn" onclick="ucusBacakEkle('donus');ucusPopupRender()" style="display:none;margin-top:4px;width:100%;padding:7px;border:1.5px dashed var(--primary);border-radius:7px;background:hsl(38,40%,97%);font-size:11px;font-weight:700;color:var(--primary);cursor:pointer" type="button">+ Aktarma Bacağı Ekle</button>
 </div>
 </div>
 <!-- Footer -->
