@@ -7137,12 +7137,12 @@ function _renderCardDetail(rowIdx) {
     +   '<span>' + turneKadroSay + '</span>'
     +   '<span style="font-size:10.5px;font-weight:700;opacity:.85">'+(eksikSay>0?'· '+eksikSay+' eksik':'· Tam ✓')+'</span>'
     + '</span>'
+    + '<button class="btn btn-primary" style="margin-left:auto;height:30px;padding:0 11px;font-size:11.5px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;gap:5px;border-radius:7px" onclick="closeCardDetail();openKisiModal('+rowIdx+')">'
+    +   '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="23" y1="11" x2="17" y2="11"/><line x1="20" y1="8" x2="20" y2="14"/></svg>'
+    +   'Katılımcıları Düzenle'
+    + '</button>'
     + '</div>';
 
-  // Katılımcıları düzenle butonu
-  katilimciHtml += '<button class="btn btn-primary" style="width:100%;height:38px;font-size:12px;font-weight:800;margin-bottom:14px;display:flex;align-items:center;justify-content:center;gap:6px" onclick="closeCardDetail();openKisiModal('+rowIdx+')">'
-    + '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="23" y1="11" x2="17" y2="11"/><line x1="20" y1="8" x2="20" y2="14"/></svg>'
-    + 'Katılımcıları Düzenle</button>';
 
   // Kişi listesi — kategorilere göre
   if (turneKadroSay > 0) {
@@ -17868,6 +17868,7 @@ function _pdfModSec(rowIdx) {
       + '<label style="display:flex;align-items:center;gap:9px;padding:9px 11px;border:1.5px solid #e5e7eb;border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:600;color:#1f2937"><input type="checkbox" id="_dpo_program" checked style="width:16px;height:16px;cursor:pointer;accent-color:#7c3aed"> 📅 Turne Programı</label>'
       + '<label style="display:flex;align-items:center;gap:9px;padding:9px 11px;border:1.5px solid #e5e7eb;border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:600;color:#1f2937"><input type="checkbox" id="_dpo_ulasim" checked style="width:16px;height:16px;cursor:pointer;accent-color:#7c3aed"> 🚌 Ulaşım / Lojistik</label>'
       + '<label style="display:flex;align-items:center;gap:9px;padding:9px 11px;border:1.5px solid #e5e7eb;border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:600;color:#1f2937"><input type="checkbox" id="_dpo_konaklama" checked style="width:16px;height:16px;cursor:pointer;accent-color:#7c3aed"> 🛏 Konaklama / Oda Eşlemeleri</label>'
+      + '<label style="display:flex;align-items:center;gap:9px;padding:9px 11px;border:1.5px solid #e5e7eb;border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:600;color:#1f2937"><input type="checkbox" id="_dpo_planlar" checked style="width:16px;height:16px;cursor:pointer;accent-color:#7c3aed"> 📋 Oda Planları (TRABZON AYAĞI, DİYARBAKIR AYAĞI ...)</label>'
       + '<label style="display:flex;align-items:center;gap:9px;padding:9px 11px;border:1.5px solid #e5e7eb;border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:600;color:#1f2937"><input type="checkbox" id="_dpo_personel" checked style="width:16px;height:16px;cursor:pointer;accent-color:#7c3aed"> 👥 Personel Listesi</label>'
       + '</div>'
       + '<div style="display:flex;gap:8px;justify-content:flex-end">'
@@ -17882,6 +17883,7 @@ function _pdfModSec(rowIdx) {
         program:   document.getElementById('_dpo_program').checked,
         ulasim:    document.getElementById('_dpo_ulasim').checked,
         konaklama: document.getElementById('_dpo_konaklama').checked,
+        planlar:   document.getElementById('_dpo_planlar').checked,
         personel:  document.getElementById('_dpo_personel').checked
       };
       document.body.removeChild(ov2);
@@ -22082,6 +22084,7 @@ function _pdfTurneDosyasiIcerik(t, opts) {
   var _incProgram   = opts.program   !== false;
   var _incUlasim    = opts.ulasim    !== false;
   var _incKonaklama = opts.konaklama !== false;
+  var _incPlanlar   = opts.planlar   !== false;
   var _incPersonel  = opts.personel  !== false;
   // ── YARDIMCI ────────────────────────────────────────────────
   var AYLAR=['Ocak','\u015eubat','Mart','Nisan','May\u0131s','Haziran','Temmuz','A\u011fustos','Eyl\u00fcl','Ekim','Kas\u0131m','Aral\u0131k'];
@@ -22818,10 +22821,155 @@ function _pdfTurneDosyasiIcerik(t, opts) {
     )
     +'</div>';
 
+
+  // ── EK SAYFALAR: ODA PLANLARI ─────────────────────────────
+  function _planSayfasi(plan, planIdx){
+    try {
+      var ek = (typeof _odaPlanEffectiveKat==='function') ? _odaPlanEffectiveKat(t, plan) : [];
+      var planKat = ek.map(function(p){
+        return {
+          kisi: p.kisi,
+          gorev: p.gorev || '',
+          kategori: p.kategori || '',
+          odaTip: (plan.odaTipleri||{})[p.kisi] || '',
+          munferit: !!(plan.munferitler||{})[p.kisi],
+          odaEsi: (plan.odaEsleri||{})[p.kisi] || ''
+        };
+      });
+
+      function _unv(p){ return (p.gorev||p.kategori||'').replace(/\s*\([^)]*\)\s*/g,'').replace(/[-\u2013\s]+$/,'').trim(); }
+
+      var tekler  = planKat.filter(function(p){ return p.odaTip==='tek' && !p.munferit; });
+      var ciftRaw = planKat.filter(function(p){ return p.odaTip==='cift' && !p.munferit; });
+      var munf    = planKat.filter(function(p){ return p.munferit; });
+      var atan    = planKat.filter(function(p){ return !p.munferit && p.odaTip!=='tek' && p.odaTip!=='cift'; });
+
+      var isl={}, ciftGr=[];
+      ciftRaw.forEach(function(p){
+        if(isl[p.kisi]) return;
+        isl[p.kisi]=true;
+        var gr=[p];
+        if(p.odaEsi){ var e=ciftRaw.find(function(x){return x.kisi===p.odaEsi;}); if(e&&!isl[e.kisi]){isl[e.kisi]=true;gr.push(e);} }
+        ciftGr.push(gr);
+      });
+
+      var planAd = (plan.baslik || ('Plan '+(planIdx+1))).toUpperCase();
+      var ozet   = planKat.length+' kişi · '+tekler.length+' tek · '+ciftGr.length+' çift · '+munf.length+' münferit';
+      var notHtml= plan.not ? '<div style="font-size:10pt;color:#555;font-style:italic;margin-top:3pt">'+plan.not+'</div>' : '';
+
+      var html = ''
+        + '<div class="bolum-baslik" style="font-size:13pt">📋 '+planAd+'</div>'
+        + '<div style="font-size:10.5pt;color:#444;font-weight:700;margin-bottom:6pt">'+ozet+'</div>'
+        + notHtml;
+
+      // TEK ODA
+      if(tekler.length){
+        var tRows=tekler.map(function(p,i){
+          return '<tr style="page-break-inside:avoid;break-inside:avoid">'
+            +'<td style="width:18pt;text-align:center;color:#777;font-size:8pt;padding:1.5pt 4pt">'+(i+1)+'</td>'
+            +'<td style="font-weight:700;white-space:nowrap;font-size:9.5pt;padding:1.5pt 5pt">'+(p.kisi||'')+'</td>'
+            +'<td style="color:#444;font-size:9pt;font-weight:500;padding:1.5pt 5pt">'+_unv(p)+'</td>'
+            +'</tr>';
+        }).join('');
+        html += '<div style="margin-top:6pt;margin-bottom:6pt">'
+          + '<div style="background:#1d4ed8;color:#fff;padding:4pt 8pt;font-size:9.5pt;font-weight:800;display:flex;justify-content:space-between;align-items:center;page-break-after:avoid;break-after:avoid">'
+          + '<span>🛏 Tek Oda</span>'
+          + '<span style="background:rgba(255,255,255,.2);border-radius:10pt;padding:1pt 8pt;font-size:9pt">'+tekler.length+' oda</span>'
+          + '</div>'
+          + '<table style="border-top:none"><thead><tr style="background:#1e40af">'
+          + '<th style="width:18pt;text-align:center;padding:3pt 4pt;font-size:9pt">No</th><th style="padding:3pt 4pt;font-size:9pt">Ad Soyad</th><th style="padding:3pt 4pt;font-size:9pt">Görev / Unvan</th>'
+          + '</tr></thead><tbody>'+tRows+'</tbody></table></div>';
+      }
+
+      // ÇİFT ODA
+      if(ciftGr.length){
+        var cRows=ciftGr.map(function(gr,gi){
+          var p1=gr[0], p2=gr[1];
+          var rowBg=gi%2===0?'#fff':'#f5faf5';
+          var eksikBorder=!p2?'border-left:3pt solid #ef4444!':'border-left:3pt solid #15803d!';
+          return '<tr style="background:'+rowBg+';'+eksikBorder+'important;page-break-inside:avoid;break-inside:avoid">'
+            +'<td style="width:18pt;text-align:center;color:#777;font-size:8pt;vertical-align:middle;padding:2pt 4pt">'+(gi+1)+'</td>'
+            +'<td style="vertical-align:top;padding:2pt 5pt">'
+              +'<div style="font-weight:700;font-size:9pt;white-space:nowrap;margin-bottom:1pt">'+(p1.kisi||'')+'</div>'
+              +(p2
+                ?'<div style="font-weight:700;font-size:9pt;color:#15803d;white-space:nowrap;border-top:1pt dashed #c8e8c8;padding-top:1pt;margin-top:1pt">'+p2.kisi+'</div>'
+                :'<div style="color:#dc2626;font-size:8.5pt;font-weight:700;padding-top:1pt;margin-top:1pt;border-top:1pt dashed #fca5a5">⚠ Oda eşi atanmamış</div>')
+            +'</td>'
+            +'<td style="vertical-align:top;padding:2pt 5pt">'
+              +'<div style="font-size:9pt;font-weight:500;color:#444;margin-bottom:1pt">'+_unv(p1)+'</div>'
+              +(p2?'<div style="font-size:9pt;font-weight:500;color:#444;border-top:1pt dashed #c8e8c8;padding-top:1pt;margin-top:1pt">'+_unv(p2)+'</div>':'')
+            +'</td></tr>';
+        }).join('');
+        html += '<div style="margin-top:4pt;margin-bottom:6pt">'
+          + '<div style="background:#15803d;color:#fff;padding:4pt 8pt;font-size:9.5pt;font-weight:800;display:flex;justify-content:space-between;align-items:center;page-break-after:avoid;break-after:avoid">'
+          + '<span>🛌 Çift Oda</span>'
+          + '<span style="background:rgba(255,255,255,.2);border-radius:10pt;padding:1pt 8pt;font-size:9pt">'+ciftGr.length+' oda</span>'
+          + '</div>'
+          + '<table style="border-top:none"><thead><tr style="background:#166534">'
+          + '<th style="width:18pt;text-align:center;padding:3pt 4pt;font-size:9pt">Oda</th><th style="padding:3pt 4pt;font-size:9pt">Kişiler</th><th style="padding:3pt 4pt;font-size:9pt">Görev / Unvan</th>'
+          + '</tr></thead><tbody>'+cRows+'</tbody></table></div>';
+      }
+
+      // MÜNFERİT
+      if(munf.length){
+        var mRows=munf.map(function(p,i){
+          return '<tr style="page-break-inside:avoid;break-inside:avoid">'
+            +'<td style="width:18pt;text-align:center;color:#777;font-size:8pt;padding:1.5pt 4pt">'+(i+1)+'</td>'
+            +'<td style="font-weight:700;white-space:nowrap;font-size:9pt;padding:1.5pt 4pt">'+(p.kisi||'')+'</td>'
+            +'<td style="color:#444;font-size:9pt;font-weight:500;padding:1.5pt 4pt">'+_unv(p)+'</td>'
+            +'</tr>';
+        }).join('');
+        html += '<div style="margin-top:4pt;margin-bottom:6pt">'
+          + '<div style="background:#92400e;color:#fff;padding:4pt 8pt;font-size:9.5pt;font-weight:800;display:flex;justify-content:space-between;align-items:center;page-break-after:avoid;break-after:avoid">'
+          + '<span>🚶 Münferit</span>'
+          + '<span style="background:rgba(255,255,255,.2);border-radius:10pt;padding:1pt 8pt;font-size:9pt">'+munf.length+' kişi</span>'
+          + '</div>'
+          + '<table style="border-top:none"><thead><tr style="background:#b45309">'
+          + '<th style="width:18pt;text-align:center;padding:3pt 4pt;font-size:9pt">No</th><th style="padding:3pt 4pt;font-size:9pt">Ad Soyad</th><th style="padding:3pt 4pt;font-size:9pt">Görev / Unvan</th>'
+          + '</tr></thead><tbody>'+mRows+'</tbody></table></div>';
+      }
+
+      // ATANMAMIŞ
+      if(atan.length){
+        var aRows=atan.map(function(p,i){
+          return '<tr style="background:#fef2f2;page-break-inside:avoid;break-inside:avoid">'
+            +'<td style="width:18pt;text-align:center;color:#777;font-size:8pt;padding:1.5pt 4pt">'+(i+1)+'</td>'
+            +'<td style="font-weight:700;color:#dc2626;white-space:nowrap;font-size:9pt;padding:1.5pt 4pt">'+(p.kisi||'')+'</td>'
+            +'<td style="color:#c07070;font-size:9pt;font-weight:500;padding:1.5pt 4pt">'+_unv(p)+'</td>'
+            +'</tr>';
+        }).join('');
+        html += '<div style="margin-top:4pt;margin-bottom:6pt">'
+          + '<div style="background:#fef2f2;border:2pt solid #dc2626;padding:4pt 8pt;font-size:9.5pt;color:#991b1b;font-weight:800;display:flex;justify-content:space-between;align-items:center;page-break-after:avoid;break-after:avoid">'
+          + '<span>⚠️ Oda Atanmamış</span>'
+          + '<span style="background:#dc2626;color:#fff;border-radius:10pt;padding:1pt 8pt;font-size:9pt">'+atan.length+' kişi</span>'
+          + '</div>'
+          + '<table style="border-top:none;border:1.5pt solid #dc2626"><thead><tr style="background:#b91c1c">'
+          + '<th style="width:18pt;text-align:center;padding:3pt 4pt;font-size:9pt">No</th><th style="padding:3pt 4pt;font-size:9pt">Ad Soyad</th><th style="padding:3pt 4pt;font-size:9pt">Görev / Unvan</th>'
+          + '</tr></thead><tbody>'+aRows+'</tbody></table></div>';
+      }
+
+      if(!tekler.length && !ciftGr.length && !munf.length && !atan.length){
+        html += '<p style="color:#555;font-style:italic;margin-top:8pt">Bu planda kişi yok.</p>';
+      }
+
+      return '<div class="sayfa-icerik" style="page-break-before:always;break-before:page">'
+        + '<div class="sayfa-header">'
+        + '<div class="sayfa-header-oyun">'+oyunAdi+'</div>'
+        + '<div class="sayfa-header-bilgi">'+ilStr+' TURNESİ<br>ODA PLANI</div>'
+        + '</div>'
+        + html
+        + '</div>';
+    } catch(e){ return ''; }
+  }
+  var sayfaPlanlar = (_incPlanlar && t.odaPlanlari && t.odaPlanlari.length)
+    ? t.odaPlanlari.map(_planSayfasi).join('')
+    : '';
+
   return CSS + kapak
     + (_incProgram   ? sayfa2 : '')
     + (_incUlasim    ? sayfa3 : '')
     + (_incKonaklama ? sayfa4 : '')
+    + sayfaPlanlar
     + (_incPersonel  ? sayfa5 : '');
 }
 
