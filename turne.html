@@ -9028,10 +9028,10 @@ var _firmaKategorileri = {
 var _firmaRehberSeed = [
   { ad: 'BARIŞ UYANIK NAKLİYE', kategori: 'nakliye', tel: '05389269355', tel2: '', not: 'Dekor nakliye' },
   { ad: 'SEYİT KAHRAMAN',        kategori: 'servis',  tel: '05539626902', tel2: '', not: 'Kiralık otobüs' },
-  { ad: 'Wyndham Grand Kayseri', kategori: 'otel',    tel: '', tel2: '', not: 'Kayseri' },
-  { ad: 'Anitta Otel',           kategori: 'otel',    tel: '', tel2: '', not: 'Corum - Tuncer Cucenoğlu Sahnesi' },
-  { ad: 'Radisson Blu',          kategori: 'otel',    tel: '', tel2: '', not: 'Ankara - Sinasi Sahnesi' },
-  { ad: 'Zorlu Grand Hotel',     kategori: 'otel',    tel: '', tel2: '', not: 'Trabzon - Sanat Evi' }
+  { ad: 'Wyndham Grand Kayseri', kategori: 'otel',    tel: '', tel2: '', not: 'Kayseri', _kaynak: 'Kayseri' },
+  { ad: 'Anitta Otel',           kategori: 'otel',    tel: '', tel2: '', not: 'Corum - Tuncer Cucenoğlu Sahnesi', _kaynak: 'Çorum' },
+  { ad: 'Radisson Blu',          kategori: 'otel',    tel: '', tel2: '', not: 'Ankara - Sinasi Sahnesi', _kaynak: 'Ankara' },
+  { ad: 'Zorlu Grand Hotel',     kategori: 'otel',    tel: '', tel2: '', not: 'Trabzon - Sanat Evi', _kaynak: 'Trabzon' }
 ];
 
 // ── DEPOLAMA: localStorage (anlik) + Google Sheets (kalici, cok tarayici) ──
@@ -9137,28 +9137,30 @@ function _firmaRehberOtomatikGuncelle(turneData) {
   var adMap = {};
   liste.forEach(function(k, i) { adMap[normalizeAd(k.ad)] = i; });
 
-  function ekleVeyaGuncelle(ad, tel, tel2, kategori, not) {
+  function ekleVeyaGuncelle(ad, tel, tel2, kategori, not, kaynak) {
     ad = (ad||'').trim();
     tel = (tel||'').trim();
     if (!ad) return;
     var key = normalizeAd(ad);
     if (adMap[key] !== undefined) {
-      // Var olan kaydı güncelle — sadece boş alanları doldur
       var mevcut = liste[adMap[key]];
       if (tel && !mevcut.tel) mevcut.tel = tel;
       if (tel2 && !mevcut.tel2) mevcut.tel2 = tel2;
       if (not && !mevcut.not) mevcut.not = not;
+      if (kaynak && !mevcut._kaynak) mevcut._kaynak = kaynak;
     } else {
-      // Yeni kayıt ekle
-      var yeni = { ad: ad, kategori: kategori || 'diger', tel: tel, tel2: tel2 || '', not: not || '' };
+      var yeni = { ad: ad, kategori: kategori || 'diger', tel: tel, tel2: tel2 || '', not: not || '', _kaynak: kaynak || '' };
       adMap[key] = liste.length;
       liste.push(yeni);
     }
   }
 
+  var _turneKaynak = (turneData.oyun || turneData.ad || '');
+  if (turneData.il) _turneKaynak += (_turneKaynak ? ' · ' : '') + turneData.il.replace('/MERKEZ','').split('/')[0].trim();
+
   // 1. Nakliye firması (kamyonFirma / kamyonTel)
   if (turneData.kamyonFirma) {
-    ekleVeyaGuncelle(turneData.kamyonFirma, turneData.kamyonTel || '', '', 'nakliye', '');
+    ekleVeyaGuncelle(turneData.kamyonFirma, turneData.kamyonTel || '', '', 'nakliye', '', _turneKaynak);
   }
   // 2. lojNot içinden 🚛 FIRMA · TEL formatını çıkar
   var lojNot = turneData.notlar || turneData.lojNot || '';
@@ -9167,7 +9169,7 @@ function _firmaRehberOtomatikGuncelle(turneData) {
   }
   var lojMatch = (lojNot||'').match(/🚛\s*([^·\n]+)·\s*([\d\s]+)/);
   if (lojMatch) {
-    ekleVeyaGuncelle(lojMatch[1].trim(), lojMatch[2].trim(), '', 'nakliye', '');
+    ekleVeyaGuncelle(lojMatch[1].trim(), lojMatch[2].trim(), '', 'nakliye', '', _turneKaynak);
   }
 
   // 3. Gidiş/dönüş ulaşım firması (|FIRMA:...|TEL:... formatı)
@@ -9177,39 +9179,114 @@ function _firmaRehberOtomatikGuncelle(turneData) {
     var telM   = surucu.match(/\|TEL:([^|]+)/);
     if (firmaM) {
       var kat = (turneData.gidisUlasim||turneData.donusUlasim||'').toLowerCase().indexOf('otob') > -1 ? 'ulasim' : 'servis';
-      ekleVeyaGuncelle(firmaM[1].trim(), telM ? telM[1].trim() : '', '', kat, '');
+      ekleVeyaGuncelle(firmaM[1].trim(), telM ? telM[1].trim() : '', '', kat, '', _turneKaynak);
     }
   });
 
-  // 4. Şehir içi ulaşım firması (sehirAracDetay + sehirTel)
-  if (turneData.sehirAracDetay) {
-    ekleVeyaGuncelle(turneData.sehirAracDetay, turneData.sehirTel || '', '', 'servis', '');
-  }
+  // 4. Şehir içi ulaşım firması — JSON array veya eski format
+  (function() {
+    var _sehirListe = [];
+    try {
+      var _p = JSON.parse(turneData.sehirAracDetay || '');
+      if (Array.isArray(_p) && _p.length) _sehirListe = _p;
+    } catch(e) {}
+    if (!_sehirListe.length && turneData.sehirAracDetay) {
+      // Eski düz metin format
+      _sehirListe = [{ firma: turneData.sehirAracDetay, tel: turneData.sehirTel || '' }];
+    }
+    _sehirListe.forEach(function(a) {
+      var firma = (a.firma || '').trim();
+      var tel   = (a.tel || turneData.sehirTel || '').trim();
+      if (firma) ekleVeyaGuncelle(firma, tel, '', 'servis', '', _turneKaynak);
+    });
+  })();
 
   // 5. Durak bazlı ilgili kişi + tel
   (turneData.duraklar || []).forEach(function(d) {
+    var _durakIl = d.il ? d.il.replace('/MERKEZ','').split('/')[0].trim() : '';
     if (d.ilgiliKisi && d.ilgiliKisi.trim()) {
       ekleVeyaGuncelle(d.ilgiliKisi.trim(), d.ilgiliTel || '', '', 'diger',
-        d.il ? (d.il + (d.ilce ? '/' + d.ilce : '') + ' ilgili kişi') : '');
+        d.il ? (d.il + (d.ilce ? '/' + d.ilce : '') + ' ilgili kişi') : '',
+        _durakIl || _turneKaynak);
     }
     // 6. Otel (durak bazlı)
     if (d.otelAdi && d.otelAdi.trim()) {
       var otelTel = d.otelTel || d.otelTelefon || '';
       ekleVeyaGuncelle(d.otelAdi.trim(), otelTel, '', 'otel',
-        d.otelAdres ? d.otelAdres : (d.il || ''));
+        d.otelAdres ? d.otelAdres : (d.il || ''),
+        _durakIl || _turneKaynak);
     }
   });
 
   // 7. Otel (turne bazlı — geriye dönük uyumluluk)
   if (turneData.otelAdi && turneData.otelAdi.trim()) {
+    var _tIl = turneData.il ? turneData.il.replace('/MERKEZ','').split('/')[0].trim() : '';
     ekleVeyaGuncelle(turneData.otelAdi.trim(), turneData.otelTelefon || '', '', 'otel',
-      turneData.otelAdres || '');
+      turneData.otelAdres || '',
+      _tIl || _turneKaynak);
   }
 
   _firmaVeriKaydet(liste);
 }
 
+// ── REHBER TEMİZLEME: JSON string olarak kaydedilmiş hatalı ad kayıtlarını sil ─
+function _firmaRehberHataliKayitlariTemizle() {
+  var liste = _firmaVeriAl();
+  var degisti = false;
+  var temizListe = [];
+  liste.forEach(function(k) {
+    // ad alanı JSON array string ise bu kayıt hatalı — sil
+    var adStr = (k.ad || '').trim();
+    if (adStr.startsWith('[{') || adStr.startsWith('[{"')) {
+      degisti = true;
+      return; // bu kaydı atla (sil)
+    }
+    // _kaynak alanı adres gibi görünüyorsa (Cadde/No/Mahalle içeriyorsa) temizle
+    if (k._kaynak) {
+      var kyn = k._kaynak;
+      var adresPatern = /Cd\.|Sk\.|Mah\.|No:|Cad\.|Blv\.|sokak|cadde|mahalle|merkez\/|\/\d{5}/i;
+      if (adresPatern.test(kyn) || kyn.length > 40) {
+        // not alanından kısa il adını çıkarmayı dene
+        var ilMatch = (k.not || '').match(/^([A-ZÇĞİÖŞÜa-zçğışöüİ]{3,15})/);
+        k._kaynak = ilMatch ? ilMatch[1] : '';
+        degisti = true;
+      }
+    }
+    temizListe.push(k);
+  });
+  if (degisti) {
+    _firmaVeriKaydet(temizListe);
+    console.log('Firma rehberi: hatalı kayıtlar temizlendi/düzeltildi');
+  }
+}
+
+// ── TÜM TURNELERİ REHBERE TOPLU AKTAR ───────────────────────────────────────
+function rehberiTumTurnelerdenGuncelle() {
+  if (typeof turneler === 'undefined' || !turneler || !turneler.length) {
+    if (typeof showToast === 'function') showToast('Henüz yüklenmiş turne yok', 'warn', 2000);
+    return;
+  }
+  var onceki = _firmaVeriAl().length;
+  turneler.forEach(function(t) {
+    try { _firmaRehberOtomatikGuncelle(t); } catch(e) { console.warn('Rehber güncelleme hatası:', e); }
+  });
+  var sonraki = _firmaVeriAl().length;
+  var yeni = sonraki - onceki;
+  firmaRehberiRender();
+  if (typeof showToast === 'function') showToast(
+    yeni > 0 ? (yeni + ' yeni kayıt eklendi') : 'Rehber zaten güncel',
+    yeni > 0 ? 'success' : 'info', 2500);
+}
+
 function firmaRehberiAc() {
+  // Eski hatalı JSON string kayıtları temizle
+  try { _firmaRehberHataliKayitlariTemizle(); } catch(e) {}
+  // Açılışta tüm turnelerdeki verileri sessizce aktar
+  if (typeof turneler !== 'undefined' && turneler && turneler.length) {
+    turneler.forEach(function(t) {
+      try { _firmaRehberOtomatikGuncelle(t); } catch(e) {}
+    });
+  }
   firmaRehberiRender();
   document.getElementById('firma-rehber-overlay').style.display = 'flex';
 }
@@ -9308,7 +9385,12 @@ function firmaRehberiRender() {
       var idx = k._idx;
       html += '<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;border:1px solid var(--border);margin-bottom:5px;background:var(--card);transition:background .12s" onmouseover="this.style.background=\'var(--muted)\'" onmouseout="this.style.background=\'var(--card)\'">';
       html += '<div style="flex:1;min-width:0">';
+      // Ad + kaynak etiketi — sadece _kaynak alanını kullan (il veya turne adı)
+      var _kaynakEtiket = (k._kaynak || '').trim();
+      html += '<div style="display:flex;align-items:baseline;gap:6px;flex-wrap:wrap">';
       html += '<div style="font-size:13px;font-weight:700;color:var(--foreground);line-height:1.3">' + k.ad + '</div>';
+      if (_kaynakEtiket) html += '<span style="font-size:9.5px;font-weight:700;background:hsl(38,70%,88%);color:hsl(38,65%,28%);border-radius:4px;padding:1px 5px;letter-spacing:.2px;white-space:nowrap;flex-shrink:0">' + _kaynakEtiket + '</span>';
+      html += '</div>';
       if (k.tel) html += '<a href="tel:'+k.tel+'" onclick="event.stopPropagation()" style="font-size:12px;color:hsl(220,65%,45%);font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:3px;margin-right:10px"><svg fill="none" height="10" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" width="10"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.58 3.41 2 2 0 0 1 3.56 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.7a16 16 0 0 0 5.91 5.91l.87-.87a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21.28 16h.64a2 2 0 0 1 0 .92z"></path></svg>'+k.tel+'</a>';
       if (k.tel2) html += '<a href="tel:'+k.tel2+'" onclick="event.stopPropagation()" style="font-size:12px;color:hsl(220,55%,50%);font-weight:500;text-decoration:none;display:inline-flex;align-items:center;gap:3px"><svg fill="none" height="10" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" width="10"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.58 3.41 2 2 0 0 1 3.56 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.7a16 16 0 0 0 5.91 5.91l.87-.87a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21.28 16h.64a2 2 0 0 1 0 .92z"></path></svg>'+k.tel2+'</a>';
       if (k.not) html += '<div style="font-size:10.5px;color:var(--muted-foreground);margin-top:2px;line-height:1.4">'+k.not+'</div>';
@@ -21635,6 +21717,9 @@ function acBindAll() {
     </select>
     <button onclick="firmaRehberiYeniForm()" style="height:34px;padding:0 12px;background:var(--primary);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;font-family:'DM Sans',sans-serif;display:inline-flex;align-items:center;gap:5px;white-space:nowrap;flex-shrink:0">
       <svg fill="none" height="12" stroke="currentColor" stroke-width="2.5" viewbox="0 0 24 24" width="12"><line x1="12" x2="12" y1="5" y2="19"></line><line x1="5" x2="19" y1="12" y2="12"></line></svg> Ekle
+    </button>
+    <button onclick="rehberiTumTurnelerdenGuncelle()" title="Tüm turnelerdeki telefon/firma bilgilerini rehbere aktar" style="height:34px;padding:0 10px;background:hsl(141,50%,92%);color:hsl(141,60%,22%);border:1.5px solid hsl(141,45%,75%);border-radius:8px;cursor:pointer;font-size:11px;font-weight:700;font-family:'DM Sans',sans-serif;display:inline-flex;align-items:center;gap:5px;white-space:nowrap;flex-shrink:0">
+      <svg fill="none" height="12" stroke="currentColor" stroke-width="2.5" viewbox="0 0 24 24" width="12"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 .49-3.63"></path></svg> Tümünü Aktar
     </button>
   </div>
   <!-- Liste -->
