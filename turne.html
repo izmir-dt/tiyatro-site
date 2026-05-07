@@ -5564,12 +5564,13 @@ async function fetchTurneler(zorlaYenile) {
       anaGrupId:      (r[42] || '').trim(),
       odaPlanlari:    (() => {
         var raw = (r[43]||'').trim();
+        if (raw.startsWith('{')) { try { var combo = JSON.parse(raw); if (combo && combo._oda) return combo._oda; } catch(e){} }
         if (raw.startsWith('[')) { try { var op = JSON.parse(raw); if (Array.isArray(op)) return op; } catch(e){} }
         return [];
       })(),
       memnuniyet: (() => {
-        var raw = (r[44]||'').trim();
-        if (raw.startsWith('{')) { try { var mm = JSON.parse(raw); if (mm && typeof mm === 'object') return mm; } catch(e){} }
+        var raw = (r[43]||'').trim();
+        if (raw.startsWith('{')) { try { var combo = JSON.parse(raw); if (combo && combo._memn) return combo._memn; } catch(e){} }
         return {};
       })(),
       };
@@ -7444,25 +7445,34 @@ function _memnuniyetLocalKaydet() {
   } catch(e) { console.warn('Memnuniyet local kayıt hatası:', e); }
 }
 
-// Sheet'e kaydet (r[44] = memnuniyet JSON). Debounce'lu, hızlı tıklamada API spam etmesin.
+// Birleşik col:43 kaydet — odaPlanlari + memnuniyet tek hücrede
+window._comboSheetTimers = window._comboSheetTimers || {};
+function _comboCol43Kaydet(t, toastMsg) {
+  if (!t || t._rowIdx == null) return;
+  var key = String(t._rowIdx);
+  clearTimeout(window._comboSheetTimers[key]);
+  window._comboSheetTimers[key] = setTimeout(function() {
+    try {
+      var combo = { _oda: t.odaPlanlari || [], _memn: t.memnuniyet || {} };
+      apiFetch('/' + encodeURIComponent(TURNE_SHEET) + '/cell', {
+        method: 'PUT',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ row: t._rowIdx + 2, col: 43, value: JSON.stringify(combo) })
+      }).then(function(res){
+        if (res && !res.ok) throw new Error('HTTP ' + res.status);
+        if (typeof showToast === 'function') showToast(toastMsg || 'Kaydedildi ✓', 'success', 1200);
+        try { _cacheYaz('cache_turneler', turneler); } catch(e2) {}
+      }).catch(function(e){ console.warn('Col43 kayıt hatası:', e); if(typeof showToast==='function') showToast('Kayıt hatası — tekrar deneyin', 'error', 3000); });
+    } catch(e) { console.warn(e); }
+  }, 800);
+}
+
+// Sheet'e memnuniyet kaydet (col:43 birleşik)
 window._memnuniyetSheetTimers = window._memnuniyetSheetTimers || {};
 function _memnuniyetSheetKaydet(t) {
   if (!t || t._rowIdx == null) return;
   _memnuniyetLocalKaydet();
-  var key = String(t._rowIdx);
-  clearTimeout(window._memnuniyetSheetTimers[key]);
-  window._memnuniyetSheetTimers[key] = setTimeout(function() {
-    try {
-      apiFetch('/' + encodeURIComponent(TURNE_SHEET) + '/cell', {
-        method: 'PUT',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ row: t._rowIdx + 2, col: 44, value: JSON.stringify(t.memnuniyet||{}) })
-      }).then(function(res){
-        if (res && !res.ok) throw new Error('HTTP ' + res.status);
-        try { _cacheYaz('cache_turneler', turneler); } catch(e2) {}
-      }).catch(function(e){ console.warn('Memnuniyet sheet kayıt hatası:', e); });
-    } catch(e) { console.warn(e); }
-  }, 800);
+  _comboCol43Kaydet(t, 'Değerlendirme kaydedildi ✓');
 }
 
 // Sayfa açılışında localStorage'daki memnuniyet verisini turnelere geri yükle
@@ -7494,7 +7504,7 @@ function _memnuniyetLocalGeriYukle() {
       }
       // Sheet dolu, local boş → sheet verisini koru (hiçbir şey yapma)
     });
-    if (degisti) { try { _cacheYaz('cache_turneler', turneler); } catch(e2) {} }
+    if (degisti) { try { _cacheYaz('cache_turneler', turneler); } catch(e2) {} (turneler||[]).forEach(function(t){ if(_memnuniyetDoluMu(t.memnuniyet)) _memnuniyetSheetKaydet(t); }); }
   } catch(e) { console.warn('Memnuniyet local geri yükleme hatası:', e); }
 }
 
@@ -8202,15 +8212,7 @@ function _odaPlanYildizDetay(rowIdx) {
 
 function _odaPlanSheetKaydet(t) {
   if (!t || t._rowIdx === undefined) return;
-  // odaPlanlari'nı katilimcilar sütununun yanındaki bir sütuna kaydet (col 40)
-  apiFetch('/' + encodeURIComponent(TURNE_SHEET) + '/cell', {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ row: t._rowIdx + 2, col: 43, value: JSON.stringify(t.odaPlanlari||[]) })
-  }).then(function(res){
-    if (res && !res.ok) throw new Error('HTTP ' + res.status);
-    showToast('Plan kaydedildi ✓', 'success', 1200);
-  }).catch(function(e){ console.warn('Plan kayıt hatası:', e); showToast('Kayıt hatası — tekrar deneyin', 'error', 3000); });
+  _comboCol43Kaydet(t, 'Plan kaydedildi ✓');
 }
 
 window._odaPlanKapali = window._odaPlanKapali || {};
@@ -8922,9 +8924,6 @@ function _konaklamaOdaTipSec(rowIdx, kisiIdx, tip) {
     p.odaTip = tip;
     p.odaEsi = '';
     // Atanmamış sekmesinden seçilince → ilgili sekmeye geç
-    if (_konaklamaAktifSekme === 'tumü') {
-      _konaklamaAktifSekme = tip === 'cift' ? 'cift' : tip === 'tek' ? 'tek' : 'tumü';
-    }
   }
   _cdAktifTab = 'konaklama';
   _renderCardDetail(rowIdx);
@@ -9121,10 +9120,6 @@ function _konaklamaMunferitSec(rowIdx, kisiIdx) {
       p.odaEsi = '';
     }
     delete p.odaTip;
-    // Atanmamış sekmesinden seçilince münferit sekmesine geç
-    if (_konaklamaAktifSekme === 'tumü') {
-      _konaklamaAktifSekme = 'munferit';
-    }
   }
   _konaklamaSheetKaydet(t);
   _cdAktifTab = 'konaklama';
