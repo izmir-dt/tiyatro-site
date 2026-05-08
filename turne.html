@@ -5578,14 +5578,14 @@ button[onclick*="firmaRehberi"]:hover {
 </div>
 </div>
 <div style="position:relative">
-<div id="leaflet-map" style="height:480px;width:100%;border-radius:0 0 10px 10px"></div>
+<div id="leaflet-map" style="height:480px;width:100%;border-radius:0 0 10px 10px;touch-action:none"></div>
 <div id="harita-spinner" style="display:none;position:absolute;inset:0;background:rgba(255,255,255,.75);z-index:500;align-items:center;justify-content:center;border-radius:0 0 10px 10px;flex-direction:column;gap:10px">
 <svg fill="none" height="28" stroke="var(--primary)" stroke-linecap="round" stroke-width="2.5" viewbox="0 0 24 24" width="28"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"><animatetransform attributename="transform" dur=".8s" from="0 12 12" repeatcount="indefinite" to="360 12 12" type="rotate"></animatetransform></path></svg>
 <span style="font-size:11px;font-weight:600;color:var(--muted-foreground)">Harita yükleniyor...</span>
 </div>
+<!-- İstatistik paneli — haritanın üzerinde overlay olarak göster -->
+<div id="harita-istatistik-panel" style="display:none;position:absolute;top:8px;right:8px;left:8px;z-index:600;padding:14px 16px;border:1px solid var(--border);border-radius:10px;background:var(--background);box-shadow:0 8px 32px rgba(0,0,0,.22);max-height:360px;overflow-y:auto"></div>
 </div>
-<!-- İstatistik paneli -->
-<div id="harita-istatistik-panel" style="display:none;padding:14px 16px;border-top:1px solid var(--border);background:var(--background)"></div>
 <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 14px;border-top:1px solid var(--border);background:var(--background);border-radius:0 0 10px 10px">
 <span style="font-size:10px;font-weight:800;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.6px">Yoğunluk:</span>
 <div style="display:flex;align-items:center;gap:6px">
@@ -17563,6 +17563,21 @@ function renderHarita() {
       maxBounds: [[33.0, 20.0], [44.5, 50.0]],
       maxBoundsViscosity: 0.7,
     });
+    // Haritaya tıklayınca sayfanın kaymasını engelle
+    var _lmDiv = document.getElementById('leaflet-map');
+    if (_lmDiv) {
+      _lmDiv.addEventListener('click', function(e){ e.stopPropagation(); }, true);
+      _lmDiv.addEventListener('mousedown', function(e){ e.stopPropagation(); }, true);
+    }
+    _leafletMap.on('click', function(e){ L.DomEvent.stopPropagation(e); });
+    // Scroll koruması: harita odaklandığında sayfanın kaymasını önle
+    _leafletMap.on('focus', function(){ if(window.history && window.history.scrollRestoration) window.history.scrollRestoration='manual'; });
+    _leafletMap.getContainer().addEventListener('wheel', function(e){ e.stopPropagation(); }, {passive:false});
+    // Leaflet attribution link'lerinin # scroll'unu engelle
+    setTimeout(function(){
+      var links = _leafletMap.getContainer().querySelectorAll('a[href="#"]');
+      links.forEach(function(a){ a.addEventListener('click', function(e){ e.preventDefault(); e.stopPropagation(); }); });
+    }, 500);
     _leafletMap.fitBounds([[36.0, 26.0], [42.0, 45.0]]);
     L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/light_nolabels/{z}/{x}/{y}{r}.png', {
       maxZoom: 14,
@@ -17575,9 +17590,12 @@ function renderHarita() {
   Object.values(_leafletMarkers).forEach(function(m) { m.remove(); });
   _leafletMarkers = {};
 
-  if (_haritaGeoJSONLayer) { _haritaGeoJSONLayer.remove(); _haritaGeoJSONLayer = null; }
-  _haritaHeatLayers.forEach(function(l){ l.remove(); });
-  _haritaHeatLayers = [];
+  // Heatmap modunda GeoJSON layer yönetimi haritaHeatmapCiz içinde yapılır
+  if (_haritaMod !== 'heatmap') {
+    if (_haritaGeoJSONLayer) { _haritaGeoJSONLayer.remove(); _haritaGeoJSONLayer = null; }
+    _haritaHeatLayers.forEach(function(l){ l.remove(); });
+    _haritaHeatLayers = [];
+  }
 
   // ── Mod seçimine göre katman ─────────────────────────────────
   if (_haritaMod === 'rota') {
@@ -17587,7 +17605,15 @@ function renderHarita() {
     haritaChoroplethCiz(ilSayilar); // altyapı rota modunda da görünsün
     haritaRotaCiz(_rotaTurneler);
   } else if (_haritaMod === 'heatmap') {
+    // Rota katmanını temizle
     if (_haritaRotaLayer && _haritaRotaLayer.length) { _haritaRotaLayer.forEach(function(l){ try{l.remove();}catch(e){} }); _haritaRotaLayer = []; }
+    // Choropleth ve label layer'larını temizle
+    if (_choroplethLayer) {
+      if (_choroplethLayer._labelGroup) { try { _choroplethLayer._labelGroup.clearLayers(); _choroplethLayer._labelGroup.remove(); } catch(e){} }
+      try { _choroplethLayer.remove(); } catch(e){}
+      _choroplethLayer = null;
+    }
+    if (_choroplethSeciliLayer) { try { _choroplethSeciliLayer.remove(); } catch(e){} _choroplethSeciliLayer = null; }
     haritaHeatmapCiz(ilSayilar);
   } else {
     if (_haritaRotaLayer && _haritaRotaLayer.length) { _haritaRotaLayer.forEach(function(l){ try{l.remove();}catch(e){} }); _haritaRotaLayer = []; }
@@ -17711,6 +17737,19 @@ var IZMIR_IL_ADI = 'İzmir (Konak/Merkez)';
 
 function haritaIlTikla(il) {
   seciliIl = seciliIl === il ? null : il;
+  // Sayfa kaymasını engelle
+  var scrollArea = document.querySelector('#tab-harita .scroll-area');
+  var savedScrollTop = scrollArea ? scrollArea.scrollTop : 0;
+  // Heatmap modunda direkt detay göster (_choroplethLayer olmadan)
+  if (_haritaMod === 'heatmap') {
+    if (seciliIl) haritaIlDetay(seciliIl, _choroplethIlSayilar);
+    else {
+      var _hdet = document.getElementById('harita-detay');
+      if (_hdet) _hdet.innerHTML = '<div class="empty-state" style="height:160px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:24px 16px"><div style="font-size:13px;font-weight:600;color:var(--foreground)">Haritadan bir il seçin</div></div>';
+    }
+    if (scrollArea) { setTimeout(function(){ scrollArea.scrollTop = savedScrollTop; }, 0); }
+    return;
+  }
   // Choropleth varsa sadece stilleri güncelle (tam re-render yerine)
   if (_choroplethLayer) {
     _choroplethSeciliGuncelle();
@@ -17723,7 +17762,15 @@ function haritaIlTikla(il) {
       + '</div>';
   } else {
     renderHarita();
+    // renderHarita async (GeoJSON yükleme) tamamlandıktan sonra detayı göster
+    if (seciliIl) {
+      setTimeout(function(){
+        if (seciliIl && _choroplethIlSayilar) haritaIlDetay(seciliIl, _choroplethIlSayilar);
+      }, 600);
+    }
   }
+  // Scroll pozisyonunu geri yükle (harita tıklaması sayfayı kaydırmasın)
+  if (scrollArea) { setTimeout(function(){ scrollArea.scrollTop = savedScrollTop; }, 0); }
 }
 
 function haritaIlDetay(il, ilSayilar) {
@@ -18017,9 +18064,9 @@ function _heatmapRenk(ratio) {
 function haritaHeatmapCiz(ilSayilar) {
   if (!_leafletMap) return;
 
-  // Önceki layerları temizle
-  if (_haritaGeoJSONLayer) { _haritaGeoJSONLayer.remove(); _haritaGeoJSONLayer = null; }
-  _haritaHeatLayers.forEach(function(l){ l.remove(); });
+  // Önceki heatmap GeoJSON layer'ını temizle
+  if (_haritaGeoJSONLayer) { try { _haritaGeoJSONLayer.remove(); } catch(e){} _haritaGeoJSONLayer = null; }
+  _haritaHeatLayers.forEach(function(l){ try { l.remove(); } catch(e){} });
   _haritaHeatLayers = [];
 
   var maxSayi = Math.max.apply(null, Object.values(ilSayilar).filter(function(v){ return v > 0; }).concat([1]));
@@ -18048,6 +18095,9 @@ function haritaHeatmapCiz(ilSayilar) {
       var idx = _ilKeysLower.indexOf(ilAdi.toLocaleLowerCase('tr-TR'));
       return idx >= 0 ? _ilKeys[idx] : null;
     }
+
+    // Heatmap modunda da il sayılarını kaydet (tıklama detayı için)
+    _choroplethIlSayilar = ilSayilar;
 
     _haritaGeoJSONLayer = L.geoJSON(geojson, {
       smoothFactor: 0,
@@ -18481,9 +18531,9 @@ function haritaIstatistikGoster() {
   if (btn) { btn.style.background = 'var(--primary)'; btn.style.color = '#fff'; }
 
   var _haritaOyun = window._haritaAktifOyun || '';
-  var liste = _haritaOyun
+  var liste = (_haritaOyun
     ? turneler.filter(function(t){ return (t.oyun||'').toLowerCase().trim() === _haritaOyun.toLowerCase().trim(); })
-    : turneler;
+    : turneler).filter(function(t){ return !t.anaGrupId && t.statu !== 'iptal'; });
 
   // İl sayıları
   var ilSay = {};
@@ -18519,7 +18569,11 @@ function haritaIstatistikGoster() {
   var ziyaretEdilen = Object.keys(ilSay).length;
 
   panel.innerHTML =
-    '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px">'
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
+    + '<span style="font-size:12px;font-weight:800;color:var(--foreground)">📊 Harita İstatistikleri</span>'
+    + '<button onclick="haritaIstatistikGoster()" style="width:24px;height:24px;border-radius:6px;border:1px solid var(--border);background:var(--card);cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;color:var(--muted-foreground)">×</button>'
+    + '</div>'
+    + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px">'
     // Özet kartları
     + _statKart('📍', ziyaretEdilen + ' İl', 'Toplam ziyaret edilen')
     + _statKart('🚌', liste.length + ' Turne', 'Toplam düzenlenen')
