@@ -33,12 +33,11 @@ function parseLocalDate(str) {
 <link href="https://izmir-dt.github.io/tiyatro-site/tiyatro-site/favicon.png" rel="icon" type="image/png"/>
 <title>Turne Yönetimi – İzmir Devlet Tiyatrosu</title>
 <link href="https://fonts.googleapis.com/" rel="preconnect"/>
-<link href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" rel="stylesheet"/>
-<script src="https//:cdnsj.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.mib.js"></script>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <link crossorigin="" href="https://fonts.gstatic.com/" rel="preconnect"/>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap&subset=latin,latin-ext" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<!-- Chart.js — düzeltilmiş URL, sadece gerçekten kullanıldığı sekmede çağrılır -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" defer></script>
+<!-- Leaflet ve XLSX artık lazy yükleniyor (aşağıdaki _loadScript/_loadCSS ile) -->
 <style>
     /* ===== AÇIK TEMA — Tiyatro Altın & Toprak (varsayılan) ===== */
     :root {
@@ -277,6 +276,59 @@ function parseLocalDate(str) {
       }
     })();
   </script>
+<script>
+// ── LAZY LOADER YARDIMCILARI ──────────────────────────────────
+// Leaflet ve XLSX yalnızca ihtiyaç duyulduğunda indirilir.
+function _loadCSS(href, id) {
+  if (document.getElementById(id)) return;
+  var l = document.createElement('link');
+  l.rel = 'stylesheet'; l.href = href; l.id = id;
+  document.head.appendChild(l);
+}
+function _loadScript(src, id, onload) {
+  if (document.getElementById(id)) { onload && onload(); return; }
+  var s = document.createElement('script');
+  s.src = src; s.id = id;
+  s.onload = onload || function(){};
+  s.onerror = function(){ console.error('Yüklenemedi:', src); };
+  document.head.appendChild(s);
+}
+
+var _xlsxYuklendi = false;
+var _xlsxBekleyenler = [];
+function _xlsxYukle(callback) {
+  if (_xlsxYuklendi) { callback(); return; }
+  _xlsxBekleyenler.push(callback);
+  if (document.getElementById('_xlsx-script')) return;
+  _loadScript(
+    'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
+    '_xlsx-script',
+    function() {
+      _xlsxYuklendi = true;
+      var cbs = _xlsxBekleyenler.slice(); _xlsxBekleyenler = [];
+      cbs.forEach(function(cb){ cb(); });
+    }
+  );
+}
+
+var _leafletYuklendi = false;
+var _leafletBekleyenler = [];
+function _leafletYukle(callback) {
+  if (_leafletYuklendi) { callback(); return; }
+  _leafletBekleyenler.push(callback);
+  if (document.getElementById('_leaflet-script')) return;
+  _loadCSS('https://unpkg.com/leaflet@1.9.4/dist/leaflet.css', '_leaflet-css');
+  _loadScript(
+    'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
+    '_leaflet-script',
+    function() {
+      _leafletYuklendi = true;
+      var cbs = _leafletBekleyenler.slice(); _leafletBekleyenler = [];
+      cbs.forEach(function(cb){ cb(); });
+    }
+  );
+}
+</script>
 <style>
     
     /* Numeric/date elements use DM Mono for crisp readability */
@@ -6387,7 +6439,7 @@ function tumUIGuncelle() {
   // Harita sadece aktifse render et (Leaflet map instance yönetimi)
   var haritaPanel = document.getElementById('tab-harita');
   if (haritaPanel && haritaPanel.classList.contains('active')) {
-    renderHarita();
+    if (_leafletYuklendi) renderHarita(); else _leafletYukle(function(){ renderHarita(); });
   }
   // Takvim açıksa notu hemen göster
   var takvimPanel = document.getElementById('tab-takvim');
@@ -6442,7 +6494,11 @@ function _geriYukleDevam(liste) {
 
 
 function exportExcel() {
-  if (typeof XLSX === 'undefined') { showToast('Excel kütüphanesi yükleniyor, bekle ve tekrar dene', 'warn', 2500); return; }
+  if (typeof XLSX === 'undefined') {
+    showToast('Excel kütüphanesi yükleniyor…', 'info', 2000);
+    _xlsxYukle(function(){ exportExcel(); });
+    return;
+  }
   var baslik = [
     'Oyun Adı','Şehir / İl','Sahne / Mekan','Başlangıç Tarihi','Bitiş Tarihi',
     'Süre (Gün)','Temsil Sayısı','Statü','Turne Grubu',
@@ -6861,7 +6917,7 @@ function switchTab(tab) {
   }
   if (tab === 'kisi')       renderKisiAra();
   if (tab === 'dispersonel') renderDisPersonel();
-  if (tab === 'harita')     renderHarita();
+  if (tab === 'harita')     _leafletYukle(function(){ renderHarita(); });
   if (tab === 'takvim') {
     renderCalendar();
     if (turneler && turneler.length) {
@@ -15950,7 +16006,11 @@ async function _kadroKisiSilDevam(silIdx) {
 
 
 function kadroExcel() {
-  if (typeof XLSX === 'undefined') { showToast('Excel kütüphanesi yükleniyor, bekle ve tekrar dene', 'warn', 2500); return; }
+  if (typeof XLSX === 'undefined') {
+    showToast('Excel kütüphanesi yükleniyor…', 'info', 2000);
+    _xlsxYukle(function(){ kadroExcel(); });
+    return;
+  }
   const oyun = document.getElementById('kadro-oyun-sec').value;
   if (!oyun) return;
   const kadro = getPersonelForOyun(oyun);
@@ -16763,6 +16823,15 @@ function _haritaSpinner(goster) {
 
 function _ilGeoJSONYukle(callback) {
   if (_ilGeoJSON) { callback(_ilGeoJSON); return; }
+  // sessionStorage önbelleği — aynı oturumda tekrar indirme
+  try {
+    var cached = sessionStorage.getItem('_tr_geojson_v1');
+    if (cached) {
+      _ilGeoJSON = JSON.parse(cached);
+      callback(_ilGeoJSON);
+      return;
+    }
+  } catch(e) {}
   _ilGeoJSONCallbacks.push(callback);
   if (_ilGeoJSONLoading) return;
   _ilGeoJSONLoading = true;
@@ -16773,6 +16842,8 @@ function _ilGeoJSONYukle(callback) {
       _ilGeoJSON = data;
       _ilGeoJSONLoading = false;
       _haritaSpinner(false);
+      // sessionStorage'a kaydet — sayfa yenilenince tekrar indirilmez
+      try { sessionStorage.setItem('_tr_geojson_v1', JSON.stringify(data)); } catch(e) {}
       var cbs = _ilGeoJSONCallbacks.slice();
       _ilGeoJSONCallbacks = [];
       cbs.forEach(function(cb){ cb(data); });
@@ -22443,7 +22514,7 @@ async function tumVeriyiYenile(options) {
   // Aktif sekmeyi de güncelle
   var aktifTab = localStorage.getItem('_sonSekme') || 'liste';
   if (aktifTab === 'kadro')      renderKadro();
-  if (aktifTab === 'harita')     renderHarita();
+  if (aktifTab === 'harita')     { if (_leafletYuklendi) renderHarita(); else _leafletYukle(function(){ renderHarita(); }); }
   if (aktifTab === 'istatistik') renderIstatistik();
   // Cache güncelle
   try { localStorage.setItem('turne_cache_data', JSON.stringify(turneler)); } catch(e){}
