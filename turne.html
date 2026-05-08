@@ -22298,17 +22298,95 @@ function gorevlendirmePdf(rowIdx, mod, overrideTurne) {
                 return '<tr style="background:' + (i%2===0?'#fff':'#fdf5f5') + '"><td style="padding:5px 8px;text-align:center;color:#888">' + (i+1) + '</td><td style="padding:5px 8px;font-weight:700;color:#111">' + p.kisi + '</td><td style="padding:5px 8px;color:#444;font-weight:500">' + (p.gorev||p.kategori||'') + '</td></tr>';
               }).join('') + '</tbody></table>'
             + (function(){
-                var atanmislar = eg.katilimcilar.filter(function(p){ return p.odaTip; });
-                if (!atanmislar.length) return '';
-                return '<div style="font-size:13px;font-weight:800;color:#333;margin:14px 0 6px;padding-bottom:4px;border-bottom:2px solid hsl(142,40%,65%)">🛏 Konaklama Listesi</div>'
-                  + '<table style="width:100%;border-collapse:collapse;font-size:11px">'
-                  + '<thead><tr style="background:hsl(142,50%,35%)"><th style="padding:6px 8px;color:#fff;text-align:left">Adı Soyadı</th><th style="padding:6px 8px;color:#fff;text-align:left">Oda Tipi</th></tr></thead>'
-                  + '<tbody>' + atanmislar.map(function(p,i){
-                      var tip = p.munferit ? 'Münferit' : p.odaTip==='tek' ? 'Tek' : 'Çift';
-                      var esiCol = p.odaTip!=='tek' && !p.munferit ? '<td style="padding:5px 8px;color:#555">' + (p.odaEsi||'—') + '</td>' : '';
-                      var cols = p.odaTip!=='tek' && !p.munferit ? 3 : 2;
-                      return '<tr style="background:' + (i%2===0?'#fff':'#f0fff4') + '"><td style="padding:5px 8px;font-weight:600">' + p.kisi + '</td><td style="padding:5px 8px">' + tip + '</td>' + esiCol + '</tr>';
-                    }).join('') + '</tbody></table>';
+                var _konaklamaAcik = window._dosyaPdfOpts ? window._dosyaPdfOpts.konaklama !== false : true;
+                if (!_konaklamaAcik) return '';
+                var kat2 = eg.katilimcilar || [];
+                var tekList  = kat2.filter(function(p){ return p.odaTip==='tek' && !p.munferit; });
+                var ciftList = kat2.filter(function(p){ return p.odaTip==='cift' && !p.munferit; });
+                var munfList = kat2.filter(function(p){ return p.munferit; });
+                var ataList  = kat2.filter(function(p){ return !p.odaTip && !p.munferit; });
+                if (!tekList.length && !ciftList.length && !munfList.length && !ataList.length) return '';
+                // Çift odaları eşli grupla
+                var ciftGr2=[]; var ciftG2={};
+                ciftList.forEach(function(p){
+                  if(ciftG2[p.kisi]) return; ciftG2[p.kisi]=true;
+                  var esi=p.odaEsi?ciftList.find(function(x){return x.kisi===p.odaEsi;}):null;
+                  if(esi){ciftG2[esi.kisi]=true;ciftGr2.push([p,esi]);}
+                  else{ciftGr2.push([p]);}
+                });
+                var eksikEs2=ciftGr2.filter(function(gr){return gr.length===1;}).length;
+                var thStyle='padding:5pt 7pt;color:#fff;font-size:9pt;font-weight:700;text-align:left';
+                var out = '<div style="font-size:13px;font-weight:800;color:#333;margin:14px 0 8px;padding-bottom:4px;border-bottom:2px solid hsl(142,40%,65%)">\uD83D\uDECC Konaklama / Oda Da\u011f\u0131l\u0131m\u0131</div>';
+                // TEK ODA
+                if(tekList.length){
+                  out += '<div style="margin-bottom:6pt">'
+                    +'<div style="background:#1e3a5f;color:#fff;padding:4pt 8pt;font-size:9.5pt;font-weight:800;display:flex;justify-content:space-between;align-items:center">'
+                    +'<span>\uD83D\uDECF Tek Oda</span>'
+                    +'<span style="background:rgba(255,255,255,.2);border-radius:10pt;padding:1pt 8pt;font-size:9pt">'+tekList.length+' ki\u015fi</span>'
+                    +'</div>'
+                    +'<table style="width:100%;border-collapse:collapse;font-size:11px;border:1px solid #d0d8e8">'
+                    +'<thead><tr style="background:#2d5282"><th style="width:22pt;text-align:center;'+thStyle+'">No</th><th style="'+thStyle+'">Ad Soyad</th><th style="'+thStyle+'">G\u00f6rev / Unvan</th></tr></thead>'
+                    +'<tbody>'+tekList.map(function(p,i){
+                      return '<tr style="background:'+(i%2===0?'#fff':'#eef4ff')+'"><td style="padding:3pt 5pt;text-align:center;color:#888;font-size:8pt">'+(i+1)+'</td><td style="padding:3pt 5pt;font-weight:700;font-size:9pt">'+p.kisi+'</td><td style="padding:3pt 5pt;color:#444;font-size:9pt">'+(p.gorev||p.kategori||'')+'</td></tr>';
+                    }).join('')+'</tbody></table></div>';
+                }
+                // ÇİFT ODA
+                if(ciftGr2.length){
+                  out += '<div style="margin-bottom:6pt">';
+                  if(eksikEs2) out += '<div style="background:#fef9c3;border:1.5pt solid #eab308;padding:6pt 10pt;font-size:9.5pt;color:#78350f;font-weight:700;margin-bottom:5pt;border-radius:4pt">\u26a0\ufe0f '+eksikEs2+' odada oda e\u015fi atanmam\u0131\u015f.</div>';
+                  out += '<div style="background:#15803d;color:#fff;padding:4pt 8pt;font-size:9.5pt;font-weight:800;display:flex;justify-content:space-between;align-items:center">'
+                    +'<span>\uD83D\uDECC \u00c7ift Oda</span>'
+                    +'<span style="background:rgba(255,255,255,.2);border-radius:10pt;padding:1pt 8pt;font-size:9pt">'+ciftGr2.length+' oda</span>'
+                    +'</div>'
+                    +'<table style="width:100%;border-collapse:collapse;font-size:11px;border:1px solid #c8e8c8">'
+                    +'<thead><tr style="background:#166534"><th style="width:22pt;text-align:center;'+thStyle+'">Oda</th><th style="'+thStyle+'">Ki\u015filer</th><th style="'+thStyle+'">G\u00f6rev / Unvan</th></tr></thead>'
+                    +'<tbody>'+ciftGr2.map(function(gr,gi){
+                      var p1=gr[0],p2=gr[1];
+                      var rowBg=gi%2===0?'#fff':'#f5faf5';
+                      var leftBorder=!p2?'border-left:3pt solid #ef4444':'border-left:3pt solid #15803d';
+                      return '<tr style="background:'+rowBg+';'+leftBorder+';border-bottom:1pt solid #d0e8d0">'
+                        +'<td style="padding:3pt 5pt;text-align:center;color:#777;font-size:8pt;vertical-align:middle">'+(gi+1)+'</td>'
+                        +'<td style="padding:3pt 5pt;vertical-align:top">'
+                          +'<div style="font-weight:700;font-size:9pt">'+p1.kisi+'</div>'
+                          +(p2
+                            ?'<div style="font-weight:700;font-size:9pt;color:#15803d;border-top:1pt dashed #c8e8c8;padding-top:2pt;margin-top:2pt">'+p2.kisi+'</div>'
+                            :'<div style="color:#dc2626;font-size:8pt;font-weight:700;border-top:1pt dashed #fca5a5;padding-top:2pt;margin-top:2pt">\u26a0 Oda e\u015fi atanmam\u0131\u015f</div>'
+                          )
+                        +'</td>'
+                        +'<td style="padding:3pt 5pt;vertical-align:top">'
+                          +'<div style="font-size:9pt;color:#444">'+(p1.gorev||p1.kategori||'')+'</div>'
+                          +(p2?'<div style="font-size:9pt;color:#444;border-top:1pt dashed #c8e8c8;padding-top:2pt;margin-top:2pt">'+(p2.gorev||p2.kategori||'')+'</div>':'')
+                        +'</td>'
+                        +'</tr>';
+                    }).join('')+'</tbody></table></div>';
+                }
+                // MÜNFERİT
+                if(munfList.length){
+                  out += '<div style="margin-bottom:6pt">'
+                    +'<div style="background:#92400e;color:#fff;padding:4pt 8pt;font-size:9.5pt;font-weight:800;display:flex;justify-content:space-between;align-items:center">'
+                    +'<span>\uD83D\UDEB6 M\u00fcnferit</span>'
+                    +'<span style="background:rgba(255,255,255,.2);border-radius:10pt;padding:1pt 8pt;font-size:9pt">'+munfList.length+' ki\u015fi</span>'
+                    +'</div>'
+                    +'<table style="width:100%;border-collapse:collapse;font-size:11px;border:1px solid #f5d0a0">'
+                    +'<thead><tr style="background:#b45309"><th style="width:22pt;text-align:center;'+thStyle+'">No</th><th style="'+thStyle+'">Ad Soyad</th><th style="'+thStyle+'">G\u00f6rev / Unvan</th></tr></thead>'
+                    +'<tbody>'+munfList.map(function(p,i){
+                      return '<tr style="background:'+(i%2===0?'#fff':'#fff7ed')+'"><td style="padding:3pt 5pt;text-align:center;color:#888;font-size:8pt">'+(i+1)+'</td><td style="padding:3pt 5pt;font-weight:700;font-size:9pt">'+p.kisi+'</td><td style="padding:3pt 5pt;color:#444;font-size:9pt">'+(p.gorev||p.kategori||'')+'</td></tr>';
+                    }).join('')+'</tbody></table></div>';
+                }
+                // ATANMAMIŞ
+                if(ataList.length){
+                  out += '<div style="margin-bottom:6pt">'
+                    +'<div style="background:#fef2f2;border:2pt solid #dc2626;padding:4pt 8pt;font-size:9.5pt;color:#991b1b;font-weight:800;display:flex;justify-content:space-between;align-items:center">'
+                    +'<span>\u26a0\ufe0f Oda Atanmam\u0131\u015f</span>'
+                    +'<span style="background:#dc2626;color:#fff;border-radius:10pt;padding:1pt 8pt;font-size:9pt">'+ataList.length+' ki\u015fi</span>'
+                    +'</div>'
+                    +'<table style="width:100%;border-collapse:collapse;font-size:11px;border:1.5pt solid #dc2626">'
+                    +'<thead><tr style="background:#b91c1c"><th style="width:22pt;text-align:center;'+thStyle+'">No</th><th style="'+thStyle+'">Ad Soyad</th><th style="'+thStyle+'">G\u00f6rev / Unvan</th></tr></thead>'
+                    +'<tbody>'+ataList.map(function(p,i){
+                      return '<tr style="background:#fef2f2"><td style="padding:3pt 5pt;text-align:center;color:#777;font-size:8pt">'+(i+1)+'</td><td style="padding:3pt 5pt;font-weight:700;color:#dc2626;font-size:9pt">'+p.kisi+'</td><td style="padding:3pt 5pt;color:#c07070;font-size:9pt">'+(p.gorev||p.kategori||'')+'</td></tr>';
+                    }).join('')+'</tbody></table></div>';
+                }
+                return out;
               })()
             + '</div>';
           _html2 += _ekSayfa;
