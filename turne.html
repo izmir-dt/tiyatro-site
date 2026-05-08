@@ -2180,6 +2180,12 @@ flex-shrink:0;
 
 <!-- ===== HARİTA ESTETİK + ERİŞİLEBİLİRLİK YAMASI v6 (siteyle uyumlu) ===== -->
 <style id="harita-aesthetic-v6">
+  /* Tablo satırları focus aldığında sayfayı scroll ettirmesin */
+  .harita-tablo-row { scroll-margin-top: 9999px !important; scroll-margin-bottom: 9999px !important; }
+  /* harita-detay içindeki tüm focuslanabilir elementler scroll-into-view tetiklemesin */
+  #harita-detay * { scroll-margin-top: 0 !important; }
+  /* scroll-area smooth scroll'u kapat */
+  #tab-harita .scroll-area { scroll-behavior: auto !important; overflow-anchor: none !important; }
   /* Site fontu (DM Sans) ve mevcut token'lar kullanılıyor — yeni font/aile yok */
 
   /* ---------- HARİTA SEKMESİ KONTEYNERLERİ ---------- */
@@ -2336,7 +2342,8 @@ flex-shrink:0;
     border: 1px solid var(--border) !important;
     background: var(--card) !important;
     box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 8px 24px -12px rgba(60,40,10,.15) !important;
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: auto;
     position: relative;
   }
   #harita-detay::before{
@@ -4908,6 +4915,8 @@ button[onclick*="firmaRehberi"]:hover {
 }
 </style>
 
+<style id="harita-fix-v3">#harita-detay,#tab-harita .scroll-area{overflow-anchor:none!important;}.harita-tablo-row{outline:none!important}</style>
+<style id="harita-fix-v4">#harita-detay table{table-layout:fixed!important;}#harita-detay td,#harita-detay th{overflow:hidden}#harita-detay{padding-right:0!important}.il-lbl{pointer-events:none}</style>
 </head>
 <body>
 <!-- SKIP NAVİGASYON (erişilebilirlik) -->
@@ -5578,7 +5587,7 @@ button[onclick*="firmaRehberi"]:hover {
 </div>
 </div>
 <div style="position:relative">
-<div id="leaflet-map" style="height:480px;width:100%;border-radius:0 0 10px 10px;touch-action:none"></div>
+<div id="leaflet-map" style="height:480px;width:100%;border-radius:0 0 10px 10px"></div>
 <div id="harita-spinner" style="display:none;position:absolute;inset:0;background:rgba(255,255,255,.75);z-index:500;align-items:center;justify-content:center;border-radius:0 0 10px 10px;flex-direction:column;gap:10px">
 <svg fill="none" height="28" stroke="var(--primary)" stroke-linecap="round" stroke-width="2.5" viewbox="0 0 24 24" width="28"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"><animatetransform attributename="transform" dur=".8s" from="0 12 12" repeatcount="indefinite" to="360 12 12" type="rotate"></animatetransform></path></svg>
 <span style="font-size:11px;font-weight:600;color:var(--muted-foreground)">Harita yükleniyor...</span>
@@ -17561,18 +17570,15 @@ function renderHarita() {
       attributionControl: false,
       minZoom: 5,
       maxBounds: [[33.0, 20.0], [44.5, 50.0]],
-      maxBoundsViscosity: 0.7,
+      maxBoundsViscosity: 0.3,
+      scrollWheelZoom: true,
+      doubleClickZoom: true,
+      touchZoom: true,
+      boxZoom: true,
+      keyboard: false,
     });
-    // Haritaya tıklayınca sayfanın kaymasını engelle
-    var _lmDiv = document.getElementById('leaflet-map');
-    if (_lmDiv) {
-      _lmDiv.addEventListener('click', function(e){ e.stopPropagation(); }, true);
-      _lmDiv.addEventListener('mousedown', function(e){ e.stopPropagation(); }, true);
-    }
-    _leafletMap.on('click', function(e){ L.DomEvent.stopPropagation(e); });
-    // Scroll koruması: harita odaklandığında sayfanın kaymasını önle
+    // Sayfa-otokayma koruması: harita konteynerine focus verildiğinde tarayıcının scrollIntoView yapmasını engelle
     _leafletMap.on('focus', function(){ if(window.history && window.history.scrollRestoration) window.history.scrollRestoration='manual'; });
-    _leafletMap.getContainer().addEventListener('wheel', function(e){ e.stopPropagation(); }, {passive:false});
     // Leaflet attribution link'lerinin # scroll'unu engelle
     setTimeout(function(){
       var links = _leafletMap.getContainer().querySelectorAll('a[href="#"]');
@@ -17592,9 +17598,12 @@ function renderHarita() {
 
   // Heatmap modunda GeoJSON layer yönetimi haritaHeatmapCiz içinde yapılır
   if (_haritaMod !== 'heatmap') {
-    if (_haritaGeoJSONLayer) { _haritaGeoJSONLayer.remove(); _haritaGeoJSONLayer = null; }
-    _haritaHeatLayers.forEach(function(l){ l.remove(); });
+    if (_haritaGeoJSONLayer) { try { _haritaGeoJSONLayer.remove(); } catch(e){} _haritaGeoJSONLayer = null; }
+    _haritaHeatLayers.forEach(function(l){ try { l.remove(); } catch(e){} });
     _haritaHeatLayers = [];
+    // Heatmap'ten kalmış olabilecek yükleniyor göstergesini de kaldır
+    var _hl = document.getElementById('harita-heatmap-load');
+    if (_hl) _hl.style.display = 'none';
   }
 
   // ── Mod seçimine göre katman ─────────────────────────────────
@@ -17608,6 +17617,7 @@ function renderHarita() {
     // Rota katmanını temizle
     if (_haritaRotaLayer && _haritaRotaLayer.length) { _haritaRotaLayer.forEach(function(l){ try{l.remove();}catch(e){} }); _haritaRotaLayer = []; }
     // Choropleth ve label layer'larını temizle
+    if (_haritaLabelGroup) { try { _haritaLabelGroup.clearLayers(); _haritaLabelGroup.remove(); } catch(e){} _haritaLabelGroup = null; }
     if (_choroplethLayer) {
       if (_choroplethLayer._labelGroup) { try { _choroplethLayer._labelGroup.clearLayers(); _choroplethLayer._labelGroup.remove(); } catch(e){} }
       try { _choroplethLayer.remove(); } catch(e){}
@@ -17737,17 +17747,32 @@ var IZMIR_IL_ADI = 'İzmir (Konak/Merkez)';
 
 function haritaIlTikla(il) {
   seciliIl = seciliIl === il ? null : il;
-  // Sayfa kaymasını engelle
+  // Sayfa kaymasını engelle — hem scroll-area hem window pozisyonunu kaydet
   var scrollArea = document.querySelector('#tab-harita .scroll-area');
   var savedScrollTop = scrollArea ? scrollArea.scrollTop : 0;
+  var savedWinY = window.scrollY || window.pageYOffset || 0;
+
+  function _scrollGeriYukle() {
+    if (scrollArea) scrollArea.scrollTop = savedScrollTop;
+    window.scrollTo(window.scrollX, savedWinY);
+    requestAnimationFrame(function() {
+      if (scrollArea) scrollArea.scrollTop = savedScrollTop;
+      window.scrollTo(window.scrollX, savedWinY);
+      requestAnimationFrame(function() {
+        if (scrollArea) scrollArea.scrollTop = savedScrollTop;
+        window.scrollTo(window.scrollX, savedWinY);
+      });
+    });
+  }
+
   // Heatmap modunda direkt detay göster (_choroplethLayer olmadan)
   if (_haritaMod === 'heatmap') {
-    if (seciliIl) haritaIlDetay(seciliIl, _choroplethIlSayilar);
+    if (seciliIl) haritaIlDetay(seciliIl, _choroplethIlSayilar || {});
     else {
       var _hdet = document.getElementById('harita-detay');
       if (_hdet) _hdet.innerHTML = '<div class="empty-state" style="height:160px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:24px 16px"><div style="font-size:13px;font-weight:600;color:var(--foreground)">Haritadan bir il seçin</div></div>';
     }
-    if (scrollArea) { setTimeout(function(){ scrollArea.scrollTop = savedScrollTop; }, 0); }
+    _scrollGeriYukle();
     return;
   }
   // Choropleth varsa sadece stilleri güncelle (tam re-render yerine)
@@ -17762,19 +17787,27 @@ function haritaIlTikla(il) {
       + '</div>';
   } else {
     renderHarita();
-    // renderHarita async (GeoJSON yükleme) tamamlandıktan sonra detayı göster
     if (seciliIl) {
       setTimeout(function(){
         if (seciliIl && _choroplethIlSayilar) haritaIlDetay(seciliIl, _choroplethIlSayilar);
+        _scrollGeriYukle();
       }, 600);
+      return;
     }
   }
-  // Scroll pozisyonunu geri yükle (harita tıklaması sayfayı kaydırmasın)
-  if (scrollArea) { setTimeout(function(){ scrollArea.scrollTop = savedScrollTop; }, 0); }
+  _scrollGeriYukle();
 }
 
 function haritaIlDetay(il, ilSayilar) {
   const el = document.getElementById('harita-detay');
+  // Scroll koruması: hem scroll alanını hem window'u kilitle
+  var _sa = document.querySelector('#tab-harita .scroll-area');
+  var _savedST = _sa ? _sa.scrollTop : 0;
+  var _savedWY = window.scrollY || window.pageYOffset || 0;
+  function _restoreScroll() {
+    if (_sa) _sa.scrollTop = _savedST;
+    window.scrollTo(window.scrollX, _savedWY);
+  }
   // Çoklu durak sisteminde bu ile giden tüm turneleri bul (büyük/küçük harf duyarsız)
   const ilLower = il.toLocaleLowerCase('tr-TR');
   var _haritaOyunDet = window._haritaAktifOyun || '';
@@ -17786,6 +17819,7 @@ function haritaIlDetay(il, ilSayilar) {
   const sayi = ilSayilar[il]||0;
   if (!ilT.length) {
     el.innerHTML = '<div class="section-header" style="border-radius:10px 10px 0 0"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="vertical-align:-2px;margin-right:4px;flex-shrink:0"><path d="M12 21s7-6.5 7-11a7 7 0 1 0-14 0c0 4.5 7 11 7 11z"/><circle cx="12" cy="10" r="2"/></svg> '+il+'</div><div class="empty-state" style="height:80px"><div class="empty-sub">Henüz turne kaydı yok</div></div>';
+    _restoreScroll();
     return;
   }
   const toplamGun = ilT.reduce(function(s,t){ return s+turneSuresi(t); }, 0);
@@ -17812,18 +17846,18 @@ function haritaIlDetay(il, ilSayilar) {
         + '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>'
         + kadro + ' kişi</span>'
       : '';
-    return '<tr class="harita-tablo-row" data-ridx="' + ridx + '" tabindex="0" role="button" aria-label="' + t.oyun + ' turnesini aç" onclick="_haritaIlDetayGit(' + ridx + ')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();_haritaIlDetayGit(' + ridx + ')}">'
-      + '<td style="padding:10px 12px;border-bottom:1px solid var(--border)">'
+    return '<tr class="harita-tablo-row" data-ridx="' + ridx + '" role="button" aria-label="' + t.oyun + ' turnesini aç" onclick="_haritaIlDetayGit(' + ridx + ')">'
+      + '<td style="padding:8px 10px;border-bottom:1px solid var(--border);min-width:0">'
         + '<div style="font-size:12.5px;font-weight:800;color:var(--foreground);line-height:1.3">' + t.oyun + '</div>'
         + (kadroHtml ? '<div style="margin-top:4px">' + kadroHtml + '</div>' : '')
       + '</td>'
-      + '<td style="padding:10px 12px;border-bottom:1px solid var(--border);white-space:nowrap;min-width:95px">'
+      + '<td style="padding:8px 10px;border-bottom:1px solid var(--border)">'
         + '<div style="font-size:11px;font-weight:700;color:var(--foreground)">' + tarihStr + '</div>'
         + (bitisTarihStr ? '<div style="font-size:10px;color:var(--muted-foreground);margin-top:1px">' + bitisTarihStr + '</div>' : '')
         + (sure > 1 ? '<div style="font-size:10px;font-weight:700;color:var(--primary);margin-top:2px">' + sure + ' gün</div>' : '')
       + '</td>'
-      + '<td style="padding:10px 12px;border-bottom:1px solid var(--border);white-space:nowrap">'
-        + '<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;background:' + sr.bg + ';color:' + sr.fg + ';border:1.5px solid ' + sr.border + ';border-radius:20px;font-size:10.5px;font-weight:700">' + (sr.svg||'') + sr.label + '</span>'
+      + '<td style="padding:8px 6px;border-bottom:1px solid var(--border);text-align:right">'
+        + '<span style="display:inline-flex;align-items:center;gap:3px;padding:3px 8px;background:' + sr.bg + ';color:' + sr.fg + ';border:1px solid ' + sr.border + ';border-radius:14px;font-size:10px;font-weight:700;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis">' + (sr.svg||'') + sr.label + '</span>'
       + '</td>'
       + '</tr>';
   }).join('');
@@ -17831,20 +17865,48 @@ function haritaIlDetay(il, ilSayilar) {
     +'<div style="display:flex;flex-direction:column"><span style="font-size:13px;font-weight:700"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="vertical-align:-2px;margin-right:4px;flex-shrink:0"><path d="M12 21s7-6.5 7-11a7 7 0 1 0-14 0c0 4.5 7 11 7 11z"/><circle cx="12" cy="10" r="2"/></svg>'+il+'</span><span style="font-size:10px;font-weight:500;color:var(--muted-foreground)">'+sayi+' turne · '+toplamGun+' gün'+kmStr+'</span></div>'
     +'<button class="btn btn-outline" style="height:24px;font-size:10px;padding:0 8px" onclick="seciliIl=null;renderHarita()">× Kapat</button>'
     +'</div>'
-    +'<table style="width:100%;table-layout:auto" aria-label="Kişi turne listesi"><thead><tr style="background:var(--muted)"><th scope="col" style="padding:6px 10px;font-size:11px;font-weight:700;color:var(--muted-foreground);white-space:nowrap">Oyun</th><th scope="col" style="padding:6px 10px;font-size:11px;font-weight:700;color:var(--muted-foreground);width:90px;white-space:nowrap">Tarih</th><th scope="col" style="padding:6px 10px;font-size:11px;font-weight:700;color:var(--muted-foreground);white-space:nowrap">Statü</th></tr></thead><tbody>'+rows+'</tbody></table>';
+    +'<table style="width:100%;table-layout:fixed;word-break:break-word" aria-label="Kişi turne listesi"><colgroup><col style="width:auto"><col style="width:84px"><col style="width:120px"></colgroup><thead><tr style="background:var(--muted)"><th scope="col" style="padding:6px 10px;font-size:11px;font-weight:700;color:var(--muted-foreground)">Oyun</th><th scope="col" style="padding:6px 10px;font-size:11px;font-weight:700;color:var(--muted-foreground)">Tarih</th><th scope="col" style="padding:6px 10px;font-size:11px;font-weight:700;color:var(--muted-foreground)">Statü</th></tr></thead><tbody>'+rows+'</tbody></table>';
+  _restoreScroll();
+  requestAnimationFrame(_restoreScroll);
 }
 
 // Harita sağ panelinden turne detayına git — harita sekmesinde kal, slide-in göster
+function _haritaPanelKapat() {
+  var p = document.getElementById('harita-turne-detay-panel');
+  if (p) p.style.right = '-440px';
+  var b = document.getElementById('harita-turne-detay-backdrop');
+  if (b) b.style.opacity = '0';
+  setTimeout(function(){
+    if (b && b.parentNode) b.parentNode.removeChild(b);
+  }, 320);
+}
 function _haritaIlDetayGit(rowIdx) {
-  var t = turneler.find(function(x){ return x._rowIdx === rowIdx; });
-  if (!t) return;
+  rowIdx = parseInt(rowIdx, 10);
+  if (isNaN(rowIdx)) { console.warn('[harita] geçersiz rowIdx'); return; }
+  var t = (typeof turneler !== 'undefined') ? turneler.find(function(x){ return Number(x._rowIdx) === rowIdx; }) : null;
+  if (!t) { console.warn('[harita] turne bulunamadı rowIdx=', rowIdx); return; }
+  // Backdrop (arka plana tıklayınca kapansın)
+  var backdrop = document.getElementById('harita-turne-detay-backdrop');
+  if (!backdrop) {
+    backdrop = document.createElement('div');
+    backdrop.id = 'harita-turne-detay-backdrop';
+    backdrop.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.18);z-index:2999;opacity:0;transition:opacity .25s ease';
+    backdrop.addEventListener('click', _haritaPanelKapat);
+    document.body.appendChild(backdrop);
+  }
   var panel = document.getElementById('harita-turne-detay-panel');
   if (!panel) {
-    // Panel yoksa oluştur (harita-detay içine ekle)
     panel = document.createElement('div');
     panel.id = 'harita-turne-detay-panel';
-    panel.style.cssText = 'position:fixed;top:0;right:-420px;width:400px;height:100vh;background:var(--card);border-left:1px solid var(--border);z-index:3000;overflow-y:auto;transition:right .3s cubic-bezier(.4,0,.2,1);box-shadow:-4px 0 24px rgba(0,0,0,.12)';
+    panel.style.cssText = 'position:fixed;top:0;right:-440px;width:400px;max-width:96vw;height:100vh;background:var(--card);border-left:1px solid var(--border);z-index:3000;overflow-y:auto;transition:right .3s cubic-bezier(.4,0,.2,1);box-shadow:-4px 0 24px rgba(0,0,0,.18)';
     document.body.appendChild(panel);
+    // ESC ile kapat (bir kere bağla)
+    document.addEventListener('keydown', function(e){
+      if (e.key === 'Escape') {
+        var pp = document.getElementById('harita-turne-detay-panel');
+        if (pp && pp.style.right === '0px') _haritaPanelKapat();
+      }
+    });
   }
 
   var sr = statuRenk(t.statu || '');
@@ -17854,10 +17916,14 @@ function _haritaIlDetayGit(rowIdx) {
   var kadroSay = t.katilimcilar ? t.katilimcilar.length : 0;
 
   panel.innerHTML =
-    '<div style="background:var(--sidebar);padding:16px 18px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:1">'    + '<div style="color:#fff">'    +   '<div style="font-size:14px;font-weight:800;line-height:1.3">' + (t.oyun || '—') + '</div>'    +   '<div style="font-size:10px;opacity:.7;margin-top:2px">' + (iller || '') + '</div>'    + '</div>'    + '<button onclick="document.getElementById(\'harita-turne-detay-panel\').style.right=\'-420px\'" style="background:rgba(255,255,255,.15);border:none;color:#fff;cursor:pointer;border-radius:8px;width:30px;height:30px;font-size:16px;display:flex;align-items:center;justify-content:center">×</button>'    + '</div>'    + '<div style="padding:16px 18px;display:flex;flex-direction:column;gap:14px">'    + '<div style="display:flex;gap:8px;flex-wrap:wrap">'    +   (sure > 0 ? '<span style="padding:4px 12px;border-radius:20px;background:hsl(220,60%,96%);color:hsl(220,60%,35%);font-size:11px;font-weight:700;border:1px solid hsl(220,60%,85%)">📅 ' + sure + ' gün</span>' : '')    +   (temsil > 0 ? '<span style="padding:4px 12px;border-radius:20px;background:hsl(141,60%,95%);color:hsl(141,60%,25%);font-size:11px;font-weight:700;border:1px solid hsl(141,60%,80%)">▶ ' + temsil + ' temsil</span>' : '')    +   (kadroSay > 0 ? '<span style="padding:4px 12px;border-radius:20px;background:hsl(38,90%,95%);color:hsl(38,70%,28%);font-size:11px;font-weight:700;border:1px solid hsl(38,85%,80%)">👥 ' + kadroSay + ' kişi</span>' : '')    +   '<span style="padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700;background:' + sr.bg + ';color:' + sr.fg + ';border:1px solid ' + sr.border + '">' + (sr.label || '') + '</span>'    + '</div>'    + '<div style="background:var(--muted);border-radius:10px;padding:12px 14px">'    +   '<div style="font-size:10px;font-weight:700;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">📍 Turne Güzergahı</div>'    +   (iller ? '<div style="font-size:12px;font-weight:600;color:var(--foreground)">' + iller + '</div>' : '<div style="font-size:11px;color:var(--muted-foreground)">Güzergah belirtilmemiş</div>')    + '</div>'    + '<div style="display:flex;gap:8px">'    +   '<button onclick="editTurne(' + rowIdx + ')" style="flex:1;height:36px;border:1.5px solid var(--border);border-radius:8px;background:var(--card);color:var(--foreground);cursor:pointer;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:5px">✏️ Düzenle</button>'    +   '<button onclick="document.getElementById(\'harita-turne-detay-panel\').style.right=\'-420px\';switchTab(\'liste\');setTimeout(function(){openCardDetail(' + rowIdx + ');},200)" style="flex:1;height:40px;border:none;border-radius:10px;background:linear-gradient(135deg,hsl(38,90%,42%),hsl(38,85%,35%));color:#fff;cursor:pointer;font-size:13px;font-weight:800;display:flex;align-items:center;justify-content:center;gap:6px;letter-spacing:-.2px;box-shadow:0 2px 8px rgba(180,110,0,.35)">Tam Detay →</button>'    + '</div>'    + '</div>';
+    '<div style="background:var(--sidebar);padding:16px 18px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:1">'    + '<div style="color:#fff">'    +   '<div style="font-size:14px;font-weight:800;line-height:1.3">' + (t.oyun || '—') + '</div>'    +   '<div style="font-size:10px;opacity:.7;margin-top:2px">' + (iller || '') + '</div>'    + '</div>'    + '<button onclick="_haritaPanelKapat()" style="background:rgba(255,255,255,.15);border:none;color:#fff;cursor:pointer;border-radius:8px;width:30px;height:30px;font-size:16px;display:flex;align-items:center;justify-content:center">×</button>'    + '</div>'    + '<div style="padding:16px 18px;display:flex;flex-direction:column;gap:14px">'    + '<div style="display:flex;gap:8px;flex-wrap:wrap">'    +   (sure > 0 ? '<span style="padding:4px 12px;border-radius:20px;background:hsl(220,60%,96%);color:hsl(220,60%,35%);font-size:11px;font-weight:700;border:1px solid hsl(220,60%,85%)">📅 ' + sure + ' gün</span>' : '')    +   (temsil > 0 ? '<span style="padding:4px 12px;border-radius:20px;background:hsl(141,60%,95%);color:hsl(141,60%,25%);font-size:11px;font-weight:700;border:1px solid hsl(141,60%,80%)">▶ ' + temsil + ' temsil</span>' : '')    +   (kadroSay > 0 ? '<span style="padding:4px 12px;border-radius:20px;background:hsl(38,90%,95%);color:hsl(38,70%,28%);font-size:11px;font-weight:700;border:1px solid hsl(38,85%,80%)">👥 ' + kadroSay + ' kişi</span>' : '')    +   '<span style="padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700;background:' + sr.bg + ';color:' + sr.fg + ';border:1px solid ' + sr.border + '">' + (sr.label || '') + '</span>'    + '</div>'    + '<div style="background:var(--muted);border-radius:10px;padding:12px 14px">'    +   '<div style="font-size:10px;font-weight:700;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">📍 Turne Güzergahı</div>'    +   (iller ? '<div style="font-size:12px;font-weight:600;color:var(--foreground)">' + iller + '</div>' : '<div style="font-size:11px;color:var(--muted-foreground)">Güzergah belirtilmemiş</div>')    + '</div>'    + '<div style="display:flex;gap:8px">'    +   '<button onclick="editTurne(' + rowIdx + ')" style="flex:1;height:36px;border:1.5px solid var(--border);border-radius:8px;background:var(--card);color:var(--foreground);cursor:pointer;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:5px">✏️ Düzenle</button>'    +   '<button onclick="_haritaPanelKapat();switchTab(\'liste\');setTimeout(function(){openCardDetail(' + rowIdx + ');},200)" style="flex:1;height:40px;border:none;border-radius:10px;background:linear-gradient(135deg,hsl(38,90%,42%),hsl(38,85%,35%));color:#fff;cursor:pointer;font-size:13px;font-weight:800;display:flex;align-items:center;justify-content:center;gap:6px;letter-spacing:-.2px;box-shadow:0 2px 8px rgba(180,110,0,.35)">Tam Detay →</button>'    + '</div>'    + '</div>';
 
-  // Aç
-  setTimeout(function(){ panel.style.right = '0'; }, 10);
+  // Aç — reflow zorla, sonra rAF içinde transition başlat
+  void panel.getBoundingClientRect();
+  requestAnimationFrame(function(){
+    panel.style.right = '0';
+    if (backdrop) backdrop.style.opacity = '1';
+  });
 }
 
 
@@ -18000,6 +18066,7 @@ var _ilGeoJSON = null;
 var _ilGeoJSONLoading = false;
 var _ilGeoJSONCallbacks = [];
 var _haritaGeoJSONLayer = null;
+var _haritaLabelGroup = null; // il ismi label'ları — heatmap modunda kaldırılır
 
 function _haritaSpinner(goster) {
   var sp = document.getElementById('harita-spinner');
@@ -18068,6 +18135,11 @@ function haritaHeatmapCiz(ilSayilar) {
   if (_haritaGeoJSONLayer) { try { _haritaGeoJSONLayer.remove(); } catch(e){} _haritaGeoJSONLayer = null; }
   _haritaHeatLayers.forEach(function(l){ try { l.remove(); } catch(e){} });
   _haritaHeatLayers = [];
+  // Label layer'ı da kesin temizle (normal moddan kalan)
+  if (_haritaLabelGroup) { try { _haritaLabelGroup.clearLayers(); _haritaLabelGroup.remove(); } catch(e){} _haritaLabelGroup = null; }
+  if (_choroplethLayer) {
+    if (_choroplethLayer._labelGroup) { try { _choroplethLayer._labelGroup.clearLayers(); _choroplethLayer._labelGroup.remove(); } catch(e){} _choroplethLayer._labelGroup = null; }
+  }
 
   var maxSayi = Math.max.apply(null, Object.values(ilSayilar).filter(function(v){ return v > 0; }).concat([1]));
 
@@ -18081,7 +18153,10 @@ function haritaHeatmapCiz(ilSayilar) {
     if (mapDiv.style.position !== 'relative') mapDiv.style.position = 'relative';
     mapDiv.appendChild(loadEl);
   }
-  if (loadEl) { loadEl.textContent = '\uD83D\uDDFA Il sinirları yükleniyor...'; loadEl.style.display = 'block'; }
+  if (loadEl) { loadEl.textContent = '\uD83D\uDDFA İl sınırları yükleniyor...'; loadEl.style.display = 'block'; }
+
+  // Heatmap modunda il sayılarını HEMEN kaydet — async callback beklemeden tıklama çalışsın
+  _choroplethIlSayilar = ilSayilar;
 
   _ilGeoJSONYukle(function(geojson) {
     if (loadEl) loadEl.style.display = 'none';
@@ -18121,8 +18196,9 @@ function haritaHeatmapCiz(ilSayilar) {
         var sayi = key ? (ilSayilar[key] || 0) : 0;
         var ratio = sayi > 0 ? sayi / maxSayi : 0;
 
+        var _tipIlAdi = key || (feature.properties && (feature.properties.name || feature.properties.Name || feature.properties.NAME || '')) || '';
         var tipHtml = '<div style="font-size:12px">'
-          + '<strong>' + (key || ilAdi) + '</strong>';
+          + '<strong>' + _tipIlAdi + '</strong>';
         if (sayi > 0) {
           tipHtml += '&nbsp;<span style="color:hsl(350,70%,35%);font-weight:700">' + sayi + ' turne</span>'
             + '<div style="margin-top:5px;height:6px;border-radius:3px;background:#ddd;overflow:hidden">'
@@ -18140,10 +18216,36 @@ function haritaHeatmapCiz(ilSayilar) {
           if (sayi > 0) { layer.setStyle({ fillOpacity: 0.95, weight: 2, color: 'rgba(80,0,0,0.6)' }); layer.bringToFront(); }
         });
         layer.on('mouseout', function() {
-          if (sayi > 0) { layer.setStyle({ fillOpacity: 0.75, weight: 1, color: 'rgba(80,0,0,0.3)' }); }
+          if (sayi > 0) { layer.setStyle({ fillOpacity: 0.68, weight: 1.8, color: 'rgba(80,30,0,0.5)' }); }
         });
       }
     }).addTo(_leafletMap);
+
+    // ── Heatmap modunda da il isimleri ve sayıları göster ──
+    try {
+      if (_haritaLabelGroup) { try { _haritaLabelGroup.clearLayers(); _haritaLabelGroup.remove(); } catch(e){} }
+      _haritaLabelGroup = L.layerGroup().addTo(_leafletMap);
+      _haritaGeoJSONLayer.eachLayer(function(lyr) {
+        var feat = lyr.feature;
+        if (!feat) return;
+        var key = _featureKey(feat);
+        if (!key) return;
+        var sayi = ilSayilar[key] || 0;
+        var center;
+        try { center = lyr.getBounds().getCenter(); } catch(e){ return; }
+        var hasVisit = sayi > 0;
+        var html = '<div class="il-lbl' + (hasVisit ? ' il-lbl--visit' : '') + '">'
+          + '<span class="il-lbl-name">' + key + '</span>'
+          + (hasVisit ? '<span class="il-lbl-cnt">' + sayi + '</span>' : '')
+          + '</div>';
+        L.marker(center, {
+          icon: L.divIcon({ html: html, className: '', iconSize: [0,0], iconAnchor: [0,0] }),
+          interactive: false,
+          keyboard: false,
+          zIndexOffset: 200,
+        }).addTo(_haritaLabelGroup);
+      });
+    } catch(e) { console.warn('[heatmap labels]', e); }
   });
 }
 
@@ -18277,9 +18379,10 @@ function haritaChoroplethCiz(ilSayilar) {
     }).addTo(_leafletMap);
 
     // ── Kalıcı il ismi label'ları — ayrı divIcon marker'lar ──────────
-    if (_choroplethLayer._labelGroup) { _choroplethLayer._labelGroup.clearLayers(); }
-    var _labelGroup = L.layerGroup().addTo(_leafletMap);
-    _choroplethLayer._labelGroup = _labelGroup;
+    if (_haritaLabelGroup) { try { _haritaLabelGroup.clearLayers(); _haritaLabelGroup.remove(); } catch(e){} }
+    _haritaLabelGroup = L.layerGroup().addTo(_leafletMap);
+    if (_choroplethLayer._labelGroup) { try { _choroplethLayer._labelGroup.clearLayers(); } catch(e){} }
+    _choroplethLayer._labelGroup = _haritaLabelGroup;
 
     _choroplethLayer.eachLayer(function(lyr) {
       var feat = lyr.feature;
@@ -18307,7 +18410,7 @@ function haritaChoroplethCiz(ilSayilar) {
         interactive: false,
         keyboard: false,
         zIndexOffset: 200,
-      }).addTo(_labelGroup);
+      }).addTo(_haritaLabelGroup);
     });
   });
 }
