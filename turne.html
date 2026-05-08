@@ -17425,12 +17425,16 @@ function renderHarita() {
   var ykHaritaDurum = {};
 
   const ilSayilar = {};
+  // -- Performans: IL_LATLON key lookup map bir kere hazırla --
+  var _rlIlKeys = Object.keys(IL_LATLON);
+  var _rlIlKeysLower = _rlIlKeys.map(function(k){ return k.toLocaleLowerCase('tr-TR'); });
   _haritaTurneler.forEach(function(t) {
     durakIllerListesi(t).forEach(function(il) {
       if (!il) return;
       var ilAdi = il.split('/')[0].trim();
-      var normalized = trCapitalize(ilAdi);
-      var matched = Object.keys(IL_LATLON).find(function(k){ return k.toLocaleLowerCase('tr-TR') === ilAdi.toLocaleLowerCase('tr-TR'); }) || normalized;
+      var lower = ilAdi.toLocaleLowerCase('tr-TR');
+      var idx = _rlIlKeysLower.indexOf(lower);
+      var matched = idx >= 0 ? _rlIlKeys[idx] : trCapitalize(ilAdi);
       ilSayilar[matched] = (ilSayilar[matched]||0) + 1;
     });
   });
@@ -18007,17 +18011,20 @@ function haritaHeatmapCiz(ilSayilar) {
     if (loadEl) loadEl.style.display = 'none';
     if (!geojson) { _haritaHeatmapDaireCiz(ilSayilar, maxSayi); return; }
 
+    // -- Performans: lookup map bir kere hesapla --
+    var _ilKeys = Object.keys(IL_LATLON);
+    var _ilKeysLower = _ilKeys.map(function(k){ return k.toLocaleLowerCase('tr-TR'); });
+    function _featureKey(feature) {
+      var ilAdi = (feature.properties && (feature.properties.name || feature.properties.Name || feature.properties.NAME || feature.properties.il || '')) || '';
+      var idx = _ilKeysLower.indexOf(ilAdi.toLocaleLowerCase('tr-TR'));
+      return idx >= 0 ? _ilKeys[idx] : null;
+    }
+
     _haritaGeoJSONLayer = L.geoJSON(geojson, {
       smoothFactor: 0,
       renderer: L.canvas({ padding: 0 }),
       style: function(feature) {
-        var ilAdi = feature.properties && (
-          feature.properties.name || feature.properties.Name ||
-          feature.properties.NAME || feature.properties.il || ''
-        );
-        var key = Object.keys(IL_LATLON).find(function(k) {
-          return k.toLocaleLowerCase('tr-TR') === (ilAdi||'').toLocaleLowerCase('tr-TR');
-        });
+        var key = _featureKey(feature);
         var sayi = key ? (ilSayilar[key] || 0) : 0;
         var ratio = sayi > 0 ? sayi / maxSayi : 0;
         if (sayi === 0) {
@@ -18031,13 +18038,7 @@ function haritaHeatmapCiz(ilSayilar) {
         };
       },
       onEachFeature: function(feature, layer) {
-        var ilAdi = feature.properties && (
-          feature.properties.name || feature.properties.Name ||
-          feature.properties.NAME || feature.properties.il || ''
-        );
-        var key = Object.keys(IL_LATLON).find(function(k) {
-          return k.toLocaleLowerCase('tr-TR') === (ilAdi||'').toLocaleLowerCase('tr-TR');
-        });
+        var key = _featureKey(feature);
         var sayi = key ? (ilSayilar[key] || 0) : 0;
         var ratio = sayi > 0 ? sayi / maxSayi : 0;
 
@@ -18072,27 +18073,37 @@ function haritaIlSinirGoster(ilSayilar) {
   _ilGeoJSONYukle(function(geojson) {
     if (!geojson) return;
     if (_haritaGeoJSONLayer) { _haritaGeoJSONLayer.remove(); _haritaGeoJSONLayer = null; }
+
+    // -- Performans: lookup map ve maxSayi bir kere hesapla --
+    var _ilKeys = Object.keys(IL_LATLON);
+    var _ilKeysLower = _ilKeys.map(function(k){ return k.toLocaleLowerCase('tr-TR'); });
+    var _maxSayi = Math.max.apply(null, Object.values(ilSayilar).filter(function(v){ return v > 0; }).concat([1]));
+    function _featureKey(feature) {
+      var ilAdi = (feature.properties && (feature.properties.name || feature.properties.Name || feature.properties.NAME || feature.properties.il || '')) || '';
+      var lower = ilAdi.toLocaleLowerCase('tr-TR');
+      var idx = _ilKeysLower.indexOf(lower);
+      return idx >= 0 ? _ilKeys[idx] : null;
+    }
+
     _haritaGeoJSONLayer = L.geoJSON(geojson, {
       smoothFactor: 0.5,
       style: function(feature) {
-        var ilAdi = feature.properties && (feature.properties.name || feature.properties.Name || feature.properties.NAME || feature.properties.il || '');
-        var key = Object.keys(IL_LATLON).find(function(k){ return k.toLocaleLowerCase('tr-TR') === (ilAdi||'').toLocaleLowerCase('tr-TR'); });
+        var key = _featureKey(feature);
         var sayi = key ? (ilSayilar[key] || 0) : 0;
         if (sayi === 0) {
           return { fillColor: 'transparent', fillOpacity: 0, color: 'rgba(120,100,70,0.28)', weight: 1 };
         }
-        var maxSayi = Math.max.apply(null, Object.values(ilSayilar).filter(function(v){ return v > 0; }).concat([1]));
-        var ratio = sayi / maxSayi;
+        var ratio = sayi / _maxSayi;
         var fillOp = 0.12 + ratio * 0.22;
         return { fillColor: 'hsl(38,85%,50%)', fillOpacity: fillOp, color: 'hsl(38,65%,35%)', weight: 1.8 };
       },
       onEachFeature: function(feature, layer) {
-        var ilAdi = feature.properties && (feature.properties.name || feature.properties.Name || feature.properties.NAME || feature.properties.il || '');
-        var key = Object.keys(IL_LATLON).find(function(k){ return k.toLocaleLowerCase('tr-TR') === (ilAdi||'').toLocaleLowerCase('tr-TR'); });
+        var key = _featureKey(feature);
         var sayi = key ? (ilSayilar[key] || 0) : 0;
         if (sayi > 0) {
+          var _normalFillOp = 0.12 + (sayi / _maxSayi) * 0.22;
           layer.on('mouseover', function() { layer.setStyle({ fillOpacity: 0.45, weight: 2.5 }); layer.bringToFront(); });
-          layer.on('mouseout',  function() { var maxS = Math.max.apply(null, Object.values(ilSayilar).filter(function(v){ return v > 0; }).concat([1])); layer.setStyle({ fillOpacity: 0.12 + (sayi/maxS)*0.22, weight: 1.8 }); });
+          layer.on('mouseout',  function() { layer.setStyle({ fillOpacity: _normalFillOp, weight: 1.8 }); });
           layer.on('click', function() { if (key) haritaIlTikla(key); });
         }
       }
@@ -18104,25 +18115,28 @@ function haritaIlBoyaNormal(ilSayilar) {
   // GeoJSON ile il sınırlarını boya: gidilen iller amber, gidilmeyenler çok soluk
   _ilGeoJSONYukle(function(geojson) {
     if (!geojson) return; // GeoJSON yüklenemezse sessizce geç
+
+    // -- Performans: lookup map bir kere hesapla --
+    var _ilKeys = Object.keys(IL_LATLON);
+    var _ilKeysLower = _ilKeys.map(function(k){ return k.toLocaleLowerCase('tr-TR'); });
+    var _maxSayi = Math.max.apply(null, Object.values(ilSayilar).concat([1]));
+    function _featureKey(feature) {
+      var ilAdi = (feature.properties && (feature.properties.name || feature.properties.Name || feature.properties.NAME || feature.properties.il || '')) || '';
+      var idx = _ilKeysLower.indexOf(ilAdi.toLocaleLowerCase('tr-TR'));
+      return idx >= 0 ? _ilKeys[idx] : null;
+    }
+
     _haritaGeoJSONLayer = L.geoJSON(geojson, {
       smoothFactor: 0,
       renderer: L.canvas({ padding: 0 }),
       style: function(feature) {
-        var ilAdi = feature.properties && (
-          feature.properties.name || feature.properties.Name ||
-          feature.properties.NAME || feature.properties.il || ''
-        );
-        var key = Object.keys(IL_LATLON).find(function(k) {
-          return k.toLocaleLowerCase('tr-TR') === (ilAdi||'').toLocaleLowerCase('tr-TR');
-        });
+        var key = _featureKey(feature);
         var sayi = key ? (ilSayilar[key] || 0) : 0;
         if (sayi === 0) {
           return { fillColor: 'transparent', fillOpacity: 0, color: 'rgba(100,80,50,0.35)', weight: 1.2 };
         }
-        // Amber tonu — turne sayısına göre yoğunluk
-        var maxSayi = Math.max.apply(null, Object.values(ilSayilar).filter(function(v){ return v > 0; }).concat([1]));
-        var ratio = sayi / maxSayi;
-        var opacity = 0.30 + ratio * 0.50; // 0.30–0.80 arası
+        var ratio = sayi / _maxSayi;
+        var opacity = 0.30 + ratio * 0.50;
         return {
           fillColor: 'hsl(38,85%,50%)',
           fillOpacity: opacity,
@@ -18131,21 +18145,16 @@ function haritaIlBoyaNormal(ilSayilar) {
         };
       },
       onEachFeature: function(feature, layer) {
-        var ilAdi = feature.properties && (
-          feature.properties.name || feature.properties.Name ||
-          feature.properties.NAME || feature.properties.il || ''
-        );
-        var key = Object.keys(IL_LATLON).find(function(k) {
-          return k.toLocaleLowerCase('tr-TR') === (ilAdi||'').toLocaleLowerCase('tr-TR');
-        });
+        var key = _featureKey(feature);
         var sayi = key ? (ilSayilar[key] || 0) : 0;
         if (sayi > 0) {
+          var _normalOp = 0.25 + (sayi / _maxSayi) * 0.45;
           layer.bindTooltip(
-            '<strong>' + (key||ilAdi) + '</strong> &nbsp;<span style="color:hsl(38,70%,30%);font-weight:700">' + sayi + ' turne</span>',
+            '<strong>' + (key||'') + '</strong> &nbsp;<span style="color:hsl(38,70%,30%);font-weight:700">' + sayi + ' turne</span>',
             { sticky: true, opacity: 0.95, className: 'harita-leaflet-tip' }
           );
           layer.on('mouseover', function() { layer.setStyle({ fillOpacity: 0.85, weight: 2 }); layer.bringToFront(); });
-          layer.on('mouseout',  function() { layer.setStyle({ fillOpacity: 0.25 + (sayi/Math.max.apply(null,Object.values(ilSayilar).concat([1])))*0.45, weight: 1 }); });
+          layer.on('mouseout',  function() { layer.setStyle({ fillOpacity: _normalOp, weight: 1 }); });
           layer.on('click', function() { if (key) haritaIlTikla(key); });
         }
       }
