@@ -13468,6 +13468,152 @@ function firmaRehberiRender() {
   el.innerHTML = html;
 }
 
+// ── DUPLICATE TESPİT & BİRLEŞTİRME ─────────────────────────────────────────
+function _firmaDuplicatesBul() {
+  var liste = _firmaVeriAl();
+  var gruplar = []; // [{idxler:[0,1,2], ortak:'tel/ad'}]
+  var islendi = {};
+
+  function normTel(t){ return (t||'').replace(/[\s\-().+]/g,'').replace(/^0/,'').trim(); }
+  function normAd(a){ return (a||'').trim().toLowerCase().replace(/\s+/g,' ').replace(/[ğ]/g,'g').replace(/[ü]/g,'u').replace(/[ş]/g,'s').replace(/[ı]/g,'i').replace(/[ö]/g,'o').replace(/[ç]/g,'c'); }
+
+  for (var i = 0; i < liste.length; i++) {
+    if (islendi[i]) continue;
+    var grup = [i];
+    var ki = liste[i];
+    var kiTel  = normTel(ki.tel);
+    var kiTel2 = normTel(ki.tel2);
+    var kiAd   = normAd(ki.ad);
+    for (var j = i+1; j < liste.length; j++) {
+      if (islendi[j]) continue;
+      var kj = liste[j];
+      var kjTel  = normTel(kj.tel);
+      var kjTel2 = normTel(kj.tel2);
+      var kjAd   = normAd(kj.ad);
+      var ayni = false;
+      // Aynı telefon
+      if (kiTel  && kjTel  && kiTel  === kjTel ) ayni = true;
+      if (kiTel  && kjTel2 && kiTel  === kjTel2) ayni = true;
+      if (kiTel2 && kjTel  && kiTel2 === kjTel ) ayni = true;
+      // Aynı isim (normalize)
+      if (!ayni && kiAd && kjAd && kiAd === kjAd) ayni = true;
+      if (ayni) { grup.push(j); islendi[j] = true; }
+    }
+    if (grup.length > 1) {
+      islendi[i] = true;
+      gruplar.push(grup);
+    }
+  }
+  return gruplar;
+}
+
+function firmaRehberiBirlestirGoster() {
+  var liste = _firmaVeriAl();
+  var gruplar = _firmaDuplicatesBul();
+  var overlay = document.getElementById('firma-birlestir-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'firma-birlestir-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:10001;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.45)';
+    document.body.appendChild(overlay);
+  }
+  if (!gruplar.length) {
+    overlay.innerHTML = '<div style="background:var(--card);border-radius:14px;padding:28px 32px;max-width:380px;text-align:center;box-shadow:0 8px 40px rgba(0,0,0,.2)">'
+      + '<div style="font-size:32px;margin-bottom:10px">✅</div>'
+      + '<div style="font-size:15px;font-weight:700;color:var(--foreground);margin-bottom:6px">Çift kayıt bulunamadı</div>'
+      + '<div style="font-size:12px;color:var(--muted-foreground);margin-bottom:18px">Tüm kayıtlar benzersiz görünüyor.</div>'
+      + '<button onclick="document.getElementById(\'firma-birlestir-overlay\').remove()" style="padding:8px 22px;background:var(--primary);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">Tamam</button>'
+      + '</div>';
+    overlay.style.display = 'flex';
+    return;
+  }
+
+  var html = '<div style="background:var(--card);border-radius:14px;padding:0;max-width:520px;width:94vw;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,.25);overflow:hidden">';
+  html += '<div style="padding:16px 20px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0">';
+  html += '<div><div style="font-size:14px;font-weight:800;color:var(--foreground)">🔀 Çift Kayıtları Birleştir</div>'
+        + '<div style="font-size:11px;color:var(--muted-foreground);margin-top:2px">'+gruplar.length+' grup çift kayıt bulundu</div></div>';
+  html += '<button onclick="document.getElementById(\'firma-birlestir-overlay\').remove()" style="width:28px;height:28px;border-radius:50%;border:none;background:var(--muted);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;color:var(--muted-foreground)">×</button>';
+  html += '</div>';
+  html += '<div style="overflow-y:auto;padding:14px 20px;flex:1">';
+
+  gruplar.forEach(function(grup, gi) {
+    html += '<div style="border:1.5px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:12px;background:var(--background)">';
+    html += '<div style="font-size:10px;font-weight:800;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Grup '+(gi+1)+'</div>';
+
+    // Kayıtları listele — checkbox ile seçilebilir
+    grup.forEach(function(idx) {
+      var k = liste[idx];
+      html += '<div style="display:flex;align-items:flex-start;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">';
+      html += '<input type="checkbox" id="birl_'+gi+'_'+idx+'" checked style="margin-top:2px;cursor:pointer;accent-color:var(--primary)" onchange="_birlestirSecimGuncelle('+gi+')">';
+      html += '<label for="birl_'+gi+'_'+idx+'" style="flex:1;cursor:pointer">';
+      html += '<div style="font-size:12.5px;font-weight:700;color:var(--foreground)">'+k.ad+'</div>';
+      if (k.tel)  html += '<div style="font-size:11px;color:hsl(220,65%,45%)">📞 '+k.tel+'</div>';
+      if (k.tel2) html += '<div style="font-size:11px;color:hsl(220,55%,50%)">📞 '+k.tel2+'</div>';
+      if (k.not)  html += '<div style="font-size:10.5px;color:var(--muted-foreground)">'+k.not+'</div>';
+      html += '</label>';
+      html += '</div>';
+    });
+
+    // Birleştirilmiş isim girişi
+    var ilkAd = (liste[grup[0]]||{}).ad || '';
+    html += '<div style="margin-top:10px">';
+    html += '<div style="font-size:10px;font-weight:700;color:var(--muted-foreground);margin-bottom:4px">BİRLEŞTİRİLMİŞ İSİM</div>';
+    html += '<div style="display:flex;gap:6px;align-items:center">';
+    html += '<input id="birl_ad_'+gi+'" value="'+ilkAd.replace(/"/g,'&quot;')+'" placeholder="Birleştirilmiş isim..." style="flex:1;height:32px;padding:0 10px;font-size:12px;border:1.5px solid var(--border);border-radius:7px;background:var(--card);color:var(--foreground);font-family:inherit;outline:none">';
+    html += '<button onclick="_birlestirGrupUygula('+gi+','+JSON.stringify(grup)+')" style="height:32px;padding:0 14px;background:var(--primary);color:#fff;border:none;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700;white-space:nowrap">Birleştir</button>';
+    html += '</div></div>';
+    html += '</div>';
+  });
+
+  html += '</div></div>';
+  overlay.innerHTML = html;
+  overlay.style.display = 'flex';
+}
+
+function _birlestirSecimGuncelle(gi) {
+  // Seçili olmayan tek kayıt kaldıysa tekrar seçtir (en az 2 seçili olmalı)
+  // Basit UX — şimdilik sadece görsel feedback
+}
+
+function _birlestirGrupUygula(gi, idxler) {
+  var yeniAd = (document.getElementById('birl_ad_'+gi).value||'').trim();
+  if (!yeniAd) {
+    document.getElementById('birl_ad_'+gi).style.borderColor = '#e11d48';
+    document.getElementById('birl_ad_'+gi).focus();
+    return;
+  }
+  // Sadece checkbox'ı işaretli olanları birleştir
+  var seciliIdxler = idxler.filter(function(idx){
+    var cb = document.getElementById('birl_'+gi+'_'+idx);
+    return cb && cb.checked;
+  });
+  if (seciliIdxler.length < 2) {
+    if (typeof showToast === 'function') showToast('En az 2 kayıt seçin', 'warn', 1800);
+    return;
+  }
+  var liste = _firmaVeriAl();
+  // İlk seçili kayıttan tüm bilgileri topla
+  var birlesik = { ad: yeniAd, kategori: 'diger', tel: '', tel2: '', not: '', _kaynak: '' };
+  seciliIdxler.forEach(function(idx) {
+    var k = liste[idx];
+    if (!birlesik.tel  && k.tel)      birlesik.tel      = k.tel;
+    if (!birlesik.tel2 && k.tel2)     birlesik.tel2     = k.tel2;
+    if (!birlesik.not  && k.not)      birlesik.not      = k.not;
+    if (!birlesik._kaynak && k._kaynak) birlesik._kaynak = k._kaynak;
+    if (k.kategori && k.kategori !== 'diger') birlesik.kategori = k.kategori;
+  });
+  // Seçili olanları sil (büyükten küçüğe sırala ki idx kaymasın)
+  var sirali = seciliIdxler.slice().sort(function(a,b){ return b-a; });
+  sirali.forEach(function(idx){ liste.splice(idx,1); });
+  // Birleşik kaydı ekle
+  liste.push(birlesik);
+  _firmaVeriKaydet(liste);
+  firmaRehberiRender();
+  if (typeof showToast === 'function') showToast('"'+yeniAd+'" olarak birleştirildi ✓', 'success', 2500);
+  // Overlay'i güncelle — kalan çiftler var mı?
+  setTimeout(function(){ firmaRehberiBirlestirGoster(); }, 300);
+}
+
 
 
 // ── İL ETİKETİ INLINE DÜZENLE ──────────────────────────────────────────────
@@ -25843,25 +25989,34 @@ function acBindAll() {
     </div>
   </div>
   <!-- Arama + Ekle -->
-  <div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:center;flex-shrink:0;background:var(--card)">
-    <div style="position:relative;flex:1">
-      <svg fill="none" height="13" stroke="currentColor" stroke-width="2" style="position:absolute;left:9px;top:50%;transform:translateY(-50%);pointer-events:none;opacity:.45" viewbox="0 0 24 24" width="13"><circle cx="11" cy="11" r="8"></circle><line x1="21" x2="16.65" y1="21" y2="16.65"></line></svg>
-      <input id="firma-ara-inp" oninput="_dFirmaRehberiRender()" placeholder="Firma, kişi, telefon ara..." style="width:100%;height:34px;padding:0 10px 0 30px;font-size:12px;border:1.5px solid var(--border);border-radius:8px;background:var(--background);color:var(--foreground);font-family:'DM Sans',sans-serif;outline:none;box-sizing:border-box" type="text"/>
+  <div style="padding:8px 14px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:6px;flex-shrink:0;background:var(--card)">
+    <!-- Satır 1: Arama + Kategori -->
+    <div style="display:flex;gap:6px;align-items:center">
+      <div style="position:relative;flex:1">
+        <svg fill="none" height="13" stroke="currentColor" stroke-width="2" style="position:absolute;left:9px;top:50%;transform:translateY(-50%);pointer-events:none;opacity:.45" viewbox="0 0 24 24" width="13"><circle cx="11" cy="11" r="8"></circle><line x1="21" x2="16.65" y1="21" y2="16.65"></line></svg>
+        <input id="firma-ara-inp" oninput="_dFirmaRehberiRender()" placeholder="Firma, kişi, telefon ara..." style="width:100%;height:32px;padding:0 10px 0 30px;font-size:12px;border:1.5px solid var(--border);border-radius:8px;background:var(--background);color:var(--foreground);font-family:'DM Sans',sans-serif;outline:none;box-sizing:border-box" type="text"/>
+      </div>
+      <select id="firma-kategori-filtre" onchange="firmaRehberiRender()" style="height:32px;padding:0 8px;font-size:11.5px;font-weight:600;border:1.5px solid var(--border);border-radius:8px;background:var(--card);color:var(--foreground);cursor:pointer;font-family:'DM Sans',sans-serif;outline:none">
+        <option value="">Tüm Kategoriler</option>
+        <option value="ulasim">🚌 Ulaşım</option>
+        <option value="nakliye">🚛 Nakliye</option>
+        <option value="otel">🏨 Otel</option>
+        <option value="servis">🚗 Servis/Transfer</option>
+        <option value="diger">📋 Diğer</option>
+      </select>
     </div>
-    <select id="firma-kategori-filtre" onchange="firmaRehberiRender()" style="height:34px;padding:0 8px;font-size:11.5px;font-weight:600;border:1.5px solid var(--border);border-radius:8px;background:var(--card);color:var(--foreground);cursor:pointer;font-family:'DM Sans',sans-serif;outline:none">
-      <option value="">Tüm Kategoriler</option>
-      <option value="ulasim">🚌 Ulaşım</option>
-      <option value="nakliye">🚛 Nakliye</option>
-      <option value="otel">🏨 Otel</option>
-      <option value="servis">🚗 Servis/Transfer</option>
-      <option value="diger">📋 Diğer</option>
-    </select>
-    <button onclick="firmaRehberiYeniForm()" style="height:34px;padding:0 12px;background:var(--primary);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;font-family:'DM Sans',sans-serif;display:inline-flex;align-items:center;gap:5px;white-space:nowrap;flex-shrink:0">
-      <svg fill="none" height="12" stroke="currentColor" stroke-width="2.5" viewbox="0 0 24 24" width="12"><line x1="12" x2="12" y1="5" y2="19"></line><line x1="5" x2="19" y1="12" y2="12"></line></svg> Ekle
-    </button>
-    <button onclick="rehberiTumTurnelerdenGuncelle()" title="Tüm turnelerdeki telefon/firma bilgilerini rehbere aktar" style="height:34px;padding:0 10px;background:hsl(141,50%,92%);color:hsl(141,60%,22%);border:1.5px solid hsl(141,45%,75%);border-radius:8px;cursor:pointer;font-size:11px;font-weight:700;font-family:'DM Sans',sans-serif;display:inline-flex;align-items:center;gap:5px;white-space:nowrap;flex-shrink:0">
-      <svg fill="none" height="12" stroke="currentColor" stroke-width="2.5" viewbox="0 0 24 24" width="12"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 .49-3.63"></path></svg> Tümünü Aktar
-    </button>
+    <!-- Satır 2: Butonlar -->
+    <div style="display:flex;gap:6px;align-items:center">
+      <button onclick="firmaRehberiYeniForm()" style="height:30px;padding:0 12px;background:var(--primary);color:#fff;border:none;border-radius:7px;cursor:pointer;font-size:11.5px;font-weight:700;font-family:'DM Sans',sans-serif;display:inline-flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0">
+        <svg fill="none" height="11" stroke="currentColor" stroke-width="2.5" viewbox="0 0 24 24" width="11"><line x1="12" x2="12" y1="5" y2="19"></line><line x1="5" x2="19" y1="12" y2="12"></line></svg> + Ekle
+      </button>
+      <button onclick="rehberiTumTurnelerdenGuncelle()" title="Tüm turnelerdeki telefon/firma bilgilerini rehbere aktar" style="height:30px;padding:0 10px;background:hsl(141,50%,92%);color:hsl(141,60%,22%);border:1.5px solid hsl(141,45%,75%);border-radius:7px;cursor:pointer;font-size:11px;font-weight:700;font-family:'DM Sans',sans-serif;display:inline-flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0">
+        <svg fill="none" height="11" stroke="currentColor" stroke-width="2.5" viewbox="0 0 24 24" width="11"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 .49-3.63"></path></svg> Tümünü Aktar
+      </button>
+      <button onclick="firmaRehberiBirlestirGoster()" title="Aynı isim veya telefona sahip çift kayıtları birleştir" style="height:30px;padding:0 10px;background:hsl(270,55%,45%);color:#fff;border:none;border-radius:7px;cursor:pointer;font-size:11px;font-weight:700;font-family:'DM Sans',sans-serif;display:inline-flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0">
+        <svg fill="none" height="11" stroke="currentColor" stroke-width="2.5" viewbox="0 0 24 24" width="11"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg> 🔀 Birleştir
+      </button>
+    </div>
   </div>
   <!-- Liste -->
   <div id="firma-rehber-liste" style="flex:1;overflow-y:auto;padding:8px 14px 14px;min-height:0"></div>
