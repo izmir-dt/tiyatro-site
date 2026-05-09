@@ -1,5 +1,197 @@
 <!DOCTYPE html>
 <html lang="tr"><head><meta content="text/html; charset=utf-8" http-equiv="Content-Type"/>
+
+
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1" name="viewport"/>
+<script>
+// Tarih string'ini timezone-safe parse et (YYYY-MM-DD → local time)
+function parseLocalDate(str) {
+  if (!str) return null;
+  var p = str.split('-');
+  if (p.length !== 3) return new Date(str);
+  return new Date(parseInt(p[0]), parseInt(p[1])-1, parseInt(p[2]));
+}
+
+    // Sadece gerçek mobil cihazlarda yönlendir (masaüstü pencere küçültülünce değil)
+    var _isMobile = /Android|iPhone|iPad|iPod|Mobile|IEMobile|BlackBerry|Opera Mini/i.test(navigator.userAgent)
+      && !(/iPad/i.test(navigator.userAgent) && window.innerWidth >= 768);
+    if (_isMobile) {
+      window.location.replace('turne_mobil.html');
+    }
+  </script>
+<link href="https://izmir-dt.github.io/tiyatro-site/tiyatro-site/favicon.png" rel="icon" type="image/png"/>
+<title>Turne Yönetimi – İzmir Devlet Tiyatrosu</title>
+<link href="https://fonts.googleapis.com/" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com/" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<!-- Leaflet ve XLSX artık lazy yükleniyor (aşağıdaki _loadScript/_loadCSS ile) -->
+
+<script>
+    (function() {
+      var t = localStorage.getItem('_tema') || 'light';
+      if (t === 'dark' || (t === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      }
+    })();
+  </script>
+<script>
+// ── LAZY LOADER YARDIMCILARI ──────────────────────────────────
+// Leaflet ve XLSX yalnızca ihtiyaç duyulduğunda indirilir.
+function _loadCSS(href, id) {
+  if (document.getElementById(id)) return;
+  var l = document.createElement('link');
+  l.rel = 'stylesheet'; l.href = href; l.id = id;
+  document.head.appendChild(l);
+}
+function _loadScript(src, id, onload) {
+  if (document.getElementById(id)) { onload && onload(); return; }
+  var s = document.createElement('script');
+  s.src = src; s.id = id;
+  s.onload = onload || function(){};
+  s.onerror = function(){ console.error('Yüklenemedi:', src); };
+  document.head.appendChild(s);
+}
+
+var _xlsxYuklendi = false;
+var _xlsxBekleyenler = [];
+function _xlsxYukle(callback) {
+  if (_xlsxYuklendi) { callback(); return; }
+  _xlsxBekleyenler.push(callback);
+  if (document.getElementById('_xlsx-script')) return;
+  _loadScript(
+    'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
+    '_xlsx-script',
+    function() {
+      _xlsxYuklendi = true;
+      var cbs = _xlsxBekleyenler.slice(); _xlsxBekleyenler = [];
+      cbs.forEach(function(cb){ cb(); });
+    }
+  );
+}
+
+var _leafletYuklendi = false;
+var _leafletBekleyenler = [];
+function _leafletYukle(callback) {
+  if (_leafletYuklendi) { callback(); return; }
+  _leafletBekleyenler.push(callback);
+  if (document.getElementById('_leaflet-script')) return;
+  _loadCSS('https://unpkg.com/leaflet@1.9.4/dist/leaflet.css', '_leaflet-css');
+  _loadScript(
+    'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
+    '_leaflet-script',
+    function() {
+      _leafletYuklendi = true;
+      var cbs = _leafletBekleyenler.slice(); _leafletBekleyenler = [];
+      cbs.forEach(function(cb){ cb(); });
+    }
+  );
+}
+</script>
+
+
+
+
+<!-- ===== HARİTA ESTETİK + ERİŞİLEBİLİRLİK YAMASI v6 (siteyle uyumlu) ===== -->
+
+
+<!-- ===== SITE-İÇİ ONAY DİYALOGU (siteConfirm) ===== -->
+
+<script id="site-confirm-script">
+(function(){
+  var overlay, box, titleEl, msgEl, okBtn, cancelBtn, iconEl, prevFocus, resolver;
+  function ensure(){
+    if (overlay) return;
+    overlay = document.createElement('div');
+    overlay.id = 'siteConfirmOverlay';
+    overlay.setAttribute('role','dialog');
+    overlay.setAttribute('aria-modal','true');
+    overlay.setAttribute('aria-labelledby','scfTitle');
+    overlay.setAttribute('aria-describedby','scfBody');
+    overlay.innerHTML =
+      '<div class="scf-box">'
+      + '<div class="scf-head">'
+      +   '<div class="scf-icon" id="scfIcon">'
+      +     '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">'
+      +       '<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>'
+      +       '<line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>'
+      +     '</svg>'
+      +   '</div>'
+      +   '<div class="scf-title" id="scfTitle">Onay</div>'
+      + '</div>'
+      + '<div class="scf-body" id="scfBody"></div>'
+      + '<div class="scf-actions">'
+      +   '<button type="button" class="scf-btn" id="scfCancel">İptal</button>'
+      +   '<button type="button" class="scf-btn scf-btn-primary" id="scfOk">Tamam</button>'
+      + '</div>'
+      + '</div>';
+    document.body.appendChild(overlay);
+    box = overlay.querySelector('.scf-box');
+    titleEl = overlay.querySelector('#scfTitle');
+    msgEl = overlay.querySelector('#scfBody');
+    okBtn = overlay.querySelector('#scfOk');
+    cancelBtn = overlay.querySelector('#scfCancel');
+    iconEl = overlay.querySelector('#scfIcon');
+    okBtn.addEventListener('click', function(){ close(true); });
+    cancelBtn.addEventListener('click', function(){ close(false); });
+    overlay.addEventListener('click', function(e){ if (e.target === overlay) close(false); });
+    document.addEventListener('keydown', function(e){
+      if (!overlay.classList.contains('on')) return;
+      if (e.key === 'Escape'){ e.preventDefault(); close(false); }
+      else if (e.key === 'Enter'){ e.preventDefault(); close(true); }
+      else if (e.key === 'Tab'){
+        // basit focus trap
+        var f = [cancelBtn, okBtn];
+        var idx = f.indexOf(document.activeElement);
+        e.preventDefault();
+        var next = e.shiftKey ? (idx <= 0 ? f.length-1 : idx-1) : (idx >= f.length-1 ? 0 : idx+1);
+        f[next].focus();
+      }
+    });
+  }
+  function close(result){
+    if (!overlay) return;
+    overlay.classList.remove('on');
+    if (prevFocus && prevFocus.focus) { try { prevFocus.focus(); } catch(_){} }
+    var r = resolver; resolver = null;
+    if (r) r(result);
+  }
+  window.siteConfirm = function(message, opts){
+    ensure();
+    opts = opts || {};
+    titleEl.textContent = opts.title || 'Onay gerekli';
+    msgEl.textContent = message || '';
+    okBtn.textContent = opts.okText || 'Tamam';
+    cancelBtn.textContent = opts.cancelText || 'İptal';
+    okBtn.className = 'scf-btn ' + (opts.danger ? 'scf-btn-danger' : 'scf-btn-primary');
+    iconEl.className = 'scf-icon ' + (opts.danger ? 'danger' : '');
+    prevFocus = document.activeElement;
+    overlay.classList.add('on');
+    setTimeout(function(){ (opts.danger ? cancelBtn : okBtn).focus(); }, 30);
+    return new Promise(function(res){ resolver = res; });
+  };
+})();
+</script>
+
+
+<!-- ══════════════════════════════════════════
+     UI GELİŞTİRMELER: Chip vurgusu + Kart tasarımı
+     ══════════════════════════════════════════ -->
+
+
+
+
+
+
+
+<!-- ╔══════════════════════════════════════════════════════════════════╗
+     ║  MODAL ESTETIK GELIŞTIRME — v4 Premium                         ║
+     ║  Tüm düzenleme modalları için güçlü görsel yükseltme            ║
+     ║  Kaydet / Sil buton işlevleri korunur — yalnızca görsel değişim ║
+     ╚══════════════════════════════════════════════════════════════════╝ -->
+
+
+
+
 <style>
 /* ═══════════════════════════════════════════════════════════════════════════
    TURNE YÖNETİM SİSTEMİ — KAPSAMLI UI GÜNCELLEMESİ v2.0
@@ -103,35 +295,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
     transition-duration: 0.01ms !important;
   }
 }
-</style>
 
-<meta content="width=device-width, initial-scale=1.0, maximum-scale=1" name="viewport"/>
-<script>
-// Tarih string'ini timezone-safe parse et (YYYY-MM-DD → local time)
-function parseLocalDate(str) {
-  if (!str) return null;
-  var p = str.split('-');
-  if (p.length !== 3) return new Date(str);
-  return new Date(parseInt(p[0]), parseInt(p[1])-1, parseInt(p[2]));
-}
-
-    // Sadece gerçek mobil cihazlarda yönlendir (masaüstü pencere küçültülünce değil)
-    var _isMobile = /Android|iPhone|iPad|iPod|Mobile|IEMobile|BlackBerry|Opera Mini/i.test(navigator.userAgent)
-      && !(/iPad/i.test(navigator.userAgent) && window.innerWidth >= 768);
-    if (_isMobile) {
-      window.location.replace('turne_mobil.html');
-    }
-  </script>
-<link href="https://izmir-dt.github.io/tiyatro-site/tiyatro-site/favicon.png" rel="icon" type="image/png"/>
-<title>Turne Yönetimi – İzmir Devlet Tiyatrosu</title>
-<link href="https://fonts.googleapis.com/" rel="preconnect"/>
-<link crossorigin="" href="https://fonts.gstatic.com/" rel="preconnect"/>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
-<!-- Chart.js — düzeltilmiş URL, sadece gerçekten kullanıldığı sekmede çağrılır -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" defer></script>
-<!-- Leaflet ve XLSX artık lazy yükleniyor (aşağıdaki _loadScript/_loadCSS ile) -->
-<style>
-    /* ===== AÇIK TEMA — Tiyatro Altın & Toprak (varsayılan) ===== */
+/* ===== AÇIK TEMA — Tiyatro Altın & Toprak (varsayılan) ===== */
     :root {
       --background:        #F8F5F0;
       --foreground:        #2C2C2C;
@@ -404,71 +569,7 @@ function parseLocalDate(str) {
     .chart-title { font-size:12px; font-weight:700; color:var(--foreground); margin-bottom:12px; display:flex; align-items:center; gap:6px; }
     .chart-canvas-wrap { position:relative; width:100%; }
 
-  </style>
-<script>
-    (function() {
-      var t = localStorage.getItem('_tema') || 'light';
-      if (t === 'dark' || (t === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-        document.documentElement.setAttribute('data-theme', 'dark');
-      }
-    })();
-  </script>
-<script>
-// ── LAZY LOADER YARDIMCILARI ──────────────────────────────────
-// Leaflet ve XLSX yalnızca ihtiyaç duyulduğunda indirilir.
-function _loadCSS(href, id) {
-  if (document.getElementById(id)) return;
-  var l = document.createElement('link');
-  l.rel = 'stylesheet'; l.href = href; l.id = id;
-  document.head.appendChild(l);
-}
-function _loadScript(src, id, onload) {
-  if (document.getElementById(id)) { onload && onload(); return; }
-  var s = document.createElement('script');
-  s.src = src; s.id = id;
-  s.onload = onload || function(){};
-  s.onerror = function(){ console.error('Yüklenemedi:', src); };
-  document.head.appendChild(s);
-}
-
-var _xlsxYuklendi = false;
-var _xlsxBekleyenler = [];
-function _xlsxYukle(callback) {
-  if (_xlsxYuklendi) { callback(); return; }
-  _xlsxBekleyenler.push(callback);
-  if (document.getElementById('_xlsx-script')) return;
-  _loadScript(
-    'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
-    '_xlsx-script',
-    function() {
-      _xlsxYuklendi = true;
-      var cbs = _xlsxBekleyenler.slice(); _xlsxBekleyenler = [];
-      cbs.forEach(function(cb){ cb(); });
-    }
-  );
-}
-
-var _leafletYuklendi = false;
-var _leafletBekleyenler = [];
-function _leafletYukle(callback) {
-  if (_leafletYuklendi) { callback(); return; }
-  _leafletBekleyenler.push(callback);
-  if (document.getElementById('_leaflet-script')) return;
-  _loadCSS('https://unpkg.com/leaflet@1.9.4/dist/leaflet.css', '_leaflet-css');
-  _loadScript(
-    'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
-    '_leaflet-script',
-    function() {
-      _leafletYuklendi = true;
-      var cbs = _leafletBekleyenler.slice(); _leafletBekleyenler = [];
-      cbs.forEach(function(cb){ cb(); });
-    }
-  );
-}
-</script>
-<style>
-    
-    /* Numeric/date elements use DM Mono for crisp readability */
+/* Numeric/date elements use DM Mono for crisp readability */
     .stat-value, .turne-list-table tbody td:first-child, 
     .badge-statu, .turne-card-badge { font-variant-numeric: tabular-nums; }
 
@@ -1370,7 +1471,6 @@ function _leafletYukle(callback) {
 
     /* GÖRÜNTÜLEME MODU — Misafir erişimi */
     body.goruntuleme-modu #tab-btn-kadro,
-    body.goruntuleme-modu #tab-btn-istatistik,
     body.goruntuleme-modu .cal-add-btn,
     body.goruntuleme-modu #cal-sub-btn-gorevler { display: none !important; }
     body.goruntuleme-modu #rehber-btn,
@@ -2326,8 +2426,6 @@ function _leafletYukle(callback) {
 
     } /* end @media 480px */
 
-</style>
-<style>
 .ui-icon{
 width:16px;
 height:16px;
@@ -2561,12 +2659,7 @@ flex-shrink:0;
       .otel-durak-body { grid-template-columns: 1fr 1fr !important; }
     }
 
-</style>
-
-
-<!-- ===== HARİTA ESTETİK + ERİŞİLEBİLİRLİK YAMASI v6 (siteyle uyumlu) ===== -->
-<style id="harita-aesthetic-v6">
-  /* Tablo satırları focus aldığında sayfayı scroll ettirmesin */
+/* Tablo satırları focus aldığında sayfayı scroll ettirmesin */
   .harita-tablo-row { scroll-margin-top: 9999px !important; scroll-margin-bottom: 9999px !important; }
   /* harita-detay içindeki tüm focuslanabilir elementler scroll-into-view tetiklemesin */
   #harita-detay * { scroll-margin-top: 0 !important; }
@@ -2967,11 +3060,8 @@ flex-shrink:0;
   #leaflet-map .leaflet-interactive{
     cursor: pointer !important;
   }
-</style>
 
-<!-- ===== SITE-İÇİ ONAY DİYALOGU (siteConfirm) ===== -->
-<style id="site-confirm-style">
-  #siteConfirmOverlay{
+#siteConfirmOverlay{
     position: fixed; inset: 0; z-index: 100000;
     background: rgba(15,12,8,.55);
     backdrop-filter: blur(3px);
@@ -3045,83 +3135,7 @@ flex-shrink:0;
   @media (prefers-reduced-motion: reduce){
     #siteConfirmOverlay, .scf-box{ animation: none !important; }
   }
-</style>
-<script id="site-confirm-script">
-(function(){
-  var overlay, box, titleEl, msgEl, okBtn, cancelBtn, iconEl, prevFocus, resolver;
-  function ensure(){
-    if (overlay) return;
-    overlay = document.createElement('div');
-    overlay.id = 'siteConfirmOverlay';
-    overlay.setAttribute('role','dialog');
-    overlay.setAttribute('aria-modal','true');
-    overlay.setAttribute('aria-labelledby','scfTitle');
-    overlay.setAttribute('aria-describedby','scfBody');
-    overlay.innerHTML =
-      '<div class="scf-box">'
-      + '<div class="scf-head">'
-      +   '<div class="scf-icon" id="scfIcon">'
-      +     '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">'
-      +       '<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>'
-      +       '<line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>'
-      +     '</svg>'
-      +   '</div>'
-      +   '<div class="scf-title" id="scfTitle">Onay</div>'
-      + '</div>'
-      + '<div class="scf-body" id="scfBody"></div>'
-      + '<div class="scf-actions">'
-      +   '<button type="button" class="scf-btn" id="scfCancel">İptal</button>'
-      +   '<button type="button" class="scf-btn scf-btn-primary" id="scfOk">Tamam</button>'
-      + '</div>'
-      + '</div>';
-    document.body.appendChild(overlay);
-    box = overlay.querySelector('.scf-box');
-    titleEl = overlay.querySelector('#scfTitle');
-    msgEl = overlay.querySelector('#scfBody');
-    okBtn = overlay.querySelector('#scfOk');
-    cancelBtn = overlay.querySelector('#scfCancel');
-    iconEl = overlay.querySelector('#scfIcon');
-    okBtn.addEventListener('click', function(){ close(true); });
-    cancelBtn.addEventListener('click', function(){ close(false); });
-    overlay.addEventListener('click', function(e){ if (e.target === overlay) close(false); });
-    document.addEventListener('keydown', function(e){
-      if (!overlay.classList.contains('on')) return;
-      if (e.key === 'Escape'){ e.preventDefault(); close(false); }
-      else if (e.key === 'Enter'){ e.preventDefault(); close(true); }
-      else if (e.key === 'Tab'){
-        // basit focus trap
-        var f = [cancelBtn, okBtn];
-        var idx = f.indexOf(document.activeElement);
-        e.preventDefault();
-        var next = e.shiftKey ? (idx <= 0 ? f.length-1 : idx-1) : (idx >= f.length-1 ? 0 : idx+1);
-        f[next].focus();
-      }
-    });
-  }
-  function close(result){
-    if (!overlay) return;
-    overlay.classList.remove('on');
-    if (prevFocus && prevFocus.focus) { try { prevFocus.focus(); } catch(_){} }
-    var r = resolver; resolver = null;
-    if (r) r(result);
-  }
-  window.siteConfirm = function(message, opts){
-    ensure();
-    opts = opts || {};
-    titleEl.textContent = opts.title || 'Onay gerekli';
-    msgEl.textContent = message || '';
-    okBtn.textContent = opts.okText || 'Tamam';
-    cancelBtn.textContent = opts.cancelText || 'İptal';
-    okBtn.className = 'scf-btn ' + (opts.danger ? 'scf-btn-danger' : 'scf-btn-primary');
-    iconEl.className = 'scf-icon ' + (opts.danger ? 'danger' : '');
-    prevFocus = document.activeElement;
-    overlay.classList.add('on');
-    setTimeout(function(){ (opts.danger ? cancelBtn : okBtn).focus(); }, 30);
-    return new Promise(function(res){ resolver = res; });
-  };
-})();
-</script>
-<style>
+
 /* ══════════════════════════════════════════════════════════
    TEMA EFEKTLERİ — Açık & Koyu (CSS ONLY, sıfır HTML/JS)
    ══════════════════════════════════════════════════════════ */
@@ -3716,12 +3730,7 @@ button[onclick*="firmaRehberi"]:hover {
 .filter-select {
   height: 34px !important;
 }
-</style>
 
-<!-- ══════════════════════════════════════════
-     UI GELİŞTİRMELER: Chip vurgusu + Kart tasarımı
-     ══════════════════════════════════════════ -->
-<style>
 /* ─── HİZLI FİLTRE ÇİPLERİ — Aktif vurgu animasyonu ─── */
 @keyframes chipBurst {
   0%   { box-shadow: 0 0 0 0 rgba(212,160,23,.7); transform: scale(1); }
@@ -5087,9 +5096,7 @@ button[onclick*="firmaRehberi"]:hover {
     to   { opacity: 1; transform: translateY(0); }
   }
 }
-</style>
 
-<style>
 /* ══════════════════════════════════════════
    TURNE YÖNETİMİ — GELİŞMİŞ ANİMASYONLAR & KONAKLAMA İYİLEŞTİRME
    ══════════════════════════════════════════ */
@@ -5299,17 +5306,10 @@ button[onclick*="firmaRehberi"]:hover {
   0%   { background-position: 100% 0; }
   100% { background-position: -100% 0; }
 }
-</style>
 
-<style id="harita-fix-v3">#harita-detay,#tab-harita .scroll-area{overflow-anchor:none!important;}.harita-tablo-row{outline:none!important}</style>
-<style id="harita-fix-v4">#harita-detay table{table-layout:fixed!important;}#harita-detay td,#harita-detay th{overflow:hidden}#harita-detay{padding-right:0!important}.il-lbl{pointer-events:none}</style>
+#harita-detay,#tab-harita .scroll-area{overflow-anchor:none!important;}.harita-tablo-row{outline:none!important}
 
-<!-- ╔══════════════════════════════════════════════════════════════════╗
-     ║  MODAL ESTETIK GELIŞTIRME — v4 Premium                         ║
-     ║  Tüm düzenleme modalları için güçlü görsel yükseltme            ║
-     ║  Kaydet / Sil buton işlevleri korunur — yalnızca görsel değişim ║
-     ╚══════════════════════════════════════════════════════════════════╝ -->
-<style id="modal-premium-v4">
+#harita-detay table{table-layout:auto!important;}#harita-detay td,#harita-detay th{overflow:hidden;max-width:0}#harita-detay td:nth-child(2){white-space:nowrap;width:1%;max-width:none}#harita-detay td:nth-child(3){white-space:nowrap;width:1%;max-width:none}#harita-detay{padding-right:0!important}.il-lbl{pointer-events:none}
 
 /* ══════════════════════════════════════════════════════════
    § 1  KEYFRAME ANİMASYONLAR
@@ -6035,10 +6035,10 @@ button[onclick*="firmaRehberi"]:hover {
   border-color: hsl(0,50%,32%) !important;
 }
 
-</style>
-<style id="harita-fix-v3">#harita-detay,#tab-harita .scroll-area{overflow-anchor:none!important;}.harita-tablo-row{outline:none!important}</style>
-<style id="harita-fix-v4">#harita-detay table{table-layout:fixed!important;}#harita-detay td,#harita-detay th{overflow:hidden}#harita-detay{padding-right:0!important}.il-lbl{pointer-events:none}</style>
-<style id="modal-premium-v5">
+#harita-detay,#tab-harita .scroll-area{overflow-anchor:none!important;}.harita-tablo-row{outline:none!important}
+
+#harita-detay table{table-layout:auto!important;}#harita-detay td,#harita-detay th{overflow:hidden;max-width:0}#harita-detay td:nth-child(2){white-space:nowrap;width:1%;max-width:none}#harita-detay td:nth-child(3){white-space:nowrap;width:1%;max-width:none}#harita-detay{padding-right:0!important}.il-lbl{pointer-events:none}
+
 /* ════════════════════════════════════════════════════════════════
    V5  ·  Program Satırları  +  Konaklama Expand  +  UX Polish
    ════════════════════════════════════════════════════════════════ */
@@ -6359,6 +6359,208 @@ a:not(.btn):not(.tab-btn):not(.nav-back):hover {
     border: 2px solid currentColor !important;
   }
 }
+
+' + css + '
+
+' + css + '
+
+body{font-family:Arial,sans-serif;margin:20px;color:#1a1a1a}@page{size:A4;margin:15mm}thead{display:table-header-group}tr{page-break-inside:avoid;break-inside:avoid}@media print{button{display:none}body{margin:0}}
+
+'      + '*{box-sizing:border-box;margin:0;padding:0}'      + 'body{font-family:Arial,Helvetica,sans-serif;font-size:10pt;color:#1a1a1a;background:#fff;padding:12mm 14mm;-webkit-print-color-adjust:exact;print-color-adjust:exact}'      + 'h1{font-size:16pt;font-weight:900;color:#1a1a1a;margin-bottom:2pt}'      + 'h2{font-size:11pt;font-weight:700;color:#fff;background:#3b3b3b;padding:5pt 10pt;margin:14pt 0 8pt;letter-spacing:.3pt}'      + '.meta{font-size:9pt;color:#444;margin-bottom:14pt}'      + '.ozet{display:grid;grid-template-columns:repeat(4,1fr);gap:8pt;margin-bottom:14pt}'      + '.ozet-kart{border:1.5pt solid #ddd;border-radius:4pt;padding:8pt 10pt;text-align:center;page-break-inside:avoid;break-inside:avoid}'      + '.ozet-kart .sayi{font-size:20pt;font-weight:900;color:#1a1a1a;line-height:1}'      + '.ozet-kart .etiket{font-size:8pt;color:#555;text-transform:uppercase;letter-spacing:.4pt;margin-top:3pt}'      + 'table{width:100%;border-collapse:collapse;font-size:9.5pt;margin-bottom:10pt}'      + 'thead{display:table-header-group;-webkit-print-color-adjust:exact;print-color-adjust:exact}'      + 'th{background:#3b3b3b;color:#fff;padding:5pt 8pt;text-align:left;font-size:9pt;font-weight:600}'      + 'th.c{text-align:center}'      + 'tbody tr{page-break-inside:avoid;break-inside:avoid}'      + 'td{padding:5pt 8pt;border-bottom:1pt solid #eee;vertical-align:top}'      + 'td.c{text-align:center}'      + 'tr:nth-child(even) td{background:#f9f9f9}'      + 'tr:last-child td{border-bottom:none}'      + '.badge{display:inline-block;padding:1pt 6pt;border-radius:8pt;font-size:8pt;font-weight:700}'      + '.tarih-hucre{font-weight:900;font-size:12pt;text-align:center;white-space:nowrap;vertical-align:top;width:44pt;background:#f5f5f5}'      + '.tarih-gun{font-size:8pt;font-weight:700;color:#444;text-transform:uppercase;letter-spacing:.5pt;display:block;margin-top:1pt}'      + '.etkinlik-adi{font-weight:800;color:#1a1a1a}'      + '.saat{font-weight:900;font-size:11pt;color:#1a1a2e}'      + '.not{font-style:italic;color:#555;font-size:8.5pt}'      + '@page{size:A4;margin:15mm}'      + '@media print{body{padding:0}thead{display:table-header-group}tr{page-break-inside:avoid;break-inside:avoid}}'      + '
+
+'
+      +'*{box-sizing:border-box;margin:0;padding:0;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}'
+      +'body{font-family:Arial,Helvetica,sans-serif;font-size:10pt;color:#111;background:#fff;padding:14mm 16mm;-webkit-print-color-adjust:exact;print-color-adjust:exact;line-height:1.4}'
+      +'.rapor-header{display:flex;align-items:flex-start;justify-content:space-between;border-bottom:3pt solid #6b1b1b;padding-bottom:8pt;margin-bottom:14pt}'
+      +'.rapor-logo{background:#6b1b1b;color:#e8c84a;font-weight:900;font-size:9pt;padding:3pt 8pt;letter-spacing:1pt;margin-right:10pt;white-space:nowrap}'
+      +'.rapor-kurum{font-size:10pt;font-weight:700;color:#111}'
+      +'.rapor-tarih{font-size:8.5pt;color:#555;text-align:right;white-space:nowrap}'
+      +'h1{font-size:18pt;font-weight:900;color:#111;margin-bottom:3pt;letter-spacing:-.3pt}'
+      +'h2{font-size:10.5pt;font-weight:800;color:#5a0f0f;border-bottom:2pt solid #c0a0a0;padding-bottom:5pt;margin:18pt 0 8pt;text-transform:uppercase;letter-spacing:.5pt;page-break-after:avoid;break-after:avoid}'
+      +'.ozet{display:grid;gap:10pt;margin-bottom:18pt}'
+      +'.ozet-kart{border:1.5pt solid #c8a4a4;border-radius:5pt;padding:10pt 8pt;text-align:center;background:#fdf5f5;page-break-inside:avoid;break-inside:avoid}'
+      +'.ozet-kart .sayi{font-size:24pt;font-weight:900;color:#6b1b1b;line-height:1;display:block}'
+      +'.ozet-kart .etiket{font-size:8pt;color:#555;text-transform:uppercase;letter-spacing:.5pt;margin-top:4pt;display:block;font-weight:600}'
+      +'table{width:100%;border-collapse:collapse;margin-top:0;font-size:10pt}'
+      +'thead{display:table-header-group;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}'
+      +'thead tr{background:#6b1b1b;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
+      +'thead th{color:#fff;padding:7pt 10pt;font-size:10.5pt;font-weight:700;text-align:left;border:1pt solid #5a1717;white-space:nowrap;vertical-align:middle}'
+      +'thead th.c{text-align:center}'
+      +'tbody tr{page-break-inside:avoid;break-inside:avoid}'
+      +'tbody tr:nth-child(even){background:#faf8f6}'
+      +'td{vertical-align:middle;border-bottom:1pt solid #e5ddd5;padding:6pt 10pt;color:#111;font-size:10.5pt}'
+      +'td.dim{color:#444;font-size:10pt;font-weight:500}'
+      +'td.c{text-align:center}'
+      +'td.num{text-align:center;color:#666;font-size:9.5pt}'
+      +'td.nowrap{white-space:nowrap}'
+      +'td.adres{word-wrap:break-word;max-width:160pt}'
+      +'td.not-td{word-wrap:break-word;max-width:200pt}'
+      +'tr:last-child td{border-bottom:none}'
+      +'.badge{display:inline-block;padding:2pt 8pt;border-radius:4pt;font-size:8.5pt;font-weight:700;white-space:nowrap;vertical-align:middle;border:1pt solid transparent}'
+      +'.gun-no{font-size:13pt;font-weight:900;color:#6b1b1b;text-align:center;border-right:1pt solid #e0d0d0;background:#fdf5f5;width:32pt;padding:6pt 8pt}'
+      +'.gun-ad{font-size:9pt;font-weight:700;color:#333;text-align:center;border-right:1pt solid #e0d0d0;width:26pt;text-transform:uppercase;padding:6pt 5pt}'
+      +'.etkinlik{font-weight:700;font-size:10.5pt;color:#111}'
+      +'.saat-hucre{font-weight:900;font-size:12pt;text-align:center;color:#111;width:54pt;letter-spacing:.3pt;white-space:nowrap}'
+      +'.sehir-hucre{color:#333;font-size:10pt;font-weight:600}'
+      +'@page{size:A4;margin:15mm}'
+      +'@media print{body{padding:0}thead{display:table-header-group}tr{page-break-inside:avoid;break-inside:avoid}}'
+      +'
+
+'
+    + 'body{font-family:Arial,Helvetica,sans-serif;font-size:12px;margin:0;padding:0;}'
+    + '.sayfa{padding:20px 24px;page-break-after:always}'
+    + '.sayfa:last-child{page-break-after:auto}'
+    + _pdfCSS()
+    + '@media print{.sayfa{page-break-after:always}.sayfa:last-child{page-break-after:auto}@page{size:A4;margin:15mm}}'
+    + '
+
+br{mso-data-placement:same-cell}td,th{mso-number-format:"@"}
+
+'
+    + '*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;box-sizing:border-box;margin:0;padding:0}'
+    + 'body{font-family:\'DM Sans\',Arial,sans-serif;font-size:10pt;color:#1a1a1a;background:#fff;padding:12mm 14mm}'
+    + '@media print{@page{size:A4 portrait;margin:0}body{padding:8mm 10mm}}'
+    + 'table{width:100%;border-collapse:collapse;outline:1.5pt solid #a08060;border-radius:4pt}'
+    + 'thead tr{background:#5e0f0f;color:#fff}'
+    + 'thead th{padding:' + thPad + ';font-size:' + thFont + ';font-weight:700;letter-spacing:.5pt;font-family:\'DM Sans\',Arial,sans-serif}'
+    + 'tfoot td{padding:' + thPad + ';background:#f5f0e8;font-size:' + thFont + ';font-family:\'DM Sans\',Arial,sans-serif}'
+    + '
+
+@page{size:A4;margin:12mm 14mm}*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,Helvetica,sans-serif;color:#1a1a1a;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}@media print{.no-print{display:none}}
+
+'+css+'
+
+'
+    + '*{box-sizing:border-box;margin:0;padding:0}'
+    + 'body{font-family:Arial,Helvetica,sans-serif;font-size:11pt;color:#111;background:#fff;'
+    + '-webkit-print-color-adjust:exact;print-color-adjust:exact;padding:14mm 16mm}'
+    + '.baslik{text-align:center;margin-bottom:16pt;padding-bottom:8pt;border-bottom:2.5pt solid #6b1b1b}'
+    + '.baslik h1{font-size:19pt;font-weight:900;text-transform:uppercase;letter-spacing:1.5pt;color:#111;margin:0}'
+    + '.baslik h2{font-size:15pt;font-weight:700;color:#6b1b1b;text-transform:uppercase;letter-spacing:.6pt;margin:6pt 0 0}'
+    + '.baslik h3{font-size:13pt;color:#444;margin:5pt 0 0;font-weight:600}'
+    + '.sec-baslik{font-size:11.5pt;font-weight:800;color:#5a0f0f;border-bottom:2pt solid #c0a0a0;padding-bottom:5pt;margin:18pt 0 8pt;text-transform:uppercase;letter-spacing:.4pt;page-break-after:avoid;break-after:avoid}'
+    + 'table{width:100%;border-collapse:collapse;font-size:10.5pt}'
+    + 'thead{display:table-header-group;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
+    + 'thead tr{background:#6b1b1b;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
+    + 'thead th{color:#fff;padding:7pt 10pt;font-size:11pt;font-weight:700;text-align:left;border:1pt solid #5a1717}'
+    + 'tbody tr{page-break-inside:avoid;break-inside:avoid}'
+    + 'tbody tr:nth-child(even){background:#faf8f6}'
+    + 'td{padding:6pt 10pt;border:1pt solid #e5ddd5;color:#111;vertical-align:middle}'
+    + '@page{size:A4;margin:15mm}'
+    + '@media print{body{padding:0};-webkit-print-color-adjust:exact;print-color-adjust:exact;thead{display:table-header-group}tr{page-break-inside:avoid;break-inside:avoid}}'
+    + '
+
+'
+        + '*{box-sizing:border-box;margin:0;padding:0}'
+        + 'html,body{overflow-x:hidden;max-width:100vw}'
+        + 'body{background:#444;font-family:Arial,sans-serif;padding:0}'
+        + '#toolbar{position:sticky;top:0;z-index:999;background:#1a1a1a;padding:10px 16px;'
+        +   'display:flex;align-items:center;gap:8px;flex-wrap:wrap}'
+        + '#d3wrap{padding-bottom:32px;overflow-x:hidden}'
+        + '.sayfa-kapak{width:'+A4W+'px;min-height:'+A4H+'px;display:block;margin:16px auto;'
+        +   'overflow:hidden;position:relative;background:#1a0505;transform-origin:top center}'
+        + '.sayfa-icerik{width:'+A4W+'px;display:block;margin:0 auto;background:#fff;'
+        +   'padding:56px 60px;box-sizing:border-box;border-bottom:2px dashed #999;transform-origin:top center}'
+        + '@media(max-width:830px){'
+        +   'html,body,#d3wrap{overflow-x:hidden}'
+        +   '.sayfa-kapak,.sayfa-icerik{transform:scale(var(--pg-scale,1));margin-left:var(--pg-ml,auto);}'
+        + '}'
+        + '
+
+' + _pdfCSS() + '@media print{body{padding:10px 14px}@page{size:A4;margin:15mm}.no-print{display:none!important}}
+
+"+wCss+"
+
+@keyframes spin { to { transform: rotate(360deg); } }
+.pdf-turne-row {
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: var(--card);
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+.pdf-turne-row:hover { border-color: var(--primary); background: hsl(38,60%,98%); }
+.pdf-turne-row.selected { border-color: var(--primary); background: hsl(38,65%,97%); }
+[data-theme="dark"] .pdf-turne-row:hover,
+[data-theme="dark"] .pdf-turne-row.selected { background: hsl(220,14%,18%); }
+.pdf-turne-row input[type=checkbox] { width:16px;height:16px;accent-color:var(--primary);flex-shrink:0;margin-top:2px;cursor:pointer; }
+.pdf-row-body { flex:1;min-width:0; }
+.pdf-row-oyun { font-size:13px;font-weight:700;color:var(--foreground);margin-bottom:4px; }
+.pdf-row-meta { display:flex;flex-wrap:wrap;gap:6px; }
+.pdf-meta-chip { font-size:10px;font-weight:600;padding:2px 8px;border-radius:20px;background:var(--muted);color:var(--muted-foreground); }
+.pdf-meta-chip.city { background:hsl(220,50%,93%);color:hsl(220,50%,35%); }
+.pdf-meta-chip.date { background:hsl(38,60%,92%);color:hsl(38,60%,28%); }
+.pdf-meta-chip.statu { background:hsl(142,40%,90%);color:hsl(142,50%,28%); }
+[data-theme="dark"] .pdf-meta-chip.city { background:hsl(220,30%,22%);color:hsl(220,50%,75%); }
+[data-theme="dark"] .pdf-meta-chip.date { background:hsl(38,30%,20%);color:hsl(38,60%,70%); }
+[data-theme="dark"] .pdf-meta-chip.statu { background:hsl(142,25%,18%);color:hsl(142,50%,65%); }
+
+'
+    // Renk sıfırlama ve temel
+    +'*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important;box-sizing:border-box;margin:0;padding:0}'
+    +'body{font-family:Arial,Helvetica,sans-serif;font-size:11pt;color:#111;line-height:1.45}'
+    // Kapak sayfası: tam A4 boyutu, sayfa numarası yok
+    +'.sayfa-kapak{width:210mm;height:297mm;position:relative;overflow:hidden;display:block;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}'
+    // İçerik sayfaları
+    +'.sayfa-icerik{padding:10mm 14mm 6mm;width:210mm;box-sizing:border-box}'
+    // Sayfa başlığı
+    +'.sayfa-header{border-bottom:2pt solid #6b1b1b;margin-bottom:8pt;padding-bottom:5pt;display:flex;justify-content:space-between;align-items:flex-end}'
+    +'.sayfa-header-oyun{font-size:13pt;font-weight:900;text-transform:uppercase;letter-spacing:.5pt;color:#111}'
+    +'.sayfa-header-bilgi{font-size:10pt;color:#6b1b1b;font-weight:800;text-transform:uppercase;letter-spacing:.4pt;text-align:right}'
+    // Bölüm başlıkları
+    +'.bolum-baslik{font-size:11.5pt;font-weight:900;color:#5a0000;border-bottom:2.5pt solid #8b2a2a;padding-bottom:4pt;margin:10pt 0 6pt;text-transform:uppercase;letter-spacing:.5pt;page-break-after:avoid;break-after:avoid}'
+    +'.bolum-blok{page-break-inside:avoid;break-inside:avoid}'
+    // Tablolar
+    +'table{width:100%;border-collapse:collapse;font-size:10pt;border:1pt solid #d0c8c0}'
+    +'thead{display:table-header-group;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}'
+    +'thead tr{background:#6b1b1b;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}'
+    +'th{color:#fff;padding:5pt 7pt;font-weight:700;text-align:left;border:1pt solid #5a1717;font-size:10pt}'
+    +'td{padding:4pt 7pt;border:1pt solid #d0c8c0;vertical-align:middle;font-size:10pt}'
+    // Satırlar asla sayfa ortasında bölünmez
+    +'tr{page-break-inside:avoid;break-inside:avoid}'
+    +'tbody tr:nth-child(even){background:#faf8f6}'
+    // İsim hücreleri: asla satır sonunda bölünmez
+    +'.td-isim{font-weight:700;color:#111;white-space:nowrap;min-width:110pt}'
+    // Telefon hücreleri: asla satır sonunda bölünmez
+    +'.tel-td{font-weight:800;color:#1d4ed8;font-size:11pt;white-space:nowrap;min-width:90pt}'
+    // Adres/not: kelime bazında bölünebilir
+    +'.td-adres{word-wrap:break-word;max-width:150pt;color:#444}'
+    // Program tablosu renk sınıfları
+    +'.prog-yol td{background:#fff7ed!important;border-left:3pt solid #ea580c!important}'
+    +'.prog-donus td{background:#faf5ff!important;border-left:3pt solid #7c3aed!important}'
+    +'.prog-oyun td{background:#f0fdf4!important;border-left:3pt solid #16a34a!important}'
+    +'.prog-prova td{background:#eff6ff!important;border-left:3pt solid #0369a1!important}'
+    +'.prog-diger td{background:#f9fafb!important;border-left:3pt solid #6b7280!important}'
+    // Saat hücreleri büyük ve belirgin
+    +'.saat-td{font-size:15pt!important;font-weight:900!important;color:#1a1a2e;text-align:center;white-space:nowrap;letter-spacing:.3pt}'
+    +'.saat2-td{font-size:13pt;font-weight:900;color:#16a34a;white-space:nowrap;display:block;margin-top:3pt;border-top:1pt dashed #c8e8c8;padding-top:3pt}'
+    // Bölge telefon – büyük ve mavi
+    +'.bolge-tel{font-weight:800;color:#1d4ed8;font-size:13pt;white-space:nowrap}'
+    // Oda listeleri
+    +'.oda-bolum-baslik{display:flex;justify-content:space-between;align-items:center;padding:6pt 10pt;color:#fff;font-size:10pt;font-weight:800;margin-bottom:0}'
+    +'.oda-sayac{background:rgba(255,255,255,.2);border-radius:12pt;padding:2pt 10pt;font-size:9pt;font-weight:700}'
+    +'.uyari-satir{background:#fef2f2!important}'
+    +'.uyari-satir td{color:#b91c1c}'
+    // Yazdırmada filtre butonları gizlenir
+    +'.no-print{}'
+    +'@page{size:A4;margin:10mm}'
+    // Kapak sayfasında @page margin sıfır — içerik dolduruyor
+    +'.sayfa-kapak{page-break-after:always;break-after:page}'
+    // İçerik sayfaları arasında sayfa kırma
+    +'.sayfa-icerik+.sayfa-icerik{page-break-before:always;break-before:page}'
+    +'@media print{'
+    +  '*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}'
+    +  '.no-print{display:none!important}'
+    +  'thead{display:table-header-group}'
+    +  'tr{page-break-inside:avoid;break-inside:avoid}'
+    +  '.sayfa-kapak{page-break-after:always;break-after:page;margin:0;padding:0}'
+    +  '.sayfa-icerik+.sayfa-icerik{page-break-before:always;break-before:page}'
+    +'}'
+    +'
 </style>
 </head>
 <body>
@@ -6462,28 +6664,22 @@ a:not(.btn):not(.tab-btn):not(.nav-back):hover {
 </div>
 <div class="nav-right">
 <span id="yedek-mesaj" style="font-size:11px;color:#16a34a;font-weight:600"></span>
-<!-- Son senkronizasyon göstergesi -->
-<span id="son-senkron-indicator" style="font-size:10px;color:rgba(255,255,255,.35);display:inline-flex;align-items:center;gap:3px" title="Son veri senkronizasyon zamanı">
+<span id="son-senkron-indicator" style="font-size:10px;color:rgba(255,255,255,.32);display:inline-flex;align-items:center;gap:3px" title="Son veri senkronizasyon zamanı">
 <svg fill="none" height="9" stroke="currentColor" stroke-width="2.5" viewbox="0 0 24 24" width="9"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
-<span id="son-senkron-zaman" title="Son güncelleme: 06.05.2026 01:16:28">01:16</span>
+<span id="son-senkron-zaman"></span>
 </span>
 <span id="_polling-indicator" style="opacity:0;transition:opacity .4s;font-size:11px;color:rgba(255,255,255,.5);display:inline-flex;align-items:center;gap:4px" title="Veriler yenileniyor...">
 <svg fill="none" height="12" stroke="currentColor" stroke-width="2.5" style="animation:spin 1s linear infinite" viewbox="0 0 24 24" width="12"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
 </span>
-<!-- Araçlar grubu: ikon-only butonlar -->
+
+<div style="width:1px;height:18px;background:rgba(255,255,255,.14);flex-shrink:0"></div>
+
+<!-- ── ARAÇLAR GRUBU ── -->
 <div style="display:inline-flex;align-items:center;gap:1px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:2px">
-<div style="position:relative;display:inline-flex;align-items:center">
-<button id="rehber-btn" onclick="event.stopPropagation();var p=document.getElementById('yedek-bilgi');p.style.display=p.style.display==='block'?'none':'block'" onmouseenter="this.style.background='rgba(255,255,255,.12)';this.style.color='#fff'" onmouseleave="this.style.background='transparent';this.style.color='rgba(255,255,255,.65)'" style="padding:0 8px;height:30px;border:none;background:transparent;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:5px;border-radius:6px;color:rgba(255,255,255,.65);transition:all .15s" title="Kullanım rehberi">
-<svg fill="none" height="14" stroke="currentColor" stroke-linecap="round" stroke-width="2" viewbox="0 0 24 24" width="14"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" x2="12.01" y1="17" y2="17"></line></svg>
-<span style="font-size:10px;font-weight:700;letter-spacing:.3px">Yardım</span>
-</button>
-</div>
-<button onclick="yedekAl()" onmouseenter="this.style.background='rgba(255,255,255,.12)';this.style.color='#fff'" onmouseleave="this.style.background='transparent';this.style.color='rgba(255,255,255,.65)'" style="padding:0 8px;height:30px;border:none;background:transparent;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:5px;border-radius:6px;color:rgba(255,255,255,.65);transition:all .15s" title="Yedek Al">
-<svg fill="none" height="14" stroke="currentColor" stroke-linecap="round" stroke-width="2" viewbox="0 0 24 24" width="14" style="opacity:.55"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" x2="12" y1="15" y2="3"></line></svg>
-</button>
-<button onclick="firmaRehberiAc()" onmouseenter="this.style.background='rgba(255,255,255,.12)';this.style.color='rgba(255,200,100,.9)'" onmouseleave="this.style.background='transparent';this.style.color='rgba(255,255,255,.65)'" style="padding:0 8px;height:30px;border:none;background:transparent;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:5px;border-radius:6px;color:rgba(255,255,255,.65);transition:all .15s" title="Firma &amp; Telefon Rehberi">
-<svg fill="none" height="14" stroke="currentColor" stroke-linecap="round" stroke-width="2" viewbox="0 0 24 24" width="14"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.58 3.41 2 2 0 0 1 3.56 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.7a16 16 0 0 0 5.91 5.91l.87-.87a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21.28 16h.64a2 2 0 0 1 0 .92z"></path></svg>
-<span style="font-size:10px;font-weight:700;letter-spacing:.3px">Rehber</span>
+<div style="position:relative;display:inline-flex">
+<button id="rehber-btn" onclick="event.stopPropagation();var p=document.getElementById('yedek-bilgi');p.style.display=p.style.display==='block'?'none':'block'" onmouseenter="this.style.background='rgba(255,255,255,.12)';this.style.color='#fff'" onmouseleave="this.style.background='transparent';this.style.color='rgba(255,255,255,.65)'" style="padding:0 10px;height:32px;border:none;background:transparent;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:5px;border-radius:6px;color:rgba(255,255,255,.65);transition:all .15s;font-size:10px;font-weight:700;letter-spacing:.3px;white-space:nowrap" title="Kullanım rehberi">
+<svg fill="none" height="13" stroke="currentColor" stroke-linecap="round" stroke-width="2" viewbox="0 0 24 24" width="13"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" x2="12.01" y1="17" y2="17"></line></svg>
+Yardım
 </button>
 <div id="yedek-bilgi" onclick="event.stopPropagation()" style="display:none;position:absolute;top:38px;right:0;z-index:900;width:360px;max-height:82vh;overflow-y:auto;background:var(--card);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 30px rgba(0,0,0,.18);padding:14px 16px;font-size:11px;color:var(--foreground)">
 <div style="font-size:12px;font-weight:800;color:var(--primary);margin-bottom:10px;border-bottom:1px solid var(--border);padding-bottom:6px"><svg fill="none" height="12" stroke="currentColor" stroke-linecap="round" stroke-width="2.5" style="margin-right:5px;vertical-align:-2px" viewbox="0 0 24 24" width="12"><circle cx="12" cy="12" r="10"></circle><line x1="12" x2="12" y1="8" y2="12"></line><line x1="12" x2="12.01" y1="16" y2="16"></line></svg>Hızlı Rehber</div>
@@ -6531,19 +6727,36 @@ a:not(.btn):not(.tab-btn):not(.nav-back):hover {
 <button onclick="document.getElementById('yedek-bilgi').style.display='none'" style="margin-top:6px;width:100%;border:none;background:var(--muted);border-radius:6px;padding:5px;font-size:11px;cursor:pointer">Kapat</button>
 </div>
 </div>
-<label onmouseenter="this.style.background='rgba(255,255,255,.12)';this.style.color='#fff'" onmouseleave="this.style.background='transparent';this.style.color='rgba(255,255,255,.65)'" style="cursor:pointer;padding:0 8px;height:30px;border:none;background:transparent;display:inline-flex;align-items:center;justify-content:center;gap:5px;border-radius:6px;color:rgba(255,255,255,.65);transition:all .15s" title="Geri Yükle">
-<svg fill="none" height="14" stroke="currentColor" stroke-linecap="round" stroke-width="2" viewbox="0 0 24 24" width="14" style="opacity:.55"><polyline points="16 16 12 12 8 16"></polyline><line x1="12" x2="12" y1="12" y2="21"></line><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"></path></svg>
+<div style="width:1px;height:16px;background:rgba(255,255,255,.12)"></div>
+<button onclick="yedekAl()" onmouseenter="this.style.background='rgba(255,255,255,.12)';this.style.color='#fff'" onmouseleave="this.style.background='transparent';this.style.color='rgba(255,255,255,.65)'" style="padding:0 10px;height:32px;border:none;background:transparent;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:5px;border-radius:6px;color:rgba(255,255,255,.65);transition:all .15s;font-size:10px;font-weight:700;letter-spacing:.3px;white-space:nowrap" title="Tüm verileri .json olarak indir">
+<svg fill="none" height="13" stroke="currentColor" stroke-linecap="round" stroke-width="2" viewbox="0 0 24 24" width="13"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" x2="12" y1="15" y2="3"></line></svg>
+Yedek
+</button>
+<label onmouseenter="this.style.background='rgba(255,255,255,.12)';this.style.color='#fff'" onmouseleave="this.style.background='transparent';this.style.color='rgba(255,255,255,.65)'" style="padding:0 10px;height:32px;border:none;background:transparent;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:5px;border-radius:6px;color:rgba(255,255,255,.65);transition:all .15s;font-size:10px;font-weight:700;letter-spacing:.3px;white-space:nowrap;cursor:pointer" title="Yedeği geri yükle">
+<svg fill="none" height="13" stroke="currentColor" stroke-linecap="round" stroke-width="2" viewbox="0 0 24 24" width="13"><polyline points="16 16 12 12 8 16"></polyline><line x1="12" x2="12" y1="12" y2="21"></line><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"></path></svg>
+Yükle
 <input accept=".tcbak,.json" onchange="geriYukle(event)" style="display:none" type="file"/>
 </label>
-<a href="https://izmir-dt.github.io/tiyatro-site/" onmouseenter="this.style.background='rgba(255,255,255,.12)';this.style.color='#fff'" onmouseleave="this.style.background='transparent';this.style.color='rgba(255,255,255,.65)'" style="padding:0 8px;height:30px;border:none;background:transparent;display:inline-flex;align-items:center;justify-content:center;gap:5px;border-radius:6px;color:rgba(255,255,255,.65);transition:all .15s;text-decoration:none" title="Ana Sayfa">
-<svg fill="none" height="14" stroke="currentColor" stroke-linecap="round" stroke-width="2" viewbox="0 0 24 24" width="14"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
-<span style="font-size:10px;font-weight:700;letter-spacing:.3px">Ana Sayfa</span>
+<div style="width:1px;height:16px;background:rgba(255,255,255,.12)"></div>
+<button onclick="firmaRehberiAc()" onmouseenter="this.style.background='rgba(255,255,255,.12)';this.style.color='rgba(255,200,100,.95)'" onmouseleave="this.style.background='transparent';this.style.color='rgba(255,255,255,.65)'" style="padding:0 10px;height:32px;border:none;background:transparent;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:5px;border-radius:6px;color:rgba(255,255,255,.65);transition:all .15s;font-size:10px;font-weight:700;letter-spacing:.3px;white-space:nowrap" title="Firma &amp; Telefon Rehberi">
+<svg fill="none" height="13" stroke="currentColor" stroke-linecap="round" stroke-width="2" viewbox="0 0 24 24" width="13"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.58 3.41 2 2 0 0 1 3.56 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.7a16 16 0 0 0 5.91 5.91l.87-.87a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21.28 16h.64a2 2 0 0 1 0 .92z"></path></svg>
+Rehber
+</button>
+</div>
+
+<div style="width:1px;height:18px;background:rgba(255,255,255,.14);flex-shrink:0"></div>
+
+<!-- ── GEZİNTİ GRUBU ── -->
+<div style="display:inline-flex;align-items:center;gap:1px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:2px">
+<a href="https://izmir-dt.github.io/tiyatro-site/" onmouseenter="this.style.background='rgba(255,255,255,.12)';this.style.color='#fff'" onmouseleave="this.style.background='transparent';this.style.color='rgba(255,255,255,.65)'" style="padding:0 10px;height:32px;border:none;background:transparent;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:5px;border-radius:6px;color:rgba(255,255,255,.65);transition:all .15s;font-size:10px;font-weight:700;letter-spacing:.3px;white-space:nowrap;text-decoration:none" title="Kurumsal ana sayfa">
+<svg fill="none" height="13" stroke="currentColor" stroke-linecap="round" stroke-width="2" viewbox="0 0 24 24" width="13"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+Ana Sayfa
 </a>
-<!-- VERİ TUTARLILIK PANELİ BUTONU -->
+<div style="width:1px;height:16px;background:rgba(255,255,255,.12)"></div>
 <div style="position:relative;display:inline-flex">
-<button id="veri-kontrol-btn" onclick="veriKontrolAc(event)" onmouseenter="this.style.background='rgba(255,255,255,.12)';this.style.color='#fff'" onmouseleave="this.style.background='transparent';this.style.color='rgba(255,255,255,.65)'" style="padding:0 8px;height:30px;border:none;background:transparent;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:5px;border-radius:6px;color:rgba(255,255,255,.65);transition:all .15s;position:relative" title="Veri Kontrolü">
-<svg fill="none" height="14" stroke="currentColor" stroke-linecap="round" stroke-width="2" viewbox="0 0 24 24" width="14"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
-<span style="font-size:10px;font-weight:700;letter-spacing:.3px">Kontrol</span>
+<button id="veri-kontrol-btn" onclick="veriKontrolAc(event)" onmouseenter="this.style.background='rgba(255,255,255,.12)';this.style.color='#fff'" onmouseleave="this.style.background='transparent';this.style.color='rgba(255,255,255,.65)'" style="padding:0 10px;height:32px;border:none;background:transparent;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:5px;border-radius:6px;color:rgba(255,255,255,.65);transition:all .15s;font-size:10px;font-weight:700;letter-spacing:.3px;white-space:nowrap;position:relative" title="Veri tutarlılık kontrolü">
+<svg fill="none" height="13" stroke="currentColor" stroke-linecap="round" stroke-width="2" viewbox="0 0 24 24" width="13"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+Kontrol
 <span id="veri-kontrol-badge" style="display:none;position:absolute;top:3px;right:3px;background:#ef4444;color:#fff;border-radius:50%;font-size:8px;font-weight:800;width:14px;height:14px;line-height:14px;text-align:center">!</span>
 </button>
 <div id="veri-kontrol-panel" onclick="event.stopPropagation()" style="display:none;position:absolute;top:38px;right:0;z-index:1100;width:480px;max-height:80vh;overflow-y:auto;background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.2)">
@@ -6567,11 +6780,11 @@ a:not(.btn):not(.tab-btn):not(.nav-back):hover {
 </div>
 </div>
 </div>
-<!-- DEĞERLENDİRME PANELİ BUTONU -->
+<div style="width:1px;height:16px;background:rgba(255,255,255,.12)"></div>
 <div style="position:relative;display:inline-flex">
-<button id="degerlendirme-btn" onclick="degerlendirmePaneliAc(event)" onmouseenter="this.style.background='rgba(255,255,255,.12)';this.style.color='#fff'" onmouseleave="this.style.background='transparent';this.style.color='rgba(255,255,255,.65)'" style="padding:0 8px;height:30px;border:none;background:transparent;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:5px;border-radius:6px;color:rgba(255,255,255,.65);transition:all .15s;position:relative" title="Değerlendirmeler">
-<svg fill="currentColor" height="14" viewbox="0 0 24 24" width="14"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path></svg>
-<span style="font-size:10px;font-weight:700;letter-spacing:.3px">Puan</span>
+<button id="degerlendirme-btn" onclick="degerlendirmePaneliAc(event)" onmouseenter="this.style.background='rgba(255,255,255,.12)';this.style.color='#fff'" onmouseleave="this.style.background='transparent';this.style.color='rgba(255,255,255,.65)'" style="padding:0 10px;height:32px;border:none;background:transparent;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:5px;border-radius:6px;color:rgba(255,255,255,.65);transition:all .15s;font-size:10px;font-weight:700;letter-spacing:.3px;white-space:nowrap;position:relative" title="Turne değerlendirmeleri">
+<svg fill="currentColor" height="13" viewbox="0 0 24 24" width="13"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path></svg>
+Puan
 <span id="degerlendirme-badge" style="display:none;position:absolute;top:3px;right:3px;background:hsl(38,90%,50%);color:#fff;border-radius:50%;font-size:8px;font-weight:800;width:14px;height:14px;line-height:14px;text-align:center">0</span>
 </button>
 <div id="degerlendirme-panel" onclick="event.stopPropagation()" style="display:none;position:absolute;top:38px;right:0;z-index:1100;width:420px;max-height:80vh;overflow-y:auto;background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.2)">
@@ -6587,26 +6800,29 @@ a:not(.btn):not(.tab-btn):not(.nav-back):hover {
 </div>
 </div>
 </div>
-<!-- KULLANICI & ÇIKIŞ -->
-<div id="nav-kullanici-alan" style="display:inline-flex;align-items:center;gap:6px;padding:0 2px">
+</div>
+
+<div style="width:1px;height:18px;background:rgba(255,255,255,.14);flex-shrink:0"></div>
+
+<!-- ── KULLANICI & TEMA ── -->
+<div id="nav-kullanici-alan" style="display:inline-flex;align-items:center;gap:6px">
 <span id="nav-kullanici-chip" style="display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);border-radius:20px;padding:3px 10px 3px 7px;font-size:11px;font-weight:600;color:rgba(255,255,255,.8)">
 <svg fill="none" height="12" stroke="currentColor" stroke-linecap="round" stroke-width="2" viewbox="0 0 24 24" width="12"><circle cx="12" cy="8" r="4"></circle><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"></path></svg>
-<span id="nav-kullanici-ad">Alper Çam</span>
+<span id="nav-kullanici-ad">—</span>
 </span>
-<button onclick="cikisYap()" onmouseenter="this.style.background='rgba(239,68,68,.25)';this.style.color='#fff'" onmouseleave="this.style.background='rgba(239,68,68,.12)';this.style.color='rgba(255,100,100,.9)'" style="display:inline-flex;align-items:center;gap:5px;height:30px;padding:0 10px;font-size:11px;font-weight:700;border:1px solid rgba(239,68,68,.4);background:rgba(239,68,68,.12);color:rgba(255,100,100,.9);border-radius:6px;cursor:pointer;transition:all .15s" title="Çıkış Yap">
+<button onclick="cikisYap()" onmouseenter="this.style.background='rgba(239,68,68,.25)';this.style.color='#fff'" onmouseleave="this.style.background='rgba(239,68,68,.12)';this.style.color='rgba(255,100,100,.9)'" style="display:inline-flex;align-items:center;gap:5px;height:32px;padding:0 10px;font-size:10px;font-weight:700;letter-spacing:.3px;border:1px solid rgba(239,68,68,.4);background:rgba(239,68,68,.12);color:rgba(255,100,100,.9);border-radius:6px;cursor:pointer;transition:all .15s;white-space:nowrap" title="Çıkış Yap">
 <svg fill="none" height="12" stroke="currentColor" stroke-linecap="round" stroke-width="2.5" viewbox="0 0 24 24" width="12"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" x2="9" y1="12" y2="12"></line></svg>
-        Çıkış
-      </button>
-</div>
-<!-- TEMA SEÇİCİ -->
+Çıkış
+</button>
 <div style="position:relative;display:inline-flex">
-<button id="tema-btn" onclick="temaMenuAc(event)" onmouseenter="this.style.background='rgba(255,255,255,.12)';this.style.color='#fff'" onmouseleave="this.style.background='transparent';this.style.color='rgba(255,255,255,.65)'" style="width:32px;height:30px;border:none;background:transparent;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;border-radius:6px;color:rgba(255,255,255,.65);transition:all .15s" title="Tema Seç">
-<span id="tema-ikon" style="display:inline-flex;align-items:center;font-size:14px"><svg fill="none" height="14" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24" width="14"><circle cx="12" cy="12" r="5"></circle><line x1="12" x2="12" y1="1" y2="3"></line><line x1="12" x2="12" y1="21" y2="23"></line><line x1="4.22" x2="5.64" y1="4.22" y2="5.64"></line><line x1="18.36" x2="19.78" y1="18.36" y2="19.78"></line><line x1="1" x2="3" y1="12" y2="12"></line><line x1="21" x2="23" y1="12" y2="12"></line><line x1="4.22" x2="5.64" y1="19.78" y2="18.36"></line><line x1="18.36" x2="19.78" y1="5.64" y2="4.22"></line></svg></span>
+<button id="tema-btn" onclick="temaMenuAc(event)" onmouseenter="this.style.background='rgba(255,255,255,.12)';this.style.color='#fff'" onmouseleave="this.style.background='transparent';this.style.color='rgba(255,255,255,.65)'" style="padding:0 10px;height:32px;border:none;background:transparent;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:5px;border-radius:6px;color:rgba(255,255,255,.65);transition:all .15s;font-size:10px;font-weight:700;letter-spacing:.3px;white-space:nowrap;width:32px;padding:0" title="Tema seç">
+<span id="tema-ikon" style="display:inline-flex;align-items:center;font-size:14px">☀️</span>
 </button>
 <div id="tema-menu" style="display:none;position:absolute;top:36px;right:0;z-index:1100;width:150px;background:var(--card);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.18);padding:6px">
 <button class="_tema-opt" id="tema-opt-light" onclick="temaSec('light')" style="width:100%;text-align:left;padding:7px 10px;border:none;border-radius:6px;background:transparent;cursor:pointer;font-size:12px;font-weight:600;display:flex;align-items:center;gap:8px;color:var(--foreground)">☀️ Açık Tema</button>
 <button class="_tema-opt" id="tema-opt-dark" onclick="temaSec('dark')" style="width:100%;text-align:left;padding:7px 10px;border:none;border-radius:6px;background:transparent;cursor:pointer;font-size:12px;font-weight:600;display:flex;align-items:center;gap:8px;color:var(--foreground)">🌙 Koyu Tema</button>
 <button class="_tema-opt" id="tema-opt-system" onclick="temaSec('system')" style="width:100%;text-align:left;padding:7px 10px;border:none;border-radius:6px;background:transparent;cursor:pointer;font-size:12px;font-weight:600;display:flex;align-items:center;gap:8px;color:var(--foreground)">💻 Sistem</button>
+</div>
 </div>
 </div>
 </div>
@@ -6636,17 +6852,7 @@ a:not(.btn):not(.tab-btn):not(.nav-back):hover {
 <svg fill="none" height="15" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24" width="15"><rect height="18" rx="2" width="18" x="3" y="4"></rect><line x1="16" x2="16" y1="2" y2="6"></line><line x1="8" x2="8" y1="2" y2="6"></line><line x1="3" x2="21" y1="10" y2="10"></line></svg>
     Takvim
   </button>
-<button aria-controls="tab-istatistik" class="tab-btn" id="tab-btn-istatistik" onclick="switchTab('istatistik')">
-<svg fill="none" height="15" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24" width="15"><line x1="18" x2="18" y1="20" y2="10"></line><line x1="12" x2="12" y1="20" y2="4"></line><line x1="6" x2="6" y1="20" y2="14"></line></svg>
-    İstatistik
-  </button>
 </nav>
-<!-- İSTATİSTİK GERİ BAR -->
-<div id="istatistik-geri-bar" style="display:none;align-items:center;gap:8px;padding:5px 16px;background:hsl(42,65%,90%);border-bottom:1px solid hsl(42,45%,80%);font-size:11px;color:hsl(42,50%,30%)">
-<svg fill="none" height="12" stroke="currentColor" stroke-width="2.5" viewbox="0 0 24 24" width="12"><line x1="18" x2="18" y1="20" y2="10"></line><line x1="12" x2="12" y1="20" y2="4"></line><line x1="6" x2="6" y1="20" y2="14"></line></svg>
-<span>İstatistik sayfasından geldiniz</span>
-<button onclick="switchTab('istatistik')" style="padding:2px 10px;border:1px solid hsl(42,60%,70%);border-radius:5px;background:hsl(42,80%,50%);color:#fff;font-size:11px;font-weight:700;cursor:pointer">← İstatistiklere Dön</button>
-</div>
 <!-- TURNE SİL GERİ AL BAR -->
 <div id="turne-sil-geri-bar" style="display:none;position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:9999;align-items:center;gap:10px;padding:10px 16px;background:#1e293b;border-radius:10px;font-size:12px;color:#fff;box-shadow:0 4px 20px rgba(0,0,0,.35);min-width:320px;max-width:90vw;overflow:hidden">
 <div id="turne-sil-geri-prog" style="position:absolute;bottom:0;left:0;height:3px;background:#ef4444;width:100%;border-radius:0 0 10px 10px"></div>
@@ -7167,10 +7373,6 @@ a:not(.btn):not(.tab-btn):not(.nav-back):hover {
 <div id="gorevler-content" style="flex:1;overflow-y:auto;padding:0 16px 16px"></div>
 </div>
 </div>
-<!-- İSTATİSTİK -->
-<div aria-label="İstatistik sekmesi" class="tab-panel" id="tab-istatistik" role="tabpanel">
-<div id="istatistik-content" style="padding:16px 20px;overflow:auto"></div>
-</div>
 <!-- TOAST STACK -->
 <div id="toast-stack"></div>
 <!-- MOBİL ALT NAVİGASYON -->
@@ -7190,10 +7392,6 @@ a:not(.btn):not(.tab-btn):not(.nav-back):hover {
 <button aria-label="Takvim" class="mbn-btn" id="mbn-takvim" onclick="switchTab('takvim');mbnSetActive('takvim')">
 <svg fill="none" height="20" stroke="currentColor" stroke-linecap="round" stroke-width="2" viewbox="0 0 24 24" width="20"><rect height="18" rx="2" width="18" x="3" y="4"></rect><line x1="16" x2="16" y1="2" y2="6"></line><line x1="8" x2="8" y1="2" y2="6"></line><line x1="3" x2="21" y1="10" y2="10"></line></svg>
     Takvim
-  </button>
-<button aria-label="İstatistik" class="mbn-btn" id="mbn-istatistik" onclick="switchTab('istatistik');mbnSetActive('istatistik')">
-<svg fill="none" height="20" stroke="currentColor" stroke-linecap="round" stroke-width="2" viewbox="0 0 24 24" width="20"><line x1="18" x2="18" y1="20" y2="10"></line><line x1="12" x2="12" y1="20" y2="4"></line><line x1="6" x2="6" y1="20" y2="14"></line></svg>
-    İstatistik
   </button>
 </nav>
 <!-- MOBİL FAB — Yeni Turne Ekle -->
@@ -8182,7 +8380,6 @@ const ICONS = {
   kopya:       '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
   personel:    '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
   oyun:        '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>',
-  istatistik:  '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>',
   harita:      '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>',
   not:         '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>',
   // Tema
@@ -9077,8 +9274,6 @@ function tumUIGuncelle() {
     kadroAltSekme(altSekme);
     if (altSekme === 'ana') renderKadro();
     renderKisiAra();
-  } else if (aktifSekme === 'istatistik') {
-    renderIstatistik();
   } else if (aktifSekme === 'harita') {
     if (_leafletYuklendi) renderHarita(); else _leafletYukle(function(){ renderHarita(); });
   } else {
@@ -9477,7 +9672,21 @@ function populateFilters() {
     if (t.duraklar) t.duraklar.forEach(function(d){ if (d.oyun && d.oyun.trim()) oyunSet.add(d.oyun.trim()); });
   });
   const oyunlar = [...oyunSet].sort(function(a,b){ return a.localeCompare(b,'tr'); });
-  const iller = [...new Set([...turneler.map(t => t.il), ...turneler.flatMap(t => (t.duraklar||[]).map(d => d.il))])].filter(Boolean).sort();
+  // Il filtresi: kompozit değerleri ("TRABZON, DİYARBAKIR") parçalara ayır, tekrarları kaldır
+  const _ilRaw = [...turneler.map(t => t.il), ...turneler.flatMap(t => (t.duraklar||[]).map(d => d.il))];
+  const _ilSet = new Set();
+  _ilRaw.forEach(function(ilVal){
+    if (!ilVal) return;
+    // "/" ile ayrılmış çoklu il: "TRABZON/DİYARBAKIR"
+    ilVal.split('/').forEach(function(part){
+      // ", " ile ayrılmış: "TRABZON, DİYARBAKIR"  
+      part.split(',').forEach(function(p){
+        var t2 = p.trim();
+        if (t2) _ilSet.add(t2);
+      });
+    });
+  });
+  const iller = [..._ilSet].sort(function(a,b){ return a.localeCompare(b,'tr'); });
   ['filter-oyun','oyun-sec','kadro-oyun-sec','kisi-filter-oyun'].forEach(id => {
     const sel = document.getElementById(id);
     if (!sel) return;
@@ -9520,7 +9729,7 @@ function switchTab(tab) {
   // Kaldırılan sekmeleri doğru yere yönlendir
   if (tab === 'oyun' || tab === 'kisi') tab = 'liste';
   if (tab === 'dispersonel') { tab = 'kadro'; _kadroAltSekme = 'dis'; }
-  const allTabs = ['liste','kadro','harita','takvim','istatistik'];
+  const allTabs = ['liste','kadro','harita','takvim'];
   document.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', allTabs[i] === tab));
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   // Sezon barını sadece liste sekmesinde göster
@@ -9587,24 +9796,6 @@ function switchTab(tab) {
           _calGununSenaryosuGuncelle();
         }
       }, 100);
-    }
-  }
-  if (tab === 'istatistik') renderIstatistik();
-  var geriBar = document.getElementById('istatistik-geri-bar');
-  if (geriBar) {
-    if (tab === 'istatistik') {
-      window._istatistikAcikti = true;
-      geriBar.style.display = 'none';
-      clearTimeout(window._geriBarTimer);
-    } else if (window._istatistikAcikti) {
-      window._istatistikAcikti = false;
-      geriBar.style.display = 'flex';
-      clearTimeout(window._geriBarTimer);
-      window._geriBarTimer = setTimeout(function(){
-        geriBar.style.display = 'none';
-      }, 5000);
-    } else {
-      geriBar.style.display = 'none';
     }
   }
 }
@@ -10073,7 +10264,7 @@ function renderListe() {
         ayDurumBadge = ' <span style="font-size:11px;padding:2px 8px;border-radius:10px;background:hsl(142,60%,40%);color:#fff;font-weight:700;vertical-align:middle;line-height:1.4">Yaklaşan</span>';
       }
 
-      var tamamlandiSay = g.tumItems.filter(function(t){ return t.statu === 'tamamlandi'; }).length;
+      var tamamlandiSay = g.tumItems.filter(function(t){ return t.statu === 'tamamlandi' && !t.anaGrupId; }).length;
       var ayGizliKey = '__tamamlandi_gizli__' + key;
       var ayGizli = (window._ayTamamlandiGizli||{})[key];
 
@@ -10111,7 +10302,7 @@ function renderListe() {
             + tamamlandiSay + ' tamamlandı'
             + '</button>'
           : '')
-        + '<span class="cards-group-count">' + g.items.length + ' turne</span>'
+        + '<span class="cards-group-count">' + g.items.filter(function(x){ return !x.anaGrupId; }).length + ' turne</span>'
         + '</div>'
         + (collapsed ? '' : (_turneListeGorunum==='liste'
             ? '<div style="overflow-x:auto"><table class="turne-list-table"><thead><tr><th style="width:4px;padding:0"></th><th>OYUN ADI</th><th>ŞEHİR</th><th>TARİH</th><th>DURUM</th><th>SEZON</th><th>KADRO</th><th></th></tr></thead><tbody>' + g.items.map(_turneListeSatiri).join('') + '</tbody></table></div>'
@@ -12888,7 +13079,7 @@ function _odaPlanPdfGenerate(t, plan, planKat, yeniBaslik, yeniAlt) {
   function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
   var html = '<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>' + esc(yeniBaslik) + '</title>'
-    + '<style>' + css + '</style></head><body>'
+    + '</head><body>'
     + '<div class="no-print" style="position:fixed;top:8px;right:8px;z-index:999">'
     + '<button onclick="window.print()" style="padding:7px 16px;background:#6b1b1b;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer">🖨 Yazdır</button>'
     + '</div>'
@@ -13921,7 +14112,7 @@ function _konaklamaPdfIndir(rowIdx) {
     + '}';
 
   var html = '<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Konaklama</title>'
-    + '<style>' + css + '</style></head><body>'
+    + '</head><body>'
     + '<div class="no-print" style="position:fixed;top:8px;right:8px;z-index:999">'
     + '<button onclick="window.print()" style="padding:7px 16px;background:#6b1b1b;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer">🖨 Yazdır</button>'
     + '</div>'
@@ -15353,7 +15544,6 @@ async function saveKisiModal() {
   // 2. Modal'ı kapat, ekranı güncelle
   closeKisiModal();
   renderListe();
-  renderIstatistik();
 
   // 4. Arka planda sadece katilimcilar sütununu yaz (/cell endpoint — backend'de mevcut)
   try {
@@ -15372,7 +15562,6 @@ async function saveKisiModal() {
       showToast(katSayisi + ' katılımcı kaydedildi', 'success', 3000);
       _cacheSil('cache_turneler');
       renderListe();
-      renderIstatistik();
     }
   } catch(e) {
     console.error('[saveKisiModal] Beklenmeyen hata:', e);
@@ -16622,7 +16811,6 @@ async function saveTurne() {
   closeModal();
   populateFilters();
   renderListe(); renderCalendar();
-  renderIstatistik();
   showToast(editIdx !== '' ? (yeniKayit.oyun || 'Turne') + ' güncellendi' : (yeniKayit.oyun || 'Yeni turne') + ' eklendi', 'success', 3500);
 
   // Arka planda API'ye kaydet
@@ -16873,7 +17061,6 @@ async function _kisiSilDevam(p, idxList) {
   renderKadro();
   renderOyunMgmt();
   renderTumPersonel();
-  renderIstatistik();
 }
 
 // Kişiye Göre sekmesinden kişiyi düzenle — ilk kaydı açar
@@ -17700,7 +17887,7 @@ async function topluKaydet() {
                 } catch(te) { console.warn('Turne katılımcı silme hatası:', te); }
               }
               showToast('"' + kisiAdi + '" ' + etkilenenT.length + ' turne kaydından kaldırıldı', 'success', 4000);
-              renderListe(); renderIstatistik();
+              renderListe();
               satirRef._onayReddedildi = false; satirRef._onayBekleniyor = false; topluKaydet();
             },
             onIptal: function() {
@@ -17820,8 +18007,6 @@ async function topluKaydet() {
   renderListe();
   renderKisiAra();
   renderTumPersonel();
-  renderIstatistik();
-
   // Sonuç bildirimi
   var toplamIslem = basariSayisi + hataSayisi;
   var msg = hataSayisi > 0
@@ -17925,7 +18110,7 @@ function kadroPdfIndir() {
   var teknikSay  = kadro.length - sanatciSay;
 
   var html = '<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>'+oyun+' – Kadro</title>'
-    +'<style>body{font-family:Arial,sans-serif;margin:20px;color:#1a1a1a}@page{size:A4;margin:15mm}thead{display:table-header-group}tr{page-break-inside:avoid;break-inside:avoid}@media print{button{display:none}body{margin:0}}</style>'
+    +''
     +'</head><body>'
     +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;padding-bottom:12px;border-bottom:2px solid #7c1d1d">'
     +'<div><div style="font-size:10px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:1px">İzmir Devlet Tiyatrosu</div>'
@@ -17985,7 +18170,6 @@ async function _oyunSilDevam(oyunAdi) {
   renderKadro();
   renderKisiAra();
   renderTumPersonel();
-  renderIstatistik();
   if (hataSayisi === 0) {
     showToast('✓ "' + oyunAdi + '" ve ' + kadroSatirlari.length + ' kadro kaydı silindi', 'success', 3500);
   } else {
@@ -18067,7 +18251,6 @@ function _oyunYendenAdlandir(eskiAd) {
     renderListe();
     renderKisiAra();
     renderTumPersonel();
-    renderIstatistik();
     showToast('"' + eskiAd + '" → "' + yeniAd + '" olarak güncellendi', 'success', 3500);
   }
   okBtn.addEventListener('click', doRename);
@@ -18601,7 +18784,6 @@ async function kadroKisiKaydet() {
   renderOyunMgmt();
   renderKisiAra();
   renderTumPersonel();
-  renderIstatistik();
 }
 
 async function kadroKisiSil() {
@@ -18678,7 +18860,6 @@ async function _kadroKisiSilDevam(silIdx) {
         }
         showToast('"' + _silKisiAdi + '" ' + etkilenenTurneler.length + ' turne kaydından kaldırıldı', 'success', 4000);
         renderListe();
-        renderIstatistik();
       }
     });
   }
@@ -18690,7 +18871,6 @@ async function _kadroKisiSilDevam(silIdx) {
   renderOyunMgmt();
   renderKisiAra();
   renderTumPersonel();
-  renderIstatistik();
 }
 
 
@@ -19323,8 +19503,7 @@ function haritaIlDetay(il, ilSayilar) {
         + (kadroHtml ? '<div style="margin-top:4px">' + kadroHtml + '</div>' : '')
       + '</td>'
       + '<td style="padding:8px 10px;border-bottom:1px solid var(--border)">'
-        + '<div style="font-size:11px;font-weight:700;color:var(--foreground)">' + tarihStr + '</div>'
-        + (bitisTarihStr ? '<div style="font-size:10px;color:var(--muted-foreground);margin-top:1px">' + bitisTarihStr + '</div>' : '')
+        + '<div style="font-size:10.5px;font-weight:700;color:var(--foreground);white-space:nowrap">' + tarihStr + (bitisTarihStr ? ' – ' + bitisTarihStr : '') + '</div>'
         + (sure > 1 ? '<div style="font-size:10px;font-weight:700;color:var(--primary);margin-top:2px">' + sure + ' gün</div>' : '')
       + '</td>'
       + '<td style="padding:8px 6px;border-bottom:1px solid var(--border);text-align:right">'
@@ -19336,7 +19515,7 @@ function haritaIlDetay(il, ilSayilar) {
     +'<div style="display:flex;flex-direction:column"><span style="font-size:13px;font-weight:700"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="vertical-align:-2px;margin-right:4px;flex-shrink:0"><path d="M12 21s7-6.5 7-11a7 7 0 1 0-14 0c0 4.5 7 11 7 11z"/><circle cx="12" cy="10" r="2"/></svg>'+il+'</span><span style="font-size:10px;font-weight:500;color:var(--muted-foreground)">'+sayi+' turne · '+toplamGun+' gün'+kmStr+'</span></div>'
     +'<button class="btn btn-outline" style="height:24px;font-size:10px;padding:0 8px" onclick="seciliIl=null;renderHarita()">× Kapat</button>'
     +'</div>'
-    +'<table style="width:100%;table-layout:fixed;word-break:break-word" aria-label="Kişi turne listesi"><colgroup><col style="width:auto"><col style="width:84px"><col style="width:120px"></colgroup><thead><tr style="background:var(--muted)"><th scope="col" style="padding:6px 10px;font-size:11px;font-weight:700;color:var(--muted-foreground)">Oyun</th><th scope="col" style="padding:6px 10px;font-size:11px;font-weight:700;color:var(--muted-foreground)">Tarih</th><th scope="col" style="padding:6px 10px;font-size:11px;font-weight:700;color:var(--muted-foreground)">Statü</th></tr></thead><tbody>'+rows+'</tbody></table>';
+    +'<table style="width:100%;table-layout:fixed;word-break:break-word" aria-label="Kişi turne listesi"><colgroup><col style="width:auto"><col style="width:108px"><col style="min-width:88px"></colgroup><thead><tr style="background:var(--muted)"><th scope="col" style="padding:6px 10px;font-size:11px;font-weight:700;color:var(--muted-foreground)">Oyun</th><th scope="col" style="padding:6px 10px;font-size:11px;font-weight:700;color:var(--muted-foreground)">Tarih</th><th scope="col" style="padding:6px 10px;font-size:11px;font-weight:700;color:var(--muted-foreground)">Statü</th></tr></thead><tbody>'+rows+'</tbody></table>';
   _restoreScroll();
   requestAnimationFrame(_restoreScroll);
 }
@@ -19739,10 +19918,23 @@ function haritaChoroplethCiz(ilSayilar) {
   var _maxSayi = Math.max.apply(null, Object.values(ilSayilar).filter(function(v){ return v>0; }).concat([1]));
   var _isDark = document.documentElement.getAttribute('data-theme') === 'dark';
 
+  // GeoJSON -> canonical il adı eşleştirme (fuzzy: Afyon ↔ Afyonkarahisar vb.)
+  var _GEOJSON_MAP = {
+    'afyon': 'Afyonkarahisar', 'afyon karahisar': 'Afyonkarahisar',
+    'zonguldak': 'Zonguldak', 'k.maras': 'Kahramanmaraş', 'kahraman maras': 'Kahramanmaraş',
+    'hatay': 'Hatay',
+  };
   function _featureKey(feature) {
     var ilAdi = (feature.properties && (feature.properties.name || feature.properties.Name || feature.properties.NAME || feature.properties.il || '')) || '';
-    var idx = _ilKeysLower.indexOf(ilAdi.toLocaleLowerCase('tr-TR'));
-    return idx >= 0 ? _ilKeys[idx] : null;
+    var lower = ilAdi.toLocaleLowerCase('tr-TR');
+    var idx = _ilKeysLower.indexOf(lower);
+    if (idx >= 0) return _ilKeys[idx];
+    // Fuzzy: önekle eşleşme (GeoJSON'daki "Afyon" → "Afyonkarahisar")
+    var mapped = _GEOJSON_MAP[lower];
+    if (mapped) return mapped;
+    // Partial: il adı diğerinin öneki mi?
+    var partial = _ilKeysLower.findIndex(function(k){ return k.startsWith(lower) || lower.startsWith(k); });
+    return partial >= 0 ? _ilKeys[partial] : null;
   }
 
   // Site renk paleti: amber (primary) yoğunluk skalası
@@ -19941,7 +20133,11 @@ function haritaIlSinirGoster(ilSayilar) {
       var ilAdi = (feature.properties && (feature.properties.name || feature.properties.Name || feature.properties.NAME || feature.properties.il || '')) || '';
       var lower = ilAdi.toLocaleLowerCase('tr-TR');
       var idx = _ilKeysLower.indexOf(lower);
-      return idx >= 0 ? _ilKeys[idx] : null;
+      if (idx >= 0) return _ilKeys[idx];
+      var _gjMap = {'afyon':'Afyonkarahisar','afyon karahisar':'Afyonkarahisar','k.maras':'Kahramanmaraş','kahraman maras':'Kahramanmaraş'};
+      if (_gjMap[lower]) return _gjMap[lower];
+      var partial = _ilKeysLower.findIndex(function(k){ return k.startsWith(lower) || lower.startsWith(k); });
+      return partial >= 0 ? _ilKeys[partial] : null;
     }
 
     _haritaGeoJSONLayer = L.geoJSON(geojson, {
@@ -21510,468 +21706,18 @@ function iCalIndir() {
   });
 }
 
-// Chart.js için yardımcı: varsa eski chart'ı destroy et, yenisini oluştur
-function _createChart(canvasId, config) {
-  var canvas = document.getElementById(canvasId);
-  if (!canvas) return;
-  // Varsa önceki chart instance'ı temizle
-  var existing = Chart.getChart ? Chart.getChart(canvas) : null;
-  if (!existing) {
-    // Eski API için
-    try { if (canvas._chartInstance) { canvas._chartInstance.destroy(); } } catch(e){}
-  }
-  if (existing) { try { existing.destroy(); } catch(e){} }
-  var chart = new Chart(canvas, config);
-  canvas._chartInstance = chart;
-  return chart;
-}
-
-// ============================================================
-// İSTATİSTİK
-// ============================================================
-
-function renderIstatistik() {
-  var el = document.getElementById('istatistik-content');
-  if (!el) return;
-
-  var bugun = new Date().toISOString().slice(0,10);
-
-  // İptal turneler istatistik sayımına dahil edilmez
-  var aktifTurneler = turneler.filter(function(t){ return t.statu !== 'iptal'; });
-
-  // -- HESAPLAMALAR --
-  var toplamTurne  = aktifTurneler.length;
-  var toplamGun    = aktifTurneler.reduce(function(a,t){ return a + turneSuresi(t); }, 0);
-  var toplamTemsil = aktifTurneler.reduce(function(a,t){ return a + durakToplamTemsil(t); }, 0);
-
-  var ilSet = {};
-  aktifTurneler.forEach(function(t){
-    durakIllerListesi(t).forEach(function(il){
-      var ilAdi = (il||'').split('/')[0].trim();
-      if (ilAdi) ilSet[ilAdi] = true;
-    });
-  });
-  var toplamIl = Object.keys(ilSet).length;
-
-  var aktifSayisi = turneler.filter(function(t){
-    var b=t.baslangicTarih||t.tarih||'', e=t.bitisTarih||b;
-    return b<=bugun && e>=bugun && t.statu!=='iptal' && t.statu!=='yarida-kesildi';
-  }).length;
-
-  var tamamlandi = turneler.filter(function(t){ return t.statu==='tamamlandi'; }).length;
-  var iptal      = turneler.filter(function(t){ return t.statu==='iptal'; }).length;
-  var yaridaKesildi = turneler.filter(function(t){ return t.statu==='yarida-kesildi'; }).length;
-  var taslak     = turneler.filter(function(t){ return t.statu==='taslak'; }).length;
-  var onayBekliyor = turneler.filter(function(t){ return t.statu==='onay_bekliyor'; }).length;
-
-  // Kisi bazli
-  var kisiMap = {};
-  aktifTurneler.forEach(function(t){
-    var liste = (t.katilimcilar&&t.katilimcilar.length) ? t.katilimcilar
-      : getPersonelForOyun(t.oyun).map(function(p){ return {kisi:p.kisi,gorev:p.gorev||p.kategori,kategori:p.kategori}; });
-    var seen = {};
-    var tSure = turneSuresi(t);
-    liste.forEach(function(k){
-      if (!k.kisi) return;
-      var ad = k.kisi.trim();
-      var key = ad.toLowerCase();
-      if (seen[key]) return; seen[key]=true;
-      if (!kisiMap[ad]) kisiMap[ad] = { turne:0, gun:0, list:[], gorev:k.gorev||'' };
-      kisiMap[ad].turne++;
-      kisiMap[ad].gun += tSure;
-      kisiMap[ad].list.push(t);
-    });
-  });
-
-  // Il bazli
-  var ilMap = {};
-  aktifTurneler.forEach(function(t){
-    durakIllerListesi(t).forEach(function(il){
-      var ilAdi = (il||'').split('/')[0].trim();
-      if (!ilAdi) return;
-      if (!ilMap[ilAdi]) ilMap[ilAdi] = [];
-      ilMap[ilAdi].push(t);
-    });
-  });
-
-  // Oyun bazli — durak bazlı oyunları da ayrı ayrı say
-  var oyunMap = {};
-  aktifTurneler.forEach(function(t){
-    // Durak bazlı oyunları topla
-    var oyunlar = [];
-    if (t.duraklar && t.duraklar.length) {
-      t.duraklar.forEach(function(d){ if (d.oyun && d.oyun.trim() && oyunlar.indexOf(d.oyun.trim()) < 0) oyunlar.push(d.oyun.trim()); });
-    }
-    // Durakta oyun yoksa t.oyun'u "/" ile ayır
-    if (!oyunlar.length && t.oyun) {
-      t.oyun.split('/').forEach(function(o){ var ot=o.trim(); if(ot && oyunlar.indexOf(ot)<0) oyunlar.push(ot); });
-    }
-    oyunlar.forEach(function(o){
-      if (!oyunMap[o]) oyunMap[o] = [];
-      // Aynı turneyi iki kez ekleme
-      if (oyunMap[o].indexOf(t) < 0) oyunMap[o].push(t);
-    });
-  });
-
-  // Top 5
-  var ilSiraliTop = Object.entries(ilMap).sort(function(a,b){ return b[1].length-a[1].length; }).slice(0,5);
-  var kisiSiraliTop = Object.entries(kisiMap).sort(function(a,b){ return b[1].turne-a[1].turne; }).slice(0,5);
-  var oyunSiraliTop = Object.entries(oyunMap).sort(function(a,b){ return b[1].length-a[1].length; }).slice(0,5);
-
-  // -- HTML --
-  var html = '';
-
-  // === TEK SATIR: KPI + DURUM ===
-  html += '<div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;align-items:center">';
-
-  var chips = [
-    { val:toplamTurne,  lbl:'Turne',  icon:'\uD83D\uDCCB' },
-    { val:toplamGun,    lbl:'G\u00FCn',    icon:'\uD83D\uDCC5' },
-    { val:toplamTemsil, lbl:'Temsil', icon:'\uD83C\uDFAD' },
-    { val:toplamIl,     lbl:'\u0130l',     icon:'\uD83D\uDCCD' },
-  ];
-  chips.forEach(function(c){
-    html += '<div style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;background:var(--card);border:1.5px solid var(--border);border-radius:8px;white-space:nowrap">'
-      + '<span style="font-size:13px">'+c.icon+'</span>'
-      + '<span style="font-size:18px;font-weight:900;color:var(--primary)">'+c.val+'</span>'
-      + '<span style="font-size:10px;font-weight:700;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.3px">'+c.lbl+'</span>'
-      + '</div>';
-  });
-
-  // Durum chips
-  html += '<div style="margin-left:auto;display:flex;gap:4px;align-items:center;flex-wrap:wrap">';
-  var durumChips = [
-    { val:aktifSayisi,   lbl:'Aktif',          dot:'hsl(142,55%,42%)' },
-    { val:tamamlandi,    lbl:'Tamamlandı',     dot:'hsl(220,65%,50%)' },
-    { val:onayBekliyor,  lbl:'Onay',           dot:'hsl(38,78%,50%)' },
-    { val:taslak,        lbl:'Taslak',         dot:'hsl(220,10%,55%)' },
-    { val:iptal,         lbl:'İptal',          dot:'hsl(0,65%,50%)' },
-    { val:yaridaKesildi, lbl:'Yarıda Kesildi', dot:'#dc2626', icon:'✂', bg:'rgba(220,38,38,.08)' }
-  ];
-  durumChips.forEach(function(d){
-    if (d.val === 0 && d.lbl === 'İptal') return;
-    var _chipBg = d.bg || 'var(--muted)';
-    var _chipDot = d.dot || 'hsl(220,10%,55%)';
-    var _chipLbl = d.lbl || '';
-    html += '<div style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;background:'+_chipBg+';border-radius:6px;font-size:10px;font-weight:700;color:var(--foreground);white-space:nowrap">'
-      + '<span style="width:7px;height:7px;border-radius:50%;background:'+_chipDot+';flex-shrink:0"></span>'
-      + (d.icon ? '<span style="font-size:11px">'+d.icon+'</span>' : '')
-      + '<span style="font-size:14px;font-weight:900">'+d.val+'</span>'
-      + '<span style="color:var(--muted-foreground)">'+_chipLbl+'</span>'
-      + '</div>';
-  });
-  html += '</div></div>';
-
-  // === ANA ICERIK: 2 SUTUN ===
-  html += '<div style="display:grid;grid-template-columns:1fr 300px;gap:14px" id="ist-ana-grid">';
-
-  // -- SOL SUTUN: Sekmeler --
-  html += '<div style="min-width:0">';
-
-  html += '<div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:12px" id="ist-sekme-bar">';
-  var sekmeler = [
-    { id:'kisi',  label:'\uD83D\uDC64 Ki\u015Fi' },
-    { id:'oyun',  label:'\uD83C\uDFAD Oyun' },
-    { id:'il',    label:'\uD83D\uDCCD \u0130l'   },
-  ];
-  sekmeler.forEach(function(s,i){
-    html += '<button onclick="_istSekmeGec(\''+s.id+'\')" id="ist-sbtn-'+s.id+'" '
-      + 'style="padding:7px 16px;border:none;background:transparent;font-size:11px;font-weight:700;cursor:pointer;'
-      + 'color:'+(i===0?'var(--primary)':'var(--muted-foreground)')+';'
-      + 'border-bottom:2.5px solid '+(i===0?'var(--primary)':'transparent')+';margin-bottom:-2px;transition:.15s">'
-      + s.label+'</button>';
-  });
-  html += '</div>';
-
-  // KISI SEKMESI
-  var kisiSirali = Object.entries(kisiMap).sort(function(a,b){ return b[1].turne-a[1].turne; });
-  html += '<div id="ist-panel-kisi">';
-  html += '<div style="position:relative;margin-bottom:10px">'
-    + '<span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--muted-foreground);font-size:13px">\uD83D\uDD0D</span>'
-    + '<input type="text" id="ist-kisi-ara" placeholder="\u0130sim ara..." oninput="_istKisiAra(this.value)" '
-    + 'style="width:100%;height:34px;padding:0 12px 0 32px;border:1.5px solid var(--border);border-radius:8px;background:var(--card);color:var(--foreground);font-size:12px;outline:none">'
-    + '</div>';
-  html += '<div id="ist-kisi-liste">' + _istKisiListeHTML(kisiSirali, '') + '</div>';
-  html += '</div>';
-
-  // OYUN SEKMESI
-  var oyunSirali = Object.entries(oyunMap).sort(function(a,b){ return b[1].length-a[1].length; });
-  html += '<div id="ist-panel-oyun" style="display:none">';
-  html += '<div style="position:relative;margin-bottom:10px">'
-    + '<span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--muted-foreground);font-size:13px">\uD83D\uDD0D</span>'
-    + '<input type="text" id="ist-oyun-ara" placeholder="Oyun ad\u0131 ara..." oninput="_istOyunAra(this.value)" '
-    + 'style="width:100%;height:34px;padding:0 12px 0 32px;border:1.5px solid var(--border);border-radius:8px;background:var(--card);color:var(--foreground);font-size:12px;outline:none">'
-    + '</div>';
-  html += '<div id="ist-oyun-liste">' + _istOyunListeHTML(oyunSirali, '') + '</div>';
-  html += '</div>';
-
-  // IL SEKMESI
-  var ilSirali = Object.entries(ilMap).sort(function(a,b){ return b[1].length-a[1].length; });
-  html += '<div id="ist-panel-il" style="display:none">';
-  html += '<div style="position:relative;margin-bottom:10px">'
-    + '<span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--muted-foreground);font-size:13px">\uD83D\uDD0D</span>'
-    + '<input type="text" id="ist-il-ara" placeholder="\u0130l ara..." oninput="_istIlAra(this.value)" '
-    + 'style="width:100%;height:34px;padding:0 12px 0 32px;border:1.5px solid var(--border);border-radius:8px;background:var(--card);color:var(--foreground);font-size:12px;outline:none">'
-    + '</div>';
-  html += '<div id="ist-il-liste">' + _istIlListeHTML(ilSirali, '') + '</div>';
-  html += '</div>';
-
-  html += '</div>';
-
-  // -- SAG SUTUN: Ozet bilgiler --
-  html += '<div style="display:flex;flex-direction:column;gap:10px">';
-
-  // Top 5 Iller
-  html += '<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 14px">';
-  html += '<div style="font-size:10px;font-weight:800;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px">\uD83C\uDFC6 En \u00C7ok Gidilen \u0130ller</div>';
-  var rozetler = ['\uD83E\uDD47','\uD83E\uDD48','\uD83E\uDD49','4.','5.'];
-  ilSiraliTop.forEach(function(e, i){
-    html += '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;'+(i<ilSiraliTop.length-1?'border-bottom:1px solid var(--border);':'')+'">'
-      + '<span style="font-size:12px;width:22px;text-align:center;flex-shrink:0">'+(rozetler[i]||'')+'</span>'
-      + '<span style="flex:1;font-size:12px;font-weight:700;color:var(--foreground)">'+e[0]+'</span>'
-      + '<span style="font-size:14px;font-weight:900;color:var(--primary)">'+e[1].length+'</span>'
-      + '</div>';
-  });
-  if (!ilSiraliTop.length) html += '<div style="font-size:11px;color:var(--muted-foreground);text-align:center;padding:10px">Veri yok</div>';
-  html += '</div>';
-
-  // Top 5 Kisiler
-  html += '<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 14px">';
-  html += '<div style="font-size:10px;font-weight:800;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px">\uD83D\uDC65 En \u00C7ok Turneye Giden Ki\u015Filer</div>';
-  kisiSiraliTop.forEach(function(e, i){
-    html += '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;'+(i<kisiSiraliTop.length-1?'border-bottom:1px solid var(--border);':'')+'">'
-      + '<span style="font-size:12px;width:22px;text-align:center;flex-shrink:0">'+(rozetler[i]||'')+'</span>'
-      + '<span style="flex:1;font-size:12px;font-weight:700;color:var(--foreground);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+e[0]+'</span>'
-      + '<span style="font-size:14px;font-weight:900;color:var(--primary)">'+e[1].turne+'</span>'
-      + '</div>';
-  });
-  if (!kisiSiraliTop.length) html += '<div style="font-size:11px;color:var(--muted-foreground);text-align:center;padding:10px">Veri yok</div>';
-  html += '</div>';
-
-  // Top 5 Oyunlar
-  html += '<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 14px">';
-  html += '<div style="font-size:10px;font-weight:800;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px">\uD83C\uDFAD En \u00C7ok Turneye \u00C7\u0131kan Oyunlar</div>';
-  oyunSiraliTop.forEach(function(e, i){
-    html += '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;'+(i<oyunSiraliTop.length-1?'border-bottom:1px solid var(--border);':'')+'">'
-      + '<span style="font-size:12px;width:22px;text-align:center;flex-shrink:0">'+(rozetler[i]||'')+'</span>'
-      + '<span style="flex:1;font-size:12px;font-weight:700;color:var(--foreground);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+e[0]+'</span>'
-      + '<span style="font-size:14px;font-weight:900;color:var(--primary)">'+e[1].length+'</span>'
-      + '</div>';
-  });
-  if (!oyunSiraliTop.length) html += '<div style="font-size:11px;color:var(--muted-foreground);text-align:center;padding:10px">Veri yok</div>';
-  html += '</div>';
-
-  html += '</div>';
-  html += '</div>';
-
-  el.innerHTML = html;
-
-  window._istKisiSirali = kisiSirali;
-  window._istOyunSirali = oyunSirali;
-  window._istIlSirali   = ilSirali;
-}
-
-function _istSekmeGec(id) {
-  ['kisi','oyun','il'].forEach(function(s){
-    var panel = document.getElementById('ist-panel-'+s);
-    var btn   = document.getElementById('ist-sbtn-'+s);
-    if (panel) panel.style.display = s===id ? '' : 'none';
-    if (btn) {
-      btn.style.color = s===id ? 'var(--primary)' : 'var(--muted-foreground)';
-      btn.style.borderBottomColor = s===id ? 'var(--primary)' : 'transparent';
-    }
-  });
-}
-
-function _istTurneKarti(t) {
-  var sr  = statuRenk(t.statu||'');
-  var bas = typeof formatTarih==='function' ? formatTarih(t.baslangicTarih||t.tarih) : (t.baslangicTarih||t.tarih||'');
-  var bit = t.bitisTarih && t.bitisTarih!==t.baslangicTarih
-    ? ' – ' + (typeof formatTarih==='function' ? formatTarih(t.bitisTarih) : t.bitisTarih) : '';
-  var iller = typeof durakIllerListesi==='function'
-    ? durakIllerListesi(t).map(function(x){ return x.replace(/\/MERKEZ/gi,''); }).join(', ')
-    : (t.il||'');
-  return '<div onclick="closeKisiModal&&closeKisiModal();switchTab(\'liste\');setTimeout(function(){openCardDetail('+t._rowIdx+');},200)" '
-    + 'style="padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--card);cursor:pointer;transition:.1s;margin-bottom:6px" '
-    + 'onmouseenter="this.style.borderColor=\'var(--primary)\'" onmouseleave="this.style.borderColor=\'var(--border)\'">'
-    + '<div style="display:flex;align-items:center;gap:8px">'
-    + '<div style="flex:1;min-width:0">'
-    + '<div style="font-size:12px;font-weight:700;color:var(--foreground);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(t.oyun||'—')+'</div>'
-    + '<div style="font-size:10px;color:var(--muted-foreground);margin-top:1px">'+iller+' · '+bas+bit+'</div>'
-    + '</div>'
-    + '<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;background:'+sr.bg+';color:'+sr.fg+';white-space:nowrap">'+sr.label+'</span>'
-    + '</div></div>';
-}
-
-function _istKisiListeHTML(liste, ara) {
-  var filtreli = ara ? liste.filter(function(e){ return e[0].toLocaleLowerCase('tr-TR').includes(ara.toLocaleLowerCase('tr-TR')); }) : liste;
-  if (!filtreli.length) return '<div style="text-align:center;padding:30px;color:var(--muted-foreground);font-size:12px">Sonuç bulunamadı</div>';
-  return filtreli.map(function(e){
-    var ad = e[0], d = e[1];
-    var initials = ad.split(' ').map(function(w){ return w[0]||''; }).slice(0,2).join('').toLocaleUpperCase('tr-TR');
-    return '<div style="border:1px solid var(--border);border-radius:10px;background:var(--card);margin-bottom:8px;overflow:hidden">'
-      + '<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;cursor:pointer;background:var(--muted)" onclick="_istKisiToggle(this)">'
-      + '<div style="width:28px;height:28px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">'+initials+'</div>'
-      + '<div style="flex:1;min-width:0">'
-      + '<div style="font-size:12px;font-weight:700;color:var(--foreground)">'+ad+'</div>'
-      + '<div style="font-size:10px;color:var(--muted-foreground)">'+d.gorev+'</div>'
-      + '</div>'
-      + '<div style="display:flex;align-items:center;gap:8px;flex-shrink:0">'
-      + '<div style="text-align:right">'
-      + '<div style="font-size:13px;font-weight:800;color:var(--primary);line-height:1.1">'+d.turne+'</div>'
-      + '<div style="font-size:9px;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.3px">turne</div>'
-      + '</div>'
-      + '<div style="text-align:right;padding-left:8px;border-left:1px solid var(--border)">'
-      + '<div style="font-size:13px;font-weight:800;color:hsl(220,65%,45%);line-height:1.1">'+d.gun+'</div>'
-      + '<div style="font-size:9px;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.3px">gün</div>'
-      + '</div>'
-      + '</div>'
-      + '<span style="color:var(--muted-foreground);font-size:12px;margin-left:4px;transition:.2s">▼</span>'
-      + '</div>'
-      + '<div class="ist-detay" style="display:none;padding:10px 14px;border-top:1px solid var(--border)">'
-      + d.list.map(function(t){ return _istTurneKarti(t); }).join('')
-      + '</div>'
-      + '</div>';
-  }).join('');
-}
-
-function _istKisiToggle(header) {
-  var detay = header.parentElement.querySelector('.ist-detay');
-  var ok = header.querySelector('span:last-child');
-  if (!detay) return;
-  var acik = detay.style.display !== 'none';
-  detay.style.display = acik ? 'none' : '';
-  if (ok) ok.style.transform = acik ? '' : 'rotate(180deg)';
-}
-
-function _istKisiAra(v) {
-  var el = document.getElementById('ist-kisi-liste');
-  if (el) el.innerHTML = _istKisiListeHTML(window._istKisiSirali||[], v);
-}
-
-function _istOyunListeHTML(liste, ara) {
-  var filtreli = ara ? liste.filter(function(e){ return e[0].toLocaleLowerCase('tr-TR').includes(ara.toLocaleLowerCase('tr-TR')); }) : liste;
-  if (!filtreli.length) return '<div style="text-align:center;padding:30px;color:var(--muted-foreground);font-size:12px">Sonuç bulunamadı</div>';
-  return filtreli.map(function(e){
-    var oyun = e[0], turneListe = e[1];
-    // Bu oyunun gittiği iller
-    var oyunIller = {};
-    turneListe.forEach(function(t){
-      durakIllerListesi(t).forEach(function(il){
-        var ilAdi = (il||'').split('/')[0].trim().replace(/\/MERKEZ/gi,'');
-        if (ilAdi) oyunIller[ilAdi] = (oyunIller[ilAdi]||0)+1;
-      });
-    });
-    var ilBadges = Object.entries(oyunIller).sort(function(a,b){ return b[1]-a[1]; }).slice(0,8)
-      .map(function(e){ return '<span style="display:inline-block;padding:2px 8px;border-radius:20px;background:hsl(220,60%,94%);color:hsl(220,60%,35%);font-size:10px;font-weight:600;margin:2px">'+e[0]+(e[1]>1?' ('+e[1]+')':'')+'</span>'; }).join('');
-    return '<div style="border:1px solid var(--border);border-radius:10px;background:var(--card);margin-bottom:8px;overflow:hidden">'
-      + '<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;cursor:pointer;background:var(--muted)" onclick="_istKisiToggle(this)">'
-      + '<div style="width:28px;height:28px;border-radius:8px;background:hsl(350,60%,94%);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">🎭</div>'
-      + '<div style="flex:1;min-width:0">'
-      + '<div style="font-size:12px;font-weight:700;color:var(--foreground)">'+oyun+'</div>'
-      + '<div style="margin-top:3px">'+ilBadges+'</div>'
-      + '</div>'
-      + '<div style="text-align:right;flex-shrink:0">'
-      + '<div style="font-size:13px;font-weight:800;color:var(--primary);line-height:1.1">'+turneListe.length+'</div>'
-      + '<div style="font-size:9px;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.3px">turne</div>'
-      + '</div>'
-      + '<span style="color:var(--muted-foreground);font-size:12px;margin-left:4px;transition:.2s">▼</span>'
-      + '</div>'
-      + '<div class="ist-detay" style="display:none;padding:10px 14px;border-top:1px solid var(--border)">'
-      + turneListe.map(function(t){ return _istTurneKarti(t); }).join('')
-      + '</div>'
-      + '</div>';
-  }).join('');
-}
-
-function _istOyunAra(v) {
-  var el = document.getElementById('ist-oyun-liste');
-  if (el) el.innerHTML = _istOyunListeHTML(window._istOyunSirali||[], v);
-}
-
-function _istIlListeHTML(liste, ara) {
-  var filtreli = ara ? liste.filter(function(e){ return e[0].toLocaleLowerCase('tr-TR').includes(ara.toLocaleLowerCase('tr-TR')); }) : liste;
-  if (!filtreli.length) return '<div style="text-align:center;padding:30px;color:var(--muted-foreground);font-size:12px">Sonuç bulunamadı</div>';
-  return filtreli.map(function(e){
-    var il = e[0], turneListe = e[1];
-    var oyunlar = {};
-    turneListe.forEach(function(t){ if(t.oyun) oyunlar[t.oyun]=(oyunlar[t.oyun]||0)+1; });
-    var oyunBadges = Object.entries(oyunlar).sort(function(a,b){ return b[1]-a[1]; }).slice(0,6)
-      .map(function(e){ return '<span style="display:inline-block;padding:2px 8px;border-radius:20px;background:hsl(38,70%,93%);color:hsl(38,70%,28%);font-size:10px;font-weight:600;margin:2px">'+e[0]+(e[1]>1?' ('+e[1]+')':'')+'</span>'; }).join('');
-    return '<div style="border:1px solid var(--border);border-radius:10px;background:var(--card);margin-bottom:8px;overflow:hidden">'
-      + '<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;cursor:pointer;background:var(--muted)" onclick="_istKisiToggle(this)">'
-      + '<div style="width:28px;height:28px;border-radius:8px;background:hsl(142,50%,93%);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">📍</div>'
-      + '<div style="flex:1;min-width:0">'
-      + '<div style="font-size:12px;font-weight:700;color:var(--foreground)">'+il+'</div>'
-      + '<div style="margin-top:3px">'+oyunBadges+'</div>'
-      + '</div>'
-      + '<div style="text-align:right;flex-shrink:0">'
-      + '<div style="font-size:13px;font-weight:800;color:var(--primary);line-height:1.1">'+turneListe.length+'</div>'
-      + '<div style="font-size:9px;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.3px">turne</div>'
-      + '</div>'
-      + '<span style="color:var(--muted-foreground);font-size:12px;margin-left:4px;transition:.2s">▼</span>'
-      + '</div>'
-      + '<div class="ist-detay" style="display:none;padding:10px 14px;border-top:1px solid var(--border)">'
-      + turneListe.map(function(t){ return _istTurneKarti(t); }).join('')
-      + '</div>'
-      + '</div>';
-  }).join('');
-}
-
-function _istIlAra(v) {
-  var el = document.getElementById('ist-il-liste');
-  if (el) el.innerHTML = _istIlListeHTML(window._istIlSirali||[], v);
-}
-
-
 // ============================================================
 // TAKVİM — AYLIK RAPOR PDF
 // ============================================================
   function _calPdfCSS() {
-    return '<style>'      + '*{box-sizing:border-box;margin:0;padding:0}'      + 'body{font-family:Arial,Helvetica,sans-serif;font-size:10pt;color:#1a1a1a;background:#fff;padding:12mm 14mm;-webkit-print-color-adjust:exact;print-color-adjust:exact}'      + 'h1{font-size:16pt;font-weight:900;color:#1a1a1a;margin-bottom:2pt}'      + 'h2{font-size:11pt;font-weight:700;color:#fff;background:#3b3b3b;padding:5pt 10pt;margin:14pt 0 8pt;letter-spacing:.3pt}'      + '.meta{font-size:9pt;color:#444;margin-bottom:14pt}'      + '.ozet{display:grid;grid-template-columns:repeat(4,1fr);gap:8pt;margin-bottom:14pt}'      + '.ozet-kart{border:1.5pt solid #ddd;border-radius:4pt;padding:8pt 10pt;text-align:center;page-break-inside:avoid;break-inside:avoid}'      + '.ozet-kart .sayi{font-size:20pt;font-weight:900;color:#1a1a1a;line-height:1}'      + '.ozet-kart .etiket{font-size:8pt;color:#555;text-transform:uppercase;letter-spacing:.4pt;margin-top:3pt}'      + 'table{width:100%;border-collapse:collapse;font-size:9.5pt;margin-bottom:10pt}'      + 'thead{display:table-header-group;-webkit-print-color-adjust:exact;print-color-adjust:exact}'      + 'th{background:#3b3b3b;color:#fff;padding:5pt 8pt;text-align:left;font-size:9pt;font-weight:600}'      + 'th.c{text-align:center}'      + 'tbody tr{page-break-inside:avoid;break-inside:avoid}'      + 'td{padding:5pt 8pt;border-bottom:1pt solid #eee;vertical-align:top}'      + 'td.c{text-align:center}'      + 'tr:nth-child(even) td{background:#f9f9f9}'      + 'tr:last-child td{border-bottom:none}'      + '.badge{display:inline-block;padding:1pt 6pt;border-radius:8pt;font-size:8pt;font-weight:700}'      + '.tarih-hucre{font-weight:900;font-size:12pt;text-align:center;white-space:nowrap;vertical-align:top;width:44pt;background:#f5f5f5}'      + '.tarih-gun{font-size:8pt;font-weight:700;color:#444;text-transform:uppercase;letter-spacing:.5pt;display:block;margin-top:1pt}'      + '.etkinlik-adi{font-weight:800;color:#1a1a1a}'      + '.saat{font-weight:900;font-size:11pt;color:#1a1a2e}'      + '.not{font-style:italic;color:#555;font-size:8.5pt}'      + '@page{size:A4;margin:15mm}'      + '@media print{body{padding:0}thead{display:table-header-group}tr{page-break-inside:avoid;break-inside:avoid}}'      + '</style>';
+    return '';
   }
 
 
 
 
   function _calRaporCSS() {
-    return '<style>'
-      +'*{box-sizing:border-box;margin:0;padding:0;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}'
-      +'body{font-family:Arial,Helvetica,sans-serif;font-size:10pt;color:#111;background:#fff;padding:14mm 16mm;-webkit-print-color-adjust:exact;print-color-adjust:exact;line-height:1.4}'
-      +'.rapor-header{display:flex;align-items:flex-start;justify-content:space-between;border-bottom:3pt solid #6b1b1b;padding-bottom:8pt;margin-bottom:14pt}'
-      +'.rapor-logo{background:#6b1b1b;color:#e8c84a;font-weight:900;font-size:9pt;padding:3pt 8pt;letter-spacing:1pt;margin-right:10pt;white-space:nowrap}'
-      +'.rapor-kurum{font-size:10pt;font-weight:700;color:#111}'
-      +'.rapor-tarih{font-size:8.5pt;color:#555;text-align:right;white-space:nowrap}'
-      +'h1{font-size:18pt;font-weight:900;color:#111;margin-bottom:3pt;letter-spacing:-.3pt}'
-      +'h2{font-size:10.5pt;font-weight:800;color:#5a0f0f;border-bottom:2pt solid #c0a0a0;padding-bottom:5pt;margin:18pt 0 8pt;text-transform:uppercase;letter-spacing:.5pt;page-break-after:avoid;break-after:avoid}'
-      +'.ozet{display:grid;gap:10pt;margin-bottom:18pt}'
-      +'.ozet-kart{border:1.5pt solid #c8a4a4;border-radius:5pt;padding:10pt 8pt;text-align:center;background:#fdf5f5;page-break-inside:avoid;break-inside:avoid}'
-      +'.ozet-kart .sayi{font-size:24pt;font-weight:900;color:#6b1b1b;line-height:1;display:block}'
-      +'.ozet-kart .etiket{font-size:8pt;color:#555;text-transform:uppercase;letter-spacing:.5pt;margin-top:4pt;display:block;font-weight:600}'
-      +'table{width:100%;border-collapse:collapse;margin-top:0;font-size:10pt}'
-      +'thead{display:table-header-group;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}'
-      +'thead tr{background:#6b1b1b;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
-      +'thead th{color:#fff;padding:7pt 10pt;font-size:10.5pt;font-weight:700;text-align:left;border:1pt solid #5a1717;white-space:nowrap;vertical-align:middle}'
-      +'thead th.c{text-align:center}'
-      +'tbody tr{page-break-inside:avoid;break-inside:avoid}'
-      +'tbody tr:nth-child(even){background:#faf8f6}'
-      +'td{vertical-align:middle;border-bottom:1pt solid #e5ddd5;padding:6pt 10pt;color:#111;font-size:10.5pt}'
-      +'td.dim{color:#444;font-size:10pt;font-weight:500}'
-      +'td.c{text-align:center}'
-      +'td.num{text-align:center;color:#666;font-size:9.5pt}'
-      +'td.nowrap{white-space:nowrap}'
-      +'td.adres{word-wrap:break-word;max-width:160pt}'
-      +'td.not-td{word-wrap:break-word;max-width:200pt}'
-      +'tr:last-child td{border-bottom:none}'
-      +'.badge{display:inline-block;padding:2pt 8pt;border-radius:4pt;font-size:8.5pt;font-weight:700;white-space:nowrap;vertical-align:middle;border:1pt solid transparent}'
-      +'.gun-no{font-size:13pt;font-weight:900;color:#6b1b1b;text-align:center;border-right:1pt solid #e0d0d0;background:#fdf5f5;width:32pt;padding:6pt 8pt}'
-      +'.gun-ad{font-size:9pt;font-weight:700;color:#333;text-align:center;border-right:1pt solid #e0d0d0;width:26pt;text-transform:uppercase;padding:6pt 5pt}'
-      +'.etkinlik{font-weight:700;font-size:10.5pt;color:#111}'
-      +'.saat-hucre{font-weight:900;font-size:12pt;text-align:center;color:#111;width:54pt;letter-spacing:.3pt;white-space:nowrap}'
-      +'.sehir-hucre{color:#333;font-size:10pt;font-weight:600}'
-      +'@page{size:A4;margin:15mm}'
-      +'@media print{body{padding:0}thead{display:table-header-group}tr{page-break-inside:avoid;break-inside:avoid}}'
-      +'</style>';
+    return '';
   }
 
 
@@ -22069,13 +21815,7 @@ function _tumRaporlarDevam(turneler) {
   var bugun = new Date().toLocaleDateString('tr-TR', { day:'numeric', month:'long', year:'numeric' });
   var docHTML = '<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8">'
     + '<title>Tüm Turne Raporları – ' + bugun + '</title>'
-    + '<style>'
-    + 'body{font-family:Arial,Helvetica,sans-serif;font-size:12px;margin:0;padding:0;}'
-    + '.sayfa{padding:20px 24px;page-break-after:always}'
-    + '.sayfa:last-child{page-break-after:auto}'
-    + _pdfCSS()
-    + '@media print{.sayfa{page-break-after:always}.sayfa:last-child{page-break-after:auto}@page{size:A4;margin:15mm}}'
-    + '</style></head><body>'
+    + '</head><body>'
     + sayfalar.map(function(s){ return '<div class="sayfa">' + s + '</div>'; }).join('')
     + '<'+'script>window.onload=function(){window.print();};<\/script>'
     + '<\/body><\/html>';
@@ -23049,7 +22789,7 @@ function _tcListesiModalAc(t) {
       + '<x:Name>TC Listesi</x:Name>'
       + '<x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>'
       + '</x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->'
-      + '<style>br{mso-data-placement:same-cell}td,th{mso-number-format:"@"}</style>'
+      + ''
       + '</head><body>'
       + '<table style="border-collapse:collapse;width:650px;table-layout:fixed">'
       + '<colgroup>'
@@ -23270,15 +23010,7 @@ function _tcListesiPdfIndir(t, katilimcilar) {
   var html = '<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8">'
     + '<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">'
     + '<title>T.C. Listesi \u2013 ' + (t.oyun || 'Turne') + '</title>'
-    + '<style>'
-    + '*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;box-sizing:border-box;margin:0;padding:0}'
-    + 'body{font-family:\'DM Sans\',Arial,sans-serif;font-size:10pt;color:#1a1a1a;background:#fff;padding:12mm 14mm}'
-    + '@media print{@page{size:A4 portrait;margin:0}body{padding:8mm 10mm}}'
-    + 'table{width:100%;border-collapse:collapse;outline:1.5pt solid #a08060;border-radius:4pt}'
-    + 'thead tr{background:#5e0f0f;color:#fff}'
-    + 'thead th{padding:' + thPad + ';font-size:' + thFont + ';font-weight:700;letter-spacing:.5pt;font-family:\'DM Sans\',Arial,sans-serif}'
-    + 'tfoot td{padding:' + thPad + ';background:#f5f0e8;font-size:' + thFont + ';font-family:\'DM Sans\',Arial,sans-serif}'
-    + '</style></head><body>'
+    + '</head><body>'
     + '<div style="text-align:center;margin-bottom:' + baslikMb + ';padding-bottom:' + baslikPb + ';border-bottom:2.5pt solid #5e0f0f">'
     + '<div style="font-size:' + kurulusFs + ';font-weight:700;letter-spacing:2.5pt;color:#666;text-transform:uppercase;margin-bottom:' + (n>30?'4pt':'8pt') + ';font-family:\'DM Sans\',Arial,sans-serif">\u0130zmir Devlet Tiyatrosu</div>'
     + '<div style="font-size:' + oyunFs + ';font-weight:700;color:#111;letter-spacing:.5pt;line-height:1.15;font-family:\'DM Sans\',Arial,sans-serif">' + (t.oyun || 'TURNE') + '</div>'
@@ -23388,7 +23120,7 @@ function _ekTurnePdfKatilimciRender(t, _pdfBaslikYazi, _pdfAltYazi) {
     + '</tr></thead><tbody>' + satirlar + '</tbody></table>';
 
   var html = '<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Ek Katılımcı Listesi</title>'
-    + '<style>@page{size:A4;margin:12mm 14mm}*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,Helvetica,sans-serif;color:#1a1a1a;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}@media print{.no-print{display:none}}</style>'
+    + ''
     + '</head><body>'
     + '<div class="no-print" style="position:fixed;top:10px;right:10px"><button onclick="window.print()" style="padding:8px 18px;background:#6b1b1b;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">🖨 Yazdır</button></div>'
     + '<div style="padding:0">' + icerik + '</div>'
@@ -23506,7 +23238,7 @@ function _ekTurnePdfKonaklamaRender(t, _pdfBaslikYazi, _pdfAltYazi) {
     + '@media print{@page{size:A4 landscape!important;margin:4mm 6mm}html,body{height:auto!important}.sayfa{page-break-after:avoid!important;page-break-inside:avoid!important}.no-print{display:none}}';
 
   var html = '<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Ek Katılımcı Konaklama</title>'
-    + '<style>'+css+'</style></head><body>'
+    + '</head><body>'
     + '<div class="no-print" style="position:fixed;top:10px;right:10px"><button onclick="window.print()" style="padding:8px 18px;background:#6b1b1b;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">🖨 Yazdır</button></div>'
     + '<div class="sayfa">'
     + '<div class="baslik">'
@@ -23620,25 +23352,7 @@ function _pdfProgramPersonelIcerik(t) {
       + '<div style="font-size:9pt;color:#555;margin-top:6px">Toplam <strong>' + katilimcilar.length + '</strong> ki\u015fi</div>'
     : '<p style="color:#666;font-style:italic;font-size:10pt">Personel atamas\u0131 yap\u0131lmam\u0131\u015ft\u0131r.</p>';
 
-  var css = '<style>'
-    + '*{box-sizing:border-box;margin:0;padding:0}'
-    + 'body{font-family:Arial,Helvetica,sans-serif;font-size:11pt;color:#111;background:#fff;'
-    + '-webkit-print-color-adjust:exact;print-color-adjust:exact;padding:14mm 16mm}'
-    + '.baslik{text-align:center;margin-bottom:16pt;padding-bottom:8pt;border-bottom:2.5pt solid #6b1b1b}'
-    + '.baslik h1{font-size:19pt;font-weight:900;text-transform:uppercase;letter-spacing:1.5pt;color:#111;margin:0}'
-    + '.baslik h2{font-size:15pt;font-weight:700;color:#6b1b1b;text-transform:uppercase;letter-spacing:.6pt;margin:6pt 0 0}'
-    + '.baslik h3{font-size:13pt;color:#444;margin:5pt 0 0;font-weight:600}'
-    + '.sec-baslik{font-size:11.5pt;font-weight:800;color:#5a0f0f;border-bottom:2pt solid #c0a0a0;padding-bottom:5pt;margin:18pt 0 8pt;text-transform:uppercase;letter-spacing:.4pt;page-break-after:avoid;break-after:avoid}'
-    + 'table{width:100%;border-collapse:collapse;font-size:10.5pt}'
-    + 'thead{display:table-header-group;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
-    + 'thead tr{background:#6b1b1b;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
-    + 'thead th{color:#fff;padding:7pt 10pt;font-size:11pt;font-weight:700;text-align:left;border:1pt solid #5a1717}'
-    + 'tbody tr{page-break-inside:avoid;break-inside:avoid}'
-    + 'tbody tr:nth-child(even){background:#faf8f6}'
-    + 'td{padding:6pt 10pt;border:1pt solid #e5ddd5;color:#111;vertical-align:middle}'
-    + '@page{size:A4;margin:15mm}'
-    + '@media print{body{padding:0};-webkit-print-color-adjust:exact;print-color-adjust:exact;thead{display:table-header-group}tr{page-break-inside:avoid;break-inside:avoid}}'
-    + '</style>';
+  var css = '';
 
   return css
     + '<div class="baslik">'
@@ -24124,22 +23838,7 @@ function gorevlendirmePdf(rowIdx, mod, overrideTurne) {
         + '<title>' + _dosyaAdi + '</title>'
         + '<'+'script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"><\/script>'
         + '<'+'script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"><\/script>'
-        + '<style>'
-        + '*{box-sizing:border-box;margin:0;padding:0}'
-        + 'html,body{overflow-x:hidden;max-width:100vw}'
-        + 'body{background:#444;font-family:Arial,sans-serif;padding:0}'
-        + '#toolbar{position:sticky;top:0;z-index:999;background:#1a1a1a;padding:10px 16px;'
-        +   'display:flex;align-items:center;gap:8px;flex-wrap:wrap}'
-        + '#d3wrap{padding-bottom:32px;overflow-x:hidden}'
-        + '.sayfa-kapak{width:'+A4W+'px;min-height:'+A4H+'px;display:block;margin:16px auto;'
-        +   'overflow:hidden;position:relative;background:#1a0505;transform-origin:top center}'
-        + '.sayfa-icerik{width:'+A4W+'px;display:block;margin:0 auto;background:#fff;'
-        +   'padding:56px 60px;box-sizing:border-box;border-bottom:2px dashed #999;transform-origin:top center}'
-        + '@media(max-width:830px){'
-        +   'html,body,#d3wrap{overflow-x:hidden}'
-        +   '.sayfa-kapak,.sayfa-icerik{transform:scale(var(--pg-scale,1));margin-left:var(--pg-ml,auto);}'
-        + '}'
-        + '</style>'
+        + ''
         + '</head><body>'
         + '<div id="toolbar">'
         + '<span style="color:#e8c84a;font-weight:900;font-size:13px">📁 Turne Dosyası</span>'
@@ -24722,7 +24421,7 @@ function gorevlendirmePdf(rowIdx, mod, overrideTurne) {
   var pdfBaslik  = [_tarihKisa, _oyunKisa, _ilKisa, _modEtiket].filter(Boolean).join('_');
   var docHTML = '<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8">'
     + '<title>' + pdfBaslik + '</title>'
-    + '<style>' + _pdfCSS() + '@media print{body{padding:10px 14px}@page{size:A4;margin:15mm}.no-print{display:none!important}}</style>'
+    + ''
     + '</head><body>'
     + '<div class="no-print" style="position:fixed;top:10px;right:10px;display:flex;gap:8px;z-index:999">'
     +   '<button onclick="window.print()" style="padding:8px 18px;background:#6b1b1b;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;font-family:sans-serif">🖨 PDF Yazdır</button>'
@@ -24748,7 +24447,7 @@ function gorevlendirmePdf(rowIdx, mod, overrideTurne) {
     +   ';'
     +   'var html="<html xmlns:o=\\"urn:schemas-microsoft-com:office:office\\" xmlns:w=\\"urn:schemas-microsoft-com:office:word\\" xmlns=\\"http://www.w3.org/TR/REC-html40\\">"'
     +     '+"<head><meta charset=\\"utf-8\\"><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom><w:DoNotOptimizeForBrowser/></w:WordDocument></xml>"'
-    +     '+"<style>"+wCss+"</style></head>"'
+    +     '+"</head>"'
     +     '+"<body><div class=\\"Section1\\">"+ic+"</div></body></html>";'
     +   'var blob=new Blob(["\\uFEFF"+html],{type:"application/msword;charset=utf-8"});'
     +   'var a=document.createElement("a");'
@@ -25612,7 +25311,6 @@ async function tumVeriyiYenile(options) {
   var aktifTab = localStorage.getItem('_sonSekme') || 'liste';
   if (aktifTab === 'kadro')      renderKadro();
   if (aktifTab === 'harita')     { if (_leafletYuklendi) renderHarita(); else _leafletYukle(function(){ renderHarita(); }); }
-  if (aktifTab === 'istatistik') renderIstatistik();
   // Cache güncelle
   try { localStorage.setItem('turne_cache_data', JSON.stringify(turneler)); } catch(e){}
   guncelleSonSenkron();
@@ -25666,7 +25364,7 @@ async function init() {
 
   // Son sekmeyi geri yükle
   var _sonSekme = localStorage.getItem('_sonSekme') || 'liste';
-  var _gecerliSekmeler = window._goruntuleme_modu ? ['liste','harita','takvim'] : ['liste','kadro','harita','takvim','istatistik'];
+  var _gecerliSekmeler = window._goruntuleme_modu ? ['liste','harita','takvim'] : ['liste','kadro','harita','takvim'];
   if (_gecerliSekmeler.includes(_sonSekme) && _sonSekme !== 'liste') {
     switchTab(_sonSekme);
   } else {
@@ -26509,35 +26207,7 @@ function acBindAll() {
 </div>
 </div>
 </div>
-<style>
-@keyframes spin { to { transform: rotate(360deg); } }
-.pdf-turne-row {
-  border: 1.5px solid var(--border);
-  border-radius: 10px;
-  padding: 12px 14px;
-  background: var(--card);
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  cursor: pointer;
-  transition: border-color .15s, background .15s;
-}
-.pdf-turne-row:hover { border-color: var(--primary); background: hsl(38,60%,98%); }
-.pdf-turne-row.selected { border-color: var(--primary); background: hsl(38,65%,97%); }
-[data-theme="dark"] .pdf-turne-row:hover,
-[data-theme="dark"] .pdf-turne-row.selected { background: hsl(220,14%,18%); }
-.pdf-turne-row input[type=checkbox] { width:16px;height:16px;accent-color:var(--primary);flex-shrink:0;margin-top:2px;cursor:pointer; }
-.pdf-row-body { flex:1;min-width:0; }
-.pdf-row-oyun { font-size:13px;font-weight:700;color:var(--foreground);margin-bottom:4px; }
-.pdf-row-meta { display:flex;flex-wrap:wrap;gap:6px; }
-.pdf-meta-chip { font-size:10px;font-weight:600;padding:2px 8px;border-radius:20px;background:var(--muted);color:var(--muted-foreground); }
-.pdf-meta-chip.city { background:hsl(220,50%,93%);color:hsl(220,50%,35%); }
-.pdf-meta-chip.date { background:hsl(38,60%,92%);color:hsl(38,60%,28%); }
-.pdf-meta-chip.statu { background:hsl(142,40%,90%);color:hsl(142,50%,28%); }
-[data-theme="dark"] .pdf-meta-chip.city { background:hsl(220,30%,22%);color:hsl(220,50%,75%); }
-[data-theme="dark"] .pdf-meta-chip.date { background:hsl(38,30%,20%);color:hsl(38,60%,70%); }
-[data-theme="dark"] .pdf-meta-chip.statu { background:hsl(142,25%,18%);color:hsl(142,50%,65%); }
-</style>
+
 <script>
 // ═══════════════════════════════════════════════
 //  PDF İÇE AKTARMA — TAM MODÜL
@@ -27223,68 +26893,7 @@ function _pdfTurneDosyasiIcerik(t, opts) {
   var kat=(t.katilimcilar&&t.katilimcilar.length)?t.katilimcilar:[];
 
   // ── CSS ─────────────────────────────────────────────────────
-  var CSS='<style>'
-    // Renk sıfırlama ve temel
-    +'*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important;box-sizing:border-box;margin:0;padding:0}'
-    +'body{font-family:Arial,Helvetica,sans-serif;font-size:11pt;color:#111;line-height:1.45}'
-    // Kapak sayfası: tam A4 boyutu, sayfa numarası yok
-    +'.sayfa-kapak{width:210mm;height:297mm;position:relative;overflow:hidden;display:block;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}'
-    // İçerik sayfaları
-    +'.sayfa-icerik{padding:10mm 14mm 6mm;width:210mm;box-sizing:border-box}'
-    // Sayfa başlığı
-    +'.sayfa-header{border-bottom:2pt solid #6b1b1b;margin-bottom:8pt;padding-bottom:5pt;display:flex;justify-content:space-between;align-items:flex-end}'
-    +'.sayfa-header-oyun{font-size:13pt;font-weight:900;text-transform:uppercase;letter-spacing:.5pt;color:#111}'
-    +'.sayfa-header-bilgi{font-size:10pt;color:#6b1b1b;font-weight:800;text-transform:uppercase;letter-spacing:.4pt;text-align:right}'
-    // Bölüm başlıkları
-    +'.bolum-baslik{font-size:11.5pt;font-weight:900;color:#5a0000;border-bottom:2.5pt solid #8b2a2a;padding-bottom:4pt;margin:10pt 0 6pt;text-transform:uppercase;letter-spacing:.5pt;page-break-after:avoid;break-after:avoid}'
-    +'.bolum-blok{page-break-inside:avoid;break-inside:avoid}'
-    // Tablolar
-    +'table{width:100%;border-collapse:collapse;font-size:10pt;border:1pt solid #d0c8c0}'
-    +'thead{display:table-header-group;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}'
-    +'thead tr{background:#6b1b1b;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}'
-    +'th{color:#fff;padding:5pt 7pt;font-weight:700;text-align:left;border:1pt solid #5a1717;font-size:10pt}'
-    +'td{padding:4pt 7pt;border:1pt solid #d0c8c0;vertical-align:middle;font-size:10pt}'
-    // Satırlar asla sayfa ortasında bölünmez
-    +'tr{page-break-inside:avoid;break-inside:avoid}'
-    +'tbody tr:nth-child(even){background:#faf8f6}'
-    // İsim hücreleri: asla satır sonunda bölünmez
-    +'.td-isim{font-weight:700;color:#111;white-space:nowrap;min-width:110pt}'
-    // Telefon hücreleri: asla satır sonunda bölünmez
-    +'.tel-td{font-weight:800;color:#1d4ed8;font-size:11pt;white-space:nowrap;min-width:90pt}'
-    // Adres/not: kelime bazında bölünebilir
-    +'.td-adres{word-wrap:break-word;max-width:150pt;color:#444}'
-    // Program tablosu renk sınıfları
-    +'.prog-yol td{background:#fff7ed!important;border-left:3pt solid #ea580c!important}'
-    +'.prog-donus td{background:#faf5ff!important;border-left:3pt solid #7c3aed!important}'
-    +'.prog-oyun td{background:#f0fdf4!important;border-left:3pt solid #16a34a!important}'
-    +'.prog-prova td{background:#eff6ff!important;border-left:3pt solid #0369a1!important}'
-    +'.prog-diger td{background:#f9fafb!important;border-left:3pt solid #6b7280!important}'
-    // Saat hücreleri büyük ve belirgin
-    +'.saat-td{font-size:15pt!important;font-weight:900!important;color:#1a1a2e;text-align:center;white-space:nowrap;letter-spacing:.3pt}'
-    +'.saat2-td{font-size:13pt;font-weight:900;color:#16a34a;white-space:nowrap;display:block;margin-top:3pt;border-top:1pt dashed #c8e8c8;padding-top:3pt}'
-    // Bölge telefon – büyük ve mavi
-    +'.bolge-tel{font-weight:800;color:#1d4ed8;font-size:13pt;white-space:nowrap}'
-    // Oda listeleri
-    +'.oda-bolum-baslik{display:flex;justify-content:space-between;align-items:center;padding:6pt 10pt;color:#fff;font-size:10pt;font-weight:800;margin-bottom:0}'
-    +'.oda-sayac{background:rgba(255,255,255,.2);border-radius:12pt;padding:2pt 10pt;font-size:9pt;font-weight:700}'
-    +'.uyari-satir{background:#fef2f2!important}'
-    +'.uyari-satir td{color:#b91c1c}'
-    // Yazdırmada filtre butonları gizlenir
-    +'.no-print{}'
-    +'@page{size:A4;margin:10mm}'
-    // Kapak sayfasında @page margin sıfır — içerik dolduruyor
-    +'.sayfa-kapak{page-break-after:always;break-after:page}'
-    // İçerik sayfaları arasında sayfa kırma
-    +'.sayfa-icerik+.sayfa-icerik{page-break-before:always;break-before:page}'
-    +'@media print{'
-    +  '*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}'
-    +  '.no-print{display:none!important}'
-    +  'thead{display:table-header-group}'
-    +  'tr{page-break-inside:avoid;break-inside:avoid}'
-    +  '.sayfa-kapak{page-break-after:always;break-after:page;margin:0;padding:0}'
-    +  '.sayfa-icerik+.sayfa-icerik{page-break-before:always;break-before:page}'
-    +'}'
-    +'</style>';
+  var CSS='';
 
   // ── SAYFA 1: KAPAK ─────────────────────────────────────────
   // Afiş varsa arka plan resim, yoksa zengin kırmızı degrade (artık siyah değil)
@@ -27684,7 +27293,7 @@ function _pdfTurneDosyasiIcerik(t, opts) {
   try{if((t.notlar||'').startsWith('{'))_lojP=JSON.parse(t.notlar);}catch(e){}
   var _yukBoslar=Array.isArray(_lojP.yukBoslar)&&_lojP.yukBoslar.length?_lojP.yukBoslar:[];
   var _aracTurPdf2=_lojP.aracTur||t.aracTur||'';
-  var nakArac=_aracTurPdf2?(t.kamyonSayisi?t.kamyonSayisi+' adet ':'')+_aracTurPdf2:'';
+  var nakArac=(_aracTurPdf2||t.kamyonSayisi)?(t.kamyonSayisi?t.kamyonSayisi+' adet ':'')+(_aracTurPdf2||'Kamyon'):'';
   var kf2='',kt2='';
   if(lojNot&&lojNot.charAt(0)==='\ud83d'){var kl2=lojNot.split('\n')[0].slice(3);var kp2=kl2.split(' \u00b7 ');kf2=kp2[0]||'';kt2=kp2[1]||'';}
   var yukBosRows=_yukBoslar.map(function(yb){
