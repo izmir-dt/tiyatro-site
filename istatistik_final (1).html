@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<title>İstatistik · İzmir Devlet Tiyatrosu</title>
+<link rel="icon" type="image/png" href="https://izmir-dt.github.io/tiyatro-site/tiyatro-site/favicon.png"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{
+  --bg:#F7F5F1; --surface:#FFFFFF; --surface-2:#FBF8F3;
+  --fg:#1A1A1A; --fg-2:#4A4A4A; --muted:#8A857C;
+  --border:#E8E2D7; --border-2:#D9D2C3;
+  --primary:#B8842B; --primary-2:#9A6E22; --primary-soft:#F6EDD8;
+  --accent:#7A2E1F;
+  --success:#2F7D4E; --warning:#C97A12; --danger:#B53030; --info:#3A6FB0;
+  --r:14px; --r-sm:10px; --r-xs:6px;
+  --shadow-1:0 1px 2px rgba(20,12,4,.04), 0 2px 8px rgba(20,12,4,.04);
+  --shadow-2:0 8px 24px rgba(20,12,4,.10);
+}
+[data-theme="dark"]{
+  --bg:#11140F; --surface:#1A1E18; --surface-2:#22271F;
+  --fg:#F2EFE9; --fg-2:#C4BFB5; --muted:#857F73;
+  --border:#2C322A; --border-2:#3A4036;
+  --primary:#E0A742; --primary-2:#C68F2F; --primary-soft:#3A2E16;
+  --accent:#D9714F;
+  --shadow-1:0 1px 2px rgba(0,0,0,.3), 0 2px 8px rgba(0,0,0,.25);
+  --shadow-2:0 12px 32px rgba(0,0,0,.5);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--fg);min-height:100vh;-webkit-font-smoothing:antialiased;font-feature-settings:"cv11","ss01";letter-spacing:-.005em;}
+.mono{font-family:'JetBrains Mono',monospace;font-feature-settings:"tnum"}
+
+/* ─── TOP BAR ─── */
+.topbar{position:sticky;top:0;z-index:100;background:var(--surface);border-bottom:1px solid var(--border);height:56px;display:flex;align-items:center;padding:0 20px;gap:14px;backdrop-filter:saturate(140%)}
+.brand{display:flex;align-items:center;gap:10px;min-width:0}
+.brand-mark{width:30px;height:30px;background:linear-gradient(135deg,var(--primary),var(--primary-2));border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:11px;letter-spacing:.5px;flex-shrink:0;box-shadow:0 2px 8px rgba(184,132,43,.35)}
+.brand-text{display:flex;flex-direction:column;line-height:1.15;min-width:0}
+.brand-name{font-size:13px;font-weight:800;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.brand-sub{font-size:10px;color:var(--muted);font-weight:500;letter-spacing:.3px;text-transform:uppercase}
+.tb-spacer{flex:1}
+.tb-actions{display:flex;align-items:center;gap:6px}
+.icon-btn{width:34px;height:34px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--fg-2);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;transition:all .15s;font-family:inherit;flex-shrink:0}
+.icon-btn:hover{background:var(--surface-2);color:var(--fg);border-color:var(--border-2)}
+.btn{height:34px;padding:0 12px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--fg-2);font-size:12px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-family:inherit;transition:all .15s;white-space:nowrap}
+.btn:hover{background:var(--surface-2);color:var(--fg);border-color:var(--border-2)}
+.btn-primary{background:var(--primary);border-color:var(--primary);color:#fff}
+.btn-primary:hover{background:var(--primary-2);border-color:var(--primary-2);color:#fff}
+.btn-sm{height:28px;padding:0 10px;font-size:11px;border-radius:7px}
+
+/* ─── LOADING ─── */
+#loading{position:fixed;inset:0;background:var(--bg);z-index:999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px}
+.spinner{width:34px;height:34px;border:2.5px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.load-txt{font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.3px}
+
+#error{display:none;position:fixed;inset:0;background:var(--bg);z-index:998;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;padding:24px}
+
+/* ─── MAIN ─── */
+.app{max-width:1500px;margin:0 auto;padding:18px 20px 28px}
+
+/* ─── FILTER BAR (compact) ─── */
+.filterbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);margin-bottom:14px;box-shadow:var(--shadow-1)}
+.fb-label{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;padding:0 4px}
+.select{height:32px;padding:0 28px 0 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%238A857C' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>") no-repeat right 9px center/9px;color:var(--fg);font-size:12px;font-weight:600;font-family:inherit;cursor:pointer;outline:none;transition:border-color .12s;appearance:none;-webkit-appearance:none}
+.select:hover,.select:focus{border-color:var(--primary)}
+.select.active{border-color:var(--primary);background-color:var(--primary-soft);color:var(--primary-2)}
+[data-theme="dark"] .select.active{color:var(--primary)}
+.fb-divider{width:1px;height:18px;background:var(--border);margin:0 2px}
+.fb-meta{margin-left:auto;font-size:11px;color:var(--muted);font-weight:600;display:flex;align-items:center;gap:8px}
+.last-sync{font-size:10px;color:var(--muted)}
+
+/* ─── KPI ─── */
+.kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:14px}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:13px 14px;box-shadow:var(--shadow-1);position:relative;overflow:hidden;transition:transform .15s,box-shadow .15s}
+.kpi:hover{transform:translateY(-1px);box-shadow:var(--shadow-2)}
+.kpi-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.kpi-icon{width:26px;height:26px;border-radius:7px;display:flex;align-items:center;justify-content:center;color:var(--kc,var(--primary));background:var(--kbg,var(--primary-soft))}
+.kpi-trend{font-size:10px;font-weight:700;color:var(--muted);background:var(--surface-2);padding:2px 6px;border-radius:5px}
+.kpi-val{font-size:24px;font-weight:800;letter-spacing:-.02em;line-height:1;color:var(--fg);font-family:'JetBrains Mono',monospace}
+.kpi-lbl{font-size:10.5px;font-weight:600;color:var(--muted);margin-top:5px;letter-spacing:.2px}
+
+/* ─── TABS ─── */
+.tabs{display:flex;gap:2px;background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:4px;margin-bottom:14px;box-shadow:var(--shadow-1);overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{flex:1;min-width:max-content;padding:8px 14px;border:none;background:transparent;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;border-radius:8px;font-family:inherit;transition:all .15s;display:inline-flex;align-items:center;justify-content:center;gap:6px;letter-spacing:.1px;white-space:nowrap}
+.tab:hover{color:var(--fg);background:var(--surface-2)}
+.tab.active{color:var(--fg);background:var(--bg);box-shadow:0 1px 2px rgba(0,0,0,.06)}
+[data-theme="dark"] .tab.active{background:var(--surface-2)}
+.tab svg{width:13px;height:13px}
+
+/* ─── PANEL / CARD ─── */
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow-1);overflow:hidden}
+.panel-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border);gap:10px}
+.panel-title{font-size:11.5px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:var(--fg);display:flex;align-items:center;gap:7px}
+.panel-title svg{color:var(--primary)}
+.panel-body{padding:14px 16px}
+.panel-body.flush{padding:0}
+
+.grid{display:grid;gap:12px}
+.g-2{grid-template-columns:1fr 1fr}
+.g-1-2{grid-template-columns:1fr 2fr}
+.g-2-1{grid-template-columns:2fr 1fr}
+.g-3{grid-template-columns:repeat(3,1fr)}
+
+.tab-pane{display:none;animation:fade .25s ease-out}
+.tab-pane.active{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+
+/* ─── CHART ─── */
+.chart-wrap{position:relative;width:100%}
+.chart-wrap canvas{display:block;max-width:100%}
+
+/* ─── RANK LIST ─── */
+.rank{display:flex;flex-direction:column}
+.rank-row{display:flex;align-items:center;gap:10px;padding:8px 16px;border-top:1px solid var(--border);transition:background .12s}
+.rank-row:first-child{border-top:none}
+.rank-row:hover{background:var(--surface-2)}
+.rank-no{width:22px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;flex-shrink:0;background:var(--surface-2);color:var(--muted);font-family:'JetBrains Mono',monospace}
+.rank-no.r1{background:linear-gradient(135deg,#E8B844,#C49625);color:#3a2400}
+.rank-no.r2{background:linear-gradient(135deg,#D5D5D5,#A8A8A8);color:#222}
+.rank-no.r3{background:linear-gradient(135deg,#D58A56,#A86232);color:#fff}
+.rank-mid{flex:1;min-width:0}
+.rank-name{font-size:12.5px;font-weight:700;color:var(--fg);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rank-bar{height:4px;background:var(--border);border-radius:3px;overflow:hidden;margin-top:5px}
+.rank-fill{height:100%;background:linear-gradient(90deg,var(--primary),var(--primary-2));border-radius:3px;transition:width .6s cubic-bezier(.4,0,.2,1)}
+.rank-num{font-size:14px;font-weight:800;color:var(--fg);font-family:'JetBrains Mono',monospace;flex-shrink:0;min-width:30px;text-align:right}
+
+/* ─── STATUS LIST ─── */
+.statu-list{display:flex;flex-direction:column;gap:6px;margin-top:10px}
+.statu-row{display:flex;align-items:center;gap:8px;padding:5px 0}
+.statu-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.statu-name{flex:1;font-size:12px;font-weight:600;color:var(--fg-2)}
+.statu-cnt{font-size:13px;font-weight:800;font-family:'JetBrains Mono',monospace}
+.statu-pct{font-size:10px;color:var(--muted);min-width:36px;text-align:right;font-weight:600}
+
+/* ─── PERSON ─── */
+.person-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;padding:14px 16px}
+.person{display:flex;align-items:center;gap:10px;padding:9px 11px;background:var(--surface-2);border-radius:9px;transition:all .12s}
+.person:hover{background:var(--primary-soft)}
+.person-av{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--primary),var(--primary-2));color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex-shrink:0;letter-spacing:-.5px}
+.person-info{flex:1;min-width:0}
+.person-name{font-size:12px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.person-role{font-size:10px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px}
+.person-stat{text-align:right;flex-shrink:0;font-family:'JetBrains Mono',monospace}
+.person-num{font-size:14px;font-weight:800;color:var(--primary)}
+.person-sub{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+
+/* ─── SEARCH ─── */
+.search{position:relative;width:240px;max-width:100%}
+.search input{width:100%;height:30px;padding:0 12px 0 30px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--fg);font-size:12px;font-family:inherit;outline:none;transition:border-color .12s}
+.search input:focus{border-color:var(--primary)}
+.search svg{position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none}
+
+/* ─── TABLE ─── */
+.tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.tbl{width:100%;border-collapse:collapse;font-size:12px}
+.tbl thead th{position:sticky;top:0;background:var(--surface-2);font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);padding:9px 12px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;cursor:pointer;user-select:none}
+.tbl thead th:hover{color:var(--fg)}
+.tbl tbody td{padding:9px 12px;border-bottom:1px solid var(--border);color:var(--fg);vertical-align:middle}
+.tbl tbody tr:last-child td{border-bottom:none}
+.tbl tbody tr:hover td{background:var(--surface-2)}
+.tbl td.num,.tbl th.num{text-align:right;font-family:'JetBrains Mono',monospace;font-weight:700}
+.tbl td.c,.tbl th.c{text-align:center}
+.badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;white-space:nowrap}
+
+.pager{display:flex;justify-content:space-between;align-items:center;padding:10px 16px;border-top:1px solid var(--border);font-size:11px;color:var(--muted);font-weight:600;gap:10px;flex-wrap:wrap}
+.pager-btns{display:flex;gap:6px}
+
+.empty{text-align:center;padding:40px 20px;color:var(--muted)}
+.empty-icon{font-size:32px;margin-bottom:8px;opacity:.6}
+.empty-text{font-size:13px;font-weight:600}
+
+.seg{display:inline-flex;background:var(--surface-2);padding:2px;border-radius:7px;border:1px solid var(--border)}
+.seg-btn{padding:4px 10px;font-size:10.5px;font-weight:700;border:none;background:transparent;color:var(--muted);cursor:pointer;border-radius:5px;font-family:inherit;transition:all .12s}
+.seg-btn.active{background:var(--surface);color:var(--fg);box-shadow:0 1px 2px rgba(0,0,0,.06)}
+
+/* ─── RESPONSIVE ─── */
+@media(max-width:1100px){
+  .kpis{grid-template-columns:repeat(3,1fr)}
+  .g-2,.g-1-2,.g-2-1{grid-template-columns:1fr}
+  .g-3{grid-template-columns:1fr 1fr}
+}
+@media(max-width:680px){
+  .app{padding:12px}
+  .topbar{padding:0 12px;gap:8px;height:52px}
+  .brand-sub{display:none}
+  .kpis{grid-template-columns:repeat(2,1fr);gap:6px}
+  .kpi{padding:11px 12px}
+  .kpi-val{font-size:20px}
+  .filterbar{padding:8px;gap:6px}
+  .fb-meta{order:99;width:100%;margin-left:0;justify-content:space-between;border-top:1px dashed var(--border);padding-top:6px;margin-top:2px}
+  .panel-head{padding:10px 12px;flex-wrap:wrap}
+  .panel-body{padding:12px}
+  .person-grid{grid-template-columns:1fr;padding:10px}
+  .g-3{grid-template-columns:1fr}
+  .search{width:100%}
+  .tab{padding:7px 10px;font-size:11px}
+  .tab span.tab-text{display:none}
+  .tab svg{width:15px;height:15px}
+}
+@media print{
+  .topbar,.tabs,.filterbar,.panel-head .seg,.panel-head .search,.icon-btn,.btn,.pager{display:none!important}
+  .tab-pane{display:block!important}
+  body{background:#fff!important}
+  .panel{box-shadow:none!important;border:1px solid #ddd!important;page-break-inside:avoid;margin-bottom:10px}
+  *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
+}
+</style>
+</head>
+<body>
+
+<div id="loading"><div class="spinner"></div><div class="load-txt">Veriler yükleniyor…</div></div>
+<div id="error">
+  <div style="font-size:34px">⚠️</div>
+  <div style="font-size:15px;font-weight:800;color:var(--danger)">Veri yüklenemedi</div>
+  <div id="error-msg" style="font-size:12px;color:var(--muted);max-width:420px;line-height:1.6"></div>
+  <button class="btn btn-primary" style="margin-top:6px" onclick="location.reload()">↺ Tekrar Dene</button>
+</div>
+
+<header class="topbar" id="topbar" style="display:none">
+  <div class="brand">
+    <div class="brand-mark">İDT</div>
+    <div class="brand-text">
+      <div class="brand-name">İzmir Devlet Tiyatrosu</div>
+      <div class="brand-sub">İstatistik Paneli</div>
+    </div>
+  </div>
+  <div class="tb-spacer"></div>
+  <div class="tb-actions">
+    <button class="btn btn-sm" onclick="pdfRapor()" title="PDF rapor indir">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      <span class="hide-sm">PDF</span>
+    </button>
+    <button class="icon-btn" id="refresh-btn" onclick="refreshData()" title="Yenile">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+    </button>
+    <button class="icon-btn" onclick="toggleTheme()" title="Tema">
+      <svg id="ic-sun" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+      <svg id="ic-moon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+    </button>
+  </div>
+</header>
+
+<main class="app" id="app" style="display:none">
+
+  <!-- FILTERS -->
+  <div class="filterbar">
+    <span class="fb-label">Filtre</span>
+    <select class="select" id="f-sezon" onchange="applyFilters()"><option value="">Tüm Sezonlar</option></select>
+    <select class="select" id="f-oyun" onchange="applyFilters()"><option value="">Tüm Oyunlar</option></select>
+    <select class="select" id="f-statu" onchange="applyFilters()">
+      <option value="">Tüm Statüler</option>
+      <option value="tamamlandi">Tamamlandı</option>
+      <option value="onaylandi">Onaylandı</option>
+      <option value="onay-bekliyor">Onay Bekliyor</option>
+      <option value="taslak">Taslak</option>
+    </select>
+    <button class="btn btn-sm" id="clear-btn" onclick="clearFilters()" style="display:none">✕ Temizle</button>
+    <div class="fb-meta">
+      <span id="filter-count"></span>
+      <span class="last-sync" id="last-sync"></span>
+    </div>
+  </div>
+
+  <!-- KPI -->
+  <div class="kpis" id="kpis"></div>
+
+  <!-- TABS -->
+  <div class="tabs" role="tablist">
+    <button class="tab active" data-tab="overview" onclick="setTab('overview')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
+      <span class="tab-text">Genel Bakış</span>
+    </button>
+    <button class="tab" data-tab="geo" onclick="setTab('geo')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+      <span class="tab-text">Coğrafya & Oyunlar</span>
+    </button>
+    <button class="tab" data-tab="people" onclick="setTab('people')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      <span class="tab-text">Personel</span>
+    </button>
+    <button class="tab" data-tab="list" onclick="setTab('list')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+      <span class="tab-text">Liste</span>
+    </button>
+  </div>
+
+  <!-- ───── PANE: OVERVIEW ───── -->
+  <div class="tab-pane active" id="pane-overview">
+    <div class="grid g-2-1">
+      <div class="panel">
+        <div class="panel-head">
+          <div class="panel-title">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            Yıllık Trend
+          </div>
+          <div class="seg">
+            <button class="seg-btn active" id="trend-bar" onclick="setTrend('bar')">Bar</button>
+            <button class="seg-btn" id="trend-line" onclick="setTrend('line')">Çizgi</button>
+          </div>
+        </div>
+        <div class="panel-body"><div class="chart-wrap" style="height:260px"><canvas id="ch-trend"></canvas></div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><div class="panel-title">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 10 10"/></svg>
+          Statü Dağılımı</div></div>
+        <div class="panel-body">
+          <div class="chart-wrap" style="height:160px"><canvas id="ch-status"></canvas></div>
+          <div class="statu-list" id="status-list"></div>
+        </div>
+      </div>
+    </div>
+    <div style="height:12px"></div>
+    <div class="panel">
+      <div class="panel-head"><div class="panel-title">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        Aylık Dağılım</div></div>
+      <div class="panel-body"><div class="chart-wrap" style="height:200px"><canvas id="ch-monthly"></canvas></div></div>
+    </div>
+  </div>
+
+  <!-- ───── PANE: GEO ───── -->
+  <div class="tab-pane" id="pane-geo">
+    <div class="grid g-2">
+      <div class="panel">
+        <div class="panel-head">
+          <div class="panel-title">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+            En Çok Gidilen İller
+          </div>
+          <select class="select" id="city-limit" style="height:28px;font-size:11px" onchange="renderGeo()">
+            <option value="10">İlk 10</option><option value="20">İlk 20</option><option value="all">Tümü</option>
+          </select>
+        </div>
+        <div class="rank" id="rank-cities"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><div class="panel-title">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+          En Çok Sahnelenen Oyunlar</div>
+          <select class="select" id="play-metric" style="height:28px;font-size:11px" onchange="renderGeo()">
+            <option value="count">Turne</option><option value="days">Gün</option><option value="temsil">Temsil</option>
+          </select>
+        </div>
+        <div class="rank" id="rank-plays"></div>
+      </div>
+    </div>
+    <div style="height:12px"></div>
+    <div class="panel">
+      <div class="panel-head"><div class="panel-title">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        Turne Süresi Dağılımı</div></div>
+      <div class="panel-body"><div class="chart-wrap" style="height:200px"><canvas id="ch-duration"></canvas></div></div>
+    </div>
+  </div>
+
+  <!-- ───── PANE: PEOPLE ───── -->
+  <div class="tab-pane" id="pane-people">
+    <div class="panel">
+      <div class="panel-head">
+        <div class="panel-title">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+          Personel Sıralaması
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <div class="seg">
+            <button class="seg-btn active" id="ptab-tours" onclick="setPerson('tours')">Turne</button>
+            <button class="seg-btn" id="ptab-days" onclick="setPerson('days')">Gün</button>
+          </div>
+          <div class="search">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="text" id="person-search" placeholder="İsim ara…" oninput="filterPerson(this.value)"/>
+          </div>
+        </div>
+      </div>
+      <div class="person-grid" id="person-grid"></div>
+      <div class="pager">
+        <span id="person-info"></span>
+        <button class="btn btn-sm" id="person-more" onclick="morePerson()">Daha Fazla Göster</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ───── PANE: LIST ───── -->
+  <div class="tab-pane" id="pane-list">
+    <div class="panel">
+      <div class="panel-head">
+        <div class="panel-title">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/></svg>
+          Turne Listesi
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <div class="search">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="text" id="tbl-search" placeholder="Oyun, şehir ara…" oninput="filterTable(this.value)"/>
+          </div>
+          <button class="btn btn-sm" onclick="exportCsv()">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            CSV
+          </button>
+        </div>
+      </div>
+      <div class="panel-body flush">
+        <div class="tbl-wrap">
+          <table class="tbl">
+            <thead><tr>
+              <th class="c">#</th>
+              <th onclick="sortTbl('oyun')">Oyun</th>
+              <th onclick="sortTbl('sehir')">Şehir / Güzergah</th>
+              <th onclick="sortTbl('tarih')">Tarih</th>
+              <th class="c num" onclick="sortTbl('sure')">Süre</th>
+              <th class="c num" onclick="sortTbl('temsil')">Temsil</th>
+              <th class="c num">Kadro</th>
+              <th>Statü</th>
+            </tr></thead>
+            <tbody id="tbl-body"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="pager">
+        <span id="tbl-info"></span>
+        <div class="pager-btns">
+          <button class="btn btn-sm" id="prev-page" onclick="changePage(-1)">← Önceki</button>
+          <button class="btn btn-sm" id="next-page" onclick="changePage(1)">Sonraki →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+// ============================================================
+// CONFIG (turne backend ile aynı)
+// ============================================================
+const API='https://turne-backend.vercel.app/api/sheets';
+const TURNE_SHEET='TURNE_KAYITLARI';
+const PERSONEL_SHEET='TURNE_PERSONEL';
+
+// ============================================================
+// STATE
+// ============================================================
+var allTurneler=[], allPersonel=[], filteredTurneler=[];
+var _trendView='bar', _personTab='tours', _personShow=24, _personSearch='';
+var _sort={key:'tarih',asc:false}, _page=0, _pageSize=20, _tableData=[];
+var _charts={}, _activeTab='overview';
+
+// ============================================================
+// THEME
+// ============================================================
+(function(){var t=localStorage.getItem('_istat_tema')||'light';if(t==='dark')document.documentElement.setAttribute('data-theme','dark');updateThemeIcon(t);})();
+function toggleTheme(){var c=document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark';if(c==='dark')document.documentElement.setAttribute('data-theme','dark');else document.documentElement.removeAttribute('data-theme');localStorage.setItem('_istat_tema',c);updateThemeIcon(c);setTimeout(rebuildCharts,80);}
+function updateThemeIcon(t){var s=document.getElementById('ic-sun'),m=document.getElementById('ic-moon');if(!s||!m)return;if(t==='dark'){s.style.display='none';m.style.display='';}else{s.style.display='';m.style.display='none';}}
+
+// ============================================================
+// HELPERS
+// ============================================================
+function parseLocalDate(s){if(!s)return null;var p=s.split('-');if(p.length!==3)return new Date(s);return new Date(+p[0],+p[1]-1,+p[2]);}
+function formatTarih(t){if(!t)return '—';try{var a=['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'];var p=t.split('-');return p[2]+' '+a[+p[1]-1]+' '+p[0];}catch(e){return t;}}
+function turneSuresi(t){try{if(t.baslangicTarih&&t.bitisTarih&&t.bitisTarih>=t.baslangicTarih)return Math.max(1,Math.round((parseLocalDate(t.bitisTarih)-parseLocalDate(t.baslangicTarih))/86400000)+1);return 1;}catch(e){return 1;}}
+function durakIller(t){if(t.duraklar&&t.duraklar.length)return [...new Set(t.duraklar.map(d=>d.il).filter(Boolean))];return t.il?[t.il]:[];}
+function durakTemsil(t){if(t.programSatirlar&&t.programSatirlar.length){var o=t.programSatirlar.filter(s=>s.program==='Oyun');return o.filter(s=>!s.saat2).length+o.filter(s=>s.saat2).length*2;}if(t.duraklar&&t.duraklar.length)return t.duraklar.reduce((s,d)=>s+(d.sayi||1),0);return t.sayi||1;}
+function temizIl(s){return (s||'').replace(/\/MERKEZ/gi,'').replace(/\/Merkez/g,'').trim();}
+function turneSezon(t){var y=((t.baslangicTarih||t.tarih||'').split('-')[0]||'').trim();if(!y)return '?';var n=+y;return n+'–'+(n+1);}
+function turneYil(t){return ((t.baslangicTarih||t.tarih||'').split('-')[0]||'').trim()||'?';}
+var STATU={
+  'tamamlandi':{label:'Tamamlandı',bg:'#DCEAF7',fg:'#1F4F7E',dot:'#3A6FB0'},
+  'onaylandi':{label:'Onaylandı',bg:'#DCEFE0',fg:'#1F5E36',dot:'#2F7D4E'},
+  'taslak':{label:'Taslak',bg:'#EDEAE2',fg:'#5C5648',dot:'#857F73'},
+  'onay-bekliyor':{label:'Onay Bekliyor',bg:'#FAEAD0',fg:'#7A4F0E',dot:'#C97A12'},
+  'iptal':{label:'İptal',bg:'#F5DBDB',fg:'#7A1F1F',dot:'#B53030'},
+  'yarida-kesildi':{label:'Yarıda Kesildi',bg:'#F5E0D5',fg:'#7A3919',dot:'#C95A28'},
+};
+function statuCfg(v){return STATU[v]||{label:v||'Taslak',bg:'#EDEAE2',fg:'#5C5648',dot:'#857F73'};}
+function isDark(){return document.documentElement.getAttribute('data-theme')==='dark';}
+function chartTheme(){return{
+  fg:isDark()?'#C4BFB5':'#4A4A4A',
+  grid:isDark()?'rgba(255,255,255,.06)':'rgba(20,12,4,.06)',
+  primary:isDark()?'#E0A742':'#B8842B',
+  primarySoft:isDark()?'rgba(224,167,66,.25)':'rgba(184,132,43,.25)',
+  bg:isDark()?'#1A1E18':'#FFFFFF',
+};}
+Chart.defaults.font.family="'Inter',system-ui,sans-serif";
+Chart.defaults.font.size=11;
+
+// ============================================================
+// API
+// ============================================================
+async function apiFetch(path){var c=new AbortController();var t=setTimeout(()=>c.abort(),20000);try{return await fetch(API+path,{signal:c.signal});}finally{clearTimeout(t);}}
+
+async function loadData(){
+  var [tR,pR]=await Promise.all([apiFetch('/'+encodeURIComponent(TURNE_SHEET)),apiFetch('/'+encodeURIComponent(PERSONEL_SHEET))]);
+  if(!tR.ok)throw new Error('Turne verisi alınamadı (HTTP '+tR.status+')');
+  parseTurneler(await tR.json());
+  if(pR.ok)parsePersonel(await pR.json());
+}
+
+function parseTurneler(data){
+  var rows=data.rows||[];if(!rows.length)return;
+  var h=(data.headers||[]).map(x=>(x||'').trim().toLowerCase());
+  var iOyun=h.findIndex(x=>x.startsWith('oyun'));
+  var iIl=h.findIndex(x=>x==='il'||x.startsWith('şehir')||x.startsWith('sehir'));
+  var iBas=h.findIndex(x=>x.startsWith('başla')||x.startsWith('basla'));
+  var iBit=h.findIndex(x=>x.startsWith('biti'));
+  var iTar=h.findIndex(x=>x.startsWith('tarih'));
+  var iSay=h.findIndex(x=>x.startsWith('temsil')||x.startsWith('sayı')||x.startsWith('sayi'));
+  var iNot=h.findIndex(x=>x.startsWith('not')&&!x.includes('loji'));
+  var iStat=h.findIndex(x=>x.startsWith('stat'));
+  var iDur=h.findIndex(x=>(x.startsWith('durak')&&x.includes('json'))||x==='duraklar');
+  var rn=data.rowNumbers||[];
+  allTurneler=rows.map(function(r,idx){
+    if(!r||!Array.isArray(r))return null;
+    var oyun=(r[iOyun>=0?iOyun:0]||'').trim();
+    if(!oyun||oyun==='Oyun Adı'||oyun==='oyun adı'||oyun==='ID')return null;
+    var bas=(r[iBas>=0?iBas:(iTar>=0?iTar:2)]||'').trim();
+    var bit=(r[iBit>=0?iBit:3]||'').trim()||bas;
+    var il=(r[iIl>=0?iIl:1]||'').trim();
+    var sayi=parseInt(r[iSay>=0?iSay:5])||1;
+    var n=(r[iNot>=0?iNot:6]||'').trim();
+    var st=(r[iStat>=0?iStat:7]||'taslak').trim().toLowerCase().replace(/\s+/g,'-');
+    var dj=(r[iDur>=0?iDur:19]||'').trim();
+    var dur=[];try{if(dj)dur=JSON.parse(dj);}catch(e){}
+    return {_rowIdx:rn[idx]!=null?rn[idx]:idx+2,oyun,il,baslangicTarih:bas,tarih:bas,bitisTarih:bit,sayi,not:n,statu:st,duraklar:dur,katilimcilar:[]};
+  }).filter(Boolean);
+}
+
+function parsePersonel(data){
+  var rows=data.rows||[];if(!rows.length)return;
+  var h=(data.headers||[]).map(x=>(x||'').trim().toLowerCase());
+  var iOyun=h.findIndex(x=>x.startsWith('oyun')),iKat=h.findIndex(x=>x.startsWith('kategori')),iGor=h.findIndex(x=>x.startsWith('görev')||x.startsWith('gorev')),iKisi=h.findIndex(x=>x.startsWith('kişi')||x.startsWith('kisi'));
+  allPersonel=rows.flatMap(function(r){
+    var oyun=(r[iOyun>=0?iOyun:0]||'').trim();
+    var kat=(r[iKat>=0?iKat:1]||'').trim();
+    var gor=(r[iGor>=0?iGor:2]||'').trim();
+    var raw=(r[iKisi>=0?iKisi:3]||'').trim();
+    if(!oyun||!raw)return [];
+    var isimler=[],depth=0,cur='';
+    for(var i=0;i<raw.length;i++){var ch=raw[i];if(ch==='(')depth++,cur+=ch;else if(ch===')')depth--,cur+=ch;else if(ch===','&&depth===0){if(cur.trim())isimler.push(cur.trim());cur='';}else cur+=ch;}
+    if(cur.trim())isimler.push(cur.trim());
+    return isimler.map(function(k){var ge='';var m=k.match(/^(.*?)\s*\(([^)]+)\)\s*$/);if(m){k=m[1].trim();ge=m[2].trim();}return {oyun,kategori:kat,gorev:ge||gor,kisi:k};});
+  }).filter(p=>p.oyun&&p.kisi);
+  allTurneler.forEach(function(t){
+    var oyunlar=[];
+    if(t.duraklar&&t.duraklar.length)t.duraklar.forEach(d=>{if(d.oyun&&d.oyun.trim()&&oyunlar.indexOf(d.oyun.trim())<0)oyunlar.push(d.oyun.trim());});
+    if(!oyunlar.length&&t.oyun)t.oyun.split('/').forEach(o=>{var ot=o.trim();if(ot)oyunlar.push(ot);});
+    var kat=new Map();
+    allPersonel.forEach(function(p){
+      var m=oyunlar.some(o=>o.toLowerCase()===p.oyun.toLowerCase());
+      if(!m&&t.oyun)m=t.oyun.split('/').some(o=>o.trim().toLowerCase()===p.oyun.toLowerCase());
+      if(m&&!kat.has(p.kisi.toLowerCase()))kat.set(p.kisi.toLowerCase(),{kisi:p.kisi,gorev:p.gorev,kategori:p.kategori});
+    });
+    t.katilimcilar=Array.from(kat.values());
+  });
+}
+
+// ============================================================
+// FILTERS
+// ============================================================
+function populateFilters(){
+  var sezSet=new Set(),oyunSet=new Set();
+  allTurneler.forEach(t=>{sezSet.add(turneSezon(t));(t.oyun||'').split('/').forEach(o=>{if(o.trim())oyunSet.add(o.trim());});});
+  var sS=document.getElementById('f-sezon');
+  [...sezSet].filter(Boolean).sort().reverse().forEach(s=>{var o=document.createElement('option');o.value=s;o.textContent=s;sS.appendChild(o);});
+  var oS=document.getElementById('f-oyun');
+  [...oyunSet].sort((a,b)=>a.localeCompare(b,'tr')).forEach(s=>{var o=document.createElement('option');o.value=s;o.textContent=s;oS.appendChild(o);});
+}
+function applyFilters(){
+  var fS=document.getElementById('f-sezon'),fO=document.getElementById('f-oyun'),fSt=document.getElementById('f-statu');
+  filteredTurneler=allTurneler.filter(function(t){
+    if(fS.value&&turneSezon(t)!==fS.value)return false;
+    if(fO.value){var oy=[t.oyun];if(t.duraklar)t.duraklar.forEach(d=>{if(d.oyun)oy.push(d.oyun);});if(!oy.some(o=>(o||'').split('/').some(x=>x.trim()===fO.value)))return false;}
+    if(fSt.value&&t.statu!==fSt.value)return false;
+    return true;
+  });
+  [fS,fO,fSt].forEach(s=>s.classList.toggle('active',!!s.value));
+  var has=!!(fS.value||fO.value||fSt.value);
+  document.getElementById('clear-btn').style.display=has?'':'none';
+  document.getElementById('filter-count').textContent=has?(filteredTurneler.length+' / '+allTurneler.length+' turne'):(allTurneler.length+' turne');
+  renderAll();
+}
+function clearFilters(){['f-sezon','f-oyun','f-statu'].forEach(id=>{document.getElementById(id).value='';});applyFilters();}
+
+// ============================================================
+// TABS
+// ============================================================
+function setTab(t){
+  _activeTab=t;
+  document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===t));
+  document.querySelectorAll('.tab-pane').forEach(p=>p.classList.toggle('active',p.id==='pane-'+t));
+  renderActive();
+}
+function renderActive(){
+  if(_activeTab==='overview'){renderTrend();renderStatus();renderMonthly();}
+  else if(_activeTab==='geo'){renderGeo();renderDuration();}
+  else if(_activeTab==='people'){renderPerson();}
+  else if(_activeTab==='list'){renderTable();}
+}
+
+// ============================================================
+// RENDER
+// ============================================================
+function renderAll(){renderKpi();renderActive();}
+function rebuildCharts(){Object.values(_charts).forEach(c=>{try{c.destroy();}catch(e){}});_charts={};renderActive();}
+function destroyChart(id){if(_charts[id]){try{_charts[id].destroy();}catch(e){}delete _charts[id];}var c=document.getElementById(id);if(c){var ex=Chart.getChart?Chart.getChart(c):null;if(ex)try{ex.destroy();}catch(e){}}}
+
+// ─── KPI ───
+var KICONS={
+  turne:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>',
+  gun:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/></svg>',
+  temsil:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>',
+  il:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>',
+  aktif:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>',
+  kisi:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>',
+};
+function renderKpi(){
+  var t=filteredTurneler,a=t.filter(x=>x.statu!=='iptal');
+  var tg=a.reduce((s,x)=>s+turneSuresi(x),0);
+  var tt=a.reduce((s,x)=>s+durakTemsil(x),0);
+  var ilSet=new Set();a.forEach(x=>durakIller(x).forEach(il=>ilSet.add(temizIl(il))));
+  var bug=new Date().toISOString().slice(0,10);
+  var ak=t.filter(x=>{var b=x.baslangicTarih||x.tarih||'',e=x.bitisTarih||b;return b<=bug&&e>=bug&&x.statu!=='iptal'&&x.statu!=='yarida-kesildi';}).length;
+  var kS=new Set();a.forEach(x=>x.katilimcilar.forEach(k=>kS.add(k.kisi)));
+  var k=[
+    {l:'Toplam Turne',v:t.length,i:KICONS.turne,c:'#B8842B',bg:'#F6EDD8'},
+    {l:'Toplam Gün',v:tg,i:KICONS.gun,c:'#3A6FB0',bg:'#E1ECF7'},
+    {l:'Toplam Temsil',v:tt,i:KICONS.temsil,c:'#2F7D4E',bg:'#DCEFE0'},
+    {l:'Ziyaret İl',v:ilSet.size,i:KICONS.il,c:'#7A2E1F',bg:'#F2DDD7'},
+    {l:'Aktif Turne',v:ak,i:KICONS.aktif,c:'#C97A12',bg:'#FAEAD0'},
+    {l:'Personel',v:kS.size,i:KICONS.kisi,c:'#6B43A8',bg:'#EAE0F5'},
+  ];
+  document.getElementById('kpis').innerHTML=k.map(x=>'<div class="kpi" style="--kc:'+x.c+';--kbg:'+x.bg+'"><div class="kpi-top"><div class="kpi-icon">'+x.i+'</div></div><div class="kpi-val">'+x.v.toLocaleString('tr-TR')+'</div><div class="kpi-lbl">'+x.l+'</div></div>').join('');
+}
+
+// ─── TREND ───
+function renderTrend(){
+  var t=filteredTurneler.filter(x=>x.statu!=='iptal');
+  var by={};t.forEach(x=>{var y=turneYil(x);if(!by[y])by[y]={c:0,g:0};by[y].c++;by[y].g+=turneSuresi(x);});
+  var years=Object.keys(by).sort();
+  var th=chartTheme();
+  destroyChart('ch-trend');var ctx=document.getElementById('ch-trend');if(!ctx)return;
+  _charts['ch-trend']=new Chart(ctx,{
+    type:_trendView==='bar'?'bar':'line',
+    data:{labels:years,datasets:[
+      {label:'Turne',data:years.map(y=>by[y].c),yAxisID:'y',backgroundColor:_trendView==='bar'?th.primary:'transparent',borderColor:th.primary,borderWidth:2.5,fill:_trendView==='line',tension:.4,pointBackgroundColor:th.primary,pointRadius:4,pointHoverRadius:6,borderRadius:6},
+      {label:'Gün',data:years.map(y=>by[y].g),yAxisID:'y2',backgroundColor:_trendView==='bar'?'rgba(58,111,176,.6)':'transparent',borderColor:'#3A6FB0',borderWidth:2,fill:false,tension:.4,pointBackgroundColor:'#3A6FB0',pointRadius:4,pointHoverRadius:6,borderRadius:6},
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+      plugins:{legend:{position:'top',align:'end',labels:{color:th.fg,font:{size:11,weight:'600'},boxWidth:10,boxHeight:10,usePointStyle:true,pointStyle:'rectRounded'}},tooltip:{backgroundColor:th.bg,titleColor:th.fg,bodyColor:th.fg,borderColor:th.grid,borderWidth:1,padding:10,cornerRadius:8}},
+      scales:{x:{ticks:{color:th.fg},grid:{color:th.grid,display:false}},y:{ticks:{color:th.fg,stepSize:1},grid:{color:th.grid},beginAtZero:true,position:'left'},y2:{ticks:{color:'#3A6FB0'},grid:{drawOnChartArea:false},position:'right'}}
+    }});
+}
+function setTrend(v){_trendView=v;document.getElementById('trend-bar').classList.toggle('active',v==='bar');document.getElementById('trend-line').classList.toggle('active',v==='line');renderTrend();}
+
+// ─── STATUS ───
+function renderStatus(){
+  var t=filteredTurneler,counts={};t.forEach(x=>{counts[x.statu||'taslak']=(counts[x.statu||'taslak']||0)+1;});
+  var order=['tamamlandi','onaylandi','onay-bekliyor','taslak','iptal','yarida-kesildi'];
+  var labels=[],vals=[],colors=[];
+  order.forEach(s=>{if(counts[s]){labels.push(statuCfg(s).label);vals.push(counts[s]);colors.push(statuCfg(s).dot);}});
+  Object.keys(counts).forEach(s=>{if(!order.includes(s)){labels.push(s);vals.push(counts[s]);colors.push('#857F73');}});
+  var th=chartTheme();
+  destroyChart('ch-status');var ctx=document.getElementById('ch-status');if(!ctx)return;
+  _charts['ch-status']=new Chart(ctx,{type:'doughnut',data:{labels,datasets:[{data:vals,backgroundColor:colors,borderWidth:3,borderColor:th.bg,hoverBorderWidth:2,hoverOffset:6}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'68%',plugins:{legend:{display:false},tooltip:{backgroundColor:th.bg,titleColor:th.fg,bodyColor:th.fg,borderColor:th.grid,borderWidth:1,padding:10,cornerRadius:8,callbacks:{label:i=>' '+i.label+': '+i.raw+' ('+Math.round(i.raw/t.length*100)+'%)'}}}}});
+  var total=vals.reduce((a,b)=>a+b,0);
+  document.getElementById('status-list').innerHTML=labels.map((l,i)=>'<div class="statu-row"><span class="statu-dot" style="background:'+colors[i]+'"></span><span class="statu-name">'+l+'</span><span class="statu-cnt" style="color:'+colors[i]+'">'+vals[i]+'</span><span class="statu-pct">'+Math.round(vals[i]/total*100)+'%</span></div>').join('');
+}
+
+// ─── MONTHLY ───
+function renderMonthly(){
+  var t=filteredTurneler.filter(x=>x.statu!=='iptal');
+  var months=new Array(12).fill(0);
+  t.forEach(x=>{var d=x.baslangicTarih||x.tarih||'';if(d){var m=parseInt(d.split('-')[1])-1;if(m>=0&&m<12)months[m]++;}});
+  var labels=['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'];
+  var th=chartTheme(),mx=Math.max.apply(null,months)||1;
+  destroyChart('ch-monthly');var ctx=document.getElementById('ch-monthly');if(!ctx)return;
+  _charts['ch-monthly']=new Chart(ctx,{type:'bar',data:{labels,datasets:[{data:months,backgroundColor:months.map(v=>v===mx?th.primary:th.primarySoft),borderRadius:6,borderSkipped:false,maxBarThickness:42}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{backgroundColor:th.bg,titleColor:th.fg,bodyColor:th.fg,borderColor:th.grid,borderWidth:1,padding:10,cornerRadius:8,callbacks:{label:i=>' '+i.raw+' turne'}}},scales:{x:{ticks:{color:th.fg},grid:{display:false}},y:{ticks:{color:th.fg,stepSize:1},grid:{color:th.grid},beginAtZero:true}}}});
+}
+
+// ─── GEO (RANKS) ───
+function renderGeo(){
+  var t=filteredTurneler.filter(x=>x.statu!=='iptal');
+  // Cities
+  var ilMap={};t.forEach(x=>durakIller(x).forEach(il=>{var n=temizIl(il);if(n)ilMap[n]=(ilMap[n]||0)+1;}));
+  var sortedC=Object.entries(ilMap).sort((a,b)=>b[1]-a[1]);
+  var lim=document.getElementById('city-limit').value;
+  var sliceC=lim==='all'?sortedC:sortedC.slice(0,parseInt(lim));
+  var maxC=sliceC[0]?sliceC[0][1]:1;
+  document.getElementById('rank-cities').innerHTML=sliceC.length?sliceC.map((e,i)=>{
+    var cls=i===0?'r1':i===1?'r2':i===2?'r3':'';
+    return '<div class="rank-row"><div class="rank-no '+cls+'">'+(i+1)+'</div><div class="rank-mid"><div class="rank-name">'+e[0]+'</div><div class="rank-bar"><div class="rank-fill" style="width:'+Math.round(e[1]/maxC*100)+'%"></div></div></div><div class="rank-num">'+e[1]+'</div></div>';
+  }).join(''):'<div class="empty"><div class="empty-icon">📍</div><div class="empty-text">Veri yok</div></div>';
+  // Plays
+  var metric=document.getElementById('play-metric').value;
+  var oM={};t.forEach(x=>{var oy=[];if(x.duraklar&&x.duraklar.length)x.duraklar.forEach(d=>{if(d.oyun&&d.oyun.trim()&&oy.indexOf(d.oyun.trim())<0)oy.push(d.oyun.trim());});if(!oy.length&&x.oyun)x.oyun.split('/').forEach(o=>{var ot=o.trim();if(ot&&oy.indexOf(ot)<0)oy.push(ot);});oy.forEach(o=>{if(!oM[o])oM[o]={count:0,days:0,temsil:0};oM[o].count++;oM[o].days+=turneSuresi(x);oM[o].temsil+=durakTemsil(x);});});
+  var sortedP=Object.entries(oM).sort((a,b)=>b[1][metric]-a[1][metric]).slice(0,15);
+  var maxP=sortedP[0]?sortedP[0][1][metric]:1;
+  var unit={count:'turne',days:'gün',temsil:'temsil'}[metric];
+  document.getElementById('rank-plays').innerHTML=sortedP.length?sortedP.map((e,i)=>{
+    var cls=i===0?'r1':i===1?'r2':i===2?'r3':'';
+    return '<div class="rank-row"><div class="rank-no '+cls+'">'+(i+1)+'</div><div class="rank-mid"><div class="rank-name">'+e[0]+'</div><div class="rank-bar"><div class="rank-fill" style="width:'+Math.round(e[1][metric]/maxP*100)+'%"></div></div></div><div class="rank-num" title="'+unit+'">'+e[1][metric]+'</div></div>';
+  }).join(''):'<div class="empty"><div class="empty-icon">🎭</div><div class="empty-text">Veri yok</div></div>';
+}
+
+// ─── DURATION ───
+function renderDuration(){
+  var t=filteredTurneler.filter(x=>x.statu!=='iptal');
+  var b={'1 gün':0,'2–3 gün':0,'4–7 gün':0,'8–14 gün':0,'15–21 gün':0,'22–30 gün':0,'30+ gün':0};
+  t.forEach(x=>{var s=turneSuresi(x);if(s<=1)b['1 gün']++;else if(s<=3)b['2–3 gün']++;else if(s<=7)b['4–7 gün']++;else if(s<=14)b['8–14 gün']++;else if(s<=21)b['15–21 gün']++;else if(s<=30)b['22–30 gün']++;else b['30+ gün']++;});
+  var labels=Object.keys(b),vals=Object.values(b),th=chartTheme(),mx=Math.max.apply(null,vals)||1;
+  destroyChart('ch-duration');var ctx=document.getElementById('ch-duration');if(!ctx)return;
+  _charts['ch-duration']=new Chart(ctx,{type:'bar',data:{labels,datasets:[{data:vals,backgroundColor:vals.map(v=>v===mx?th.primary:th.primarySoft),borderRadius:6,borderSkipped:false,maxBarThickness:48}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{backgroundColor:th.bg,titleColor:th.fg,bodyColor:th.fg,borderColor:th.grid,borderWidth:1,padding:10,cornerRadius:8,callbacks:{label:i=>' '+i.raw+' turne'}}},scales:{x:{ticks:{color:th.fg},grid:{display:false}},y:{ticks:{color:th.fg,stepSize:1},grid:{color:th.grid},beginAtZero:true}}}});
+}
+
+// ─── PERSON ───
+function buildPerson(){
+  var t=filteredTurneler.filter(x=>x.statu!=='iptal'),m={};
+  t.forEach(function(x){var seen=new Set(),s=turneSuresi(x);x.katilimcilar.forEach(function(k){if(!k.kisi||seen.has(k.kisi.toLowerCase()))return;seen.add(k.kisi.toLowerCase());if(!m[k.kisi])m[k.kisi]={turne:0,gun:0,gorev:k.gorev||''};m[k.kisi].turne++;m[k.kisi].gun+=s;});});
+  return Object.entries(m).sort((a,b)=>_personTab==='days'?b[1].gun-a[1].gun:b[1].turne-a[1].turne);
+}
+function renderPerson(){
+  var all=buildPerson();
+  var f=_personSearch?all.filter(e=>e[0].toLocaleLowerCase('tr-TR').includes(_personSearch.toLocaleLowerCase('tr-TR'))):all;
+  var sh=f.slice(0,_personShow);
+  document.getElementById('person-grid').innerHTML=sh.length?sh.map(function(e){
+    var n=e[0],d=e[1],ini=n.split(' ').map(w=>w[0]||'').slice(0,2).join('').toLocaleUpperCase('tr-TR');
+    return '<div class="person"><div class="person-av">'+ini+'</div><div class="person-info"><div class="person-name">'+n+'</div><div class="person-role">'+d.gorev+'</div></div><div class="person-stat"><div class="person-num">'+(_personTab==='days'?d.gun:d.turne)+'</div><div class="person-sub">'+(_personTab==='days'?'gün':'turne')+'</div></div></div>';
+  }).join(''):'<div class="empty" style="grid-column:1/-1"><div class="empty-icon">👤</div><div class="empty-text">Sonuç bulunamadı</div></div>';
+  document.getElementById('person-info').textContent=f.length+' kişi'+(_personSearch?' (filtrelenmiş)':'');
+  document.getElementById('person-more').style.display=f.length>_personShow?'':'none';
+}
+function setPerson(t){_personTab=t;document.getElementById('ptab-tours').classList.toggle('active',t==='tours');document.getElementById('ptab-days').classList.toggle('active',t==='days');renderPerson();}
+function filterPerson(v){_personSearch=v;_personShow=24;renderPerson();}
+function morePerson(){_personShow+=24;renderPerson();}
+
+// ─── TABLE ───
+function renderTable(){
+  var t=filteredTurneler;
+  var s=(document.getElementById('tbl-search')||{}).value||'';
+  if(s){var q=s.toLocaleLowerCase('tr-TR');t=t.filter(x=>(x.oyun||'').toLocaleLowerCase('tr-TR').includes(q)||durakIller(x).some(il=>il.toLocaleLowerCase('tr-TR').includes(q))||(x.il||'').toLocaleLowerCase('tr-TR').includes(q));}
+  t=t.slice().sort(function(a,b){var va,vb;
+    if(_sort.key==='oyun'){va=a.oyun||'';vb=b.oyun||'';return _sort.asc?va.localeCompare(vb,'tr'):vb.localeCompare(va,'tr');}
+    if(_sort.key==='tarih'){va=a.baslangicTarih||a.tarih||'';vb=b.baslangicTarih||b.tarih||'';return _sort.asc?va.localeCompare(vb):vb.localeCompare(va);}
+    if(_sort.key==='sure'){va=turneSuresi(a);vb=turneSuresi(b);return _sort.asc?va-vb:vb-va;}
+    if(_sort.key==='temsil'){va=durakTemsil(a);vb=durakTemsil(b);return _sort.asc?va-vb:vb-va;}
+    if(_sort.key==='sehir'){va=durakIller(a).join(',');vb=durakIller(b).join(',');return _sort.asc?va.localeCompare(vb,'tr'):vb.localeCompare(va,'tr');}
+    return 0;
+  });
+  _tableData=t;
+  var tot=t.length,pages=Math.max(1,Math.ceil(tot/_pageSize));
+  if(_page>=pages)_page=pages-1;
+  var sl=t.slice(_page*_pageSize,(_page+1)*_pageSize);
+  document.getElementById('tbl-body').innerHTML=sl.length?sl.map(function(x,i){
+    var sc=statuCfg(x.statu),iller=durakIller(x).map(temizIl).filter(Boolean).join(' › ')||(x.il||'—');
+    var bas=formatTarih(x.baslangicTarih||x.tarih),bit=x.bitisTarih&&x.bitisTarih!==(x.baslangicTarih||x.tarih)?' – '+formatTarih(x.bitisTarih):'';
+    return '<tr><td class="c" style="color:var(--muted);font-size:11px" class="num">'+(_page*_pageSize+i+1)+'</td><td style="font-weight:700;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+x.oyun+'</td><td style="color:var(--fg-2);font-size:11.5px;max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+iller+'</td><td style="white-space:nowrap;font-size:11.5px;color:var(--fg-2)">'+bas+bit+'</td><td class="num c">'+turneSuresi(x)+'g</td><td class="num c">'+durakTemsil(x)+'</td><td class="c num">'+x.katilimcilar.length+'</td><td><span class="badge" style="background:'+sc.bg+';color:'+sc.fg+'"><span style="width:6px;height:6px;border-radius:50%;background:'+sc.dot+';display:inline-block"></span>'+sc.label+'</span></td></tr>';
+  }).join(''):'<tr><td colspan="8"><div class="empty"><div class="empty-icon">📭</div><div class="empty-text">Sonuç bulunamadı</div></div></td></tr>';
+  document.getElementById('tbl-info').textContent=tot+' turne'+(pages>1?' · Sayfa '+(_page+1)+'/'+pages:'');
+  document.getElementById('prev-page').disabled=_page<=0;
+  document.getElementById('next-page').disabled=_page>=pages-1;
+}
+function sortTbl(k){if(_sort.key===k)_sort.asc=!_sort.asc;else{_sort.key=k;_sort.asc=false;}_page=0;renderTable();}
+function changePage(d){_page+=d;renderTable();}
+function filterTable(){_page=0;renderTable();}
+
+// ─── CSV ───
+function exportCsv(){
+  var t=_tableData.length?_tableData:filteredTurneler;
+  var rows=[['No','Oyun','Şehir / Güzergah','Başlangıç','Bitiş','Süre (Gün)','Temsil','Kadro','Statü']];
+  t.forEach((x,i)=>rows.push([i+1,x.oyun||'',durakIller(x).map(temizIl).join(' › ')||(x.il||''),x.baslangicTarih||x.tarih||'',x.bitisTarih||'',turneSuresi(x),durakTemsil(x),x.katilimcilar.length,statuCfg(x.statu).label]));
+  var csv=rows.map(r=>r.map(c=>'"'+(String(c||'').replace(/"/g,'""'))+'"').join(',')).join('\n');
+  var b=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});var a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='turne-istatistik-'+new Date().toISOString().slice(0,10)+'.csv';a.click();URL.revokeObjectURL(a.href);
+}
+
+// ─── PDF ───
+function pdfRapor(){
+  var t=filteredTurneler,a=t.filter(x=>x.statu!=='iptal');
+  var tg=a.reduce((s,x)=>s+turneSuresi(x),0),tt=a.reduce((s,x)=>s+durakTemsil(x),0);
+  var ilSet=new Set();a.forEach(x=>durakIller(x).forEach(il=>ilSet.add(temizIl(il))));
+  var kS=new Set();a.forEach(x=>x.katilimcilar.forEach(k=>kS.add(k.kisi)));
+  var ilMap={};a.forEach(x=>durakIller(x).forEach(il=>{var n=temizIl(il);if(n)ilMap[n]=(ilMap[n]||0)+1;}));
+  var topC=Object.entries(ilMap).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  var oM={};a.forEach(x=>{var oy=[];if(x.duraklar&&x.duraklar.length)x.duraklar.forEach(d=>{if(d.oyun&&d.oyun.trim()&&oy.indexOf(d.oyun.trim())<0)oy.push(d.oyun.trim());});if(!oy.length&&x.oyun)x.oyun.split('/').forEach(o=>{var ot=o.trim();if(ot&&oy.indexOf(ot)<0)oy.push(ot);});oy.forEach(o=>{if(o)oM[o]=(oM[o]||0)+1;});});
+  var topP=Object.entries(oM).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  var rows=t.slice().sort((a,b)=>(b.baslangicTarih||b.tarih||'').localeCompare(a.baslangicTarih||a.tarih||'')).map(function(x,i){
+    var sc=statuCfg(x.statu),iller=durakIller(x).map(temizIl).join(', ')||(x.il||'—');
+    var bas=x.baslangicTarih||x.tarih||'',bit=x.bitisTarih&&x.bitisTarih!==bas?' – '+x.bitisTarih:'';
+    return '<tr><td class="c">'+(i+1)+'</td><td><strong>'+x.oyun+'</strong></td><td>'+iller+'</td><td class="nowrap">'+bas+bit+'</td><td class="c">'+turneSuresi(x)+'</td><td class="c">'+durakTemsil(x)+'</td><td class="c">'+x.katilimcilar.length+'</td><td><span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:8.5pt;font-weight:700;background:'+sc.bg+';color:'+sc.fg+'">'+sc.label+'</span></td></tr>';
+  }).join('');
+  var bug=new Date().toLocaleDateString('tr-TR',{day:'numeric',month:'long',year:'numeric'});
+  var html='<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>İstatistik Raporu</title><style>*{box-sizing:border-box;margin:0;padding:0;-webkit-print-color-adjust:exact!important}body{font-family:Arial,sans-serif;font-size:10pt;color:#111;padding:14mm 16mm;line-height:1.5}.h{display:flex;justify-content:space-between;border-bottom:3pt solid #B8842B;padding-bottom:10pt;margin-bottom:14pt}.lg{background:#B8842B;color:#fff;font-weight:900;padding:6pt 10pt;border-radius:4pt;display:inline-block}h1{font-size:18pt;font-weight:900;margin:6pt 0}h2{font-size:11pt;color:#B8842B;border-bottom:1.5pt solid #E8D9B0;padding-bottom:5pt;margin:14pt 0 8pt;text-transform:uppercase;letter-spacing:.4pt}.kg{display:grid;grid-template-columns:repeat(5,1fr);gap:6pt;margin-bottom:12pt}.k{border:1pt solid #E8D9B0;border-radius:4pt;padding:8pt;text-align:center;background:#FBF6EA}.kv{font-size:18pt;font-weight:900;color:#B8842B;display:block}.kl{font-size:8pt;color:#666;text-transform:uppercase;letter-spacing:.4pt;margin-top:3pt;display:block}.g2{display:grid;grid-template-columns:1fr 1fr;gap:14pt;margin-bottom:12pt}table{width:100%;border-collapse:collapse;font-size:9.5pt}thead tr{background:#B8842B}th{color:#fff;padding:6pt 8pt;text-align:left;border:1pt solid #9A6E22}td{padding:5pt 8pt;border-bottom:1pt solid #eee}td.c,th.c{text-align:center}td.nowrap{white-space:nowrap}tr:nth-child(even) td{background:#FBF8F3}@page{size:A4;margin:12mm}</style></head><body><div class="h"><div><span class="lg">İDT</span><h1>İstatistik Raporu</h1><div style="font-size:9pt;color:#666">İzmir Devlet Tiyatrosu</div></div><div style="text-align:right;font-size:9pt;color:#666">'+bug+'<br/><span style="font-size:8pt">Otomatik oluşturuldu</span></div></div><div class="kg"><div class="k"><span class="kv">'+t.length+'</span><span class="kl">Turne</span></div><div class="k"><span class="kv">'+tg+'</span><span class="kl">Gün</span></div><div class="k"><span class="kv">'+tt+'</span><span class="kl">Temsil</span></div><div class="k"><span class="kv">'+ilSet.size+'</span><span class="kl">İl</span></div><div class="k"><span class="kv">'+kS.size+'</span><span class="kl">Personel</span></div></div><div class="g2"><div><h2>En Çok Gidilen İller</h2><table><thead><tr><th class="c" style="width:22pt">#</th><th>İl</th><th class="c">Turne</th></tr></thead><tbody>'+topC.map((e,i)=>'<tr><td class="c"><strong>'+(i+1)+'</strong></td><td>'+e[0]+'</td><td class="c"><strong>'+e[1]+'</strong></td></tr>').join('')+'</tbody></table></div><div><h2>En Çok Sahnelenen Oyunlar</h2><table><thead><tr><th class="c" style="width:22pt">#</th><th>Oyun</th><th class="c">Turne</th></tr></thead><tbody>'+topP.map((e,i)=>'<tr><td class="c"><strong>'+(i+1)+'</strong></td><td>'+e[0]+'</td><td class="c"><strong>'+e[1]+'</strong></td></tr>').join('')+'</tbody></table></div></div><h2>Tüm Turneler</h2><table><thead><tr><th class="c">No</th><th>Oyun</th><th>Şehir</th><th>Tarih</th><th class="c">Süre</th><th class="c">Temsil</th><th class="c">Kadro</th><th>Statü</th></tr></thead><tbody>'+rows+'</tbody></table><script>window.onload=function(){window.print();};<\/script></body></html>';
+  var w=window.open('','_blank');if(!w){alert('Pop-up engelleyiciyi kapatın.');return;}w.document.write(html);w.document.close();
+}
+
+// ─── REFRESH / INIT ───
+async function refreshData(){
+  var btn=document.getElementById('refresh-btn');if(btn)btn.disabled=true;
+  try{await loadData();applyFilters();document.getElementById('last-sync').textContent='Güncel: '+new Date().toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'});}
+  catch(e){alert('Yenileme hatası: '+e.message);}
+  finally{if(btn)btn.disabled=false;}
+}
+async function init(){
+  try{
+    await loadData();
+    populateFilters();
+    applyFilters();
+    document.getElementById('loading').style.display='none';
+    document.getElementById('topbar').style.display='';
+    document.getElementById('app').style.display='';
+    document.getElementById('last-sync').textContent='Güncel: '+new Date().toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'});
+  }catch(e){
+    document.getElementById('loading').style.display='none';
+    var es=document.getElementById('error');es.style.display='flex';
+    document.getElementById('error-msg').textContent='Hata: '+e.message+'. Lütfen internet bağlantınızı kontrol edip tekrar deneyin.';
+  }
+}
+document.addEventListener('DOMContentLoaded',init);
+</script>
+</body>
+</html>
