@@ -12922,7 +12922,9 @@ var _firmaRehberSeed = [
   { ad: 'Zorlu Grand Hotel',     kategori: 'otel',    tel: '', tel2: '', not: 'Trabzon - Sanat Evi', _kaynak: 'Trabzon' }
 ];
 
-// ── DEPOLAMA: localStorage (anlik) + Google Sheets (kalici, cok tarayici) ──
+// ── DEPOLAMA: localStorage (önbellek) + Google Sheets (kalıcı, çok cihaz) ──
+// Sheets HER ZAMAN ana kaynak. localStorage sadece hız için önbellek.
+
 function _firmaVeriAl() {
   try {
     var raw = localStorage.getItem('firma_rehber');
@@ -12934,45 +12936,69 @@ function _firmaVeriAl() {
     return liste;
   } catch(e) { return JSON.parse(JSON.stringify(_firmaRehberSeed)); }
 }
+
 function _firmaVeriKaydet(liste) {
+  // Önce localStorage'a yaz (anında görünsün)
   localStorage.setItem('firma_rehber', JSON.stringify(liste));
-  _firmaRehberSheetSync(liste);
+  // Sonra Sheets'e tam listeyi gönder
+  _firmaSheetTamYaz(liste);
 }
 
-// ── SHEETS SENKRONIZASYONU ──────────────────────────────────────────────────
+// ── SHEETS'E TAM LİSTE YAZ ──────────────────────────────────────────────────
 var _firmaSheetSyncTimer = null;
-function _firmaRehberSheetSync(liste) {
+function _firmaSheetTamYaz(liste) {
   clearTimeout(_firmaSheetSyncTimer);
   _firmaSheetSyncTimer = setTimeout(async function() {
     try {
+      // Her kaydı PUT (varsa güncelle) veya POST (yoksa ekle) ile yaz
       var listeCopy = JSON.parse(JSON.stringify(liste));
+      // Önce Sheets'teki silinmiş satırları bul ve sil
+      var mevcutRaw = localStorage.getItem('firma_rehber_sheetrows');
+      var eskiRows = mevcutRaw ? JSON.parse(mevcutRaw) : [];
+      var yeniRows = listeCopy.filter(function(k){ return k._sheetRow; }).map(function(k){ return k._sheetRow; });
+      var silinecekRows = eskiRows.filter(function(r){ return yeniRows.indexOf(r) === -1; });
+      for (var d = silinecekRows.length - 1; d >= 0; d--) {
+        try { await apiFetch('/' + encodeURIComponent(FIRMA_REHBER_SHEET) + '/row/' + silinecekRows[d], { method: 'DELETE' }); } catch(e3) {}
+      }
+      // Kayıtları yaz
+      var tumRows = [];
       for (var i = 0; i < listeCopy.length; i++) {
         var k = listeCopy[i];
-        var values = [k.ad || '', k.kategori || 'diger', k.tel || '', k.tel2 || '', k.not || ''];
+        var values = [k.ad || '', k.kategori || 'diger', k.tel || '', k.tel2 || '', k.not || '', k._kaynak || ''];
         if (k._sheetRow) {
-          await apiFetch('/' + encodeURIComponent(FIRMA_REHBER_SHEET) + '/row/' + k._sheetRow, {
-            method: 'PUT', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ values: values })
-          });
+          // Güncelle
+          try {
+            await apiFetch('/' + encodeURIComponent(FIRMA_REHBER_SHEET) + '/row/' + k._sheetRow, {
+              method: 'PUT', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ values: values })
+            });
+            tumRows.push(k._sheetRow);
+          } catch(e4) {}
         } else {
+          // Yeni ekle
           try {
             var res = await apiFetch('/' + encodeURIComponent(FIRMA_REHBER_SHEET) + '/row', {
               method: 'POST', headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ values: values })
             });
             if (res && res.ok) {
-              var rData = await res.json();
-              liste[i]._sheetRow = rData.rowNumber || null;
+              var rd = await res.json();
+              liste[i]._sheetRow = rd.rowNumber || null;
+              if (liste[i]._sheetRow) tumRows.push(liste[i]._sheetRow);
             }
-          } catch(e2) {}
+          } catch(e5) {}
         }
       }
       localStorage.setItem('firma_rehber', JSON.stringify(liste));
+      localStorage.setItem('firma_rehber_sheetrows', JSON.stringify(tumRows));
     } catch(e) { console.warn('Firma rehberi Sheets sync hatasi:', e); }
-  }, 1500);
+  }, 1200);
 }
 
-// ── SHEETS'TEN YUKLEME ────────────────────────────────────────────────────
+// Geriye dönük uyumluluk
+function _firmaRehberSheetSync(liste) { _firmaSheetTamYaz(liste); }
+
+// ── SHEETS'TEN YUKLEME (Sheets her zaman öncelikli, çok cihaz desteği) ──────
 async function _firmaRehberSheetYukle() {
   try {
     var res = await apiFetch('/' + encodeURIComponent(FIRMA_REHBER_SHEET));
@@ -12980,33 +13006,35 @@ async function _firmaRehberSheetYukle() {
     var data = await res.json();
     var rows = data.rows || [];
     var rowNumbers = data.rowNumbers || [];
+
+    // Sheets boşsa mevcut listeyi Sheets'e yaz (ilk kurulum)
     if (rows.length === 0) {
       var mevcut = _firmaVeriAl();
-      _firmaRehberSheetSync(mevcut);
+      _firmaSheetTamYaz(mevcut);
       return;
     }
-    var localListe = [];
-    try { localListe = JSON.parse(localStorage.getItem('firma_rehber') || '[]'); } catch(e) {}
-    var localMap = {};
-    localListe.forEach(function(k) { if (k.ad) localMap[k.ad.toLowerCase().trim()] = k; });
+
+    // Sheets'ten gelen veriyi ana liste olarak al
     var sheetListe = rows.map(function(r, i) {
-      var ad = (r[0] || '').trim();
-      var localK = localMap[ad.toLowerCase()] || {};
       return {
-        ad: ad,
-        kategori: (r[1] || '').trim() || localK.kategori || 'diger',
-        tel:  (r[2] || '').trim() || localK.tel  || '',
-        tel2: (r[3] || '').trim() || localK.tel2 || '',
-        not:  (r[4] || '').trim() || localK.not  || '',
+        ad:       (r[0] || '').trim(),
+        kategori: (r[1] || '').trim() || 'diger',
+        tel:      (r[2] || '').trim(),
+        tel2:     (r[3] || '').trim(),
+        not:      (r[4] || '').trim(),
+        _kaynak:  (r[5] || '').trim(),
         _sheetRow: rowNumbers[i] || (i + 2)
       };
     }).filter(function(k) { return k.ad; });
-    var sheetAdlar = {};
-    sheetListe.forEach(function(k) { sheetAdlar[k.ad.toLowerCase().trim()] = true; });
-    localListe.forEach(function(k) {
-      if (k.ad && !sheetAdlar[k.ad.toLowerCase().trim()]) sheetListe.push(k);
-    });
+
+    // Tüm sheetRow numaralarını kaydet (silme takibi için)
+    var tumRows = sheetListe.map(function(k){ return k._sheetRow; });
+    localStorage.setItem('firma_rehber_sheetrows', JSON.stringify(tumRows));
+
+    // localStorage'ı Sheets verisiyle güncelle
     localStorage.setItem('firma_rehber', JSON.stringify(sheetListe));
+
+    // Rehber açıksa yenile
     var overlay = document.getElementById('firma-rehber-overlay');
     if (overlay && overlay.style.display !== 'none') firmaRehberiRender();
   } catch(e) { console.warn('Firma rehberi Sheet yuklenemedi:', e); }
@@ -13357,16 +13385,10 @@ function firmaRehberiSil(idx) {
   var kayit = liste[idx] || {};
   var ad = kayit.ad || 'Bu kayıt';
   if (!confirm(ad + ' silinsin mi?')) return;
-  // Sheet'ten sil (arka planda)
-  if (kayit._sheetRow) {
-    (async function() {
-      try {
-        await apiFetch('/' + encodeURIComponent(FIRMA_REHBER_SHEET) + '/row/' + kayit._sheetRow, { method: 'DELETE' });
-      } catch(e) { console.warn('Firma sheet silme hatasi:', e); }
-    })();
-  }
   liste.splice(idx, 1);
-  localStorage.setItem('firma_rehber', JSON.stringify(liste));
+  // _firmaVeriKaydet hem localStorage'a yazar hem Sheets'e tam listeyi gönderir
+  // (silinen kayıt listede olmadığı için Sheets'ten de kaldırılır)
+  _firmaVeriKaydet(liste);
   firmaRehberiRender();
   if (typeof showToast === 'function') showToast('Kayıt silindi', 'info', 1800);
 }
