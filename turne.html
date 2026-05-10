@@ -650,8 +650,9 @@ function _leafletYukle(callback) {
       transition: all .25s cubic-bezier(.4,0,.2,1);
       position: relative;
     }
-    /* Grid hücreleri içerikleri kadar — ek grup subcard'ı diğer kartları uzatmasın */
-    .cards-grid { align-items: start !important; }
+    /* Tüm kartlar aynı boyutta — satır içindeki en uzun karta göre stretch */
+    .cards-grid { align-items: stretch !important; }
+    .turne-card > .turne-card-body, .turne-card .tc-body { flex: 1 1 auto; }
     /* Kart üst aksanı */
     .turne-card::after {
       content: '';
@@ -3112,6 +3113,127 @@ flex-shrink:0;
     overlay.classList.add('on');
     setTimeout(function(){ (opts.danger ? cancelBtn : okBtn).focus(); }, 30);
     return new Promise(function(res){ resolver = res; });
+  };
+})();
+</script>
+
+<!-- ═══════ TURNE OLUR NO — kart üzerinde, kopyalanabilir, buluta kayıt ═══════ -->
+<style>
+  .olur-chip-wrap { margin-top: 7px; display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+  .olur-chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 10.5px; font-weight: 700; line-height: 1.45;
+    padding: 3px 9px; border-radius: 6px;
+    background: hsl(220, 55%, 96%); color: hsl(220, 70%, 30%);
+    border: 1px solid hsl(220, 50%, 82%);
+    cursor: pointer; user-select: all;
+    max-width: 100%; word-break: break-all; transition: all .15s;
+  }
+  .olur-chip:hover { background: hsl(220, 55%, 92%); border-color: hsl(220, 55%, 70%); }
+  .olur-chip-edit, .olur-chip-add {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 10px; font-weight: 700; line-height: 1.45;
+    padding: 2px 7px; border-radius: 6px;
+    background: transparent; color: var(--muted-foreground);
+    border: 1px dashed var(--border);
+    cursor: pointer; transition: all .15s;
+  }
+  .olur-chip-edit:hover, .olur-chip-add:hover {
+    background: hsl(220, 55%, 96%); color: hsl(220, 70%, 30%); border-color: hsl(220, 55%, 70%); border-style: solid;
+  }
+</style>
+<script>
+(function(){
+  var OLUR_RE = /\[Olur:\s*([^\]]*)\]/i;
+
+  window._getOlurNo = function(t){
+    if (!t || !t.not) return '';
+    var m = (t.not || '').match(OLUR_RE);
+    return m ? (m[1] || '').trim() : '';
+  };
+
+  window._olurNoChipHtml = function(t){
+    var no = _getOlurNo(t);
+    var rid = t._rowIdx;
+    if (no) {
+      var safe = no.replace(/"/g,'&quot;');
+      return '<div class="olur-chip-wrap">'
+        + '<span class="olur-chip" title="Tıkla → kopyala" onclick="event.stopPropagation();_copyOlurNo(\'' + safe.replace(/'/g,"\\'") + '\')">'
+        +   '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>'
+        +   '<span>Olur No: ' + no + '</span>'
+        + '</span>'
+        + '<button class="olur-chip-edit" title="Düzenle" onclick="event.stopPropagation();_editOlurNo(' + rid + ')">'
+        +   '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>'
+        +   'Düzenle'
+        + '</button>'
+        + '</div>';
+    }
+    if (window._goruntuleme_modu) return '';
+    return '<div class="olur-chip-wrap">'
+      + '<button class="olur-chip-add" title="Olur No ekle" onclick="event.stopPropagation();_editOlurNo(' + rid + ')">'
+      +   '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>'
+      +   'Olur No Ekle'
+      + '</button>'
+      + '</div>';
+  };
+
+  window._copyOlurNo = function(no){
+    if (!no) return;
+    var done = function(){
+      if (typeof showToast === 'function') showToast('Olur No kopyalandı: ' + no, 'success', 1800);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(no).then(done).catch(function(){ _olurFallbackCopy(no); done(); });
+    } else {
+      _olurFallbackCopy(no); done();
+    }
+  };
+  function _olurFallbackCopy(text){
+    try {
+      var ta = document.createElement('textarea');
+      ta.value = text; ta.style.position='fixed'; ta.style.left='-9999px';
+      document.body.appendChild(ta); ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    } catch(e){}
+  }
+
+  window._editOlurNo = function(rowIdx){
+    var t = (window.turneler||[]).find(function(x){ return x._rowIdx === rowIdx; });
+    if (!t) return;
+    var mevcut = _getOlurNo(t);
+    var yeni = window.prompt('Turne Olur No (örn. E-81915022-020-245679):', mevcut || '');
+    if (yeni === null) return; // iptal
+    yeni = (yeni || '').trim();
+    var eskiNot = t.not || '';
+    var temiz = eskiNot.replace(/\[Olur:\s*[^\]]*\]\s*/gi, '').trim();
+    var yeniNot = yeni ? ('[Olur: ' + yeni + '] ' + temiz).trim() : temiz;
+    t.not = yeniNot;
+    // UI'yi anında yenile
+    try { if (typeof renderListe === 'function') renderListe(); } catch(e){}
+    // Buluta kaydet (TURNE_SHEET, "not" sütunu)
+    try {
+      if (typeof apiFetch === 'function' && typeof TURNE_SHEET !== 'undefined') {
+        apiFetch('/' + encodeURIComponent(TURNE_SHEET) + '/cell', {
+          method: 'PUT',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ row: t._rowIdx + 2, col: 6, value: yeniNot })
+        }).then(function(res){
+          if (res && res.ok) {
+            if (typeof showToast === 'function') showToast(yeni ? 'Olur No kaydedildi ✓' : 'Olur No silindi', 'success', 1800);
+            try { _cacheYaz('cache_turneler', window.turneler); } catch(e){}
+          } else {
+            if (typeof showToast === 'function') showToast('Kayıt hatası — tekrar deneyin', 'error', 3000);
+            t.not = eskiNot;
+            try { if (typeof renderListe === 'function') renderListe(); } catch(e){}
+          }
+        }).catch(function(){
+          if (typeof showToast === 'function') showToast('Bağlantı hatası — tekrar deneyin', 'error', 3000);
+          t.not = eskiNot;
+          try { if (typeof renderListe === 'function') renderListe(); } catch(e){}
+        });
+      }
+    } catch(e){ console.warn('Olur kayıt hatası:', e); }
   };
 })();
 </script>
@@ -10254,8 +10376,8 @@ function _turneCardGruplu(items, kucuk) {
 
     if (hasBagli) {
       // Ana turne + ek grupları — kart genişliğinde, alt satırda indent
-      html += '<div style="display:flex;flex-direction:column;gap:0">';
-      html += '<div style="position:relative">'
+      html += '<div class="ek-grup-wrap" style="display:flex;flex-direction:column;gap:0;height:100%">';
+      html += '<div class="ek-grup-main" style="position:relative;flex:1 1 auto;display:flex;flex-direction:column">'
         + '<div style="position:absolute;right:0;top:0;bottom:0;width:4px;background:hsl(270,50%,60%);border-radius:0 10px 10px 0;opacity:.5;z-index:1"></div>'
         + (function(){ t._ekGrupSay = baglilar.length; t._ekGrupGizli2 = gizli; t._ekGrupRowIdx = t._rowIdx; return ''; })()
         + turneCard(t, _kucuk)
@@ -10660,6 +10782,7 @@ function turneCard(t, kucuk) {
     +     '<span style="font-size:11px;font-weight:500;color:var(--muted-foreground);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">' + tarihStr + '</span>'
     +     (gunStr ? '<span style="flex-shrink:0;font-size:10px;font-weight:800;color:hsl(38,70%,28%);background:hsl(42,85%,90%);border:1px solid hsl(42,70%,75%);padding:1px 7px;border-radius:6px;letter-spacing:.2px;white-space:nowrap">' + gunStr + '</span>' : '')
     +   '</div>'
+    +   _olurNoChipHtml(t)
     +   (_festivalAdi
         ? '<div style="margin:6px -14px 0;padding:5px 14px;background:hsl(345,52%,36%);display:flex;align-items:center;gap:6px">'
           + '<div style="flex-shrink:0;height:1px;width:12px;background:rgba(255,255,255,.35)"></div>'
@@ -24314,7 +24437,25 @@ function gorevlendirmePdf(rowIdx, mod, overrideTurne) {
               }
               var PDFLib = _w3.PDFLib;
               (async function(){
-                var anaDoc = await PDFLib.PDFDocument.load(jspdfInstance.output('arraybuffer'), { ignoreEncryption: true });
+                // Cross-realm fix: pdf-lib popup penceresinde çalışıyor; ana pencerenin
+                // ArrayBuffer/Uint8Array örnekleri instanceof kontrolünden geçemez ve
+                // pdf-lib bunları "NaN" tipi olarak raporlar. Tüm girişleri popup
+                // realm'inin Uint8Array'ine kopyalıyoruz.
+                function _toPopupBytes(src) {
+                  var srcBuf;
+                  if (src instanceof ArrayBuffer || (src && src.byteLength != null && !src.buffer)) {
+                    srcBuf = src;
+                  } else if (src && src.buffer) {
+                    srcBuf = src.buffer.slice(src.byteOffset || 0, (src.byteOffset || 0) + src.byteLength);
+                  } else {
+                    srcBuf = src;
+                  }
+                  var srcView = new Uint8Array(srcBuf);
+                  var dst = new _w3.Uint8Array(srcView.length);
+                  dst.set(srcView);
+                  return dst;
+                }
+                var anaDoc = await PDFLib.PDFDocument.load(_toPopupBytes(jspdfInstance.output('arraybuffer')), { ignoreEncryption: true });
                 var outDoc = await PDFLib.PDFDocument.create();
                 var mainPages = await outDoc.copyPages(anaDoc, anaDoc.getPageIndices());
                 var pageCount = mainPages.length;
@@ -24325,7 +24466,7 @@ function gorevlendirmePdf(rowIdx, mod, overrideTurne) {
                 for (var ei = 0; ei < _ekPdfler.length; ei++) {
                   var ek = _ekPdfler[ei];
                   try {
-                    var ekDoc = await PDFLib.PDFDocument.load(ek.data, { ignoreEncryption: true });
+                    var ekDoc = await PDFLib.PDFDocument.load(_toPopupBytes(ek.data), { ignoreEncryption: true });
                     ekDocs.push({ ek: ek, doc: ekDoc });
                   } catch(e) {
                     console.error('Ek PDF yüklenemedi:', ek.ad, e);
@@ -24439,7 +24580,20 @@ function gorevlendirmePdf(rowIdx, mod, overrideTurne) {
               kayitlar.forEach(function(k){ k.hedef = hedef; _ekPdfler.push(k); });
               _w3.document.body.removeChild(ov);
               _ekPdfDurumGuncelle();
+              _ekPdfYesilToast(kayitlar.length + ' PDF eklendi');
             };
+          }
+
+          function _ekPdfYesilToast(mesaj) {
+            try {
+              var d = _w3.document;
+              var t = d.createElement('div');
+              t.textContent = '✓ ' + mesaj;
+              t.style.cssText = 'position:fixed;top:20px;right:20px;z-index:200000;background:linear-gradient(135deg,#10b981,#059669);color:#fff;padding:12px 18px;border-radius:10px;font-family:Arial,sans-serif;font-size:13px;font-weight:700;box-shadow:0 8px 24px rgba(16,185,129,.35);opacity:0;transform:translateY(-10px);transition:opacity .25s,transform .25s';
+              d.body.appendChild(t);
+              requestAnimationFrame(function(){ t.style.opacity='1'; t.style.transform='translateY(0)'; });
+              setTimeout(function(){ t.style.opacity='0'; t.style.transform='translateY(-10px)'; setTimeout(function(){ if(t.parentNode) t.parentNode.removeChild(t); }, 300); }, 2600);
+            } catch(e) {}
           }
 
           // PDF Yükle (bilgisayardan) — yükleme sonrası eklenecek sayfayı seçtir
@@ -28415,10 +28569,14 @@ function ilgiliKisiOneri(input, _unused, durakIdx) {
 </div>
 <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9f731bbb0976d2ef',t:'MTc3ODAxOTM3Mw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script>
 
-<!-- ═══════ KULLANICI DÜZENLEMESİ v3: NAV YENİDEN GRUPLAMA + EŞİT KART ═══════ -->
+<!-- ═══════ KULLANICI DÜZENLEMESİ v4: KOMPAKT KART + OLUR NO ═══════ -->
 <style id="kc-patch-style">
-  .cards-grid { grid-auto-rows: 1fr !important; align-items: stretch !important; }
-  .cards-grid > .turne-card { height: 100% !important; min-height: 220px !important; }
+  /* Satırlar içeriğe göre boyutlansın — ek-grup yoksa kartlar kısalır,
+     ek-grup varsa aynı satırdaki diğerleri yine ona uyar (align-items:stretch) */
+  .cards-grid { grid-auto-rows: auto !important; align-items: stretch !important; }
+  .cards-grid > .turne-card { height: auto !important; min-height: 0 !important; }
+  .cards-grid > .ek-grup-wrap { height: 100% !important; }
+  .ek-grup-wrap > .ek-grup-main > .turne-card { flex: 1 1 auto !important; height: auto !important; min-height: 0 !important; }
   .kc-eski-grup { display: none !important; }
   .kc-pill {
     display: inline-flex; align-items: center; gap: 0;
