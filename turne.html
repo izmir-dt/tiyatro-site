@@ -1311,12 +1311,32 @@ function _leafletYukle(callback) {
     .durak-row:before { content:''; position:absolute; left:0; top:0; bottom:0; width:4px; background:var(--primary); border-radius:8px 0 0 8px; opacity:1; }
     .durak-il-wrap { position:relative; grid-column:1/3; }
     .grup-badge { display:inline-flex; align-items:center; gap:4px; padding:2px 8px; border-radius:12px; background:hsl(38,92%,94%); border:1px solid hsl(38,80%,75%); color:hsl(32,80%,35%); font-size:10px; font-weight:700; }
-    .cards-group { margin-bottom:18px; }
-    .cards-group-header { display:flex; align-items:center; gap:8px; margin-bottom:8px; padding:6px 10px; background:var(--card); border:1px solid var(--border); border-radius:8px; cursor:pointer; }
-    .cards-group-header:hover { background: hsl(38,18%,93%); }
-    [data-theme="dark"] .cards-group-header:hover { background: hsl(222,14%,22%); }
-    .cards-group-title { font-size:11px; font-weight:700; color:var(--foreground); flex:1; letter-spacing:0.5px; text-transform:uppercase; }
-    .cards-group-count { font-size:11px; color:var(--muted-foreground); }
+    .cards-group { margin-bottom:22px; }
+    .cards-group-header {
+      display:flex; align-items:center; gap:10px; margin-bottom:10px;
+      padding:9px 14px;
+      background:linear-gradient(135deg, hsl(38,30%,96%) 0%, hsl(38,20%,98%) 100%);
+      border:1.5px solid hsl(38,35%,82%);
+      border-left:4px solid var(--primary);
+      border-radius:10px;
+      cursor:pointer;
+      box-shadow: 0 1px 3px rgba(0,0,0,.06), 0 2px 8px -4px rgba(180,110,0,.12);
+      transition: all .15s ease;
+    }
+    .cards-group-header:hover {
+      background:linear-gradient(135deg, hsl(38,45%,92%) 0%, hsl(38,30%,95%) 100%);
+      border-color: hsl(38,55%,70%);
+      box-shadow: 0 2px 6px rgba(0,0,0,.08), 0 4px 14px -4px rgba(180,110,0,.18);
+      transform: translateY(-1px);
+    }
+    [data-theme="dark"] .cards-group-header {
+      background:linear-gradient(135deg, hsl(222,18%,18%) 0%, hsl(222,14%,16%) 100%);
+      border-color: hsl(222,20%,30%);
+      border-left-color: var(--primary);
+    }
+    [data-theme="dark"] .cards-group-header:hover { background: hsl(222,18%,22%); }
+    .cards-group-title { font-size:13px; font-weight:800; color:var(--foreground); flex:1; letter-spacing:0.8px; text-transform:uppercase; }
+    .cards-group-count { font-size:11px; font-weight:700; color:var(--muted-foreground); background:var(--muted); padding:2px 9px; border-radius:20px; border:1px solid var(--border); white-space:nowrap; }
     .harita-tablo-row { cursor:pointer; transition:background .15s; }
     .harita-tablo-row:hover { background: hsl(38,50%,97%); }
     .harita-leaflet-tip { font-family:inherit!important; font-size:12px!important; border-radius:6px!important; border:1px solid var(--border)!important; box-shadow:0 4px 12px rgba(0,0,0,.15)!important; padding:5px 10px!important; }
@@ -10396,9 +10416,9 @@ function renderListe() {
       var bugunYilAy = bugun.slice(0,7); // "2026-03"
       var ayDurumBadge = '';
       if (key === bugunYilAy) {
-        ayDurumBadge = ' <span style="font-size:11px;padding:2px 8px;border-radius:10px;background:hsl(42,90%,50%);color:hsl(42,70%,15%);font-weight:700;vertical-align:middle;line-height:1.4">Bu Ay</span>';
+        ayDurumBadge = ' <span style="font-size:10px;padding:2px 10px;border-radius:20px;background:linear-gradient(135deg,hsl(42,95%,48%),hsl(38,90%,42%));color:#fff;font-weight:800;vertical-align:middle;line-height:1.4;letter-spacing:.4px;box-shadow:0 2px 6px -1px rgba(180,110,0,.35)">BU AY</span>';
       } else if (key > bugunYilAy) {
-        ayDurumBadge = ' <span style="font-size:11px;padding:2px 8px;border-radius:10px;background:hsl(142,60%,40%);color:#fff;font-weight:700;vertical-align:middle;line-height:1.4">Yaklaşan</span>';
+        ayDurumBadge = ' <span style="font-size:10px;padding:2px 10px;border-radius:20px;background:linear-gradient(135deg,hsl(142,65%,38%),hsl(150,60%,32%));color:#fff;font-weight:800;vertical-align:middle;line-height:1.4;letter-spacing:.4px;box-shadow:0 2px 6px -1px rgba(20,120,60,.3)">YAKLAŞAN</span>';
       }
 
       var tamamlandiSay = g.tumItems.filter(function(t){ return t.statu === 'tamamlandi' && !t.anaGrupId; }).length;
@@ -11853,8 +11873,15 @@ function _memnuniyetLocalGeriYukle() {
         t.memnuniyet = lm;
         degisti = true;
       } else if (sheetDolu && localDolu) {
-        // Her ikisi de dolu → sheet öncelikli, local ile eksikleri tamamla
-        t.memnuniyet = Object.assign({}, lm, sheet);
+        // Her ikisi de dolu → sheet kesinlikle öncelikli (puan silmeleri korunur)
+        // lm'den sadece sheet'te bulunmayan alanları al, puanları sheet'ten al
+        var merged = Object.assign({}, lm);
+        Object.keys(sheet).forEach(function(k){ merged[k] = sheet[k]; });
+        // Sheet'te silinmiş puanları lm'den de sil
+        Object.keys(lm).forEach(function(k){
+          if (k.endsWith('Puan') && !(k in sheet)) delete merged[k];
+        });
+        t.memnuniyet = merged;
       }
       // Sheet dolu, local boş → sheet verisini koru (hiçbir şey yapma)
     });
@@ -29727,6 +29754,8 @@ function _turFiltreEkle(){
   sel.onchange = function(){
     TUR_AY_FILTRE = this.value;
     this.classList.toggle('aktif-filtre', !!this.value);
+    // Ay filtresi değişince ek turne açık state'ini sıfırla
+    if (this.value) window._ekMiniAcik = {};
     _turAyFiltreUygula();
     _turFiltreTemizleLinkGuncelle();
   };
