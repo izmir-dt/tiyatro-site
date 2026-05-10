@@ -28902,4 +28902,496 @@ function ilgiliKisiOneri(input, _unused, durakIdx) {
   });
 })();
 </script>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════
+   TURNE — KAPSAMLI İYİLEŞTİRMELER v3.0
+   6 bağımsız iyileştirme. Mevcut fonksiyon adları ve veri yapısı korunmuştur.
+   ═══════════════════════════════════════════════════════════════════════════ */
+(function(){
+'use strict';
+
+/* Ortak yardımcılar ============================================== */
+function _$(id){ return document.getElementById(id); }
+function _q(sel,root){ return (root||document).querySelector(sel); }
+function _qa(sel,root){ return Array.prototype.slice.call((root||document).querySelectorAll(sel)); }
+function _isFn(f){ return typeof f === 'function'; }
+
+/* ────────────────────────────────────────────────────────────────
+   İYİLEŞTİRME 1 — PDF öncesi zorunlu alan kontrolü
+   Test: 1) Boş başlıklı turnede PDF butonuna bas → uyarı banner çıkar.
+         2) En az bir durak/tarih dolduktan sonra PDF normal çalışır.
+   ──────────────────────────────────────────────────────────────── */
+function _turPdfTurneCoz(arg){
+  // arg: rowIdx (number/string) veya turne objesi
+  try{
+    if (arg == null) return null;
+    if (typeof arg === 'object' && (arg.duraklar !== undefined || arg.oyun !== undefined)) return arg;
+    var idx = (typeof arg === 'string') ? parseInt(arg) : arg;
+    if (isNaN(idx)) return null;
+    if (typeof turneler !== 'undefined' && Array.isArray(turneler)){
+      return turneler.find(function(t){ return t._rowIdx === idx; }) || null;
+    }
+  }catch(e){}
+  return null;
+}
+function _turPdfDogrula(t){
+  var eksik = [];
+  if (!t) { return ['Turne verisi bulunamadı']; }
+  var baslik = (t.oyun||'').trim() || (t.grup||'').trim();
+  if (!baslik) eksik.push('Turne başlığı (oyun adı)');
+  var dlist = (t.duraklar && t.duraklar.length) ? t.duraklar.filter(function(d){ return d && d.il && d.il.trim(); }) : [];
+  if (dlist.length === 0 && !(t.il||'').trim()) eksik.push('En az bir durak');
+  // Her durak için başlangıç tarihi: ana turne tarihinden veya programSatirlar'dan üretiliyor.
+  // Asgari: turne başlangıç tarihi (tarih) dolu olmalı.
+  if (!(t.tarih||'').trim()) eksik.push('Başlangıç tarihi');
+  return eksik;
+}
+function _turUyariBannerGoster(eksikler){
+  var eski = _$('tur-pdf-banner');
+  if (eski) eski.remove();
+  var b = document.createElement('div');
+  b.id = 'tur-pdf-banner';
+  b.className = 'tur-uyari-banner';
+  b.setAttribute('role','alert');
+  b.style.cssText = 'position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:99999;'
+    + 'background:#fffbe6;border:1.5px solid #f0c040;color:#7a5800;padding:10px 36px 10px 14px;'
+    + 'border-radius:9px;font-size:12.5px;font-weight:600;box-shadow:0 6px 20px rgba(0,0,0,.12);'
+    + 'max-width:560px;line-height:1.5;font-family:inherit';
+  b.innerHTML = '<div style="font-weight:800;margin-bottom:4px">⚠ PDF oluşturulamadı — eksik alan(lar):</div>'
+    + '<ul style="margin:0;padding-left:18px;font-weight:500">'
+    + eksikler.map(function(x){ return '<li>'+x+'</li>'; }).join('')
+    + '</ul>'
+    + '<button aria-label="Kapat" style="position:absolute;top:6px;right:8px;background:transparent;border:none;font-size:18px;cursor:pointer;color:#7a5800;font-weight:700">×</button>';
+  b.querySelector('button').onclick = function(){ b.remove(); };
+  document.body.appendChild(b);
+}
+function _turPdfWrap(name){
+  var orig = window[name];
+  if (!_isFn(orig)) return;
+  if (orig.__turPdfWrapped) return;
+  var wrapped = function(){
+    var t = _turPdfTurneCoz(arguments[0]);
+    // Bazı çağrılar (örn. tumRaporlarPdf, kadroPdfIndir, calGenelRaporPdf)
+    // tek bir turne almaz; bu durumda tüm aktif turneler içinden minimum
+    // gereksinimi sağlayan en az 1 turne yeterli sayılır.
+    if (!t){
+      try{
+        if (typeof turneler !== 'undefined' && Array.isArray(turneler)){
+          var anyOk = turneler.some(function(x){ return _turPdfDogrula(x).length === 0; });
+          if (anyOk) return orig.apply(this, arguments);
+          _turUyariBannerGoster(['En az bir geçerli turne (başlık + durak + tarih) bulunmuyor']);
+          return;
+        }
+      }catch(e){}
+      return orig.apply(this, arguments);
+    }
+    var eksik = _turPdfDogrula(t);
+    if (eksik.length){ _turUyariBannerGoster(eksik); return; }
+    return orig.apply(this, arguments);
+  };
+  wrapped.__turPdfWrapped = true;
+  window[name] = wrapped;
+}
+function _turPdfWrapAll(){
+  ['_pdfModSec','gorevlendirmePdf','_konaklamaPdfIndir','_ekTurnePdfSec',
+   '_tcListesiPdfIndir','_ekTurnePdfKatilimci','_ekTurnePdfKonaklama',
+   '_odaPlanPdfIndir','kadroPdfIndir','tumRaporlarPdf','calGenelRaporPdf']
+    .forEach(_turPdfWrap);
+}
+
+/* ────────────────────────────────────────────────────────────────
+   İYİLEŞTİRME 2 — Form sekme tamamlanma göstergesi
+   Test: 1) Modal aç → tüm noktalar gri.
+         2) Genel sekmesinde oyun + tarih gir → noktalar yeşile döner.
+         3) Klavye 1-5 ile sekme geçişi etkilenmemeli.
+   ──────────────────────────────────────────────────────────────── */
+var TUR_SEKME_DURUM = ['gri','gri','gri','gri','gri']; // 0..4
+var TUR_SEKME_ID = ['ms-genel','ms-ulasim','ms-konaklama','ms-lojistik','ms-program'];
+var TUR_SEKME_ZORUNLU = {
+  0: function(){ // Genel: oyun (m-oyun) || grup (m-grup), statü (m-statu), m-tarih
+    var oyun = ((_$('m-oyun')||{}).value||'').trim();
+    var grup = ((_$('m-grup')||{}).value||'').trim();
+    var statu = ((_$('m-statu')||{}).value||'').trim();
+    var tarih = ((_$('m-tarih')||{}).value||'').trim();
+    var hepsi = [oyun||grup, statu, tarih].filter(Boolean).length;
+    if (hepsi === 3) return 'yesil';
+    if (hepsi === 0) return 'gri';
+    return 'sari';
+  }
+};
+function _turSekmePanelDokunulmus(panelId){
+  var p = _$(panelId); if (!p) return false;
+  var inputlar = _qa('input,select,textarea', p);
+  return inputlar.some(function(i){
+    if (i.type === 'hidden') return false;
+    if (i.type === 'checkbox' || i.type === 'radio') return i.checked;
+    return (i.value||'').toString().trim().length > 0;
+  });
+}
+function _turSekmeDurumHesapla(){
+  TUR_SEKME_DURUM[0] = TUR_SEKME_ZORUNLU[0]();
+  for (var i=1;i<5;i++){
+    TUR_SEKME_DURUM[i] = _turSekmePanelDokunulmus(TUR_SEKME_ID[i]) ? 'yesil' : 'gri';
+  }
+}
+function _turSekmeNoktaUygula(){
+  _turSekmeDurumHesapla();
+  var renkler = { gri:'#9ca3af', sari:'#f59e0b', yesil:'#16a34a' };
+  for (var i=0;i<5;i++){
+    var lbl = _$('wz-l-'+i);
+    if (!lbl) continue;
+    var nokta = lbl.querySelector('.tur-sekme-nokta');
+    if (!nokta){
+      nokta = document.createElement('span');
+      nokta.className = 'tur-sekme-nokta';
+      nokta.style.cssText = 'display:inline-block;width:6px;height:6px;border-radius:50%;margin-left:5px;vertical-align:middle;transition:background .2s';
+      lbl.appendChild(nokta);
+    }
+    nokta.style.background = renkler[TUR_SEKME_DURUM[i]] || renkler.gri;
+  }
+}
+function _turSekmeIzlemeKur(){
+  var modal = _$('modal-overlay');
+  if (!modal) return;
+  modal.addEventListener('input', _turSekmeNoktaUygula, true);
+  modal.addEventListener('change', _turSekmeNoktaUygula, true);
+  modal.addEventListener('click', function(){ setTimeout(_turSekmeNoktaUygula, 100); }, true);
+  // Modal açıldığında uygula
+  var mo = new MutationObserver(function(){
+    if (modal.classList.contains('active')) setTimeout(_turSekmeNoktaUygula, 50);
+  });
+  mo.observe(modal, { attributes:true, attributeFilter:['class','style'] });
+}
+
+/* ────────────────────────────────────────────────────────────────
+   İYİLEŞTİRME 3 — Liste filtre paneli (Statü/Oyun/Ay)
+   Test: 1) Liste sekmesinde yeni "Ay" dropdown'u görünür.
+         2) Bir ay seç → sadece o ayda başlayan turneler kalır.
+         3) "X filtreyi temizle" linkine bas → tüm filtreler sıfırlanır.
+   Mevcut filter-search/filter-statu/filter-oyun/filter-zaman korunur.
+   Ay filtresi eklenir; client-side; renderListe sonrası DOM filtre.
+   ──────────────────────────────────────────────────────────────── */
+var TUR_AY_FILTRE = ''; // '' = hepsi, '01'..'12'
+function _turFiltreEkle(){
+  if (_$('tur-filter-ay')) return;
+  var sezonBar = _$('sezon-bar'); if (!sezonBar) return;
+  // Ay dropdown
+  var sel = document.createElement('select');
+  sel.id = 'tur-filter-ay';
+  sel.className = 'filter-select mobil-gizle';
+  sel.style.cssText = 'min-width:110px;max-width:150px';
+  var aylar = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
+  sel.innerHTML = '<option value="">📅 Tüm Aylar</option>'
+    + aylar.map(function(a,i){ var v=String(i+1).padStart(2,'0'); return '<option value="'+v+'">'+a+'</option>'; }).join('');
+  sel.onchange = function(){
+    TUR_AY_FILTRE = this.value;
+    this.classList.toggle('aktif-filtre', !!this.value);
+    _turAyFiltreUygula();
+    _turFiltreTemizleLinkGuncelle();
+  };
+  // Oyun filtresinden sonra ekle
+  var oyunSel = _$('filter-oyun');
+  if (oyunSel && oyunSel.parentElement === sezonBar){
+    sezonBar.insertBefore(sel, oyunSel.nextSibling);
+  } else {
+    sezonBar.appendChild(sel);
+  }
+  // Filtreyi temizle linki
+  var clearWrap = document.createElement('div');
+  clearWrap.id = 'tur-filtre-temizle-wrap';
+  clearWrap.style.cssText = 'display:none;padding:6px 14px;background:hsl(38,30%,96%);border-bottom:1px solid var(--border);font-size:11px';
+  clearWrap.innerHTML = '<a href="#" id="tur-filtre-temizle" style="color:#b45309;font-weight:700;text-decoration:none">✕ Filtreyi temizle</a>'
+    + ' <span id="tur-filtre-aktif-sayi" style="color:#666;margin-left:6px"></span>';
+  var listeTab = _$('tab-liste');
+  if (listeTab && sezonBar.parentElement === listeTab){
+    sezonBar.parentElement.insertBefore(clearWrap, sezonBar.nextSibling);
+  }
+  clearWrap.querySelector('#tur-filtre-temizle').onclick = function(e){
+    e.preventDefault();
+    var fs=_$('filter-search'); if (fs){ fs.value=''; var cl=_$('fs-clear'); if (cl) cl.classList.remove('visible'); }
+    var fz=_$('filter-zaman'); if (fz){ fz.value='tum'; fz.classList.remove('aktif-filtre'); if(typeof zamanFiltre!=='undefined') zamanFiltre='tum'; }
+    var fo=_$('filter-oyun'); if (fo){ fo.value=''; fo.classList.remove('aktif-filtre'); }
+    var fi=_$('filter-il'); if (fi){ fi.value=''; fi.classList.remove('aktif-filtre'); }
+    if (_isFn(window.statuDdSec)) try{ window.statuDdSec('tum', null); }catch(_){}
+    if (typeof statuFiltre !== 'undefined') statuFiltre = 'tum';
+    var fa=_$('tur-filter-ay'); if (fa){ fa.value=''; fa.classList.remove('aktif-filtre'); }
+    TUR_AY_FILTRE = '';
+    if (_isFn(window.renderListe)) try{ window.renderListe(); }catch(_){}
+    _turAyFiltreUygula();
+    _turFiltreTemizleLinkGuncelle();
+  };
+}
+function _turAyFiltreUygula(){
+  if (!TUR_AY_FILTRE) {
+    _qa('.turne-card[data-tur-ay-gizli="1"]').forEach(function(k){ k.style.display=''; k.removeAttribute('data-tur-ay-gizli'); });
+    return;
+  }
+  if (typeof turneler === 'undefined') return;
+  _qa('.turne-card').forEach(function(k){
+    var idx = parseInt(k.getAttribute('data-row-idx')||k.getAttribute('data-rowIdx')||'-1');
+    var t = turneler.find(function(x){ return x._rowIdx === idx; });
+    var tarih = t && (t.tarih||'');
+    var ay = (tarih.match(/^\d{4}-(\d{2})-/)||[])[1] || '';
+    if (ay === TUR_AY_FILTRE){
+      k.style.display=''; k.removeAttribute('data-tur-ay-gizli');
+    } else {
+      k.style.display='none'; k.setAttribute('data-tur-ay-gizli','1');
+    }
+  });
+}
+function _turFiltreTemizleLinkGuncelle(){
+  var w = _$('tur-filtre-temizle-wrap'); if (!w) return;
+  var aktif = 0;
+  if (((_$('filter-search')||{}).value||'').trim()) aktif++;
+  if (((_$('filter-zaman')||{}).value||'tum') !== 'tum') aktif++;
+  if (((_$('filter-oyun')||{}).value||'')) aktif++;
+  if (((_$('filter-il')||{}).value||'')) aktif++;
+  if (typeof statuFiltre !== 'undefined' && statuFiltre && statuFiltre !== 'tum') aktif++;
+  if (TUR_AY_FILTRE) aktif++;
+  w.style.display = aktif > 0 ? 'block' : 'none';
+  var s = _$('tur-filtre-aktif-sayi'); if (s) s.textContent = aktif > 0 ? '('+aktif+' aktif)' : '';
+}
+function _turRenderListeHook(){
+  var orig = window.renderListe;
+  if (!_isFn(orig) || orig.__turWrapped) return;
+  var wrapped = function(){
+    var r = orig.apply(this, arguments);
+    setTimeout(function(){
+      _turAyFiltreUygula();
+      _turFiltreTemizleLinkGuncelle();
+      _turSonDegistirenBilgisiKartlaraEkle();
+    }, 0);
+    return r;
+  };
+  wrapped.__turWrapped = true;
+  window.renderListe = wrapped;
+}
+
+/* ────────────────────────────────────────────────────────────────
+   İYİLEŞTİRME 4 — Tarih çakışma uyarısı (program tablosu)
+   Test: 1) Program sekmesinde aynı tarihe iki satır gir →
+            ikisinin arkaplanı turuncu, sağa "⚠ Tarih çakışıyor" eklenir.
+         2) Tarihi değiştir → uyarı kaybolur.
+         3) Kayıt bloklanmaz.
+   ──────────────────────────────────────────────────────────────── */
+function _turProgCakismaUygula(){
+  var wrap = _$('program-gunler-wrap'); if (!wrap) return;
+  if (typeof programSatirlar === 'undefined' || !programSatirlar.length) return;
+  // Tarih sayımı
+  var sayim = {};
+  programSatirlar.forEach(function(s){
+    var t = (s && s.tarih) ? s.tarih : '';
+    if (t) sayim[t] = (sayim[t]||0) + 1;
+  });
+  // Mevcut etiketleri temizle
+  _qa('.tur-cakisma-etiket', wrap).forEach(function(e){ e.remove(); });
+  // Üst kapsayıcı: programSatirlar.length adet ana satır var, sıraya göre
+  // İlk grid satırını yakala. renderProgramGunler her satırı `display:grid;grid-template-columns:112px 84px 94px 110px 1fr 28px` ile çiziyor.
+  var anaSatirlar = _qa('div[style*="grid-template-columns:112px"]', wrap);
+  anaSatirlar.forEach(function(row, i){
+    var s = programSatirlar[i]; if (!s) return;
+    var t = s.tarih || '';
+    var cakisiyor = t && sayim[t] > 1;
+    if (cakisiyor){
+      row.style.background = 'hsl(28,90%,92%)';
+      row.style.position = row.style.position || 'relative';
+      var et = document.createElement('span');
+      et.className = 'tur-cakisma-etiket';
+      et.textContent = '⚠ Tarih çakışıyor';
+      et.style.cssText = 'display:inline-block;margin-left:6px;padding:2px 8px;border-radius:6px;background:#fb923c;color:#fff;font-size:10px;font-weight:800;white-space:nowrap;position:absolute;right:42px;top:50%;transform:translateY(-50%)';
+      row.appendChild(et);
+    } else {
+      // Reset bg if previously set
+      if (row.style.background && row.style.background.indexOf('28,90%') >= 0){
+        row.style.background = (i%2===0 ? 'var(--card)' : 'hsl(38,28%,97%)');
+      }
+    }
+  });
+}
+function _turProgRenderHook(){
+  var orig = window.renderProgramGunler;
+  if (!_isFn(orig) || orig.__turWrapped) return;
+  var wrapped = function(){
+    var r = orig.apply(this, arguments);
+    setTimeout(_turProgCakismaUygula, 0);
+    return r;
+  };
+  wrapped.__turWrapped = true;
+  window.renderProgramGunler = wrapped;
+}
+
+/* ────────────────────────────────────────────────────────────────
+   İYİLEŞTİRME 5 — "Son değiştiren" tag (görünür kart altı)
+   notes alanına: [LastEdit:email:ISO8601] tag'i eklenir.
+   Test: 1) Bir turne kaydet → notlardan tag parse edilip karta küçük gri
+            "Son: ali@izmir.dt — N gün önce" yazısı düşer.
+         2) Notlar metni düzenleme alanında tag görünmez.
+         3) PDF'lerde tag görünmez (kullanım anında ham notlardan parse edilir).
+   ──────────────────────────────────────────────────────────────── */
+var TUR_LE_RE = /\[LastEdit:([^:\]]+):([0-9T:\-\.Z+]+)\]\s*/g;
+function _turNotStrip(s){ return (s||'').replace(TUR_LE_RE,'').trim(); }
+function _turNotParse(s){
+  if (!s) return null;
+  TUR_LE_RE.lastIndex = 0;
+  var m = TUR_LE_RE.exec(s);
+  return m ? { email: m[1], tarih: m[2] } : null;
+}
+function _turGoreceliZaman(iso){
+  try{
+    var d = new Date(iso); if (isNaN(d.getTime())) return '';
+    var fark = (Date.now() - d.getTime()) / 1000;
+    if (fark < 60) return 'az önce';
+    if (fark < 3600) return Math.floor(fark/60) + ' dk önce';
+    if (fark < 86400) return Math.floor(fark/3600) + ' saat önce';
+    if (fark < 604800) return Math.floor(fark/86400) + ' gün önce';
+    return d.toLocaleDateString('tr-TR');
+  }catch(e){ return ''; }
+}
+function _turKullaniciEpostaAl(){
+  try{ return localStorage.getItem('turne_eposta') || sessionStorage.getItem('turne_eposta') || ''; }catch(e){ return ''; }
+}
+window._turNotStrip = _turNotStrip;
+window._turNotParse = _turNotParse;
+function _turSaveTurneHook(){
+  var orig = window.saveTurne;
+  if (!_isFn(orig) || orig.__turWrapped) return;
+  var wrapped = async function(){
+    // m-not içine [LastEdit:...] tag'ini enjekte et (eski tag'i değiştir)
+    try{
+      var nEl = _$('m-not');
+      if (nEl){
+        var raw = (nEl.value||'');
+        raw = raw.replace(TUR_LE_RE, '').trim();
+        var email = _turKullaniciEpostaAl() || 'bilinmeyen';
+        var tag = '[LastEdit:' + email + ':' + new Date().toISOString() + ']';
+        nEl.value = raw ? (tag + ' ' + raw) : tag;
+        // İYİLEŞTİRME 6 ile koordinasyon: statü düşürme
+        if (window._turOnayDusur === true){
+          var st = _$('m-statu');
+          if (st) st.value = 'beklemede';
+          // m-statu-dd-label da güncellensin
+          if (_isFn(window.mStatuDdSec)) try{ window.mStatuDdSec('beklemede', null); }catch(_){}
+          window._turOnayDusur = false;
+        }
+      }
+    }catch(e){ console.warn('[İYİ5] not tag eklenemedi', e); }
+    return orig.apply(this, arguments);
+  };
+  wrapped.__turWrapped = true;
+  window.saveTurne = wrapped;
+}
+function _turEditTurneHook(){
+  var orig = window.editTurne;
+  if (!_isFn(orig) || orig.__turWrapped) return;
+  var wrapped = function(){
+    var r = orig.apply(this, arguments);
+    // Açıldıktan sonra m-not içindeki LastEdit tag'ini gizle
+    setTimeout(function(){
+      var nEl = _$('m-not'); if (nEl) nEl.value = _turNotStrip(nEl.value);
+      _turSekmeNoktaUygula();
+    }, 80);
+    // İYİ 6 için orijinal statüyü kaydet
+    try{
+      var idx = arguments[0];
+      var t = (typeof turneler !== 'undefined') ? turneler.find(function(x){ return x._rowIdx === (typeof idx==='string'?parseInt(idx):idx); }) : null;
+      window._turOrijStatu = t ? (t.statu||'taslak') : '';
+      window._turOnayDusur = false;
+    }catch(e){}
+    return r;
+  };
+  wrapped.__turWrapped = true;
+  window.editTurne = wrapped;
+}
+function _turSonDegistirenBilgisiKartlaraEkle(){
+  if (typeof turneler === 'undefined') return;
+  _qa('.turne-card').forEach(function(k){
+    if (k.querySelector('.tur-son-degistiren')) return;
+    var idx = parseInt(k.getAttribute('data-row-idx')||k.getAttribute('data-rowIdx')||'-1');
+    var t = turneler.find(function(x){ return x._rowIdx === idx; });
+    if (!t) return;
+    var info = _turNotParse(t.notlar||t.not||'');
+    if (!info) return;
+    var div = document.createElement('div');
+    div.className = 'tur-son-degistiren';
+    div.style.cssText = 'position:absolute;bottom:4px;right:8px;font-size:9.5px;color:#9ca3af;font-weight:500;pointer-events:none;font-family:inherit';
+    div.textContent = 'Son: ' + info.email + ' — ' + _turGoreceliZaman(info.tarih);
+    if (getComputedStyle(k).position === 'static') k.style.position = 'relative';
+    k.appendChild(div);
+  });
+}
+
+/* ────────────────────────────────────────────────────────────────
+   İYİLEŞTİRME 6 — Onaylı/Tamamlanmış turnede değişiklik uyarısı
+   Test: 1) "Onaylandı" statülü turneyi düzenle → bir alanı değiştir →
+            Kaydet'e bas → onay diyaloğu çıkar.
+         2) Evet → kayıt yapılır, statü "Beklemede"ye düşer.
+         3) Hayır → form kapanır, mevcut veri korunur.
+         4) Salt-okunur (görüntüleme) modunda kontrol çalışmaz.
+   ──────────────────────────────────────────────────────────────── */
+function _turKaydetButonHook(){
+  // Kaydet butonu tıklamasını yakala (capture aşamasında)
+  document.addEventListener('click', function(e){
+    var btn = e.target && (e.target.id === 'save-turne-btn' ? e.target : e.target.closest && e.target.closest('#save-turne-btn'));
+    if (!btn) return;
+    if (window._turOnayKontrolGecildi) { window._turOnayKontrolGecildi = false; return; }
+    // Salt-okunur modda atla
+    if (document.body.classList.contains('goruntuleme-modu') || window._goruntuleme_modu) return;
+    var orig = (window._turOrijStatu||'').toLowerCase();
+    if (orig !== 'onaylandi' && orig !== 'onaylandı' && orig !== 'tamamlandi' && orig !== 'tamamlandı') return;
+    // Form değişikliği var mı? _modalDirty global olarak yönetiliyor
+    if (typeof _modalDirty !== 'undefined' && _modalDirty === false) return;
+    e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+    if (_isFn(window.onayGoster)){
+      window.onayGoster({
+        baslik: 'Onaylı turnede değişiklik',
+        mesaj: 'Bu turne onaylanmış durumda. Değişiklik yaparsanız statü otomatik olarak "Beklemede"ye düşürülür. Devam etmek istiyor musunuz?',
+        ikon: '⚠️',
+        ikonBg: 'hsl(42,90%,94%)',
+        tamamRenk: 'hsl(42,60%,38%)',
+        tamamYazi: 'Evet, devam et',
+        iptalYazi: 'Hayır',
+        onOnay: function(){
+          window._turOnayDusur = true;
+          window._turOnayKontrolGecildi = true;
+          // Yeniden kaydet butonuna tıklat
+          setTimeout(function(){ var b=_$('save-turne-btn'); if(b) b.click(); }, 50);
+        },
+        onIptal: function(){
+          if (_isFn(window.closeModal)) try{ window.closeModal(); }catch(_){}
+        }
+      });
+    }
+  }, true);
+}
+
+/* ────────────────────────────────────────────────────────────────
+   Bootstrap
+   ──────────────────────────────────────────────────────────────── */
+function _turBoot(){
+  try{ _turPdfWrapAll(); }catch(e){ console.warn('[İYİ1]',e); }
+  try{ _turSekmeIzlemeKur(); _turSekmeNoktaUygula(); }catch(e){ console.warn('[İYİ2]',e); }
+  try{ _turFiltreEkle(); _turRenderListeHook(); _turAyFiltreUygula(); _turFiltreTemizleLinkGuncelle(); _turSonDegistirenBilgisiKartlaraEkle(); }catch(e){ console.warn('[İYİ3/5]',e); }
+  try{ _turProgRenderHook(); _turProgCakismaUygula(); }catch(e){ console.warn('[İYİ4]',e); }
+  try{ _turSaveTurneHook(); _turEditTurneHook(); }catch(e){ console.warn('[İYİ5]',e); }
+  try{ _turKaydetButonHook(); }catch(e){ console.warn('[İYİ6]',e); }
+  // Filtre dinleyicileri (mevcut elemanlara temizleme linki güncellemesi için)
+  ['filter-search','filter-zaman','filter-oyun','filter-il'].forEach(function(id){
+    var el = _$(id); if (!el) return;
+    el.addEventListener('change', _turFiltreTemizleLinkGuncelle);
+    el.addEventListener('input', _turFiltreTemizleLinkGuncelle);
+  });
+}
+if (document.readyState === 'loading'){
+  document.addEventListener('DOMContentLoaded', function(){ setTimeout(_turBoot, 300); });
+} else {
+  setTimeout(_turBoot, 300);
+}
+// Geç yüklenen fonksiyonlar için yeniden bağlama
+setTimeout(_turBoot, 1500);
+setTimeout(_turBoot, 4000);
+
+})();
+</script>
+
 </body></html>
