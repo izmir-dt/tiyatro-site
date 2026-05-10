@@ -3152,9 +3152,16 @@ flex-shrink:0;
     return m ? (m[1] || '').trim() : '';
   };
 
+  // Turne objelerini rowIdx → t şeklinde saklayan registry
+  // window.turneler'a bağımlılığı ortadan kaldırır
+  var _olurRegistry = {};
+  window._olurKayit = function(t){ if (t && t._rowIdx != null) _olurRegistry[String(t._rowIdx)] = t; };
+
   window._olurNoChipHtml = function(t){
+    // Render anında objeyi registry'e kaydet
+    window._olurKayit(t);
     var no = _getOlurNo(t);
-    var rid = t._rowIdx;
+    var rid = String(t._rowIdx);
     if (no) {
       var safe = no.replace(/"/g,'&quot;');
       return '<div class="olur-chip-wrap">'
@@ -3162,7 +3169,7 @@ flex-shrink:0;
         +   '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>'
         +   '<span>Olur No: ' + no + '</span>'
         + '</span>'
-        + '<button class="olur-chip-edit" title="Düzenle" onclick="event.stopPropagation();_editOlurNo(' + rid + ')">'
+        + '<button class="olur-chip-edit" title="Düzenle" onclick="event.stopPropagation();_editOlurNo(\'' + rid + '\')">'
         +   '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>'
         +   'Düzenle'
         + '</button>'
@@ -3170,7 +3177,7 @@ flex-shrink:0;
     }
     if (window._goruntuleme_modu) return '';
     return '<div class="olur-chip-wrap">'
-      + '<button class="olur-chip-add" title="Olur No ekle" onclick="event.stopPropagation();_editOlurNo(' + rid + ')">'
+      + '<button class="olur-chip-add" title="Olur No ekle" onclick="event.stopPropagation();_editOlurNo(\'' + rid + '\')">'
       +   '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>'
       +   'Olur No Ekle'
       + '</button>'
@@ -3199,41 +3206,68 @@ flex-shrink:0;
   }
 
   window._editOlurNo = function(rowIdx){
-    var t = (window.turneler||[]).find(function(x){ return x._rowIdx === rowIdx; });
-    if (!t) return;
+    var key = String(rowIdx);
+    // Önce registry'den bak, yoksa window.turneler'dan ara
+    var t = _olurRegistry[key];
+    if (!t) t = (window.turneler||[]).find(function(x){ return String(x._rowIdx) === key; });
+    if (!t){ console.warn('[OlurNo] Turne bulunamadı, rowIdx:', rowIdx); return; }
+    // Registry'i güncel tut
+    _olurRegistry[key] = t;
     var mevcut = _getOlurNo(t);
-    var yeni = window.prompt('Turne Olur No (örn. E-81915022-020-245679):', mevcut || '');
-    if (yeni === null) return; // iptal
-    yeni = (yeni || '').trim();
-    var eskiNot = t.not || '';
-    var temiz = eskiNot.replace(/\[Olur:\s*[^\]]*\]\s*/gi, '').trim();
-    var yeniNot = yeni ? ('[Olur: ' + yeni + '] ' + temiz).trim() : temiz;
-    t.not = yeniNot;
-    // UI'yi anında yenile
-    try { if (typeof renderListe === 'function') renderListe(); } catch(e){}
-    // Buluta kaydet (TURNE_SHEET, "not" sütunu)
-    try {
-      if (typeof apiFetch === 'function' && typeof TURNE_SHEET !== 'undefined') {
-        apiFetch('/' + encodeURIComponent(TURNE_SHEET) + '/cell', {
-          method: 'PUT',
-          headers: {'Content-Type':'application/json'},
-          body: JSON.stringify({ row: t._rowIdx + 2, col: 6, value: yeniNot })
-        }).then(function(res){
-          if (res && res.ok) {
-            if (typeof showToast === 'function') showToast(yeni ? 'Olur No kaydedildi ✓' : 'Olur No silindi', 'success', 1800);
-            try { _cacheYaz('cache_turneler', window.turneler); } catch(e){}
-          } else {
-            if (typeof showToast === 'function') showToast('Kayıt hatası — tekrar deneyin', 'error', 3000);
+    // prompt() yerine özel inline modal (iframe/güvenlik uyumlu)
+    var overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:99999;display:flex;align-items:center;justify-content:center;animation:fadeInScale .15s ease';
+    var box = document.createElement('div');
+    box.style.cssText = 'background:var(--card,#fff);border-radius:14px;padding:24px 28px 20px;width:min(420px,92vw);box-shadow:0 20px 60px rgba(0,0,0,.25);font-family:inherit';
+    box.innerHTML = '<div style="font-size:15px;font-weight:800;color:var(--foreground,#222);margin-bottom:6px">Olur No</div>'
+      + '<div style="font-size:12px;color:var(--muted-foreground,#888);margin-bottom:14px">Örn: E-81915022-020-245679</div>'
+      + '<input id="_olur-no-input" type="text" value="' + (mevcut||'').replace(/"/g,'&quot;') + '" placeholder="E-81915022-020-245679" style="width:100%;padding:9px 12px;border:1.5px solid var(--border,#ddd);border-radius:8px;font-size:13px;font-weight:600;font-family:inherit;outline:none;color:var(--foreground,#222);background:var(--card,#fff);box-sizing:border-box;margin-bottom:16px"/>'
+      + '<div style="display:flex;gap:8px;justify-content:flex-end">'
+      + '<button id="_olur-no-iptal" style="padding:8px 18px;border:1.5px solid var(--border,#ddd);border-radius:8px;background:transparent;cursor:pointer;font-size:12px;font-weight:700;color:var(--muted-foreground,#888);font-family:inherit">İptal</button>'
+      + '<button id="_olur-no-kaydet" style="padding:8px 20px;border:none;border-radius:8px;background:var(--primary,#c8920f);color:#fff;cursor:pointer;font-size:12px;font-weight:800;font-family:inherit">Kaydet</button>'
+      + '</div>';
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+    var inp = document.getElementById('_olur-no-input');
+    setTimeout(function(){ inp.focus(); inp.select(); }, 60);
+    function kapat(){ document.body.removeChild(overlay); }
+    document.getElementById('_olur-no-iptal').onclick = kapat;
+    overlay.addEventListener('click', function(e){ if(e.target===overlay) kapat(); });
+    function kaydet(){
+      var yeni = (inp.value||'').trim();
+      kapat();
+      var eskiNot = t.not || '';
+      var temiz = eskiNot.replace(/\[Olur:\s*[^\]]*\]\s*/gi, '').trim();
+      var yeniNot = yeni ? ('[Olur: ' + yeni + '] ' + temiz).trim() : temiz;
+      t.not = yeniNot;
+      // UI'yi anında yenile
+      try { if (typeof renderListe === 'function') renderListe(); } catch(e){}
+      // Buluta kaydet (TURNE_SHEET, "not" sütunu)
+      try {
+        if (typeof apiFetch === 'function' && typeof TURNE_SHEET !== 'undefined') {
+          apiFetch('/' + encodeURIComponent(TURNE_SHEET) + '/cell', {
+            method: 'PUT',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ row: t._rowIdx + 2, col: 6, value: yeniNot })
+          }).then(function(res){
+            if (res && res.ok) {
+              if (typeof showToast === 'function') showToast(yeni ? 'Olur No kaydedildi ✓' : 'Olur No silindi', 'success', 1800);
+              try { _cacheYaz('cache_turneler', window.turneler); } catch(e){}
+            } else {
+              if (typeof showToast === 'function') showToast('Kayıt hatası — tekrar deneyin', 'error', 3000);
+              t.not = eskiNot;
+              try { if (typeof renderListe === 'function') renderListe(); } catch(e){}
+            }
+          }).catch(function(){
+            if (typeof showToast === 'function') showToast('Bağlantı hatası — tekrar deneyin', 'error', 3000);
             t.not = eskiNot;
             try { if (typeof renderListe === 'function') renderListe(); } catch(e){}
-          }
-        }).catch(function(){
-          if (typeof showToast === 'function') showToast('Bağlantı hatası — tekrar deneyin', 'error', 3000);
-          t.not = eskiNot;
-          try { if (typeof renderListe === 'function') renderListe(); } catch(e){}
-        });
-      }
-    } catch(e){ console.warn('Olur kayıt hatası:', e); }
+          });
+        }
+      } catch(e){ console.warn('Olur kayıt hatası:', e); }
+    }
+    document.getElementById('_olur-no-kaydet').onclick = kaydet;
+    inp.addEventListener('keydown', function(e){ if(e.key==='Enter') kaydet(); if(e.key==='Escape') kapat(); });
   };
 })();
 </script>
