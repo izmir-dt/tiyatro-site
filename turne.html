@@ -3175,15 +3175,10 @@ flex-shrink:0;
     var html = '<div class="olur-chip-wrap">';
     if (no) {
       var safe = no.replace(/"/g,'&quot;');
-      html += '<span class="olur-chip" title="Tıkla → kopyala" onclick="event.stopPropagation();_copyOlurNo(\'' + safe.replace(/'/g,"\\'") + '\')">'
+      html += '<span class="olur-chip" title="Kopyala · Sağ tık → Düzenle" onclick="event.stopPropagation();_copyOlurNo(\'' + safe.replace(/'/g,"\\'") + '\')" oncontextmenu="event.preventDefault();event.stopPropagation();_olurCtxMenu(event,\'' + rid + '\',1)">'
         + '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>'
         + '<span>Onay: ' + no + '</span>'
         + '</span>';
-      if (!window._goruntuleme_modu) {
-        html += '<button class="olur-chip-edit" title="Düzenle" onclick="event.stopPropagation();_editOlurNo(\'' + rid + '\',1)">'
-          + '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>'
-          + 'Düzenle</button>';
-      }
     } else if (!window._goruntuleme_modu) {
       html += '<button class="olur-chip-add" title="Onay No ekle" onclick="event.stopPropagation();_editOlurNo(\'' + rid + '\',1)">'
         + '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>'
@@ -3192,15 +3187,10 @@ flex-shrink:0;
     // Ek olur no
     if (no2) {
       var safe2 = no2.replace(/"/g,'&quot;');
-      html += '<span class="olur-chip" style="background:hsl(270,55%,96%);color:hsl(270,70%,30%);border-color:hsl(270,50%,82%)" title="Ek Onay — Tıkla → kopyala" onclick="event.stopPropagation();_copyOlurNo(\'' + safe2.replace(/'/g,"\\'") + '\')">'
+      html += '<span class="olur-chip" style="background:hsl(270,55%,96%);color:hsl(270,70%,30%);border-color:hsl(270,50%,82%)" title="Kopyala · Sağ tık → Düzenle" onclick="event.stopPropagation();_copyOlurNo(\'' + safe2.replace(/'/g,"\\'") + '\')" oncontextmenu="event.preventDefault();event.stopPropagation();_olurCtxMenu(event,\'' + rid + '\',2)">'
         + '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>'
         + '<span>Ek Onay: ' + no2 + '</span>'
         + '</span>';
-      if (!window._goruntuleme_modu) {
-        html += '<button class="olur-chip-edit" style="border-color:hsl(270,40%,80%);color:hsl(270,50%,50%)" title="Ek Onay Düzenle" onclick="event.stopPropagation();_editOlurNo(\'' + rid + '\',2)">'
-          + '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>'
-          + 'Düzenle</button>';
-      }
     } else if (no && !window._goruntuleme_modu) {
       // Sadece olur1 varsa ek olur ekleme butonu göster
       html += '<button class="olur-chip-add" style="border-color:hsl(270,40%,80%);color:hsl(270,50%,50%)" title="Ek Onay No ekle" onclick="event.stopPropagation();_editOlurNo(\'' + rid + '\',2)">'
@@ -3210,6 +3200,61 @@ flex-shrink:0;
     html += '</div>';
     return html;
   };
+
+  // Sağ tık context menu — Kopyala / Düzenle
+  window._olurCtxMenu = function(e, rowIdx, hangi) {
+    // Varsa eski menüyü kaldır
+    var old = document.getElementById('_olur-ctx-menu');
+    if (old) old.remove();
+
+    var no = hangi === 2 ? _getOlur2No(_bul(String(rowIdx))) : _getOlurNo(_bul(String(rowIdx)));
+    var isEk = (hangi === 2);
+
+    var menu = document.createElement('div');
+    menu.id = '_olur-ctx-menu';
+    menu.style.cssText = 'position:fixed;z-index:999999;background:var(--card,#fff);border:1.5px solid var(--border,#e0e0e0);border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,.18);padding:4px;min-width:160px;font-family:inherit;animation:_ctxFadeIn .12s ease';
+
+    var accentColor = isEk ? 'hsl(270,60%,50%)' : 'var(--primary,#c8920f)';
+
+    var items = [
+      { icon: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>', label: 'Kopyala', fn: function(){ _copyOlurNo(no); } },
+      { icon: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>', label: (isEk ? 'Ek Onay No' : 'Onay No') + ' Düzenle', fn: function(){ _editOlurNo(rowIdx, hangi); }, accent: true }
+    ];
+
+    items.forEach(function(item) {
+      var btn = document.createElement('button');
+      btn.style.cssText = 'display:flex;align-items:center;gap:9px;width:100%;padding:8px 12px;border:none;background:transparent;cursor:pointer;font-size:12px;font-weight:700;color:' + (item.accent ? accentColor : 'var(--foreground,#222)') + ';border-radius:7px;font-family:inherit;text-align:left;transition:background .1s';
+      btn.innerHTML = item.icon + '<span>' + item.label + '</span>';
+      btn.onmouseover = function(){ this.style.background = 'var(--muted,#f5f5f5)'; };
+      btn.onmouseout  = function(){ this.style.background = 'transparent'; };
+      btn.onclick = function(ev){ ev.stopPropagation(); kapat(); item.fn(); };
+      menu.appendChild(btn);
+    });
+
+    // Konumu ayarla
+    var x = e.clientX, y = e.clientY;
+    document.body.appendChild(menu);
+    var mw = menu.offsetWidth, mh = menu.offsetHeight;
+    if (x + mw > window.innerWidth  - 8) x = window.innerWidth  - mw - 8;
+    if (y + mh > window.innerHeight - 8) y = window.innerHeight - mh - 8;
+    menu.style.left = x + 'px';
+    menu.style.top  = y + 'px';
+
+    function kapat() { if (menu.parentNode) menu.remove(); }
+    setTimeout(function() {
+      document.addEventListener('click',     kapat, { once: true, capture: true });
+      document.addEventListener('contextmenu', kapat, { once: true, capture: true });
+      document.addEventListener('keydown', function(ev){ if(ev.key==='Escape') kapat(); }, { once: true });
+    }, 0);
+  };
+
+  // CSS animasyon (bir kez ekle)
+  if (!document.getElementById('_olur-ctx-style')) {
+    var s = document.createElement('style');
+    s.id = '_olur-ctx-style';
+    s.textContent = '@keyframes _ctxFadeIn { from { opacity:0; transform:scale(.95) translateY(-4px) } to { opacity:1; transform:scale(1) translateY(0) } }';
+    document.head.appendChild(s);
+  }
 
   window._copyOlurNo = function(no){
     if (!no) return;
@@ -9794,9 +9839,11 @@ function populateFilters() {
   const mo = document.getElementById('m-oyun');
   if (mo) {
     const mFirst = mo.options[0];
+    const mSavedVal = mo.value; // Mevcut seçili oyunu kaydet
     mo.innerHTML = '';
     if (mFirst) mo.appendChild(mFirst);
     oyunlar.forEach(o => { const opt = document.createElement('option'); opt.value = o; opt.textContent = o; mo.appendChild(opt); });
+    if (mSavedVal) mo.value = mSavedVal; // Seçili oyunu geri yükle
   }
 }
 
@@ -29923,6 +29970,8 @@ function _turSonDegistirenBilgisiKartlaraEkle(){
          4) Salt-okunur (görüntüleme) modunda kontrol çalışmaz.
    ──────────────────────────────────────────────────────────────── */
 function _turKaydetButonHook(){
+  if (window._turKaydetButonHookKuruldu) return;
+  window._turKaydetButonHookKuruldu = true;
   // Kaydet butonu tıklamasını yakala (capture aşamasında)
   document.addEventListener('click', function(e){
     var btn = e.target && (e.target.id === 'save-turne-btn' ? e.target : e.target.closest && e.target.closest('#save-turne-btn'));
@@ -29947,7 +29996,10 @@ function _turKaydetButonHook(){
         onOnay: function(){
           window._turOnayDusur = true;
           window._turOnayKontrolGecildi = true;
-          // Yeniden kaydet butonuna tıklat
+          // Flag ve butonu sıfırla, sonra yeniden kaydet butonuna tıklat
+          window._saveTurneCalisiyor = false;
+          var _sb = _$('save-turne-btn');
+          if (_sb) { _sb.disabled = false; _sb.textContent = 'Kaydet'; }
           setTimeout(function(){ var b=_$('save-turne-btn'); if(b) b.click(); }, 50);
         },
         onIptal: function(){
