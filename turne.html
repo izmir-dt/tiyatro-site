@@ -10703,7 +10703,7 @@ function turneCard(t, kucuk) {
     otelPillHtml = '<span style="font-size:11px;padding:3px 10px;border-radius:14px;background:hsl(42,50%,92%);color:hsl(42,60%,28%);font-weight:600;max-width:100%;display:inline-block;line-height:1.45;word-break:break-word;overflow-wrap:anywhere;white-space:normal" title="' + otelKisa.replace(/"/g,'&quot;') + '">🏨 ' + otelKisa + '</span>';
   }
 
-  var _notGoster = (t.not || '').replace(/\[Festival:[^\]]*\]\s*/g, '').replace(/\[Yarıda Kesildi:[^\]]*\]\s*/g, '').trim();
+  var _notGoster = (t.not || '').replace(/\[Festival:[^\]]*\]\s*/g, '').replace(/\[Yarıda Kesildi:[^\]]*\]\s*/g, '').replace(/\[Olur:[^\]]*\]\s*/gi, '').replace(/\[LastEdit:[^\]]*\]\s*/g, '').trim();
   var notHtml = _notGoster ? '<div style="font-size:11px;color:var(--muted-foreground);margin-top:5px;max-width:100%;line-height:1.45;word-break:break-word;overflow-wrap:anywhere;white-space:normal;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden" title="' + _notGoster.replace(/"/g,'&quot;') + '">📝 ' + _notGoster + '</div>' : '';
 
   // Festival tespiti — [Festival: AdıAdı] formatı
@@ -11336,7 +11336,7 @@ function _renderCardDetail(rowIdx) {
   }
 
   // Not — [Festival:...] ve [Yarıda Kesildi:...] kısımlarını gizle
-  var _cdNot = (t.not || '').replace(/\[Festival:[^\]]*\]\s*/g, '').replace(/\[Yarıda Kesildi:[^\]]*\]\s*/g, '').trim();
+  var _cdNot = (t.not || '').replace(/\[Festival:[^\]]*\]\s*/g, '').replace(/\[Yarıda Kesildi:[^\]]*\]\s*/g, '').replace(/\[Olur:[^\]]*\]\s*/gi, '').replace(/\[LastEdit:[^\]]*\]\s*/g, '').trim();
   if (_cdNot) {
     bilgiHtml += secBaslik('Not');
     bilgiHtml += '<div style="font-size:12px;color:var(--foreground);line-height:1.6;padding:6px 0">' + _cdNot + '</div>';
@@ -16477,7 +16477,7 @@ function turneCopyala(rowIdx) {
     document.getElementById('m-tarih').value = t.baslangicTarih || '';
     document.getElementById('m-bitis').value = t.bitisTarih || '';
     document.getElementById('m-statu').value = 'taslak'; mStatuDdSec('taslak');
-    document.getElementById('m-not').value   = t.not || '';
+    document.getElementById('m-not').value   = (t.not || '').replace(/\[Olur:[^\]]*\]\s*/gi, '').replace(/\[LastEdit:[^\]]*\]\s*/g, '').trim();
     document.getElementById('m-grup').value  = t.grup || '';
     var _afEl2 = document.getElementById('m-afis-url'); if (_afEl2) _afEl2.value = t.afisUrl || '';
     // Ulaşım
@@ -16575,7 +16575,7 @@ function editTurne(rowIdx) {
   var _sv = t.statu || 'tamamlandi';
   document.getElementById('m-statu').value = _sv;
   mStatuDdSec(_sv);
-  document.getElementById('m-not').value   = t.not   || '';
+  document.getElementById('m-not').value   = (t.not   || '').replace(/\[Olur:[^\]]*\]\s*/gi, '').replace(/\[LastEdit:[^\]]*\]\s*/g, '').trim();
   // Yarıda Kesildi detaylarını parse et ve formu doldur
   (function() {
     var _notRaw = t.not || '';
@@ -16765,6 +16765,21 @@ async function saveTurne() {
   if (_festCb && _festCb.checked && _festAd2) {
     not_ = ('[Festival: ' + _festAd2 + '] ' + not_).trim();
   }
+  // [Olur:...] tag'ini mevcut kayıttan koru (formda gösterilmez ama saklanır)
+  (function(){
+    var _eidEl = document.getElementById('edit-rowidx');
+    var _eid = _eidEl ? _eidEl.value : '';
+    if (_eid === '') return; // yeni kayıt, olur no yok
+    var _mevcut = (window._olurRegistry && window._olurRegistry[String(_eid)])
+      ? window._olurRegistry[String(_eid)]
+      : (window.turneler||[]).find(function(x){ return String(x._rowIdx)===String(_eid); });
+    if (!_mevcut) return;
+    var _olurM = (_mevcut.not||'').match(/\[Olur:\s*([^\]]*)\]/i);
+    if (_olurM) {
+      not_ = not_.replace(/\[Olur:[^\]]*\]\s*/gi,'').trim();
+      not_ = ('[Olur: ' + _olurM[1].trim() + '] ' + not_).trim();
+    }
+  })();
   // Yarıda Kesildi seçiliyse detayları not'a [Yarıda Kesildi: ...] tag olarak ekle
   if (statu === 'yarida-kesildi') {
     var _ykSehir    = ((document.getElementById('yk-sehir')||{}).value||'').trim();
@@ -22504,7 +22519,7 @@ function _pdfIcerik(t) {
     nakliyeHTML += '<thead><tr style="background:#1e3a5f"><th colspan="2" style="padding:6px 10px;color:#fff;text-align:left;border:1px solid #1a305a;font-size:10px">\ud83d\ude9b Nakliye Bilgileri</th></tr></thead><tbody>';
     nakliyeHTML += '<tr style="background:#f0f7ff"><td style="padding:6px 10px;border:1px solid #ddd;font-weight:700;width:40%">Araç</td><td style="padding:6px 10px;border:1px solid #ddd">' + _aracStr + '</td></tr>';
     // Kamyon firma/tel — lojNot'tan parse et
-    var _lojNotKamyon = (t.not || t.notlar || '').replace(/\[Festival:[^\]]*\]\s*/g, '').trim();
+    var _lojNotKamyon = (t.not || t.notlar || '').replace(/\[Festival:[^\]]*\]\s*/g, '').replace(/\[Olur:[^\]]*\]\s*/gi, '').replace(/\[LastEdit:[^\]]*\]\s*/g, '').trim();
     if (_lojNotKamyon.startsWith('{')) { try { _lojNotKamyon = JSON.parse(_lojNotKamyon).not||''; } catch(e){ _lojNotKamyon=''; } }
     if (_lojNotKamyon.indexOf('🚛') === 0) {
       var _kLine = _lojNotKamyon.split('\n')[0].replace('🚛 ','');
@@ -22568,7 +22583,7 @@ function _pdfIcerik(t) {
     }
   }
 
-  var _notRaw = (t.not || t.notlar || '').replace(/\[Festival:[^\]]*\]\s*/g, '').trim();
+  var _notRaw = (t.not || t.notlar || '').replace(/\[Festival:[^\]]*\]\s*/g, '').replace(/\[Olur:[^\]]*\]\s*/gi, '').replace(/\[LastEdit:[^\]]*\]\s*/g, '').trim();
   var _notGoster = _notRaw;
   if (_notRaw.startsWith('{')) { try { var _np=JSON.parse(_notRaw); _notGoster=_np.not||''; } catch(e) { _notGoster=''; } }
   // 🚛 satırını notGoster'dan temizle — nakliye tablosunda gösteriliyor
@@ -27727,8 +27742,8 @@ function _pdfTurneDosyasiIcerik(t, opts) {
   try{
     var _notlarRaw=t.notlar||'';
     if(_notlarRaw.startsWith('{')){var _nObj=JSON.parse(_notlarRaw);_lojN=_nObj.not||'';}
-    else{_lojN=(t.not||'').replace(/\[Festival:[^\]]*\]\s*/g,'').trim();}
-  }catch(e){_lojN=(t.not||'').replace(/\[Festival:[^\]]*\]\s*/g,'').trim();}
+    else{_lojN=(t.not||'').replace(/\[Festival:[^\]]*\]\s*/g,'').replace(/\[Olur:[^\]]*\]\s*/gi,'').replace(/\[LastEdit:[^\]]*\]\s*/g,'').trim();}
+  }catch(e){_lojN=(t.not||'').replace(/\[Festival:[^\]]*\]\s*/g,'').replace(/\[Olur:[^\]]*\]\s*/gi,'').replace(/\[LastEdit:[^\]]*\]\s*/g,'').trim();}
 
   var _nakKapak='';
   var _lojPKapak={}; try{if((t.notlar||'').startsWith('{'))_lojPKapak=JSON.parse(t.notlar);}catch(e){}
