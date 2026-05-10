@@ -9430,6 +9430,7 @@ function tumUIGuncelle() {
     if (altSekme === 'ana') renderKadro();
     renderKisiAra();
   } else if (aktifSekme === 'harita') {
+    window._haritaLastRenderKey = null; // Data tazeyse yeniden çiz
     if (_leafletYuklendi) renderHarita(); else _leafletYukle(function(){ renderHarita(); });
   } else {
     // Bilinmeyen sekme — güvenli fallback
@@ -9942,6 +9943,10 @@ function switchTab(tab) {
   if (tab === 'kisi')       renderKisiAra();
   if (tab === 'dispersonel') renderDisPersonel();
   if (tab === 'harita')     _leafletYukle(function(){ renderHarita(); });
+  else {
+    // Haritadan ayrılınca animasyonu durdur (bellek/CPU)
+    if (typeof haritaAnimasyonDurdur === 'function') try { haritaAnimasyonDurdur(); } catch(e) {}
+  }
   if (tab === 'takvim') {
     renderCalendar();
     if (turneler && turneler.length) {
@@ -19553,6 +19558,43 @@ function haritaFiltre(mod) {
 }
 
 function renderHarita() {
+  // ── Dirty-check: data/mod değişmediyse choropleth'i yeniden çizme ──
+  var _sMod  = (_haritaMod||'') + '|' + (_haritaFiltreMod||'') + '|' + (_haritaZamanFiltre||'') + '|' + (window._haritaAktifOyun||'');
+  var _sTur  = (typeof turneler !== 'undefined') ? turneler.length + '|' + (turneler.map(function(t){return t._rowIdx+':'+(t.statu||'');}).join(',')) : '';
+  var _sKey  = _sMod + '||' + _sTur;
+  var _seciliChanged = (window._haritaLastSecili !== seciliIl);
+  window._haritaLastSecili = seciliIl;
+  if (window._haritaLastRenderKey === _sKey && _leafletMap && _choroplethLayer && !_seciliChanged) {
+    // Data değişmedi, sadece panel güncelle
+    if (seciliIl) haritaIlDetay(seciliIl, _choroplethIlSayilar);
+    return;
+  }
+  if (window._haritaLastRenderKey === _sKey && _leafletMap && _choroplethLayer && _seciliChanged) {
+    // Sadece seçili il değişti — choropleth style'ını güncelle, tam render'a gerek yok
+    if (_choroplethLayer) {
+      _choroplethLayer.eachLayer(function(lyr) {
+        var feat = lyr.feature;
+        var key = feat && feat.properties && (feat.properties.name||feat.properties.Name||feat.properties.NAME||feat.properties.il||'');
+        if (!key) return;
+        var sayi = _choroplethIlSayilar[key] || 0;
+        var isSecili = key === seciliIl;
+        lyr.setStyle({
+          fillColor: isSecili ? 'hsl(38,88%,52%)' : undefined,
+          fillOpacity: isSecili ? 0.95 : undefined,
+          color: isSecili ? 'hsl(38,80%,30%)' : undefined,
+          weight: isSecili ? 2.5 : undefined,
+        });
+        if (!isSecili) lyr.resetStyle && lyr.resetStyle();
+      });
+    }
+    if (seciliIl) haritaIlDetay(seciliIl, _choroplethIlSayilar);
+    else {
+      var det = document.getElementById('harita-detay');
+      if (det) det.innerHTML = '<div class="empty-state" style="height:160px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:24px 16px"><div style="font-size:13px;font-weight:600;color:var(--foreground)">Haritadan bir il seçin</div></div>';
+    }
+    return;
+  }
+  window._haritaLastRenderKey = _sKey;
   // İl normalize fonksiyonu — büyük/küçük harf duyarsız, trim
   function normalizeIl(ilAdi) {
     if (!ilAdi) return '';
