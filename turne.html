@@ -11820,19 +11820,35 @@ function _renderCardDetail(rowIdx) {
   // ── BİLGİ SEKMESİ ──
   // Per-durak temsil sayımı: programSatirlar varsa onu kullan (çift temsili de sayar),
   // yoksa lojistik sayi alanına fallback. Toplam ile breakdown tutarlı olsun diye.
+  // Yarıda Kesildi: kesilen şehir ve sonrası → 0
+  var _ykKesCD = ((t.statu||'')==='yarida-kesildi' && typeof _yaridaKesildiKesimAnalizi==='function') ? _yaridaKesildiKesimAnalizi(t) : null;
+  function _ykCityCut(cityNorm){
+    if (!_ykKesCD || _ykKesCD.kesilenIndex < 0) return false;
+    var idx = _ykKesCD.normSehirler.findIndex(function(n){
+      var nIlk = (n||'').split(' ')[0]||'';
+      var cIlk = (cityNorm||'').split(' ')[0]||'';
+      return n === cityNorm || (nIlk && cityNorm.indexOf(nIlk)===0) || (cIlk && n.indexOf(cIlk)===0);
+    });
+    return idx < 0 ? false : (idx >= _ykKesCD.kesilenIndex);
+  }
   var _byCityT = {};
   (function(){
     var ps = t.programSatirlar || [];
     var oyunRows = ps.filter(function(s){ return s.program === 'Oyun'; });
     oyunRows.forEach(function(s){
-      var k = temizIl((s.sehir||'').split('/')[0]).toUpperCase();
+      var rawCity = (s.sehir||'').split('/')[0];
+      var k = temizIl(rawCity).toUpperCase();
       if (!k) return;
+      var sNorm = (typeof _normIlAdi==='function') ? _normIlAdi(rawCity) : (rawCity||'').toLowerCase().trim();
+      if (_ykCityCut(sNorm)) { _byCityT[k] = _byCityT[k]||0; return; }
       _byCityT[k] = (_byCityT[k]||0) + (s.saat2 ? 2 : 1);
     });
   })();
   function _durakTemsil(d){
     var k = temizIl(d.il||'').toUpperCase();
-    if (_byCityT[k]) return _byCityT[k];
+    var ilNorm = (typeof _normIlAdi==='function') ? _normIlAdi(d.il||'') : (d.il||'').toLowerCase().trim();
+    if (_ykCityCut(ilNorm)) return 0;
+    if (_byCityT[k] !== undefined) return _byCityT[k];
     return parseInt(d.sayi||d.temsil||d.temsilSayisi||1) || 1;
   }
   var bilgiHtml = '';
@@ -26491,6 +26507,37 @@ function durakIllerListesi(t) {
 }
 
 function durakToplamTemsil(t) {
+  // ── Yarıda Kesildi: gerçekten yapılan temsil sayısı (kesilen şehre/sonrasına gidilmedi) ──
+  if (t && (t.statu||'') === 'yarida-kesildi') {
+    try {
+      var _ykInfo = (typeof _yaridaKesildiInfoFromTurne === 'function') ? _yaridaKesildiInfoFromTurne(t) : null;
+      var _ykKes  = (typeof _yaridaKesildiKesimAnalizi === 'function') ? _yaridaKesildiKesimAnalizi(t) : null;
+      // 1) programSatirlar varsa → kesilen şehirden ÖNCEKİ Oyun satırlarını say (saat2 → +2)
+      if (t.programSatirlar && t.programSatirlar.length && _ykKes && _ykKes.kesilenIndex >= 0) {
+        var _kesilenSehirNorm = _ykKes.normSehirler[_ykKes.kesilenIndex] || '';
+        var _kesilenIlk = (_kesilenSehirNorm.split(' ')[0] || '');
+        var _toplam = 0;
+        t.programSatirlar.forEach(function(s){
+          if (s.program !== 'Oyun') return;
+          var sNorm = (typeof _normIlAdi==='function') ? _normIlAdi((s.sehir||'').split('/')[0]) : ((s.sehir||'').split('/')[0]||'').toLowerCase().trim();
+          var sIdx = _ykKes.normSehirler.findIndex(function(n){
+            var nIlk = (n||'').split(' ')[0]||'';
+            var sIlk = (sNorm||'').split(' ')[0]||'';
+            return n === sNorm || (nIlk && sNorm.indexOf(nIlk)===0) || (sIlk && n.indexOf(sIlk)===0);
+          });
+          // Kesilen şehir ve sonrası → sayma
+          if (sIdx < 0 || sIdx >= _ykKes.kesilenIndex) return;
+          _toplam += (s.saat2 ? 2 : 1);
+        });
+        return _toplam;
+      }
+      // 2) Kullanıcının girdiği "Gerçekleşen Temsil Sayısı"
+      if (_ykInfo && _ykInfo['Temsil']) {
+        var n = parseInt(_ykInfo['Temsil'], 10);
+        if (!isNaN(n) && n >= 0) return n;
+      }
+    } catch(e){}
+  }
   // programSatirlar dolu ise → gerçek oyun satırlarını say (öncelikli ve doğru kaynak)
   if (t.programSatirlar && t.programSatirlar.length) {
     var oyunGunleri = t.programSatirlar.filter(function(s){ return s.program === 'Oyun'; });
