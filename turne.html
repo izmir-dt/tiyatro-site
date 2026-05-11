@@ -8357,7 +8357,11 @@ html, body {
 </div>
 <!-- KONAKLAMA - Durak bazlı -->
 <div class="modal-section" id="ms-konaklama">
-<div style="background:hsl(42,55%,92%);border-left:3px solid hsl(42,70%,50%);border-radius:4px;padding:7px 10px;font-size:11px;color:hsl(42,60%,28%);margin-bottom:10px;font-weight:500"><svg fill="none" height="12" stroke="currentColor" stroke-linecap="round" stroke-width="2.5" style="flex-shrink:0;vertical-align:-2px;margin-right:4px" viewbox="0 0 24 24" width="12"><path d="M3 22V8l9-6 9 6v14H3z"></path><rect height="8" width="6" x="9" y="14"></rect></svg> Her durak için ayrı otel girilebilir. Duraklar <b>Genel</b> sekmesinde tanımlanır.</div>
+<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+  <div style="flex:1;min-width:240px;background:hsl(42,55%,92%);border-left:3px solid hsl(42,70%,50%);border-radius:4px;padding:7px 10px;font-size:11px;color:hsl(42,60%,28%);font-weight:500"><svg fill="none" height="12" stroke="currentColor" stroke-linecap="round" stroke-width="2.5" style="flex-shrink:0;vertical-align:-2px;margin-right:4px" viewbox="0 0 24 24" width="12"><path d="M3 22V8l9-6 9 6v14H3z"></path><rect height="8" width="6" x="9" y="14"></rect></svg> Her durak için ayrı otel girilebilir. Duraklar <b>Genel</b> sekmesinde tanımlanır.</div>
+  <button type="button" onclick="_konaklamaOdaEslemeyeGec()" title="Oda eşleme (Tek/Çift/Münferit) görünümüne geç" style="height:32px;padding:0 14px;border-radius:7px;border:1px solid hsl(142,50%,40%);background:hsl(142,45%,96%);color:hsl(142,55%,25%);font-size:11.5px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;transition:.15s" onmouseover="this.style.background=\'hsl(142,45%,92%)\'" onmouseout="this.style.background=\'hsl(142,45%,96%)\'">🛏 Oda Eşlemeye Geç →</button>
+</div>
+<datalist id="otel-onerileri-list"></datalist>
 <div id="konaklama-durak-listesi"></div>
 <input id="m-otel-adi" type="hidden"/><input id="m-otel-adr" type="hidden"/><input id="m-otel-tel" type="hidden"/>
 </div>
@@ -25910,6 +25914,89 @@ function gorevlendirmePdf(rowIdx, mod, overrideTurne) {
 var duraklar = []; // [{il, ilce, mekan, sayi, otelAdi, otelAdres, otelTel}]
 var otelBilgileri = {}; // {durakIdx: {otelAdi, otelAdres, otelTel}} - backward compat
 
+// Geçmiş tüm turnelerden benzersiz otel kayıtlarını topla
+function _otelKayitlariniTopla() {
+  var map = {};
+  function ekle(o) {
+    if (!o || !o.otelAdi) return;
+    var ad = (o.otelAdi || '').trim();
+    if (!ad) return;
+    var key = ad.toLocaleLowerCase('tr-TR');
+    if (!map[key] || (!map[key].otelAdres && o.otelAdres) || (!map[key].otelTel && o.otelTel)) {
+      map[key] = {
+        otelAdi:   ad,
+        otelAdres: (o.otelAdres || (map[key] && map[key].otelAdres) || '').trim(),
+        otelTel:   (o.otelTel   || (map[key] && map[key].otelTel)   || '').trim()
+      };
+    }
+  }
+  try {
+    (window.turneler || []).forEach(function(t){
+      if (t && t.duraklar) t.duraklar.forEach(ekle);
+      if (t) ekle({ otelAdi: t.otelAdi, otelAdres: t.otelAdres, otelTel: t.otelTel });
+    });
+  } catch(e){}
+  try { (duraklar || []).forEach(ekle); } catch(e){}
+  return map;
+}
+
+// Otel adı yazılınca eski kayıttan adres/telefonu otomatik doldur
+function _otelAutofill(i, inputEl) {
+  var deger = (inputEl.value || '').trim();
+  duraklar[i].otelAdi = inputEl.value;
+  if (!deger) return;
+  var kayitlar = _otelKayitlariniTopla();
+  var key = deger.toLocaleLowerCase('tr-TR');
+  var bul = kayitlar[key];
+  if (!bul) {
+    // tam eşleşme yoksa "ile başlayan" tek aday varsa onu kullan
+    var adaylar = Object.keys(kayitlar).filter(function(k){ return k.indexOf(key) === 0; });
+    if (adaylar.length === 1) bul = kayitlar[adaylar[0]];
+  }
+  if (!bul) return;
+  var card = inputEl.closest('.otel-durak-card');
+  if (!card) return;
+  var inputs = card.querySelectorAll('input');
+  // inputs: [0]=ad, [1]=adres, [2]=tel
+  if (inputs[1] && !inputs[1].value && bul.otelAdres) {
+    inputs[1].value = bul.otelAdres;
+    duraklar[i].otelAdres = bul.otelAdres;
+    inputs[1].style.background = '#f0fdf4';
+    setTimeout(function(){ inputs[1].style.background = ''; }, 1200);
+  }
+  if (inputs[2] && !inputs[2].value && bul.otelTel) {
+    inputs[2].value = bul.otelTel;
+    duraklar[i].otelTel = bul.otelTel;
+    inputs[2].style.background = '#f0fdf4';
+    setTimeout(function(){ inputs[2].style.background = ''; }, 1200);
+  }
+}
+
+
+// Konaklama wizard'dan Oda Eşleme görünümüne geçiş
+function _konaklamaOdaEslemeyeGec() {
+  var inp = document.getElementById('edit-rowidx');
+  var rowIdx = inp ? parseInt(inp.value) : NaN;
+  if (isNaN(rowIdx)) {
+    if (typeof showToast === 'function') showToast('Önce turneyi kaydedin; oda eşleme kayıtlı turneler için açılır.', 'info', 3200);
+    else alert('Önce turneyi kaydedin.');
+    return;
+  }
+  // Pencere değişkeni — kart detayı açılırken konaklama sekmesinden başlasın
+  try { window._cdAktifTab = 'konaklama'; } catch(e){}
+  try { _cdAktifTab = 'konaklama'; } catch(e){}
+  if (typeof closeModal === 'function') closeModal();
+  setTimeout(function(){
+    if (typeof openCardDetail === 'function') openCardDetail(rowIdx);
+    // openCardDetail _cdAktifTab'i 'bilgi' yapıyor — konaklama'ya çevirip yeniden render et
+    setTimeout(function(){
+      try { _cdAktifTab = 'konaklama'; } catch(e){}
+      try { window._cdAktifTab = 'konaklama'; } catch(e){}
+      if (typeof _renderCardDetail === 'function') _renderCardDetail(rowIdx);
+    }, 30);
+  }, 120);
+}
+
 function renderKonaklamaDuraklar() {
   var wrap = document.getElementById('konaklama-durak-listesi');
   if (!wrap) return;
@@ -25918,6 +26005,18 @@ function renderKonaklamaDuraklar() {
     wrap.innerHTML = '<div style="padding:12px;text-align:center;font-size:11px;color:var(--muted-foreground);background:var(--muted);border-radius:7px">Önce Genel sekmesinden durak ekleyin</div>';
     return;
   }
+
+  // Datalist'i geçmiş otel adlarıyla doldur
+  var dl = document.getElementById('otel-onerileri-list');
+  if (dl) {
+    var kayitlar = _otelKayitlariniTopla();
+    dl.innerHTML = Object.keys(kayitlar).map(function(k){
+      var o = kayitlar[k];
+      var sub = [o.otelAdres, o.otelTel].filter(Boolean).join(' • ');
+      return '<option value="' + (o.otelAdi || '').replace(/"/g,'&quot;') + '"' + (sub ? ' label="' + sub.replace(/"/g,'&quot;') + '"' : '') + '></option>';
+    }).join('');
+  }
+
   wrap.innerHTML = gezerDuraklar.map(function(d, i) {
     var ilLabel = (d.il || '?') + (d.ilce ? ' / ' + d.ilce : '');
     return '<div class="otel-durak-card">'
@@ -25927,16 +26026,16 @@ function renderKonaklamaDuraklar() {
       + '</div>'
       + '<div class="otel-durak-body">'
       + '<div class="form-group" style="margin:0">'
-      + '<label class="form-label" style="font-size:10px">Otel / Konaklama Adı</label>'
-      + '<input class="form-input" style="font-size:11px" type="text" placeholder="Grand Otel..." value="' + (d.otelAdi||'') + '" oninput="duraklar['+i+'].otelAdi=this.value">'
+      + '<label class="form-label" style="font-size:10px">Otel / Konaklama Adı <span style="color:var(--muted-foreground);font-weight:400">— önceki kayıtlar önerilir</span></label>'
+      + '<input class="form-input" list="otel-onerileri-list" autocomplete="off" style="font-size:11px" type="text" placeholder="Grand Otel..." value="' + (d.otelAdi||'').replace(/"/g,'&quot;') + '" oninput="_otelAutofill(' + i + ', this)" onchange="_otelAutofill(' + i + ', this)">'
       + '</div>'
       + '<div class="form-group" style="margin:0">'
       + '<label class="form-label" style="font-size:10px">Adres</label>'
-      + '<input class="form-input" style="font-size:11px" type="text" placeholder="Şehir merkezi..." value="' + (d.otelAdres||'') + '" oninput="duraklar['+i+'].otelAdres=this.value">'
+      + '<input class="form-input" style="font-size:11px;transition:background .3s" type="text" placeholder="Şehir merkezi..." value="' + (d.otelAdres||'').replace(/"/g,'&quot;') + '" oninput="duraklar['+i+'].otelAdres=this.value">'
       + '</div>'
       + '<div class="form-group" style="margin:0">'
       + '<label class="form-label" style="font-size:10px">Telefon</label>'
-      + '<input class="form-input" style="font-size:11px" type="tel" placeholder="0xxx xxx xx xx" value="' + (d.otelTel||'') + '" oninput="duraklar['+i+'].otelTel=this.value">'
+      + '<input class="form-input" style="font-size:11px;transition:background .3s" type="tel" placeholder="0xxx xxx xx xx" value="' + (d.otelTel||'').replace(/"/g,'&quot;') + '" oninput="duraklar['+i+'].otelTel=this.value">'
       + '</div>'
       + '</div></div>';
   }).join('');
