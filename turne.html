@@ -23778,6 +23778,17 @@ function _tcListesiModalAc(t) {
 
   overlay.querySelector('#_tc_excel').onclick = function() {
     var data = _tcVeriOku();
+    // Modaldaki canlı input değerlerini de al (henüz storage'a kaydedilmemiş olabilir)
+    try {
+      overlay.querySelectorAll('input[data-key]').forEach(function(inp){
+        var k = inp.getAttribute('data-key');
+        var f = inp.getAttribute('data-field');
+        var v = (inp.value || '').trim();
+        if (!v) return;
+        if (!data[k]) data[k] = {};
+        if (!data[k][f]) data[k][f] = v;
+      });
+    } catch(e){}
     var oyunStr = (t.oyun || 'Turne').replace(/[^a-zA-Z0-9ğüşıöçĞÜŞİÖÇ\s]/g,'').trim().substring(0,30);
     var tarihStr2 = '';
     if (t.baslangicTarih || t.tarih) {
@@ -23799,16 +23810,16 @@ function _tcListesiModalAc(t) {
 
     var satirlar = '';
     katilimcilar.forEach(function(p, i) {
-      var key = p.kisi + '_' + (t._rowIdx || '');
+      var key = (p.kisi || '').trim().toLowerCase().replace(/\s+/g, '_');
       var kayit = data[key] || {};
       var bg = i % 2 === 0 ? '#FFFFFF' : '#FDECEA';
       var gorev = temizleGorev(p.gorev || p.kategori || '');
-      satirlar += '<tr style="height:22px;background:' + bg + '">'
-        + '<td style="border:1px solid #D0A0A0;text-align:center;font-size:11pt;color:#333;padding:3px 6px;width:40px">' + (i+1) + '</td>'
-        + '<td style="border:1px solid #D0A0A0;font-weight:bold;font-size:11pt;color:#111;padding:3px 8px;width:200px">' + (p.kisi || '') + '</td>'
-        + '<td style="border:1px solid #D0A0A0;font-size:11pt;color:#333;padding:3px 8px;width:180px">' + gorev + '</td>'
-        + '<td style="border:1px solid #D0A0A0;font-size:11pt;color:#555;padding:3px 8px;width:110px">' + (kayit.dogum || '') + '</td>'
-        + '<td style="border:1px solid #D0A0A0;font-size:11pt;color:#444;padding:3px 8px;width:120px">' + (kayit.tc || '') + '</td>'
+      satirlar += '<tr style="height:22px">'
+        + '<td style="background:' + bg + ';border:1px solid #D0A0A0;text-align:center;font-size:11pt;color:#333;padding:3px 6px;width:40px">' + (i+1) + '</td>'
+        + '<td style="background:' + bg + ';border:1px solid #D0A0A0;font-weight:bold;font-size:11pt;color:#111;padding:3px 8px;width:200px">' + (p.kisi || '') + '</td>'
+        + '<td style="background:' + bg + ';border:1px solid #D0A0A0;font-size:11pt;color:#333;padding:3px 8px;width:180px">' + gorev + '</td>'
+        + '<td style="background:' + bg + ';border:1px solid #D0A0A0;font-size:11pt;color:#555;padding:3px 8px;width:110px">' + (kayit.dogum || '') + '</td>'
+        + '<td style="background:' + bg + ';border:1px solid #D0A0A0;font-size:11pt;color:#444;padding:3px 8px;width:120px">' + (kayit.tc || '') + '</td>'
         + '</tr>';
     });
 
@@ -23847,8 +23858,6 @@ function _tcListesiModalAc(t) {
       + '<th style="border:2px solid #5A1717;background:#8B2222;color:#FFFFFF;font-size:11pt;font-weight:bold;text-align:left;padding:4px 8px;font-family:Calibri,Arial">TC Kimlik No</th>'
       + '</tr>'
       + satirlar
-      // Alt kapama kenarlığı
-      + '<tr style="height:0px"><td colspan="5" style="border:2px solid #5A1717;padding:0"></td></tr>'
       + '</table></body></html>';
 
     var blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8' });
