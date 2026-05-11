@@ -8413,7 +8413,7 @@ html, body {
 <input class="form-input" id="extra-kisi-ad" oninput="ekstraOtomatikTamamla()" placeholder="Kadroya isim ekle…" style="width:100%;border:1.5px solid var(--border)" type="text"/>
 <div id="ekstra-oneri-liste" style="display:none;position:absolute;top:100%;left:0;width:100%;background:var(--background);border:1px solid var(--border);border-radius:6px;z-index:999;max-height:160px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.15)"></div>
 </div>
-<input class="form-input" id="extra-kisi-gorev" placeholder="Görevi" style="flex:0 0 80px;border:1.5px solid var(--border)" type="text"/>
+<input class="form-input" id="extra-kisi-gorev" placeholder="Görevi" list="gorev-datalist" autocomplete="off" style="flex:0 0 80px;border:1.5px solid var(--border)" type="text"/>
 <button class="btn btn-primary" onclick="ekstraKisiEkle()" style="white-space:nowrap;flex:0 0 auto;padding:0 12px">+ Ekle</button>
 </div>
 </div>
@@ -8870,9 +8870,9 @@ async function apiFetch(path, options) {
     fetchOpts.headers = options.headers || { 'Content-Type': 'application/json' };
     fetchOpts.body = options.body;
   }
-  // 15 saniyelik zaman aşımı — buton "Kontrol ediliyor..." takılmasını önler
+  // 30 saniyelik zaman aşımı — yavaş Sheets bağlantılarına tolerans
   var controller = new AbortController();
-  var timer = setTimeout(function(){ controller.abort(); }, 15000);
+  var timer = setTimeout(function(){ controller.abort(); }, 30000);
   fetchOpts.signal = controller.signal;
   try {
     var res = await fetch(url, fetchOpts);
@@ -13870,7 +13870,7 @@ async function _firmaRehberSheetYukle() {
     // Rehber açıksa yenile
     var overlay = document.getElementById('firma-rehber-overlay');
     if (overlay && overlay.style.display !== 'none') firmaRehberiRender();
-  } catch(e) { console.warn('Firma rehberi Sheet yuklenemedi:', e); }
+  } catch(e) { if (e && e.name !== 'AbortError') console.warn('Firma rehberi Sheet yuklenemedi:', e); }
 }
 
 // ── OTOMATİK FİRMA REHBERİ GÜNCELLEME ──────────────────────────────────────
@@ -15765,7 +15765,7 @@ function renderKisiModalList(oyunAdi, q) {
         + '<div class="kisi-row-name">' + p.kisi + '</div>'
         + '<span class="kisi-kat-chip">' + _katGoster + '</span>'
         + (secili
-          ? '<input type="text" value="' + esc(turneGorev) + '" placeholder="Görevi..." '
+          ? '<input type="text" value="' + esc(turneGorev) + '" placeholder="Görevi..." list="gorev-datalist" autocomplete="off" '
             + 'onclick="event.stopPropagation()" '
             + 'oninput="event.stopPropagation();kisiGorevGuncelle(\'' + esc(p.kisi) + '\',this.value)" onchange="event.stopPropagation();kisiGorevGuncelle(\'' + esc(p.kisi) + '\',this.value);gorevHafizayaKaydet(this.value)" '
             + 'class="kisi-gorev-input">'
@@ -15901,7 +15901,7 @@ function renderSelectedPills(scrollToIdx) {
         +   '<div style="font-size:13px;font-weight:700;color:hsl(220,20%,12%);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.35;margin-bottom:2px">' + (k.kisi||'') + '</div>'
         +   '<div style="display:flex;align-items:center;gap:3px">'
         +   '<input type="text" value="' + (k.gorev||'').replace(/"/g,'&quot;') + '"'
-        +   ' placeholder="Görev..."'
+        +   ' placeholder="Görev..." list="gorev-datalist" autocomplete="off"'
         +   ' onclick="event.stopPropagation()"'
         +   ' oninput="event.stopPropagation();kisiGorevGuncelle(' + i + ',this.value)" onchange="event.stopPropagation();kisiGorevGuncelle(' + i + ',this.value);gorevHafizayaKaydet(this.value)"'
         +   ' style="flex:1;min-width:0;border:1.5px solid var(--border);border-radius:8px;padding:5px 10px;font-size:14px;background:var(--card);color:hsl(220,15%,25%);font-weight:600;-webkit-appearance:none">'
@@ -17127,6 +17127,16 @@ function editTurne(rowIdx) {
   var _sv = t.statu || 'tamamlandi';
   document.getElementById('m-statu').value = _sv;
   mStatuDdSec(_sv);
+  // ── Onay No (Olur) snapshot — statü değişikliğinde silinmesini önler ──
+  (function(){
+    var _rawNot = t.not || '';
+    var _o1 = _rawNot.match(/\[Olur:\s*([^\]]*)\]/i);
+    var _o2 = _rawNot.match(/\[Olur2:\s*([^\]]*)\]/i);
+    window._editOlurSnapshot = {
+      olur1: _o1 ? _o1[1].trim() : '',
+      olur2: _o2 ? _o2[1].trim() : ''
+    };
+  })();
   document.getElementById('m-not').value   = (t.not   || '').replace(/\[Olur:[^\]]*\]\s*/gi, '').replace(/\[Olur2:[^\]]*\]\s*/gi, '').replace(/\[LastEdit:[^\]]*\]\s*/g, '').trim();
   // Yarıda Kesildi detaylarını parse et ve formu doldur
   (function() {
@@ -17317,25 +17327,31 @@ async function saveTurne() {
   if (_festCb && _festCb.checked && _festAd2) {
     not_ = ('[Festival: ' + _festAd2 + '] ' + not_).trim();
   }
-  // [Olur:...] tag'ini mevcut kayıttan koru (formda gösterilmez ama saklanır)
+  // [Olur:...] ve [Olur2:...] tag'lerini koru — statü değişse bile onay no silinmesin
   (function(){
     var _eidEl = document.getElementById('edit-rowidx');
     var _eid = _eidEl ? _eidEl.value : '';
-    if (_eid === '') return; // yeni kayıt, olur no yok
-    var _mevcut = (window._olurRegistry && window._olurRegistry[String(_eid)])
-      ? window._olurRegistry[String(_eid)]
-      : (window.turneler||[]).find(function(x){ return String(x._rowIdx)===String(_eid); });
-    if (!_mevcut) return;
-    var _olurM = (_mevcut.not||'').match(/\[Olur:\s*([^\]]*)\]/i);
-    if (_olurM) {
-      not_ = not_.replace(/\[Olur:[^\]]*\]\s*/gi,'').trim();
-      not_ = ('[Olur: ' + _olurM[1].trim() + '] ' + not_).trim();
+    if (_eid === '') return; // yeni kayıt
+    // Önce snapshot'tan oku (modal açıldığında alınmıştı)
+    var _snap = window._editOlurSnapshot || { olur1:'', olur2:'' };
+    var _olur1 = _snap.olur1 || '';
+    var _olur2 = _snap.olur2 || '';
+    // Snapshot boşsa registry/turneler'den fallback dene
+    if (!_olur1 && !_olur2) {
+      var _mevcut = (window._olurRegistry && window._olurRegistry[String(_eid)])
+        ? window._olurRegistry[String(_eid)]
+        : (window.turneler||[]).find(function(x){ return String(x._rowIdx)===String(_eid); });
+      if (_mevcut) {
+        var _m1 = (_mevcut.not||'').match(/\[Olur:\s*([^\]]*)\]/i);
+        var _m2 = (_mevcut.not||'').match(/\[Olur2:\s*([^\]]*)\]/i);
+        if (_m1) _olur1 = _m1[1].trim();
+        if (_m2) _olur2 = _m2[1].trim();
+      }
     }
-    var _olur2M = (_mevcut.not||'').match(/\[Olur2:\s*([^\]]*)\]/i);
-    if (_olur2M) {
-      not_ = not_.replace(/\[Olur2:[^\]]*\]\s*/gi,'').trim();
-      not_ = ('[Olur2: ' + _olur2M[1].trim() + '] ' + not_).trim();
-    }
+    // Form notunda olur tag varsa temizle (mükerrer önle)
+    not_ = not_.replace(/\[Olur:[^\]]*\]\s*/gi,'').replace(/\[Olur2:[^\]]*\]\s*/gi,'').trim();
+    if (_olur1) not_ = ('[Olur: ' + _olur1 + '] ' + not_).trim();
+    if (_olur2) not_ = ('[Olur2: ' + _olur2 + '] ' + not_).trim();
   })();
   // Yarıda Kesildi se  iliyse detayları not'a [Yarıda Kesildi: ...] tag olarak ekle
   if (statu === 'yarida-kesildi') {
