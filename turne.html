@@ -11818,6 +11818,23 @@ function _renderCardDetail(rowIdx) {
     + '</div>';
 
   // ── BİLGİ SEKMESİ ──
+  // Per-durak temsil sayımı: programSatirlar varsa onu kullan (çift temsili de sayar),
+  // yoksa lojistik sayi alanına fallback. Toplam ile breakdown tutarlı olsun diye.
+  var _byCityT = {};
+  (function(){
+    var ps = t.programSatirlar || [];
+    var oyunRows = ps.filter(function(s){ return s.program === 'Oyun'; });
+    oyunRows.forEach(function(s){
+      var k = temizIl((s.sehir||'').split('/')[0]).toUpperCase();
+      if (!k) return;
+      _byCityT[k] = (_byCityT[k]||0) + (s.saat2 ? 2 : 1);
+    });
+  })();
+  function _durakTemsil(d){
+    var k = temizIl(d.il||'').toUpperCase();
+    if (_byCityT[k]) return _byCityT[k];
+    return parseInt(d.sayi||d.temsil||d.temsilSayisi||1) || 1;
+  }
   var bilgiHtml = '';
 
   // Şehir / Sahne
@@ -11826,7 +11843,7 @@ function _renderCardDetail(rowIdx) {
     var ilTxt  = temizIl(d.il||'—');
     var ilceTxt= (d.ilce && d.ilce.toLowerCase()!=='merkez') ? '<span style="font-size:11px;color:var(--muted-foreground)"> / '+d.ilce+'</span>' : '';
     var oyunTxt= (d.oyun && d.oyun!==t.oyun) ? ' <span style="font-size:11px;font-weight:700;color:var(--primary)">'+d.oyun+'</span>' : '';
-    var temsil = parseInt(d.sayi||d.temsil||d.temsilSayisi||1);
+    var temsil = _durakTemsil(d);
     return '<div style="padding:8px 0;border-bottom:1px solid var(--border)">'
       + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">'
       +   '<div style="font-size:13px;font-weight:800;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + ilTxt + ilceTxt + oyunTxt + '</div>'
@@ -11847,7 +11864,7 @@ function _renderCardDetail(rowIdx) {
     + '<div style="display:grid;grid-template-columns:90px 1fr;padding:7px 0">'
     +   '<span style="font-size:11px;font-weight:700;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.4px;padding-top:2px;line-height:1.4">Temsil</span>'
     +   '<span style="font-size:12px;line-height:1.45">' + toplamT + ' temsil'
-    +     (durakListeSS.length>1 ? ' <span style="font-size:11px;color:var(--muted-foreground)">('+durakListeSS.map(function(d){return temizIl(d.il||'')+(':'+((d.sayi||d.temsil)||1));}).join(', ')+')</span>' : '')
+    +     (durakListeSS.length>1 ? ' <span style="font-size:11px;color:var(--muted-foreground)">('+durakListeSS.map(function(d){return temizIl(d.il||'')+':'+_durakTemsil(d);}).join(', ')+')</span>' : '')
     +   '</span>'
     + '</div>'
     + '</div>';
