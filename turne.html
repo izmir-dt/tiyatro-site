@@ -21532,7 +21532,14 @@ function _calEvStyle(progSatir, turne) {
     oyunAdi = t.oyun || '—';
     subtitl = '';
   }
-  return { tip:tip, bg:bg, fg:fg, border:border, ikon:ikon, oyunAdi:oyunAdi, subtitl:subtitl, saat:saat, ilStr:ilStr };
+  // ── İPTAL: kart soluk + kırmızı çerçeve + üstü çizili ──
+  var iptal = (t.statu || '') === 'iptal';
+  if (iptal) {
+    bg = 'repeating-linear-gradient(135deg, hsl(0,70%,97%) 0 6px, hsl(0,60%,94%) 6px 12px)';
+    fg = 'hsl(0,55%,42%)';
+    border = 'hsl(0,75%,55%)';
+  }
+  return { tip:tip, bg:bg, fg:fg, border:border, ikon:ikon, oyunAdi:oyunAdi, subtitl:subtitl, saat:saat, ilStr:ilStr, iptal:iptal };
 }
 
 // ── Gün için event listesi ──────────────────────────────────
@@ -21627,7 +21634,9 @@ function _calEventHTML(t, key, overrideSatir) {
       _calStrike = _eventIdx > _ykKesim.kesilenIndex;
     }
   }
-  var _eventTextStyle = _calStrike ? 'text-decoration:line-through;opacity:0.4;' : '';
+  var _eventTextStyle = (_calStrike || st.iptal) ? 'text-decoration:line-through;opacity:0.55;' : '';
+  var _iptalCardStyle = st.iptal ? 'border-left-style:dashed;border-left-width:4px;opacity:.85;' : '';
+  var _iptalBadge = st.iptal ? '<span style="display:inline-block;font-size:8px;font-weight:900;background:hsl(0,75%,55%);color:#fff;padding:1px 5px;border-radius:3px;margin-left:4px;letter-spacing:.5px">İPTAL</span>' : '';
 
   // Tooltip — gün tipine göre özel veriler
   var _progTipX = progSatir ? progSatir.program : 'genel';
@@ -21711,24 +21720,24 @@ function _calEventHTML(t, key, overrideSatir) {
       + 'style="border-left-color:hsl(270,55%,55%);background:hsl(270,40%,94%);color:hsl(270,55%,30%);font-style:italic">'
       + '<span class="cal-event-icon">⛓</span>'
       + '<span class="cal-event-body">'
-      + '<span class="cal-event-text" style="' + _eventTextStyle + '">' + (t.oyun || 'Ek Grup') + '</span>'
+      + '<span class="cal-event-text" style="' + _eventTextStyle + '">' + (t.oyun || 'Ek Grup') + _iptalBadge + '</span>'
       + '<span class="cal-event-sub">Ek Turne</span>'
       + '</span>'
       + '</div>';
   }
 
-  return '<div class="cal-event tip-' + st.tip + '" '
+  return '<div class="cal-event tip-' + st.tip + (st.iptal ? ' iptal-event' : '') + '" '
     + 'onmouseenter="calTooltipGoster(event,\'' + ttData + '\')" '
     + 'onmouseleave="calTooltipGizle()" '
     + 'onmousemove="calTooltipTasi(event)" '
     + 'onclick="event.stopPropagation();calGunTikla(\'' + key + '\')" '
-    + 'style="border-left-color:' + st.border + ';background:' + st.bg + ';color:' + st.fg + '">'
+    + 'style="border-left-color:' + st.border + ';background:' + st.bg + ';color:' + st.fg + ';' + _iptalCardStyle + '">'
     + '<span class="cal-event-icon">' + st.ikon + '</span>'
     + '<span class="cal-event-body">'
-    + '<span class="cal-event-text" style="' + _eventTextStyle + '">' + st.oyunAdi + '</span>'
-    + (st.subtitl ? '<span class="cal-event-sub">' + st.subtitl + '</span>' : '')
+    + '<span class="cal-event-text" style="' + _eventTextStyle + '">' + st.oyunAdi + _iptalBadge + '</span>'
+    + (st.subtitl ? '<span class="cal-event-sub" style="' + (st.iptal?'text-decoration:line-through;opacity:.6;':'') + '">' + st.subtitl + '</span>' : '')
     + '</span>'
-    + (st.saat ? '<span class="cal-event-saat">' + st.saat + '</span>' : '')
+    + (st.saat ? '<span class="cal-event-saat" style="' + (st.iptal?'text-decoration:line-through;opacity:.6;':'') + '">' + st.saat + '</span>' : '')
     + '</div>';
 }
 
@@ -21945,10 +21954,18 @@ function _renderCalAy() {
     var _expandedEvs = [];
     events.forEach(function(t) {
       var gunSat = t.programSatirlar ? t.programSatirlar.filter(function(s){ return s.tarih===key; }) : [];
-      if (gunSat.length > 1) {
-        gunSat.forEach(function(ps) { _expandedEvs.push({ t:t, ps:ps }); });
+      if (gunSat.length > 0) {
+        gunSat.forEach(function(ps) {
+          // saat2 dolu ise: aynı gün matine + akşam → 2 ayrı kart
+          if (ps.saat2) {
+            _expandedEvs.push({ t:t, ps: Object.assign({}, ps, { saat: ps.saat || '', _temsilNo: 1 }) });
+            _expandedEvs.push({ t:t, ps: Object.assign({}, ps, { saat: ps.saat2, _temsilNo: 2 }) });
+          } else {
+            _expandedEvs.push({ t:t, ps: ps });
+          }
+        });
       } else {
-        _expandedEvs.push({ t:t, ps: gunSat[0]||null });
+        _expandedEvs.push({ t:t, ps: null });
       }
     });
     var evCount = _expandedEvs.length;
@@ -22016,14 +22033,29 @@ function _renderCalHafta() {
     var isSelected = key === calSelectedDay;
     rowHTML += '<div style="min-height:120px;padding:6px;border-right:1px solid var(--border);border-bottom:1px solid var(--border);background:'+(isTodayCol?'hsl(42,90%,98%)':(isSelected?'hsl(350,60%,97%)':'var(--card)'))+';cursor:pointer;transition:background .12s;display:flex;flex-direction:column;gap:3px" onclick="calGunTikla(\''+key+'\',event)">'
       + (tatilAdi ? '<div style="font-size:8px;font-weight:700;color:hsl(42,75%,32%);background:hsl(42,85%,88%);border-radius:3px;padding:1px 5px;margin-bottom:2px">⭐ '+tatilAdi+'</div>' : '')
-      + events.map(function(t) {
-          var ps = t.programSatirlar ? t.programSatirlar.find(function(s){ return s.tarih===key; }) : null;
-          var st = _calEvStyle(ps, t);
-          return '<div style="border-radius:6px;border-left:3px solid '+st.border+';background:'+st.bg+';color:'+st.fg+';padding:4px 8px;margin-bottom:3px;cursor:pointer;font-size:10.5px;font-weight:700;" onclick="event.stopPropagation();calGunTikla(\''+key+'\',event)">'
-            + '<div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + st.ikon + ' ' + st.oyunAdi + '</div>'
-            + (st.saat ? '<div style="font-size:11px;font-weight:800;opacity:.9;margin-top:1px">⏰ ' + st.saat + '</div>' : '')
-            + '</div>';
-        }).join('')
+      + (function(){
+          var _items = [];
+          events.forEach(function(t){
+            var gs = t.programSatirlar ? t.programSatirlar.filter(function(s){return s.tarih===key;}) : [];
+            if (gs.length === 0) { _items.push({t:t, ps:null}); return; }
+            gs.forEach(function(ps){
+              if (ps.saat2) {
+                _items.push({t:t, ps: Object.assign({}, ps, { saat: ps.saat || '' }) });
+                _items.push({t:t, ps: Object.assign({}, ps, { saat: ps.saat2 }) });
+              } else { _items.push({t:t, ps:ps}); }
+            });
+          });
+          return _items.map(function(it){
+            var ps = it.ps; var t = it.t;
+            var st = _calEvStyle(ps, t);
+            var _ipStyle = st.iptal ? 'border-style:dashed;opacity:.85;' : '';
+            var _txtStyle = st.iptal ? 'text-decoration:line-through;opacity:.6;' : '';
+            return '<div style="border-radius:6px;border-left:3px solid '+st.border+';background:'+st.bg+';color:'+st.fg+';padding:4px 8px;margin-bottom:3px;cursor:pointer;font-size:10.5px;font-weight:700;'+_ipStyle+'" onclick="event.stopPropagation();calGunTikla(\''+key+'\',event)">'
+              + '<div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'+_txtStyle+'">' + st.ikon + ' ' + st.oyunAdi + (st.iptal?' <span style=\"font-size:8px;background:hsl(0,75%,55%);color:#fff;padding:1px 4px;border-radius:3px;text-decoration:none;opacity:1\">İPTAL</span>':'') + '</div>'
+              + (st.saat ? '<div style="font-size:11px;font-weight:800;opacity:.9;margin-top:1px;'+_txtStyle+'">⏰ ' + st.saat + '</div>' : '')
+              + '</div>';
+          }).join('');
+        })()
       + '</div>';
   });
 
@@ -23965,15 +23997,35 @@ function _tcListesiModalAc(t) {
       });
     } catch(e){}
     var oyunStr = (t.oyun || 'Turne').replace(/[^a-zA-Z0-9ğüşıöçĞÜŞİÖÇ\s]/g,'').trim().substring(0,30);
-    var tarihStr2 = '';
-    if (t.baslangicTarih || t.tarih) {
-      var _bd = (t.baslangicTarih || t.tarih).split('-');
-      tarihStr2 = _bd[2] + '.' + _bd[1] + '.' + _bd[0];
-      if (t.bitisTarih && t.bitisTarih !== (t.baslangicTarih || t.tarih)) {
-        var _ed = t.bitisTarih.split('-');
-        tarihStr2 += ' \u2013 ' + _ed[2] + '.' + _ed[1] + '.' + _ed[0];
-      }
+    var oyunBaslik = (t.oyun || 'TURNE').toLocaleUpperCase('tr-TR');
+
+    // Şehir(ler) → "İSTANBUL TURNESİ" / "İSTANBUL – ANKARA TURNESİ"
+    var sehirler = [];
+    if (t.duraklar && t.duraklar.length) {
+      t.duraklar.forEach(function(d){
+        var il = (d.il || '').replace(/\/MERKEZ/gi,'').trim();
+        if (il && sehirler.indexOf(il) === -1) sehirler.push(il);
+      });
+    } else if (t.il) {
+      t.il.split(',').forEach(function(x){
+        var il = x.replace(/\/MERKEZ/gi,'').trim();
+        if (il && sehirler.indexOf(il) === -1) sehirler.push(il);
+      });
     }
+    var turneBaslik = sehirler.length
+      ? sehirler.map(function(s){return s.toLocaleUpperCase('tr-TR');}).join(' – ') + ' TURNESİ'
+      : 'TURNE';
+
+    // Tarih: "18 Mayıs 2026 – 23 Mayıs 2026"
+    var AYLAR_TR2 = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
+    function _fmtTarihUzun(s) {
+      if (!s) return '';
+      var p = s.split('-');
+      return parseInt(p[2],10) + ' ' + AYLAR_TR2[+p[1]-1] + ' ' + p[0];
+    }
+    var bas = t.baslangicTarih || t.tarih || '';
+    var bit = t.bitisTarih || bas;
+    var tarihStr2 = _fmtTarihUzun(bas) + (bit && bit !== bas ? ' – ' + _fmtTarihUzun(bit) : '');
 
     // Görev adından " - tarih" veya " – tarih" kısmını temizle
     function temizleGorev(g) {
@@ -23987,55 +24039,56 @@ function _tcListesiModalAc(t) {
     katilimcilar.forEach(function(p, i) {
       var key = (p.kisi || '').trim().toLowerCase().replace(/\s+/g, '_');
       var kayit = data[key] || {};
-      var bg = i % 2 === 0 ? '#FFFFFF' : '#FDECEA';
+      var bg = i % 2 === 0 ? '#FFFFFF' : '#FBF3F3';
       var gorev = temizleGorev(p.gorev || p.kategori || '');
-      satirlar += '<tr style="height:22px">'
-        + '<td style="background:' + bg + ';border:1px solid #D0A0A0;text-align:center;font-size:11pt;color:#333;padding:3px 6px;width:40px">' + (i+1) + '</td>'
-        + '<td style="background:' + bg + ';border:1px solid #D0A0A0;font-weight:bold;font-size:11pt;color:#111;padding:3px 8px;width:200px">' + (p.kisi || '') + '</td>'
-        + '<td style="background:' + bg + ';border:1px solid #D0A0A0;font-size:11pt;color:#333;padding:3px 8px;width:180px">' + gorev + '</td>'
-        + '<td style="background:' + bg + ';border:1px solid #D0A0A0;font-size:11pt;color:#555;padding:3px 8px;width:110px">' + (kayit.dogum || '') + '</td>'
-        + '<td style="background:' + bg + ';border:1px solid #D0A0A0;font-size:11pt;color:#444;padding:3px 8px;width:120px">' + (kayit.tc || '') + '</td>'
+      satirlar += '<tr style="height:24px">'
+        + '<td style="background:' + bg + ';border:1px solid #C4A0A0;text-align:center;font-size:11pt;color:#444;padding:4px 6px;font-family:Calibri,Arial">' + (i+1) + '</td>'
+        + '<td style="background:' + bg + ';border:1px solid #C4A0A0;font-weight:bold;font-size:11pt;color:#111;padding:4px 10px;font-family:Calibri,Arial">' + (p.kisi || '') + '</td>'
+        + '<td style="background:' + bg + ';border:1px solid #C4A0A0;font-size:11pt;color:#333;padding:4px 10px;font-family:Calibri,Arial">' + gorev + '</td>'
+        + '<td style="background:' + bg + ';border:1px solid #C4A0A0;font-size:11pt;color:#333;padding:4px 8px;text-align:center;vertical-align:middle;font-family:Calibri,Arial">' + (kayit.dogum || '') + '</td>'
+        + '<td style="background:' + bg + ';border:1px solid #C4A0A0;font-size:12pt;font-weight:bold;color:#111;padding:4px 8px;text-align:center;vertical-align:middle;font-family:Calibri,Arial;letter-spacing:0.5px">' + (kayit.tc || '') + '</td>'
         + '</tr>';
     });
 
     var html = '<!DOCTYPE html><html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">'
       + '<head><meta charset="UTF-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet>'
       + '<x:Name>TC Listesi</x:Name>'
-      + '<x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>'
+      + '<x:WorksheetOptions><x:DisplayGridlines/><x:Print><x:FitWidth>1</x:FitWidth><x:FitHeight>0</x:FitHeight><x:Orientation>Landscape</x:Orientation></x:Print></x:WorksheetOptions>'
       + '</x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->'
       + '<style>br{mso-data-placement:same-cell}td,th{mso-number-format:"@"}</style>'
       + '</head><body>'
-      + '<table style="border-collapse:collapse;width:650px;table-layout:fixed">'
+      + '<table style="border-collapse:collapse;width:720px;table-layout:fixed">'
       + '<colgroup>'
-      + '<col style="width:40px"/>'
+      + '<col style="width:50px"/>'
+      + '<col style="width:220px"/>'
       + '<col style="width:200px"/>'
-      + '<col style="width:180px"/>'
-      + '<col style="width:110px"/>'
       + '<col style="width:120px"/>'
+      + '<col style="width:140px"/>'
       + '</colgroup>'
-      // Başlık
-      + '<tr style="height:32px">'
-      + '<td colspan="5" style="background:#6B1B1B;color:#FFFFFF;font-size:14pt;font-weight:bold;text-align:center;padding:6px 10px;border:2px solid #5A1717;letter-spacing:0.5px;font-family:Calibri,Arial">T.C. K\u0130ML\u0130K L\u0130STES\u0130</td>'
-      + '</tr>'
-      // Alt başlık
-      + '<tr style="height:20px">'
-      + '<td colspan="5" style="background:#F3E8E8;color:#6B1B1B;font-size:10pt;font-weight:bold;text-align:center;padding:4px 10px;border-left:2px solid #5A1717;border-right:2px solid #5A1717;border-bottom:1px solid #D0B0B0;font-family:Calibri,Arial">'
-      + (oyunStr || '') + (tarihStr2 ? '   \u2013   ' + tarihStr2 : '')
-      + '</td></tr>'
-      // Boşluk satırı
-      + '<tr style="height:6px"><td colspan="5" style="border-left:2px solid #5A1717;border-right:2px solid #5A1717;background:#F8F8F8"></td></tr>'
-      // Sütun başlıkları
-      + '<tr style="height:24px">'
-      + '<th style="border:2px solid #5A1717;background:#8B2222;color:#FFFFFF;font-size:11pt;font-weight:bold;text-align:center;padding:4px 6px;font-family:Calibri,Arial">No</th>'
-      + '<th style="border:2px solid #5A1717;background:#8B2222;color:#FFFFFF;font-size:11pt;font-weight:bold;text-align:left;padding:4px 8px;font-family:Calibri,Arial">Ad Soyad</th>'
-      + '<th style="border:2px solid #5A1717;background:#8B2222;color:#FFFFFF;font-size:11pt;font-weight:bold;text-align:left;padding:4px 8px;font-family:Calibri,Arial">G\u00f6revi</th>'
-      + '<th style="border:2px solid #5A1717;background:#8B2222;color:#FFFFFF;font-size:11pt;font-weight:bold;text-align:left;padding:4px 8px;font-family:Calibri,Arial">Do\u011fum Tarihi</th>'
-      + '<th style="border:2px solid #5A1717;background:#8B2222;color:#FFFFFF;font-size:11pt;font-weight:bold;text-align:left;padding:4px 8px;font-family:Calibri,Arial">TC Kimlik No</th>'
+      // 1) Oyun adı (büyük, kırmızı)
+      + '<tr style="height:38px"><td colspan="5" style="background:#FFFFFF;color:#6B1B1B;font-size:22pt;font-weight:bold;text-align:center;padding:8px 10px;letter-spacing:2px;font-family:Calibri,Arial">' + oyunBaslik + '</td></tr>'
+      // 2) Şehir Turnesi
+      + '<tr style="height:24px"><td colspan="5" style="background:#FFFFFF;color:#333;font-size:13pt;font-weight:bold;text-align:center;padding:4px 10px;letter-spacing:1px;font-family:Calibri,Arial">' + turneBaslik + '</td></tr>'
+      // 3) Tarih aralığı
+      + '<tr style="height:22px"><td colspan="5" style="background:#FFFFFF;color:#555;font-size:12pt;text-align:center;padding:4px 10px;font-family:Calibri,Arial">' + tarihStr2 + '</td></tr>'
+      // 4) Boşluk
+      + '<tr style="height:10px"><td colspan="5" style="background:#FFFFFF"></td></tr>'
+      // 5) Alt başlık
+      + '<tr style="height:28px"><td colspan="5" style="background:#6B1B1B;color:#FFFFFF;font-size:12pt;font-weight:bold;text-align:center;padding:6px 10px;letter-spacing:1px;font-family:Calibri,Arial;border:2px solid #5A1717">GÖREVLİ PERSONEL T.C. LİSTESİ</td></tr>'
+      // 6) Boşluk
+      + '<tr style="height:6px"><td colspan="5" style="background:#FFFFFF"></td></tr>'
+      // 7) Sütun başlıkları
+      + '<tr style="height:26px">'
+      + '<th style="border:1px solid #5A1717;background:#8B2222;color:#FFFFFF;font-size:11pt;font-weight:bold;text-align:center;padding:5px 6px;font-family:Calibri,Arial">NO</th>'
+      + '<th style="border:1px solid #5A1717;background:#8B2222;color:#FFFFFF;font-size:11pt;font-weight:bold;text-align:center;padding:5px 8px;font-family:Calibri,Arial">AD SOYAD</th>'
+      + '<th style="border:1px solid #5A1717;background:#8B2222;color:#FFFFFF;font-size:11pt;font-weight:bold;text-align:center;padding:5px 8px;font-family:Calibri,Arial">GÖREVİ</th>'
+      + '<th style="border:1px solid #5A1717;background:#8B2222;color:#FFFFFF;font-size:11pt;font-weight:bold;text-align:center;padding:5px 8px;font-family:Calibri,Arial">DOĞUM TARİHİ</th>'
+      + '<th style="border:1px solid #5A1717;background:#8B2222;color:#FFFFFF;font-size:11pt;font-weight:bold;text-align:center;padding:5px 8px;font-family:Calibri,Arial">TC KİMLİK NO</th>'
       + '</tr>'
       + satirlar
       + '</table></body></html>';
 
-    var blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8' });
+    var blob = new Blob(['\ufeff' + html], { type: 'application/vnd.ms-excel;charset=utf-8' });
     var url = URL.createObjectURL(blob);
     var a = document.createElement('a');
     a.href = url;
