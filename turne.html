@@ -10999,7 +10999,7 @@ function renderListe() {
   // ── Pagination footer
   if (filtered.length > 0) {
     html += '<div id="liste-pagination-footer" style="text-align:center;padding:14px;color:var(--muted-foreground);font-size:11px">'
-      + filtered.length + ' turne gösteriliyor'
+      + filtered.filter(function(__t){return !__t.anaGrupId;}).length + ' turne gösteriliyor'
       + '</div>';
   }
 
@@ -16566,8 +16566,8 @@ function renderOyunDetay() {
     });
     // Turne sayısına göre sırala (en çok turneye giden en başta)
     var tumOyunlar = [...oyunSet].sort(function(a,b){
-      var aT = turneler.filter(function(t){ return t.oyun===a||(t.duraklar&&t.duraklar.some(function(d){return d.oyun===a;})); }).length;
-      var bT = turneler.filter(function(t){ return t.oyun===b||(t.duraklar&&t.duraklar.some(function(d){return d.oyun===b;})); }).length;
+      var aT = turneler.filter(function(t){ return !t.anaGrupId && (t.oyun===a||(t.duraklar&&t.duraklar.some(function(d){return d.oyun===a;}))); }).length;
+      var bT = turneler.filter(function(t){ return !t.anaGrupId && (t.oyun===b||(t.duraklar&&t.duraklar.some(function(d){return d.oyun===b;}))); }).length;
       return bT - aT;
     });
     if (!tumOyunlar.length) {
@@ -16580,7 +16580,7 @@ function renderOyunDetay() {
       + tumOyunlar.length + ' oyun — turne sayısına göre sıralı</div>'
       + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:10px">'
       + tumOyunlar.map(function(o, oi) {
-          var oT = turneler.filter(function(t){ return t.oyun===o||(t.duraklar&&t.duraklar.some(function(d){return d.oyun===o;})); });
+          var oT = turneler.filter(function(t){ return !t.anaGrupId && (t.oyun===o||(t.duraklar&&t.duraklar.some(function(d){return d.oyun===o;}))); });
           var oP = getPersonelForOyun(o);
           var toplamGun = oT.reduce(function(s,t){ return s+turneSuresi(t); },0);
           var toplamTemsil = oT.reduce(function(s,t){ return s+durakToplamTemsil(t); },0);
@@ -16616,6 +16616,7 @@ function renderOyunDetay() {
   localStorage.setItem('_sonSecOyun', oyun);
 
   var oyunT = turneler.filter(function(t) {
+    if (t.anaGrupId) return false;
     if (t.oyun === oyun) return true;
     if (!t.oyun && t.duraklar) return t.duraklar.some(function(d){ return d.oyun === oyun; });
     return false;
@@ -19160,7 +19161,7 @@ function kadroPdfIndir() {
 // Oyun adını yeniden adlandır
 async function _oyunSilOnay(oyunAdi) {
   var kadroSay = tumPersonel.filter(function(p){ return p.oyun === oyunAdi; }).length;
-  var turneSay = turneler.filter(function(t){ return t.oyun === oyunAdi; }).length;
+  var turneSay = turneler.filter(function(t){ return !t.anaGrupId && t.oyun === oyunAdi; }).length;
   var liste = [];
   if (kadroSay > 0) liste.push(kadroSay + ' kadro kaydı silinecek (personel listesi)');
   if (turneSay > 0) liste.push(turneSay + ' turne kaydı bu oyuna bağlı (turneler silinmez, sadece kadro)');
@@ -19203,7 +19204,7 @@ async function _oyunSilDevam(oyunAdi) {
 
 function _oyunYendenAdlandir(eskiAd) {
   // Sezon bilgisini topla
-  var oyunTurneleri = turneler.filter(function(t){ return t.oyun === eskiAd; });
+  var oyunTurneleri = turneler.filter(function(t){ return !t.anaGrupId && t.oyun === eskiAd; });
   var sezonlar = Array.from(new Set(oyunTurneleri.map(function(t){
     return tarihSezon ? tarihSezon(t.baslangicTarih||t.tarih) : null;
   }).filter(Boolean))).sort();
@@ -22964,6 +22965,8 @@ function calGenelRaporPdf() {
   if (!turneler.length) { alert('Henüz turne kaydı yok.'); return; }
   var bugun = new Date().toLocaleDateString('tr-TR',{day:'numeric',month:'long',year:'numeric'});
 
+  var __origTurneler_pdf = turneler;
+  var turneler = __origTurneler_pdf.filter(function(t){ return !t.anaGrupId; });
   var sezonlar = {};
   turneler.forEach(function(t) {
     var yil = (t.baslangicTarih||t.tarih||'').split('-')[0]||'?';
@@ -28615,6 +28618,7 @@ function calAylikRaporPdf() {
   var ayBit = calYear + '-' + String(calMonth+1).padStart(2,'0') + '-' + String(sonGun).padStart(2,'0');
 
   var ayTurneler = turneler.filter(function(t) {
+    if (t.anaGrupId) return false;
     var bas = t.baslangicTarih||t.tarih||'';
     var bit = t.bitisTarih||bas;
     return bas <= ayBit && bit >= ayBas;
@@ -32482,6 +32486,75 @@ setTimeout(_turBoot, 4000);
     transition: none !important;
   }
 }
+
+
+/* === MOBILE FIX OVERRIDES v2 === */
+@media (max-width: 768px) {
+  html body, html body *:not(script):not(style):not(svg):not(path) {
+    font-size: max(12px, 1em);
+  }
+  html body .badge, html body .tag, html body .chip, html body .legend,
+  html body .legend *, html body th, html body td, html body small,
+  html body .stat-label, html body .pill, html body [class*="badge"],
+  html body [class*="chip"], html body [class*="tag"] {
+    font-size: 12px !important; line-height: 1.4 !important;
+  }
+  html body .calendar-event, html body .event,
+  html body [class*="calendar"] [class*="event"], html body [class*="event-"] {
+    font-size: 12px !important; line-height: 1.3 !important;
+  }
+  html body [class*="calendar"] .day, html body [class*="calendar"] .cell { min-height: 80px !important; }
+  html body input, html body select, html body textarea,
+  html body input[style], html body select[style], html body textarea[style] {
+    font-size: 16px !important;
+  }
+  html body .btn, html body .bulk-btn, html body .filter-select,
+  html body .filter-input, html body button, html body [role="button"],
+  html body input[type="button"], html body input[type="submit"],
+  html body input[type="reset"], html body select { min-height: 44px !important; }
+  html body .btn, html body button, html body [role="button"] {
+    min-width: 44px;
+    padding-top: max(8px, .5em) !important;
+    padding-bottom: max(8px, .5em) !important;
+  }
+  html body .icon-btn, html body [class*="icon-btn"], html body button[class*="icon"] {
+    padding: 10px !important; min-width: 44px !important; min-height: 44px !important;
+  }
+  html body input[style*="width:240px"], html body input[style*="width: 240px"],
+  html body input[style*="width:220px"], html body input[style*="width: 220px"],
+  html body .filter-input, html body .search-input {
+    width: 100% !important; max-width: 100% !important; box-sizing: border-box !important;
+  }
+  html body [data-tooltip][data-tooltip-active]::after,
+  html body [data-tooltip][data-tooltip-active]::before {
+    opacity: 1 !important; visibility: visible !important; pointer-events: none;
+  }
+  .tabs-bar, .desktop-tabs, [class*="tabs-bar"] { display: none !important; }
+  .bottom-nav, .mobile-bottom-nav, [class*="bottom-nav"] { display: flex !important; }
+}
+@media (min-width: 769px) {
+  .bottom-nav, .mobile-bottom-nav, [class*="bottom-nav"] { display: none !important; }
+}
+/* === /MOBILE FIX OVERRIDES === */
+
 </style>
 
+
+<script>
+(function(){
+  if (!matchMedia('(hover: none)').matches) return;
+  var current = null, timer = null;
+  function clear(){ if(current){ current.removeAttribute('data-tooltip-active'); current=null;} if(timer){clearTimeout(timer); timer=null;} }
+  document.addEventListener('click', function(e){
+    var el = e.target.closest('[data-tooltip]');
+    if (!el) { clear(); return; }
+    if (current === el) { clear(); return; }
+    clear();
+    current = el;
+    el.setAttribute('data-tooltip-active','1');
+    if (!el.getAttribute('aria-label')) el.setAttribute('aria-label', el.getAttribute('data-tooltip'));
+    timer = setTimeout(clear, 3000);
+  }, true);
+})();
+</script>
 </body></html>
