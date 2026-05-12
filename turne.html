@@ -10412,7 +10412,7 @@ function populateFilters() {
     if (id === 'kadro-oyun-sec') _kadroOyunDdSyncLabel();
   });
   const fi = document.getElementById('filter-il');
-  fi.innerHTML = '<option value="">Tüm İller</option>';
+  fi.innerHTML = '<option value="">📍 Tüm İller</option>';
   iller.forEach(il => { const opt = document.createElement('option'); opt.value = il; opt.textContent = il; fi.appendChild(opt); });
   const mo = document.getElementById('m-oyun');
   if (mo) {
@@ -10825,94 +10825,9 @@ async function _topluStatuKaydet(yeniStatu) {
   topluSecIptal(); renderListe();
 }
 
-// ── Günlük Program Banner ─────────────────────────────────────────────────
-function _gunlukBannerRender() {
-  var el = document.getElementById('gunluk-banner');
-  if (!el) return;
-
-  var now = new Date();
-  var bugun = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0');
-
-  // Bugün aktif olan turneler
-  var aktifBugün = (window.turneler || []).filter(function(t) {
-    if (t.statu === 'iptal') return false;
-    var bas = t.baslangicTarih || t.tarih || '';
-    var bit = t.bitisTarih || t.tarih || bas;
-    return bas <= bugun && bit >= bugun;
-  });
-
-  if (!aktifBugün.length) { el.innerHTML = ''; return; }
-
-  var gunler = ['Pazar','Pazartesi','Salı','Çarşamba','Perşembe','Cuma','Cumartesi'];
-  var aylar  = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
-  var tarihStr = gunler[now.getDay()] + ', ' + now.getDate() + ' ' + aylar[now.getMonth()];
-
-  var kartlar = aktifBugün.map(function(t) {
-    var sr = typeof statuRenk === 'function' ? statuRenk(t.statu) : { bg:'#eee', fg:'#333', label: t.statu };
-    // Bugün hangi durak aktif?
-    var ilAdi = '';
-    if (t.duraklar && t.duraklar.length) {
-      var aktifDurak = t.duraklar.find(function(d) {
-        return d.bas <= bugun && (d.bit || d.bas) >= bugun;
-      }) || t.duraklar.find(function(d) {
-        var dBas = d.baslangicTarih || d.tarih || '';
-        var dBit = d.bitisTarih || dBas;
-        return dBas <= bugun && dBit >= bugun;
-      }) || null;
-      if (aktifDurak) ilAdi = aktifDurak.il || '';
-      if (!ilAdi) ilAdi = (t.duraklar[0].il || '');
-    }
-    if (!ilAdi) ilAdi = (t.il || '').split('/')[0].trim();
-
-    var mekan = '';
-    if (t.duraklar && t.duraklar.length) {
-      var md = t.duraklar.find(function(d){ return d.il && d.il.split('/')[0].trim() === ilAdi && d.mekan; });
-      if (md) mekan = md.mekan;
-    }
-    if (!mekan) mekan = t.mekan || '';
-
-    var basTar = t.baslangicTarih || t.tarih || '';
-    var bitTar = t.bitisTarih || basTar;
-    var gunSayisi = 0;
-    if (basTar && bitTar) {
-      var d1 = new Date(basTar), d2 = new Date(bitTar);
-      gunSayisi = Math.round((d2 - d1) / 86400000) + 1;
-    }
-    var gecenGun = 0;
-    if (basTar) {
-      var d0 = new Date(basTar), dn = new Date(bugun);
-      gecenGun = Math.round((dn - d0) / 86400000) + 1;
-    }
-
-    var rowIdx = t._rowIdx;
-    return '<div onclick="_haritaDetayGitListe(' + rowIdx + ')" style="cursor:pointer;display:flex;align-items:center;gap:10px;padding:9px 13px;background:var(--card);border:1.5px solid var(--border);border-radius:9px;min-width:220px;max-width:300px;flex-shrink:0;transition:box-shadow .15s,border-color .15s" onmouseenter="this.style.borderColor=\'var(--primary)\';this.style.boxShadow=\'0 2px 10px rgba(180,110,0,.18)\'" onmouseleave="this.style.borderColor=\'var(--border)\';this.style.boxShadow=\'\'">'
-      + '<div style="width:34px;height:34px;border-radius:8px;background:linear-gradient(135deg,var(--primary),hsl(30,70%,38%));display:flex;align-items:center;justify-content:center;flex-shrink:0">'
-      + '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"><path d="M12 21s7-6.5 7-11a7 7 0 1 0-14 0c0 4.5 7 11 7 11z"/><circle cx="12" cy="10" r="2" fill="#fff" stroke="none"/></svg>'
-      + '</div>'
-      + '<div style="min-width:0;flex:1">'
-        + '<div style="font-size:12px;font-weight:800;color:var(--foreground);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + (t.oyun || '—') + '</div>'
-        + '<div style="display:flex;align-items:center;gap:5px;margin-top:2px;flex-wrap:wrap">'
-          + (ilAdi ? '<span style="font-size:10.5px;font-weight:700;color:var(--primary)">' + ilAdi + '</span>' : '')
-          + (mekan ? '<span style="font-size:10px;color:var(--muted-foreground)">· ' + mekan + '</span>' : '')
-        + '</div>'
-        + (gunSayisi > 1 ? '<div style="font-size:9.5px;color:var(--muted-foreground);margin-top:2px">' + gecenGun + '. gün / ' + gunSayisi + ' gün</div>' : '')
-      + '</div>'
-      + '<span style="font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px;background:' + sr.bg + ';color:' + sr.fg + ';white-space:nowrap;flex-shrink:0">' + sr.label + '</span>'
-    + '</div>';
-  }).join('');
-
-  el.innerHTML = '<div style="padding:8px 14px 0;display:flex;align-items:center;gap:8px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none">'
-    + '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0;min-width:0">'
-      + '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2.2" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>'
-      + '<span style="font-size:11px;font-weight:700;color:var(--foreground);white-space:nowrap">' + tarihStr + '</span>'
-      + '<span style="font-size:10px;color:var(--muted-foreground);white-space:nowrap">— bugün ' + aktifBugün.length + ' aktif turne</span>'
-    + '</div>'
-    + '<div style="display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px">' + kartlar + '</div>'
-    + '<button onclick="switchTab(\'takvim\')" style="flex-shrink:0;height:28px;padding:0 11px;border:1.5px solid var(--border);border-radius:7px;background:transparent;cursor:pointer;font-size:10px;font-weight:700;color:var(--muted-foreground);display:inline-flex;align-items:center;gap:4px;white-space:nowrap;transition:all .15s" onmouseenter="this.style.borderColor=\'var(--primary)\';this.style.color=\'var(--primary)\'" onmouseleave="this.style.borderColor=\'var(--border)\';this.style.color=\'var(--muted-foreground)\'">'
-      + '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>'
-      + 'Takvime Git</button>'
-  + '</div>';
-}
+// ── Günlük Program Banner — devre dışı ───────────────────────────────────
+function _gunlukBannerKapat() {}
+function _gunlukBannerRender() { var el = document.getElementById('gunluk-banner'); if (el) el.innerHTML = ''; }
 
 function _haritaDetayGitListe(rowIdx) {
   rowIdx = parseInt(rowIdx, 10);
@@ -12627,13 +12542,13 @@ function _memnuniyetLocalGeriYukle() {
         t.memnuniyet = lm;
         degisti = true;
       } else if (sheetDolu && localDolu) {
-        // Her ikisi de dolu → sheet kesinlikle öncelikli (puan silmeleri korunur)
-        // lm'den sadece sheet'te bulunmayan alanları al, puanları sheet'ten al
-        var merged = Object.assign({}, lm);
-        Object.keys(sheet).forEach(function(k){ merged[k] = sheet[k]; });
-        // Sheet'te silinmiş puanları lm'den de sil
+        // Her ikisi de dolu → sheet KESİNLİKLE öncelikli
+        // Sadece Not/notlar alanlarını local'den ekle (sheet'te yoksa)
+        var merged = Object.assign({}, sheet);
         Object.keys(lm).forEach(function(k){
-          if (k.endsWith('Puan') && !(k in sheet)) delete merged[k];
+          if ((k.endsWith('Not') || k === 'notlar') && !(k in sheet)) {
+            merged[k] = lm[k];
+          }
         });
         t.memnuniyet = merged;
       }
@@ -12667,6 +12582,7 @@ function _memnuniyetPuanKaydet(rowIdx, tip, puan) {
   } else {
     t.memnuniyet[tip + 'Puan'] = puan;
   }
+  _memnuniyetLocalKaydet(); // silme anında hemen yaz — geri gelmesin
   _memnuniyetSheetKaydet(t);
   if (typeof _degerlendirmeBadgeGuncelle === 'function') _degerlendirmeBadgeGuncelle();
   // Yildizlari yerinde guncelle — sekmeyi DEGISTIRME
