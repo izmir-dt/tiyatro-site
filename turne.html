@@ -20897,25 +20897,42 @@ function _ilGeoJSONYukle(callback) {
   if (_ilGeoJSONLoading) return;
   _ilGeoJSONLoading = true;
   _haritaSpinner(true);
-  fetch('https://raw.githubusercontent.com/cihadturhan/tr-geojson/master/geo/tr-cities-utf8.json')
-    .then(function(r){ return r.json(); })
-    .then(function(data){
-      _ilGeoJSON = data;
+
+  // Yedek CDN listesi — ilki başarısız olursa sıradaki denenir
+  var _geojsonUrls = [
+    'https://raw.githubusercontent.com/cihadturhan/tr-geojson/master/geo/tr-cities-utf8.json',
+    'https://cdn.jsdelivr.net/gh/cihadturhan/tr-geojson@master/geo/tr-cities-utf8.json',
+    'https://rawcdn.githack.com/cihadturhan/tr-geojson/master/geo/tr-cities-utf8.json'
+  ];
+
+  function _fetchWithTimeout(url, ms) {
+    var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    var timer = ctrl ? setTimeout(function(){ ctrl.abort(); }, ms) : null;
+    return fetch(url, ctrl ? { signal: ctrl.signal } : {})
+      .finally(function(){ if (timer) clearTimeout(timer); });
+  }
+
+  function _deneUrl(idx) {
+    if (idx >= _geojsonUrls.length) {
       _ilGeoJSONLoading = false;
       _haritaSpinner(false);
-      // sessionStorage'a kaydet — sayfa yenilenince tekrar indirilmez
-      try { sessionStorage.setItem('_tr_geojson_v1', JSON.stringify(data)); } catch(e) {}
-      var cbs = _ilGeoJSONCallbacks.slice();
-      _ilGeoJSONCallbacks = [];
-      cbs.forEach(function(cb){ cb(data); });
-    })
-    .catch(function(err){
-      _ilGeoJSONLoading = false;
-      _haritaSpinner(false);
-      var cbs = _ilGeoJSONCallbacks.slice();
-      _ilGeoJSONCallbacks = [];
+      var cbs = _ilGeoJSONCallbacks.slice(); _ilGeoJSONCallbacks = [];
       cbs.forEach(function(cb){ cb(null); });
-    });
+      return;
+    }
+    _fetchWithTimeout(_geojsonUrls[idx], 8000)
+      .then(function(r){ if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function(data){
+        _ilGeoJSON = data;
+        _ilGeoJSONLoading = false;
+        _haritaSpinner(false);
+        try { sessionStorage.setItem('_tr_geojson_v1', JSON.stringify(data)); } catch(e) {}
+        var cbs = _ilGeoJSONCallbacks.slice(); _ilGeoJSONCallbacks = [];
+        cbs.forEach(function(cb){ cb(data); });
+      })
+      .catch(function(){ _deneUrl(idx + 1); });
+  }
+  _deneUrl(0);
 }
 
 function _heatmapRenk(ratio) {
