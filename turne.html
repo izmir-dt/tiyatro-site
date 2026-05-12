@@ -1412,7 +1412,6 @@ function _leafletYukle(callback) {
     .cards-group-count { font-size:11px; font-weight:700; color:var(--muted-foreground); background:var(--muted); padding:2px 9px; border-radius:20px; border:1px solid var(--border); white-space:nowrap; }
     .harita-tablo-row { cursor:pointer; transition:background .15s; }
     .harita-tablo-row:hover { background: hsl(38,50%,97%); }
-    .harita-leaflet-tip { font-family:inherit!important; font-size:12px!important; border-radius:6px!important; border:1px solid var(--border)!important; box-shadow:0 4px 12px rgba(0,0,0,.15)!important; padding:5px 10px!important; }
     .leaflet-container {  }
     .leaflet-control-attribution { font-size:9px!important; }
     #leaflet-map { z-index:1; }
@@ -2966,14 +2965,52 @@ flex-shrink:0;
   .harita-tooltip{
     font-family: inherit !important;
     font-weight: 600 !important;
-    font-size: 11.5px !important;
-    background: var(--sidebar) !important;
-    color: var(--sidebar-foreground) !important;
-    border: 1px solid var(--sidebar-border) !important;
-    box-shadow: 0 8px 20px -6px rgba(0,0,0,.35) !important;
-    border-radius: 6px !important;
-    padding: 5px 10px !important;
+    font-size: 12px !important;
+    background: hsl(25,45%,10%) !important;
+    color: hsl(38,55%,93%) !important;
+    border: 1px solid hsl(38,40%,28%) !important;
+    box-shadow: 0 10px 28px -6px rgba(0,0,0,.55), 0 2px 8px rgba(0,0,0,.25) !important;
+    border-radius: 10px !important;
+    padding: 8px 13px !important;
     letter-spacing: .1px;
+    max-width: 240px !important;
+    pointer-events: none !important;
+  }
+  .harita-leaflet-tip strong {
+    font-size: 13px !important;
+    font-weight: 800 !important;
+    color: hsl(42,90%,68%) !important;
+    display: block !important;
+    margin-bottom: 3px !important;
+    letter-spacing: .2px !important;
+  }
+  .harita-leaflet-tip .tip-statu {
+    font-size: 10.5px !important;
+    font-weight: 700 !important;
+    color: hsl(38,40%,62%) !important;
+    letter-spacing: .15px !important;
+  }
+  .harita-leaflet-tip .tip-turne {
+    color: hsl(42,88%,62%) !important;
+    font-weight: 800 !important;
+    font-size: 12px !important;
+  }
+  .harita-leaflet-tip .tip-km {
+    color: hsl(200,55%,65%) !important;
+    font-weight: 600 !important;
+    font-size: 10.5px !important;
+  }
+  .harita-leaflet-tip .tip-bar-wrap {
+    margin-top: 5px !important;
+    height: 5px !important;
+    background: hsl(25,30%,22%) !important;
+    border-radius: 3px !important;
+    overflow: hidden !important;
+  }
+  .harita-leaflet-tip .tip-bar-fill {
+    height: 5px !important;
+    border-radius: 3px !important;
+    background: linear-gradient(90deg, hsl(38,78%,48%), hsl(30,70%,38%)) !important;
   }
   .harita-leaflet-tip::before{ display:none !important; }
 
@@ -21023,19 +21060,15 @@ function haritaHeatmapCiz(ilSayilar) {
         var ratio = sayi > 0 ? sayi / maxSayi : 0;
 
         var _tipIlAdi = key || (feature.properties && (feature.properties.name || feature.properties.Name || feature.properties.NAME || '')) || '';
-        var tipHtml = '<div style="font-size:12px">'
-          + '<strong>' + _tipIlAdi + '</strong>';
+        var tipHtml = '<strong>' + _tipIlAdi + '</strong>';
         if (sayi > 0) {
-          tipHtml += '&nbsp;<span style="color:hsl(350,70%,35%);font-weight:700">' + sayi + ' turne</span>'
-            + '<div style="margin-top:5px;height:6px;border-radius:3px;background:#ddd;overflow:hidden">'
-            + '<div style="height:6px;border-radius:3px;background:' + _heatmapRenk(ratio)
-            + ';width:' + Math.round(ratio * 100) + '%"></div></div>';
+          tipHtml += '<span class="tip-statu"><span class="tip-turne">' + sayi + ' turne</span></span>'
+            + '<div class="tip-bar-wrap"><div class="tip-bar-fill" style="width:' + Math.round(ratio * 100) + '%"></div></div>';
         } else {
-          tipHtml += '&nbsp;<span style="color:#aaa;font-size:10px">gidilmedi</span>';
+          tipHtml += '<span class="tip-statu">gidilmedi</span>';
         }
-        tipHtml += '</div>';
 
-        layer.bindTooltip(tipHtml, { sticky: true, opacity: 0.97, className: 'harita-leaflet-tip' });
+        layer.bindTooltip(tipHtml, { sticky: true, opacity: 1, className: 'harita-leaflet-tip' });
 
         layer.on('click', function() { if (key) haritaIlTikla(key); });
         layer.on('mouseover', function() {
@@ -21180,21 +21213,28 @@ function haritaChoroplethCiz(ilSayilar) {
         if (!_shouldShow(sayi)) return;
 
         // Km hesabı — tooltip için
-        var kmTip = '';
+        var kmVal = '';
         if (key) {
           var _ki = _kmKeysLower.indexOf((key||'').toLocaleLowerCase('tr-TR'));
-          if (_ki >= 0) { kmTip = ' &middot; <span style="color:var(--muted-foreground)">' + IZMIR_KARAYOLU_KM[_kmKeys[_ki]] + ' km</span>'; }
-          else { var ll = IL_LATLON[key]; if (ll) { kmTip = ' &middot; <span style="color:var(--muted-foreground)">~' + hesaplaKm(IZMIR_LATLON[0],IZMIR_LATLON[1],ll[0],ll[1]) + ' km</span>'; } }
+          if (_ki >= 0) { kmVal = IZMIR_KARAYOLU_KM[_kmKeys[_ki]] + ' km'; }
+          else { var ll = IL_LATLON[key]; if (ll) { kmVal = '~' + hesaplaKm(IZMIR_LATLON[0],IZMIR_LATLON[1],ll[0],ll[1]) + ' km'; } }
         }
 
-        var tipHtml = '<strong style="font-size:12px">' + (key || '') + '</strong>';
+        var tipHtml = '<strong>' + (key || '') + '</strong>';
         if (sayi > 0) {
-          tipHtml += ' &nbsp;<span style="color:hsl(38,78%,38%);font-weight:800">' + sayi + '&thinsp;turne</span>' + kmTip;
+          var barPct = Math.round(Math.min(sayi / _maxSayi, 1) * 100);
+          tipHtml += '<span class="tip-statu">'
+            + '<span class="tip-turne">' + sayi + ' turne</span>'
+            + (kmVal ? ' &nbsp;<span class="tip-km">📍 ' + kmVal + ' İzmir\'den</span>' : '')
+            + '</span>'
+            + '<div class="tip-bar-wrap"><div class="tip-bar-fill" style="width:' + barPct + '%"></div></div>';
         } else if (_haritaFiltreMod !== 'gidilen') {
-          tipHtml += ' &nbsp;<span style="font-size:10px;color:var(--muted-foreground);font-weight:500">gidilmedi</span>' + kmTip;
+          tipHtml += '<span class="tip-statu">gidilmedi'
+            + (kmVal ? ' &nbsp;<span class="tip-km">📍 ' + kmVal + ' İzmir\'den</span>' : '')
+            + '</span>';
         }
         // Hover tooltip (sticky)
-        layer.bindTooltip(tipHtml, { sticky: true, opacity: 0.97, className: 'harita-leaflet-tip' });
+        layer.bindTooltip(tipHtml, { sticky: true, opacity: 1, className: 'harita-leaflet-tip' });
 
         var _normalFill = _choroplethFill(sayi);
         var _normalOp   = _choroplethOpacity(sayi);
