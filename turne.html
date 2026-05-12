@@ -3223,10 +3223,7 @@ flex-shrink:0;
   }
 
   /* ---------- TILE KATMANI DARK UYUM ---------- */
-  /* Leaflet harita canvas dark modda biraz karartılır */
-  [data-theme="dark"] #leaflet-map .leaflet-tile-pane{
-    filter: brightness(0.72) saturate(0.6) !important;
-  }
+  /* Leaflet harita canvas dark modda artık karartılmıyor — renk bozulması engellendi */
 
   /* ---------- CHOROPLETH HOVER CURSOR ---------- */
   #leaflet-map .leaflet-interactive{
@@ -20612,7 +20609,7 @@ function haritaIlDetay(il, ilSayilar) {
   var _haritaOyunDet = window._haritaAktifOyun || '';
   var _haritaTurnelerDet = (_haritaOyunDet
     ? turneler.filter(function(t){ return (t.oyun||'').toLowerCase().trim() === _haritaOyunDet.toLowerCase().trim(); })
-    : turneler).filter(function(t){ return !t.anaGrupId && t.statu !== 'iptal'; });
+    : turneler).filter(function(t){ return !t.anaGrupId; });
   const ilT = _haritaTurnelerDet.filter(function(t) {
     // Bu ile ait durak var mı? Yarıda kesildi ise: gidilmedi işaretli durak bile listede görünsün
     return t.duraklar && t.duraklar.length
@@ -20674,7 +20671,7 @@ function haritaIlDetay(il, ilSayilar) {
       + '</tr>';
   }).join('');
   el.innerHTML = '<div class="section-header" style="border-radius:10px 10px 0 0">'
-    +'<div style="display:flex;flex-direction:column"><span style="font-size:13px;font-weight:700"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="vertical-align:-2px;margin-right:4px;flex-shrink:0"><path d="M12 21s7-6.5 7-11a7 7 0 1 0-14 0c0 4.5 7 11 7 11z"/><circle cx="12" cy="10" r="2"/></svg>'+il+'</span><span style="font-size:10px;font-weight:500;color:var(--muted-foreground)">'+sayi+' turne · '+toplamGun+' gün'+kmStr+'</span></div>'
+    +'<div style="display:flex;flex-direction:column"><span style="font-size:13px;font-weight:700"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="vertical-align:-2px;margin-right:4px;flex-shrink:0"><path d="M12 21s7-6.5 7-11a7 7 0 1 0-14 0c0 4.5 7 11 7 11z"/><circle cx="12" cy="10" r="2"/></svg>'+il+'</span><span style="font-size:10px;font-weight:500;color:var(--muted-foreground)">'+ilT.length+' turne · '+toplamGun+' gün'+kmStr+'</span></div>'
     +'<button class="btn btn-outline" style="height:24px;font-size:10px;padding:0 8px" onclick="seciliIl=null;renderHarita()">× Kapat</button>'
     +'</div>'
     +'<table style="width:100%;table-layout:fixed;word-break:break-word" aria-label="Kişi turne listesi"><colgroup><col style="width:auto"><col style="width:108px"><col style="min-width:88px"></colgroup><thead><tr style="background:var(--muted)"><th scope="col" style="padding:6px 10px;font-size:11px;font-weight:700;color:var(--muted-foreground)">Oyun</th><th scope="col" style="padding:6px 10px;font-size:11px;font-weight:700;color:var(--muted-foreground)">Tarih</th><th scope="col" style="padding:6px 10px;font-size:11px;font-weight:700;color:var(--muted-foreground)">Statü</th></tr></thead><tbody>'+rows+'</tbody></table>';
@@ -21078,7 +21075,8 @@ function haritaChoroplethCiz(ilSayilar) {
   var _ilKeys = Object.keys(IL_LATLON);
   var _ilKeysLower = _ilKeys.map(function(k){ return k.toLocaleLowerCase('tr-TR'); });
   var _maxSayi = Math.max.apply(null, Object.values(ilSayilar).filter(function(v){ return v>0; }).concat([1]));
-  var _isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  // _isDark'ı fonksiyon olarak tut — async callback içinde canlı oku
+  function _getIsDark() { return document.documentElement.getAttribute('data-theme') === 'dark'; }
 
   // GeoJSON -> canonical il adı eşleştirme (fuzzy: Afyon ↔ Afyonkarahisar vb.)
   var _GEOJSON_MAP = {
@@ -21102,6 +21100,7 @@ function haritaChoroplethCiz(ilSayilar) {
   // Site renk paleti: amber (primary) yoğunluk skalası
   // gidilmedi: çok soluk gri-bej / gidilen: amber-kahve artan yoğunluk
   function _choroplethFill(sayi) {
+    var _isDark = _getIsDark();
     if (sayi === 0) return _isDark ? 'hsl(220,12%,20%)' : 'hsl(38,15%,91%)';
     var ratio = Math.min(sayi / _maxSayi, 1);
     // 5 adım: açık amber → koyu amber → kahve-altın
@@ -21117,11 +21116,12 @@ function haritaChoroplethCiz(ilSayilar) {
     return 'hsl(' + Math.round(h) + ',' + Math.round(s) + '%,' + Math.round(l) + '%)';
   }
   function _choroplethBorder(sayi) {
+    var _isDark = _getIsDark();
     if (sayi === 0) return _isDark ? 'hsl(220,10%,30%)' : 'hsl(38,20%,76%)';
     return _isDark ? 'hsl(38,55%,35%)' : 'hsl(38,60%,28%)';
   }
   function _choroplethOpacity(sayi) {
-    return sayi === 0 ? (_isDark ? 0.5 : 0.6) : 0.88;
+    return sayi === 0 ? (_getIsDark() ? 0.5 : 0.6) : 0.88;
   }
   function _choroplethWeight(sayi) {
     return sayi === 0 ? 0.6 : 1.2;
@@ -21189,7 +21189,7 @@ function haritaChoroplethCiz(ilSayilar) {
           layer.setStyle({
             fillOpacity: sayi > 0 ? Math.min(_normalOp + 0.22, 1) : 0.35,
             weight: sayi > 0 ? _normalW + 1 : 1,
-            color: sayi > 0 ? 'hsl(38,65%,24%)' : (_isDark ? 'hsl(220,12%,45%)' : 'hsl(38,30%,55%)'),
+            color: sayi > 0 ? 'hsl(38,65%,24%)' : (_getIsDark() ? 'hsl(220,12%,45%)' : 'hsl(38,30%,55%)'),
           });
           layer.bringToFront();
         });
@@ -21212,9 +21212,7 @@ function haritaChoroplethCiz(ilSayilar) {
     _choroplethLayer.eachLayer(function(lyr) {
       var feat = lyr.feature;
       if (!feat) return;
-      var ilAdi = (feat.properties && (feat.properties.name || feat.properties.Name || feat.properties.NAME || feat.properties.il || '')) || '';
-      var idx = _ilKeysLower.indexOf(ilAdi.toLocaleLowerCase('tr-TR'));
-      var key = idx >= 0 ? _ilKeys[idx] : null;
+      var key = _featureKey(feat);
       if (!key) return;
       var sayi = ilSayilar[key] || 0;
       if (!_shouldShow(sayi)) return;
