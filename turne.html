@@ -20316,27 +20316,44 @@ function renderHarita() {
     ? turneler.filter(function(t){ return (t.oyun||'').toLowerCase().trim() === _haritaOyun.toLowerCase().trim(); })
     : turneler).filter(function(t){ return !t.anaGrupId && t.statu !== 'iptal'; });
 
-  // Yarıda Kesildi şehir durumları: haritada çarpı gösterilmiyor,
-  // kesilme bilgisi sağ panelde statü badge'i olarak görünür.
+  // Yarıda Kesildi: kesilme bilgisi sağ panelde statü badge'i olarak görünür.
   var ykHaritaDurum = {};
 
+  // ilSayilar: harita marker sayıları
+  // - Normal turneler: tüm duraklar sayılır
+  // - Yarıda kesildi: sadece gidildi !== false olan duraklar sayılır
   const ilSayilar = {};
-  // -- Performans: IL_LATLON key lookup map bir kere hazırla --
   var _rlIlKeys = Object.keys(IL_LATLON);
   var _rlIlKeysLower = _rlIlKeys.map(function(k){ return k.toLocaleLowerCase('tr-TR'); });
+  function _ilEkle(ilStr) {
+    if (!ilStr) return;
+    var ilAdi = ilStr.split('/')[0].trim();
+    var lower = ilAdi.toLocaleLowerCase('tr-TR');
+    var _idx = _rlIlKeysLower.indexOf(lower);
+    var matched = _idx >= 0 ? _rlIlKeys[_idx] : trCapitalize(ilAdi);
+    ilSayilar[matched] = (ilSayilar[matched]||0) + 1;
+  }
+  var _haritaAktifTurneler = [];
   _haritaTurneler.forEach(function(t) {
-    durakIllerListesi(t).forEach(function(il) {
-      if (!il) return;
-      var ilAdi = il.split('/')[0].trim();
-      var lower = ilAdi.toLocaleLowerCase('tr-TR');
-      var idx = _rlIlKeysLower.indexOf(lower);
-      var matched = idx >= 0 ? _rlIlKeys[idx] : trCapitalize(ilAdi);
-      ilSayilar[matched] = (ilSayilar[matched]||0) + 1;
-    });
+    var sayildi = false;
+    if (t.statu === 'yarida-kesildi') {
+      var dList = t.duraklar && t.duraklar.length ? t.duraklar : (t.il ? [{il:t.il,gidildi:true}] : []);
+      var gidilenVar = false;
+      dList.forEach(function(d) {
+        if (d.gidildi === false) return;
+        _ilEkle(d.il);
+        gidilenVar = true;
+      });
+      if (gidilenVar) sayildi = true;
+    } else {
+      durakIllerListesi(t).forEach(function(il) { _ilEkle(il); });
+      sayildi = true;
+    }
+    if (sayildi) _haritaAktifTurneler.push(t);
   });
   const ziyaretIlSayisi = Object.keys(ilSayilar).length;
   var _haritaBaslik = _haritaOyun ? (_haritaOyun + ' · ') : '';
-  document.getElementById('harita-ozet').textContent = _haritaBaslik + ziyaretIlSayisi + ' ilde ' + _haritaTurneler.length + ' turne';
+  document.getElementById('harita-ozet').textContent = _haritaBaslik + ziyaretIlSayisi + ' ilde ' + _haritaAktifTurneler.length + ' turne';
 
   var _hBar = document.getElementById('harita-oyuna-don-bar');
   var _hLabel = document.getElementById('harita-oyuna-don-label');
@@ -20595,9 +20612,13 @@ function haritaIlDetay(il, ilSayilar) {
   var _haritaOyunDet = window._haritaAktifOyun || '';
   var _haritaTurnelerDet = (_haritaOyunDet
     ? turneler.filter(function(t){ return (t.oyun||'').toLowerCase().trim() === _haritaOyunDet.toLowerCase().trim(); })
-    : turneler).filter(function(t){ return !t.anaGrupId; });
-  const ilT = _haritaTurnelerDet.filter(function(t){ return durakIllerListesi(t).some(function(d){ return d.split('/')[0].trim().toLocaleLowerCase('tr-TR') === ilLower; }); })
-    .sort(function(a,b){ return new Date(b.baslangicTarih||b.tarih||0)-new Date(a.baslangicTarih||a.tarih||0); });
+    : turneler).filter(function(t){ return !t.anaGrupId && t.statu !== 'iptal'; });
+  const ilT = _haritaTurnelerDet.filter(function(t) {
+    // Bu ile ait durak var mı? Yarıda kesildi ise: gidilmedi işaretli durak bile listede görünsün
+    return t.duraklar && t.duraklar.length
+      ? t.duraklar.some(function(d){ return (d.il||'').split('/')[0].trim().toLocaleLowerCase('tr-TR') === ilLower; })
+      : (t.il||'').split('/')[0].trim().toLocaleLowerCase('tr-TR') === ilLower;
+  }).sort(function(a,b){ return new Date(b.baslangicTarih||b.tarih||0)-new Date(a.baslangicTarih||a.tarih||0); });
   const sayi = ilSayilar[il]||0;
   if (!ilT.length) {
     el.innerHTML = '<div class="section-header" style="border-radius:10px 10px 0 0"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="vertical-align:-2px;margin-right:4px;flex-shrink:0"><path d="M12 21s7-6.5 7-11a7 7 0 1 0-14 0c0 4.5 7 11 7 11z"/><circle cx="12" cy="10" r="2"/></svg> '+il+'</div><div class="empty-state" style="height:80px"><div class="empty-sub">Henüz turne kaydı yok</div></div>';
@@ -20628,9 +20649,19 @@ function haritaIlDetay(il, ilSayilar) {
         + '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>'
         + kadro + ' kişi</span>'
       : '';
+    // Yarıda kesildi: bu ilde gidilmedi durumu kontrol et
+    var gidilmediIl = false;
+    if (t.statu === 'yarida-kesildi' && t.duraklar && t.duraklar.length) {
+      gidilmediIl = t.duraklar.some(function(d){
+        return (d.il||'').split('/')[0].trim().toLocaleLowerCase('tr-TR') === ilLower && d.gidildi === false;
+      });
+    }
+    var gidilmediBadge = gidilmediIl
+      ? '<span style="display:inline-flex;align-items:center;gap:3px;font-size:9.5px;font-weight:700;color:hsl(0,60%,38%);background:hsl(0,60%,96%);border:1px solid hsl(0,50%,85%);border-radius:8px;padding:1px 6px;margin-left:4px">✗ gidilmedi</span>'
+      : '';
     return '<tr class="harita-tablo-row" data-ridx="' + ridx + '" role="button" aria-label="' + t.oyun + ' turnesini aç" onclick="_haritaIlDetayGit(' + ridx + ')">'
       + '<td style="padding:8px 10px;border-bottom:1px solid var(--border);min-width:0">'
-        + '<div style="font-size:12.5px;font-weight:800;color:var(--foreground);line-height:1.3">' + t.oyun + '</div>'
+        + '<div style="font-size:12.5px;font-weight:800;color:var(--foreground);line-height:1.3">' + t.oyun + gidilmediBadge + '</div>'
         + (kadroHtml ? '<div style="margin-top:4px">' + kadroHtml + '</div>' : '')
       + '</td>'
       + '<td style="padding:8px 10px;border-bottom:1px solid var(--border)">'
@@ -21442,27 +21473,35 @@ function haritaIstatistikGoster() {
   var toplamGun = 0;
   var sezonSay = {};
 
-  liste.forEach(function(t) {
-    var gun = turneSuresi(t);
-    toplamGun += gun;
+  // listeAktif: yarıda kesildi için sadece gidildi !== false olan durakları hesapla
+  var listeAktif = liste.filter(function(t){ return t.statu !== 'yarida-kesildi'; });
+  var listeYK = liste.filter(function(t){ return t.statu === 'yarida-kesildi'; });
 
-    // Sezon
+  function _istatIlEkle(ilStr) {
+    var ilAdi = (ilStr||'').split('/')[0].trim();
+    var key = Object.keys(IL_LATLON).find(function(k){ return k.toLocaleLowerCase('tr-TR') === ilAdi.toLocaleLowerCase('tr-TR'); }) || ilAdi;
+    ilSay[key] = (ilSay[key]||0) + 1;
+    var km = izmirenKm(key);
+    if (km) toplamKm += km * 2;
+    else { var ll = IL_LATLON[key]; if (ll) toplamKm += hesaplaKm(IZMIR_LATLON[0], IZMIR_LATLON[1], ll[0], ll[1]) * 2; }
+  }
+
+  listeAktif.forEach(function(t) {
+    toplamGun += turneSuresi(t);
     var yil = (t.baslangicTarih || t.tarih || '').split('-')[0];
     if (yil) sezonSay[yil] = (sezonSay[yil]||0) + 1;
-
-    // İller
-    durakIllerListesi(t).forEach(function(il) {
-      var ilAdi = il.split('/')[0].trim();
-      var key = Object.keys(IL_LATLON).find(function(k){ return k.toLocaleLowerCase('tr-TR') === ilAdi.toLocaleLowerCase('tr-TR'); }) || ilAdi;
-      ilSay[key] = (ilSay[key]||0) + 1;
-      // Km
-      var km = izmirenKm(key);
-      if (km) toplamKm += km * 2; // gidiş-dönüş
-      else {
-        var ll = IL_LATLON[key];
-        if (ll) toplamKm += hesaplaKm(IZMIR_LATLON[0], IZMIR_LATLON[1], ll[0], ll[1]) * 2;
-      }
-    });
+    durakIllerListesi(t).forEach(function(il) { _istatIlEkle(il); });
+  });
+  listeYK.forEach(function(t) {
+    // Yarıda kesildi: yalnızca gidildi !== false olan duraklar
+    var gidilenDuraklar = (t.duraklar && t.duraklar.length)
+      ? t.duraklar.filter(function(d){ return d.gidildi !== false; })
+      : (t.il ? [{il:t.il}] : []);
+    if (!gidilenDuraklar.length) return;
+    toplamGun += turneSuresi(t);
+    var yil = (t.baslangicTarih || t.tarih || '').split('-')[0];
+    if (yil) sezonSay[yil] = (sezonSay[yil]||0) + 1;
+    gidilenDuraklar.forEach(function(d) { _istatIlEkle(d.il); });
   });
 
   var enCokIller = Object.entries(ilSay).sort(function(a,b){ return b[1]-a[1]; }).slice(0,5);
@@ -21477,7 +21516,7 @@ function haritaIstatistikGoster() {
     + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px">'
     // Özet kartları
     + _statKart('📍', ziyaretEdilen + ' İl', 'Toplam ziyaret edilen')
-    + _statKart('🚌', liste.length + ' Turne', 'Toplam düzenlenen')
+    + _statKart('🚌', (listeAktif.length + listeYK.filter(function(t){ return (t.duraklar&&t.duraklar.length)?t.duraklar.some(function(d){return d.gidildi!==false;}):(!!t.il); }).length) + ' Turne', 'Toplam düzenlenen')
     + _statKart('📅', toplamGun + ' Gün', 'Toplam turne süresi')
     + _statKart('🛣️', Math.round(toplamKm).toLocaleString('tr-TR') + ' km', 'Tahmini toplam yol')
     + '</div>'
@@ -26540,6 +26579,20 @@ function renderDuraklar() {
         + '<input class="form-input" type="tel" placeholder="Telefonu" value="' + (d.ilgiliTel||'') + '" '
           + 'oninput="duraklar[' + i + '].ilgiliTel=this.value" style="width:100%;font-size:12px;font-weight:600">'
       + '</div>'
+      // Yarıda kesildi: gidildi checkbox
+      + (function(){
+          var _st = (document.getElementById('m-statu')||{value:''}).value;
+          if (_st !== 'yarida-kesildi') return '';
+          var _chk = d.gidildi !== false;
+          return '<div style="padding:2px 0;border-top:1px solid var(--border);margin-top:2px">'
+            + '<label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:11px;font-weight:700;'
+            + 'color:' + (_chk ? 'hsl(142,55%,32%)' : 'hsl(0,60%,40%)') + ';user-select:none;padding:3px 0">'
+            + '<input type="checkbox" ' + (_chk ? 'checked' : '') + ' '
+            + 'onchange="duraklar[' + i + '].gidildi=this.checked;renderDuraklar()" '
+            + 'style="width:14px;height:14px;accent-color:hsl(142,55%,40%);cursor:pointer;flex-shrink:0">'
+            + (_chk ? '✓ Bu durağa gidildi' : '✗ Bu durağa gidilmedi')
+            + '</label></div>';
+        })()
       // Sil — sağ alta, padding yok
       + '<div style="display:flex;justify-content:flex-end">'
         + '<button onclick="durakSil(' + i + ')" '
