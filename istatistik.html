@@ -506,6 +506,9 @@ function parseTurneler(data){
   var iNot=h.findIndex(x=>x.startsWith('not')&&!x.includes('loji'));
   var iStat=h.findIndex(x=>x.startsWith('stat'));
   var iDur=h.findIndex(x=>(x.startsWith('durak')&&x.includes('json'))||x==='duraklar');
+  // anaGrupId sütunu: önce header'dan bul, yoksa sabit 42. sütun (0-tabanlı)
+  var iAnaGrup=h.findIndex(x=>x.startsWith('anagrup')||x==='ana_grup_id'||x==='anagrupid');
+  if(iAnaGrup<0)iAnaGrup=42;
   var rn=data.rowNumbers||[];
   allTurneler=rows.map(function(r,idx){
     if(!r||!Array.isArray(r))return null;
@@ -520,8 +523,11 @@ function parseTurneler(data){
     var dj=(r[iDur>=0?iDur:19]||'').trim();
     var dur=[];try{if(dj)dur=JSON.parse(dj);}catch(e){}
     var kat=[];try{var kj=(r[39]||'').trim();if(kj.startsWith('['))kat=JSON.parse(kj);}catch(e){}
-    return {_rowIdx:rn[idx]!=null?rn[idx]:idx+2,oyun,il,baslangicTarih:bas,tarih:bas,bitisTarih:bit,sayi,not:n,statu:st,duraklar:dur,katilimcilar:Array.isArray(kat)?kat:[]};
+    var anaGrupId=(r[iAnaGrup]||'').toString().trim();
+    return {_rowIdx:rn[idx]!=null?rn[idx]:idx+2,oyun,il,baslangicTarih:bas,tarih:bas,bitisTarih:bit,sayi,not:n,statu:st,duraklar:dur,katilimcilar:Array.isArray(kat)?kat:[],anaGrupId};
   }).filter(Boolean);
+  // Ek grupları (bağlı alt turneler) istatistiklerden hariç tut
+  allTurneler=allTurneler.filter(function(t){return !t.anaGrupId;});
 }
 
 function parsePersonel(data){
