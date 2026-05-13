@@ -12463,7 +12463,12 @@ function _memnuniyetSekmesiHTML(t, rowIdx) {
   html += ' onblur="this.style.borderColor=\'var(--border)\'">'; 
   html += notlar;
   html += '</textarea>';
-  html += '</div></div>';
+  html += '</div>';
+  // YENİ: Tüm değerlendirmeyi sil butonu
+  html += '<div style="display:flex;justify-content:flex-end;padding-top:4px;border-top:1px dashed var(--border);margin-top:4px">';
+  html += '<button onclick="_memnuniyetTumunuSil(' + rowIdx + ')" style="display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;border:1px solid hsl(0,65%,75%);border-radius:7px;background:hsl(0,80%,98%);color:hsl(0,65%,40%);font-size:11.5px;font-weight:700;cursor:pointer;transition:all .15s" onmouseenter="this.style.background=\'hsl(0,80%,94%)\'" onmouseleave="this.style.background=\'hsl(0,80%,98%)\'">🗑 Tüm Değerlendirmeyi Sil</button>';
+  html += '</div>';
+  html += '</div>';
   return html;
 }
 
@@ -12530,29 +12535,13 @@ function _memnuniyetLocalGeriYukle() {
     var degisti = false;
     (turneler || []).forEach(function(t) {
       var lm = map[String(t._rowIdx)];
-      var sheet = t.memnuniyet || {};
-      var sheetDolu = _memnuniyetDoluMu(sheet);
       var localDolu = lm && _memnuniyetDoluMu(lm);
-      if (!lm) {
-        // localStorage'da kayıt yok → sheet verisini koru
-        return;
-      }
-      if (!sheetDolu && localDolu) {
-        // Sheet boş, localStorage dolu → localStorage'ı kullan
-        t.memnuniyet = lm;
-        degisti = true;
-      } else if (sheetDolu && localDolu) {
-        // Her ikisi de dolu → sheet KESİNLİKLE öncelikli
-        // Sadece Not/notlar alanlarını local'den ekle (sheet'te yoksa)
-        var merged = Object.assign({}, sheet);
-        Object.keys(lm).forEach(function(k){
-          if ((k.endsWith('Not') || k === 'notlar') && !(k in sheet)) {
-            merged[k] = lm[k];
-          }
-        });
-        t.memnuniyet = merged;
-      }
-      // Sheet dolu, local boş → sheet verisini koru (hiçbir şey yapma)
+      // YENİ KURAL — kullanıcı sildiğinde geri gelmesin:
+      //   Sheet'te t.memnuniyet ALANI VARSA (boş {} dahil) sheet KESİNLİKLE öncelikli.
+      //   Yalnızca sheet bu turne için hiç memnuniyet döndürmediyse (undefined)
+      //   localStorage devreye girer.
+      if (t.memnuniyet !== undefined) return;
+      if (localDolu) { t.memnuniyet = lm; degisti = true; }
     });
     if (degisti) { try { _cacheYaz('cache_turneler', turneler); } catch(e2) {} (turneler||[]).forEach(function(t){ if(_memnuniyetDoluMu(t.memnuniyet)) _memnuniyetSheetKaydet(t); }); }
   } catch(e) { console.warn('Memnuniyet local geri yükleme hatası:', e); }
@@ -12612,6 +12601,56 @@ function _memnuniyetGenelNotKaydet(rowIdx, not) {
   t.memnuniyet.notlar = not;
   _memnuniyetSheetKaydet(t);
   if (typeof _degerlendirmeBadgeGuncelle === 'function') _degerlendirmeBadgeGuncelle();
+}
+
+// YENİ: Bir turnenin TÜM değerlendirmesini sil (puan + notlar). Anında kaydet,
+// geri gelmesini önlemek için localStorage + sheet'i eşzamanlı boşaltır.
+function _memnuniyetTumunuSil(rowIdx, sessizce) {
+  var t = (typeof turneler !== 'undefined' ? turneler : []).find(function(x){
+    return String(x._rowIdx) === String(rowIdx);
+  });
+  if (!t) return;
+  if (!sessizce) {
+    var ad = (t.oyun || 'bu turne') + (t.il ? ' / ' + t.il : '');
+    if (!confirm('"' + ad + '" değerlendirmesi tamamen silinecek. Devam edilsin mi?')) return;
+  }
+  // 1) Bellekte sıfırla
+  t.memnuniyet = {};
+  // 2) localStorage'ı hemen güncelle (auto-restore tetiklenmesin)
+  try { _memnuniyetLocalKaydet(); } catch(e){}
+  // 3) Sheet'e debounce'suz anında yaz — col 43 birleşik hücre
+  try {
+    var key = String(t._rowIdx);
+    if (window._comboSheetTimers) clearTimeout(window._comboSheetTimers[key]);
+    var combo = { _oda: t.odaPlanlari || [], _memn: {} };
+    apiFetch('/' + encodeURIComponent(TURNE_SHEET) + '/cell', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ row: t._rowIdx + 2, col: 43, value: JSON.stringify(combo) })
+    }).then(function(res){
+      if (res && !res.ok) throw new Error('HTTP ' + res.status);
+      try { _cacheYaz('cache_turneler', turneler); } catch(e2){}
+      if (typeof showToast === 'function') showToast('Değerlendirme silindi ✓', 'success', 1500);
+    }).catch(function(e){
+      console.warn('Memnuniyet silme kayıt hatası:', e);
+      if (typeof showToast === 'function') showToast('Sunucuya kaydedilemedi — tekrar deneyin', 'error', 3000);
+    });
+  } catch(e) { console.warn(e); }
+  // 4) UI tazele
+  if (typeof _degerlendirmeBadgeGuncelle === 'function') _degerlendirmeBadgeGuncelle();
+  if (typeof _degerlendirmePaneliDoldur === 'function') {
+    var panel = document.getElementById('degerlendirme-panel');
+    if (panel && panel.style.display === 'block') _degerlendirmePaneliDoldur();
+  }
+  // Açık memnuniyet sekmesi varsa, görseli sıfırla
+  document.querySelectorAll('[id^="_mem_yildiz_"]').forEach(function(c){
+    c.querySelectorAll('button').forEach(function(b){
+      b.style.opacity = '.25';
+      b.onmouseleave = function(){ this.style.opacity = '.25'; };
+    });
+  });
+  document.querySelectorAll('input[oninput*="_memnuniyetNotKaydet"]').forEach(function(i){ i.value = ''; });
+  document.querySelectorAll('textarea[oninput*="_memnuniyetGenelNotKaydet"]').forEach(function(t2){ t2.value = ''; });
 }
 
 function _konaklamaSekmesiHTML(t, rowIdx) {
@@ -15515,17 +15554,20 @@ function _degerlendirmePaneliDoldur() {
 
     html += '<div style="border:1px solid var(--border);border-radius:10px;overflow:hidden">';
     // Başlık bandı
-    html += '<div style="padding:9px 12px;background:var(--muted);display:flex;align-items:center;justify-content:space-between;gap:8px;cursor:pointer" onclick="event.stopPropagation();document.getElementById(\'degerlendirme-panel\').style.display=\'none\';openCardDetailTab(' + t._rowIdx + ',\'memnuniyet\')">';
-    html += '<div style="min-width:0">';
+    html += '<div style="padding:9px 12px;background:var(--muted);display:flex;align-items:center;justify-content:space-between;gap:8px">';
+    html += '<div style="min-width:0;flex:1;cursor:pointer" onclick="event.stopPropagation();document.getElementById(\'degerlendirme-panel\').style.display=\'none\';openCardDetailTab(' + t._rowIdx + ',\'memnuniyet\')">';
     html += '<div style="font-size:12px;font-weight:800;color:var(--foreground);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+baslik+'</div>';
     if (tarih) html += '<div style="font-size:10px;color:var(--muted-foreground);margin-top:2px;display:flex;align-items:center;gap:4px"><span>📅</span><span>'+tarih+'</span></div>';
     html += '</div>';
+    html += '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0">';
     if (ort) {
-      html += '<div style="display:flex;align-items:center;gap:3px;flex-shrink:0">';
+      html += '<div style="display:flex;align-items:center;gap:3px">';
       html += '<span style="font-size:13px">⭐</span>';
       html += '<span style="font-size:11px;font-weight:800;color:hsl(38,70%,28%)">'+ort.toFixed(1)+'</span>';
       html += '</div>';
     }
+    html += '<button title="Bu değerlendirmeyi sil" onclick="event.stopPropagation();_memnuniyetTumunuSil(' + t._rowIdx + ')" style="border:1px solid var(--border);background:var(--card);color:hsl(0,65%,45%);width:24px;height:24px;border-radius:6px;cursor:pointer;font-size:12px;line-height:1;display:inline-flex;align-items:center;justify-content:center" onmouseenter="this.style.background=\'hsl(0,80%,96%)\';this.style.borderColor=\'hsl(0,65%,70%)\'" onmouseleave="this.style.background=\'var(--card)\';this.style.borderColor=\'var(--border)\'">🗑</button>';
+    html += '</div>';
     html += '</div>';
 
     // Detay satırları — tüm puan/not anahtarlarını dinamik tara (otel0, otel1, ... dahil)
@@ -19462,13 +19504,12 @@ function renderKadro() {
   if (filtrebar) { filtrebar.style.display = oyun ? 'flex' : 'none'; }
 
   if (!oyun && !araRaw) {
-    // Güzel boş durum
-    el.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:320px;color:var(--muted-foreground);gap:16px">'
-      + '<div style="width:72px;height:72px;border-radius:50%;background:hsl(38,40%,94%);display:flex;align-items:center;justify-content:center">'
-      + '<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="hsl(350,55%,55%)" stroke-width="1.5" stroke-linecap="round"><circle cx="9" cy="7" r="3"/><circle cx="17" cy="7" r="3"/><path d="M1 20c0-3.3 3.1-6 8-6"/><path d="M23 20c0-3.3-3.1-6-8-6"/><path d="M9 14c2.7 0 7 1.3 7 6H2c0-4.7 4.3-6 7-6z"/></svg>'
+    el.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:340px;padding:40px 20px;color:var(--muted-foreground);gap:18px">'
+      + '<div style="width:80px;height:80px;border-radius:20px;background:linear-gradient(135deg,hsl(38,55%,94%),hsl(350,40%,95%));display:flex;align-items:center;justify-content:center;box-shadow:0 8px 20px -10px rgba(0,0,0,.15)">'
+      + '<svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="hsl(350,55%,45%)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="7" r="3"/><circle cx="17" cy="7" r="3"/><path d="M1 20c0-3.3 3.1-6 8-6"/><path d="M23 20c0-3.3-3.1-6-8-6"/><path d="M9 14c2.7 0 7 1.3 7 6H2c0-4.7 4.3-6 7-6z"/></svg>'
       + '</div>'
-      + '<div style="text-align:center"><div style="font-size:15px;font-weight:700;color:var(--foreground);margin-bottom:5px">Oyun Kadrosu</div>'
-      + '<div style="font-size:12px;color:var(--muted-foreground)">Görüntülemek istediğiniz oyunu yukarıdan seçin</div></div>'
+      + '<div style="text-align:center;max-width:320px"><div style="font-size:16px;font-weight:800;color:var(--foreground);margin-bottom:6px;letter-spacing:-.2px">Oyun Kadrosu</div>'
+      + '<div style="font-size:12.5px;color:var(--muted-foreground);line-height:1.55">Yukarıdaki seçim çubuğundan bir oyun seçerek sanatçı ve teknik kadroyu görüntüleyin.</div></div>'
       + '</div>';
     ozet.textContent = ''; return;
   }
@@ -19521,34 +19562,67 @@ function renderKadro() {
   }
 
   if (!kadro.length) {
-    el.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:200px;color:var(--muted-foreground);gap:12px">'
-      + '<div style="font-size:36px">🔍</div>'
-      + '<div style="text-align:center"><div style="font-size:13px;font-weight:700;color:var(--foreground)">' + (araRaw || filKat ? 'Sonuç bulunamadı' : 'Bu oyuna ait kadro yok') + '</div>'
-      + (araRaw || filKat ? '<div style="font-size:11px;margin-top:4px">Arama kriterini değiştirin</div>' : '')
-      + '</div></div>';
+    el.innerHTML = '<div style="max-width:1080px;margin:0 auto;padding:18px 20px">' + kpiHTML
+      + '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 20px;background:var(--card);border:1px dashed var(--border);border-radius:14px;color:var(--muted-foreground);gap:14px">'
+      + '<div style="width:56px;height:56px;border-radius:14px;background:var(--muted);display:flex;align-items:center;justify-content:center;font-size:26px">🔍</div>'
+      + '<div style="text-align:center"><div style="font-size:13.5px;font-weight:800;color:var(--foreground);margin-bottom:4px">' + (araRaw || filKat || aktifGrup ? 'Sonuç bulunamadı' : 'Bu oyuna ait kadro yok') + '</div>'
+      + (araRaw || filKat || aktifGrup ? '<div style="font-size:11.5px;line-height:1.5">Arama kriterini değiştirin veya filtreleri temizleyin.</div>' : '<div style="font-size:11.5px;line-height:1.5">Sağ üstteki <strong style="color:var(--foreground)">+ Kişi Ekle</strong> ile başlayabilirsiniz.</div>')
+      + '</div></div></div>';
     return;
   }
 
-  // ── KPI BANT ──────────────────────────────────────────────
-  var kpiHTML = '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px">';
-  function _kpiKadro(lbl, val, accent, aktifCheck, grupKodu) {
+  // ── KPI BANT — yenilenmiş, sistemle uyumlu, hover lift ───
+  var kpiHTML = '<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:18px">';
+  function _kpiKadro(lbl, val, accentH, accentS, accentL, ikonSvg, aktifCheck, grupKodu) {
     var isAktif = aktifCheck;
-    var bg = isAktif ? accent : 'var(--card)';
-    var clr = isAktif ? '#fff' : 'var(--foreground)';
-    var border = isAktif ? accent : 'var(--border)';
-    // grupKodu: null = tıklanamaz, string = tıklanabilir (boş string = tümü)
-    var clickHandler = grupKodu !== null
-      ? 'onclick="kadroGrupFiltreSec(\'' + grupKodu + '\')" style="border:2px solid '+border+';border-radius:10px;background:'+bg+';padding:12px 14px;text-align:left;cursor:pointer;transition:all .15s;display:flex;flex-direction:column;gap:3px;width:100%"'
-      : 'style="border:2px solid '+border+';border-radius:10px;background:'+bg+';padding:12px 14px;text-align:left;cursor:default;display:flex;flex-direction:column;gap:3px;width:100%;border:none;outline:none"';
-    return '<button type="button" ' + clickHandler + '>'
-      + '<div style="font-size:22px;font-weight:900;color:'+clr+';line-height:1">'+val+'</div>'
-      + '<div style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:'+(isAktif ? 'rgba(255,255,255,.8)' : 'var(--muted-foreground)')+'">'+lbl+'</div>'
+    var accent      = 'hsl(' + accentH + ',' + accentS + '%,' + accentL + '%)';
+    var accentSoft  = 'hsl(' + accentH + ',' + accentS + '%,' + (accentL+45) + '%)';
+    var accentDeep  = 'hsl(' + accentH + ',' + accentS + '%,' + Math.max(accentL-10,15) + '%)';
+    var clickable   = grupKodu !== null;
+    // Aktif: dolu gradient + beyaz yazı. Pasif: kart + renkli sol şerit.
+    var bg          = isAktif
+      ? 'linear-gradient(135deg,' + accent + ' 0%,' + accentDeep + ' 100%)'
+      : 'var(--card)';
+    var border      = isAktif ? accentDeep : 'var(--border)';
+    var labelClr    = isAktif ? 'rgba(255,255,255,.85)' : 'var(--muted-foreground)';
+    var valueClr    = isAktif ? '#fff' : 'var(--foreground)';
+    var iconBg      = isAktif ? 'rgba(255,255,255,.18)' : accentSoft;
+    var iconClr     = isAktif ? '#fff' : accent;
+    var stripe      = isAktif ? '' : 'box-shadow: inset 3px 0 0 0 ' + accent + ';';
+    var hoverIn     = clickable
+      ? 'this.style.transform=\'translateY(-2px)\';this.style.boxShadow=\'' + (isAktif ? '0 8px 20px -6px ' + accentDeep : '0 6px 16px -8px rgba(0,0,0,.15), inset 3px 0 0 0 ' + accent) + '\''
+      : '';
+    var hoverOut    = clickable
+      ? 'this.style.transform=\'\';this.style.boxShadow=\'' + (isAktif ? '' : 'inset 3px 0 0 0 ' + accent) + '\''
+      : '';
+    var common = 'border:1.5px solid ' + border + ';border-radius:14px;background:' + bg + ';' + stripe
+      + 'padding:14px 16px;text-align:left;display:flex;align-items:center;gap:12px;width:100%;'
+      + 'transition:transform .18s ease,box-shadow .18s ease,border-color .15s;font-family:inherit;';
+    var attrs;
+    if (clickable) {
+      attrs = 'type="button" onclick="kadroGrupFiltreSec(\'' + grupKodu + '\')" '
+            + 'onmouseenter="' + hoverIn + '" onmouseleave="' + hoverOut + '" '
+            + 'style="cursor:pointer;' + common + '"';
+    } else {
+      attrs = 'type="button" disabled style="cursor:default;' + common + '"';
+    }
+    return '<button ' + attrs + '>'
+      + '<div style="width:38px;height:38px;border-radius:10px;background:' + iconBg + ';color:' + iconClr
+        + ';display:flex;align-items:center;justify-content:center;flex-shrink:0">' + ikonSvg + '</div>'
+      + '<div style="display:flex;flex-direction:column;gap:1px;min-width:0">'
+      +   '<div style="font-size:22px;font-weight:800;color:' + valueClr + ';line-height:1;letter-spacing:-.5px">' + val + '</div>'
+      +   '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:' + labelClr + '">' + lbl + '</div>'
+      + '</div>'
       + '</button>';
   }
-  kpiHTML += _kpiKadro('Toplam',  tumKadro.length, 'hsl(220,50%,40%)', !aktifGrup && !filKat, '');
-  kpiHTML += _kpiKadro('Sanatçı', sanatciCount,    'hsl(350,62%,36%)', aktifGrup==='sanatci',  'sanatci');
-  kpiHTML += _kpiKadro('Teknik',  teknikCount,     'hsl(220,60%,40%)', aktifGrup==='teknik',   'teknik');
-  kpiHTML += _kpiKadro('Kategori',katCount,        'hsl(265,55%,48%)', !!filKat,               'kategori');
+  var ICON_TOPLAM   = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>';
+  var ICON_SANATCI  = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s2.5-7 10-7 10 7 10 7-2.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>';
+  var ICON_TEKNIK   = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>';
+  var ICON_KATEGORI = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>';
+  kpiHTML += _kpiKadro('Toplam',   tumKadro.length, 220, 30, 32, ICON_TOPLAM,   !aktifGrup && !filKat, '');
+  kpiHTML += _kpiKadro('Sanatçı',  sanatciCount,    350, 55, 38, ICON_SANATCI,  aktifGrup==='sanatci',  'sanatci');
+  kpiHTML += _kpiKadro('Teknik',   teknikCount,     220, 50, 42, ICON_TEKNIK,   aktifGrup==='teknik',   'teknik');
+  kpiHTML += _kpiKadro('Kategori', katCount,        265, 45, 48, ICON_KATEGORI, !!filKat,               null);
   kpiHTML += '</div>';
 
   // ── GÖRÜNÜM SEÇİMİ ────────────────────────────────────────
@@ -19584,80 +19658,96 @@ function renderKadro() {
       '<mark style="background:#fef08a;border-radius:2px;padding:0 1px">$1</mark>');
   }
 
-  // KART görünümü
+  // KART görünümü — sol renk şeridi + dengeli tipografi + nazik hover lift
   function kisiyiKartYap(p, globalIdx) {
     var av = avatarRenk(p.kategori);
     var badge = kisiBadgeRenk(p.kategori);
     var initials = kisiBastaHarf(p.kisi);
     var isimHtml = vurgula(p.kisi, araRaw);
-    return '<div style="background:var(--card);border:1.5px solid var(--border);border-radius:10px;padding:12px 14px;display:flex;gap:12px;align-items:flex-start;position:relative;transition:box-shadow .15s,transform .1s" '
-      + 'onmouseenter="this.style.boxShadow=\'0 4px 14px rgba(0,0,0,.1)\';this.style.transform=\'translateY(-1px)\'" '
+    return '<div style="background:var(--card);border:1px solid var(--border);border-left:3px solid '+av.bg+';border-radius:12px;padding:13px 14px 13px 13px;display:flex;gap:12px;align-items:center;position:relative;transition:box-shadow .18s ease,transform .15s ease,border-color .15s" '
+      + 'onmouseenter="this.style.boxShadow=\'0 6px 18px -6px rgba(0,0,0,.12)\';this.style.transform=\'translateY(-2px)\'" '
       + 'onmouseleave="this.style.boxShadow=\'\';this.style.transform=\'\'">'
-      // Avatar
-      + '<div style="width:38px;height:38px;border-radius:50%;background:'+av.bg+';color:'+av.fg+';font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;letter-spacing:.5px">'+initials+'</div>'
+      // Avatar — yumuşak halkalı
+      + '<div style="width:40px;height:40px;border-radius:50%;background:'+av.bg+';color:'+av.fg+';font-size:13px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;letter-spacing:.5px;box-shadow:0 0 0 3px '+badge.bg+'">'+initials+'</div>'
       // Bilgi
       + '<div style="flex:1;min-width:0">'
-      +   '<div style="font-size:13px;font-weight:700;color:var(--foreground);line-height:1.2;margin-bottom:4px">'+isimHtml+'</div>'
-      +   '<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">'
-      +     '<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:20px;background:'+badge.bg+';color:'+badge.fg+'">'+p.kategori+'</span>'
-      +     (p.gorev ? '<span style="font-size:11px;color:var(--muted-foreground)">· '+vurgula(p.gorev,araRaw)+'</span>' : '')
+      +   '<div style="font-size:13px;font-weight:700;color:var(--foreground);line-height:1.25;margin-bottom:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+isimHtml+'</div>'
+      +   '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
+      +     '<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:'+badge.bg+';color:'+badge.fg+';letter-spacing:.2px">'+p.kategori+'</span>'
+      +     (p.gorev ? '<span style="font-size:11.5px;color:var(--muted-foreground);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+vurgula(p.gorev,araRaw)+'</span>' : '')
       +   '</div>'
       + '</div>'
-      // Düzenle butonu
-      + (globalIdx >= 0 ? '<button onclick="kadroKisiDuzenleAc('+globalIdx+')" '
-        + 'style="flex-shrink:0;height:32px;padding:0 12px;border:1.5px solid var(--border);border-radius:7px;background:transparent;cursor:pointer;font-size:11px;font-weight:600;color:var(--muted-foreground);display:flex;align-items:center;gap:5px;transition:all .15s;white-space:nowrap" '
-        + 'onmouseenter="this.style.borderColor=\'var(--primary)\';this.style.color=\'var(--primary)\'" '
-        + 'onmouseleave="this.style.borderColor=\'var(--border)\';this.style.color=\'var(--muted-foreground)\'">'
-        + '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>Düzenle'
+      // Düzenle — ikon-only, hover'da renklenir
+      + (globalIdx >= 0 ? '<button onclick="kadroKisiDuzenleAc('+globalIdx+')" title="Düzenle" '
+        + 'style="flex-shrink:0;width:32px;height:32px;padding:0;border:1px solid var(--border);border-radius:8px;background:var(--card);cursor:pointer;color:var(--muted-foreground);display:flex;align-items:center;justify-content:center;transition:all .15s" '
+        + 'onmouseenter="this.style.borderColor=\''+av.bg+'\';this.style.color=\''+av.bg+'\';this.style.background=\''+badge.bg+'\'" '
+        + 'onmouseleave="this.style.borderColor=\'var(--border)\';this.style.color=\'var(--muted-foreground)\';this.style.background=\'var(--card)\'">'
+        + '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>'
         + '</button>' : '')
       + '</div>';
   }
 
-  // LİSTE görünümü — tek tablo satırı
+  // LİSTE görünümü — küçük avatar + nazik hover satır
   function kisiyiSatirYap(p, globalIdx, siraNo) {
+    var av = avatarRenk(p.kategori);
     var badge = kisiBadgeRenk(p.kategori);
+    var initials = kisiBastaHarf(p.kisi);
     var isimHtml = vurgula(p.kisi, araRaw);
-    var gorevHtml = p.gorev ? vurgula(p.gorev, araRaw) : '<span style="color:var(--muted-foreground)">—</span>';
-    return '<tr style="border-bottom:1px solid var(--border)">'
-      + '<td style="padding:7px 10px;font-size:10px;color:var(--muted-foreground);width:36px;font-weight:600;text-align:center">'+siraNo+'</td>'
-      + '<td style="padding:7px 10px;font-weight:700;font-size:12px">'+isimHtml+'</td>'
-      + '<td style="padding:7px 10px"><span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:20px;background:'+badge.bg+';color:'+badge.fg+'">'+p.kategori+'</span></td>'
-      + '<td style="padding:7px 10px;font-size:12px;color:var(--foreground)">'+gorevHtml+'</td>'
-      + '<td style="padding:7px 10px;text-align:right;white-space:nowrap;width:90px">'
-      + (globalIdx >= 0 ? '<button onclick="kadroKisiDuzenleAc('+globalIdx+')" '
-        + 'style="height:28px;padding:0 11px;border:1.5px solid var(--border);border-radius:6px;background:transparent;cursor:pointer;font-size:11px;font-weight:600;color:var(--muted-foreground);display:inline-flex;align-items:center;gap:4px;transition:all .15s;white-space:nowrap;flex-shrink:0" '
-        + 'onmouseenter="this.style.borderColor=\'var(--primary)\';this.style.color=\'var(--primary)\'" '
-        + 'onmouseleave="this.style.borderColor=\'var(--border)\';this.style.color=\'var(--muted-foreground)\'">'
-        + '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>Düzenle'
+    var gorevHtml = p.gorev ? vurgula(p.gorev, araRaw) : '<span style="color:var(--muted-foreground);opacity:.6">—</span>';
+    return '<tr class="kadro-kisi-row" style="border-bottom:1px solid var(--border);transition:background .12s">'
+      + '<td style="padding:9px 12px;font-size:10.5px;color:var(--muted-foreground);width:42px;font-weight:700;text-align:center;font-variant-numeric:tabular-nums">'+siraNo+'</td>'
+      + '<td style="padding:9px 12px">'
+      +   '<div style="display:flex;align-items:center;gap:10px;min-width:0">'
+      +     '<div style="width:30px;height:30px;border-radius:50%;background:'+av.bg+';color:'+av.fg+';font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;letter-spacing:.4px">'+initials+'</div>'
+      +     '<span style="font-weight:700;font-size:12.5px;color:var(--foreground);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+isimHtml+'</span>'
+      +   '</div>'
+      + '</td>'
+      + '<td style="padding:9px 12px"><span style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;background:'+badge.bg+';color:'+badge.fg+';letter-spacing:.2px;display:inline-block">'+p.kategori+'</span></td>'
+      + '<td style="padding:9px 12px;font-size:12.5px;color:var(--foreground)">'+gorevHtml+'</td>'
+      + '<td style="padding:9px 12px;text-align:right;white-space:nowrap;width:90px">'
+      + (globalIdx >= 0 ? '<button onclick="kadroKisiDuzenleAc('+globalIdx+')" title="Düzenle" '
+        + 'style="width:30px;height:30px;padding:0;border:1px solid var(--border);border-radius:7px;background:var(--card);cursor:pointer;color:var(--muted-foreground);display:inline-flex;align-items:center;justify-content:center;transition:all .15s" '
+        + 'onmouseenter="this.style.borderColor=\''+av.bg+'\';this.style.color=\''+av.bg+'\';this.style.background=\''+badge.bg+'\'" '
+        + 'onmouseleave="this.style.borderColor=\'var(--border)\';this.style.color=\'var(--muted-foreground)\';this.style.background=\'var(--card)\'">'
+        + '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>'
         + '</button>' : '')
       + '</td></tr>';
   }
 
-  // Grup bloğu render — hem kart hem liste destekliyor
+  // Grup bloğu render — gradient başlık, daha aerated kart kabı
   function grupBlok(filtreKats, baslik, baslikBg, baslikFg, baslikRenk2) {
     var grup = kadro.filter(function(p){ return filtreKats.includes(p.kategori); });
     if (!grup.length) return '';
     var katGruplari = {};
     grup.forEach(function(p){ if (!katGruplari[p.kategori]) katGruplari[p.kategori]=[]; katGruplari[p.kategori].push(p); });
 
-    var h = '<div style="margin-bottom:16px;border:1.5px solid var(--border);border-radius:12px;overflow:hidden">';
-    // Başlık bandı
-    h += '<div style="display:flex;align-items:center;gap:10px;padding:10px 16px;background:'+baslikBg+';border-bottom:1.5px solid var(--border)">';
-    h += '<div style="width:8px;height:8px;border-radius:50%;background:'+baslikRenk2+'"></div>';
-    h += '<span style="font-size:12px;font-weight:800;color:'+baslikFg+'">'+baslik+'</span>';
-    h += '<span style="font-size:11px;color:'+baslikFg+';opacity:.55;font-weight:500">'+grup.length+' kişi</span>';
-    // Kategori sayıları
-    h += '<div style="margin-left:auto;display:flex;gap:5px;flex-wrap:wrap">';
+    var h = '<section style="margin-bottom:18px;border:1px solid var(--border);border-radius:14px;overflow:hidden;background:var(--card);box-shadow:0 1px 2px rgba(0,0,0,.03)">';
+    // Başlık bandı — yumuşak gradient + sol şerit + accent nokta
+    h += '<header style="display:flex;align-items:center;gap:10px;padding:13px 18px;background:linear-gradient(90deg,'+baslikBg+' 0%, color-mix(in srgb,'+baslikBg+' 70%,var(--card)) 100%);border-bottom:1px solid var(--border);box-shadow:inset 4px 0 0 0 '+baslikRenk2+'">';
+    h += '<span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:8px;background:'+baslikRenk2+';color:#fff;font-size:14px;line-height:1">'+baslik.split(" ")[0]+'</span>';
+    h += '<div style="display:flex;flex-direction:column;line-height:1.2">';
+    h +=   '<span style="font-size:13px;font-weight:800;color:'+baslikFg+';letter-spacing:.1px">'+baslik.replace(/^[^A-Za-zĞÜŞİÖÇğüşıöç]+/,"").trim()+'</span>';
+    h +=   '<span style="font-size:10.5px;color:'+baslikFg+';opacity:.65;font-weight:600;margin-top:1px">'+grup.length+' kişi · '+Object.keys(katGruplari).length+' kategori</span>';
+    h += '</div>';
+    // Kategori chip'leri
+    h += '<div style="margin-left:auto;display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end;max-width:55%">';
     Object.keys(katGruplari).sort().forEach(function(k) {
       var badge = kisiBadgeRenk(k);
-      h += '<span style="font-size:9.5px;font-weight:600;padding:1px 7px;border-radius:10px;background:'+badge.bg+';color:'+badge.fg+'">'+k+' ('+katGruplari[k].length+')</span>';
+      h += '<span style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;background:'+badge.bg+';color:'+badge.fg+';white-space:nowrap;letter-spacing:.2px">'+k+' <span style="opacity:.65;font-weight:600">('+katGruplari[k].length+')</span></span>';
     });
-    h += '</div></div>';
+    h += '</div></header>';
 
     if (viewTip === 'kart') {
-      // KART IZGARA
-      h += '<div style="padding:12px 14px;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,300px));gap:8px;background:var(--background);justify-content:start">';
-      Object.keys(katGruplari).sort().forEach(function(kat) {
+      // KART IZGARA — daha rahat aralıklar
+      h += '<div style="padding:14px 16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px;background:var(--background)">';
+      var KAT_SIRA_K = ['Sanatçı','Oyuncu','Koro','Koro/Dans Ekibi','Koro/Dans','Solist','Dansçı','Figüran','Müzisyen','Sahne Amiri','Kondüvit','Ses – Kondüvit','Ses','Mutemet','Turne Başkanı'];
+      var sortedKatsK = Object.keys(katGruplari).sort(function(a,b){
+        var ai = KAT_SIRA_K.indexOf(a); var bi = KAT_SIRA_K.indexOf(b);
+        if (ai>=0 && bi>=0) return ai-bi;
+        if (ai>=0) return -1; if (bi>=0) return 1;
+        return a.localeCompare(b,'tr');
+      });
+      sortedKatsK.forEach(function(kat) {
         katGruplari[kat].forEach(function(p) {
           var globalIdx = tumPersonel.findIndex(function(tp){ return tp.kisi === p.kisi && tp.oyun === p.oyun; });
           h += kisiyiKartYap(p, globalIdx);
@@ -19665,17 +19755,17 @@ function renderKadro() {
       });
       h += '</div>';
     } else {
-      // LİSTE TABLO — v5 mantığı: her grup bloğu 1'den başlayan sürekli numara
+      // LİSTE TABLO
+      h += '<div style="background:var(--card)">';
       h += '<table style="width:100%;border-collapse:collapse">';
-      h += '<thead><tr style="background:var(--muted)">';
-      h += '<th style="padding:6px 10px;text-align:center;font-size:9.5px;font-weight:700;color:var(--muted-foreground);width:50px">Sıra No</th>';
-      h += '<th style="padding:6px 10px;text-align:left;font-size:9.5px;font-weight:700;color:var(--muted-foreground)">AD SOYAD</th>';
-      h += '<th style="padding:6px 10px;text-align:left;font-size:9.5px;font-weight:700;color:var(--muted-foreground)">KATEGORİ</th>';
-      h += '<th style="padding:6px 10px;text-align:left;font-size:9.5px;font-weight:700;color:var(--muted-foreground)">GÖREV / ROL</th>';
-      h += '<th style="padding:6px 10px;width:90px"></th>';
+      h += '<thead><tr style="background:var(--muted);border-bottom:1px solid var(--border)">';
+      h += '<th style="padding:9px 12px;text-align:center;font-size:9.5px;font-weight:800;color:var(--muted-foreground);letter-spacing:.6px;text-transform:uppercase;width:42px">No</th>';
+      h += '<th style="padding:9px 12px;text-align:left;font-size:9.5px;font-weight:800;color:var(--muted-foreground);letter-spacing:.6px;text-transform:uppercase">Ad Soyad</th>';
+      h += '<th style="padding:9px 12px;text-align:left;font-size:9.5px;font-weight:800;color:var(--muted-foreground);letter-spacing:.6px;text-transform:uppercase">Kategori</th>';
+      h += '<th style="padding:9px 12px;text-align:left;font-size:9.5px;font-weight:800;color:var(--muted-foreground);letter-spacing:.6px;text-transform:uppercase">Görev / Rol</th>';
+      h += '<th style="padding:9px 12px;width:60px"></th>';
       h += '</tr></thead><tbody>';
       var sira = 0;
-      // Kategori sıralaması: önce sıralı liste, sonra alfabetik
       var KAT_SIRA3 = ['Sanatçı','Oyuncu','Koro','Koro/Dans Ekibi','Koro/Dans','Solist','Dansçı','Figüran','Müzisyen','Sahne Amiri','Kondüvit','Ses – Kondüvit','Ses','Mutemet','Turne Başkanı'];
       var sortedKats = Object.keys(katGruplari).sort(function(a,b){
         var ai = KAT_SIRA3.indexOf(a); var bi = KAT_SIRA3.indexOf(b);
@@ -19683,19 +19773,19 @@ function renderKadro() {
         if (ai>=0) return -1; if (bi>=0) return 1;
         return a.localeCompare(b,'tr');
       });
-      sortedKats.forEach(function(kat) {
-        // Kategori bölücü satır — arka planı farklı, ince ve zarif
-        h += '<tr style="background:var(--muted)"><td colspan="5" style="padding:5px 12px;font-size:9.5px;font-weight:800;color:var(--muted-foreground);letter-spacing:.5px;text-transform:uppercase;border-top:1.5px solid var(--border);border-bottom:1px solid var(--border)">'
-          + kat + ' <span style="font-weight:500;opacity:.6">(' + katGruplari[kat].length + ')</span></td></tr>';
+      sortedKats.forEach(function(kat, idx) {
+        // Kategori bölücü — accent çizgi + temiz yazı
+        h += '<tr style="background:linear-gradient(90deg,'+baslikBg+' 0%, var(--card) 60%)"><td colspan="5" style="padding:8px 14px;font-size:10px;font-weight:800;color:'+baslikFg+';letter-spacing:.7px;text-transform:uppercase;border-top:'+(idx===0?'none':'1px solid var(--border)')+';box-shadow:inset 3px 0 0 0 '+baslikRenk2+'">'
+          + kat + ' <span style="font-weight:600;opacity:.6;letter-spacing:0;text-transform:none">· ' + katGruplari[kat].length + ' kişi</span></td></tr>';
         katGruplari[kat].forEach(function(p) {
           sira++;
           var globalIdx = tumPersonel.findIndex(function(tp){ return tp.kisi === p.kisi && tp.oyun === p.oyun; });
           h += kisiyiSatirYap(p, globalIdx, sira);
         });
       });
-      h += '</tbody></table>';
+      h += '</tbody></table></div>';
     }
-    h += '</div>';
+    h += '</section>';
     return h;
   }
 
@@ -19704,7 +19794,7 @@ function renderKadro() {
   grupHTML += grupBlok(TEKNIK_KATS2,  '⚙️ Teknik Kadro',    'hsl(220,40%,95%)', 'hsl(220,65%,28%)', 'hsl(220,60%,40%)');
   if (digerKats.length) grupHTML += grupBlok(digerKats, '📋 Diğer', 'var(--muted)', 'var(--muted-foreground)', 'hsl(265,55%,48%)');
 
-  el.innerHTML = '<div style="max-width:1000px;margin:0 auto;padding:16px">' + kpiHTML + grupHTML + '</div>';
+  el.innerHTML = '<div style="max-width:1080px;margin:0 auto;padding:18px 20px 32px">' + kpiHTML + grupHTML + '</div>';
 
   // Görünüm toggle buton stillerini güncelle (renderKadro çağırmadan)
   var bKart = document.getElementById('kadro-view-kart');
@@ -24345,18 +24435,44 @@ function _tcListesiModalAc(t) {
           { s:{r:4,c:0}, e:{r:4,c:4} },
           { s:{r:5,c:0}, e:{r:5,c:4} }
         ];
-        // Sütun genişlikleri (px → wpx)
+        // Sütun genişlikleri — A4 DİKEY için optimize (toplam ~ 540px ≈ 17cm)
         ws['!cols'] = [
-          { wpx: 50 }, { wpx: 220 }, { wpx: 200 }, { wpx: 120 }, { wpx: 140 }
+          { wpx: 38 },   // NO
+          { wpx: 175 },  // AD SOYAD
+          { wpx: 150 },  // GÖREVİ
+          { wpx: 90 },   // DOĞUM TARİHİ
+          { wpx: 110 }   // TC KİMLİK NO
         ];
-        // Satır yükseklikleri (önemli olanlar)
+        // Satır yükseklikleri (başlık bloğu)
         ws['!rows'] = [
-          { hpx: 38 }, { hpx: 24 }, { hpx: 22 }, { hpx: 10 },
-          { hpx: 28 }, { hpx: 6 },  { hpx: 26 }
+          { hpx: 36 }, { hpx: 22 }, { hpx: 20 }, { hpx: 8 },
+          { hpx: 26 }, { hpx: 6 },  { hpx: 24 }
         ];
-        // Yazdırma ayarları (yatay, sayfaya sığdır)
-        ws['!pageSetup']  = { orientation:'landscape', fitToWidth:1, fitToHeight:0 };
-        ws['!printOptions'] = { horizontalCentered:true };
+        // Yazdırma ayarları — A4 DİKEY, sayfaya genişlik olarak sığdır,
+        // her sayfada başlık satırı tekrarlasın, sayfa içeriği yatay ortalansın.
+        ws['!pageSetup']  = {
+          orientation: 'portrait',
+          paperSize: 9,        // 9 = A4
+          fitToWidth: 1,
+          fitToHeight: 0,
+          scale: 100
+        };
+        ws['!printOptions'] = { horizontalCentered: true };
+        // Sayfa kenar boşlukları (inç) — A4 dikeyde dengeli görünüm
+        ws['!margins'] = {
+          left: 0.4, right: 0.4,
+          top: 0.5, bottom: 0.5,
+          header: 0.3, footer: 0.3
+        };
+        // Her yazdırma sayfasında 1–7 arası başlık satırları tekrar etsin
+        ws['!printSetup'] = ws['!printSetup'] || {};
+        if (!wb.Workbook) wb.Workbook = {};
+        if (!wb.Workbook.Names) wb.Workbook.Names = [];
+        wb.Workbook.Names.push({
+          Name: '_xlnm.Print_Titles',
+          Ref:  "'TC Listesi'!$1:$7",
+          Sheet: 0
+        });
 
         // === Birleştirilmiş başlık hücrelerine TAM çerçeve ===
         // Her merge satırının her hücresine border yazılmalı; aksi halde
