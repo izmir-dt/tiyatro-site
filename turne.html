@@ -10051,7 +10051,7 @@ function exportExcel() {
     'Süre (Gün)','Temsil Sayısı','Statü','Turne Grubu',
     'Gidiş Ulaşım','Gidiş Saati','Dönüş Ulaşım','Dönüş Saati',
     'Aktarma','Otel Adı','Otel Adresi','Otel Tel',
-    'Kamyon','Kapasite','Notlar','Katılımcı Sayısı'
+    'Kamyon','Nakliye Firma','Nakliye Tel','Kapasite','Notlar','Katılımcı Sayısı'
   ];
   var rows = [baslik];
   turneler.forEach(function(t) {
@@ -10059,6 +10059,12 @@ function exportExcel() {
     var iller = t.duraklar && t.duraklar.length
       ? t.duraklar.map(function(d){ return d.il || ''; }).filter(Boolean).join(' › ')
       : (t.il || '');
+    // lojNot'tan firma/tel parse et
+    var _lojExObj={},_lojNakFirma='',_lojNakTel='',_lojNakNot='';
+    try{if((t.notlar||'').startsWith('{'))_lojExObj=JSON.parse(t.notlar);}catch(e){}
+    var _lojNotStr=_lojExObj.not!==undefined?_lojExObj.not:(t.notlar&&!t.notlar.startsWith('{')?t.notlar:'');
+    if(_lojNotStr){var _m=_lojNotStr.split('\n')[0].match(/(?:🚛\s*)(.+)/u);if(_m){var _p=_m[1].split(/\s*[·•]\s*/);_lojNakFirma=(_p[0]||'').trim();_lojNakTel=(_p[1]||'').trim();}}
+    _lojNakNot=_lojNotStr.replace(/^🚛[^\n]*\n?/,'').trim();
     rows.push([
       t.oyun || '',
       iller,
@@ -10078,8 +10084,10 @@ function exportExcel() {
       t.otelAdres   || '',
       t.otelTelefon || '',
       t.kamyonSayisi    || '',
+      _lojNakFirma || t.kamyonFirma || '',
+      _lojNakTel   || t.kamyonTel  || '',
       t.sahneKapasitesi || '',
-      t.not || '',
+      _lojNakNot || t.not || '',
       t.katilimcilar ? t.katilimcilar.length : getPersonelForOyun(t.oyun).length
     ]);
   });
@@ -10093,12 +10101,12 @@ function exportExcel() {
     {wch:10},{wch:10},{wch:12},{wch:14},
     {wch:16},{wch:12},{wch:16},{wch:12},
     {wch:20},{wch:24},{wch:26},{wch:14},
-    {wch:10},{wch:10},{wch:30},{wch:12}
+    {wch:10},{wch:22},{wch:16},{wch:10},{wch:30},{wch:12}
   ];
 
   // Başlık satırı stili — kalın + arka plan
   var baslikStil = { font:{bold:true,color:{rgb:'FFFFFF'}}, fill:{fgColor:{rgb:'6B1B1B'}}, alignment:{horizontal:'center',vertical:'center'}, border:{bottom:{style:'medium',color:{rgb:'5A1717'}}} };
-  var harfler = 'ABCDEFGHIJKLMNOPQRSTU';
+  var harfler = 'ABCDEFGHIJKLMNOPQRSTUVW';
   for (var ci = 0; ci < baslik.length; ci++) {
     var cellRef = harfler[ci] + '1';
     if (ws[cellRef]) ws[cellRef].s = baslikStil;
@@ -29183,7 +29191,7 @@ function _pdfTurneDosyasiIcerik(t, opts) {
     try{var d=new Date(s+'T00:00:00');return p[2]+' '+AYLAR[+p[1]-1]+' '+p[0]+' '+GUNLER[d.getDay()];}
     catch(e){return p[2]+' '+AYLAR[+p[1]-1]+' '+p[0];}
   }
-  function _fk(s){if(!s)return'\u2014';var p=s.split('-');return p[2]+' '+AYLAR[+p[1]-1]+' '+p[0];}
+  function _fk(s){if(!s)return'\u2014';var p=s.split('-');try{var d=new Date(s+'T00:00:00');return p[2]+' '+AYLAR[+p[1]-1]+' '+GUNLER[d.getDay()];}catch(e){return p[2]+' '+AYLAR[+p[1]-1]+' '+p[0];}}
   var bugun=new Date().toLocaleDateString('tr-TR',{day:'numeric',month:'long',year:'numeric'});
   var oyunAdi=t.oyun||(t.duraklar?[...new Set(t.duraklar.map(function(d){return d.oyun||''}).filter(Boolean))].join(' / '):'');
   var ilStr=_temizleIlPdf(durakIlStr(t));
@@ -29573,11 +29581,19 @@ function _pdfTurneDosyasiIcerik(t, opts) {
     if(/tren|ray/i.test(u)) return '\ud83d\ude86';
     return '\ud83d\ude97';
   }
-  // gidisUlasim/donusUlasim içinde "Uçak" geçiyorsa gösterme — zaten başlıkta var
-  function _sadeceFirma(ulasim, ucusNo){
+  // gidisUlasim/donusUlasim içinde "Uçak" geçiyorsa sadece ucusNo göster; kara aracıysa ulasım adı + ucusNo/firma
+  function _sadeceFirma(ulasim, ucusNo, tel){
     var u=(ulasim||'').trim();
-    if(_ucakMi(u)) u='';
-    return u+(ucusNo&&ucusNo.trim()?(u?' \u00b7 ':'')+ucusNo.trim():'');
+    var display='';
+    if(_ucakMi(u)){
+      // Uçakta araç adını gizle, sadece firma/ucuş no
+      display=ucusNo&&ucusNo.trim()?ucusNo.trim():'';
+    } else {
+      // Kara aracı: araç adını göster + firma/no varsa ekle
+      display=u+(ucusNo&&ucusNo.trim()?(u?' \u00b7 ':'')+ucusNo.trim():'');
+    }
+    if(tel&&tel.trim()) display+=(display?' \u00b7 ':'')+tel.trim();
+    return display;
   }
 
   if(t.gidisUlasim){
@@ -29589,30 +29605,36 @@ function _pdfTurneDosyasiIcerik(t, opts) {
         var saatStr=(b.kalkis||'\u2014')+(b.inis?' \u2192 '+b.inis:'');
         var firmaStr=_sadeceFirma(t.gidisUlasim,b.ucusNo);
         var tarihHucre=bi===0?_fk(t.baslangicTarih||t.tarih):'\u21b3 Aktarma';
+        var isUcak=_ucakMi(t.gidisUlasim);
         ucusGidisRows.push('<tr style="background:'+(bi===0?'#f0f7ff':'#f8fbff')+'">'
-          +'<td style="font-weight:700;white-space:nowrap;padding:4pt 7pt;font-size:10pt">'+tarihHucre+'</td>'
-          +'<td style="font-weight:700;padding:4pt 7pt;font-size:10pt;white-space:nowrap">'+nereden+' \u2192 '+nereye+'</td>'
-          +'<td style="font-size:11.5pt;font-weight:900;text-align:center;color:#1a1a2e;white-space:nowrap;padding:4pt 6pt">'+saatStr+'</td>'
-          +'<td style="color:#1d4ed8;font-weight:700;padding:4pt 7pt;font-size:10pt;white-space:nowrap">'+firmaStr+'</td>'
+          +'<td style="font-weight:700;white-space:nowrap;padding:3pt 6pt;font-size:9.5pt">'+tarihHucre+'</td>'
+          +'<td style="font-weight:700;padding:3pt 6pt;font-size:9.5pt;white-space:nowrap">'+nereden+' \u2192 '+nereye+'</td>'
+          +'<td style="font-size:11pt;font-weight:900;text-align:center;color:#1a1a2e;white-space:nowrap;padding:3pt 5pt">'+saatStr+'</td>'
+          +'<td style="text-align:center;padding:3pt 5pt">'+(isUcak&&firmaStr?'<span style="display:inline-block;background:#e8f0fe;color:#1d4ed8;font-weight:900;font-size:10pt;letter-spacing:.5pt;padding:2pt 10pt;border-radius:4pt;white-space:nowrap;border:1pt solid #bcd0f7">'+firmaStr+'</span>':'<span style="color:#1d4ed8;font-weight:700;font-size:9pt">'+firmaStr+'</span>')+'</td>'
           +'</tr>');
       });
     } else {
       var gf='',gt='';
       var gr=t.gidisSurucu||''; var gmf=gr.match(/\|FIRMA:([^|]*)/); var gmt=gr.match(/\|TEL:([^|]*)/);
-      if(gmf)gf=gmf[1]; if(gmt)gt=gmt[1];
-      var df2=''; var dr2=t.donusSurucu||''; var dmf2=dr2.match(/\|FIRMA:([^|]*)/); if(dmf2)df2=dmf2[1];
+      if(gmf)gf=(gmf[1]||'').trim(); if(gmt)gt=(gmt[1]||'').trim();
+      var df2='',dt2='';
+      var dr2=t.donusSurucu||''; var dmf2=dr2.match(/\|FIRMA:([^|]*)/); var dmt2=dr2.match(/\|TEL:([^|]*)/);
+      if(dmf2)df2=(dmf2[1]||'').trim(); if(dmt2)dt2=(dmt2[1]||'').trim();
+      // Firma + telefon birleşik gösterim yardımcısı
+      function _firmaTelG(firma,tel,ucusNo){ return _sadeceFirma(t.gidisUlasim,ucusNo||firma,tel); }
+      function _firmaTelD(firma,tel,ucusNo){ return _sadeceFirma(t.donusUlasim,ucusNo||firma,tel); }
       ucusGidisRows.push(
         '<tr style="background:#f0f7ff">'
-        +'<td style="font-weight:700;padding:4pt 7pt;font-size:10pt">'+_fk(t.baslangicTarih||t.tarih)+'</td>'
-        +'<td style="font-weight:700;padding:4pt 7pt;font-size:10pt">\u0130zmir \u2192 '+ilStr+'</td>'
-        +'<td style="font-size:12pt;font-weight:900;text-align:center;color:#1a1a2e;padding:4pt 7pt">'+(t.gidisSaat||'\u2014')+'</td>'
-        +'<td style="color:#1d4ed8;font-weight:700;padding:4pt 7pt;font-size:10pt">'+_sadeceFirma(t.gidisUlasim,t.gidisUcusNo||gf)+'</td>'
+        +'<td style="font-weight:700;padding:3pt 6pt;font-size:9.5pt">'+_fk(t.baslangicTarih||t.tarih)+'</td>'
+        +'<td style="font-weight:700;padding:3pt 6pt;font-size:9.5pt">\u0130zmir \u2192 '+ilStr+'</td>'
+        +'<td style="font-size:11pt;font-weight:900;text-align:center;color:#1a1a2e;padding:3pt 6pt;white-space:nowrap">'+(t.gidisSaat||'\u2014')+'</td>'
+        +'<td style="color:#1d4ed8;font-weight:700;padding:3pt 6pt;font-size:8.5pt;word-break:break-word;line-height:1.4">'+_firmaTelG(gf,gt,t.gidisUcusNo)+'</td>'
         +'</tr>'
         +'<tr style="background:#fdf4ff">'
-        +'<td style="font-weight:700;padding:4pt 7pt;font-size:10pt">'+_fk(t.bitisTarih||t.tarih)+'</td>'
-        +'<td style="font-weight:700;padding:4pt 7pt;font-size:10pt">'+ilStr+' \u2192 \u0130zmir</td>'
-        +'<td style="font-size:12pt;font-weight:900;text-align:center;color:#1a1a2e;padding:4pt 7pt">'+(t.donusSaat||'\u2014')+'</td>'
-        +'<td style="color:#1d4ed8;font-weight:700;padding:4pt 7pt;font-size:10pt">'+_sadeceFirma(t.donusUlasim,t.donusUcusNo||df2)+'</td>'
+        +'<td style="font-weight:700;padding:3pt 6pt;font-size:9.5pt">'+_fk(t.bitisTarih||t.tarih)+'</td>'
+        +'<td style="font-weight:700;padding:3pt 6pt;font-size:9.5pt">'+ilStr+' \u2192 \u0130zmir</td>'
+        +'<td style="font-size:11pt;font-weight:900;text-align:center;color:#1a1a2e;padding:3pt 6pt;white-space:nowrap">'+(t.donusSaat||'\u2014')+'</td>'
+        +'<td style="color:#1d4ed8;font-weight:700;padding:3pt 6pt;font-size:8.5pt;word-break:break-word;line-height:1.4">'+_firmaTelD(df2,dt2,t.donusUcusNo)+'</td>'
         +'</tr>'
       );
     }
@@ -29626,11 +29648,12 @@ function _pdfTurneDosyasiIcerik(t, opts) {
         var saatStr=(b.kalkis||'\u2014')+(b.inis?' \u2192 '+b.inis:'');
         var firmaStr=_sadeceFirma(t.donusUlasim,b.ucusNo);
         var tarihHucre=bi===0?_fk(t.bitisTarih||t.tarih):'\u21b3 Aktarma';
+        var isUcakD=_ucakMi(t.donusUlasim);
         ucusDonusRows.push('<tr style="background:'+(bi===0?'#fdf4ff':'#faf0ff')+'">'
-          +'<td style="font-weight:700;white-space:nowrap;padding:4pt 7pt;font-size:10pt">'+tarihHucre+'</td>'
-          +'<td style="font-weight:700;padding:4pt 7pt;font-size:10pt;white-space:nowrap">'+nereden+' \u2192 '+nereye+'</td>'
-          +'<td style="font-size:11.5pt;font-weight:900;text-align:center;color:#1a1a2e;white-space:nowrap;padding:4pt 6pt">'+saatStr+'</td>'
-          +'<td style="color:#1d4ed8;font-weight:700;padding:4pt 7pt;font-size:10pt;white-space:nowrap">'+firmaStr+'</td>'
+          +'<td style="font-weight:700;white-space:nowrap;padding:3pt 6pt;font-size:9.5pt">'+tarihHucre+'</td>'
+          +'<td style="font-weight:700;padding:3pt 6pt;font-size:9.5pt;white-space:nowrap">'+nereden+' \u2192 '+nereye+'</td>'
+          +'<td style="font-size:11pt;font-weight:900;text-align:center;color:#1a1a2e;white-space:nowrap;padding:3pt 5pt">'+saatStr+'</td>'
+          +'<td style="text-align:center;padding:3pt 5pt">'+(isUcakD&&firmaStr?'<span style="display:inline-block;background:#e8f0fe;color:#1d4ed8;font-weight:900;font-size:10pt;letter-spacing:.5pt;padding:2pt 10pt;border-radius:4pt;white-space:nowrap;border:1pt solid #bcd0f7">'+firmaStr+'</span>':'<span style="color:#1d4ed8;font-weight:700;font-size:9pt">'+firmaStr+'</span>')+'</td>'
           +'</tr>');
       });
     } else {
@@ -29647,16 +29670,20 @@ function _pdfTurneDosyasiIcerik(t, opts) {
       +'</tr>';
   }).join('');
 
-  // Nakliye/dekor
-  var lojNot=t.not||t.notlar||'';
-  try{if(lojNot.startsWith('{'))lojNot=JSON.parse(lojNot).not||'';}catch(e){lojNot='';}
+  // Nakliye/dekor — lojNot'u her zaman notlar (index 18) alanından al, not (index 6) değil
   var _lojP={};
   try{if((t.notlar||'').startsWith('{'))_lojP=JSON.parse(t.notlar);}catch(e){}
+  var lojNot=_lojP.not!==undefined?_lojP.not:(t.notlar&&!t.notlar.startsWith('{')?t.notlar:'');
   var _yukBoslar=Array.isArray(_lojP.yukBoslar)&&_lojP.yukBoslar.length?_lojP.yukBoslar:[];
   var _aracTurPdf2=_lojP.aracTur||t.aracTur||'';
   var nakArac=(_aracTurPdf2||t.kamyonSayisi)?(t.kamyonSayisi?t.kamyonSayisi+' adet ':'')+(_aracTurPdf2||'Kamyon'):'';
   var kf2='',kt2='';
-  if(lojNot&&lojNot.charAt(0)==='\ud83d'){var kl2=lojNot.split('\n')[0].slice(3);var kp2=kl2.split(' \u00b7 ');kf2=kp2[0]||'';kt2=kp2[1]||'';}
+  if(lojNot){
+    // "🚛 FİRMA · TEL" formatı veya emoji ile başlayan satır
+    var _lojLine0=lojNot.split('\n')[0];
+    var _truckmatch=_lojLine0.match(/(?:🚛\s*)(.+)/u);
+    if(_truckmatch){var _kparts=_truckmatch[1].split(/\s*[\u00b7\u2022]\s*/);kf2=(_kparts[0]||'').trim();kt2=(_kparts[1]||'').trim();}
+  }
   var yukBosRows=_yukBoslar.map(function(yb){
     var isYuk=yb.tip==='yukleme';
     return '<tr style="background:'+(isYuk?'#fff8e7':'#fff0f0')+'">'
@@ -29666,11 +29693,11 @@ function _pdfTurneDosyasiIcerik(t, opts) {
       +'</tr>';
   }).join('');
 
-  var _thRow='<colgroup><col style="width:22%"><col style="width:38%"><col style="width:22%"><col style="width:18%"></colgroup><thead><tr>'
-    +'<th style="white-space:nowrap">Tarih</th>'
-    +'<th>G\u00fczerg\u00e2h</th>'
-    +'<th style="text-align:center;white-space:nowrap">Saat</th>'
-    +'<th>Firma</th>'
+  var _thRow='<colgroup><col style="width:20%"><col style="width:34%"><col style="width:21%"><col style="width:25%"></colgroup><thead><tr>'
+    +'<th style="white-space:nowrap;font-size:9pt">Tarih</th>'
+    +'<th style="font-size:9pt">G\u00fczerg\u00e2h</th>'
+    +'<th style="text-align:center;white-space:nowrap;font-size:9pt">Saat</th>'
+    +'<th style="text-align:center;font-size:9pt">Firma</th>'
     +'</tr></thead>';
 
   // Gidiş/dönüş aktarma etiketi — belirgin badge
@@ -29708,12 +29735,11 @@ function _pdfTurneDosyasiIcerik(t, opts) {
       ?'<div class="bolum-baslik">📋 Genel Ulaşım Notu</div>'
         +'<div class="bolum-blok"><div style="background:#fffbf0;border:1.5pt solid #d97706;border-radius:5pt;padding:8pt 12pt;font-size:10.5pt;color:#78350f;line-height:1.6;white-space:pre-line">'+t.aktarma+'</div></div>'
       :'')
-    +((t.kamyonSayisi||_aracTurPdf2||_yukBoslar.length)
+    +((t.kamyonSayisi||_aracTurPdf2||_yukBoslar.length||kf2||kt2)
       ?'<div class="bolum-baslik">\ud83d\ude9b Nakliye / Dekor</div>'
         +'<div class="bolum-blok"><table style="margin-bottom:6pt"><tbody>'
-        +'<tr><td style="font-weight:700;width:30%;white-space:nowrap">Ara\u00e7</td><td style="word-wrap:break-word">'+nakArac+'</td></tr>'
-        +(kf2?'<tr><td style="font-weight:700;white-space:nowrap">Firma</td><td><strong>'+kf2+'</strong></td></tr>':'')
-        +(kt2?'<tr><td style="font-weight:700;white-space:nowrap">Telefon</td><td style="font-weight:800;color:#1d4ed8;font-size:13pt;white-space:nowrap">'+kt2+'</td></tr>':'')
+        +(nakArac?'<tr><td style="font-weight:700;width:30%;white-space:nowrap">Ara\u00e7</td><td style="word-wrap:break-word">'+nakArac+'</td></tr>':'')
+        +(kf2?'<tr><td style="font-weight:700;white-space:nowrap">Firma</td><td><strong>'+kf2+(kt2?' &nbsp;<span style="font-weight:400;color:#555;font-size:9.5pt">·</span>&nbsp; <span style="color:#1d4ed8;font-weight:700">'+kt2+'</span>':'')+'</strong></td></tr>':'')
         +'</tbody></table>'
         +(yukBosRows?'<table><thead><tr><th>\u0130\u015elem</th><th style="text-align:center">Saat</th><th>Yer</th></tr></thead><tbody>'+yukBosRows+'</tbody></table>':'')
         +'</div>'
