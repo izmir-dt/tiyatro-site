@@ -27702,11 +27702,15 @@ async function tumVeriyiYenile(options) {
   options = options || {};
   var personelDe = options.personel !== false;
   var turneDe    = options.turne    !== false;
-  var fetchler = [];
-  if (personelDe) fetchler.push(fetchPersonel());
-  if (turneDe)    fetchler.push(fetchTurneler());
-  fetchler.push(fetchDisPersonel());
-  await Promise.all(fetchler);
+  // Sıralı fetch — quota aşımını önlemek için
+  var _tumFetchler = [];
+  if (personelDe) _tumFetchler.push(fetchPersonel);
+  if (turneDe)    _tumFetchler.push(fetchTurneler);
+  _tumFetchler.push(fetchDisPersonel);
+  for (var _tfi = 0; _tfi < _tumFetchler.length; _tfi++) {
+    try { await _tumFetchler[_tfi](); } catch(e) { console.warn('Veri yenileme hatası (devam):', e); }
+    if (_tfi < _tumFetchler.length - 1) await new Promise(function(r){ setTimeout(r, 300); });
+  }
   populateFilters();
   renderListe();
   renderCalendar();
@@ -27749,7 +27753,12 @@ async function init() {
   }
 
   // Arka planda API'den güncelle (notlar dahil)
-  await Promise.all([fetchPersonel(), fetchDisPersonel(), fetchTurneler(), calNotYukle(), _firmaRehberSheetYukle()]);
+  // Sıralı fetch — Google Sheets quota aşımını önlemek için (Promise.all yerine)
+  var _fetchSirayla = [fetchPersonel, fetchDisPersonel, fetchTurneler, calNotYukle, _firmaRehberSheetYukle];
+  for (var _fi = 0; _fi < _fetchSirayla.length; _fi++) {
+    try { await _fetchSirayla[_fi](); } catch(e) { console.warn('Fetch hatası (devam ediliyor):', e); }
+    if (_fi < _fetchSirayla.length - 1) await new Promise(function(r){ setTimeout(r, 300); });
+  }
 
   // Cache güncelle
   try { localStorage.setItem('turne_cache_data', JSON.stringify(turneler)); } catch(e){}
@@ -27895,7 +27904,15 @@ function _pollingYap() {
     });
   }
 
-  Promise.all([fetchTurneler(), fetchPersonel(), fetchDisPersonel(), calNotYukle()])
+  // Sıralı fetch — quota aşımını önlemek için
+  (async function() {
+    var _pFetchler = [fetchTurneler, fetchPersonel, fetchDisPersonel, calNotYukle];
+    for (var _pfi = 0; _pfi < _pFetchler.length; _pfi++) {
+      try { await _pFetchler[_pfi](); } catch(e) { console.warn('Polling fetch hatası:', e); }
+      if (_pfi < _pFetchler.length - 1) await new Promise(function(r){ setTimeout(r, 300); });
+    }
+    return { then: function(fn) { fn(); return this; } };
+  })()
     .then(function() {
       // tumUIGuncelle artık sadece aktif sekmeyi render eder (bellek optimizasyonu)
       tumUIGuncelle();
