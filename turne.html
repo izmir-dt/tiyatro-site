@@ -10157,9 +10157,13 @@ function geriYukle(event) {
 
 function _geriYukleDevam(liste) {
   turneler = liste;
-  renderListe(); populateFilters();
+  // localStorage cache güncelle
+  try { localStorage.setItem('turne_cache_data', JSON.stringify(turneler)); } catch(e){}
+  renderListe(); populateFilters(); renderCalendar();
   var el = document.getElementById('yedek-mesaj');
-  if (el) { el.textContent = '✓ ' + liste.length + ' kayıt yüklendi'; setTimeout(() => { el.textContent=''; }, 3000); }
+  if (el) { el.textContent = '✓ ' + liste.length + ' kayıt yüklendi'; setTimeout(function(){ el.textContent=''; }, 3000); }
+  showToast(liste.length + ' kayıt yüklendi — Sheets\'e yazmak için kaydet butonunu kullanın', 'info', 5000);
+  guncelleSonSenkron();
 }
 
 
@@ -12743,7 +12747,16 @@ function _memnuniyetTumunuSil(rowIdx, sessizce) {
   if (!t) return;
   if (!sessizce) {
     var ad = (t.oyun || 'bu turne') + (t.il ? ' / ' + t.il : '');
-    if (!confirm('"' + ad + '" değerlendirmesi tamamen silinecek. Devam edilsin mi?')) return;
+    siteConfirm('"' + ad + '" değerlendirmesi tamamen silinecek. Bu işlem geri alınamaz.', {
+      title: 'Değerlendirmeyi Sil',
+      okText: 'Evet, Sil',
+      cancelText: 'İptal',
+      danger: true
+    }).then(function(onay) {
+      if (!onay) return;
+      _memnuniyetTumunuSil(rowIdx, true);
+    });
+    return;
   }
   // 1) Bellekte sıfırla
   t.memnuniyet = {};
@@ -14612,13 +14625,18 @@ function firmaRehberiSil(idx) {
   var liste = _firmaVeriAl();
   var kayit = liste[idx] || {};
   var ad = kayit.ad || 'Bu kayıt';
-  if (!confirm(ad + ' silinsin mi?')) return;
-  liste.splice(idx, 1);
-  // _firmaVeriKaydet hem localStorage'a yazar hem Sheets'e tam listeyi gönderir
-  // (silinen kayıt listede olmadığı için Sheets'ten de kaldırılır)
-  _firmaVeriKaydet(liste);
-  firmaRehberiRender();
-  if (typeof showToast === 'function') showToast('Kayıt silindi', 'info', 1800);
+  siteConfirm(ad + ' silinsin mi? Bu işlem geri alınamaz.', {
+    title: 'Kaydı Sil',
+    okText: 'Evet, Sil',
+    cancelText: 'İptal',
+    danger: true
+  }).then(function(onay) {
+    if (!onay) return;
+    liste.splice(idx, 1);
+    _firmaVeriKaydet(liste);
+    firmaRehberiRender();
+    if (typeof showToast === 'function') showToast('Kayıt silindi', 'info', 1800);
+  });
 }
 function firmaRehberiRender() {
   var ara = (document.getElementById('firma-ara-inp').value||'').toLowerCase();
@@ -16751,7 +16769,13 @@ async function saveKisiModal() {
     ? Object.values(window._kisiModalCoklu).reduce(function(s,a){ return s+(a||[]).length; },0)
     : kisiModalSecili.length;
   if (_toplamSecili === 0) {
-    if (!window.confirm('Katılımcı listesi boş. Kaydetmek tüm mevcut kadroyu silecek.\n\nDevam edilsin mi?')) return;
+    var _bosOnay = await siteConfirm('Katılımcı listesi boş. Kaydetmek tüm mevcut kadroyu silecek.', {
+      title: '⚠️ Boş Liste Uyarısı',
+      okText: 'Evet, Kaydet',
+      cancelText: 'İptal',
+      danger: true
+    });
+    if (!_bosOnay) return;
   }
   _saveKisiModalCalisiyor = true;
   var _kaydetBtn = document.getElementById('save-kisi-btn');
@@ -16800,12 +16824,17 @@ async function saveKisiModal() {
         });
       });
       if (_cak.length) {
-        var msg = '⚠️ TARİH ÇAKIŞMASI\n\n'
-          + 'Aynı tarihte (' + _basT.split('-').reverse().join('.') + ') başlayan başka turne(ler)de\n'
-          + 'aşağıdaki kişiler de görevli:\n\n'
-          + _cak.map(function(c){ return '• ' + c.kisi + '  →  ' + c.oyun + (c.gorev?' ('+c.gorev+')':''); }).join('\n')
+        var _cakTarih = _basT.split('-').reverse().join('.');
+        var _cakMesaj = 'Aynı tarihte (' + _cakTarih + ') başlayan başka turne(ler)de şu kişiler görevli:\n\n'
+          + _cak.map(function(c){ return '• ' + c.kisi + ' → ' + c.oyun + (c.gorev?' ('+c.gorev+')':''); }).join('\n')
           + '\n\nYine de kaydetmek istiyor musunuz?';
-        if (!window.confirm(msg)) {
+        var _cakOnay = await siteConfirm(_cakMesaj, {
+          title: '⚠️ Tarih Çakışması',
+          okText: 'Evet, Kaydet',
+          cancelText: 'İptal',
+          danger: false
+        });
+        if (!_cakOnay) {
           _saveKisiModalCalisiyor = false;
           if (_kaydetBtn) { _kaydetBtn.disabled = false; _kaydetBtn.textContent = 'Kaydet'; }
           return;
@@ -27702,15 +27731,11 @@ async function tumVeriyiYenile(options) {
   options = options || {};
   var personelDe = options.personel !== false;
   var turneDe    = options.turne    !== false;
-  // Sıralı fetch — quota aşımını önlemek için
-  var _tumFetchler = [];
-  if (personelDe) _tumFetchler.push(fetchPersonel);
-  if (turneDe)    _tumFetchler.push(fetchTurneler);
-  _tumFetchler.push(fetchDisPersonel);
-  for (var _tfi = 0; _tfi < _tumFetchler.length; _tfi++) {
-    try { await _tumFetchler[_tfi](); } catch(e) { console.warn('Veri yenileme hatası (devam):', e); }
-    if (_tfi < _tumFetchler.length - 1) await new Promise(function(r){ setTimeout(r, 300); });
-  }
+  var fetchler = [];
+  if (personelDe) fetchler.push(fetchPersonel());
+  if (turneDe)    fetchler.push(fetchTurneler());
+  fetchler.push(fetchDisPersonel());
+  await Promise.all(fetchler);
   populateFilters();
   renderListe();
   renderCalendar();
@@ -27753,12 +27778,7 @@ async function init() {
   }
 
   // Arka planda API'den güncelle (notlar dahil)
-  // Sıralı fetch — Google Sheets quota aşımını önlemek için (Promise.all yerine)
-  var _fetchSirayla = [fetchPersonel, fetchDisPersonel, fetchTurneler, calNotYukle, _firmaRehberSheetYukle];
-  for (var _fi = 0; _fi < _fetchSirayla.length; _fi++) {
-    try { await _fetchSirayla[_fi](); } catch(e) { console.warn('Fetch hatası (devam ediliyor):', e); }
-    if (_fi < _fetchSirayla.length - 1) await new Promise(function(r){ setTimeout(r, 300); });
-  }
+  await Promise.all([fetchPersonel(), fetchDisPersonel(), fetchTurneler(), calNotYukle(), _firmaRehberSheetYukle()]);
 
   // Cache güncelle
   try { localStorage.setItem('turne_cache_data', JSON.stringify(turneler)); } catch(e){}
@@ -27904,15 +27924,7 @@ function _pollingYap() {
     });
   }
 
-  // Sıralı fetch — quota aşımını önlemek için
-  (async function() {
-    var _pFetchler = [fetchTurneler, fetchPersonel, fetchDisPersonel, calNotYukle];
-    for (var _pfi = 0; _pfi < _pFetchler.length; _pfi++) {
-      try { await _pFetchler[_pfi](); } catch(e) { console.warn('Polling fetch hatası:', e); }
-      if (_pfi < _pFetchler.length - 1) await new Promise(function(r){ setTimeout(r, 300); });
-    }
-    return { then: function(fn) { fn(); return this; } };
-  })()
+  Promise.all([fetchTurneler(), fetchPersonel(), fetchDisPersonel(), calNotYukle()])
     .then(function() {
       // tumUIGuncelle artık sadece aktif sekmeyi render eder (bellek optimizasyonu)
       tumUIGuncelle();
