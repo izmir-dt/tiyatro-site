@@ -166,7 +166,7 @@ function parseLocalDate(str) {
 
     // Mobil yönlendirme devre dışı — aynı sayfa mobilde de açılır (404 düzeltmesi)
   </script>
-<link href="https://izmir-dt.github.io/tiyatro-site/tiyatro-site/favicon.png" rel="icon" type="image/png"/>
+<link href="https://izmir-dt.github.io/tiyatro-site/favicon.png" rel="icon" type="image/png"/>
 <title>Turne Yönetimi – İzmir Devlet Tiyatrosu</title>
 <meta name="description" content="İzmir Devlet Tiyatrosu Turne Yönetim Sistemi – turneler, kadro, harita ve takvim bilgilerini görüntüleyin."/>
 <link href="https://fonts.googleapis.com/" rel="preconnect"/>
@@ -15993,50 +15993,51 @@ function _veriKontrolHesapla() {
   // ── 4. Turne tarihleri çakışan personel ──────────────────────
   var grup4 = { id: 'tarih-cakisma', renk: '#dc2626', ikon: '📅',
     baslik: 'Turne tarihleri çakışan personel',
-    aciklama: 'Aynı personel aynı tarih aralığında birden fazla turneye atanmış.',
+    aciklama: 'Aynı personel aynı başlangıç tarihinde birden fazla turneye atanmış.',
     items: [] };
 
-  // Turne → tarih aralığı olan kayıtları topla
+  // Başlangıç tarihi olan turneleri topla
   var turneAraliklari = gecerliTurneler.filter(function(t) {
-    return t.baslangicTarih && t.bitisTarih && t.katilimcilar && t.katilimcilar.length;
+    return (t.baslangicTarih || t.tarih) && t.katilimcilar && t.katilimcilar.length;
   });
 
-  // Her personel için turneleri kontrol et
-  var kisiTurneleri = {};
+  // Her personel için başlangıç tarihi (ms) → turneler eşlemesi
+  var kisiBaslangiclar = {}; // key → [{kisi, turne, basMs}]
   turneAraliklari.forEach(function(t) {
+    var basStr = t.baslangicTarih || t.tarih;
+    var basMs;
+    try { basMs = parseLocalDate(basStr).getTime(); } catch(e) { return; }
     t.katilimcilar.forEach(function(k) {
       if (!k.kisi) return;
       var key = k.kisi.trim().toLowerCase();
-      if (!kisiTurneleri[key]) kisiTurneleri[key] = [];
-      kisiTurneleri[key].push({
-        kisi: k.kisi,
-        turne: t,
-        bas: parseLocalDate(t.baslangicTarih),
-        bit: parseLocalDate(t.bitisTarih)
-      });
+      if (!kisiBaslangiclar[key]) kisiBaslangiclar[key] = [];
+      kisiBaslangiclar[key].push({ kisi: k.kisi, turne: t, basMs: basMs, basStr: basStr });
     });
   });
 
   var cakismaGosterildi = {};
-  Object.keys(kisiTurneleri).forEach(function(key) {
-    var liste = kisiTurneleri[key];
+  Object.keys(kisiBaslangiclar).forEach(function(key) {
+    var liste = kisiBaslangiclar[key];
     if (liste.length < 2) return;
     for (var i = 0; i < liste.length; i++) {
       for (var j = i + 1; j < liste.length; j++) {
         var a = liste[i], b = liste[j];
-        // Çakışma: A'nın başı B'nin bitişinden önce VE A'nın bitişi B'nin başından sonra
-        if (a.bas <= b.bit && a.bit >= b.bas) {
-          var cakismaKey = key + ':' + a.turne._rowIdx + ':' + b.turne._rowIdx;
-          if (cakismaGosterildi[cakismaKey]) continue;
-          cakismaGosterildi[cakismaKey] = true;
-          var tA = (a.turne.oyun || '') + (a.turne.il ? ' – ' + a.turne.il : '');
-          var tB = (b.turne.oyun || '') + (b.turne.il ? ' – ' + b.turne.il : '');
-          grup4.items.push({
-            kisi: liste[i].kisi,
-            detay: 'Tarih çakışması',
-            turneDetay: tA + ' ↔ ' + tB
-          });
-        }
+        // Parse edilmiş ms ile karşılaştır (format farklılıklarına karşı güvenli)
+        if (a.basMs !== b.basMs) continue;
+        // Bağlı ek grupları (aynı ana turneye bağlı) çakışma sayma
+        var aAna = String(a.turne.anaGrupId || a.turne._rowIdx);
+        var bAna = String(b.turne.anaGrupId || b.turne._rowIdx);
+        if (aAna === bAna) continue;
+        var cakismaKey = key + ':' + a.turne._rowIdx + ':' + b.turne._rowIdx;
+        if (cakismaGosterildi[cakismaKey]) continue;
+        cakismaGosterildi[cakismaKey] = true;
+        var tA = (a.turne.oyun || '') + (a.turne.il ? ' – ' + a.turne.il : '');
+        var tB = (b.turne.oyun || '') + (b.turne.il ? ' – ' + b.turne.il : '');
+        grup4.items.push({
+          kisi: liste[i].kisi,
+          detay: 'Aynı başlangıç tarihi: ' + (a.basStr||'').split('-').reverse().join('.'),
+          turneDetay: tA + ' ↔ ' + tB
+        });
       }
     }
   });
@@ -16319,7 +16320,9 @@ function toggleKisiSecim(kisi, gorev, kategori) {
   if (idx >= 0) {
     kisiModalSecili.splice(idx, 1);
   } else {
-    kisiModalSecili.push({ kisi, gorev, kategori, ekstra: false });
+    // Geçmişteki en sık görev varsa onu kullan, yoksa kategori adını kullan
+    var gecmisGorev = _gorevTahminEt(kisi);
+    kisiModalSecili.push({ kisi, gorev: gecmisGorev || gorev, kategori, ekstra: false });
   }
   // Çok oyunlu modda aktif sekmeyi senkronize et
   if (window._kisiModalCoklu && window._kisiModalOyunAdi) {
@@ -16846,29 +16849,56 @@ async function saveKisiModal() {
   } else {
     _birlesikListe = JSON.parse(JSON.stringify(kisiModalSecili));
   }
-  // === ÇAKIŞMA UYARISI: aynı tarihte başlayan başka turnede aynı kişi var mı? ===
+  // === ÇAKIŞMA UYARISI: aynı başlangıç tarihinde başka turnede aynı kişi var mı? ===
   try {
     var _basT = (t.baslangicTarih || t.tarih || '').trim();
+    // Ek grupsa ana turnenin tarihini kullan
+    if (!_basT && t.anaGrupId) {
+      var _anaTurne = turneler.find(function(x){ return String(x._rowIdx) === String(t.anaGrupId); });
+      if (_anaTurne) _basT = (_anaTurne.baslangicTarih || _anaTurne.tarih || '').trim();
+    }
     if (_basT) {
+      var _buBasMs = parseLocalDate(_basT).getTime();
+      var _atlanacakIdx = {};
+      _atlanacakIdx[String(t._rowIdx)] = true;
+      if (t.anaGrupId) {
+        _atlanacakIdx[String(t.anaGrupId)] = true;
+        turneler.forEach(function(x){
+          if (x.anaGrupId && String(x.anaGrupId) === String(t.anaGrupId)) _atlanacakIdx[String(x._rowIdx)] = true;
+        });
+      } else {
+        turneler.forEach(function(x){
+          if (x.anaGrupId && String(x.anaGrupId) === String(t._rowIdx)) _atlanacakIdx[String(x._rowIdx)] = true;
+        });
+      }
       var _bu = _birlesikListe.map(function(k){ return (k.kisi||'').trim().toLowerCase(); }).filter(Boolean);
       var _set = {};
       _bu.forEach(function(k){ _set[k] = true; });
-      var _cak = []; // [{kisi, oyun, gorev}]
-      (window.turneler||[]).forEach(function(tt){
-        if (!tt || tt._rowIdx === t._rowIdx) return;
-        var bt = (tt.baslangicTarih || tt.tarih || '').trim();
-        if (bt !== _basT) return;
+      var _cak = [];
+      var _cakGosterildi = {};
+      turneler.forEach(function(tt){
+        if (!tt || _atlanacakIdx[String(tt._rowIdx)]) return;
+        if (tt.statu === 'iptal') return;
+        var btStr = (tt.baslangicTarih || tt.tarih || '').trim();
+        if (!btStr) return;
+        var ttBasMs;
+        // Parse ederek karşılaştır (format farklılıklarına karşı güvenli)
+        try { ttBasMs = parseLocalDate(btStr).getTime(); } catch(e) { return; }
+        if (ttBasMs !== _buBasMs) return;
         (tt.katilimcilar||[]).forEach(function(kk){
           var ad = (kk && kk.kisi || '').trim();
-          if (ad && _set[ad.toLowerCase()]) {
-            _cak.push({ kisi: ad, oyun: tt.oyun || '(adsız turne)', gorev: kk.gorev || kk.kategori || '' });
+          var adKey = ad.toLowerCase();
+          if (ad && _set[adKey] && !_cakGosterildi[adKey + ':' + tt._rowIdx]) {
+            _cakGosterildi[adKey + ':' + tt._rowIdx] = true;
+            var bitStr = (tt.bitisTarih || btStr).trim();
+            var ttTarihStr = btStr.split('-').reverse().join('.') + (bitStr !== btStr ? ' – ' + bitStr.split('-').reverse().join('.') : '');
+            _cak.push({ kisi: ad, oyun: tt.oyun || '(adsız turne)', gorev: kk.gorev || kk.kategori || '', tarih: ttTarihStr });
           }
         });
       });
       if (_cak.length) {
-        var _cakTarih = _basT.split('-').reverse().join('.');
-        var _cakMesaj = 'Aynı tarihte (' + _cakTarih + ') başlayan başka turne(ler)de şu kişiler görevli:\n\n'
-          + _cak.map(function(c){ return '• ' + c.kisi + ' → ' + c.oyun + (c.gorev?' ('+c.gorev+')':''); }).join('\n')
+        var _cakMesaj = 'Aynı başlangıç tarihinde başka turne(lere) kayıtlı kişiler var:\n\n'
+          + _cak.map(function(c){ return '• ' + c.kisi + ' → ' + c.oyun + ' (' + c.tarih + ')' + (c.gorev?' ['+c.gorev+']':''); }).join('\n')
           + '\n\nYine de kaydetmek istiyor musunuz?';
         var _cakOnay = await siteConfirm(_cakMesaj, {
           title: '⚠️ Tarih Çakışması',
