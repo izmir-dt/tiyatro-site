@@ -14175,10 +14175,34 @@ function _firmaVeriKaydet(liste) {
 }
 
 // ── SHEETS'E TAM LİSTE YAZ ──────────────────────────────────────────────────
+// ── SHEETS'E TAM LİSTE YAZ (BATCH + RATE-LIMIT KORUMALI) ───────────────────
 var _firmaSheetSyncTimer = null;
+// 429 hatası için exponential backoff ile yeniden dene
+async function _apiFetchWithRetry(path, options, maxRetries) {
+  maxRetries = maxRetries || 4;
+  var delay = 2000;
+  for (var attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      var res = await apiFetch(path, options);
+      if (res && res.status === 429) {
+        if (attempt === maxRetries) throw new Error('Rate limit: max retry aşıldı');
+        console.warn('[apiFetchWithRetry] 429 alındı, ' + (delay/1000) + 's sonra tekrar denenecek…');
+        await new Promise(function(r){ setTimeout(r, delay); });
+        delay = Math.min(delay * 2, 30000);
+        continue;
+      }
+      return res;
+    } catch(e) {
+      if (attempt === maxRetries) throw e;
+      await new Promise(function(r){ setTimeout(r, delay); });
+      delay = Math.min(delay * 2, 30000);
+    }
+  }
+}
+
 function _firmaSheetTamYaz(liste, hizli) {
   clearTimeout(_firmaSheetSyncTimer);
-  var bekle = hizli ? 0 : 400;
+  var bekle = hizli ? 500 : 1200; // debounce — hızlı ardışık kayıtları birleştir
   _firmaSheetSyncTimer = setTimeout(async function() {
     try {
       var listeCopy = JSON.parse(JSON.stringify(liste));
@@ -14188,8 +14212,12 @@ function _firmaSheetTamYaz(liste, hizli) {
       var silinecekRows = eskiRows.filter(function(r){ return yeniRows.indexOf(r) === -1; });
       // Row numaraları büyükten küçüğe sırala — silme sırasında index kaymasın
       silinecekRows.sort(function(a,b){ return b - a; });
+      // Silme işlemleri backoff ile (batch delete yok)
       for (var d = 0; d < silinecekRows.length; d++) {
-        try { await apiFetch('/' + encodeURIComponent(FIRMA_REHBER_SHEET) + '/row/' + silinecekRows[d], { method: 'DELETE' }); } catch(e3) {}
+        try {
+          await _apiFetchWithRetry('/' + encodeURIComponent(FIRMA_REHBER_SHEET) + '/row/' + silinecekRows[d], { method: 'DELETE' });
+        } catch(e3) { console.warn('Firma satır silme hatası:', e3); }
+        if (d < silinecekRows.length - 1) await new Promise(function(r){ setTimeout(r, 300); });
       }
       // Silinen satırların üstündeki kayıtların _sheetRow değerlerini düşür
       if (silinecekRows.length > 0) {
@@ -14203,30 +14231,41 @@ function _firmaSheetTamYaz(liste, hizli) {
           if (liste[si]) liste[si]._sheetRow = listeCopy[si]._sheetRow;
         }
       }
-      var tumRows = [];
+      // Güncelleme ve ekleme listelerini ayır
+      var updates = [];
+      var inserts = [];
+      var insertIdxMap = [];
       for (var i = 0; i < listeCopy.length; i++) {
         var k = listeCopy[i];
         var values = [k.ad || '', k.kategori || 'diger', k.tel || '', k.tel2 || '', k.not || '', k._kaynak || ''];
         if (k._sheetRow) {
-          try {
-            await apiFetch('/' + encodeURIComponent(FIRMA_REHBER_SHEET) + '/row/' + k._sheetRow, {
-              method: 'PUT', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ values: values })
-            });
-            tumRows.push(k._sheetRow);
-          } catch(e4) {}
+          updates.push({ row: k._sheetRow, values: values });
         } else {
-          try {
-            var res = await apiFetch('/' + encodeURIComponent(FIRMA_REHBER_SHEET) + '/row', {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ values: values })
-            });
-            if (res && res.ok) {
-              var rd = await res.json();
-              liste[i]._sheetRow = rd.rowNumber || null;
-              if (liste[i]._sheetRow) tumRows.push(liste[i]._sheetRow);
+          inserts.push({ values: values });
+          insertIdxMap.push(i);
+        }
+      }
+      // TEK API ÇAĞRISI — tüm update + insert'ler bir arada
+      var batchRes = await _apiFetchWithRetry(
+        '/' + encodeURIComponent(FIRMA_REHBER_SHEET) + '/batch',
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ updates: updates, inserts: inserts })
+        }
+      );
+      var tumRows = listeCopy.filter(function(k){ return k._sheetRow; }).map(function(k){ return k._sheetRow; });
+      if (batchRes && batchRes.ok) {
+        var bd = await batchRes.json();
+        if (bd.insertResults) {
+          for (var ir = 0; ir < bd.insertResults.length; ir++) {
+            var origIdx = insertIdxMap[ir];
+            var rowNum = bd.insertResults[ir].rowNumber;
+            if (rowNum) {
+              liste[origIdx]._sheetRow = rowNum;
+              tumRows.push(rowNum);
             }
-          } catch(e5) {}
+          }
         }
       }
       localStorage.setItem('firma_rehber', JSON.stringify(liste));
