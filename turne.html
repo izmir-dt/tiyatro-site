@@ -14283,9 +14283,9 @@ async function _firmaRehberSheetYukle() {
 // ── OTOMATİK FİRMA REHBERİ GÜNCELLEME ──────────────────────────────────────
 // Turnedeki firma/kişi/telefon bilgilerini rehbere otomatik ekler/günceller.
 // Kural: aynı ad (normalize) zaten varsa telefon güncellenir, yoksa yeni kayıt eklenir.
-function _firmaRehberOtomatikGuncelle(turneData) {
+function _firmaRehberOtomatikGuncelle(turneData, _disListeRef) {
   if (!turneData) return;
-  var liste = _firmaVeriAl();
+  var liste = _disListeRef ? _disListeRef.liste : _firmaVeriAl();
 
   function normalizeAd(ad) { return (ad||'').trim().toLowerCase().replace(/\s+/g,' '); }
   function normalizeTel(tel) { return (tel||'').replace(/[\s\-().]/g,'').trim(); }
@@ -14388,7 +14388,8 @@ function _firmaRehberOtomatikGuncelle(turneData) {
       _tIl || _turneKaynak);
   }
 
-  _firmaVeriKaydet(liste);
+  // Toplu modda (dışarıdan liste geliyorsa) kaydetme — çağıran yapar
+  if (!_disListeRef) _firmaVeriKaydet(liste);
 }
 
 // ── REHBER TEMİZLEME: Hatalı + çift kayıtları sil/birleştir ─
@@ -14535,11 +14536,13 @@ function _rehberKopyala(btn, metin) {
 function firmaRehberiAc() {
   // Eski hatalı JSON string kayıtları temizle
   try { _firmaRehberHataliKayitlariTemizle(); } catch(e) {}
-  // Açılışta tüm turnelerdeki verileri sessizce aktar
+  // Açılışta tüm turnelerdeki verileri sessizce aktar (toplu: 1 okuma, 1 yazma)
   if (typeof turneler !== 'undefined' && turneler && turneler.length) {
+    var _topluListe = { liste: _firmaVeriAl() };
     turneler.forEach(function(t) {
-      try { _firmaRehberOtomatikGuncelle(t); } catch(e) {}
+      try { _firmaRehberOtomatikGuncelle(t, _topluListe); } catch(e) {}
     });
+    _firmaVeriKaydet(_topluListe.liste);
   }
   firmaRehberiRender();
   var _ov = document.getElementById('firma-rehber-overlay');
