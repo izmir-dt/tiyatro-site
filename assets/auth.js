@@ -73,8 +73,8 @@
     });
     setTimeout(function(){inp.focus();},50);
   }
-  var _push=history.pushState;
-  history.pushState=function(){_push.apply(history,arguments);setTimeout(showOverlay,100);};
+  window.addEventListener("pushState",function(){setTimeout(showOverlay,100);});
+  window.addEventListener("replaceState",function(){setTimeout(showOverlay,100);});
   window.addEventListener("popstate",function(){setTimeout(showOverlay,100);});
   document.addEventListener("DOMContentLoaded",showOverlay);
 })();
