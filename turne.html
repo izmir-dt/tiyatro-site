@@ -1879,6 +1879,7 @@ function _leafletYukle(callback) {
       [id^="wz-l-"] { display: none !important; }
       /* İlerleme çubuğu üstündeki hint gizle — yer kazanmak için */
       #wz-hint { display: none !important; }
+      #wz-gorev-panel { display: none !important; }
       /* Modal body biraz daha az padding */
       .modal-body { padding: 12px 14px; }
       /* Turne form adım daireleri biraz küçük */
@@ -8280,10 +8281,24 @@ table td:first-child[style*="text-align:center"] {
 <div style="height:3px;background:var(--muted);border-radius:3px;margin-bottom:8px">
 <div id="wz-bar" style="height:3px;background:var(--primary);border-radius:3px;width:10%;transition:width .35s ease"></div>
 </div>
-<!-- Adım açıklaması -->
-<div id="wz-hint" style="font-size:11px;color:var(--muted-foreground);padding-bottom:10px">
-<strong style="color:var(--foreground)">Adım 1 / 5 — Temel Bilgiler:</strong> Oyun adı, tarih ve şehir girilmesi yeterli. Diğer bilgileri sonra ekleyebilirsiniz.
-        </div>
+<!-- Adım açıklaması + Görev badge (inline, hiç yer kaplamaz) -->
+<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding-bottom:8px;position:relative">
+  <div id="wz-hint" style="font-size:11px;color:var(--muted-foreground);flex:1;min-width:0">
+    <strong style="color:var(--foreground)">Adım 1 / 5 — Temel Bilgiler:</strong> Oyun adı, tarih ve şehir girilmesi yeterli. Diğer bilgileri sonra ekleyebilirsiniz.
+  </div>
+  <!-- Görev badge — tıkla aç/kapat -->
+  <div id="wz-gorev-panel" style="position:relative;flex-shrink:0">
+    <button id="wz-gorev-btn" onclick="(function(){var p=document.getElementById('wz-gorev-popup');p.style.display=p.style.display==='none'?'block':'none';})()" style="display:flex;align-items:center;gap:5px;background:var(--muted);border:1.5px solid var(--border);border-radius:20px;padding:3px 10px 3px 7px;cursor:pointer;white-space:nowrap;font-size:11px;font-weight:700;color:var(--foreground);transition:border-color .15s" title="Bu adımda yapılacaklar">
+      <span style="font-size:13px">✅</span>
+      <span id="wz-gorev-sayac" style="color:var(--primary)">0 / 0</span>
+    </button>
+    <!-- Popover -->
+    <div id="wz-gorev-popup" style="display:none;position:absolute;top:calc(100% + 6px);right:0;z-index:9999;width:240px;background:var(--card);border:1.5px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.18);padding:10px 12px">
+      <div style="font-size:9px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--muted-foreground);margin-bottom:7px">Bu adımda yapılacaklar</div>
+      <div id="wz-gorev-box"></div>
+    </div>
+  </div>
+</div>
 </div>
 </div>
 <div class="modal-body">
@@ -10727,7 +10742,12 @@ function switchModalTab(key, idx) {
   if (hintEl) hintEl.innerHTML = hints[idx] || '';
   if (barEl)  barEl.style.width = barW[idx] || '10%';
 
-  for (var i = 0; i < 5; i++) {
+  // ── GÖREV TAKİP ──
+  window._aktifModalIdx = idx;
+  _wzGorevGuncelle(idx);
+  _wzAdimDaireGuncelle(idx);
+
+for (var i = 0; i < 5; i++) {
     var c = document.getElementById('wz-c-' + i);
     var l = document.getElementById('wz-l-' + i);
     var line = document.getElementById('wz-line-' + i);
@@ -10753,8 +10773,84 @@ function switchModalTab(key, idx) {
     }
   }
 }
+// ── GÖREV TAKİP FONKSİYONU ──
+function _wzGorevGuncelle(idx) {
+  var gorevler = [
+    [
+      { zorunlu: true,  label: 'Oyun adını seç',            fieldId: 'm-oyun'     },
+      { zorunlu: true,  label: 'Başlangıç tarihi gir',       fieldId: 'm-tarih'    },
+      { zorunlu: true,  label: 'Bitiş tarihi gir',           fieldId: 'm-bitis'    },
+      { zorunlu: false, label: 'Şehir / il bilgisi ekle',    fieldId: 'm-il'       }
+    ],
+    [
+      { zorunlu: false, label: 'Gidiş ulaşım türü seç',      fieldId: null         },
+      { zorunlu: false, label: 'Dönüş ulaşım türü seç',      fieldId: null         }
+    ],
+    [
+      { zorunlu: false, label: 'Otel adını gir',             fieldId: null         },
+      { zorunlu: false, label: 'Oda planlamasını yap',       fieldId: null         }
+    ],
+    [
+      { zorunlu: false, label: 'Taşıma aracı seç',           fieldId: null         },
+      { zorunlu: false, label: 'Teknik bilgileri ekle',       fieldId: null         }
+    ],
+    [
+      { zorunlu: false, label: 'Günlük programı oluştur',    fieldId: null         },
+      { zorunlu: true,  label: 'Kaydet / tamamla',           fieldId: null         }
+    ]
+  ];
+  var adimGorevler = gorevler[idx] || [];
+  var tamamlanan = 0;
+  var gorevHTML = adimGorevler.map(function(g) {
+    var dolu = g.fieldId ? (function(){ var el = document.getElementById(g.fieldId); return !!(el && el.value && el.value.trim() !== ''); })() : false;
+    if (dolu) tamamlanan++;
+    return '<div style="display:flex;align-items:center;gap:8px;font-size:11px;padding:3px 0;'+(dolu?'color:var(--muted-foreground)':g.zorunlu?'color:var(--foreground);font-weight:600':'color:var(--muted-foreground)')+'">'
+      + '<div style="width:14px;height:14px;border-radius:4px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:8px;border:1.5px solid '+(dolu?'var(--success)':g.zorunlu?'var(--primary)':'var(--border)')+';background:'+(dolu?'var(--success)':'transparent')+';color:#fff">'+(dolu?'✓':'')+'</div>'
+      + '<span style="'+(dolu?'text-decoration:line-through;opacity:.55':'')+'">' + g.label + (g.zorunlu && !dolu ? ' <span style="color:var(--primary);font-size:9px">●</span>' : '') + '</span>'
+      + '</div>';
+  }).join('');
+  var gorevBox = document.getElementById('wz-gorev-box');
+  var gorevSayac = document.getElementById('wz-gorev-sayac');
+  if (gorevBox) gorevBox.innerHTML = gorevHTML || '<div style="font-size:11px;color:var(--muted-foreground);font-style:italic">Bu adımda zorunlu alan yok.</div>';
+  if (gorevSayac) {
+    var hepsi = tamamlanan === adimGorevler.length && adimGorevler.length > 0;
+    gorevSayac.textContent = tamamlanan + ' / ' + adimGorevler.length;
+    gorevSayac.style.color = hepsi ? 'var(--success)' : 'var(--primary)';
+    var btn = document.getElementById('wz-gorev-btn');
+    if (btn) btn.style.borderColor = hepsi ? 'var(--success)' : 'var(--border)';
+  }
+}
+function _wzAdimDaireGuncelle(idx) {
+  for (var i = 0; i < 5; i++) {
+      var c = document.getElementById('wz-c-' + i);
+      var l = document.getElementById('wz-l-' + i);
+      var line = document.getElementById('wz-line-' + i);
+      if (!c) continue;
+      if (i < idx) {
+        // Tamamlandı ✓
+        c.style.background = 'var(--primary)'; c.style.borderColor = 'var(--primary)'; c.style.color = '#fff';
+        c.innerHTML = '✓';
+        if (l) { l.style.color = 'var(--primary)'; l.style.fontWeight = '700'; }
+        if (line) line.style.background = 'var(--primary)';
+      } else if (i === idx) {
+        // Aktif
+        c.style.background = 'var(--primary)'; c.style.borderColor = 'var(--primary)'; c.style.color = '#fff';
+        c.innerHTML = String(i + 1);
+        if (l) { l.style.color = 'var(--primary)'; l.style.fontWeight = '800'; }
+        if (line) line.style.background = 'var(--border)';
+      } else {
+        // Bekliyor
+        c.style.background = 'var(--muted)'; c.style.borderColor = 'var(--border)'; c.style.color = 'var(--muted-foreground)';
+        c.innerHTML = String(i + 1);
+        if (l) { l.style.color = 'var(--muted-foreground)'; l.style.fontWeight = '700'; }
+        if (line) line.style.background = 'var(--border)';
+      }
+    }
+}
 
 function hesaplaSure() {
+  // Görev takibini güncelle (mevcut adım için)
+  try { _wzGorevGuncelle(window._aktifModalIdx || 0); } catch(e){}
   const bas = document.getElementById('m-tarih').value;
   const bit = document.getElementById('m-bitis').value;
   const info = document.getElementById('sure-info');
@@ -21102,7 +21198,8 @@ function _haritaIlDetayGit(rowIdx) {
   if (!panel) {
     panel = document.createElement('div');
     panel.id = 'harita-turne-detay-panel';
-    panel.style.cssText = 'position:fixed;top:0;right:-440px;width:400px;max-width:96vw;height:100vh;background:var(--card);border-left:1px solid var(--border);z-index:3000;overflow-y:auto;transition:right .3s cubic-bezier(.4,0,.2,1);box-shadow:-4px 0 24px rgba(0,0,0,.18)';
+    panel.style.cssText = 'position:fixed;top:0;right:-440px;width:420px;max-width:96vw;height:100vh;background:var(--sidebar);border-left:1px solid rgba(255,255,255,.07);z-index:3000;overflow:hidden;transition:right .32s cubic-bezier(.4,0,.2,1);box-shadow:-8px 0 40px rgba(0,0,0,.32);display:flex;flex-direction:column';
+    panel.innerHTML = '';
     document.body.appendChild(panel);
     // ESC ile kapat (bir kere bağla)
     document.addEventListener('keydown', function(e){
@@ -21119,8 +21216,97 @@ function _haritaIlDetayGit(rowIdx) {
   var temsil = durakToplamTemsil ? durakToplamTemsil(t) : '';
   var kadroSay = t.katilimcilar ? t.katilimcilar.length : 0;
 
+  // ── Durak listesini HTML'e çevir ──
+  var durakHTML = '';
+  if (t.duraklar && t.duraklar.length) {
+    var durakIller = t.duraklar.map(function(d){ return d.il || ''; }).filter(Boolean);
+    var durakList = ['İzmir'].concat(durakIller).concat(['İzmir']);
+    durakHTML = durakList.map(function(il, i) {
+      var isHome = (i === 0 || i === durakList.length - 1);
+      var venue = '';
+      if (!isHome && t.duraklar[i-1]) venue = (t.duraklar[i-1].salon || '');
+      return '<div style="display:flex;align-items:center;gap:9px;padding:5px 0">'
+        + '<div style="width:7px;height:7px;border-radius:50%;flex-shrink:0;background:' + (isHome ? 'hsl(220,65%,65%)' : 'var(--sidebar-primary)') + '"></div>'
+        + '<span style="font-size:12px;font-weight:700;color:' + (isHome ? 'rgba(255,255,255,.45)' : 'rgba(255,255,255,.9)') + '">' + il + '</span>'
+        + (venue ? '<span style="font-size:10px;color:rgba(255,255,255,.3);margin-left:auto;max-width:120px;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + venue + '</span>' : (isHome ? '<span style="font-size:10px;color:rgba(255,255,255,.25);margin-left:auto">' + (i === 0 ? 'Kalkış' : 'Dönüş') + '</span>' : ''))
+        + '</div>';
+    }).join('');
+  } else {
+    durakHTML = '<div style="font-size:11px;color:rgba(255,255,255,.3);padding:6px 0">Güzergah belirtilmemiş</div>';
+    if (iller) durakHTML = '<div style="font-size:12px;font-weight:600;color:rgba(255,255,255,.8)">' + iller + '</div>';
+  }
+
+  // ── Ulaşım bilgisi ──
+  var ulasimHTML = '';
+  if (t.duraklar && t.duraklar.length) {
+    t.duraklar.forEach(function(d) {
+      if (d.ulasim_gidis) ulasimHTML += '<div style="display:flex;align-items:center;gap:7px;font-size:11px;color:rgba(255,255,255,.65);padding:3px 0"><span style="color:var(--sidebar-primary);font-size:10px">↗</span>' + d.ulasim_gidis + '</div>';
+      if (d.ulasim_donus) ulasimHTML += '<div style="display:flex;align-items:center;gap:7px;font-size:11px;color:rgba(255,255,255,.65);padding:3px 0"><span style="color:hsl(220,65%,65%);font-size:10px">↙</span>' + d.ulasim_donus + '</div>';
+    });
+  }
+  if (!ulasimHTML) ulasimHTML = '<div style="font-size:11px;color:rgba(255,255,255,.3)">Bilgi girilmemiş</div>';
+
+  // ── Onay No ──
+  var olurStr = (t.olurNo || t.onay_no || '');
+  var olurHTML = olurStr
+    ? '<div style="font-size:13px;font-weight:800;color:var(--sidebar-primary);letter-spacing:.5px">' + olurStr + '</div>'
+    : '<div style="font-size:11px;color:rgba(255,255,255,.3)">Henüz atanmadı</div>';
+
   panel.innerHTML =
-    '<div style="background:var(--sidebar);padding:16px 18px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:1">'    + '<div style="color:#fff">'    +   '<div style="font-size:14px;font-weight:800;line-height:1.3">' + (t.oyun || '—') + '</div>'    +   '<div style="font-size:10px;opacity:.7;margin-top:2px">' + (iller || '') + '</div>'    + '</div>'    + '<button onclick="_haritaPanelKapat()" style="background:rgba(255,255,255,.15);border:none;color:#fff;cursor:pointer;border-radius:8px;width:30px;height:30px;font-size:16px;display:flex;align-items:center;justify-content:center">×</button>'    + '</div>'    + '<div style="padding:16px 18px;display:flex;flex-direction:column;gap:14px">'    + '<div style="display:flex;gap:8px;flex-wrap:wrap">'    +   (sure > 0 ? '<span style="padding:4px 12px;border-radius:20px;background:hsl(220,60%,96%);color:hsl(220,60%,35%);font-size:11px;font-weight:700;border:1px solid hsl(220,60%,85%)">📅 ' + sure + ' gün</span>' : '')    +   (temsil > 0 ? '<span style="padding:4px 12px;border-radius:20px;background:hsl(141,60%,95%);color:hsl(141,60%,25%);font-size:11px;font-weight:700;border:1px solid hsl(141,60%,80%)">▶ ' + temsil + ' temsil</span>' : '')    +   (kadroSay > 0 ? '<span style="padding:4px 12px;border-radius:20px;background:hsl(38,90%,95%);color:hsl(38,70%,28%);font-size:11px;font-weight:700;border:1px solid hsl(38,85%,80%)">👥 ' + kadroSay + ' kişi</span>' : '')    +   '<span style="padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700;background:' + sr.bg + ';color:' + sr.fg + ';border:1px solid ' + sr.border + '">' + (sr.label || '') + '</span>'    + '</div>'    + '<div style="background:var(--muted);border-radius:10px;padding:12px 14px">'    +   '<div style="font-size:10px;font-weight:700;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">📍 Turne Güzergahı</div>'    +   (iller ? '<div style="font-size:12px;font-weight:600;color:var(--foreground)">' + iller + '</div>' : '<div style="font-size:11px;color:var(--muted-foreground)">Güzergah belirtilmemiş</div>')    + '</div>'    + '<div style="display:flex;gap:8px">'    +   '<button onclick="editTurne(' + rowIdx + ')" style="flex:1;height:36px;border:1.5px solid var(--border);border-radius:8px;background:var(--card);color:var(--foreground);cursor:pointer;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:5px">✏️ Düzenle</button>'    +   '<button onclick="_haritaPanelKapat();switchTab(\'liste\');setTimeout(function(){openCardDetail(' + rowIdx + ');},200)" style="flex:1;height:40px;border:none;border-radius:10px;background:linear-gradient(135deg,hsl(38,90%,42%),hsl(38,85%,35%));color:#fff;cursor:pointer;font-size:13px;font-weight:800;display:flex;align-items:center;justify-content:center;gap:6px;letter-spacing:-.2px;box-shadow:0 2px 8px rgba(180,110,0,.35)">Tam Detay →</button>'    + '</div>'    + '</div>';
+    // ── HEADER ──
+    '<div style="background:linear-gradient(160deg,hsl(25,45%,8%) 0%,hsl(25,35%,13%) 100%);padding:18px 20px 14px;flex-shrink:0;border-bottom:1px solid rgba(255,255,255,.07)">'
+    +   '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">'
+    +     '<div style="flex:1;min-width:0">'
+    +       '<div style="display:flex;align-items:center;gap:7px;margin-bottom:8px">'
+    +         '<div style="width:7px;height:7px;border-radius:50%;background:' + sr.fg + ';box-shadow:0 0 8px ' + sr.fg + '40;flex-shrink:0"></div>'
+    +         '<span style="font-size:9px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:' + sr.fg + '">' + (sr.label || '') + '</span>'
+    +       '</div>'
+    +       '<div style="font-size:17px;font-weight:900;color:#fff;letter-spacing:-.2px;line-height:1.2;text-transform:uppercase;margin-bottom:3px">' + (t.oyun || '—') + '</div>'
+    +       (t.etkinlik ? '<div style="font-size:10px;color:rgba(255,255,255,.35);font-weight:500">' + t.etkinlik + '</div>' : '')
+    +     '</div>'
+    +     '<button onclick="_haritaPanelKapat()" aria-label="Kapat" style="width:30px;height:30px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.6);cursor:pointer;border-radius:8px;font-size:15px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background .15s">×</button>'
+    +   '</div>'
+    // ── Chip bar ──
+    +   '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px">'
+    +     (sure > 0 ? '<span style="padding:4px 10px;border-radius:20px;background:rgba(99,155,255,.14);color:hsl(220,75%,72%);font-size:10px;font-weight:700;border:1px solid rgba(99,155,255,.22)">📅 ' + sure + ' gün</span>' : '')
+    +     (temsil > 0 ? '<span style="padding:4px 10px;border-radius:20px;background:rgba(74,222,128,.12);color:hsl(141,65%,58%);font-size:10px;font-weight:700;border:1px solid rgba(74,222,128,.2)">▶ ' + temsil + ' temsil</span>' : '')
+    +     (kadroSay > 0 ? '<span style="padding:4px 10px;border-radius:20px;background:rgba(250,195,117,.12);color:hsl(38,85%,65%);font-size:10px;font-weight:700;border:1px solid rgba(250,195,117,.2)">👥 ' + kadroSay + ' kişi</span>' : '')
+    +   '</div>'
+    + '</div>'
+    // ── BODY ──
+    + '<div style="flex:1;overflow-y:auto;padding:16px 18px;display:flex;flex-direction:column;gap:14px">'
+    // Hızlı istatistikler
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
+    +   '<div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:9px;padding:10px 12px">'
+    +     '<div style="font-size:9px;font-weight:700;letter-spacing:.9px;text-transform:uppercase;color:rgba(255,255,255,.3);margin-bottom:4px">Süre</div>'
+    +     '<div style="font-size:17px;font-weight:900;color:#fff">' + (sure > 0 ? sure : '—') + '<span style="font-size:10px;font-weight:500;color:rgba(255,255,255,.3)"> gün</span></div>'
+    +   '</div>'
+    +   '<div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:9px;padding:10px 12px">'
+    +     '<div style="font-size:9px;font-weight:700;letter-spacing:.9px;text-transform:uppercase;color:rgba(255,255,255,.3);margin-bottom:4px">Kadro</div>'
+    +     '<div style="font-size:17px;font-weight:900;color:#fff">' + (kadroSay > 0 ? kadroSay : '—') + '<span style="font-size:10px;font-weight:500;color:rgba(255,255,255,.3)"> kişi</span></div>'
+    +   '</div>'
+    + '</div>'
+    // Güzergah
+    + '<div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:12px 14px">'
+    +   '<div style="font-size:9px;font-weight:800;letter-spacing:1.3px;text-transform:uppercase;color:rgba(255,255,255,.3);margin-bottom:10px;display:flex;align-items:center;gap:6px">📍 Güzergah</div>'
+    +   durakHTML
+    + '</div>'
+    // Ulaşım
+    + '<div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:12px 14px">'
+    +   '<div style="font-size:9px;font-weight:800;letter-spacing:1.3px;text-transform:uppercase;color:rgba(255,255,255,.3);margin-bottom:10px">✈ Ulaşım</div>'
+    +   ulasimHTML
+    + '</div>'
+    // Onay No
+    + '<div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:12px 14px">'
+    +   '<div style="font-size:9px;font-weight:800;letter-spacing:1.3px;text-transform:uppercase;color:rgba(255,255,255,.3);margin-bottom:6px"># Onay No</div>'
+    +   olurHTML
+    + '</div>'
+    + '</div>'
+    // ── ACTIONS ──
+    + '<div style="flex-shrink:0;padding:12px 16px;border-top:1px solid rgba(255,255,255,.07);display:flex;gap:8px;background:rgba(0,0,0,.2)">'
+    +   '<button onclick="editTurne(' + rowIdx + ')" style="flex:1;height:38px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.13);border-radius:10px;color:rgba(255,255,255,.75);cursor:pointer;font-size:12px;font-weight:700;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:5px;transition:background .15s">✏️ Düzenle</button>'
+    +   '<button onclick="_haritaPanelKapat();switchTab(\'liste\');setTimeout(function(){openCardDetail(' + rowIdx + ');},200)" style="flex:2;height:38px;border:none;border-radius:10px;background:linear-gradient(135deg,hsl(38,90%,42%),hsl(38,82%,34%));color:#fff;cursor:pointer;font-size:13px;font-weight:800;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:6px;letter-spacing:-.2px;box-shadow:0 3px 12px rgba(180,110,0,.35)">Tam Detay →</button>'
+    + '</div>';
 
   // Aç — reflow zorla, sonra rAF içinde transition başlat
   void panel.getBoundingClientRect();
@@ -23618,33 +23804,34 @@ function _temizleMekan(mekan) {
 
 function _pdfCSS() {
   return '@charset "UTF-8";'
+    + '@import url(\'https://fonts.googleapis.com/css2?family=EB+Garamond:wght@400;600;700;800&family=DM+Sans:wght@400;500;600;700;800&display=swap\');'
     // TEMEL
     + '*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}'
-    + 'body{font-family:Arial,Helvetica,sans-serif;font-size:11pt;margin:0;padding:10mm 12mm 10mm;color:#1a1a1a;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;line-height:1.4}'
+    + 'body{font-family:"DM Sans",Arial,Helvetica,sans-serif;font-size:9.5pt;margin:0;padding:7mm 10mm 7mm;color:#1a1a1a;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;line-height:1.3}'
     + '*{box-sizing:border-box}'
     + '.rapor-wrap{max-width:100%}'
     // ── ÜST BAŞLIK ──
-    + '.rapor-header{display:flex;align-items:stretch;justify-content:space-between;padding-bottom:8pt;border-bottom:3pt solid #6b1b1b;margin-bottom:10pt}'
+    + '.rapor-header{display:flex;align-items:stretch;justify-content:space-between;padding-bottom:5pt;border-bottom:2.5pt solid #6b1b1b;margin-bottom:7pt}'
     + '.rapor-kurulus{display:flex;align-items:center;gap:10pt}'
-    + '.rapor-amblem{width:44pt;height:44pt;background:#6b1b1b;border-radius:6pt;display:flex;align-items:center;justify-content:center;color:#e8c84a;font-weight:900;font-size:13pt;flex-shrink:0;letter-spacing:.5pt}'
+    + '.rapor-amblem{width:36pt;height:36pt;background:#6b1b1b;border-radius:5pt;display:flex;align-items:center;justify-content:center;color:#e8c84a;font-weight:900;font-size:11pt;flex-shrink:0;letter-spacing:.5pt}'
     + '.rapor-kurulus-metin{}'
-    + '.rapor-kurum{font-size:14pt;font-weight:900;color:#6b1b1b;line-height:1.1}'
-    + '.rapor-alt-baslik{font-size:10.5pt;color:#333;font-weight:700;margin-top:3pt}'
+    + '.rapor-kurum{font-family:"EB Garamond","Times New Roman",Georgia,serif;font-size:13pt;font-weight:700;color:#6b1b1b;line-height:1.1;letter-spacing:.2pt}'
+    + '.rapor-alt-baslik{font-family:"EB Garamond","Times New Roman",Georgia,serif;font-size:11pt;color:#333;font-weight:600;margin-top:3pt;letter-spacing:.2pt}'
     + '.rapor-tarih-bilgi{text-align:right;display:flex;flex-direction:column;justify-content:flex-end;align-items:flex-end;gap:1pt;padding-left:12pt}'
     + '.rapor-tarih-bilgi .etiket{font-size:8.5pt;color:#444;text-transform:uppercase;letter-spacing:.4pt;line-height:1.3}'
     + '.rapor-tarih-bilgi .deger{font-size:11.5pt;font-weight:800;color:#1a1a1a;line-height:1.2}'
     + '.rapor-tarih-bilgi .sezon{font-size:9.5pt;font-weight:700;color:#6b1b1b;background:#f5ede0;border-radius:4pt;padding:1.5pt 8pt;margin-top:3pt;border:1pt solid #e0cdb8}'
     // ── TURNE BAŞLIĞI ──
-    + '.turne-baslik-blok{background:linear-gradient(135deg,#6b1b1b 0%,#8b2020 100%);color:#fff;border-radius:8pt;padding:10pt 14pt;margin-bottom:10pt}'
-    + '.turne-oyun-adi{font-size:22pt;font-weight:900;letter-spacing:.3pt;line-height:1.15;margin-bottom:5pt}'
+    + '.turne-baslik-blok{background:linear-gradient(135deg,#6b1b1b 0%,#8b2020 100%);color:#fff;border-radius:6pt;padding:7pt 12pt;margin-bottom:7pt}'
+    + '.turne-oyun-adi{font-family:"EB Garamond","Times New Roman",Georgia,serif;font-size:18pt;font-weight:700;letter-spacing:.3pt;line-height:1.1;margin-bottom:3pt}'
     + '.turne-alt-satir{display:flex;align-items:center;gap:12pt;flex-wrap:wrap}'
     + '.turne-sehir{font-size:12pt;font-weight:700;letter-spacing:1.2pt;opacity:.9}'
     + '.turne-tarih{font-size:11pt;font-weight:700;opacity:1}'
     + '.turne-sure-badge{background:rgba(255,255,255,.18);border:1pt solid rgba(255,255,255,.3);border-radius:20pt;padding:2pt 9pt;font-size:11pt;font-weight:700}'
     + '.turne-durum-badge{border-radius:20pt;padding:2pt 10pt;font-size:11pt;font-weight:700}'
     // ── BİLGİ KUTULARI GRID ──
-    + '.bilgi-grid{display:grid;grid-template-columns:1fr 1fr;gap:8pt;margin-bottom:10pt}'
-    + '.bilgi-kutu{border:1pt solid #e5ddd5;border-left:3pt solid #6b1b1b;border-radius:5pt;padding:8pt 11pt;background:#fafaf8}'
+    + '.bilgi-grid{display:grid;grid-template-columns:1fr 1fr;gap:5pt;margin-bottom:7pt}'
+    + '.bilgi-kutu{border:1pt solid #e5ddd5;border-left:3pt solid #6b1b1b;border-radius:4pt;padding:5pt 8pt;background:#fafaf8}'
     + '.bilgi-kutu.mavi{border-left-color:#1d4ed8}'
     + '.bilgi-kutu.yesil{border-left-color:#15803d}'
     + '.bilgi-kutu.sari{border-left-color:#d97706}'
@@ -23652,18 +23839,18 @@ function _pdfCSS() {
     + '.bilgi-deger{font-size:12pt;font-weight:800;color:#1a1a1a;line-height:1.25}'
     + '.bilgi-deger.kucuk{font-size:11.5pt}'
     // ── BÖLÜM BAŞLIKLARI ──
-    + '.bolum{margin-bottom:8pt}'
-    + '.bolum-baslik{font-size:11pt;font-weight:900;text-transform:uppercase;letter-spacing:.6pt;color:#4a0a0a;border-bottom:2.5pt solid #8b2a2a;padding-bottom:5pt;margin-bottom:8pt}'
+    + '.bolum{margin-bottom:5pt}'
+    + '.bolum-baslik{font-family:"EB Garamond","Times New Roman",Georgia,serif;font-size:10.5pt;font-weight:700;text-transform:uppercase;letter-spacing:.6pt;color:#4a0a0a;border-bottom:2pt solid #8b2a2a;padding-bottom:3pt;margin-bottom:6pt}'
     // ── TABLOLAR ──
     + 'table{width:100%;border-collapse:collapse;font-size:10pt}'
     + 'thead tr{background:#6b1b1b}'
-    + 'th{color:#fff;padding:7pt 10pt;text-align:left;font-size:11pt;font-weight:700;letter-spacing:.2pt}'
-    + 'td{padding:6pt 9pt;border-bottom:1pt solid #f0ebe4;color:#111;vertical-align:middle;font-size:11pt}'
+    + 'th{color:#fff;padding:5pt 8pt;text-align:left;font-size:9.5pt;font-weight:700;letter-spacing:.1pt}'
+    + 'td{padding:4pt 8pt;border-bottom:1pt solid #f0ebe4;color:#111;vertical-align:middle;font-size:9.5pt}'
     + 'tbody tr:nth-child(even){background:#faf8f6}'
     + 'tbody tr:last-child td{border-bottom:none}'
     // TABLO SÜTUN SINIFLARI — hiyerarşik boyut
     + '.kol-no{text-align:center;color:#333;font-size:10pt;width:26pt}'
-    + '.per-no{text-align:center;color:#333;font-size:10pt;width:26pt;padding:5pt 9pt;border:1pt solid #e5ddd5;vertical-align:middle}'
+    + '.per-no{text-align:center;color:#333;font-size:9pt;width:22pt;padding:3.5pt 6pt;border:1pt solid #e5ddd5;vertical-align:middle}'
     // İsim sütunları: white-space:nowrap ile asla bölünmez
     + '.kol-ad{font-weight:700;font-size:10pt;color:#111;word-wrap:break-word;overflow-wrap:break-word}'
     + '.kol-isim{font-weight:700;font-size:10pt;color:#111;word-wrap:break-word;overflow-wrap:break-word}'
@@ -23688,24 +23875,24 @@ function _pdfCSS() {
     + '.td-not{font-size:10pt;color:#555;padding:6pt 9pt;border:1pt solid #e5ddd5;vertical-align:middle;word-wrap:break-word;max-width:200pt}'
     // ── PANEL STİLLERİ ──
     + '.panel-lbl{font-size:8.5pt;font-weight:700;text-transform:uppercase;letter-spacing:.5pt;color:#555;margin-bottom:3pt}'
-    + '.panel-val-oyun{font-size:12pt;font-weight:800;color:#6b1b1b;line-height:1.2}'
+    + '.panel-val-oyun{font-family:"EB Garamond","Times New Roman",Georgia,serif;font-size:13pt;font-weight:700;color:#6b1b1b;line-height:1.2}'
     + '.panel-val-tarih{font-size:11pt;font-weight:700;color:#1d4ed8;line-height:1.2}'
     // ── PROGRAM TABLO ──
     + '.prog-saat{font-size:13pt;font-weight:900;color:#15803d;letter-spacing:.5pt}'
     // KATEGORI BAŞLIĞI (personel tablosunda)
     + '.kat-baslik-row{background:#e8ddd5!important}'
-    + '.kat-baslik-row td{font-size:10pt;font-weight:800;color:#6b1b1b;text-transform:uppercase;letter-spacing:.5pt;border-bottom:1pt solid #d0c8c0!important;padding:4pt 9pt}'
+    + '.kat-baslik-row td{font-family:"EB Garamond","Times New Roman",Georgia,serif;font-size:10.5pt;font-weight:700;color:#6b1b1b;text-transform:uppercase;letter-spacing:.6pt;border-bottom:1pt solid #d0c8c0!important;padding:4pt 9pt}'
     // isim/tel cell sınıfları — pdf personel tablolarında kullanılır
-    + '.per-ad{font-size:10pt;font-weight:700;color:#111;padding:5pt 8pt;border:1pt solid #e5ddd5;vertical-align:middle;word-wrap:break-word;overflow-wrap:break-word}'
-    + '.per-tel{font-size:10pt;font-weight:700;color:#1d4ed8;padding:5pt 8pt;border:1pt solid #e5ddd5;vertical-align:middle;white-space:nowrap}'
-    + '.per-gorev{font-size:10.5pt;font-weight:500;color:#444;padding:5pt 9pt;border:1pt solid #e5ddd5;vertical-align:middle;word-wrap:break-word}'
+    + '.per-ad{font-size:9.5pt;font-weight:700;color:#111;padding:3.5pt 7pt;border:1pt solid #e5ddd5;vertical-align:middle;word-wrap:break-word;overflow-wrap:break-word}'
+    + '.per-tel{font-size:9.5pt;font-weight:700;color:#1d4ed8;padding:3.5pt 7pt;border:1pt solid #e5ddd5;vertical-align:middle;white-space:nowrap}'
+    + '.per-gorev{font-size:9.5pt;font-weight:500;color:#444;padding:3.5pt 7pt;border:1pt solid #e5ddd5;vertical-align:middle;word-wrap:break-word}'
     // ── NOT KUTUSU ──
     + '.not-kutu{padding:8pt 12pt;background:#fef3c7;border-radius:5pt;border-left:3pt solid #d97706;font-size:11pt;margin-top:10pt;color:#78350f;word-wrap:break-word}'
     // ── ALT ÇUBUK ──
     + '.alt-cubuk{margin-top:18pt;padding-top:8pt;border-top:1pt solid #e5ddd5;display:flex;justify-content:space-between;align-items:center}'
-    + '.alt-cubuk-sol{font-size:9pt;font-weight:700;color:#555}'
+    + '.alt-cubuk-sol{font-family:"EB Garamond","Times New Roman",Georgia,serif;font-size:9.5pt;font-weight:600;color:#555;letter-spacing:.2pt}'
     // ── SAYFA NUMARASI (@page: tutarlı kenar boşlukları) ──
-    + '@page{size:A4;margin:15mm;}'
+    + '@page{size:A4;margin:12mm 13mm;}'
     // ── SAYFA KIRMA — tablo satırları bölünmez ──
     + 'tr{page-break-inside:avoid;break-inside:avoid}'
     + 'tbody tr{page-break-inside:avoid;break-inside:avoid}'
@@ -26936,7 +27123,7 @@ function renderKonaklamaDuraklar() {
       + '</div>'
       + '<div class="otel-durak-body">'
       + '<div class="form-group" style="margin:0">'
-      + '<label class="form-label" style="font-size:10px">Otel / Konaklama Adı <span style="color:var(--muted-foreground);font-weight:400">— önceki kayıtlar önerilir</span></label>'
+      + '<label class="form-label" style="font-size:10px">Otel / Konaklama Adı</label>'
       + '<input class="form-input" list="otel-onerileri-list" autocomplete="off" style="font-size:11px" type="text" placeholder="Grand Otel..." value="' + (d.otelAdi||'').replace(/"/g,'&quot;') + '" oninput="_otelAutofill(' + i + ', this)" onchange="_otelAutofill(' + i + ', this)">'
       + '</div>'
       + '<div class="form-group" style="margin:0">'
@@ -28409,6 +28596,14 @@ function onayKapat() {
 document.addEventListener('DOMContentLoaded', function() {
   var _om = document.getElementById('onay-modal');
   if (_om) _om.addEventListener('click', function(e) { if (e.target === this) onayKapat(); });
+});
+// Görev popup — dışarı tıklayınca kapat
+document.addEventListener('click', function(e) {
+  var popup = document.getElementById('wz-gorev-popup');
+  var btn   = document.getElementById('wz-gorev-btn');
+  if (popup && popup.style.display !== 'none' && !popup.contains(e.target) && btn && !btn.contains(e.target)) {
+    popup.style.display = 'none';
+  }
 });
 
 function acBindAll() {
