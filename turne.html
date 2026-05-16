@@ -8621,7 +8621,7 @@ table td:first-child[style*="text-align:center"] {
 <div class="form-grid-2" style="grid-template-columns:2fr 1fr;gap:10px">
 <div class="form-group" style="margin:0">
 <label class="form-label">Dekor / Teknik Araç</label>
-<select class="form-select" id="m-arac-tur">
+<select class="form-select" id="m-arac-tur" onchange="try{_wzAdimDaireGuncelle(window._aktifModalIdx||0);_wzGorevGuncelle(window._aktifModalIdx||0);}catch(e){}">
 <option value="">— Seçilmedi —</option>
 <option value="Kamyon">Kamyon</option>
 <option value="Kamyon (Liftli)">Kamyon (Liftli)</option>
@@ -8640,7 +8640,7 @@ table td:first-child[style*="text-align:center"] {
 <div style="display:flex;gap:8px;margin-top:6px">
 <div class="form-group" style="flex:1;margin:0">
 <label class="form-label">Firma Adı</label>
-<input class="form-input" id="m-kamyon-firma" placeholder="Nakliye firması..." type="text"/>
+<input class="form-input" id="m-kamyon-firma" placeholder="Nakliye firması..." type="text" oninput="try{_wzAdimDaireGuncelle(window._aktifModalIdx||0);_wzGorevGuncelle(window._aktifModalIdx||0);}catch(e){}"/>
 </div>
 <div class="form-group" style="width:140px;margin:0">
 <label class="form-label">Telefon</label>
@@ -10747,31 +10747,7 @@ function switchModalTab(key, idx) {
   _wzGorevGuncelle(idx);
   _wzAdimDaireGuncelle(idx);
 
-for (var i = 0; i < 5; i++) {
-    var c = document.getElementById('wz-c-' + i);
-    var l = document.getElementById('wz-l-' + i);
-    var line = document.getElementById('wz-line-' + i);
-    if (!c) continue;
-    if (i < idx) {
-      // Tamamlandı ✓
-      c.style.background = 'var(--primary)'; c.style.borderColor = 'var(--primary)'; c.style.color = '#fff';
-      c.innerHTML = '✓';
-      if (l) { l.style.color = 'var(--primary)'; l.style.fontWeight = '700'; }
-      if (line) line.style.background = 'var(--primary)';
-    } else if (i === idx) {
-      // Aktif
-      c.style.background = 'var(--primary)'; c.style.borderColor = 'var(--primary)'; c.style.color = '#fff';
-      c.innerHTML = String(i + 1);
-      if (l) { l.style.color = 'var(--primary)'; l.style.fontWeight = '800'; }
-      if (line) line.style.background = 'var(--border)';
-    } else {
-      // Bekliyor
-      c.style.background = 'var(--muted)'; c.style.borderColor = 'var(--border)'; c.style.color = 'var(--muted-foreground)';
-      c.innerHTML = String(i + 1);
-      if (l) { l.style.color = 'var(--muted-foreground)'; l.style.fontWeight = '700'; }
-      if (line) line.style.background = 'var(--border)';
-    }
-  }
+// Daire güncellemesi _wzAdimDaireGuncelle ile yapılır (yukarıda çağrılıyor)
 }
 // ── GÖREV TAKİP FONKSİYONU ──
 function _wzGorevGuncelle(idx) {
@@ -10783,26 +10759,34 @@ function _wzGorevGuncelle(idx) {
       { zorunlu: false, label: 'Şehir / il bilgisi ekle',    fieldId: 'm-il'       }
     ],
     [
-      { zorunlu: false, label: 'Gidiş ulaşım türü seç',      fieldId: null         },
-      { zorunlu: false, label: 'Dönüş ulaşım türü seç',      fieldId: null         }
+      { zorunlu: false, label: 'Gidiş ulaşım türü seç',      fieldId: 'm-gidis-ulasim'  },
+      { zorunlu: false, label: 'Dönüş ulaşım türü seç',      fieldId: 'm-donus-ulasim'  }
     ],
     [
-      { zorunlu: false, label: 'Otel adını gir',             fieldId: null         },
-      { zorunlu: false, label: 'Oda planlamasını yap',       fieldId: null         }
+      { zorunlu: false, label: 'Otel adını gir',             fieldId: 'm-otel-adi'      },
+      { zorunlu: false, label: 'Oda planlamasını yap',       fieldId: 'm-otel-adr'      }
     ],
     [
-      { zorunlu: false, label: 'Taşıma aracı seç',           fieldId: null         },
-      { zorunlu: false, label: 'Teknik bilgileri ekle',       fieldId: null         }
+      { zorunlu: false, label: 'Taşıma aracı seç',           fieldId: 'm-arac-tur'      },
+      { zorunlu: false, label: 'Teknik bilgileri ekle',       fieldId: 'm-kamyon-firma'  }
     ],
     [
-      { zorunlu: false, label: 'Günlük programı oluştur',    fieldId: null         },
-      { zorunlu: true,  label: 'Kaydet / tamamla',           fieldId: null         }
+      { zorunlu: false, label: 'Günlük programı oluştur',    fieldId: null              },
+      { zorunlu: true,  label: 'Kaydet / tamamla',           fieldId: null              }
     ]
   ];
   var adimGorevler = gorevler[idx] || [];
   var tamamlanan = 0;
   var gorevHTML = adimGorevler.map(function(g) {
-    var dolu = g.fieldId ? (function(){ var el = document.getElementById(g.fieldId); return !!(el && el.value && el.value.trim() !== ''); })() : false;
+    var dolu = false;
+    if (g.fieldId) {
+      var el = document.getElementById(g.fieldId);
+      dolu = !!(el && el.value && el.value.trim() !== '' && el.value !== '0');
+    } else if (g.label === 'Günlük programı oluştur') {
+      dolu = !!(window.programSatirlar && window.programSatirlar.length > 0);
+    } else if (g.label === 'Kaydet / tamamla') {
+      dolu = false; // Kaydet sonrası modal kapanır, hep beklemede görünür
+    }
     if (dolu) tamamlanan++;
     return '<div style="display:flex;align-items:center;gap:8px;font-size:11px;padding:3px 0;'+(dolu?'color:var(--muted-foreground)':g.zorunlu?'color:var(--foreground);font-weight:600':'color:var(--muted-foreground)')+'">'
       + '<div style="width:14px;height:14px;border-radius:4px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:8px;border:1.5px solid '+(dolu?'var(--success)':g.zorunlu?'var(--primary)':'var(--border)')+';background:'+(dolu?'var(--success)':'transparent')+';color:#fff">'+(dolu?'✓':'')+'</div>'
@@ -10820,24 +10804,47 @@ function _wzGorevGuncelle(idx) {
     if (btn) btn.style.borderColor = hepsi ? 'var(--success)' : 'var(--border)';
   }
 }
+function _wzAdimTamamlandiMi(adimIdx) {
+  // Her adım için hangi alanların dolu olması gerektiğini kontrol et
+  var adimAlanlari = [
+    ['m-oyun', 'm-tarih', 'm-bitis'],          // 0: Genel (zorunlu alanlar)
+    ['m-gidis-ulasim', 'm-donus-ulasim'],       // 1: Ulaşım
+    ['m-otel-adi'],                             // 2: Konaklama
+    ['m-arac-tur'],                             // 3: Lojistik
+    null                                        // 4: Program — özel kontrol
+  ];
+  if (adimIdx === 4) {
+    // Program adımı: programSatirlar dizisinde en az bir satır varsa tamamlanmış say
+    return !!(window.programSatirlar && window.programSatirlar.length > 0);
+  }
+  var alanlar = adimAlanlari[adimIdx] || [];
+  if (alanlar.length === 0) return false;
+  // En az bir alan doluysa adımı tamamlanmış say
+  return alanlar.some(function(id) {
+    var el = document.getElementById(id);
+    return el && el.value && el.value.trim() !== '' && el.value !== '0';
+  });
+}
+
 function _wzAdimDaireGuncelle(idx) {
   for (var i = 0; i < 5; i++) {
       var c = document.getElementById('wz-c-' + i);
       var l = document.getElementById('wz-l-' + i);
       var line = document.getElementById('wz-line-' + i);
       if (!c) continue;
-      if (i < idx) {
+      var tamam = (i < idx) || (i !== idx && _wzAdimTamamlandiMi(i));
+      if (i === idx) {
+        // Aktif sekme
+        c.style.background = 'var(--primary)'; c.style.borderColor = 'var(--primary)'; c.style.color = '#fff';
+        c.innerHTML = String(i + 1);
+        if (l) { l.style.color = 'var(--primary)'; l.style.fontWeight = '800'; }
+        if (line) line.style.background = tamam ? 'var(--primary)' : 'var(--border)';
+      } else if (tamam) {
         // Tamamlandı ✓
         c.style.background = 'var(--primary)'; c.style.borderColor = 'var(--primary)'; c.style.color = '#fff';
         c.innerHTML = '✓';
         if (l) { l.style.color = 'var(--primary)'; l.style.fontWeight = '700'; }
         if (line) line.style.background = 'var(--primary)';
-      } else if (i === idx) {
-        // Aktif
-        c.style.background = 'var(--primary)'; c.style.borderColor = 'var(--primary)'; c.style.color = '#fff';
-        c.innerHTML = String(i + 1);
-        if (l) { l.style.color = 'var(--primary)'; l.style.fontWeight = '800'; }
-        if (line) line.style.background = 'var(--border)';
       } else {
         // Bekliyor
         c.style.background = 'var(--muted)'; c.style.borderColor = 'var(--border)'; c.style.color = 'var(--muted-foreground)';
@@ -10851,6 +10858,7 @@ function _wzAdimDaireGuncelle(idx) {
 function hesaplaSure() {
   // Görev takibini güncelle (mevcut adım için)
   try { _wzGorevGuncelle(window._aktifModalIdx || 0); } catch(e){}
+  try { _wzAdimDaireGuncelle(window._aktifModalIdx || 0); } catch(e){}
   const bas = document.getElementById('m-tarih').value;
   const bit = document.getElementById('m-bitis').value;
   const info = document.getElementById('sure-info');
@@ -17540,7 +17548,7 @@ function openModal(rowIdx) {
   _modalDirty = false;
   document.getElementById('modal-overlay').classList.add('on');
   _modalNavGuncelle(0);
-  setTimeout(function(){ switchModalTab('genel', 0); }, 0);
+  setTimeout(function(){ switchModalTab('genel', 0); setTimeout(function(){ try{_wzAdimDaireGuncelle(0);}catch(e){} }, 100); }, 0);
   // Taslak modu UI
   var bar = document.getElementById('taslak-modu-bar');
   var tabsRow = document.getElementById('modal-tabs-row');
@@ -17956,6 +17964,7 @@ function editTurne(rowIdx) {
   document.getElementById('modal-overlay').classList.add('on');
   switchModalTab('genel', 0);
   hesaplaSure();
+  setTimeout(function(){ try{_wzAdimDaireGuncelle(0);}catch(e){}}, 150);
   // Çakışma koruması: modal açılırken o anki Sheets snapshot'ını sakla
   window._editSnapshot = JSON.stringify(t);
   window._editAcilanZaman = Date.now();
@@ -27551,6 +27560,9 @@ function ulasimTuruDegisti(yon) {
 
   // Özet etiketi güncelle
   _ucusOzetGuncelle(yon);
+  // Wizard daire güncelle
+  try { _wzAdimDaireGuncelle(window._aktifModalIdx || 0); } catch(e){}
+  try { _wzGorevGuncelle(window._aktifModalIdx || 0); } catch(e){}
 }
 
 // ── UÇUŞ POPUP ──────────────────────────────────────────
@@ -27809,11 +27821,15 @@ function programSatirEkle(tarih, gun, program, saat, saat2) {
   var defaultSehir = gecerliDuraklar.length ? gecerliDuraklar[0].il + (gecerliDuraklar[0].ilce ? '/' + gecerliDuraklar[0].ilce : '') : 'İzmir';
   programSatirlar.push({ tarih: tarih||'', gun: gun||'', program: program||'Yol', saat: saat||'', saat2: saat2||'', sehir: defaultSehir });
   renderProgramGunler();
+  try { _wzGorevGuncelle(window._aktifModalIdx || 0); } catch(e){}
+  try { _wzAdimDaireGuncelle(window._aktifModalIdx || 0); } catch(e){}
 }
 
 function programSatirSil(idx) {
   programSatirlar.splice(idx, 1);
   renderProgramGunler();
+  try { _wzGorevGuncelle(window._aktifModalIdx || 0); } catch(e){}
+  try { _wzAdimDaireGuncelle(window._aktifModalIdx || 0); } catch(e){}
 }
 
 function renderProgramGunler() {
@@ -27918,6 +27934,11 @@ function renderProgramGunler() {
       return row1 + _mekanSatiri + row2;
     }).join('')
     + '</div>';
+  // Wizard güncelle (program sekmesindeyse sayacı yenile)
+  if (window._aktifModalIdx === 4) {
+    try { _wzGorevGuncelle(4); } catch(e){}
+    try { _wzAdimDaireGuncelle(4); } catch(e){}
+  }
 }
 
 function programTarihlerOtoDoldur() {
@@ -27986,11 +28007,9 @@ function programTarihlerOtoDoldur() {
     }
   }
   renderProgramGunler();
+  try { _wzGorevGuncelle(window._aktifModalIdx || 0); } catch(e){}
+  try { _wzAdimDaireGuncelle(window._aktifModalIdx || 0); } catch(e){}
 }
-
-// ============================================================
-// INIT
-// ============================================================
 // ============================================================
 // MERKEZİ VERİ YENİLEME — tüm işlemler sonrası çağrılır
 // ============================================================
