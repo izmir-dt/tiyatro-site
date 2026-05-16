@@ -1248,21 +1248,30 @@ async function aiGonder() {
   var veri = aiVeriyiHazirla();
   _aiGecmis.push({ role: 'user', content: soru });
 
-  var sistem = 'Sen İzmir Devlet Tiyatrosu\'nun Turne İstatistik Sistemi\'nin akıllı asistanısın. ' +
+  var sistem = 'Sen İzmir Devlet Tiyatrosu\'nun Turne Yönetim Sistemi\'nin akıllı asistanısın. ' +
     'Aşağıdaki gerçek turne verilerini kullanarak Türkçe, ayrıntılı ve yararlı yanıtlar ver. ' +
     'Sayısal veriler için kesin rakamlar kullan. Listeler ve tablolar kullanabilirsin. ' +
     'Türkçe konuş, dostane ve profesyonel ol.\n\n' + veri;
 
   try {
-    var resp = await fetch('https://turne-backend.vercel.app/api/ai', {
+    var resp = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ system: sistem, messages: _aiGecmis.slice(-8) })
+      headers: {
+        'Content-Type': 'application/json',
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        system: sistem,
+        messages: _aiGecmis.slice(-8)
+      })
     });
     var data = await resp.json();
     var cevap = (data.content && data.content[0] && data.content[0].text)
       ? data.content[0].text
-      : (data.error ? '⚠️ Hata: ' + (data.error.message || data.error) : '⚠️ Yanıt alınamadı.');
+      : (data.error ? '⚠️ Hata: ' + (data.error.message || JSON.stringify(data.error)) : '⚠️ Yanıt alınamadı.');
     _aiGecmis.push({ role: 'assistant', content: cevap });
     aiYukluyorGizle();
     aiMesajEkle(aiFormatla(cevap), 'asistan', true);
