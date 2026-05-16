@@ -7631,6 +7631,19 @@ table td:first-child[style*="text-align:center"] {
 
 <!-- GRUP 3: Kullanıcı + Çıkış + Tema — tek pill içinde hizalı -->
 <div style="display:inline-flex;align-items:center;gap:0;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:2px;height:34px" id="nav-kullanici-alan">
+<!-- AI SORU SOR — nav içinde, her zaman görünür -->
+<button onclick="aiSoruPaneliAc(event)" title="AI Turne Asistanı (Ctrl+K)"
+  onmouseenter="this.style.background='rgba(140,80,255,.3)';this.style.color='#d8b4fe'"
+  onmouseleave="this.style.background='rgba(120,60,220,.15)';this.style.color='#c4b5fd'"
+  style="display:inline-flex;align-items:center;gap:5px;height:30px;padding:0 10px;
+    font-size:10px;font-weight:800;border:none;letter-spacing:.3px;
+    background:rgba(120,60,220,.15);color:#c4b5fd;border-radius:6px;
+    cursor:pointer;transition:all .15s;white-space:nowrap;
+    border:1px solid rgba(140,80,255,.3);">
+  <svg fill="none" height="12" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" viewbox="0 0 24 24" width="12"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path><circle cx="9" cy="10" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="10" r="1" fill="currentColor" stroke="none"/><circle cx="15" cy="10" r="1" fill="currentColor" stroke="none"/></svg>
+  Soru Sor
+</button>
+<div style="width:1px;height:18px;background:rgba(255,255,255,.1);margin:0 1px;flex-shrink:0"></div>
 <span id="nav-kullanici-chip" style="display:inline-flex;align-items:center;gap:5px;padding:0 9px;height:30px;font-size:11px;font-weight:600;color:rgba(255,255,255,.75);white-space:nowrap">
 <svg fill="none" height="12" stroke="currentColor" stroke-linecap="round" stroke-width="2" viewbox="0 0 24 24" width="12"><circle cx="12" cy="8" r="4"></circle><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"></path></svg>
 <span id="nav-kullanici-ad">Alper Çam</span>
@@ -34230,6 +34243,469 @@ setTimeout(_turBoot, 4000);
     w.document.close();
   });
 })();
+</script>
+
+<!-- ═══════════════════════════════════════════════════════
+     AI SORU SOR PANELİ — Turne Asistanı
+     ═══════════════════════════════════════════════════════ -->
+<style>
+#ai-soru-overlay {
+  display:none;position:fixed;inset:0;z-index:9500;
+  background:rgba(0,0,0,.45);backdrop-filter:blur(4px);
+  animation:fadeIn .2s ease;
+}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+#ai-soru-panel {
+  position:fixed;right:0;top:0;bottom:0;z-index:9501;
+  width:420px;max-width:100vw;
+  background:var(--card);border-left:1px solid var(--border);
+  display:flex;flex-direction:column;
+  box-shadow:-8px 0 40px rgba(0,0,0,.2);
+  transform:translateX(100%);transition:transform .3s cubic-bezier(.4,0,.2,1);
+}
+#ai-soru-panel.open{transform:translateX(0);}
+#ai-panel-header{
+  padding:14px 16px 12px;
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:10px;
+  background:linear-gradient(135deg,hsl(258,60%,18%),hsl(258,50%,24%));
+  flex-shrink:0;
+}
+#ai-panel-title{
+  flex:1;font-size:14px;font-weight:800;color:#fff;
+  display:flex;align-items:center;gap:8px;
+}
+#ai-panel-title svg{opacity:.9;}
+#ai-panel-close{
+  width:28px;height:28px;border-radius:8px;border:1px solid rgba(255,255,255,.2);
+  background:rgba(255,255,255,.1);color:#fff;font-size:16px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;transition:background .15s;
+}
+#ai-panel-close:hover{background:rgba(255,255,255,.25);}
+#ai-chat-mesajlar{
+  flex:1;overflow-y:auto;padding:14px 14px 8px;
+  display:flex;flex-direction:column;gap:10px;
+}
+.ai-msg{
+  max-width:100%;animation:slideUp .25s ease;
+}
+@keyframes slideUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.ai-msg-kullanici{
+  align-self:flex-end;
+  background:hsl(258,60%,20%);color:hsl(258,80%,90%);
+  border-radius:12px 12px 3px 12px;
+  padding:9px 13px;font-size:12.5px;line-height:1.5;
+  max-width:85%;
+}
+.ai-msg-asistan{
+  align-self:flex-start;
+  background:var(--muted);color:var(--foreground);
+  border-radius:3px 12px 12px 12px;
+  padding:10px 13px;font-size:12.5px;line-height:1.6;
+  max-width:95%;border:1px solid var(--border);
+}
+.ai-msg-asistan strong{color:var(--primary);}
+.ai-msg-asistan ul{margin:4px 0 4px 16px;padding:0;}
+.ai-msg-asistan li{margin-bottom:2px;}
+.ai-msg-asistan .ai-tablo{width:100%;border-collapse:collapse;margin:6px 0;font-size:11px;}
+.ai-msg-asistan .ai-tablo th{background:var(--accent);color:var(--accent-foreground);padding:4px 8px;text-align:left;font-weight:700;}
+.ai-msg-asistan .ai-tablo td{padding:4px 8px;border-top:1px solid var(--border);}
+.ai-yukluyor{
+  align-self:flex-start;display:flex;align-items:center;gap:6px;
+  color:var(--muted-foreground);font-size:12px;padding:8px 12px;
+}
+.ai-nokta{width:6px;height:6px;border-radius:50%;background:hsl(258,60%,50%);
+  animation:nokta 1.2s ease-in-out infinite;}
+.ai-nokta:nth-child(2){animation-delay:.2s;}
+.ai-nokta:nth-child(3){animation-delay:.4s;}
+@keyframes nokta{0%,80%,100%{transform:scale(.6);opacity:.4}40%{transform:scale(1);opacity:1}}
+#ai-onerilen-sorular{
+  padding:8px 14px;border-top:1px solid var(--border);flex-shrink:0;
+}
+#ai-onerilen-sorular .ai-sor-baslik{
+  font-size:10px;font-weight:700;color:var(--muted-foreground);
+  text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;
+}
+.ai-oneri-chip{
+  display:inline-block;padding:4px 10px;border-radius:20px;
+  background:var(--accent);color:var(--accent-foreground);
+  border:1px solid var(--border);font-size:11px;font-weight:600;
+  cursor:pointer;margin:2px 3px 2px 0;transition:all .15s;
+}
+.ai-oneri-chip:hover{background:hsl(258,60%,20%);color:hsl(258,80%,90%);border-color:hsl(258,50%,40%);}
+#ai-panel-input-wrap{
+  padding:10px 14px 14px;border-top:1px solid var(--border);
+  display:flex;gap:8px;flex-shrink:0;
+}
+#ai-soru-input{
+  flex:1;border:1.5px solid var(--border);border-radius:10px;
+  padding:9px 12px;font-size:12.5px;background:var(--card);
+  color:var(--foreground);resize:none;height:42px;line-height:1.4;
+  transition:border-color .15s,box-shadow .15s;font-family:inherit;
+  min-height:42px;max-height:120px;overflow-y:auto;
+}
+#ai-soru-input:focus{outline:none;border-color:hsl(258,60%,50%);box-shadow:0 0 0 3px hsl(258,60%,50%,.12);}
+#ai-gonder-btn{
+  width:42px;height:42px;border-radius:10px;border:none;flex-shrink:0;
+  background:hsl(258,60%,45%);color:#fff;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  transition:background .15s,transform .1s;
+}
+#ai-gonder-btn:hover{background:hsl(258,60%,38%);}
+#ai-gonder-btn:active{transform:scale(.93);}
+#ai-gonder-btn:disabled{background:var(--muted);cursor:not-allowed;opacity:.6;}
+@media(max-width:600px){
+  #ai-soru-panel{width:100vw;}
+}
+</style>
+
+<!-- Overlay -->
+<div id="ai-soru-overlay" onclick="aiSoruPaneliKapat()"></div>
+
+<!-- FAB — AI Soru Sor (her zaman görünür, sağ alt köşe) -->
+<button id="ai-fab-btn" onclick="aiSoruPaneliAc(event)" title="AI'ya Soru Sor (Ctrl+K)"
+  style="position:fixed;bottom:28px;right:28px;z-index:8000;
+    width:56px;height:56px;border-radius:50%;border:none;cursor:pointer;
+    background:linear-gradient(135deg,hsl(258,70%,50%),hsl(280,65%,45%));
+    color:#fff;box-shadow:0 4px 20px rgba(120,60,200,.5),0 2px 8px rgba(0,0,0,.2);
+    display:flex;align-items:center;justify-content:center;
+    transition:transform .15s,box-shadow .2s;
+    animation:aiFabPulse 3s ease-in-out infinite;">
+  <svg fill="none" height="22" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24" width="22"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path><circle cx="9" cy="10" r="1.2" fill="currentColor" stroke="none"/><circle cx="12" cy="10" r="1.2" fill="currentColor" stroke="none"/><circle cx="15" cy="10" r="1.2" fill="currentColor" stroke="none"/></svg>
+</button>
+<!-- FAB Tooltip etiketi -->
+<div id="ai-fab-label" style="position:fixed;bottom:34px;right:92px;z-index:8000;
+  background:hsl(258,70%,20%);color:#fff;padding:6px 12px;border-radius:20px;
+  font-size:11px;font-weight:700;white-space:nowrap;pointer-events:none;
+  box-shadow:0 2px 12px rgba(0,0,0,.25);opacity:0;transition:opacity .2s;
+  font-family:'DM Sans',sans-serif;">
+  🤖 Turne Asistanı
+</div>
+<style>
+@keyframes aiFabPulse {
+  0%,100%{box-shadow:0 4px 20px rgba(120,60,200,.5),0 2px 8px rgba(0,0,0,.2);}
+  50%{box-shadow:0 4px 28px rgba(120,60,200,.75),0 0 0 8px rgba(120,60,200,.1);}
+}
+#ai-fab-btn:hover{transform:scale(1.1);box-shadow:0 6px 28px rgba(120,60,200,.7);}
+#ai-fab-btn:active{transform:scale(.93);}
+#ai-fab-btn:hover ~ #ai-fab-label, #ai-fab-label:hover{opacity:1;}
+@media(max-width:768px){
+  #ai-fab-btn{bottom:80px;right:16px;width:50px;height:50px;}
+  #ai-fab-label{display:none;}
+}
+</style>
+<div id="ai-soru-panel">
+  <div id="ai-panel-header">
+    <div id="ai-panel-title">
+      <svg fill="none" height="18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24" width="18"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+      Turne Asistanı
+      <span style="font-size:9px;font-weight:600;background:hsl(142,60%,38%);color:#fff;padding:2px 7px;border-radius:20px;margin-left:2px;">Gemini</span>
+    </div>
+    <button id="ai-panel-close" onclick="aiSoruPaneliKapat()">×</button>
+  </div>
+
+  <div id="ai-chat-mesajlar">
+    <!-- Karşılama mesajı -->
+    <div class="ai-msg ai-msg-asistan" id="ai-hosgeldin">
+      👋 Merhaba! Ben <strong>Turne Asistanı</strong>'yım. Turne verileriniz hakkında sorularınızı yanıtlayabilirim.<br><br>
+      Örnek: <em>"En fazla turneye giden kişi kim?"</em>, <em>"Hangi şehre en çok turne yapıldı?"</em> veya <em>"Bu ayki turnelerin kadro dağılımı nedir?"</em>
+    </div>
+  </div>
+
+  <div id="ai-onerilen-sorular">
+    <div class="ai-sor-baslik">💡 Önerilen Sorular</div>
+    <span class="ai-oneri-chip" onclick="aiOneriSor(this)">En fazla turneye giden kişi?</span>
+    <span class="ai-oneri-chip" onclick="aiOneriSor(this)">Hangi şehire en çok turne yapıldı?</span>
+    <span class="ai-oneri-chip" onclick="aiOneriSor(this)">Bu ay kaç turne var?</span>
+    <span class="ai-oneri-chip" onclick="aiOneriSor(this)">En uzun süren turne hangisi?</span>
+    <span class="ai-oneri-chip" onclick="aiOneriSor(this)">Tamamlanan turne sayısı?</span>
+    <span class="ai-oneri-chip" onclick="aiOneriSor(this)">Hangi oyun en çok sahneye çıktı?</span>
+  </div>
+
+  <div id="ai-panel-input-wrap">
+    <textarea id="ai-soru-input" placeholder="Turne verisi hakkında soru sorun…" rows="1"
+      onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();aiSoruGonder();}"
+      oninput="this.style.height='42px';this.style.height=Math.min(this.scrollHeight,120)+'px'"></textarea>
+    <button id="ai-gonder-btn" onclick="aiSoruGonder()" title="Gönder">
+      <svg fill="none" height="16" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" viewbox="0 0 24 24" width="16"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+    </button>
+  </div>
+</div>
+
+<script>
+// ── AI SORU SOR — Turne Asistanı ───────────────────────────────
+var _aiSohuSohbetGecmisi = [];
+var _aiYukluyor = false;
+
+function aiSoruPaneliAc(e) {
+  if (e) e.stopPropagation();
+  document.getElementById('ai-soru-overlay').style.display = 'block';
+  var p = document.getElementById('ai-soru-panel');
+  p.style.display = 'flex';
+  setTimeout(function() { p.classList.add('open'); }, 10);
+  document.getElementById('ai-soru-badge').style.display = 'none';
+  setTimeout(function() { document.getElementById('ai-soru-input').focus(); }, 300);
+}
+
+function aiSoruPaneliKapat() {
+  var p = document.getElementById('ai-soru-panel');
+  p.classList.remove('open');
+  setTimeout(function() {
+    document.getElementById('ai-soru-overlay').style.display = 'none';
+  }, 300);
+}
+
+function aiOneriSor(el) {
+  var soru = el.textContent.trim();
+  document.getElementById('ai-soru-input').value = soru;
+  aiSoruGonder();
+}
+
+function _aiVeriyiHazirla() {
+  // Gerçek turneler verisini özetle
+  if (typeof turneler === 'undefined' || !turneler || !turneler.length) {
+    return 'Veri henüz yüklenmedi.';
+  }
+  
+  var now = new Date();
+  var buAy = now.getMonth();
+  var buYil = now.getFullYear();
+  
+  // Katılımcı sayımı
+  var kisiSayilari = {};
+  var ilSayilari = {};
+  var oyunSayilari = {};
+  var statuSayilari = {};
+  
+  turneler.forEach(function(t) {
+    if (t.anaGrupId) return; // Alt grupları atla
+    
+    // İl sayımı
+    var iller = [];
+    if (t.il) iller.push(t.il);
+    if (t.duraklar && Array.isArray(t.duraklar)) {
+      t.duraklar.forEach(function(d) { if (d.il) iller.push(d.il); });
+    }
+    iller.forEach(function(il) {
+      il = il.trim().toUpperCase();
+      if (il) ilSayilari[il] = (ilSayilari[il] || 0) + 1;
+    });
+    
+    // Oyun sayımı
+    if (t.oyun) {
+      oyunSayilari[t.oyun] = (oyunSayilari[t.oyun] || 0) + (t.sayi || 1);
+    }
+    
+    // Statü
+    var st = t.statu || 'tamamlandi';
+    statuSayilari[st] = (statuSayilari[st] || 0) + 1;
+    
+    // Katılımcılar
+    if (Array.isArray(t.katilimcilar)) {
+      t.katilimcilar.forEach(function(k) {
+        var ad = k.kisi || k.ad || '';
+        if (ad) kisiSayilari[ad] = (kisiSayilari[ad] || 0) + 1;
+      });
+    }
+  });
+  
+  // Bu ay turneler
+  var buAyTurneler = turneler.filter(function(t) {
+    if (t.anaGrupId) return false;
+    var d = new Date(t.baslangicTarih || t.tarih || '');
+    return !isNaN(d) && d.getMonth() === buAy && d.getFullYear() === buYil;
+  });
+  
+  // Top 10 kişi
+  var topKisiler = Object.entries(kisiSayilari)
+    .sort(function(a,b){return b[1]-a[1];})
+    .slice(0, 15)
+    .map(function(x){return x[0]+': '+x[1]+' turne';});
+  
+  // Top şehirler  
+  var topIller = Object.entries(ilSayilari)
+    .sort(function(a,b){return b[1]-a[1];})
+    .slice(0, 10)
+    .map(function(x){return x[0]+': '+x[1]+' kez';});
+  
+  // Top oyunlar
+  var topOyunlar = Object.entries(oyunSayilari)
+    .sort(function(a,b){return b[1]-a[1];})
+    .slice(0, 10)
+    .map(function(x){return x[0]+': '+x[1]+' temsil';});
+  
+  // En uzun turne
+  var enUzun = turneler.filter(function(t){return !t.anaGrupId;}).reduce(function(max, t) {
+    var bas = new Date(t.baslangicTarih || t.tarih || '');
+    var bit = new Date(t.bitisTarih || '');
+    if (isNaN(bas) || isNaN(bit)) return max;
+    var gun = Math.round((bit-bas)/(1000*60*60*24))+1;
+    return gun > (max.gun||0) ? {gun:gun, oyun:t.oyun, il:t.il} : max;
+  }, {});
+  
+  // Bu ay detay
+  var buAyDetay = buAyTurneler.map(function(t) {
+    return t.oyun + ' (' + (t.il||'?') + ', ' + (t.sayi||1) + ' temsil, ' + (t.statu||'?') + ')';
+  }).join('; ');
+  
+  var ozet = [
+    '=== TURNE YÖNETİM SİSTEMİ VERİSİ ===',
+    'Toplam Turne Sayısı: ' + turneler.filter(function(t){return !t.anaGrupId;}).length,
+    'Bu Ayki Turne Sayısı (' + (buAy+1) + '/' + buYil + '): ' + buAyTurneler.length,
+    '',
+    'STATÜ DAĞILIMI:',
+    Object.entries(statuSayilari).map(function(x){return x[0]+': '+x[1];}).join(', '),
+    '',
+    'EN FAZLA TURNEYE KATILAN KİŞİLER (katılım sayısına göre):',
+    topKisiler.join('\n'),
+    '',
+    'EN ÇOK ZİYARET EDİLEN ŞEHİRLER:',
+    topIller.join('\n'),
+    '',
+    'EN ÇOK TEMSİL EDILEN OYUNLAR:',
+    topOyunlar.join('\n'),
+    '',
+    'EN UZUN TURNE: ' + (enUzun.gun ? (enUzun.oyun + ' - ' + enUzun.gun + ' gün (' + enUzun.il + ')') : 'Bilinmiyor'),
+    '',
+    'BU AYKİ TURNELER: ' + (buAyDetay || 'Yok'),
+  ].join('\n');
+  
+  return ozet;
+}
+
+function _aiMesajEkle(icerik, tip, html) {
+  var kutu = document.getElementById('ai-chat-mesajlar');
+  var div = document.createElement('div');
+  div.className = 'ai-msg ai-msg-' + tip;
+  if (html) {
+    div.innerHTML = icerik;
+  } else {
+    div.textContent = icerik;
+  }
+  kutu.appendChild(div);
+  kutu.scrollTop = kutu.scrollHeight;
+  return div;
+}
+
+function _aiYukluyorGoster() {
+  var kutu = document.getElementById('ai-chat-mesajlar');
+  var div = document.createElement('div');
+  div.className = 'ai-yukluyor';
+  div.id = 'ai-yukluyor-dot';
+  div.innerHTML = '<div class="ai-nokta"></div><div class="ai-nokta"></div><div class="ai-nokta"></div><span style="font-size:11px;margin-left:2px">Düşünüyor…</span>';
+  kutu.appendChild(div);
+  kutu.scrollTop = kutu.scrollHeight;
+}
+
+function _aiYukluyorGizle() {
+  var el = document.getElementById('ai-yukluyor-dot');
+  if (el) el.remove();
+}
+
+function _formatliMesaj(metin) {
+  // Markdown benzeri basit dönüşüm
+  metin = metin.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  metin = metin.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+  metin = metin.replace(/__(.*?)__/g, '<strong>$1</strong>');
+  metin = metin.replace(/\*(.*?)\*/g, '<em>$1</em>');
+  // Numaralı listeler
+  metin = metin.replace(/^(\d+)\. (.+)$/gm, '<li>$2</li>');
+  metin = metin.replace(/(<li>.*<\/li>)/s, '<ol>$1</ol>');
+  // Madde işaretleri
+  metin = metin.replace(/^[-•] (.+)$/gm, '<li>$1</li>');
+  metin = metin.replace(/(<li>.*?<\/li>(?:\s*<li>.*?<\/li>)*)/gs, function(m) {
+    if (!m.match(/^<ol>/)) return '<ul>' + m + '</ul>';
+    return m;
+  });
+  // Satır sonları
+  metin = metin.replace(/\n\n/g, '<br><br>');
+  metin = metin.replace(/\n/g, '<br>');
+  return metin;
+}
+
+async function aiSoruGonder() {
+  if (_aiYukluyor) return;
+  var inputEl = document.getElementById('ai-soru-input');
+  var soru = (inputEl.value || '').trim();
+  if (!soru) return;
+  
+  inputEl.value = '';
+  inputEl.style.height = '42px';
+  document.getElementById('ai-gonder-btn').disabled = true;
+  _aiYukluyor = true;
+  
+  // Kullanıcı mesajını ekle
+  _aiMesajEkle(soru, 'kullanici', false);
+  
+  // Yükleniyor göster
+  _aiYukluyorGoster();
+  
+  // Gerçek veriyi hazırla
+  var veriOzeti = _aiVeriyiHazirla();
+  
+  // Sohbet geçmişine ekle
+  _aiSohuSohbetGecmisi.push({ role: 'user', content: soru });
+  
+  // Sistem mesajı + veri özeti
+  var sistemMesaji = 'Sen İzmir Devlet Tiyatrosu\'nun Turne Yönetim Sistemi\'nin akıllı asistanısın. ' +
+    'Aşağıdaki gerçek turne verilerini kullanarak Türkçe, ayrıntılı ve yararlı yanıtlar ver. ' +
+    'Sayısal veriler için kesin rakamlar kullan. Listeler ve tablolar kullanabilirsin. ' +
+    'Türkçe konuş, dostane ve profesyonel ol.\n\n' + veriOzeti;
+  
+  // Son 8 mesajı al (context window için)
+  var gecmisCopy = _aiSohuSohbetGecmisi.slice(-8);
+
+  try {
+    var response = await fetch('https://turne-backend.vercel.app/api/ai', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        system: sistemMesaji,
+        messages: gecmisCopy
+      })
+    });
+
+    var data = await response.json();
+    var cevap = '';
+    if (data.content && data.content[0] && data.content[0].text) {
+      cevap = data.content[0].text;
+    } else if (data.error) {
+      cevap = '⚠️ Hata: ' + (data.error.message || data.error || 'Bilinmeyen hata');
+    } else {
+      cevap = '⚠️ Yanıt alınamadı.';
+    }
+    
+    _aiSohuSohbetGecmisi.push({ role: 'assistant', content: cevap });
+    
+    _aiYukluyorGizle();
+    _aiMesajEkle(_formatliMesaj(cevap), 'asistan', true);
+    
+  } catch(err) {
+    _aiYukluyorGizle();
+    _aiMesajEkle('⚠️ Bağlantı hatası: ' + err.message, 'asistan', false);
+  }
+  
+  _aiYukluyor = false;
+  document.getElementById('ai-gonder-btn').disabled = false;
+  setTimeout(function(){ document.getElementById('ai-soru-input').focus(); }, 100);
+}
+
+// Klavye kısayolu: Ctrl+K ile paneli aç
+document.addEventListener('keydown', function(e) {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+    e.preventDefault();
+    var p = document.getElementById('ai-soru-panel');
+    if (p.classList.contains('open')) {
+      aiSoruPaneliKapat();
+    } else {
+      aiSoruPaneliAc();
+    }
+  }
+  if (e.key === 'Escape') {
+    var p = document.getElementById('ai-soru-panel');
+    if (p.classList.contains('open')) aiSoruPaneliKapat();
+  }
+});
 </script>
 
 </body></html>
