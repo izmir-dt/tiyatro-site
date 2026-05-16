@@ -7756,11 +7756,11 @@ table td:first-child[style*="text-align:center"] {
 <!-- SAĞ TARAF -->
 <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;margin-left:auto">
 <!-- Turne Ekle -->
-<button class="btn btn-primary" id="turne-ekle-btn" onclick="openModal()" style="height:36px;display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:800;padding:0 18px;border-radius:7px 0 0 7px;letter-spacing:.1px;box-shadow:0 2px 10px rgba(180,110,0,.4)">
+<button class="btn btn-primary" id="turne-ekle-btn" onclick="openModal()" style="height:36px;display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:800;padding:0 18px;border-radius:7px;letter-spacing:.1px;box-shadow:0 2px 10px rgba(180,110,0,.4)">
 <svg fill="none" height="14" stroke="currentColor" stroke-linecap="round" stroke-width="2.5" viewbox="0 0 24 24" width="14"><line x1="12" x2="12" y1="5" y2="19"></line><line x1="5" x2="19" y1="12" y2="12"></line></svg> Turne Ekle
         </button>
-<button class="btn btn-primary" onclick="openModal('taslak')" style="height:36px;border-radius:0 7px 7px 0;border-left:1px solid rgba(255,255,255,.2);padding:0 11px;box-shadow:0 2px 10px rgba(180,110,0,.4)" title="Hızlı taslak oluştur">
-<svg fill="none" height="12" stroke="currentColor" stroke-width="2.5" viewbox="0 0 24 24" width="12"><polygon fill="currentColor" points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" stroke="none"></polygon></svg>
+<button class="btn btn-primary" onclick="document.getElementById('olurFab').click()" style="height:36px;display:inline-flex;align-items:center;justify-content:center;padding:0 11px;border-radius:7px;box-shadow:0 2px 10px rgba(180,110,0,.4)" title="Turne Oluru Oluştur">
+<svg fill="none" height="15" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.4" viewbox="0 0 24 24" width="15"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" x2="15" y1="13" y2="13"/><line x1="9" x2="15" y1="17" y2="17"/></svg>
 </button>
 </div>
 </div>
@@ -33497,13 +33497,7 @@ setTimeout(_turBoot, 4000);
      Veri kaynağı: window.turneler  •  Bağımsız, mevcut koda dokunmaz
      ═══════════════════════════════════════════════════════════════════════ -->
 <style>
-  #olurFab{position:fixed;right:22px;bottom:22px;z-index:99980;display:inline-flex;align-items:center;gap:8px;
-    height:42px;padding:0 16px;border-radius:24px;border:none;cursor:pointer;
-    background:linear-gradient(135deg,#1a3a6e,#0c2340);color:#fff;
-    font-family:inherit;font-size:12.5px;font-weight:800;letter-spacing:.2px;
-    box-shadow:0 6px 22px rgba(12,35,64,.35);
-    opacity:.38;filter:saturate(.7);transition:opacity .25s,filter .25s,transform .15s,box-shadow .2s}
-  #olurFab:hover{opacity:1;filter:none;transform:translateY(-1px);box-shadow:0 10px 28px rgba(12,35,64,.5)}
+  #olurFab{display:none!important}
   #olurFab svg{width:16px;height:16px}
   #olurOverlay{position:fixed;inset:0;background:rgba(8,12,24,.55);z-index:99990;display:none;
     align-items:center;justify-content:center;backdrop-filter:blur(3px);animation:olurFade .15s}
@@ -33677,9 +33671,6 @@ setTimeout(_turBoot, 4000);
   function uretSablon(cfg){
     var t = cfg.turne || {};
     var oyun = trUpper(cfg.oyun || t.oyun || t.oyunAdi || '………');
-    var sehir = trCap(cfg.sehir || t.il || '………');
-    var mekan = cfg.mekan || t.mekan || '………';
-    var temsilSay = +(cfg.temsil || t.temsil || t.sayi || 1);
     var ulasim = cfg.ulasim || ulasimAna(t);
     var kamyonSay = +(cfg.kamyon || 1);
     var festival = cfg.festival || getFestival(t) || '';
@@ -33689,64 +33680,147 @@ setTimeout(_turBoot, 4000);
     var tarihObj = cfg.tarihObj || parseTarih(cfg.tarih || t.tarih);
     var aralik = tarihObj ? tarihObj.aralikStr : (cfg.tarih || t.tarih || '………');
     var gun = cfg.gun ? +cfg.gun : (tarihObj ? tarihObj.gun : 0);
-    var konu = cfg.konu || (trCap(t.oyun || oyun) + ' ' + sehir + ' Turnesi');
     var mudur = cfg.mudur || 'Burcu AKSAKAL';
     var mudurUnvan = cfg.mudurUnvan || 'Tiyatro Müdürü';
     var genelMd = cfg.genelMd || 'Tamer KARADAĞLI';
     var genelMdUnvan = cfg.genelMdUnvan || 'Genel Müdür';
     var ekstraParag = (cfg.ekstra || '').trim();
-    var ekListe = (cfg.ekListe || '1 - Turne Listesi ve Programı (1 Sayfa)\n2 - Konaklama Listesi (1 Sayfa)').trim();
+    var ekListe = (cfg.ekListe || '1 - Turne Listesi ve Programı (2 Sayfa)\n2 - Konaklama Listesi (1 Sayfa)').trim();
+
+    // ── Çok şehirli turne desteği ──
+    // cfg.sehirler: [{sehir, mekan, temsil}] dizisi (yeni çok şehirli form)
+    // Geriye dönük uyumluluk: tekli şehir cfg.sehir/cfg.mekan/cfg.temsil
+    var sehirler = [];
+    if(cfg.sehirler && cfg.sehirler.length) {
+      sehirler = cfg.sehirler.filter(function(s){ return s.sehir; });
+    }
+    if(!sehirler.length) {
+      var _s = trCap(cfg.sehir || t.il || '………');
+      var _m = cfg.mekan || t.mekan || '………';
+      var _te = +(cfg.temsil || t.temsil || t.sayi || 1);
+      sehirler = [{sehir: _s, mekan: _m, temsil: _te}];
+    }
+    var ilAdlari = sehirler.map(function(s){ return trCap(s.sehir); });
+    var ilStr = ilAdlari.join(', ');
+    // Konu için ilk şehir kullan (veya birleştir)
+    var konu = cfg.konu || (trCap(t.oyun || oyun) + ' ' + ilStr + ' Turnesi');
+
+    // İç transfer: çok şehirliyse otobüs/minibüs transferi ekle
+    var icTransfer = cfg.icTransfer || (sehirler.length > 1 ? 'otobüs' : '');
+    // icTransfer: 'otobüs', 'minibüs', 'her ikisi', '' (yok)
 
     // Ek oyunlar (çift/çoklu oyunlu turne için): "Oyun|Mekan|Temsil" satır satır
     var ekOyunlar = [];
     if(cfg.ekOyunlar){
       String(cfg.ekOyunlar).split(/\n/).forEach(function(ln){
         var p = ln.split('|').map(function(x){return x.trim();});
-        if(p[0]) ekOyunlar.push({oyun:trUpper(p[0]), mekan:p[1]||mekan, temsil:+(p[2]||1)});
+        if(p[0]) ekOyunlar.push({oyun:trUpper(p[0]), mekan:p[1]||sehirler[0].mekan, temsil:+(p[2]||1)});
       });
     }
 
-    // Tüm oyunları topla (ana + ek)
-    var tumOyunlar = [{oyun:oyun, mekan:mekan, temsil:temsilSay}].concat(ekOyunlar);
-    function oyunCumlesi(o){
-      return '"' + o.oyun + '" adlı oyunumuz ' + o.mekan + ' Sahnesinde ' + o.temsil + '(' + yaz(o.temsil) + ') kez';
+    // Tüm temsil cümlelerini oluştur: her şehir için ayrı
+    function oyunCumlesiSehir(s){
+      return s.mekan + ' Sahnesinde ' + s.temsil + '(' + yaz(s.temsil) + ') kez';
     }
-    var oyunlarStr = tumOyunlar.map(oyunCumlesi).join(', ') + ' sahnelenmesi planlanmaktadır.';
+    var oyunlarStr;
+    if(sehirler.length === 1) {
+      oyunlarStr = '"' + oyun + '" adlı oyunumuz ' + oyunCumlesiSehir(sehirler[0]) + ' sahnelenmesi planlanmaktadır.';
+    } else {
+      // "X Sahnesinde 2(iki) kez, Y Sahnesinde 3(üç) kez sahnelenmesi planlanmaktadır."
+      oyunlarStr = '"' + oyun + '" adlı oyunumuzun '
+        + sehirler.map(oyunCumlesiSehir).join(', ')
+        + ' sahnelenmesi planlanmaktadır.';
+    }
+    // Ek oyunlar (tek şehirli modda) — eski davranış koru
+    if(ekOyunlar.length && sehirler.length === 1){
+      function oyunCumlesiEk(o){ return '"' + o.oyun + '" adlı oyunumuz ' + o.mekan + ' Sahnesinde ' + o.temsil + '(' + yaz(o.temsil) + ') kez'; }
+      oyunlarStr = ['"' + oyun + '" adlı oyunumuz ' + oyunCumlesiSehir(sehirler[0])].concat(ekOyunlar.map(oyunCumlesiEk)).join(', ') + ' sahnelenmesi planlanmaktadır.';
+    }
 
     // Festival / kapsam cümlesi
+    // Kalıplar (gerçek olurlardan):
+    //   Festival varsa   → "[Festival]" kapsamında [tarih] tarihleri arasında [oyunlar]
+    //   Festival yoksa   → [Ay] [yıl] aylık programımız gereği / programı kapsamında [oyunlar]
+    //   tarihsiz festival→ "[Festival]" kapsamında [oyunlar]
     var kapsam;
+    var _kapsamAy = tarihObj ? AYLAR[tarihObj.bas.getMonth()] + ' ' + tarihObj.bas.getFullYear() : '………';
     if(festival){
       kapsam = '"' + festival + '" kapsamında ' + aralik + ' tarihleri arasında ' + oyunlarStr;
     } else {
-      kapsam = 'Müdürlüğümüz ' + (tarihObj ? AYLAR[tarihObj.bas.getMonth()] : '………')
-        + ' ayı programı gereği ' + aralik + ' tarihleri arasında ' + oyunlarStr;
+      kapsam = _kapsamAy + ' aylık programımız gereği ' + aralik + ' tarihleri arasında ' + oyunlarStr;
     }
 
-    // Görevlendirme cümlesi
+    // ── Görevlendirme: ulaşım cümlesi ──
+    var tumSehirler = ilAdlari.join('-');
     var ulasimCumle;
-    if(ulasim==='uçak'){
-      ulasimCumle = 'İzmir-' + sehir + ', ' + sehir + '-İzmir arası ulaşımları uçak ile olması kaydıyla';
-    } else if(ulasim==='otobüs') {
-      ulasimCumle = 'İzmir-' + sehir + '-İzmir arası ulaşımları Müdürlüğümüzce kiralanacak otobüs ile sağlanması kaydıyla';
-    } else if(ulasim==='tren') {
-      ulasimCumle = 'İzmir-' + sehir + '-İzmir arası ulaşımları tren ile olması kaydıyla';
+    if(ulasim === 'uçak') {
+      if(sehirler.length > 1) {
+        // İzmir-Trabzon, Trabzon-Diyarbakır ve Diyarbakır-İzmir arası ulaşımları uçak ile
+        var guzergahlar = [];
+        guzergahlar.push('İzmir-' + ilAdlari[0]);
+        for(var gi=0; gi<ilAdlari.length-1; gi++) guzergahlar.push(ilAdlari[gi]+'-'+ilAdlari[gi+1]);
+        guzergahlar.push(ilAdlari[ilAdlari.length-1]+'-İzmir');
+        ulasimCumle = guzergahlar.join(', ') + ' arası ulaşımları uçak ile olması kaydıyla';
+      } else {
+        ulasimCumle = 'İzmir-' + ilAdlari[0] + '-İzmir arası ulaşımları uçak ile olması kaydıyla';
+      }
+    } else if(ulasim === 'otobüs') {
+      ulasimCumle = 'İzmir-' + tumSehirler + '-İzmir arası ulaşımları Müdürlüğümüzce kiralanacak otobüs ile sağlanması kaydıyla';
+    } else if(ulasim === 'tren') {
+      ulasimCumle = 'İzmir-' + tumSehirler + '-İzmir arası ulaşımları tren ile olması kaydıyla';
     } else {
-      ulasimCumle = 'İzmir-' + sehir + '-İzmir arası ulaşımları Müdürlüğümüzce kiralanacak araç ile sağlanması kaydıyla';
+      ulasimCumle = 'İzmir-' + tumSehirler + '-İzmir arası ulaşımları Müdürlüğümüzce kiralanacak araç ile sağlanması kaydıyla';
+    }
+
+    // Görev süresi: gün belirtilmişse tarih+gün, belirtilmemişse "görev süreleri dikkate alınarak"
+    var illerdeStr = ilAdlari.length > 1 ? (ilAdlari.join('-') + ' illerinde') : (ilAdlari[0] + ' ilinde');
+    var gorevSureCumle;
+    if(gun > 0) {
+      gorevSureCumle = aralik + ' tarihleri arasında ' + gun + '(' + yaz(gun) + ') gün süre ile ' + illerdeStr;
+    } else {
+      gorevSureCumle = 'görev süreleri dikkate alınarak ' + illerdeStr;
     }
     var gorevCumle = 'Ek\'te turne listesinde ad, soyad ve unvanları belirtilen personelin, ' + ulasimCumle + ', '
-      + (gun>0 ? (aralik + ' tarihleri arasında ' + gun + '(' + yaz(gun) + ') gün süre ile ') : 'görev süreleri dikkate alınarak ')
-      + sehir + ' ilinde görevlendirilmelerini;';
+      + gorevSureCumle + ' görevlendirilmelerini;';
 
-    // Kamyon cümlesi
-    var kamyonStr = kamyonSay > 1 ? (kamyonSay + '(' + yaz(kamyonSay) + ') adet kamyon') : 'kamyon';
-    var nakilCumle = 'Oyuna ait dekor, kostüm, aksesuar ve benzeri malzemelerin İzmir-' + sehir
-      + '-İzmir arası naklinin Müdürlüğümüzce kiralanacak ' + kamyonStr + ' ile yapılabilmesini;';
+    // İç transfer cümlesi
+    var icTransferCumle = '';
+    if(icTransfer && icTransfer !== '') {
+      var icIller = ilAdlari.length > 1 ? ilAdlari.join('-') : ilAdlari[0];
+      var icArac;
+      if(icTransfer === 'minibüs') icArac = 'minibüs';
+      else if(icTransfer === 'her ikisi') icArac = 'otobüs ve/veya minibüs';
+      else icArac = 'otobüs';
+      var icSuffix = ilAdlari.length > 1 ? ' illerinde' : ' ilinde';
+      icTransferCumle = 'Turne süresince ' + icIller + icSuffix + ' yapılacak iç transferlerin Müdürlüğümüzce kiralanacak '
+        + icArac + ' ile gerçekleştirilebilmesini;';
+    }
+
+    // Kamyon / nakliye
+    // nakliyeTur: 'kamyon' (varsayılan), 'yok-otobüs' (minimal dekor - otobüsle), 'yok' (nakliye yok)
+    var nakliyeTur = cfg.nakliye || 'kamyon';
+    var nakilGuzergah = 'İzmir-' + tumSehirler + '-İzmir';
+    var nakilCumle = '';
+    if(nakliyeTur === 'yok-otobüs') {
+      nakilCumle = 'Söz konusu oyuna ait dekor, kostüm ve aksesuar malzemelerinin minimal nitelikte olması nedeniyle ayrıca bir nakliye aracı kiralanmasına ihtiyaç duyulmayıp, ' + nakilGuzergah + ' arası taşımalarının turne kapsamında görevlendirilen personelin ulaşımlarının sağlanacağı otobüs ile gerçekleştirilmesi;';
+    } else if(nakliyeTur !== 'yok') {
+      var kamyonStr = kamyonSay > 1 ? kamyonSay + '(' + yaz(kamyonSay) + ') adet kamyon' : 'kamyon';
+      nakilCumle = 'Oyuna ait dekor, kostüm, aksesuar ve benzeri malzemelerin ' + nakilGuzergah
+        + ' arası naklinin Müdürlüğümüzce kiralanacak ' + kamyonStr + ' ile yapılabilmesini;';
+    }
 
     var sozlesme = 'Müdürlüğümüzce kiralanacak olan araçlar için sözleşme yapılmasına yetki verilmesini;';
 
-    var ucakBileti = ucakliMi({gidis:ulasim,donus:ulasim}) ? 'uçak bilet ücretlerinin, ' : '';
+    // Harcırah: uçak varsa uçak bileti, şehirlerarası otobüs varsa otobüs bileti, ikisi de olabilir
+    var harcirahEkler = '';
+    if(ulasim === 'uçak') harcirahEkler += 'uçak bilet ücretlerinin, ';
+    if(cfg.sehirArasıOtobus) harcirahEkler += 'şehirler arası otobüs bilet ücretinin, ';
     var harcirah = 'Turne personeline, Harcırah Kanunu\'nun 33/c maddesi uyarınca ödenecek turne harcırahları ile zorunlu giderlerin, konaklama ücretlerinin, '
-      + ucakBileti + 'kiralanacak araçların bedellerinin ve mutemete verilecek yeterli miktardaki avansın Müdürlüğümüz bütçesinden Saymanlığımızca ödenebilmesini;';
+      + harcirahEkler + 'kiralanacak araçların bedellerinin ve mutemete verilecek yeterli miktardaki avansın Müdürlüğümüz bütçesinden Saymanlığımızca ödenebilmesini;';
+
+    // "Uygun görüşle" bloku (varsa - Başrejisör imzası)
+    var basrejisör = cfg.basrejisör || '';
+    var basrejisörUnvan = cfg.basrejisörUnvan || 'Başrejisör V.';
 
     // ─── Belge (HTML) ───
     var html = ''
@@ -33760,12 +33834,14 @@ setTimeout(_turBoot, 4000);
       + (ilgiYazi ? '<div class="ilgi"><b>İlgi</b> : ' + esc(ilgiYazi) + '</div>' : '')
       + '<p>' + esc(kapsam) + '</p>'
       + '<p>' + esc(gorevCumle) + '</p>'
+      + (icTransferCumle ? '<p>' + esc(icTransferCumle) + '</p>' : '')
       + (ekstraParag ? ekstraParag.split(/\n\s*\n/).map(function(p){return '<p class="ekstra"><b>'+esc(p.trim())+'</b></p>';}).join('') : '')
-      + '<p>' + esc(nakilCumle) + '</p>'
+      + (nakilCumle ? '<p>' + esc(nakilCumle) + '</p>' : '')
       + '<p>' + esc(sozlesme) + '</p>'
       + '<p>' + esc(harcirah) + '</p>'
       + '<p style="text-align:left"><b>Olurlarınıza arz ederim.</b></p>'
       + '<div class="imza-tek">' + esc(mudur) + '<br>' + esc(mudurUnvan) + '</div>'
+      + (basrejisör ? '<div style="margin-top:20pt;font-size:12pt"><i>Uygun görüşle arz ederim.</i><br>' + esc(basrejisör) + '<br>' + esc(basrejisörUnvan) + '</div>' : '')
       + '<div style="margin-top:30pt;text-align:center;font-weight:bold">OLUR<br>' + esc(genelMd) + '<br>' + esc(genelMdUnvan) + '</div>'
       + '<div class="ek"><div class="ek-baslik">Ek:</div>' + esc(ekListe).replace(/\n/g,'<br>') + '</div>'
       + '<div class="dag"><div class="dag-baslik">Dağıtım:</div>Genel Müdürlük Turne Organizasyon ve Program Birimine<br>İzmir Devlet Tiyatrosu Müdürlüğüne</div>';
@@ -33779,12 +33855,14 @@ setTimeout(_turBoot, 4000);
       + (ilgiYazi ? ('İlgi : ' + ilgiYazi + '\n\n') : '')
       + kapsam + '\n\n'
       + gorevCumle + '\n\n'
+      + (icTransferCumle ? (icTransferCumle + '\n\n') : '')
       + (ekstraParag ? (ekstraParag + '\n\n') : '')
-      + nakilCumle + '\n\n'
+      + (nakilCumle ? (nakilCumle + '\n\n') : '')
       + sozlesme + '\n\n'
       + harcirah + '\n\n'
       + 'Olurlarınıza arz ederim.\n\n\n'
-      + mudur + '\n' + mudurUnvan + '\n\n\n'
+      + mudur + '\n' + mudurUnvan + '\n\n'
+      + (basrejisör ? ('Uygun görüşle arz ederim.\n' + basrejisör + '\n' + basrejisörUnvan + '\n\n') : '')
       + '\t\t\tOLUR\n\t\t\t' + genelMd + '\n\t\t\t' + genelMdUnvan + '\n\n'
       + 'Ek:\n' + ekListe + '\n\n'
       + 'Dağıtım:\nGenel Müdürlük Turne Organizasyon ve Program Birimine\nİzmir Devlet Tiyatrosu Müdürlüğüne\n';
@@ -33846,14 +33924,14 @@ setTimeout(_turBoot, 4000);
   }
 
   function _formdanState(){
-    // Formdaki mevcut değerlerden state.selected oluştur (şablon için gerekli)
+    var sh = formEl._getSehirler ? formEl._getSehirler() : [{sehir:'',mekan:'',temsil:1}];
     return {
       oyun: val('of_oyun'),
       oyunAdi: val('of_oyun'),
-      il: val('of_sehir'),
-      mekan: val('of_mekan'),
+      il: sh[0] ? sh[0].sehir : '',
+      mekan: sh[0] ? sh[0].mekan : '',
       tarih: val('of_tar'),
-      temsil: parseInt(val('of_tem'),10) || 1,
+      temsil: sh[0] ? (sh[0].temsil||1) : 1,
       sure: parseInt(val('of_gun'),10) || 0,
       not: ''
     };
@@ -33907,15 +33985,54 @@ setTimeout(_turBoot, 4000);
       + '<div class="grp"><label>İlgi (varsa, festival yazısı)</label><textarea id="of_ilgi" placeholder="Devlet Tiyatroları Genel Müdürlüğü (Dış İlişkiler ve Festivaller Birimi)\'nün __.__.____ tarihli ve E-________ sayılı yazısı."></textarea></div>'
       + '<div class="grp"><label>Festival / Kapsam (varsa)</label><input id="of_fest" placeholder="ör. 16. Devlet Tiyatroları Antalya Uluslararası Tiyatro Festivali"></div>'
       + '<div class="grp"><label>Oyun Adı</label><input id="of_oyun"></div>'
-      + '<div class="grp row2"><div><label>Şehir</label><input id="of_sehir"></div><div><label>Mekan</label><input id="of_mekan"></div></div>'
-      + '<div class="grp"><label>Tarih Aralığı</label><input id="of_tar" placeholder="11-14 Mayıs 2026"></div>'
-      + '<div class="grp row2"><div><label>Temsil Sayısı</label><input id="of_tem" type="number" min="1" value="1"></div><div><label>Gün Sayısı</label><input id="of_gun" type="number" min="0" value="0"></div></div>'
-      + '<div class="grp row2"><div><label>Ulaşım</label><select id="of_ula"><option value="otobüs">Otobüs (kiralık)</option><option value="uçak">Uçak</option><option value="tren">Tren</option><option value="kiralık araç">Kiralık Araç</option></select></div><div><label>Kamyon Sayısı</label><input id="of_kam" type="number" min="1" value="1"></div></div>'
-      + '<div class="grp"><label>Ek Oyunlar (çift/çoklu oyunlu turne — her satır: <code>Oyun|Mekan|Temsil</code>)</label><textarea id="of_ekoy" placeholder="ör.&#10;Böcek Oteli|Mamak Kültür Merkezi Sergi Salonu|4"></textarea></div>'
+      + '<div class="grp"><label style="display:flex;justify-content:space-between;align-items:center">Şehir / Mekan / Temsil <button type="button" id="of_sehirEkle" style="background:transparent;border:1px solid var(--border,#ddd);border-radius:6px;font-size:10px;font-weight:700;padding:2px 9px;cursor:pointer;color:var(--muted-foreground,#666);font-family:inherit">+ Şehir Ekle</button></label><div id="of_sehirler"></div></div>'
+      + '<div class="grp"><label>Tarih Aralığı</label><input id="of_tar" placeholder="18-24 Mayıs 2026"></div>'
+      + '<div class="grp row2"><div><label>Gün Sayısı</label><input id="of_gun" type="number" min="0" value="0"></div><div><label>Ulaşım (Ana)</label><select id="of_ula"><option value="uçak">Uçak</option><option value="otobüs">Otobüs (kiralık)</option><option value="tren">Tren</option><option value="kiralık araç">Kiralık Araç</option></select></div></div>'
+      + '<div class="grp row2"><div><label>İç Transfer (şehirler arası)</label><select id="of_ict"><option value="">— Yok (tek şehir)</option><option value="otobüs">Otobüs</option><option value="minibüs">Minibüs</option><option value="her ikisi">Otobüs ve/veya Minibüs</option></select></div><div><label>Kamyon Sayısı</label><input id="of_kam" type="number" min="1" value="1"></div></div>'
+      + '<div class="grp"><label>Nakliye</label><select id="of_nak"><option value="kamyon">Kamyon ile taşıma</option><option value="yok-otobüs">Minimal dekor — otobüsle taşıma</option><option value="yok">Nakliye yok (cümle yazılmasın)</option></select></div>'
+      + '<div class="grp"><label>Harcırahta Ek Bilet Kalemi</label><select id="of_hrc"><option value="">Yok (otobüs turnelerde)</option><option value="sehir-otobus">Şehirlerarası otobüs bilet ücreti</option></select></div>'
       + '<div class="grp"><label>Ek Paragraflar (özel personel istisnaları vb. — <b>kalın yazılır</b>)</label><textarea id="of_eks" placeholder="ör. Turne listesinde bulunan ......\'ın ___ tarihinde ___-___ arası ulaşımını uçak ile gerçekleştirmesini,"></textarea></div>'
       + '<div class="grp row2"><div><label>Müdür</label><input id="of_md" value="Burcu AKSAKAL"></div><div><label>Unvan</label><input id="of_mu" value="Tiyatro Müdürü"></div></div>'
+      + '<div class="grp row2"><div><label>Başrejisör (varsa)</label><input id="of_br" placeholder="Esat TANRIVERDİ"></div><div><label>Unvan</label><input id="of_bru" value="Başrejisör V."></div></div>'
       + '<div class="grp row2"><div><label>Genel Müdür</label><input id="of_gm" value="Tamer KARADAĞLI"></div><div><label>Unvan</label><input id="of_gu" value="Genel Müdür"></div></div>'
-      + '<div class="grp"><label>Ekler Listesi (her satır bir ek)</label><textarea id="of_ek" rows="3">1 - Turne Listesi ve Programı (1 Sayfa)\n2 - Konaklama Listesi (1 Sayfa)</textarea></div>';
+      + '<div class="grp"><label>Ekler Listesi (her satır bir ek)</label><textarea id="of_ek" rows="3">1 - Turne Listesi ve Programı (2 Sayfa)\n2 - Konaklama Listesi (1 Sayfa)</textarea></div>';
+
+    // Dinamik şehir satırları
+    function _sehirlerHtml(rows){
+      var s = '<div id="of_sehirler_rows">';
+      rows.forEach(function(r, i){
+        s += '<div class="of-sehir-row" data-i="'+i+'" style="display:grid;grid-template-columns:2fr 3fr 1fr 28px;gap:5px;margin-bottom:5px;align-items:center">'
+          + '<input class="of-sr-sehir" placeholder="Şehir (ör. Elazığ)" value="'+esc(r.sehir||'')+'" style="padding:6px 8px;font-size:12px;border:1.5px solid var(--border,#ddd);border-radius:6px;background:var(--card,#fff);color:var(--foreground,#222);font-family:inherit;font-weight:500">'
+          + '<input class="of-sr-mekan" placeholder="Mekan (ör. Nurettin Ardıçoğlu KM DT)" value="'+esc(r.mekan||'')+'" style="padding:6px 8px;font-size:12px;border:1.5px solid var(--border,#ddd);border-radius:6px;background:var(--card,#fff);color:var(--foreground,#222);font-family:inherit;font-weight:500">'
+          + '<input class="of-sr-temsil" type="number" min="1" placeholder="Kez" value="'+(r.temsil||1)+'" style="padding:6px 8px;font-size:12px;border:1.5px solid var(--border,#ddd);border-radius:6px;background:var(--card,#fff);color:var(--foreground,#222);font-family:inherit;font-weight:500;text-align:center">'
+          + '<button type="button" class="of-sr-sil" style="background:transparent;border:1.5px solid #e5e5e5;border-radius:6px;cursor:pointer;color:#999;font-size:14px;height:32px;width:28px;display:flex;align-items:center;justify-content:center;padding:0" title="Sil">×</button>'
+          + '</div>';
+      });
+      s += '</div>';
+      return s;
+    }
+
+    var _sehirRows = [{sehir:'',mekan:'',temsil:1}];
+    var _wrap = document.getElementById('of_sehirler');
+    function _renderSehirRows(){
+      _wrap.innerHTML = _sehirlerHtml(_sehirRows);
+      _wrap.querySelectorAll('.of-sehir-row').forEach(function(row){
+        var i = +row.getAttribute('data-i');
+        row.querySelector('.of-sr-sehir').addEventListener('input', function(){ _sehirRows[i].sehir = this.value; render(); });
+        row.querySelector('.of-sr-mekan').addEventListener('input', function(){ _sehirRows[i].mekan = this.value; render(); });
+        row.querySelector('.of-sr-temsil').addEventListener('input', function(){ _sehirRows[i].temsil = +this.value||1; render(); });
+        row.querySelector('.of-sr-sil').addEventListener('click', function(){
+          if(_sehirRows.length > 1) { _sehirRows.splice(i,1); _renderSehirRows(); render(); }
+        });
+      });
+    }
+    _renderSehirRows();
+    formEl._getSehirler = function(){ return _sehirRows.slice(); };
+    formEl._setSehirler = function(arr){ _sehirRows = arr.slice(); _renderSehirRows(); };
+
+    document.getElementById('of_sehirEkle').addEventListener('click', function(){
+      _sehirRows.push({sehir:'',mekan:'',temsil:1}); _renderSehirRows(); render();
+    });
 
     _bindList();
     var rb = document.getElementById('olurListRefresh');
@@ -33927,21 +34044,81 @@ setTimeout(_turBoot, 4000);
     });
   }
 
+  // ISO tarih "2026-03-25" → "25 Mart 2026" dönüştür
+  function isoTrTarih(s){
+    if(!s) return s;
+    var m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if(!m) return s;
+    var ay = AYLAR[+m[2]-1] || '';
+    return +m[3] + ' ' + ay + ' ' + m[1];
+  }
+  // Turne nesnesinden ulaşım türünü çıkar (gidis/donus veya gidisUlasim/donusUlasim alanlarından)
+  function ulasimAnaGenis(t){
+    var g = ((t.gidis||t.gidisUlasim||'')+' '+(t.donus||t.donusUlasim||'')).toLocaleLowerCase('tr-TR');
+    if(/uçak|ucak|hava|thy|pegasus|ajet/.test(g)) return 'uçak';
+    if(/otobüs|otobus|bus/.test(g)) return 'otobüs';
+    if(/tren|tcdd|yht/.test(g)) return 'tren';
+    if(/araç|arac|servis|minibüs|minibus|kamyonet/.test(g)) return 'kiralık araç';
+    return 'otobüs';
+  }
   function doldurFormdan(t){
-    var p = parseTarih(t.tarih);
+    // ── Tarih aralığı ──
+    var basISO = t.baslangicTarih || t.basTarih || t.tarih || '';
+    var bitISO = t.bitisTarih || t.bitTarih || '';
+    if((!bitISO || bitISO === basISO) && basISO && (t.sure > 1)) {
+      var _d = new Date(basISO); _d.setDate(_d.getDate() + (+t.sure) - 1);
+      bitISO = _d.getFullYear() + '-' + ('0'+(_d.getMonth()+1)).slice(-2) + '-' + ('0'+_d.getDate()).slice(-2);
+    }
+    if(!bitISO) bitISO = basISO;
+    var basTr = isoTrTarih(basISO);
+    var bitTr = isoTrTarih(bitISO);
+    var tarihStr = basTr + (bitTr && bitTr !== basTr ? ' - ' + bitTr : '');
+    var p = parseTarih(tarihStr);
+    var tarihForm = p ? p.aralikStr : tarihStr;
+    var gun = p ? p.gun : (t.sure || 0);
+
+    // ── Şehir / Durak satırları ──
+    // Önce t.duraklar[] dizisine bak (yeni yapı), yoksa tekli t.il/t.mekan'a düş
+    var _sehirRows = [];
+    if(t.duraklar && t.duraklar.length) {
+      t.duraklar.filter(function(d){ return d.il; }).forEach(function(d){
+        _sehirRows.push({
+          sehir: trCap(d.il || ''),
+          mekan: d.mekan || '',
+          temsil: parseInt(d.sayi || d.temsil || d.temsilSayisi || 1, 10) || 1
+        });
+      });
+    }
+    if(!_sehirRows.length) {
+      _sehirRows = [{sehir: trCap(t.il||''), mekan: t.mekan||'', temsil: parseInt(t.temsil||t.sayi||t.temsilSayisi||1,10)||1}];
+    }
+    if(formEl._setSehirler) formEl._setSehirler(_sehirRows);
+
+    // ── Oyun adı: duraktan oku (ilk doluyken) yoksa t.oyun ──
+    var oyunAdi = (t.duraklar && t.duraklar[0] && t.duraklar[0].oyun) ? t.duraklar[0].oyun : (t.oyun || t.oyunAdi || '');
+
+    // ── Ulaşım ──
+    var ula = ulasimAnaGenis(t);
+
+    // ── İç transfer: çok durak varsa varsayılan otobüs ──
+    var ict = _sehirRows.length > 1 ? 'otobüs' : '';
+
+    // ── Konu ──
+    var ilStr = _sehirRows.map(function(s){ return trCap(s.sehir); }).join(', ');
     var olurNo = getOlurNo(t);
     var fest = getFestival(t);
-    set('of_sayi', olurNo || ('E-81915022-020-'));
-    set('of_konu', trCap(t.oyun||'') + ' ' + trCap(t.il||'') + ' Turnesi');
-    set('of_oyun', t.oyun||t.oyunAdi||'');
-    set('of_sehir', trCap(t.il||''));
-    set('of_mekan', t.mekan||'');
-    set('of_tar', t.tarih||'');
-    set('of_tem', t.temsil||t.sayi||1);
-    set('of_gun', p ? p.gun : (t.sure||0));
-    set('of_ula', ulasimAna(t));
+
+    set('of_sayi', olurNo || 'E-81915022-020-');
+    set('of_konu', trCap(oyunAdi) + ' ' + ilStr + ' Turnesi');
+    set('of_oyun', oyunAdi);
+    set('of_tar', tarihForm);
+    set('of_gun', gun || 0);
+    set('of_ula', ula);
+    set('of_ict', ict);
     set('of_fest', fest);
-    pickEl.textContent = '✓ ' + (t.oyun||'') + ' / ' + (t.il||'');
+    set('of_nak', 'kamyon');
+    set('of_hrc', ula === 'uçak' ? '' : '');
+    pickEl.textContent = '✓ ' + (oyunAdi || '') + ' / ' + ilStr;
   }
   function set(id,v){ var el=document.getElementById(id); if(el) el.value = v==null?'':v; }
   function val(id){ var el=document.getElementById(id); return el?el.value:''; }
@@ -33949,6 +34126,7 @@ setTimeout(_turBoot, 4000);
   function render(){
     _syncStateFromForm();
     var t = state.selected || {};
+    var sh = formEl._getSehirler ? formEl._getSehirler() : null;
     var cfg = {
       turne: t,
       sayi: val('of_sayi'),
@@ -33957,17 +34135,21 @@ setTimeout(_turBoot, 4000);
       ilgi: val('of_ilgi'),
       festival: val('of_fest'),
       oyun: val('of_oyun'),
-      sehir: val('of_sehir'),
-      mekan: val('of_mekan'),
+      sehir: sh && sh[0] ? sh[0].sehir : '',
+      mekan: sh && sh[0] ? sh[0].mekan : '',
+      sehirler: sh || null,
       tarih: val('of_tar'),
-      temsil: val('of_tem'),
       gun: val('of_gun'),
       ulasim: val('of_ula'),
+      icTransfer: val('of_ict'),
       kamyon: val('of_kam'),
+      nakliye: val('of_nak'),
+      sehirArasıOtobus: val('of_hrc') === 'sehir-otobus',
       ekstra: val('of_eks'),
-      ekOyunlar: val('of_ekoy'),
       mudur: val('of_md'),
       mudurUnvan: val('of_mu'),
+      basrejisör: val('of_br'),
+      basrejisörUnvan: val('of_bru'),
       genelMd: val('of_gm'),
       genelMdUnvan: val('of_gu'),
       ekListe: val('of_ek')
@@ -33988,8 +34170,7 @@ setTimeout(_turBoot, 4000);
   var _fab = document.getElementById('olurFab'); if(_fab) _fab.addEventListener('click', ac);
   var _openBtn = document.getElementById('olurOpenBtn'); if(_openBtn) _openBtn.addEventListener('click', ac);
   document.getElementById('olurClose').addEventListener('click', kapat);
-  overlay.addEventListener('click', function(e){ if(e.target===overlay) kapat(); });
-  document.addEventListener('keydown', function(e){ if(e.key==='Escape' && overlay.classList.contains('show')) kapat(); });
+  // Overlay dışına tıklamak modalı kapatmaz — sadece X butonuyla kapanır
 
   document.getElementById('olurEdit').addEventListener('click', function(){
     var on = docEl.contentEditable !== 'true';
