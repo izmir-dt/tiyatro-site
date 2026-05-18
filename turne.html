@@ -16435,9 +16435,19 @@ function toggleKisiSecim(kisi, gorev, kategori) {
   if (idx >= 0) {
     kisiModalSecili.splice(idx, 1);
   } else {
-    // Geçmişteki en sık görev varsa onu kullan, yoksa kategori adını kullan
-    var gecmisGorev = _gorevTahminEt(kisi);
-    kisiModalSecili.push({ kisi, gorev: gecmisGorev || gorev, kategori, ekstra: false });
+    // Sanatçı kategorilerinde turneye kategori adıyla (Sanatçı, Figüran vs.) gider
+    // Teknik kategorilerde tumPersonel'deki gerçek resmi görevi gelir
+    var _SANATCI_K = ['Sanatçı','Oyuncu','Figüran','Figüran/Müzisyen','Koro','Koro/Dans','Koro/Dans Ekibi','Solist','Dansçı','Müzisyen','Orkestra','Kurumdan Emekli Sanatçı'];
+    var _tumP = (window.tumPersonel||[]).find(function(p){ return p && p.kisi && p.kisi.trim().toLowerCase() === kisi.trim().toLowerCase(); });
+    var gercekGorev;
+    if (_SANATCI_K.indexOf(kategori) >= 0) {
+      // Sanatçı → kategori adı (rol adı değil)
+      gercekGorev = gorev; // gorev zaten _katGoster = kategori adı olarak geliyor
+    } else {
+      // Teknik → resmi görev
+      gercekGorev = (_tumP && _tumP.gorev) ? _tumP.gorev : (_gorevTahminEt(kisi) || gorev);
+    }
+    kisiModalSecili.push({ kisi, gorev: gercekGorev, kategori, ekstra: false });
   }
   // Çok oyunlu modda aktif sekmeyi senkronize et
   if (window._kisiModalCoklu && window._kisiModalOyunAdi) {
@@ -18584,7 +18594,7 @@ async function kisiGoruSil(idxList) {
   if (!p) return;
   onayGoster({
     baslik: p.kisi + ' silinecek',
-    mesaj: '"' + p.kisi + '" tüm oyunlardan ve personel listesinden silinecek (' + idxList.length + ' kayıt). Daha önce atandığı turne kadroları etkilenmez. İşlem birkaç saniye sürebilir. Bu işlem geri alınamaz.',
+    mesaj: '"' + p.kisi + '" bu oyundan silinecek. Daha önce atandığı turne kadroları etkilenmez. Bu işlem geri alınamaz.',
     ikon: '👤', ikonBg: 'hsl(0,80%,96%)',
     tamamRenk: 'hsl(0,75%,52%)', tamamYazi: 'Evet, sil',
     onOnay: function() { _kisiSilDevam(p, idxList); }
@@ -18987,14 +18997,37 @@ function renderTumPersonel() {
     }).join('');
 
     // Görev
-    var gorevStr = Array.from(g.gorevler).filter(function(gv){ return gv && gv !== kat; }).join(', ') || '';
+    // Görev: tüm kayıtlar aynı göreve sahipse göster, farklıysa gösterme
+    var gorevArr = Array.from(g.gorevler).filter(function(gv){ return gv; });
+    var gorevStr = (gorevArr.length === 1) ? (gorevArr[0] !== kat ? gorevArr[0] : '') : '';
 
     // Tüm kayıt indexleri (silme için)
     var idxList = g.kayitlar.map(function(k){ return tumPersonel.indexOf(k); }).filter(function(x){ return x >= 0; });
     var idxAttr = idxList.join('|');
 
-    // Düzenle: ilk kaydı aç
+    // Düzenle: tek oyunsa doğrudan aç; birden fazla oyun varsa toplu görev satırı + oyun başına düzenle butonu
     var ilkIdx = idxList[0];
+    var safeKisiAttr = g.kisi.replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    var ilkGorev = (g.kayitlar[0] && g.kayitlar[0].gorev) ? g.kayitlar[0].gorev : '';
+    var safeIlkGorev = ilkGorev.replace(/"/g,'&quot;');
+    var duzenleHTML = '';
+    if (idxList.length <= 1) {
+      // Tek kayıt — eski davranış
+      duzenleHTML = ilkIdx >= 0
+        ? '<button onclick="kadroKisiDuzenleAc(' + ilkIdx + ')" '
+          + 'style="height:28px;padding:0 10px;border:1.5px solid var(--border);border-radius:6px;background:transparent;cursor:pointer;font-size:11px;font-weight:600;color:var(--muted-foreground);display:inline-flex;align-items:center;gap:3px;white-space:nowrap;flex-shrink:0;transition:all .15s" '
+          + 'onmouseenter="this.style.borderColor=\'var(--primary)\';this.style.color=\'var(--primary)\'" '
+          + 'onmouseleave="this.style.borderColor=\'var(--border)\';this.style.color=\'var(--muted-foreground)\'">✏️ Düzenle</button>'
+        : '';
+    } else {
+      // Birden fazla oyun — tek oyunla aynı: sadece Düzenle butonu
+      duzenleHTML = ilkIdx >= 0
+        ? '<button onclick="kadroKisiDuzenleAc(' + ilkIdx + ')" '
+          + 'style="height:28px;padding:0 10px;border:1.5px solid var(--border);border-radius:6px;background:transparent;cursor:pointer;font-size:11px;font-weight:600;color:var(--muted-foreground);display:inline-flex;align-items:center;gap:3px;white-space:nowrap;flex-shrink:0;transition:all .15s" '
+          + 'onmouseenter="this.style.borderColor=\'var(--primary)\';this.style.color=\'var(--primary)\'" '
+          + 'onmouseleave="this.style.borderColor=\'var(--border)\';this.style.color=\'var(--muted-foreground)\'">✏️ Düzenle</button>'
+        : '';
+    }
 
     h += '<tr style="border-bottom:1px solid var(--border);transition:background .1s" onmouseenter="this.style.background=\'var(--muted)\'" onmouseleave="this.style.background=\'\'">'
       + '<td style="padding:7px 12px;font-size:11px;color:var(--muted-foreground);font-weight:700;text-align:center;width:54px;white-space:nowrap">' + (i+1) + '</td>'
@@ -19003,14 +19036,9 @@ function renderTumPersonel() {
       + (gorevStr ? '<div style="font-size:10px;color:var(--muted-foreground);margin-top:2px">' + gorevStr + '</div>' : '')
       + '</td>'
       + '<td style="padding:7px 12px;min-width:180px">' + oyunBadges + '</td>'
-      + '<td style="padding:7px 12px;text-align:right;white-space:nowrap;width:140px;vertical-align:middle">'
-      + '<div style="display:inline-flex;gap:5px;justify-content:flex-end;align-items:center;flex-wrap:nowrap">'
-      + (ilkIdx >= 0
-        ? '<button onclick="kadroKisiDuzenleAc(' + ilkIdx + ')" '
-          + 'style="height:28px;padding:0 10px;border:1.5px solid var(--border);border-radius:6px;background:transparent;cursor:pointer;font-size:11px;font-weight:600;color:var(--muted-foreground);display:inline-flex;align-items:center;gap:3px;white-space:nowrap;flex-shrink:0;transition:all .15s" '
-          + 'onmouseenter="this.style.borderColor=\'var(--primary)\';this.style.color=\'var(--primary)\'" '
-          + 'onmouseleave="this.style.borderColor=\'var(--border)\';this.style.color=\'var(--muted-foreground)\'">✏️ Düzenle</button>'
-        : '')
+      + '<td style="padding:7px 12px;text-align:right;white-space:nowrap;width:' + (idxList.length > 1 ? '260px' : '140px') + ';vertical-align:middle">'
+      + '<div style="display:inline-flex;gap:5px;justify-content:flex-end;align-items:center;flex-wrap:nowrap;width:100%">'
+      + duzenleHTML
       + (idxList.length > 0
         ? '<button data-idxlist="' + idxAttr + '" onclick="event.stopPropagation();var idxs=this.getAttribute(\'data-idxlist\').split(\'|\').map(Number);kisiGoruSil(idxs)" '
           + 'style="height:28px;padding:0 10px;border:1.5px solid hsl(0,50%,85%);border-radius:6px;background:transparent;cursor:pointer;font-size:11px;font-weight:600;color:var(--destructive);display:inline-flex;align-items:center;gap:3px;white-space:nowrap;flex-shrink:0;transition:all .15s" '
@@ -19021,6 +19049,48 @@ function renderTumPersonel() {
 
   h += '</tbody></table></div>';
   el.innerHTML = h;
+}
+
+// ============================================================
+// TOPLU GÖREV GÜNCELLE — Tüm Personel listesinden tüm oyunlara aynı görevi yaz
+// ============================================================
+async function topluGorevUygula(kisiAdi, idxList, yeniGorev) {
+  yeniGorev = (yeniGorev || '').trim();
+  if (!yeniGorev) { showToast('Görev alanı boş — önce bir görev yazın', 'warn', 2500); return; }
+  if (!idxList || !idxList.length) return;
+
+  var btn = (typeof event !== 'undefined' && event && event.currentTarget) ? event.currentTarget : null;
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Kaydediliyor…'; }
+
+  var basarili = 0; var basarisiz = 0;
+  try {
+    await Promise.all(idxList.map(async function(idx) {
+      var p = tumPersonel[idx];
+      if (!p || !p._sheetRow) { basarisiz++; return; }
+      try {
+        await apiFetch('/' + encodeURIComponent(PERSONEL_SHEET) + '/cell', {
+          method: 'PUT',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ row: p._sheetRow, col: 2, value: yeniGorev })
+        });
+        tumPersonel[idx].gorev = yeniGorev;
+        basarili++;
+      } catch(e) {
+        basarisiz++;
+      }
+    }));
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Tümüne Uygula'; }
+  }
+
+  if (basarili > 0) {
+    gorevHafizayaKaydet(yeniGorev);
+    showToast('"' + kisiAdi + '" için ' + basarili + ' oyunda görev güncellendi' + (basarisiz > 0 ? ' (' + basarisiz + ' atlandı)' : ''), 'success', 3000);
+    renderTumPersonel();
+    if (window._altS === 'ana') renderKadro();
+  } else {
+    showToast('Hiçbir kayıt güncellenemedi — lütfen tekrar deneyin', 'error', 4000);
+  }
 }
 
 // ============================================================
@@ -20319,15 +20389,17 @@ async function kadroKisiKaydet() {
           }
         });
         if (digerKayitlar.length > 0) {
-          // Yerel güncelle
+          // Yerel güncelle (kategori + isim + görev — tüm oyunlara yansıt)
           digerKayitlar.forEach(function(item) {
             item.p.kisi = ad;
             item.p.kategori = kat;
-            // Görevi güncelleme — her oyundaki görev farklı olabilir, sadece isim+kategori güncelle
+            item.p.gorev = gorev;
           });
-          // Sheet'e yaz — paralel
+          // Sheet'e yaz — paralel; _sheetRow eksik olanları atla
+          var basarili = 0; var basarisiz = 0;
           await Promise.all(digerKayitlar.map(function(item) {
-            if (!item.p._sheetRow) return Promise.resolve();
+            if (!item.p._sheetRow) { basarisiz++; return Promise.resolve(); }
+            basarili++;
             return Promise.all([
               apiFetch('/' + encodeURIComponent(PERSONEL_SHEET) + '/cell', {
                 method: 'PUT', headers: {'Content-Type':'application/json'},
@@ -20335,11 +20407,16 @@ async function kadroKisiKaydet() {
               }),
               apiFetch('/' + encodeURIComponent(PERSONEL_SHEET) + '/cell', {
                 method: 'PUT', headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({ row: item.p._sheetRow, col: 2, value: gorev })
+              }),
+              apiFetch('/' + encodeURIComponent(PERSONEL_SHEET) + '/cell', {
+                method: 'PUT', headers: {'Content-Type':'application/json'},
                 body: JSON.stringify({ row: item.p._sheetRow, col: 3, value: ad })
               })
             ]);
           }));
-          showToast(digerKayitlar.length + ' oyundaki kayıt da güncellendi', 'success', 2500);
+          if (basarili > 0) showToast(basarili + ' oyundaki kayıt da güncellendi' + (basarisiz > 0 ? ' (' + basarisiz + ' atlandı)' : ''), 'success', 2500);
+          else if (basarisiz > 0) showToast(basarisiz + ' kayıt güncellenemedi — lütfen sayfayı yenileyin', 'warn', 4000);
         }
       }
     } else {
@@ -20415,6 +20492,8 @@ async function _kadroKisiSilDevam(silIdx) {
     const res = await apiFetch('/' + encodeURIComponent(PERSONEL_SHEET) + '/row/' + sheetRow, { method: 'DELETE' });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     tumPersonel.splice(silIdx, 1);
+    // Silinen satırın altındaki _sheetRow değerlerini bir azalt
+    tumPersonel.forEach(function(p){ if (p._sheetRow && p._sheetRow > sheetRow) p._sheetRow--; });
     if (kadroEditIdx === silIdx) kadroEditIdx = null;
   } catch(e) {
     showToast('Silme sırasında hata: ' + (e.message||'Bilinmeyen hata'), 'error', 4000);
@@ -21256,7 +21335,12 @@ function _haritaIlDetayGit(rowIdx) {
 
   // ── Ulaşım bilgisi ──
   var ulasimHTML = '';
-  if (t.duraklar && t.duraklar.length) {
+  // Önce ana turne alanlarından oku (gidisUlasim / donusUlasim)
+  if (t.gidisUlasim) ulasimHTML += '<div style="display:flex;align-items:center;gap:7px;font-size:11px;color:rgba(255,255,255,.65);padding:3px 0"><span style="color:var(--sidebar-primary);font-size:10px">↗</span>' + t.gidisUlasim + (t.gidisSaat ? ' · ' + t.gidisSaat : '') + '</div>';
+  if (t.donusUlasim) ulasimHTML += '<div style="display:flex;align-items:center;gap:7px;font-size:11px;color:rgba(255,255,255,.65);padding:3px 0"><span style="color:hsl(220,65%,65%);font-size:10px">↙</span>' + t.donusUlasim + (t.donusSaat ? ' · ' + t.donusSaat : '') + '</div>';
+  if (t.sehirAracTur) ulasimHTML += '<div style="display:flex;align-items:center;gap:7px;font-size:11px;color:rgba(255,255,255,.65);padding:3px 0"><span style="color:hsl(42,85%,65%);font-size:10px">🚌</span>' + t.sehirAracTur + '</div>';
+  // Yedek: durak bazlı alanlar (eski yapı)
+  if (!ulasimHTML && t.duraklar && t.duraklar.length) {
     t.duraklar.forEach(function(d) {
       if (d.ulasim_gidis) ulasimHTML += '<div style="display:flex;align-items:center;gap:7px;font-size:11px;color:rgba(255,255,255,.65);padding:3px 0"><span style="color:var(--sidebar-primary);font-size:10px">↗</span>' + d.ulasim_gidis + '</div>';
       if (d.ulasim_donus) ulasimHTML += '<div style="display:flex;align-items:center;gap:7px;font-size:11px;color:rgba(255,255,255,.65);padding:3px 0"><span style="color:hsl(220,65%,65%);font-size:10px">↙</span>' + d.ulasim_donus + '</div>';
