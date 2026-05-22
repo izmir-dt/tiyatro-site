@@ -2,6 +2,7 @@
    TURNE ASİSTANI — Kural tabanlı, %100 ücretsiz widget
    İzmir Devlet Tiyatrosu · Tek dosya, hiçbir API anahtarı gerekmez
    Kullanım:  <script src="./turne-asistan.js"></script>
+   v2.1 — Sürüklenebilir, yeniden boyutlandırılabilir, vişne teması
    ═══════════════════════════════════════════════════════════════ */
 (function () {
   if (window.__turneAsistanLoaded) return;
@@ -11,36 +12,60 @@
   const TURNE_SHEET = "TURNE_KAYITLARI";
   const PERSONEL_SHEET = "TURNE_PERSONEL";
 
+  // İstatistik sayfasının URL'si — aynı dizinde olduğu varsayılır
+  const ISTATISTIK_URL = "./istatistik.html";
+
   // ───────────────────── STYLES ─────────────────────
   const css = `
-  #ta-fab{position:fixed;bottom:24px;right:24px;z-index:9500;width:54px;height:54px;border-radius:50%;border:none;cursor:pointer;background:linear-gradient(135deg,#B8842B,#7A2E1F);color:#fff;box-shadow:0 6px 20px rgba(120,60,40,.4),0 2px 8px rgba(0,0,0,.2);display:flex;align-items:center;justify-content:center;transition:transform .15s,box-shadow .2s;animation:taPulse 3s ease-in-out infinite;}
-  #ta-fab:hover{transform:scale(1.08);box-shadow:0 8px 28px rgba(120,60,40,.55);}
+  #ta-fab{position:fixed;bottom:24px;right:24px;z-index:9500;width:54px;height:54px;border-radius:50%;border:none;cursor:pointer;background:linear-gradient(135deg,#A0192E,#6B0E1E);color:#fff;box-shadow:0 6px 20px rgba(107,14,30,.45),0 2px 8px rgba(0,0,0,.2);display:flex;align-items:center;justify-content:center;transition:transform .15s,box-shadow .2s;animation:taPulse 3s ease-in-out infinite;}
+  #ta-fab:hover{transform:scale(1.08);box-shadow:0 8px 28px rgba(107,14,30,.6);}
   #ta-fab:active{transform:scale(.94);}
-  @keyframes taPulse{0%,100%{box-shadow:0 6px 20px rgba(120,60,40,.4),0 0 0 0 rgba(184,132,43,.4);}50%{box-shadow:0 6px 24px rgba(120,60,40,.55),0 0 0 10px rgba(184,132,43,0);}}
-  #ta-panel{position:fixed;right:24px;bottom:90px;z-index:9501;width:400px;max-width:calc(100vw - 32px);height:600px;max-height:calc(100vh - 120px);background:#FBF8F3;border:1px solid #E8E2D7;border-radius:18px;display:flex;flex-direction:column;box-shadow:0 24px 64px rgba(20,12,4,.22),0 4px 16px rgba(20,12,4,.12);opacity:0;pointer-events:none;transform:translateY(16px) scale(.97);transition:opacity .22s,transform .22s;overflow:hidden;font-family:'Inter','DM Sans',system-ui,sans-serif;}
+  @keyframes taPulse{0%,100%{box-shadow:0 6px 20px rgba(107,14,30,.45),0 0 0 0 rgba(160,25,46,.4);}50%{box-shadow:0 6px 24px rgba(107,14,30,.6),0 0 0 10px rgba(160,25,46,0);}}
+
+  #ta-panel{position:fixed;right:24px;bottom:90px;z-index:9501;width:420px;max-width:calc(100vw - 32px);height:620px;max-height:calc(100vh - 120px);background:#FBF8F3;border:1px solid #E8E2D7;border-radius:18px;display:flex;flex-direction:column;box-shadow:0 24px 64px rgba(20,12,4,.22),0 4px 16px rgba(20,12,4,.12);opacity:0;pointer-events:none;transform:translateY(16px) scale(.97);transition:opacity .22s,transform .22s;overflow:hidden;font-family:'Inter','DM Sans',system-ui,sans-serif;min-width:300px;min-height:400px;}
   #ta-panel.open{opacity:1;pointer-events:all;transform:none;}
-  #ta-head{padding:14px 16px;border-bottom:1px solid #E8E2D7;display:flex;align-items:center;gap:10px;background:linear-gradient(135deg,#B8842B,#9A6E22);color:#fff;flex-shrink:0;}
-  #ta-head .ta-logo{width:30px;height:30px;border-radius:9px;background:rgba(255,255,255,.18);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:11px;letter-spacing:.5px;}
+  #ta-panel.dragging{transition:none;user-select:none;}
+  #ta-panel.resizing{transition:none;user-select:none;}
+
+  /* Resize handle — sağ alt köşe */
+  #ta-resize{position:absolute;right:0;bottom:0;width:18px;height:18px;cursor:se-resize;z-index:10;display:flex;align-items:flex-end;justify-content:flex-end;padding:4px;}
+  #ta-resize svg{opacity:.35;transition:opacity .15s;}
+  #ta-resize:hover svg{opacity:.7;}
+
+  /* Başlık — sürükleme tutacağı */
+  #ta-head{padding:14px 16px;border-bottom:1px solid rgba(255,255,255,.15);display:flex;align-items:center;gap:10px;background:linear-gradient(135deg,#A0192E 0%,#6B0E1E 100%);color:#fff;flex-shrink:0;cursor:grab;user-select:none;border-radius:18px 18px 0 0;}
+  #ta-head:active{cursor:grabbing;}
+
+  /* Logo — sitenin kare logosu */
+  #ta-head .ta-logo{width:32px;height:32px;border-radius:8px;overflow:hidden;flex-shrink:0;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;}
+  #ta-head .ta-logo img{width:100%;height:100%;object-fit:cover;border-radius:8px;}
+  #ta-head .ta-logo-fallback{font-weight:900;font-size:10px;letter-spacing:.5px;color:#fff;}
+
   #ta-head .ta-title{flex:1;font-size:14px;font-weight:800;line-height:1.1;}
   #ta-head .ta-sub{font-size:10.5px;font-weight:500;opacity:.85;margin-top:2px;}
-  #ta-close{width:28px;height:28px;border-radius:8px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.12);color:#fff;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
-  #ta-close:hover{background:rgba(255,255,255,.25);}
+
+  /* Başlık sağ butonlar */
+  .ta-head-btns{display:flex;align-items:center;gap:5px;}
+  .ta-hbtn{width:28px;height:28px;border-radius:8px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.12);color:#fff;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s;flex-shrink:0;}
+  .ta-hbtn:hover{background:rgba(255,255,255,.25);}
+  .ta-hbtn.stat-btn{font-size:11px;font-weight:700;width:auto;padding:0 8px;gap:4px;letter-spacing:.3px;}
+
   #ta-msgs{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px;background:#FBF8F3;}
   .ta-msg{max-width:90%;padding:10px 14px;border-radius:14px;font-size:13px;line-height:1.55;white-space:pre-wrap;word-wrap:break-word;}
-  .ta-msg.user{align-self:flex-end;background:#B8842B;color:#fff;border-bottom-right-radius:4px;}
+  .ta-msg.user{align-self:flex-end;background:#A0192E;color:#fff;border-bottom-right-radius:4px;}
   .ta-msg.bot{align-self:flex-start;background:#fff;color:#1A1A1A;border:1px solid #E8E2D7;border-bottom-left-radius:4px;}
-  .ta-msg.bot strong{color:#7A2E1F;font-weight:700;}
+  .ta-msg.bot strong{color:#A0192E;font-weight:700;}
   .ta-typing{display:inline-flex;gap:4px;padding:8px 0;}
-  .ta-typing span{width:6px;height:6px;border-radius:50%;background:#B8842B;animation:taDot 1.2s infinite;}
+  .ta-typing span{width:6px;height:6px;border-radius:50%;background:#A0192E;animation:taDot 1.2s infinite;}
   .ta-typing span:nth-child(2){animation-delay:.15s;} .ta-typing span:nth-child(3){animation-delay:.3s;}
   @keyframes taDot{0%,60%,100%{opacity:.3;transform:translateY(0);}30%{opacity:1;transform:translateY(-4px);}}
   #ta-sugs{padding:0 16px 8px;display:flex;flex-wrap:wrap;gap:6px;}
   .ta-sug{font-size:11.5px;padding:6px 10px;border:1px solid #E8E2D7;background:#fff;border-radius:999px;cursor:pointer;color:#4A4A4A;transition:all .15s;}
-  .ta-sug:hover{border-color:#B8842B;color:#B8842B;background:#F6EDD8;}
+  .ta-sug:hover{border-color:#A0192E;color:#A0192E;background:#FBE8EB;}
   #ta-form{padding:12px 14px;border-top:1px solid #E8E2D7;display:flex;gap:8px;background:#fff;flex-shrink:0;}
   #ta-input{flex:1;border:1px solid #E8E2D7;border-radius:12px;padding:9px 12px;font-size:13px;outline:none;font-family:inherit;background:#FBF8F3;resize:none;max-height:90px;}
-  #ta-input:focus{border-color:#B8842B;background:#fff;box-shadow:0 0 0 3px rgba(184,132,43,.15);}
-  #ta-send{width:38px;height:38px;border:none;border-radius:11px;background:linear-gradient(135deg,#B8842B,#9A6E22);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:transform .1s;}
+  #ta-input:focus{border-color:#A0192E;background:#fff;box-shadow:0 0 0 3px rgba(160,25,46,.12);}
+  #ta-send{width:38px;height:38px;border:none;border-radius:11px;background:linear-gradient(135deg,#A0192E,#6B0E1E);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:transform .1s;}
   #ta-send:hover{transform:scale(1.05);} #ta-send:disabled{opacity:.4;cursor:not-allowed;transform:none;}
   #ta-foot{font-size:10px;text-align:center;color:#8A857C;padding:6px 12px 10px;background:#fff;}
   @media(max-width:600px){#ta-panel{width:calc(100vw - 16px);right:8px;bottom:80px;height:calc(100vh - 100px);} #ta-fab{bottom:16px;right:16px;width:50px;height:50px;}}
@@ -50,6 +75,9 @@
   document.head.appendChild(styleEl);
 
   // ───────────────────── DOM ─────────────────────
+  // Logo URL — İzmir DT favicon / logo
+  const LOGO_URL = "https://izmir-dt.github.io/tiyatro-site/tiyatro-site/favicon.png";
+
   const root = document.createElement("div");
   root.innerHTML = `
     <button id="ta-fab" title="Turne Asistanı" aria-label="Turne Asistanı">
@@ -62,22 +90,36 @@
     </button>
     <div id="ta-panel" role="dialog" aria-label="Turne Asistanı">
       <div id="ta-head">
-        <div class="ta-logo">İDT</div>
+        <div class="ta-logo">
+          <img src="${LOGO_URL}" alt="İDT" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
+          <span class="ta-logo-fallback" style="display:none">İDT</span>
+        </div>
         <div style="flex:1;min-width:0;">
           <div class="ta-title">Turne Asistanı</div>
           <div class="ta-sub" id="ta-status">Yükleniyor…</div>
         </div>
-        <button id="ta-close" aria-label="Kapat">×</button>
+        <div class="ta-head-btns">
+          <button class="ta-hbtn stat-btn" id="ta-stat-btn" title="İstatistik sayfasına git" aria-label="İstatistik">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+            İSTATİSTİK
+          </button>
+          <button class="ta-hbtn" id="ta-close" aria-label="Kapat">×</button>
+        </div>
       </div>
       <div id="ta-msgs"></div>
       <div id="ta-sugs"></div>
-      <form id="ta-form">
+      <div id="ta-form" style="padding:12px 14px;border-top:1px solid #E8E2D7;display:flex;gap:8px;background:#fff;flex-shrink:0;">
         <textarea id="ta-input" rows="1" placeholder="Turne verisi hakkında soru sorun…" autocomplete="off"></textarea>
-        <button id="ta-send" type="submit" aria-label="Gönder">
+        <button id="ta-send" aria-label="Gönder">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
         </button>
-      </form>
+      </div>
       <div id="ta-foot">Kural tabanlı · LLM kullanılmaz · %100 ücretsiz</div>
+      <div id="ta-resize" title="Boyutu değiştir">
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+          <path d="M9 1L1 9M9 5L5 9M9 9L9 9" stroke="#6B0E1E" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </div>
     </div>
   `;
   document.body.appendChild(root);
@@ -85,23 +127,123 @@
   const $ = (id) => document.getElementById(id);
   const panel = $("ta-panel"), msgs = $("ta-msgs"), sugs = $("ta-sugs");
   const input = $("ta-input"), send = $("ta-send"), status = $("ta-status");
+  const head = $("ta-head"), resizeHandle = $("ta-resize");
 
+  // ───────────────────── EVENTS ─────────────────────
   $("ta-fab").addEventListener("click", () => togglePanel(true));
   $("ta-close").addEventListener("click", () => togglePanel(false));
+  $("ta-stat-btn").addEventListener("click", () => {
+    window.open(ISTATISTIK_URL, "_blank");
+  });
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && panel.classList.contains("open")) togglePanel(false);
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); togglePanel(!panel.classList.contains("open")); }
   });
-  $("ta-form").addEventListener("submit", (e) => { e.preventDefault(); submit(input.value); });
-  input.addEventListener("keydown", (e) => {
+  $("ta-input").addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(input.value); }
   });
+  $("ta-send").addEventListener("click", () => submit(input.value));
   input.addEventListener("input", () => { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 90) + "px"; });
 
   function togglePanel(open) {
     panel.classList.toggle("open", open);
     if (open) setTimeout(() => input.focus(), 250);
   }
+
+  // ───────────────────── SÜRÜKLEME (DRAG) ─────────────────────
+  let dragState = null;
+
+  head.addEventListener("mousedown", (e) => {
+    if (e.target.closest(".ta-hbtn")) return; // butonlara tıklayınca sürükleme başlamasın
+    e.preventDefault();
+    const rect = panel.getBoundingClientRect();
+    // Panel fixed pozisyonunu hesapla
+    dragState = {
+      startX: e.clientX,
+      startY: e.clientY,
+      origRight: window.innerWidth - rect.right,
+      origBottom: window.innerHeight - rect.bottom,
+    };
+    panel.classList.add("dragging");
+    panel.style.transition = "none";
+  });
+
+  document.addEventListener("mousemove", (e) => {
+    if (!dragState) return;
+    const dx = e.clientX - dragState.startX;
+    const dy = e.clientY - dragState.startY;
+    const newRight = Math.max(0, Math.min(window.innerWidth - 60, dragState.origRight - dx));
+    const newBottom = Math.max(0, Math.min(window.innerHeight - 60, dragState.origBottom - dy));
+    panel.style.right = newRight + "px";
+    panel.style.bottom = newBottom + "px";
+  });
+
+  document.addEventListener("mouseup", () => {
+    if (dragState) {
+      dragState = null;
+      panel.classList.remove("dragging");
+    }
+    if (resizeState) {
+      resizeState = null;
+      panel.classList.remove("resizing");
+    }
+  });
+
+  // Touch desteği — sürükleme
+  head.addEventListener("touchstart", (e) => {
+    if (e.target.closest(".ta-hbtn")) return;
+    const touch = e.touches[0];
+    const rect = panel.getBoundingClientRect();
+    dragState = {
+      startX: touch.clientX,
+      startY: touch.clientY,
+      origRight: window.innerWidth - rect.right,
+      origBottom: window.innerHeight - rect.bottom,
+    };
+    panel.classList.add("dragging");
+  }, { passive: true });
+
+  document.addEventListener("touchmove", (e) => {
+    if (!dragState) return;
+    const touch = e.touches[0];
+    const dx = touch.clientX - dragState.startX;
+    const dy = touch.clientY - dragState.startY;
+    const newRight = Math.max(0, Math.min(window.innerWidth - 60, dragState.origRight - dx));
+    const newBottom = Math.max(0, Math.min(window.innerHeight - 60, dragState.origBottom - dy));
+    panel.style.right = newRight + "px";
+    panel.style.bottom = newBottom + "px";
+  }, { passive: true });
+
+  document.addEventListener("touchend", () => {
+    dragState = null;
+    panel.classList.remove("dragging");
+  });
+
+  // ───────────────────── YENİDEN BOYUTLANDIRMA (RESIZE) ─────────────────────
+  let resizeState = null;
+
+  resizeHandle.addEventListener("mousedown", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = panel.getBoundingClientRect();
+    resizeState = {
+      startX: e.clientX,
+      startY: e.clientY,
+      origWidth: rect.width,
+      origHeight: rect.height,
+    };
+    panel.classList.add("resizing");
+  });
+
+  document.addEventListener("mousemove", (e) => {
+    if (!resizeState) return;
+    const dx = e.clientX - resizeState.startX;
+    const dy = e.clientY - resizeState.startY;
+    const newW = Math.max(300, Math.min(window.innerWidth - 40, resizeState.origWidth + dx));
+    const newH = Math.max(400, Math.min(window.innerHeight - 80, resizeState.origHeight + dy));
+    panel.style.width = newW + "px";
+    panel.style.height = newH + "px";
+  });
 
   // ───────────────────── DATA ─────────────────────
   const norm = (s) => (s || "").toLocaleLowerCase("tr").replace(/i̇/g, "i").replace(/\s+/g, " ").trim();
@@ -235,7 +377,8 @@
     if (mi >= 0) scope = scope.filter((t) => { const d = parseDate(t.baslangic); return d && d.getMonth() === mi; });
 
     if (/(en\s*(fazla|cok|çok)).*(kişi|kisi|personel|giden|katilan|katılan)/.test(Q)) {
-      const c = new Map(); for (const t of scope) for (const k of t.katilimcilar) c.set(k.kisi, (c.get(k.kisi) || 0) + 1);
+      const c = new Map();
+      for (const t of scope) for (const k of t.katilimcilar) c.set(k.kisi, (c.get(k.kisi) || 0) + 1);
       const top = [...c.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10);
       return top.length ? "En fazla turneye giden kişiler:\n\n" + top.map(([k, n], i) => `${i + 1}. **${k}** — ${n} turne`).join("\n") : "Kayıt bulunamadı.";
     }
@@ -270,13 +413,19 @@
       const tm = scope.reduce((s, t) => s + (t.sayi || 0), 0);
       return `Bu kapsamda **${scope.length}** turne, **${g}** gün, **${tm}** temsil bulundu.`;
     }
-    // Person lookup
+    // Person lookup — önce tam ad eşleşmesi, sonra parça eşleşmesi
     const names = new Set(); for (const t of T) for (const k of t.katilimcilar) names.add(k.kisi);
     let found = null;
+    // Tam ad eşleşmesi (normalize edilmiş)
     for (const n of names) { const nN = norm(n); if (nN.split(" ").length >= 2 && Q.includes(nN)) { found = n; break; } }
+    // Parça eşleşmesi — en az 4 karakter olan kelimelerle
     if (!found) for (const n of names) { const parts = norm(n).split(" ").filter((p) => p.length >= 4); if (parts.some((p) => Q.includes(p))) { found = n; break; } }
     if (found) {
-      const list = T.filter((t) => t.katilimcilar.some((k) => k.kisi === found));
+      // Sadece gerçekten katılımcı olarak listelendiği turneleri göster
+      const list = T.filter((t) => t.katilimcilar.some((k) => norm(k.kisi) === norm(found)));
+      if (list.length === 0) {
+        return `**${found}** adlı kişi hiçbir turneye katılmamış olarak görünüyor. Lütfen veri sayfasını kontrol edin.`;
+      }
       const gun = list.reduce((s, t) => s + turneGun(t), 0);
       const lines = list.sort((a, b) => (parseDate(b.baslangic) || 0) - (parseDate(a.baslangic) || 0)).slice(0, 15)
         .map((t) => `• ${t.baslangic || "—"} · **${t.oyun}** · ${t.il || "—"} (${t.statu})`).join("\n");
@@ -329,7 +478,7 @@
   }
 
   // Welcome + suggestions
-  addMsg("👋 Merhaba! Ben **Turne Asistanı**'yım.\n\nTurne verileriniz hakkında sorularınızı yanıtlarım — kişiler, şehirler, görevler, tarihler. Tamamen ücretsiz ve sınırsız.", "bot");
+  addMsg("👋 Merhaba! Ben **Turne Asistanı**'yım.\n\nTurne verileriniz hakkında sorularınızı yanıtlarım — kişiler, şehirler, görevler, tarihler. Tamamen ücretsiz ve sınırsız.\n\n📊 İstatistik sayfasına geçmek için sağ üstteki **İSTATİSTİK** butonunu kullanabilirsiniz.", "bot");
   const SUGS = ["En fazla turneye giden kişi?", "En çok gün yolda olan kimler?", "Hangi ay en yoğun?", "Hangi görev grubu en kalabalık?", "En çok gidilen şehirler?", "Toplam kaç personel turneye çıktı?"];
   for (const s of SUGS) {
     const b = document.createElement("button");
