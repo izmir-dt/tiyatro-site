@@ -454,6 +454,7 @@
   document.addEventListener("touchend", () => { dragState = null; panel.classList.remove("dragging"); });
 
   /* ─────────────────── VERİ ─────────────────── */
+  function _debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
   const norm = s => (s || "").toLocaleLowerCase("tr").replace(/i̇/g, "i").replace(/\s+/g, " ").trim();
   let DS = null;
 
@@ -718,9 +719,29 @@
         if (t.katilimcilar.length) { o+=`\n👥 **${t.katilimcilar.length} kişi:** ${t.katilimcilar.slice(0,5).map(k=>k.kisi).join(", ")}`;if(t.katilimcilar.length>5)o+=` ve ${t.katilimcilar.length-5} kişi daha`;o+="\n";}
         // Düzenle butonu
         o += `\n<button class="ta-inline-aktar" onclick="(function(){if(typeof editTurne==='function'){editTurne(${t._rawIdx});}else{var m=document.getElementById('modal-overlay');if(m){m.classList.add('on');}}})()" >✏️ Turneyi Düzenle</button>`;
+        o += `\n<button class="ta-inline-copy" onclick="(function(){window._pendingRemineTurne=${JSON.stringify(t.oyun)};togglePanel(true);var rt=document.querySelector('.ta-tab[data-view=remind]');if(rt){document.querySelectorAll('.ta-tab').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.ta-view').forEach(x=>x.classList.remove('active'));rt.classList.add('active');document.getElementById('ta-remind-view').classList.add('active');renderReminders();}setTimeout(showAddForm,100);})()" style="border-color:#2F7D4E;color:#2F7D4E">🔔 Hatırlatıcı Ekle</button>`;
         return {html:o};
       }
     }
+    /* TAKVİM & HATIRLATICI SORGUSU */
+    if (/(takvim|not.*bugün|bugün.*not|hatırlatıcı|hatirlatici|ajanda|gündem|remind)/.test(Q)) {
+      const calNotes=(function(){try{return JSON.parse(localStorage.getItem('calNotes_cache')||'{}');}catch(e){return {};}})();
+      const today=new Date();
+      const todayKey=today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-'+String(today.getDate()).padStart(2,'0');
+      const reminders=loadReminders();
+      const todayNot=calNotes[todayKey];
+      const todayR=reminders.filter(r=>!r.done&&r.date&&new Date(r.date).toDateString()===today.toDateString());
+      const overdueR=reminders.filter(r=>!r.done&&r.date&&new Date(r.date)<today&&new Date(r.date).toDateString()!==today.toDateString());
+      const upcomingR=reminders.filter(r=>!r.done&&r.date&&new Date(r.date)>today).sort((a,b)=>new Date(a.date)-new Date(b.date)).slice(0,6);
+      let o='';
+      if(todayNot) o+=`📌 **Bugünün takvim notu:** ${todayNot}\n\n`;
+      if(overdueR.length){o+=`⚠️ **Gecikmiş (${overdueR.length}):**\n`;for(const r of overdueR.slice(0,5))o+=`• ${r.text}${r.turne?' · '+r.turne:''}\n`;o+='\n';}
+      if(todayR.length){o+=`⚡ **Bugün (${todayR.length}):**\n`;for(const r of todayR)o+=`• ${r.text}${r.turne?' · '+r.turne:''}\n`;o+='\n';}
+      if(upcomingR.length){o+=`📅 **Yaklaşan hatırlatıcılar:**\n`;for(const r of upcomingR){const d=new Date(r.date);o+=`• ${d.getDate()} ${AYLAR[d.getMonth()]} — ${r.text}${r.turne?' · **'+r.turne+'**':''}\n`;}}
+      if(!o) o='Bekleyen hatırlatıcı veya bugüne ait takvim notu yok. 🎉';
+      return {html:o};
+    }
+
     /* BUGÜN NE VAR */
     if (/(bugün|bugun|bu\s*gün|today|günün|gunun)/.test(Q)) {
       const now = new Date();
@@ -782,7 +803,61 @@
       return {html: o};
     }
 
-    return "Şu sorulara cevap verebilirim 💡\n\n👤 **Kişi:** \"Çağlar'ın turne listesi\"\n🏙 **Şehir:** \"Ankara turneleri\"\n🏨 **Otel:** \"Ankara oteli telefonu\"\n📋 **Firma:** \"Nakliye firmaları\"\n📅 **Bugün:** \"Bugün ne var?\"\n📊 **İstatistik:** \"En fazla turneye giden?\"\n✈️ **Ulaşım:** \"Münasebetsiz uçak saati\"\n✏️ **Düzenle:** Düzenle sekmesinden turneleri görüntüleyin";
+    /* KADRO EKSİKLİĞİ */
+    if (/(kadro.*eksik|eksik.*kadro|atanmamış|atanmamis|kadro.*yok|kadro.*tam|doldu)/.test(Q)) {
+      const aktifScope=scope.filter(t=>!t.statu.includes("iptal")&&!t.statu.includes("tamamlan"));
+      const eksik=aktifScope.filter(t=>t.katilimcilar.length===0);
+      const az=aktifScope.filter(t=>t.katilimcilar.length>0&&t.katilimcilar.length<5);
+      let o='';
+      if(eksik.length){o+=`🚨 **Kadro atanmamış ${eksik.length} turne:**\n\n`;for(const t of eksik.slice(0,12))o+=`• **${t.oyun}** — ${t.il||'—'} · ${fmtTarihAralik(t.baslangic,t.bitis)}\n`;o+='\n';}
+      if(az.length){o+=`⚠️ **Az kadro (5'ten az kişi) ${az.length} turne:**\n\n`;for(const t of az.slice(0,8))o+=`• **${t.oyun}** — ${t.katilimcilar.length} kişi · ${t.il||'—'}\n`;}
+      if(!o) o='✅ Aktif turnelerin tamamında kadro atanmış görünüyor.';
+      return {html:o};
+    }
+
+    /* YAKLAŞAn TURNELER / HAFTALIK ÖZET */
+    if (/(özet|ozet|haftalık|haftalik|bu\s*hafta|30.*gün|rapor|brief|genel.*bak)/.test(Q)) {
+      const now2=new Date(); const son30=new Date(now2.getTime()+30*24*60*60*1000);
+      const yaklasan=T.filter(t=>{const d=parseDate(t.baslangic);return d&&d>=now2&&d<=son30&&!t.statu.includes("iptal");}).sort((a,b)=>(parseDate(a.baslangic)||0)-(parseDate(b.baslangic)||0));
+      if(!yaklasan.length) return '30 gün içinde planlanmış turne yok.';
+      let o=`📋 **Önümüzdeki 30 gün — ${yaklasan.length} turne:**\n\n`;
+      for(const t of yaklasan){
+        const gun=Math.ceil((parseDate(t.baslangic)-now2)/(1000*60*60*24));
+        o+=`• **${t.oyun}** — ${t.il||'—'} · ${fmtTarihAralik(t.baslangic,t.bitis)}\n`;
+        o+=`  ⏳ ${gun} gün sonra · 👥 ${t.katilimcilar.length} kişi${t.katilimcilar.length===0?' 🚨':''}\n`;
+        if(t.gidisUlasim) o+=`  ✈️ ${t.gidisUlasim}${t.gidisSaat?' '+t.gidisSaat:''}\n`;
+        o+='\n';
+      }
+      return {html:o};
+    }
+
+    /* UÇUŞ / ULAŞIM ÖZET LİSTESİ */
+    if (/(ulaşım.*listesi|ulasim.*listesi|tüm.*uçuş|tum.*ucus|sefer.*listesi)/.test(Q)) {
+      const ucaklar=scope.filter(t=>t.gidisUlasim&&/(uçak|ucak|thy|pegasus|ajet|sun|express|fly)/i.test(t.gidisUlasim)).sort((a,b)=>(parseDate(a.baslangic)||0)-(parseDate(b.baslangic)||0));
+      if(!ucaklar.length) return 'Uçaklı ulaşım bilgisi olan turne bulunamadı.';
+      let o=`✈️ **Uçaklı turneler (${ucaklar.length}):**\n\n`;
+      for(const t of ucaklar.slice(0,15)){
+        o+=`• **${t.oyun}** — ${t.il||'—'} · ${fmtTarihAralik(t.baslangic,t.bitis)}\n`;
+        if(t.gidisUlasim) o+=`  → ${t.gidisUlasim}${t.gidisSaat?' · '+t.gidisSaat:''}\n`;
+        if(t.donusUlasim) o+=`  ← ${t.donusUlasim}${t.donusSaat?' · '+t.donusSaat:''}\n`;
+        o+='\n';
+      }
+      return {html:o};
+    }
+
+    /* PERSONEL YÜK RAPORU */
+    if (/(yük.*rapor|yuk.*rapor|en.*meşgul|en.*mesgul|kimler.*yoğun|yoğun.*kim|personel.*yük|cok.*calis)/.test(Q)) {
+      const aktifT=T.filter(t=>!t.statu.includes("iptal")&&!t.statu.includes("tamamlan"));
+      const yukMap=new Map();
+      for(const t of aktifT) for(const k of t.katilimcilar) yukMap.set(k.kisi,(yukMap.get(k.kisi)||0)+turneGun(t));
+      const sirali=[...yukMap.entries()].sort((a,b)=>b[1]-a[1]).slice(0,12);
+      if(!sirali.length) return 'Aktif turnelerde kayıtlı personel bulunamadı.';
+      let o=`👥 **En yoğun personel (aktif turnelere göre):**\n\n`;
+      for(const [kisi,gun] of sirali) o+=`• **${kisi}** — ${gun} gün yolda\n`;
+      return {html:o};
+    }
+
+    return "Şu sorulara cevap verebilirim 💡\n\n👤 **Kişi:** \"Çağlar'ın turne listesi\"\n🏙 **Şehir:** \"Ankara turneleri\"\n🏨 **Otel:** \"Ankara oteli telefonu\"\n📅 **Bugün:** \"Bugün ne var?\"\n📋 **Özet:** \"30 günlük özet\"\n⚠️ **Eksik:** \"Kadro eksik turneler\"\n👥 **Yük:** \"En meşgul personel\"\n📊 **İstatistik:** \"En fazla turneye giden?\"\n🔔 **Takvim:** \"Takvim notlarım\"";
   }
 
   function findPerson(Q,T) { const m=new Map();for(const t of T)for(const k of t.katilimcilar){const key=norm(k.kisi);if(!m.has(key))m.set(key,k);} for(const[nN,k]of m)if(nN.split(" ").length>=2&&Q.includes(nN))return k; for(const[nN,k]of m)if(nN.split(" ").filter(p=>p.length>=4).some(p=>Q.includes(p)))return k; return null; }
@@ -1006,7 +1081,7 @@
         let arr=loadReminders();
         if (action==="done"||action==="undone") { arr=arr.map(r=>r.id===id?{...r,done:action==="done"}:r); }
         else if (action==="delete") { arr=arr.filter(r=>r.id!==id); }
-        saveReminders(arr); checkReminders(); renderReminders();
+        saveReminders(arr); checkReminders(); renderReminders(); _reminderBadgeGuncelle();
       });
     });
   }
@@ -1038,13 +1113,14 @@
       </div>`;
     body.insertBefore(form, body.children[1]||null);
     $i("rf-text")?.focus();
+    if (window._pendingRemineTurne) { const sel=$i("rf-turne"); if(sel){for(const opt of sel.options)if(opt.value===window._pendingRemineTurne){sel.value=opt.value;break;}} window._pendingRemineTurne=null; }
     $i("rf-cancel")?.addEventListener("click",()=>{form.remove();});
     $i("rf-save")?.addEventListener("click",()=>{
       const text=($i("rf-text")?.value||"").trim();
       if (!text) { $i("rf-text").style.borderColor="#A0192E"; return; }
       const arr=loadReminders();
       arr.push({ id: Date.now().toString(36)+Math.random().toString(36).slice(2), text, type:$i("rf-type")?.value||"diger", date:$i("rf-date")?.value||"", turne:$i("rf-turne")?.value||"", done:false, created:new Date().toISOString() });
-      saveReminders(arr); checkReminders(); form.remove(); renderReminders();
+      saveReminders(arr); checkReminders(); form.remove(); renderReminders(); _reminderBadgeGuncelle();
     });
   }
 
@@ -1270,13 +1346,49 @@
     `;
   }
 
+
+  /* ─────────────────── TURNE KARTI HATIRLATICI BADGE ─────────────── */
+  function _reminderBadgeGuncelle() {
+    const arr = loadReminders().filter(r => !r.done && r.turne);
+    const sayac = new Map();
+    for (const r of arr) { const n = norm(r.turne); sayac.set(n, (sayac.get(n)||0)+1); }
+    document.querySelectorAll('.ta-remind-card-badge').forEach(b=>b.remove());
+    if (!sayac.size || !DS) return;
+    document.querySelectorAll('.turne-card').forEach(card => {
+      const titleEl = card.querySelector('.turne-card-title');
+      if (!titleEl) return;
+      const oyun = titleEl.textContent.trim();
+      const say = sayac.get(norm(oyun));
+      if (!say) return;
+      const band = card.querySelector('div[style*="padding:7px"]');
+      if (!band) return;
+      const badge = document.createElement('span');
+      badge.className = 'ta-remind-card-badge';
+      badge.setAttribute('style', 'display:inline-flex;align-items:center;gap:3px;font-size:9.5px;font-weight:800;background:rgba(255,255,255,.92);color:#A0192E;border-radius:20px;padding:2px 7px;line-height:1.4;border:1px solid rgba(160,25,46,.35);cursor:pointer;flex-shrink:0;margin-right:4px;');
+      badge.title = say + ' bekleyen hatırlatıcı';
+      badge.textContent = '\uD83D\uDD14 ' + say;
+      badge.onclick = (e) => { e.stopPropagation(); togglePanel(true); document.querySelector('.ta-tab[data-view="remind"]')?.click(); };
+      const rightSpan = band.querySelector('span:last-child');
+      if (rightSpan) rightSpan.prepend(badge);
+      else band.appendChild(badge);
+    });
+  }
+  // Kart render olunca badge'leri güncelle
+  const _cardObs = new MutationObserver(_debounce(_reminderBadgeGuncelle, 400));
+  function _startCardObs() {
+    const grid = document.getElementById('liste-content');
+    if (grid) _cardObs.observe(grid, { childList: true, subtree: false });
+    else setTimeout(_startCardObs, 800);
+  }
+  _startCardObs();
+
   /* ─────────────────── BAŞLAT ─────────────────── */
   addMsg({html:"👋 Merhaba! Ben <strong>Turne Asistanı</strong>'yım.\n\nOtel numaraları, firma rehberi, kişi listeleri, tarih & istatistik sorularınızı yanıtlarım.\n\n<span style='font-size:12px;color:#8A857C'>💡 Üst sekmeleri kullanarak turne <strong>düzenleyebilir</strong>, <strong>hatırlatıcı</strong> ekleyebilir ve <strong>istatistikleri</strong> görüntüleyebilirsiniz.</span>"},"bot",true);
 
-  const SUGS=["En fazla turneye giden?","Yaklaşan turneler","Ankara oteli","Nakliye firmaları","Hangi ay en yoğun?"];
+  const SUGS=["30 günlük özet","Kadro eksik turneler","Bugün ne var?","En fazla turneye giden?","Takvim notlarım"];
   for (const s of SUGS) { const b=document.createElement("button");b.type="button";b.className="ta-sug";b.textContent=s;b.addEventListener("click",()=>submit(s));sugs.appendChild(b); }
 
-  loadData();
-  setInterval(checkReminders, 60000);
+  loadData().then(()=>{ setTimeout(_reminderBadgeGuncelle, 1500); });
+  setInterval(()=>{ checkReminders(); _reminderBadgeGuncelle(); }, 60000);
   window.__taAktar = aktarOtelFormuna;
 })();
