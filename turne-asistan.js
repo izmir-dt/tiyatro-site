@@ -1,12 +1,7 @@
 /* ════════════════════════════════════════════════════════════════
-   TURNE ASİSTANI v3.0 — Akıllı, Kural tabanlı, %100 ücretsiz
+   TURNE ASİSTANI v4.0
    İzmir Devlet Tiyatrosu
-   - Katılımcılar JSON'undan doğru kişi sayımı
-   - Otel / firma numaraları
-   - Türkçe tarih formatı (05 Haziran 2026)
-   - Sürüklenebilir & yeniden boyutlandırılabilir panel
-   - Vişne rengi tema · Site logosu
-   - Karşılama mesajı kapatılabilir
+   YENİ: Turne düzenleme · Hatırlatıcı · Detaylı istatistik
    ═══════════════════════════════════════════════════════════════ */
 (function () {
   if (window.__turneAsistanLoaded) return;
@@ -16,20 +11,25 @@
   const TURNE_SHEET = "TURNE_KAYITLARI";
   const ISTATISTIK_URL = "./istatistik.html";
   const LOGO_URL = "https://izmir-dt.github.io/tiyatro-site/tiyatro-site/favicon.png";
+  const STORAGE_KEY = "ta_hatirlaticilar_v1";
 
-  /* ─── CSS ─── */
+  /* ─────────────────── CSS ─────────────────── */
   const css = `
   #ta-fab{position:fixed;bottom:24px;right:24px;z-index:9500;width:54px;height:54px;border-radius:50%;border:none;cursor:pointer;
     background:linear-gradient(135deg,#A0192E,#6B0E1E);color:#fff;
     box-shadow:0 6px 20px rgba(107,14,30,.45),0 2px 8px rgba(0,0,0,.2);
     display:flex;align-items:center;justify-content:center;transition:transform .15s,box-shadow .2s;animation:taPulse 3s ease-in-out infinite;}
-  #ta-fab:hover{transform:scale(1.08);box-shadow:0 8px 28px rgba(107,14,30,.6);}
-  #ta-fab:active{transform:scale(.94);}
+  #ta-fab:hover{transform:scale(1.08);} #ta-fab:active{transform:scale(.94);}
+  #ta-fab-badge{position:absolute;top:-4px;right:-4px;background:#E53E3E;color:#fff;font-size:10px;font-weight:800;
+    border-radius:99px;min-width:18px;height:18px;display:none;align-items:center;justify-content:center;
+    border:2px solid #fff;padding:0 4px;line-height:1;}
+  #ta-fab-badge.show{display:flex;}
   @keyframes taPulse{0%,100%{box-shadow:0 6px 20px rgba(107,14,30,.45),0 0 0 0 rgba(160,25,46,.4);}
                      50%{box-shadow:0 6px 24px rgba(107,14,30,.6),0 0 0 10px rgba(160,25,46,0);}}
 
+  /* Panel */
   #ta-panel{position:fixed;right:24px;bottom:90px;z-index:9501;
-    width:430px;max-width:calc(100vw - 32px);height:640px;max-height:calc(100vh - 120px);
+    width:440px;max-width:calc(100vw - 32px);height:640px;max-height:calc(100vh - 120px);
     background:#FBF8F3;border:1px solid #E0D5CC;border-radius:18px;
     display:flex;flex-direction:column;
     box-shadow:0 28px 70px rgba(20,8,4,.24),0 4px 16px rgba(20,8,4,.12);
@@ -39,67 +39,159 @@
   #ta-panel.open{opacity:1;pointer-events:all;transform:none;}
   #ta-panel.dragging,#ta-panel.resizing{transition:none;user-select:none;}
 
+  /* Resize köşe */
   #ta-resize{position:absolute;right:0;bottom:0;width:20px;height:20px;cursor:se-resize;z-index:10;
     display:flex;align-items:flex-end;justify-content:flex-end;padding:5px;}
-  #ta-resize svg{opacity:.3;transition:opacity .15s;} #ta-resize:hover svg{opacity:.65;}
+  #ta-resize svg{opacity:.28;transition:opacity .15s;} #ta-resize:hover svg{opacity:.6;}
 
-  #ta-head{padding:13px 15px;border-bottom:1px solid rgba(255,255,255,.12);
-    display:flex;align-items:center;gap:10px;
+  /* Başlık */
+  #ta-head{padding:12px 14px;border-bottom:1px solid rgba(255,255,255,.12);
+    display:flex;align-items:center;gap:9px;
     background:linear-gradient(135deg,#A0192E 0%,#6B0E1E 100%);
     color:#fff;flex-shrink:0;cursor:grab;user-select:none;border-radius:18px 18px 0 0;}
   #ta-head:active{cursor:grabbing;}
-  #ta-head .ta-logo{width:32px;height:32px;border-radius:8px;overflow:hidden;flex-shrink:0;
+  .ta-logo{width:30px;height:30px;border-radius:7px;overflow:hidden;flex-shrink:0;
     background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;}
-  #ta-head .ta-logo img{width:100%;height:100%;object-fit:cover;border-radius:8px;}
-  #ta-head .ta-logo-fb{font-weight:900;font-size:10px;letter-spacing:.5px;color:#fff;display:none;}
-  #ta-head .ta-title{flex:1;font-size:13.5px;font-weight:800;line-height:1.1;}
-  #ta-head .ta-sub{font-size:10.5px;font-weight:500;opacity:.82;margin-top:2px;}
-  .ta-hbtns{display:flex;align-items:center;gap:5px;}
-  .ta-hbtn{min-width:28px;height:28px;border-radius:8px;border:1px solid rgba(255,255,255,.25);
-    background:rgba(255,255,255,.12);color:#fff;font-size:14px;cursor:pointer;
-    display:flex;align-items:center;justify-content:center;transition:background .15s;flex-shrink:0;padding:0 6px;}
-  .ta-hbtn:hover{background:rgba(255,255,255,.28);}
-  .ta-hbtn.stat-btn{font-size:10.5px;font-weight:700;gap:4px;letter-spacing:.3px;}
+  .ta-logo img{width:100%;height:100%;object-fit:cover;border-radius:7px;}
+  .ta-logo-fb{font-weight:900;font-size:10px;color:#fff;display:none;}
+  .ta-title{font-size:13px;font-weight:800;line-height:1.1;}
+  .ta-sub{font-size:10px;font-weight:500;opacity:.8;margin-top:1px;}
+  .ta-hbtns{display:flex;align-items:center;gap:4px;margin-left:auto;}
+  .ta-hbtn{height:26px;border-radius:7px;border:1px solid rgba(255,255,255,.22);
+    background:rgba(255,255,255,.1);color:#fff;font-size:13px;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;transition:background .15s;flex-shrink:0;padding:0 7px;gap:4px;
+    font-family:inherit;white-space:nowrap;}
+  .ta-hbtn:hover{background:rgba(255,255,255,.26);}
+  .ta-hbtn.sm{font-size:10px;font-weight:700;letter-spacing:.2px;}
 
-  /* Mesajlar alanı */
+  /* SEKMELİ NAVİGASYON */
+  #ta-tabs{display:flex;background:#fff;border-bottom:1px solid #E8E2D7;flex-shrink:0;}
+  .ta-tab{flex:1;padding:8px 4px;border:none;background:transparent;font-size:11px;font-weight:700;
+    color:#8A857C;cursor:pointer;font-family:inherit;transition:all .15s;border-bottom:2px solid transparent;
+    display:flex;align-items:center;justify-content:center;gap:4px;}
+  .ta-tab:hover{color:#A0192E;background:#FBF8F3;}
+  .ta-tab.active{color:#A0192E;border-bottom-color:#A0192E;background:#FBF8F3;}
+  .ta-tab-badge{background:#A0192E;color:#fff;border-radius:99px;font-size:9px;font-weight:800;
+    min-width:15px;height:15px;display:inline-flex;align-items:center;justify-content:center;padding:0 3px;}
+
+  /* Sekmeler içeriği */
+  .ta-view{flex:1;overflow:hidden;display:none;flex-direction:column;}
+  .ta-view.active{display:flex;}
+
+  /* ── SOHBET GÖRÜNÜMÜ ── */
   #ta-msgs{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px;background:#FBF8F3;scroll-behavior:smooth;}
   #ta-msgs::-webkit-scrollbar{width:4px;} #ta-msgs::-webkit-scrollbar-thumb{background:#D9C9BD;border-radius:4px;}
-
   .ta-msg{max-width:92%;padding:10px 14px;border-radius:14px;font-size:13px;line-height:1.58;white-space:pre-wrap;word-wrap:break-word;animation:taFadeIn .18s ease;}
   @keyframes taFadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
   .ta-msg.user{align-self:flex-end;background:#A0192E;color:#fff;border-bottom-right-radius:4px;}
-  .ta-msg.bot{align-self:flex-start;background:#fff;color:#1A1A1A;border:1px solid #E8E2D7;border-bottom-left-radius:4px;box-shadow:0 1px 4px rgba(0,0,0,.05);}
+  .ta-msg.bot{align-self:flex-start;background:#fff;color:#1A1A1A;border:1px solid #E8E2D7;border-bottom-left-radius:4px;box-shadow:0 1px 3px rgba(0,0,0,.04);}
   .ta-msg.bot strong{color:#A0192E;font-weight:700;}
-  .ta-msg.bot .ta-badge{display:inline-block;background:#FBE8EB;color:#7A0E1E;border-radius:6px;padding:1px 7px;font-size:11px;font-weight:700;margin:0 2px;}
-  .ta-msg.bot .ta-phone{color:#A0192E;font-weight:700;cursor:pointer;text-decoration:none;border-bottom:1px dashed rgba(160,25,46,.35);}
-  .ta-msg.bot .ta-phone:hover{border-bottom-style:solid;}
-  .ta-msg.bot .ta-section{background:#F8F4F0;border-left:3px solid #A0192E;border-radius:0 8px 8px 0;padding:8px 11px;margin:6px 0;font-size:12.5px;}
-  .ta-msg.bot .ta-kpi{display:inline-flex;align-items:center;gap:6px;background:#FBE8EB;border-radius:8px;padding:5px 10px;margin:3px 2px;font-size:12px;font-weight:600;color:#6B0E1E;}
-  .ta-dismiss{float:right;margin-left:8px;margin-top:-2px;background:none;border:none;cursor:pointer;color:rgba(160,25,46,.45);font-size:16px;line-height:1;padding:0 2px;transition:color .15s;}
+  .ta-msg.bot a.ta-phone{color:#A0192E;font-weight:700;text-decoration:none;border-bottom:1px dashed rgba(160,25,46,.35);}
+  .ta-msg.bot a.ta-phone:hover{border-bottom-style:solid;}
+  .ta-badge{display:inline-block;background:#FBE8EB;color:#7A0E1E;border-radius:5px;padding:1px 6px;font-size:10.5px;font-weight:700;}
+  .ta-dismiss{float:right;margin-left:8px;margin-top:-2px;background:none;border:none;cursor:pointer;
+    color:rgba(160,25,46,.4);font-size:16px;line-height:1;padding:0 2px;transition:color .15s;}
   .ta-dismiss:hover{color:#A0192E;}
-
   .ta-typing{display:inline-flex;gap:4px;padding:8px 2px;}
   .ta-typing span{width:6px;height:6px;border-radius:50%;background:#A0192E;animation:taDot 1.2s infinite;}
   .ta-typing span:nth-child(2){animation-delay:.15s;}.ta-typing span:nth-child(3){animation-delay:.3s;}
   @keyframes taDot{0%,60%,100%{opacity:.3;transform:translateY(0);}30%{opacity:1;transform:translateY(-4px);}}
-
-  /* Öneri butonları */
-  #ta-sugs{padding:0 14px 8px;display:flex;flex-wrap:wrap;gap:5px;}
-  .ta-sug{font-size:11.5px;padding:5px 10px;border:1px solid #E8E2D7;background:#fff;border-radius:999px;cursor:pointer;
+  #ta-sugs{padding:0 12px 8px;display:flex;flex-wrap:wrap;gap:5px;background:#FBF8F3;}
+  .ta-sug{font-size:11px;padding:5px 10px;border:1px solid #E8E2D7;background:#fff;border-radius:999px;cursor:pointer;
     color:#4A4A4A;transition:all .15s;white-space:nowrap;}
   .ta-sug:hover{border-color:#A0192E;color:#A0192E;background:#FBE8EB;}
-
-  /* Alt form */
-  #ta-form{padding:10px 12px;border-top:1px solid #E8E2D7;display:flex;gap:7px;background:#fff;flex-shrink:0;}
-  #ta-input{flex:1;border:1.5px solid #E8E2D7;border-radius:12px;padding:8px 12px;font-size:13px;outline:none;
-    font-family:inherit;background:#FBF8F3;resize:none;max-height:90px;line-height:1.45;transition:border-color .15s;}
+  #ta-form{padding:9px 11px;border-top:1px solid #E8E2D7;display:flex;gap:7px;background:#fff;flex-shrink:0;align-items:flex-end;}
+  #ta-input{flex:1;border:1.5px solid #E8E2D7;border-radius:11px;padding:7px 11px;font-size:12.5px;outline:none;
+    font-family:inherit;background:#FBF8F3;resize:none;max-height:80px;line-height:1.4;transition:border-color .15s;
+    overflow:hidden;}
   #ta-input:focus{border-color:#A0192E;background:#fff;box-shadow:0 0 0 3px rgba(160,25,46,.1);}
-  #ta-input::placeholder{color:#B0A99E;}
-  #ta-send{width:38px;height:38px;border:none;border-radius:11px;
+  #ta-input::placeholder{color:#B0A99E;font-size:12px;}
+  #ta-send{width:36px;height:36px;border:none;border-radius:10px;
     background:linear-gradient(135deg,#A0192E,#6B0E1E);color:#fff;cursor:pointer;
-    display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:transform .1s,opacity .15s;}
-  #ta-send:hover{transform:scale(1.05);} #ta-send:disabled{opacity:.38;cursor:not-allowed;transform:none;}
-  #ta-foot{font-size:10px;text-align:center;color:#9A9490;padding:5px 12px 9px;background:#fff;letter-spacing:.2px;}
+    display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:transform .1s;}
+  #ta-send:hover{transform:scale(1.05);} #ta-send:disabled{opacity:.35;cursor:not-allowed;transform:none;}
+  #ta-foot{font-size:10px;text-align:center;color:#9A9490;padding:4px 12px 8px;background:#fff;}
+
+  /* ── DÜZENLEME GÖRÜNÜMÜ ── */
+  #ta-edit-view{background:#FBF8F3;}
+  .ta-edit-header{padding:10px 14px;background:#fff;border-bottom:1px solid #E8E2D7;display:flex;align-items:center;gap:8px;}
+  .ta-edit-header select{flex:1;border:1.5px solid #E8E2D7;border-radius:8px;padding:6px 10px;font-size:12.5px;
+    font-family:inherit;background:#FBF8F3;outline:none;color:#1A1A1A;cursor:pointer;}
+  .ta-edit-header select:focus{border-color:#A0192E;}
+  .ta-edit-body{flex:1;overflow-y:auto;padding:12px;}
+  .ta-edit-body::-webkit-scrollbar{width:4px;} .ta-edit-body::-webkit-scrollbar-thumb{background:#D9C9BD;border-radius:4px;}
+  .ta-field{margin-bottom:10px;}
+  .ta-field label{display:block;font-size:11px;font-weight:700;color:#6B0E1E;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;}
+  .ta-field input,.ta-field textarea,.ta-field select{width:100%;border:1.5px solid #E8E2D7;border-radius:8px;
+    padding:7px 10px;font-size:12.5px;font-family:inherit;background:#fff;outline:none;color:#1A1A1A;transition:border-color .15s;box-sizing:border-box;}
+  .ta-field input:focus,.ta-field textarea:focus,.ta-field select:focus{border-color:#A0192E;box-shadow:0 0 0 3px rgba(160,25,46,.08);}
+  .ta-field textarea{resize:vertical;min-height:60px;}
+  .ta-field-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .ta-section-title{font-size:11px;font-weight:800;color:#A0192E;text-transform:uppercase;letter-spacing:.5px;
+    padding:8px 0 6px;border-bottom:1.5px solid #E8E2D7;margin-bottom:8px;}
+  .ta-edit-actions{padding:10px 12px;background:#fff;border-top:1px solid #E8E2D7;display:flex;gap:8px;flex-shrink:0;}
+  .ta-btn{height:34px;padding:0 14px;border-radius:8px;border:none;font-size:12.5px;font-weight:700;
+    cursor:pointer;font-family:inherit;transition:all .15s;display:inline-flex;align-items:center;gap:5px;}
+  .ta-btn-primary{background:linear-gradient(135deg,#A0192E,#6B0E1E);color:#fff;}
+  .ta-btn-primary:hover{opacity:.9;}
+  .ta-btn-secondary{background:#F0EBE5;color:#6B0E1E;border:1.5px solid #E0D5CC;}
+  .ta-btn-secondary:hover{background:#E8E2D7;}
+  .ta-btn-danger{background:#FBE8EB;color:#A0192E;border:1.5px solid #F0C4CB;}
+  .ta-btn-danger:hover{background:#F5D0D8;}
+  .ta-save-status{font-size:11px;color:#2F7D4E;font-weight:600;margin-left:auto;display:flex;align-items:center;gap:4px;}
+
+  /* ── HAT IRLATICI GÖRÜNÜMÜ ── */
+  #ta-remind-view{background:#FBF8F3;}
+  .ta-remind-body{flex:1;overflow-y:auto;padding:12px;}
+  .ta-remind-body::-webkit-scrollbar{width:4px;} .ta-remind-body::-webkit-scrollbar-thumb{background:#D9C9BD;border-radius:4px;}
+  .ta-remind-add{background:#fff;border:1.5px dashed #D9C9BD;border-radius:12px;padding:12px;margin-bottom:10px;cursor:pointer;
+    text-align:center;font-size:12px;font-weight:700;color:#8A857C;transition:all .15s;}
+  .ta-remind-add:hover{border-color:#A0192E;color:#A0192E;background:#FBE8EB;}
+  .ta-remind-form{background:#fff;border:1.5px solid #E0D5CC;border-radius:12px;padding:12px;margin-bottom:10px;}
+  .ta-remind-form .ta-field{margin-bottom:8px;}
+  .ta-remind-form .ta-field:last-child{margin-bottom:0;}
+  .ta-remind-item{background:#fff;border:1px solid #E8E2D7;border-radius:10px;padding:10px 12px;margin-bottom:8px;
+    display:flex;align-items:flex-start;gap:8px;transition:box-shadow .15s;}
+  .ta-remind-item:hover{box-shadow:0 2px 8px rgba(0,0,0,.08);}
+  .ta-remind-item.overdue{border-color:#F0C4CB;background:#FFF8F8;}
+  .ta-remind-item.today{border-color:#A0192E;background:#FBE8EB;}
+  .ta-remind-item.done{opacity:.5;}
+  .ta-remind-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;
+    font-size:16px;flex-shrink:0;}
+  .ta-remind-content{flex:1;min-width:0;}
+  .ta-remind-text{font-size:12.5px;font-weight:700;color:#1A1A1A;line-height:1.35;word-break:break-word;}
+  .ta-remind-meta{font-size:11px;color:#8A857C;margin-top:3px;}
+  .ta-remind-meta strong{color:#A0192E;}
+  .ta-remind-actions{display:flex;gap:4px;flex-shrink:0;}
+  .ta-remind-btn{width:26px;height:26px;border-radius:6px;border:1px solid #E8E2D7;background:#FBF8F3;
+    cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px;transition:all .15s;color:#6B0E1E;}
+  .ta-remind-btn:hover{background:#FBE8EB;border-color:#F0C4CB;}
+  .ta-remind-empty{text-align:center;padding:40px 20px;color:#B0A99E;}
+  .ta-remind-empty-icon{font-size:32px;margin-bottom:8px;}
+  .ta-remind-empty-text{font-size:13px;font-weight:600;}
+
+  /* ── İSTATİSTİK GÖRÜNÜMÜ ── */
+  #ta-stat-view{background:#FBF8F3;}
+  .ta-stat-body{flex:1;overflow-y:auto;padding:12px;}
+  .ta-stat-body::-webkit-scrollbar{width:4px;} .ta-stat-body::-webkit-scrollbar-thumb{background:#D9C9BD;border-radius:4px;}
+  .ta-kpi-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;}
+  .ta-kpi{background:#fff;border:1px solid #E8E2D7;border-radius:10px;padding:10px 12px;text-align:center;}
+  .ta-kpi-val{font-size:22px;font-weight:900;color:#A0192E;line-height:1;}
+  .ta-kpi-lbl{font-size:10px;font-weight:700;color:#8A857C;text-transform:uppercase;letter-spacing:.4px;margin-top:3px;}
+  .ta-stat-section{background:#fff;border:1px solid #E8E2D7;border-radius:10px;padding:10px 12px;margin-bottom:8px;}
+  .ta-stat-section-title{font-size:11px;font-weight:800;color:#A0192E;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;}
+  .ta-stat-row{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #F0EBE5;}
+  .ta-stat-row:last-child{border-bottom:none;}
+  .ta-stat-rank{font-size:10px;font-weight:800;color:#B0A99E;width:16px;text-align:right;flex-shrink:0;}
+  .ta-stat-name{flex:1;font-size:12px;font-weight:600;color:#1A1A1A;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .ta-stat-val{font-size:12px;font-weight:800;color:#A0192E;flex-shrink:0;}
+  .ta-stat-bar-wrap{height:4px;background:#F0EBE5;border-radius:2px;flex:1;max-width:60px;}
+  .ta-stat-bar{height:4px;background:#A0192E;border-radius:2px;transition:width .3s;}
+  .ta-stat-month{display:flex;align-items:flex-end;gap:4px;height:60px;padding-top:8px;}
+  .ta-stat-month-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;}
+  .ta-stat-month-bar{width:100%;background:#A0192E;border-radius:3px 3px 0 0;min-height:2px;transition:height .3s;}
+  .ta-stat-month-lbl{font-size:8px;font-weight:700;color:#8A857C;}
+  .ta-stat-month-val{font-size:9px;font-weight:800;color:#A0192E;}
 
   @media(max-width:600px){
     #ta-panel{width:calc(100vw - 16px);right:8px;bottom:80px;height:calc(100vh - 100px);}
@@ -110,7 +202,7 @@
   styleEl.textContent = css;
   document.head.appendChild(styleEl);
 
-  /* ─── DOM ─── */
+  /* ─────────────────── DOM ─────────────────── */
   const root = document.createElement("div");
   root.innerHTML = `
     <button id="ta-fab" title="Turne Asistanı" aria-label="Turne Asistanı">
@@ -120,34 +212,103 @@
         <circle cx="12" cy="10" r="1.2" fill="currentColor" stroke="none"/>
         <circle cx="15" cy="10" r="1.2" fill="currentColor" stroke="none"/>
       </svg>
+      <span id="ta-fab-badge"></span>
     </button>
+
     <div id="ta-panel" role="dialog" aria-label="Turne Asistanı">
+      <!-- BAŞLIK -->
       <div id="ta-head">
         <div class="ta-logo">
           <img src="${LOGO_URL}" alt="İDT" onerror="this.style.display='none';document.querySelector('.ta-logo-fb').style.display='flex';">
           <span class="ta-logo-fb">İDT</span>
         </div>
-        <div style="flex:1;min-width:0;">
+        <div style="min-width:0;">
           <div class="ta-title">Turne Asistanı</div>
           <div class="ta-sub" id="ta-status">Yükleniyor…</div>
         </div>
         <div class="ta-hbtns">
-          <button class="ta-hbtn stat-btn" id="ta-stat-btn" title="İstatistik sayfası">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+          <button class="ta-hbtn sm" id="ta-stat-btn" title="İstatistik sayfası">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
             İSTATİSTİK
           </button>
-          <button class="ta-hbtn" id="ta-close" aria-label="Kapat">×</button>
+          <button class="ta-hbtn" id="ta-close" aria-label="Kapat" style="font-size:16px;width:26px;">×</button>
         </div>
       </div>
-      <div id="ta-msgs"></div>
-      <div id="ta-sugs"></div>
-      <div id="ta-form">
-        <textarea id="ta-input" rows="1" placeholder="Sorunuzu yazın… (ör: Çağlar'ın turne listesi, Ankara oteli, nakliye firması)" autocomplete="off"></textarea>
-        <button id="ta-send" aria-label="Gönder">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+
+      <!-- SEKMELİ NAV -->
+      <div id="ta-tabs">
+        <button class="ta-tab active" data-view="chat">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          Asistan
+        </button>
+        <button class="ta-tab" data-view="edit">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          Düzenle
+        </button>
+        <button class="ta-tab" data-view="remind">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          Hatırlatıcı
+          <span class="ta-tab-badge" id="ta-remind-badge" style="display:none"></span>
+        </button>
+        <button class="ta-tab" data-view="stats">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2"/><path d="M7 17V13M12 17V7M17 17V11"/></svg>
+          İstatistik
         </button>
       </div>
-      <div id="ta-foot">Kural tabanlı · LLM kullanılmaz · %100 ücretsiz</div>
+
+      <!-- SOHBET -->
+      <div class="ta-view active" id="ta-chat-view">
+        <div id="ta-msgs"></div>
+        <div id="ta-sugs"></div>
+        <div id="ta-form">
+          <textarea id="ta-input" rows="1" placeholder="Soru yazın…" autocomplete="off"></textarea>
+          <button id="ta-send" aria-label="Gönder">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          </button>
+        </div>
+        <div id="ta-foot">Kural tabanlı · LLM kullanılmaz · %100 ücretsiz</div>
+      </div>
+
+      <!-- DÜZENLEME -->
+      <div class="ta-view" id="ta-edit-view">
+        <div class="ta-edit-header">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#A0192E" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          <select id="ta-edit-select"><option value="">— Turne seçin —</option></select>
+        </div>
+        <div class="ta-edit-body" id="ta-edit-body">
+          <div style="text-align:center;padding:40px 20px;color:#B0A99E;">
+            <div style="font-size:28px;margin-bottom:8px;">✏️</div>
+            <div style="font-size:13px;font-weight:600;">Düzenlemek için bir turne seçin</div>
+          </div>
+        </div>
+        <div class="ta-edit-actions" id="ta-edit-actions" style="display:none;">
+          <button class="ta-btn ta-btn-primary" id="ta-save-btn">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+            Kaydet
+          </button>
+          <button class="ta-btn ta-btn-secondary" id="ta-reset-btn">Sıfırla</button>
+          <span class="ta-save-status" id="ta-save-status" style="display:none;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            Kaydedildi
+          </span>
+        </div>
+      </div>
+
+      <!-- HATIRLATICI -->
+      <div class="ta-view" id="ta-remind-view">
+        <div class="ta-remind-body" id="ta-remind-body"></div>
+      </div>
+
+      <!-- İSTATİSTİK -->
+      <div class="ta-view" id="ta-stats-view">
+        <div class="ta-stat-body" id="ta-stat-body">
+          <div style="text-align:center;padding:40px;color:#B0A99E;">
+            <div style="font-size:28px;margin-bottom:8px;">📊</div>
+            <div style="font-size:13px;font-weight:600;">Veriler yükleniyor…</div>
+          </div>
+        </div>
+      </div>
+
       <div id="ta-resize" title="Boyutu değiştir">
         <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
           <path d="M9 1L1 9M9 5L5 9" stroke="#6B0E1E" stroke-width="1.5" stroke-linecap="round"/>
@@ -160,8 +321,23 @@
   const panel = $i("ta-panel"), msgs = $i("ta-msgs"), sugs = $i("ta-sugs");
   const input = $i("ta-input"), send = $i("ta-send"), status = $i("ta-status");
   const head = $i("ta-head"), resizeH = $i("ta-resize");
+  const fabBadge = $i("ta-fab-badge"), remindBadge = $i("ta-remind-badge");
 
-  /* ─── TOGGLE ─── */
+  /* ─────────────────── SEKMELER ─────────────────── */
+  document.querySelectorAll(".ta-tab").forEach(tab => {
+    tab.addEventListener("click", () => {
+      document.querySelectorAll(".ta-tab").forEach(t => t.classList.remove("active"));
+      document.querySelectorAll(".ta-view").forEach(v => v.classList.remove("active"));
+      tab.classList.add("active");
+      const viewId = "ta-" + tab.dataset.view + "-view";
+      $i(viewId)?.classList.add("active");
+      if (tab.dataset.view === "stats" && DS) renderStats();
+      if (tab.dataset.view === "remind") renderReminders();
+      if (tab.dataset.view === "edit" && DS) populateEditSelect();
+    });
+  });
+
+  /* ─────────────────── TOGGLE / PANEL ─────────────────── */
   $i("ta-fab").addEventListener("click", () => togglePanel(true));
   $i("ta-close").addEventListener("click", () => togglePanel(false));
   $i("ta-stat-btn").addEventListener("click", () => window.open(ISTATISTIK_URL, "_blank"));
@@ -171,16 +347,15 @@
   });
   input.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(input.value); } });
   send.addEventListener("click", () => submit(input.value));
-  input.addEventListener("input", () => { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 90) + "px"; });
+  input.addEventListener("input", () => { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 80) + "px"; });
 
   function togglePanel(open) {
     panel.classList.toggle("open", open);
-    if (open) setTimeout(() => input.focus(), 250);
+    if (open) { setTimeout(() => input.focus(), 250); checkReminders(); }
   }
 
-  /* ─── SÜRÜKLEME ─── */
+  /* ─────────────────── SÜRÜKLEME ─────────────────── */
   let dragState = null, resizeState = null;
-
   head.addEventListener("mousedown", e => {
     if (e.target.closest(".ta-hbtn") || e.target.closest(".ta-dismiss")) return;
     e.preventDefault();
@@ -196,9 +371,8 @@
   });
   document.addEventListener("mousemove", e => {
     if (dragState) {
-      const dx = e.clientX - dragState.sx, dy = e.clientY - dragState.sy;
-      panel.style.right = Math.max(0, Math.min(window.innerWidth - 80, dragState.or - dx)) + "px";
-      panel.style.bottom = Math.max(0, Math.min(window.innerHeight - 80, dragState.ob - dy)) + "px";
+      panel.style.right = Math.max(0, Math.min(window.innerWidth - 80, dragState.or - (e.clientX - dragState.sx))) + "px";
+      panel.style.bottom = Math.max(0, Math.min(window.innerHeight - 80, dragState.ob - (e.clientY - dragState.sy))) + "px";
     }
     if (resizeState) {
       panel.style.width = Math.max(300, Math.min(window.innerWidth - 32, resizeState.ow + (e.clientX - resizeState.sx))) + "px";
@@ -209,7 +383,6 @@
     dragState = null; resizeState = null;
     panel.classList.remove("dragging", "resizing");
   });
-  // Touch desteği — sürükleme
   head.addEventListener("touchstart", e => {
     if (e.target.closest(".ta-hbtn")) return;
     const t = e.touches[0], r = panel.getBoundingClientRect();
@@ -224,14 +397,21 @@
   }, { passive: true });
   document.addEventListener("touchend", () => { dragState = null; panel.classList.remove("dragging"); });
 
-  /* ─── DATA ─── */
+  /* ─────────────────── VERİ ─────────────────── */
   const norm = s => (s || "").toLocaleLowerCase("tr").replace(/i̇/g, "i").replace(/\s+/g, " ").trim();
   let DS = null;
 
   async function fetchSheet(name) {
     const r = await fetch(`${API}/${encodeURIComponent(name)}`);
-    if (!r.ok) throw new Error(`${name} alınamadı (HTTP ${r.status})`);
+    if (!r.ok) throw new Error(`${name}: HTTP ${r.status}`);
     return r.json();
+  }
+
+  function formatTel(raw) {
+    if (!raw) return "";
+    const s = String(raw).replace(/\s/g, "");
+    if (s.includes("e+") || s.includes("E+")) return "0" + String(Math.round(parseFloat(s)));
+    return s.startsWith("0") ? s : (s.length === 10 ? "0" + s : s);
   }
 
   function parseTurneler(data) {
@@ -242,139 +422,98 @@
     const iIl   = fi(x => x === "il" || x.startsWith("şehir") || x.startsWith("sehir"), 1);
     const iBas  = fi(x => x.startsWith("başla") || x.startsWith("basla"), 2);
     const iBit  = fi(x => x.startsWith("biti"), 3);
+    const iMekan= fi(x => x.startsWith("sahne") || x.startsWith("mekan"), 4);
     const iSay  = fi(x => x.startsWith("temsil") || x.startsWith("sayı") || x.startsWith("sayi"), 5);
+    const iNot  = fi(x => x === "notlar" || x === "not", 6);
     const iStat = fi(x => x.startsWith("stat"), 7);
-    const iOtel = fi(x => x.startsWith("otel") && x.includes("ad"), 8);
-    const iOtelTel = fi(x => x.startsWith("otel") && x.includes("tel"), 10);
-    const iOtelAdres = fi(x => x.startsWith("otel") && (x.includes("adre") || x.includes("adr")), 9);
+    const iOtel = fi(x => x.startsWith("otel") && (x.includes("ad") || x.includes("adı")), 8);
+    const iOtelAdres = fi(x => x.startsWith("otel") && x.includes("adre"), 9);
+    const iOtelTel   = fi(x => x.startsWith("otel") && x.includes("tel"), 10);
+    const iGidis = fi(x => x.startsWith("gidiş") || x.startsWith("gidis"), 11);
+    const iGidisSaat = fi(x => (x.startsWith("gidiş") || x.startsWith("gidis")) && x.includes("saat"), 12);
+    const iDonus = fi(x => x.startsWith("dönüş") || x.startsWith("donus"), 13);
+    const iDonusSaat = fi(x => (x.startsWith("dönüş") || x.startsWith("donus")) && x.includes("saat"), 14);
     const iDur  = fi(x => (x.startsWith("durak") && x.includes("json")) || x === "duraklar", 19);
     const iKat  = fi(x => x.startsWith("katıl") || x.startsWith("katil"), -1);
-    let iAna = h.findIndex(x => x.startsWith("anagrup") || x === "ana_grup_id" || x === "anagrupid");
+    let iAna = h.findIndex(x => x.startsWith("anagrup") || x === "ana_grup_id");
     if (iAna < 0) iAna = 42;
 
     return rows.map(r => {
       if (!r || !Array.isArray(r)) return null;
       const oyun = (r[iOyun] || "").trim();
       if (!oyun || oyun === "Oyun Adı" || oyun === "ID") return null;
-      const bas = (r[iBas] || "").trim();
-      const bit = (r[iBit] || "").trim() || bas;
-      const il  = (r[iIl]  || "").trim();
-      const sayi = parseInt(r[iSay]) || 1;
+      const bas   = (r[iBas] || "").trim();
+      const bit   = (r[iBit] || "").trim() || bas;
+      const il    = (r[iIl]  || "").trim();
+      const mekan = (r[iMekan] || "").trim();
+      const sayi  = parseInt(r[iSay]) || 1;
+      const not   = (r[iNot]  || "").trim();
       const statu = (r[iStat] || "taslak").trim().toLowerCase().replace(/\s+/g, "-");
-      const otelAdi  = (r[iOtel] || "").trim();
-      const otelTel  = formatTel(r[iOtelTel]);
-      const otelAdres= (r[iOtelAdres] || "").trim();
+      const otelAdi   = (r[iOtel]      || "").trim();
+      const otelAdres = (r[iOtelAdres] || "").trim();
+      const otelTel   = formatTel(r[iOtelTel]);
+      const gidisUlasim = (r[iGidis] || "").trim();
+      const gidisSaat   = (r[iGidisSaat] || "").trim();
+      const donusUlasim = (r[iDonus] || "").trim();
+      const donusSaat   = (r[iDonusSaat] || "").trim();
 
       let duraklar = [];
       try { const dj = (r[iDur] || "").trim(); if (dj) duraklar = JSON.parse(dj); } catch(e) {}
 
-      // Katılımcıları önce "Katılımcılar" JSON kolonundan al (en doğru kaynak)
       let katilimcilar = [];
       if (iKat >= 0) {
         try {
           const kj = (r[iKat] || "").trim();
-          if (kj) {
-            const arr = JSON.parse(kj);
-            katilimcilar = arr.map(p => ({
-              kisi: (p.kisi || "").trim(),
-              gorev: (p.gorev || "").trim(),
-              kategori: (p.kategori || "").trim(),
-            })).filter(p => p.kisi);
-          }
+          if (kj) katilimcilar = JSON.parse(kj).map(p => ({ kisi: (p.kisi||"").trim(), gorev: (p.gorev||"").trim(), kategori: (p.kategori||"").trim() })).filter(p=>p.kisi);
         } catch(e) {}
       }
 
       const anaGrupId = (r[iAna] || "").toString().trim();
-      return { oyun, il, baslangic: bas, bitis: bit, sayi, statu, otelAdi, otelTel, otelAdres, duraklar, katilimcilar, anaGrupId };
+      return { oyun, il, mekan, baslangic: bas, bitis: bit, sayi, not, statu, otelAdi, otelAdres, otelTel, gidisUlasim, gidisSaat, donusUlasim, donusSaat, duraklar, katilimcilar, anaGrupId, _rawIdx: rows.indexOf(r) };
     }).filter(t => t && !t.anaGrupId);
-  }
-
-  function formatTel(raw) {
-    if (!raw) return "";
-    const s = String(raw).replace(/\s/g, "").replace(/[()]/g, "");
-    // scientific notation e.g. 3.882327e+09
-    if (s.includes("e+") || s.includes("E+")) {
-      const n = Math.round(parseFloat(s));
-      return "0" + String(n);
-    }
-    if (s.startsWith("0")) return s;
-    if (s.length === 10) return "0" + s;
-    return s;
   }
 
   function parseFirmaRehberi(data) {
     const rows = data.rows || [];
     const h = (data.headers || []).map(x => (x || "").trim().toLowerCase());
     const fi = (pred, fb) => { const i = h.findIndex(pred); return i >= 0 ? i : fb; };
-    const iAd  = fi(x => x === "ad", 0);
-    const iKat = fi(x => x.startsWith("katag") || x.startsWith("kateg"), 1);
-    const iTel = fi(x => x === "tel", 2);
-    const iNot = fi(x => x === "not", 4);
-    const iKay = fi(x => x.startsWith("kaynak"), 5);
     return rows.map(r => {
       if (!r || !Array.isArray(r)) return null;
-      const ad = (r[iAd] || "").trim();
-      if (!ad) return null;
-      return {
-        ad,
-        kategori: (r[iKat] || "").trim(),
-        tel: formatTel(r[iTel]),
-        not: (r[iNot] || "").trim(),
-        kaynak: (r[iKay] || "").trim(),
-      };
+      const ad = (r[fi(x=>x==="ad",0)] || "").trim(); if (!ad) return null;
+      return { ad, kategori: (r[fi(x=>x.startsWith("katag")||x.startsWith("kateg"),1)]||"").trim(), tel: formatTel(r[fi(x=>x==="tel",2)]), not: (r[fi(x=>x==="not",4)]||"").trim(), kaynak: (r[fi(x=>x.startsWith("kaynak"),5)]||"").trim() };
     }).filter(Boolean);
   }
 
-  /* Durak bazında otel/personel bulma */
   function parseDurakOteller(duraklar) {
-    return (duraklar || []).map(d => ({
-      il: (d.il || "").trim(),
-      mekan: (d.mekan || "").trim(),
-      otelAdi: (d.otelAdi || "").trim(),
-      otelAdres: (d.otelAdres || "").trim(),
-      otelTel: formatTel(d.otelTel),
-      ilgiliKisi: (d.ilgiliKisi || "").trim(),
-      ilgiliTel: formatTel(d.ilgiliTel),
-      oyun: (d.oyun || "").trim(),
-      sayi: d.sayi || 0,
-    }));
+    return (duraklar||[]).map(d => ({ il:(d.il||"").trim(), mekan:(d.mekan||"").trim(), otelAdi:(d.otelAdi||"").trim(), otelAdres:(d.otelAdres||"").trim(), otelTel:formatTel(d.otelTel), ilgiliKisi:(d.ilgiliKisi||"").trim(), ilgiliTel:formatTel(d.ilgiliTel), oyun:(d.oyun||"").trim() }));
   }
 
   async function loadData() {
     status.textContent = "Yükleniyor…";
     try {
-      const [tData, fData] = await Promise.all([
-        fetchSheet(TURNE_SHEET),
-        fetchSheet("FIRMA_REHBERI").catch(() => ({ rows: [], headers: [] })),
-      ]);
+      const [tData, fData] = await Promise.all([fetchSheet(TURNE_SHEET), fetchSheet("FIRMA_REHBERI").catch(()=>({rows:[],headers:[]}))]);
       const turneler = parseTurneler(tData);
       const firmalar = parseFirmaRehberi(fData);
       DS = { turneler, firmalar };
-
-      const cities = new Set();
-      const ppl = new Set();
+      const cities = new Set(), ppl = new Set();
       for (const t of turneler) {
         if (t.il) cities.add(t.il);
-        for (const d of t.duraklar || []) if (d.il) cities.add(d.il);
+        for (const d of t.duraklar||[]) if (d.il) cities.add(d.il);
         for (const k of t.katilimcilar) ppl.add(norm(k.kisi));
       }
       status.textContent = `${turneler.length} turne · ${cities.size} şehir · ${ppl.size} personel`;
+      populateEditSelect();
+      checkReminders();
     } catch (e) {
       status.textContent = "Bağlantı hatası";
       addMsg("⚠️ Veri alınamadı: " + e.message, "bot");
     }
   }
 
-  /* ─── YARDIMCI FONKSİYONLAR ─── */
+  /* ─────────────────── YARDIMCILAR ─────────────────── */
   const AYLAR = ["Ocak","Şubat","Mart","Nisan","Mayıs","Haziran","Temmuz","Ağustos","Eylül","Ekim","Kasım","Aralık"];
   const AY_NORM = ["ocak","şubat","mart","nisan","mayıs","haziran","temmuz","ağustos","eylül","ekim","kasım","aralık"];
-  const STATU_MAP = {
-    "tamamlandı": ["tamamlan","biten","bitmiş","tamamlandi"],
-    "taslak": ["taslak","planlanan","gelecek","yaklaşan"],
-    "iptal": ["iptal"],
-    "yarıda-kesildi": ["yarıda","kesild"],
-    "devam": ["devam","süren","aktif"],
-  };
+  const STATU_MAP = { "tamamlandı":["tamamlan","biten","bitmiş","tamamlandi"], "taslak":["taslak","planlanan","gelecek","yaklaşan"], "iptal":["iptal"], "devam":["devam","süren","aktif"] };
 
   function parseDate(s) {
     if (!s) return null;
@@ -384,434 +523,474 @@
     if (m) return new Date(+m[1], +m[2]-1, +m[3]);
     return null;
   }
-
-  function fmtTarih(s) {
-    const d = parseDate(s);
-    if (!d) return s || "—";
-    return `${String(d.getDate()).padStart(2,"0")} ${AYLAR[d.getMonth()]} ${d.getFullYear()}`;
-  }
-
-  function fmtTarihAralik(bas, bit) {
-    const a = fmtTarih(bas), b = fmtTarih(bit);
-    if (!a || a === "—") return "—";
-    if (a === b || !bit) return a;
-    return `${a} – ${b}`;
-  }
-
-  function turneGun(t) {
-    const a = parseDate(t.baslangic), b = parseDate(t.bitis) || a;
-    if (!a || !b) return 1;
-    return Math.max(1, Math.round((b-a)/86400000)+1);
-  }
-
+  function fmtTarih(s) { const d = parseDate(s); if (!d) return s||"—"; return `${String(d.getDate()).padStart(2,"0")} ${AYLAR[d.getMonth()]} ${d.getFullYear()}`; }
+  function fmtTarihAralik(bas, bit) { const a=fmtTarih(bas), b=fmtTarih(bit); if (!a||a==="—") return "—"; if (a===b||!bit) return a; return `${a} – ${b}`; }
+  function turneGun(t) { const a=parseDate(t.baslangic), b=parseDate(t.bitis)||a; if(!a||!b) return 1; return Math.max(1,Math.round((b-a)/86400000)+1); }
   function fmtTel(tel) {
-    if (!tel) return null;
-    const clean = String(tel).replace(/\s/g,"");
-    // Format: 0XXX XXX XX XX
-    if (clean.match(/^0?\d{10}$/)) {
-      const d = clean.startsWith("0") ? clean : "0"+clean;
-      return d.replace(/(\d{4})(\d{3})(\d{2})(\d{2})/, "$1 $2 $3 $4");
-    }
+    if (!tel) return null; const c=String(tel).replace(/\s/g,"");
+    if (c.match(/^0?\d{10}$/)) { const d=c.startsWith("0")?c:"0"+c; return d.replace(/(\d{4})(\d{3})(\d{2})(\d{2})/,"$1 $2 $3 $4"); }
     return tel;
   }
 
-  /* ─── ANSWER ENGINE ─── */
+  /* ─────────────────── CEVAP MOTORUu ─────────────────── */
   function answer(q, ds) {
-    const Q = norm(q);
-    const T = ds.turneler;
-    const F = ds.firmalar || [];
-
-    /* Kapsam filtrele */
+    const Q = norm(q), T = ds.turneler, F = ds.firmalar||[];
     let scope = T;
-    for (const [s, keys] of Object.entries(STATU_MAP)) {
-      if (keys.some(k => Q.includes(k))) { scope = T.filter(t => t.statu.startsWith(s.split("-")[0])); break; }
-    }
+    for (const [s, keys] of Object.entries(STATU_MAP)) if (keys.some(k=>Q.includes(k))) { scope=T.filter(t=>t.statu.startsWith(s.split("-")[0])); break; }
     const ym = Q.match(/\b(20\d{2})\b/);
-    if (ym) { const y = +ym[1]; scope = scope.filter(t => { const d = parseDate(t.baslangic); return d && d.getFullYear()===y; }); }
-    const mi = AY_NORM.findIndex(m => Q.includes(m));
-    if (mi >= 0) scope = scope.filter(t => { const d = parseDate(t.baslangic); return d && d.getMonth()===mi; });
+    if (ym) { const y=+ym[1]; scope=scope.filter(t=>{const d=parseDate(t.baslangic);return d&&d.getFullYear()===y;}); }
+    const mi = AY_NORM.findIndex(m=>Q.includes(m));
+    if (mi>=0) scope=scope.filter(t=>{const d=parseDate(t.baslangic);return d&&d.getMonth()===mi;});
 
-    /* ── OTEL SORGUSU ── */
+    /* OTEL */
     if (/otel|konaklama|kal(ınan|dığı|acak)/.test(Q)) {
-      // Belirli bir turne veya şehir içinse
-      const cityHit = findCity(Q, T);
-      const personHit = findPerson(Q, T);
-
-      if (cityHit) {
-        const list = T.filter(t => t.il === cityHit || (t.duraklar||[]).some(d=>d.il===cityHit));
-        const otels = new Map();
-        for (const t of list) {
-          const durakOtels = parseDurakOteller(t.duraklar).filter(d=>d.il===cityHit);
-          for (const d of durakOtels) {
-            if (d.otelAdi && !otels.has(d.otelAdi)) {
-              otels.set(d.otelAdi, { adres: d.otelAdres, tel: d.otelTel, ilgili: d.ilgiliKisi, ilgiliTel: d.ilgiliTel });
-            }
-          }
-          if (!otels.size && t.otelAdi) otels.set(t.otelAdi, { adres: t.otelAdres, tel: t.otelTel });
-        }
-        if (otels.size) {
-          let out = `**${cityHit}** şehri otel bilgileri:\n\n`;
-          for (const [ad, info] of otels) {
-            out += `🏨 **${ad}**\n`;
-            if (info.adres) out += `   📍 ${info.adres}\n`;
-            if (info.tel) out += `   📞 <a class="ta-phone" href="tel:${info.tel}">${fmtTel(info.tel)}</a>\n`;
-            if (info.ilgili) out += `   👤 ${info.ilgili}`;
-            if (info.ilgiliTel) out += ` — <a class="ta-phone" href="tel:${info.ilgiliTel}">${fmtTel(info.ilgiliTel)}</a>`;
-            if (info.ilgili) out += "\n";
-            out += "\n";
-          }
-          return { html: out };
-        }
+      const city=findCity(Q,T);
+      if (city) {
+        const list=T.filter(t=>t.il===city||(t.duraklar||[]).some(d=>d.il===city));
+        const otels=new Map();
+        for (const t of list) { for (const d of parseDurakOteller(t.duraklar).filter(d=>d.il===city)) { if (d.otelAdi&&!otels.has(d.otelAdi)) otels.set(d.otelAdi,{adres:d.otelAdres,tel:d.otelTel,ilgili:d.ilgiliKisi,ilgiliTel:d.ilgiliTel}); } if (!otels.size&&t.otelAdi) otels.set(t.otelAdi,{adres:t.otelAdres,tel:t.otelTel}); }
+        if (otels.size) { let o=`**${city}** otel bilgileri:\n\n`; for (const [ad,inf] of otels) { o+=`🏨 **${ad}**\n`; if(inf.adres)o+=`   📍 ${inf.adres}\n`; if(inf.tel)o+=`   📞 <a class="ta-phone" href="tel:${inf.tel}">${fmtTel(inf.tel)||inf.tel}</a>\n`; if(inf.ilgili){o+=`   👤 ${inf.ilgili}`;if(inf.ilgiliTel)o+=` — <a class="ta-phone" href="tel:${inf.ilgiliTel}">${fmtTel(inf.ilgiliTel)||inf.ilgiliTel}</a>`;o+="\n";} o+="\n"; } return {html:o}; }
       }
-
-      // Genel otel listesi
-      const otelFirmalar = F.filter(f => f.kategori === "otel");
-      if (otelFirmalar.length) {
-        let out = `Rehberdeki **${otelFirmalar.length}** otel:\n\n`;
-        for (const f of otelFirmalar) {
-          out += `🏨 **${f.ad}**`;
-          if (f.kaynak) out += ` <span class="ta-badge">${f.kaynak.split("·")[1]?.trim()||f.kaynak}</span>`;
-          out += "\n";
-          if (f.not) out += `   📍 ${f.not}\n`;
-          if (f.tel) out += `   📞 <a class="ta-phone" href="tel:${f.tel}">${fmtTel(f.tel)}</a>\n`;
-          out += "\n";
-        }
-        return { html: out };
-      }
+      const otelF=F.filter(f=>f.kategori==="otel");
+      if (otelF.length) { let o=`Rehberdeki **${otelF.length}** otel:\n\n`; for(const f of otelF){o+=`🏨 **${f.ad}**\n`;if(f.not)o+=`   📍 ${f.not}\n`;if(f.tel)o+=`   📞 <a class="ta-phone" href="tel:${f.tel}">${fmtTel(f.tel)||f.tel}</a>\n\n`;} return {html:o}; }
     }
 
-    /* ── FİRMA / NUMARA SORGUSU ── */
-    if (/(firma|nakliye|ulaşım|ulasim|servis|otobüs|otobus|kamyon|rehber)/.test(Q) ||
-        /(numara|telefon|tel|ara(yın|yabilirim)|iletişim|irtibat)/.test(Q)) {
-      // Kategori filtresi
-      let cat = null;
-      if (/(nakliye|kamyon)/.test(Q)) cat = "nakliye";
-      else if (/(otobüs|otobus|ulaşım|ulasim|servis)/.test(Q)) cat = ["ulasim","servis"];
-      else if (/otel/.test(Q)) cat = "otel";
-
-      let firmalar = F;
-      if (cat) firmalar = F.filter(f => Array.isArray(cat) ? cat.includes(f.kategori) : f.kategori === cat);
-
-      // İsim araması
-      for (const f of F) {
-        if (norm(f.ad).split(" ").filter(p=>p.length>=4).some(p=>Q.includes(p))) {
-          let out = `📋 **${f.ad}**\n`;
-          if (f.kaynak) out += `   🗂 ${f.kaynak}\n`;
-          if (f.not) out += `   📍 ${f.not}\n`;
-          if (f.tel) out += `   📞 <a class="ta-phone" href="tel:${f.tel}">${fmtTel(f.tel)}</a>\n`;
-          return { html: out };
-        }
-      }
-
-      if (firmalar.length) {
-        const catLabel = cat === "nakliye" ? "Nakliye firmaları" : Array.isArray(cat) ? "Ulaşım firmaları" : cat === "otel" ? "Oteller" : "Firma rehberi";
-        let out = `**${catLabel}** (${firmalar.length} kayıt):\n\n`;
-        for (const f of firmalar) {
-          out += `📋 **${f.ad}**`;
-          if (f.kaynak) out += ` <span class="ta-badge">${f.kaynak.split("·").pop().trim()}</span>`;
-          out += "\n";
-          if (f.not) out += `   📍 ${f.not}\n`;
-          if (f.tel) out += `   📞 <a class="ta-phone" href="tel:${f.tel}">${fmtTel(f.tel)}</a>\n`;
-          out += "\n";
-        }
-        return { html: out };
-      }
+    /* FİRMA / NUMARA */
+    if (/(firma|nakliye|ulaşım|ulasim|servis|otobüs|otobus|kamyon|rehber|numara|telefon|ara(yın|yabilirim)|iletişim|irtibat)/.test(Q)) {
+      for (const f of F) { if (norm(f.ad).split(" ").filter(p=>p.length>=4).some(p=>Q.includes(p))) { let o=`📋 **${f.ad}**\n`; if(f.kaynak)o+=`   🗂 ${f.kaynak}\n`; if(f.not)o+=`   📍 ${f.not}\n`; if(f.tel)o+=`   📞 <a class="ta-phone" href="tel:${f.tel}">${fmtTel(f.tel)||f.tel}</a>\n`; return {html:o}; } }
+      let cat=null;
+      if (/(nakliye|kamyon)/.test(Q)) cat="nakliye";
+      else if (/(otobüs|otobus|ulaşım|ulasim|servis)/.test(Q)) cat=["ulasim","servis"];
+      else if (/otel/.test(Q)) cat="otel";
+      let firmalar=F; if(cat) firmalar=F.filter(f=>Array.isArray(cat)?cat.includes(f.kategori):f.kategori===cat);
+      if (firmalar.length) { const lbl=cat==="nakliye"?"Nakliye firmaları":Array.isArray(cat)?"Ulaşım firmaları":cat==="otel"?"Oteller":"Firma rehberi"; let o=`**${lbl}** (${firmalar.length}):\n\n`; for(const f of firmalar){o+=`📋 **${f.ad}**`;if(f.kaynak)o+=` <span class="ta-badge">${f.kaynak.split("·").pop().trim()}</span>`;o+="\n";if(f.not)o+=`   📍 ${f.not}\n`;if(f.tel)o+=`   📞 <a class="ta-phone" href="tel:${f.tel}">${fmtTel(f.tel)||f.tel}</a>\n\n`;} return {html:o}; }
     }
 
-    /* ── İLGİLİ KİŞİ NUMARALARI ── */
-    if (/(ilgili|sorumlu|koordinat).*?(kişi|kisi|numara|tel)/.test(Q) || /(kişi|kisi).*?(numara|tel|ara)/.test(Q)) {
-      const cityHit = findCity(Q, T);
-      if (cityHit) {
-        const list = T.filter(t => t.il===cityHit || (t.duraklar||[]).some(d=>d.il===cityHit));
-        let out = `**${cityHit}** ilgili kişi bilgileri:\n\n`;
-        const seen = new Set();
-        for (const t of list) {
-          for (const d of parseDurakOteller(t.duraklar).filter(d=>d.il===cityHit)) {
-            if (d.ilgiliKisi && !seen.has(d.ilgiliKisi)) {
-              seen.add(d.ilgiliKisi);
-              out += `👤 **${d.ilgiliKisi}** (${t.oyun})\n`;
-              if (d.ilgiliTel) out += `   📞 <a class="ta-phone" href="tel:${d.ilgiliTel}">${fmtTel(d.ilgiliTel)}</a>\n`;
-              out += "\n";
-            }
-          }
-        }
-        if (seen.size) return { html: out };
-      }
-      // Firma rehberindeki "diger" kişiler
-      const diger = F.filter(f => f.kategori === "diger");
-      if (diger.length) {
-        let out = `Rehberdeki ilgili kişiler (${diger.length}):\n\n`;
-        for (const f of diger) {
-          out += `👤 **${f.ad}** <span class="ta-badge">${f.kaynak.split("·").pop().trim()||f.kaynak}</span>\n`;
-          if (f.tel) out += `   📞 <a class="ta-phone" href="tel:${f.tel}">${fmtTel(f.tel)}</a>\n`;
-          out += "\n";
-        }
-        return { html: out };
-      }
+    /* İLGİLİ KİŞİ */
+    if (/(ilgili|sorumlu|koordinat).*(kişi|kisi|numara|tel)/.test(Q)||(/(kişi|kisi)/.test(Q)&&/(numara|tel|ara)/.test(Q))) {
+      const city=findCity(Q,T);
+      if (city) { const list=T.filter(t=>t.il===city||(t.duraklar||[]).some(d=>d.il===city)); let o=`**${city}** ilgili kişiler:\n\n`; const seen=new Set(); for(const t of list){for(const d of parseDurakOteller(t.duraklar).filter(d=>d.il===city)){if(d.ilgiliKisi&&!seen.has(d.ilgiliKisi)){seen.add(d.ilgiliKisi);o+=`👤 **${d.ilgiliKisi}** (${t.oyun})\n`;if(d.ilgiliTel)o+=`   📞 <a class="ta-phone" href="tel:${d.ilgiliTel}">${fmtTel(d.ilgiliTel)||d.ilgiliTel}</a>\n`;o+="\n";}}} if(seen.size) return {html:o}; }
+      const diger=F.filter(f=>f.kategori==="diger"); if(diger.length){let o=`Rehberdeki ilgili kişiler (${diger.length}):\n\n`;for(const f of diger){o+=`👤 **${f.ad}** <span class="ta-badge">${f.kaynak.split("·").pop().trim()||f.kaynak}</span>\n`;if(f.tel)o+=`   📞 <a class="ta-phone" href="tel:${f.tel}">${fmtTel(f.tel)||f.tel}</a>\n\n`;}return {html:o};}
     }
 
-    /* ── EN FAZLA TURNE ── */
+    /* EN FAZLA TURNE */
     if (/(en\s*(fazla|cok|çok)).*(kişi|kisi|personel|giden|katılan|katilan)/.test(Q)) {
-      const c = new Map();
-      for (const t of scope) for (const k of t.katilimcilar) {
-        const key = k.kisi;
-        c.set(key, (c.get(key)||0)+1);
-      }
-      const top = [...c.entries()].sort((a,b)=>b[1]-a[1]).slice(0,10);
-      return top.length
-        ? "En fazla turneye giden kişiler:\n\n" + top.map(([k,n],i) => `${i+1}. **${k}** — ${n} turne`).join("\n")
-        : "Kayıt bulunamadı.";
+      const c=new Map(); for(const t of scope)for(const k of t.katilimcilar)c.set(k.kisi,(c.get(k.kisi)||0)+1);
+      const top=[...c.entries()].sort((a,b)=>b[1]-a[1]).slice(0,10);
+      return top.length?"En fazla turneye giden kişiler:\n\n"+top.map(([k,n],i)=>`${i+1}. **${k}** — ${n} turne`).join("\n"):"Kayıt bulunamadı.";
     }
-
-    /* ── EN FAZLA GÜN ── */
-    if (/(en\s*(fazla|cok|çok)).*(gün|gun).*(yolda|turne)/.test(Q) || /yolda.*kim/.test(Q)) {
-      const d = new Map();
-      for (const t of scope) { const g = turneGun(t); for (const k of t.katilimcilar) d.set(k.kisi,(d.get(k.kisi)||0)+g); }
-      const top = [...d.entries()].sort((a,b)=>b[1]-a[1]).slice(0,10);
-      return top.length ? "En çok gün yolda:\n\n" + top.map(([k,g],i)=>`${i+1}. **${k}** — ${g} gün`).join("\n") : "Veri yok.";
+    /* EN FAZLA GÜN */
+    if (/(en\s*(fazla|cok|çok)).*(gün|gun).*(yolda|turne)/.test(Q)||/yolda.*kim/.test(Q)) {
+      const d=new Map(); for(const t of scope){const g=turneGun(t);for(const k of t.katilimcilar)d.set(k.kisi,(d.get(k.kisi)||0)+g);}
+      const top=[...d.entries()].sort((a,b)=>b[1]-a[1]).slice(0,10);
+      return top.length?"En çok gün yolda:\n\n"+top.map(([k,g],i)=>`${i+1}. **${k}** — ${g} gün`).join("\n"):"Veri yok.";
     }
-
-    /* ── TOPLAM PERSONEL ── */
-    if (/(toplam|kac|kaç).*(personel|kişi|kisi)/.test(Q)) {
-      const s = new Set(); for (const t of scope) for (const k of t.katilimcilar) s.add(norm(k.kisi));
-      return `Toplam **${s.size}** farklı personel turneye çıktı.`;
-    }
-
-    /* ── GÖREV GRUPLARI ── */
+    /* TOPLAM PERSONEL */
+    if (/(toplam|kac|kaç).*(personel|kişi|kisi)/.test(Q)) { const s=new Set();for(const t of scope)for(const k of t.katilimcilar)s.add(norm(k.kisi));return `Toplam **${s.size}** farklı personel turneye çıktı.`; }
+    /* GÖREV */
     if (/(görev|gorev|kategori).*(kalabalık|kalabalik|en\s*cok|en\s*çok|en\s*fazla)/.test(Q)) {
-      const c = new Map();
-      for (const t of scope) for (const k of t.katilimcilar) {
-        const g = k.kategori || k.gorev || "Diğer";
-        if (!c.has(g)) c.set(g, new Set());
-        c.get(g).add(norm(k.kisi));
-      }
-      const top = [...c.entries()].map(([g,s])=>[g,s.size]).sort((a,b)=>b[1]-a[1]);
-      return top.length ? "Görev grupları:\n\n" + top.map(([g,n],i)=>`${i+1}. **${g}** — ${n} kişi`).join("\n") : "Veri yok.";
+      const c=new Map();for(const t of scope)for(const k of t.katilimcilar){const g=k.kategori||k.gorev||"Diğer";if(!c.has(g))c.set(g,new Set());c.get(g).add(norm(k.kisi));}
+      const top=[...c.entries()].map(([g,s])=>[g,s.size]).sort((a,b)=>b[1]-a[1]);
+      return top.length?"Görev grupları:\n\n"+top.map(([g,n],i)=>`${i+1}. **${g}** — ${n} kişi`).join("\n"):"Veri yok.";
     }
-
-    /* ── HANGI AY ── */
+    /* AY */
     if (/(hangi\s*ay|en\s*yoğun|en\s*yogun|aylık)/.test(Q)) {
-      const c = new Array(12).fill(0);
-      for (const t of scope) { const d=parseDate(t.baslangic); if(d) c[d.getMonth()]++; }
-      const r = c.map((n,i)=>({ay:AYLAR[i],n})).sort((a,b)=>b.n-a.n).slice(0,3).filter(x=>x.n>0);
-      return r.length ? "En yoğun aylar:\n\n" + r.map((x,i)=>`${i+1}. **${x.ay}** — ${x.n} turne`).join("\n") : "Veri yok.";
+      const c=new Array(12).fill(0);for(const t of scope){const d=parseDate(t.baslangic);if(d)c[d.getMonth()]++;}
+      const r=c.map((n,i)=>({ay:AYLAR[i],n})).sort((a,b)=>b.n-a.n).slice(0,3).filter(x=>x.n>0);
+      return r.length?"En yoğun aylar:\n\n"+r.map((x,i)=>`${i+1}. **${x.ay}** — ${x.n} turne`).join("\n"):"Veri yok.";
     }
-
-    /* ── ŞEHİR ── */
-    if (/(şehir|sehir|il)/.test(Q) && /(en\s*cok|en\s*çok|en\s*fazla|kac|kaç)/.test(Q)) {
-      const c = new Map();
-      for (const t of scope) {
-        const ill = new Set();
-        if (t.il) ill.add(t.il);
-        for (const d of t.duraklar||[]) if(d.il) ill.add(d.il);
-        for (const il of ill) c.set(il,(c.get(il)||0)+1);
-      }
+    /* ŞEHİR */
+    if (/(şehir|sehir|il)/.test(Q)&&/(en\s*cok|en\s*çok|en\s*fazla|kac|kaç)/.test(Q)) {
+      const c=new Map();for(const t of scope){const ill=new Set();if(t.il)ill.add(t.il);for(const d of t.duraklar||[])if(d.il)ill.add(d.il);for(const il of ill)c.set(il,(c.get(il)||0)+1);}
       if (/kac|kaç/.test(Q)) return `Toplam **${c.size}** farklı şehre gidildi.`;
-      const top = [...c.entries()].sort((a,b)=>b[1]-a[1]).slice(0,10);
-      return "En çok gidilen şehirler:\n\n" + top.map(([s,n],i)=>`${i+1}. **${s}** — ${n} turne`).join("\n");
+      return "En çok gidilen şehirler:\n\n"+ [...c.entries()].sort((a,b)=>b[1]-a[1]).slice(0,10).map(([s,n],i)=>`${i+1}. **${s}** — ${n} turne`).join("\n");
     }
-
-    /* ── TOPLAM TURNE ── */
-    if (/(toplam|kac|kaç).*(turne)/.test(Q)) {
-      const g = scope.reduce((s,t)=>s+turneGun(t),0);
-      const tm = scope.reduce((s,t)=>s+(t.sayi||0),0);
-      return `Bu kapsamda **${scope.length}** turne, **${g}** gün, **${tm}** temsil.`;
-    }
-
-    /* ── KİŞİ ARAMA ── */
-    const found = findPerson(Q, T);
-    if (found) {
-      const list = T.filter(t => t.katilimcilar.some(k => norm(k.kisi) === norm(found.kisi)));
-      if (!list.length) return `**${found.kisi}** adlı kişi henüz hiçbir turneye atanmamış.`;
-      const gun = list.reduce((s,t)=>s+turneGun(t),0);
-      const gorev = found.gorev ? ` · ${found.gorev}` : "";
-      const sorted = list.sort((a,b)=>(parseDate(b.baslangic)||0)-(parseDate(a.baslangic)||0));
-      const lines = sorted.slice(0,15).map(t => {
-        const tarih = fmtTarihAralik(t.baslangic, t.bitis);
-        const otel = t.duraklar?.find(d=>d.otelAdi)?.otelAdi || t.otelAdi || "";
-        return `• **${t.oyun}**\n  📅 ${tarih} · 📍 ${t.il||"—"}${otel?" · 🏨 "+otel:""}`;
-      }).join("\n");
-      return `**${found.kisi}**${gorev}\n${list.length} turne · ${gun} gün yolda\n\n${lines}`;
-    }
-
-    /* ── ŞEHİR ARAMA ── */
-    const cityHit = findCity(Q, T);
-    if (cityHit) {
-      const list = T.filter(t => t.il===cityHit || (t.duraklar||[]).some(d=>d.il===cityHit));
-      let out = `**${cityHit}** şehrine **${list.length}** turne yapıldı.\n\n`;
-      for (const t of list.slice(0,10)) {
-        const tarih = fmtTarihAralik(t.baslangic, t.bitis);
-        const duraklar = parseDurakOteller(t.duraklar).filter(d=>d.il===cityHit);
-        const otel = duraklar[0]?.otelAdi || t.otelAdi || "";
-        const otelTel = duraklar[0]?.otelTel || t.otelTel || "";
-        const ilgili = duraklar[0]?.ilgiliKisi || "";
-        const ilgiliTel = duraklar[0]?.ilgiliTel || "";
-        out += `• **${t.oyun}** (${t.statu})\n`;
-        out += `  📅 ${tarih}\n`;
-        if (otel) { out += `  🏨 ${otel}`; if(otelTel) out += ` — <a class="ta-phone" href="tel:${otelTel}">${fmtTel(otelTel)}</a>`; out+="\n"; }
-        if (ilgili) { out += `  👤 ${ilgili}`; if(ilgiliTel) out += ` — <a class="ta-phone" href="tel:${ilgiliTel}">${fmtTel(ilgiliTel)}</a>`; out+="\n"; }
-        out += "\n";
-      }
-      return { html: out };
-    }
-
-    /* ── YAKLAŞAN TURNELER ── */
+    /* TOPLAM TURNE */
+    if (/(toplam|kac|kaç).*(turne)/.test(Q)) { const g=scope.reduce((s,t)=>s+turneGun(t),0),tm=scope.reduce((s,t)=>s+(t.sayi||0),0);return `Bu kapsamda **${scope.length}** turne, **${g}** gün, **${tm}** temsil.`; }
+    /* YAKLAŞAN */
     if (/(yaklaşan|yaklasan|gelecek|planlı|planli|taslak|önümüzdeki|onumuzdeki)/.test(Q)) {
-      const now = new Date();
-      const upcoming = T.filter(t => { const d=parseDate(t.baslangic); return d && d >= now; })
-        .sort((a,b)=>(parseDate(a.baslangic)||0)-(parseDate(b.baslangic)||0)).slice(0,8);
-      if (!upcoming.length) return "Yaklaşan turne bulunamadı.";
-      return "Yaklaşan turneler:\n\n" + upcoming.map(t=>`• **${t.oyun}**\n  📅 ${fmtTarihAralik(t.baslangic,t.bitis)} · 📍 ${t.il||"—"} (${t.statu})`).join("\n");
+      const now=new Date(),up=T.filter(t=>{const d=parseDate(t.baslangic);return d&&d>=now;}).sort((a,b)=>(parseDate(a.baslangic)||0)-(parseDate(b.baslangic)||0)).slice(0,8);
+      if (!up.length) return "Yaklaşan turne bulunamadı.";
+      return "Yaklaşan turneler:\n\n"+up.map(t=>`• **${t.oyun}**\n  📅 ${fmtTarihAralik(t.baslangic,t.bitis)} · 📍 ${t.il||"—"} (${t.statu})`).join("\n");
     }
-
-    /* ── TURNE DETAYI (oyun adı) ── */
+    /* KİŞİ */
+    const found=findPerson(Q,T);
+    if (found) {
+      const list=T.filter(t=>t.katilimcilar.some(k=>norm(k.kisi)===norm(found.kisi)));
+      if (!list.length) return `**${found.kisi}** henüz hiçbir turneye atanmamış.`;
+      const gun=list.reduce((s,t)=>s+turneGun(t),0);
+      const sorted=list.sort((a,b)=>(parseDate(b.baslangic)||0)-(parseDate(a.baslangic)||0));
+      const lines=sorted.slice(0,15).map(t=>{const otel=t.duraklar?.find(d=>d.otelAdi)?.otelAdi||t.otelAdi||"";return `• **${t.oyun}**\n  📅 ${fmtTarihAralik(t.baslangic,t.bitis)} · 📍 ${t.il||"—"}${otel?" · 🏨 "+otel:""}`;}).join("\n");
+      return `**${found.kisi}**${found.gorev?" · "+found.gorev:""}\n${list.length} turne · ${gun} gün yolda\n\n${lines}`;
+    }
+    /* ŞEHİR DETAYI */
+    const city=findCity(Q,T);
+    if (city) {
+      const list=T.filter(t=>t.il===city||(t.duraklar||[]).some(d=>d.il===city));
+      let o=`**${city}** şehrine **${list.length}** turne yapıldı.\n\n`;
+      for(const t of list.slice(0,10)){const duraklar=parseDurakOteller(t.duraklar).filter(d=>d.il===city);const otel=duraklar[0]?.otelAdi||t.otelAdi||"";const otelTel=duraklar[0]?.otelTel||t.otelTel||"";const ilgili=duraklar[0]?.ilgiliKisi||"";const ilgiliTel=duraklar[0]?.ilgiliTel||"";o+=`• **${t.oyun}** (${t.statu})\n  📅 ${fmtTarihAralik(t.baslangic,t.bitis)}\n`;if(otel){o+=`  🏨 ${otel}`;if(otelTel)o+=` — <a class="ta-phone" href="tel:${otelTel}">${fmtTel(otelTel)||otelTel}</a>`;o+="\n";}if(ilgili){o+=`  👤 ${ilgili}`;if(ilgiliTel)o+=` — <a class="ta-phone" href="tel:${ilgiliTel}">${fmtTel(ilgiliTel)||ilgiliTel}</a>`;o+="\n";}o+="\n";}
+      return {html:o};
+    }
+    /* OYUN DETAYI */
     for (const t of T) {
       if (norm(t.oyun).split(" ").filter(p=>p.length>=4).some(p=>Q.includes(p))) {
-        const duraklar = parseDurakOteller(t.duraklar);
-        let out = `**${t.oyun}**\n\n`;
-        out += `📅 ${fmtTarihAralik(t.baslangic,t.bitis)}\n`;
-        out += `📍 ${t.il||"—"}\n`;
-        out += `🎭 ${t.sayi||"?"} temsil · ${turneGun(t)} gün\n`;
-        out += `📊 Statü: ${t.statu}\n\n`;
-        if (duraklar.length) {
-          out += `**Duraklar:**\n`;
-          for (const d of duraklar) {
-            out += `\n🏙 **${d.il}**`;
-            if (d.mekan) out += ` — ${d.mekan}`;
-            out += "\n";
-            if (d.otelAdi) { out += `   🏨 ${d.otelAdi}`; if(d.otelTel) out+=` <a class="ta-phone" href="tel:${d.otelTel}">${fmtTel(d.otelTel)}</a>`; out+="\n"; }
-            if (d.ilgiliKisi) { out += `   👤 ${d.ilgiliKisi}`; if(d.ilgiliTel) out+=` — <a class="ta-phone" href="tel:${d.ilgiliTel}">${fmtTel(d.ilgiliTel)}</a>`; out+="\n"; }
-          }
-          out += "\n";
-        } else if (t.otelAdi) {
-          out += `🏨 **${t.otelAdi}**\n`;
-          if (t.otelAdres) out += `   📍 ${t.otelAdres}\n`;
-          if (t.otelTel) out += `   📞 <a class="ta-phone" href="tel:${t.otelTel}">${fmtTel(t.otelTel)}</a>\n`;
-        }
-        if (t.katilimcilar.length) {
-          out += `\n👥 **${t.katilimcilar.length} kişi:** ${t.katilimcilar.slice(0,5).map(k=>k.kisi).join(", ")}`;
-          if (t.katilimcilar.length>5) out += ` ve ${t.katilimcilar.length-5} kişi daha`;
-          out += "\n";
-        }
-        return { html: out };
+        const dur=parseDurakOteller(t.duraklar);
+        let o=`**${t.oyun}**\n\n📅 ${fmtTarihAralik(t.baslangic,t.bitis)}\n📍 ${t.il||"—"}\n🎭 ${t.sayi||"?"} temsil · ${turneGun(t)} gün\n📊 Statü: ${t.statu}\n`;
+        if (t.gidisUlasim) o+=`🚌 Gidiş: ${t.gidisUlasim}${t.gidisSaat?" · "+t.gidisSaat:""}\n`;
+        if (t.donusUlasim) o+=`🚌 Dönüş: ${t.donusUlasim}${t.donusSaat?" · "+t.donusSaat:""}\n`;
+        if (dur.length) { o+="\n**Duraklar:**\n"; for(const d of dur){o+=`\n🏙 **${d.il}**${d.mekan?" — "+d.mekan:""}\n`;if(d.otelAdi){o+=`   🏨 ${d.otelAdi}`;if(d.otelTel)o+=` <a class="ta-phone" href="tel:${d.otelTel}">${fmtTel(d.otelTel)||d.otelTel}</a>`;o+="\n";}if(d.ilgiliKisi){o+=`   👤 ${d.ilgiliKisi}`;if(d.ilgiliTel)o+=` — <a class="ta-phone" href="tel:${d.ilgiliTel}">${fmtTel(d.ilgiliTel)||d.ilgiliTel}</a>`;o+="\n";}}} else if(t.otelAdi){o+=`\n🏨 **${t.otelAdi}**\n`;if(t.otelAdres)o+=`   📍 ${t.otelAdres}\n`;if(t.otelTel)o+=`   📞 <a class="ta-phone" href="tel:${t.otelTel}">${fmtTel(t.otelTel)||t.otelTel}</a>\n`;}
+        if (t.katilimcilar.length) { o+=`\n👥 **${t.katilimcilar.length} kişi:** ${t.katilimcilar.slice(0,5).map(k=>k.kisi).join(", ")}`;if(t.katilimcilar.length>5)o+=` ve ${t.katilimcilar.length-5} kişi daha`;o+="\n";}
+        return {html:o};
       }
     }
-
-    /* ── YARDIM ── */
-    return "Şu sorulara cevap verebilirim 💡\n\n" +
-      "👤 **Kişi sorguları:** \"Çağlar'ın turne listesi\", \"Sami Öztürk kaç turneye gitti\"\n" +
-      "🏙 **Şehir sorguları:** \"Ankara turneleri\", \"Konya otel numarası\"\n" +
-      "🏨 **Otel bilgileri:** \"Ankara oteli\", \"Çorum otel telefonu\"\n" +
-      "📋 **Firma rehberi:** \"Nakliye firmaları\", \"Ulusoy numarası\", \"Ulasim firmaları\"\n" +
-      "👤 **İlgili kişiler:** \"Ankara ilgili kişi\", \"Konya koordinatör numarası\"\n" +
-      "📊 **İstatistik:** \"En fazla turneye giden?\", \"En çok gidilen şehirler\"\n" +
-      "📅 **Tarih:** \"Nisan turneları\", \"2026 turne sayısı\", \"Yaklaşan turneler\"";
+    return "Şu sorulara cevap verebilirim 💡\n\n👤 **Kişi:** \"Çağlar'ın turne listesi\"\n🏙 **Şehir:** \"Ankara turneleri\"\n🏨 **Otel:** \"Ankara oteli telefonu\"\n📋 **Firma:** \"Nakliye firmaları\"\n📊 **İstatistik:** \"En fazla turneye giden?\"\n📅 **Tarih:** \"Nisan turneları\", \"Yaklaşan turneler\"\n✏️ **Düzenle:** Düzenle sekmesinden turneleri düzenleyebilirsiniz\n🔔 **Hatırlatıcı:** Hatırlatıcı sekmesinden hatırlatıcı ekleyebilirsiniz";
   }
 
-  function findPerson(Q, T) {
-    const names = new Map();
-    for (const t of T) for (const k of t.katilimcilar) {
-      const key = norm(k.kisi);
-      if (!names.has(key)) names.set(key, k);
-    }
-    // Tam eşleşme
-    for (const [nN, k] of names) {
-      if (nN.split(" ").length >= 2 && Q.includes(nN)) return k;
-    }
-    // Parça eşleşmesi (≥4 karakter)
-    for (const [nN, k] of names) {
-      if (nN.split(" ").filter(p=>p.length>=4).some(p=>Q.includes(p))) return k;
-    }
-    return null;
-  }
+  function findPerson(Q,T) { const m=new Map();for(const t of T)for(const k of t.katilimcilar){const key=norm(k.kisi);if(!m.has(key))m.set(key,k);} for(const[nN,k]of m)if(nN.split(" ").length>=2&&Q.includes(nN))return k; for(const[nN,k]of m)if(nN.split(" ").filter(p=>p.length>=4).some(p=>Q.includes(p)))return k; return null; }
+  function findCity(Q,T) { const c=new Set();for(const t of T){if(t.il)c.add(t.il);for(const d of t.duraklar||[])if(d.il)c.add(d.il);}for(const city of c)if(norm(city).length>=4&&Q.includes(norm(city)))return city;return null; }
 
-  function findCity(Q, T) {
-    const cities = new Set();
-    for (const t of T) {
-      if (t.il) cities.add(t.il);
-      for (const d of t.duraklar||[]) if(d.il) cities.add(d.il);
-    }
-    for (const c of cities) {
-      if (norm(c).length >= 4 && Q.includes(norm(c))) return c;
-    }
-    return null;
-  }
-
-  /* ─── UI ─── */
+  /* ─────────────────── UI: SOHBET ─────────────────── */
   function fmtHtml(text) {
-    if (typeof text === "object" && text.html) {
-      // HTML mesaj — sadece **bold** dönüştür, anchor'lar zaten HTML
-      const lines = text.html.split("\n").map(l => {
-        return l.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
-      });
-      return lines.join("\n");
-    }
-    const esc = text.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    if (typeof text==="object"&&text.html) return text.html.split("\n").map(l=>l.replace(/\*\*([^*]+)\*\*/g,"<strong>$1</strong>")).join("\n");
+    const esc=text.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
     return esc.replace(/\*\*([^*]+)\*\*/g,"<strong>$1</strong>");
   }
-
   function addMsg(text, who, dismissable) {
-    const el = document.createElement("div");
-    el.className = "ta-msg " + (who==="user" ? "user" : "bot");
-    const content = who === "bot" ? fmtHtml(text) : (text+"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
-    el.innerHTML = content;
-    if (dismissable && who === "bot") {
-      const btn = document.createElement("button");
-      btn.className = "ta-dismiss"; btn.title = "Kapat"; btn.innerHTML = "×";
-      btn.addEventListener("click", () => el.remove());
-      el.insertBefore(btn, el.firstChild);
-    }
-    msgs.appendChild(el);
-    msgs.scrollTop = msgs.scrollHeight;
-    return el;
+    const el=document.createElement("div");
+    el.className="ta-msg "+(who==="user"?"user":"bot");
+    el.innerHTML=who==="bot"?fmtHtml(text):(text+"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    if (dismissable&&who==="bot") { const btn=document.createElement("button");btn.className="ta-dismiss";btn.title="Kapat";btn.innerHTML="×";btn.addEventListener("click",()=>el.remove());el.insertBefore(btn,el.firstChild); }
+    msgs.appendChild(el); msgs.scrollTop=msgs.scrollHeight; return el;
   }
-
-  function addTyping() {
-    const el = document.createElement("div");
-    el.className = "ta-msg bot";
-    el.innerHTML = '<div class="ta-typing"><span></span><span></span><span></span></div>';
-    msgs.appendChild(el); msgs.scrollTop = msgs.scrollHeight;
-    return el;
-  }
-
+  function addTyping() { const el=document.createElement("div");el.className="ta-msg bot";el.innerHTML='<div class="ta-typing"><span></span><span></span><span></span></div>';msgs.appendChild(el);msgs.scrollTop=msgs.scrollHeight;return el; }
   function submit(text) {
-    const q = (text||"").trim();
-    if (!q) return;
-    if (!DS) { addMsg("Veriler henüz yüklenmedi, lütfen bekleyin…","bot"); return; }
-    addMsg(q,"user");
-    input.value=""; input.style.height="auto";
-    sugs.style.display="none";
-    const typing = addTyping();
-    setTimeout(() => {
-      typing.remove();
-      addMsg(answer(q, DS), "bot");
-    }, 200);
+    const q=(text||"").trim(); if (!q) return;
+    if (!DS) { addMsg("Veriler yüklenmedi, bekleyin…","bot"); return; }
+    addMsg(q,"user"); input.value=""; input.style.height="auto"; sugs.style.display="none";
+    const typing=addTyping();
+    setTimeout(()=>{typing.remove();addMsg(answer(q,DS),"bot");},200);
   }
 
-  /* ─── KARŞILAMA ─── */
-  addMsg({html:
-    "👋 Merhaba! Ben <strong>Turne Asistanı</strong>'yım.\n\n" +
-    "Turne verileriniz hakkında sorularınızı yanıtlarım:\n" +
-    "🏙 Şehir otel numaraları · 📋 Firma rehberi · 👤 Kişi turne listeleri\n" +
-    "📅 Tarih & istatistik — tamamen ücretsiz ve sınırsız.\n\n" +
-    "📊 İstatistik için sağ üstteki <strong>İSTATİSTİK</strong> butonuna tıklayın."
-  }, "bot", true);
+  /* ─────────────────── DÜZENLEME SEKMESİ ─────────────────── */
+  let editOriginal = null;
 
-  const SUGS = [
-    "En fazla turneye giden kişi?",
-    "Yaklaşan turneler",
-    "Nakliye firma numaraları",
-    "Otel rehberi",
-    "En çok gidilen şehirler?",
-    "Hangi ay en yoğun?",
-    "Toplam kaç personel turneye çıktı?",
-  ];
-  for (const s of SUGS) {
-    const b = document.createElement("button");
-    b.type="button"; b.className="ta-sug"; b.textContent=s;
-    b.addEventListener("click",()=>submit(s));
-    sugs.appendChild(b);
+  function populateEditSelect() {
+    if (!DS) return;
+    const sel = $i("ta-edit-select");
+    const cur = sel.value;
+    while (sel.options.length > 1) sel.remove(1);
+    for (const t of DS.turneler) {
+      const opt = document.createElement("option");
+      opt.value = t.oyun;
+      opt.textContent = `${t.oyun} — ${t.il||"?"} · ${fmtTarih(t.baslangic)}`;
+      sel.appendChild(opt);
+    }
+    if (cur) sel.value = cur;
   }
+
+  $i("ta-edit-select")?.addEventListener("change", function() {
+    const oyun = this.value;
+    const body = $i("ta-edit-body");
+    const actions = $i("ta-edit-actions");
+    if (!oyun || !DS) { body.innerHTML='<div style="text-align:center;padding:40px 20px;color:#B0A99E;"><div style="font-size:28px;margin-bottom:8px;">✏️</div><div style="font-size:13px;font-weight:600;">Düzenlemek için bir turne seçin</div></div>'; actions.style.display="none"; return; }
+    const t = DS.turneler.find(x=>x.oyun===oyun);
+    if (!t) return;
+    editOriginal = JSON.parse(JSON.stringify(t));
+    actions.style.display="flex";
+    $i("ta-save-status").style.display="none";
+
+    body.innerHTML = `
+      <div class="ta-section-title">📋 Temel Bilgiler</div>
+      <div class="ta-field"><label>Oyun Adı</label><input id="ef-oyun" value="${esc(t.oyun)}"></div>
+      <div class="ta-field-row">
+        <div class="ta-field"><label>Başlangıç</label><input id="ef-bas" type="text" value="${esc(t.baslangic)}"></div>
+        <div class="ta-field"><label>Bitiş</label><input id="ef-bit" type="text" value="${esc(t.bitis)}"></div>
+      </div>
+      <div class="ta-field-row">
+        <div class="ta-field"><label>Şehir / İl</label><input id="ef-il" value="${esc(t.il)}"></div>
+        <div class="ta-field"><label>Temsil Sayısı</label><input id="ef-sayi" type="number" min="1" value="${t.sayi||1}"></div>
+      </div>
+      <div class="ta-field"><label>Sahne / Mekan</label><input id="ef-mekan" value="${esc(t.mekan)}"></div>
+      <div class="ta-field"><label>Statü</label>
+        <select id="ef-statu">
+          ${["taslak","tamamlandi","devam-ediyor","iptal","yarıda-kesildi"].map(s=>`<option value="${s}"${t.statu===s?" selected":""}>${s}</option>`).join("")}
+        </select>
+      </div>
+
+      <div class="ta-section-title" style="margin-top:14px;">🏨 Konaklama</div>
+      <div class="ta-field"><label>Otel Adı</label><input id="ef-otel" value="${esc(t.otelAdi)}"></div>
+      <div class="ta-field"><label>Otel Telefonu</label><input id="ef-otelt" value="${esc(t.otelTel)}"></div>
+      <div class="ta-field"><label>Otel Adresi</label><input id="ef-otela" value="${esc(t.otelAdres)}"></div>
+
+      <div class="ta-section-title" style="margin-top:14px;">🚌 Ulaşım</div>
+      <div class="ta-field-row">
+        <div class="ta-field"><label>Gidiş</label><input id="ef-gidis" value="${esc(t.gidisUlasim)}"></div>
+        <div class="ta-field"><label>Gidiş Saati</label><input id="ef-gidiss" value="${esc(t.gidisSaat)}"></div>
+      </div>
+      <div class="ta-field-row">
+        <div class="ta-field"><label>Dönüş</label><input id="ef-donus" value="${esc(t.donusUlasim)}"></div>
+        <div class="ta-field"><label>Dönüş Saati</label><input id="ef-donuss" value="${esc(t.donusSaat)}"></div>
+      </div>
+
+      <div class="ta-section-title" style="margin-top:14px;">📝 Not</div>
+      <div class="ta-field"><textarea id="ef-not" rows="3">${esc(t.not)}</textarea></div>
+
+      <div class="ta-section-title" style="margin-top:14px;">👥 Kadro (${t.katilimcilar.length} kişi)</div>
+      ${t.katilimcilar.slice(0,30).map(k=>`<div style="padding:4px 8px;font-size:12px;border-bottom:1px solid #F0EBE5;display:flex;justify-content:space-between;"><span style="font-weight:600">${esc(k.kisi)}</span><span style="color:#8A857C;font-size:11px">${esc(k.gorev||k.kategori)}</span></div>`).join("")}
+      ${t.katilimcilar.length>30?`<div style="text-align:center;font-size:11px;color:#B0A99E;padding:6px">+${t.katilimcilar.length-30} kişi daha (tam liste turne sayfasında)</div>`:""}
+      <div style="height:16px"></div>
+    `;
+  });
+
+  function esc(s) { return (s||"").replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+
+  $i("ta-save-btn")?.addEventListener("click", () => {
+    const oyun = $i("ta-edit-select").value; if (!oyun||!DS) return;
+    const t = DS.turneler.find(x=>x.oyun===oyun); if (!t) return;
+    t.oyun      = $i("ef-oyun").value.trim();
+    t.baslangic = $i("ef-bas").value.trim();
+    t.bitis     = $i("ef-bit").value.trim();
+    t.il        = $i("ef-il").value.trim();
+    t.sayi      = parseInt($i("ef-sayi").value)||1;
+    t.mekan     = $i("ef-mekan").value.trim();
+    t.statu     = $i("ef-statu").value;
+    t.otelAdi   = $i("ef-otel").value.trim();
+    t.otelTel   = $i("ef-otelt").value.trim();
+    t.otelAdres = $i("ef-otela").value.trim();
+    t.gidisUlasim = $i("ef-gidis").value.trim();
+    t.gidisSaat   = $i("ef-gidiss").value.trim();
+    t.donusUlasim = $i("ef-donus").value.trim();
+    t.donusSaat   = $i("ef-donuss").value.trim();
+    t.not       = $i("ef-not").value.trim();
+    populateEditSelect();
+    const ss = $i("ta-save-status"); ss.style.display="flex";
+    setTimeout(()=>ss.style.display="none",3000);
+    addMsg(`✅ **${t.oyun}** turne bilgileri güncellendi (bu oturumda geçerli).`,"bot");
+  });
+
+  $i("ta-reset-btn")?.addEventListener("click", () => {
+    if (!editOriginal) return;
+    const t = DS.turneler.find(x=>x.oyun===$i("ta-edit-select").value); if (!t) return;
+    Object.assign(t, JSON.parse(JSON.stringify(editOriginal)));
+    $i("ta-edit-select").dispatchEvent(new Event("change"));
+  });
+
+  /* ─────────────────── HATIRLATICI SEKMESİ ─────────────────── */
+  function loadReminders() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY)||"[]"); } catch(e){ return []; } }
+  function saveReminders(arr) { try { localStorage.setItem(STORAGE_KEY,JSON.stringify(arr)); } catch(e){} }
+
+  function checkReminders() {
+    const now=new Date(), today=now.toDateString();
+    const arr=loadReminders();
+    const due=arr.filter(r=>!r.done&&r.date&&new Date(r.date).toDateString()===today);
+    const overdue=arr.filter(r=>!r.done&&r.date&&new Date(r.date)<now&&new Date(r.date).toDateString()!==today);
+    const total=due.length+overdue.length;
+    if (total>0) { fabBadge.textContent=total;fabBadge.classList.add("show"); } else { fabBadge.classList.remove("show"); }
+    remindBadge.textContent=total; remindBadge.style.display=total>0?"inline-flex":"none";
+  }
+
+  function renderReminders() {
+    const body=$i("ta-remind-body"); if(!body) return;
+    const arr=loadReminders();
+    const now=new Date();
+
+    const addBtn=document.createElement("div"); addBtn.className="ta-remind-add"; addBtn.innerHTML="＋ Yeni Hatırlatıcı Ekle"; addBtn.addEventListener("click",()=>showAddForm());
+    body.innerHTML=""; body.appendChild(addBtn);
+
+    if (!arr.length) { const empty=document.createElement("div"); empty.className="ta-remind-empty"; empty.innerHTML='<div class="ta-remind-empty-icon">🔔</div><div class="ta-remind-empty-text">Henüz hatırlatıcı yok</div><div style="font-size:11px;margin-top:4px;color:#C0BAB2">Turne tarihleri, ödemeler, toplantılar için hatırlatıcı ekleyin</div>'; body.appendChild(empty); return; }
+
+    // Sırala: gecikmiş → bugün → gelecek → tamamlandı
+    const sorted=[...arr].sort((a,b)=>{
+      const da=a.date?new Date(a.date):new Date("9999");
+      const db=b.date?new Date(b.date):new Date("9999");
+      if (a.done!==b.done) return a.done?1:-1;
+      return da-db;
+    });
+
+    for (const [idx,r] of sorted.entries()) {
+      const d=r.date?new Date(r.date):null;
+      const isToday=d&&d.toDateString()===now.toDateString();
+      const isOverdue=d&&d<now&&!isToday;
+      const item=document.createElement("div");
+      item.className="ta-remind-item"+(r.done?" done":isToday?" today":isOverdue?" overdue":"");
+
+      const icons={"turne":"🎭","otel":"🏨","ulasim":"🚌","odeme":"💰","toplanti":"📅","diger":"🔔"};
+      const icon=icons[r.type||"diger"]||"🔔";
+      const dateStr=d?`${d.getDate()} ${AYLAR[d.getMonth()]} ${d.getFullYear()}`:"Tarihi yok";
+      const durum=r.done?"✅ Tamamlandı":isToday?`<strong>⚡ Bugün</strong>`:isOverdue?`<strong style="color:#B53030">⚠️ Gecikmiş</strong>`:`📅 ${dateStr}`;
+
+      item.innerHTML=`
+        <div class="ta-remind-icon" style="background:${r.done?"#F0EBE5":isToday?"#FBE8EB":isOverdue?"#FFF0F0":"#F8F4F0"}">${icon}</div>
+        <div class="ta-remind-content">
+          <div class="ta-remind-text">${esc(r.text)}</div>
+          <div class="ta-remind-meta">${durum}${r.turne?` · <strong>${esc(r.turne)}</strong>`:""}</div>
+        </div>
+        <div class="ta-remind-actions">
+          ${!r.done?`<button class="ta-remind-btn" data-action="done" data-id="${r.id}" title="Tamamlandı">✓</button>`:`<button class="ta-remind-btn" data-action="undone" data-id="${r.id}" title="Geri al">↩</button>`}
+          <button class="ta-remind-btn" data-action="delete" data-id="${r.id}" title="Sil" style="color:#B53030">✕</button>
+        </div>`;
+      body.appendChild(item);
+    }
+
+    body.querySelectorAll(".ta-remind-btn").forEach(btn=>{
+      btn.addEventListener("click",()=>{
+        const id=btn.dataset.id, action=btn.dataset.action;
+        let arr=loadReminders();
+        if (action==="done"||action==="undone") { arr=arr.map(r=>r.id===id?{...r,done:action==="done"}:r); }
+        else if (action==="delete") { arr=arr.filter(r=>r.id!==id); }
+        saveReminders(arr); checkReminders(); renderReminders();
+      });
+    });
+  }
+
+  function showAddForm() {
+    const body=$i("ta-remind-body"); if(!body) return;
+    const turneOptions=DS?DS.turneler.map(t=>`<option value="${esc(t.oyun)}">${esc(t.oyun)} — ${esc(t.il||"?")} · ${fmtTarih(t.baslangic)}</option>`).join(""):"";
+    const form=document.createElement("div"); form.className="ta-remind-form";
+    const today=new Date().toISOString().slice(0,10);
+    form.innerHTML=`
+      <div class="ta-field"><label>Hatırlatıcı Metni</label><input id="rf-text" placeholder="ör: Otel rezervasyonu yap, Uçak bileti al…"></div>
+      <div class="ta-field-row">
+        <div class="ta-field"><label>Tür</label>
+          <select id="rf-type">
+            <option value="diger">🔔 Genel</option>
+            <option value="turne">🎭 Turne</option>
+            <option value="otel">🏨 Otel</option>
+            <option value="ulasim">🚌 Ulaşım</option>
+            <option value="odeme">💰 Ödeme</option>
+            <option value="toplanti">📅 Toplantı</option>
+          </select>
+        </div>
+        <div class="ta-field"><label>Tarih</label><input id="rf-date" type="date" value="${today}"></div>
+      </div>
+      ${turneOptions?`<div class="ta-field"><label>İlgili Turne (opsiyonel)</label><select id="rf-turne"><option value="">— Seçiniz —</option>${turneOptions}</select></div>`:""}
+      <div style="display:flex;gap:6px;margin-top:2px;">
+        <button class="ta-btn ta-btn-primary" id="rf-save" style="flex:1">Ekle</button>
+        <button class="ta-btn ta-btn-secondary" id="rf-cancel">İptal</button>
+      </div>`;
+    body.insertBefore(form, body.children[1]||null);
+    $i("rf-text")?.focus();
+    $i("rf-cancel")?.addEventListener("click",()=>{form.remove();});
+    $i("rf-save")?.addEventListener("click",()=>{
+      const text=($i("rf-text")?.value||"").trim();
+      if (!text) { $i("rf-text").style.borderColor="#A0192E"; return; }
+      const arr=loadReminders();
+      arr.push({ id: Date.now().toString(36)+Math.random().toString(36).slice(2), text, type:$i("rf-type")?.value||"diger", date:$i("rf-date")?.value||"", turne:$i("rf-turne")?.value||"", done:false, created:new Date().toISOString() });
+      saveReminders(arr); checkReminders(); form.remove(); renderReminders();
+    });
+  }
+
+  /* ─────────────────── İSTATİSTİK SEKMESİ ─────────────────── */
+  function renderStats() {
+    if (!DS) return;
+    const body=$i("ta-stat-body"); if(!body) return;
+    const T=DS.turneler;
+    const now=new Date();
+
+    const toplam=T.length;
+    const tamamlanan=T.filter(t=>t.statu.startsWith("tamamlan")).length;
+    const devam=T.filter(t=>t.statu.startsWith("devam")).length;
+    const iptal=T.filter(t=>t.statu==="iptal").length;
+    const gelecek=T.filter(t=>{const d=parseDate(t.baslangic);return d&&d>now;}).length;
+    const toplamGun=T.filter(t=>!t.statu.includes("iptal")).reduce((s,t)=>s+turneGun(t),0);
+    const toplamTemsil=T.filter(t=>!t.statu.includes("iptal")).reduce((s,t)=>s+(t.sayi||0),0);
+    const personelSet=new Set();T.forEach(t=>t.katilimcilar.forEach(k=>personelSet.add(norm(k.kisi))));
+
+    // Şehir sıklığı
+    const ilMap=new Map();
+    T.filter(t=>!t.statu.includes("iptal")).forEach(t=>{const ils=new Set();if(t.il)ils.add(t.il);(t.duraklar||[]).forEach(d=>{if(d.il)ils.add(d.il);});ils.forEach(il=>ilMap.set(il,(ilMap.get(il)||0)+1));});
+    const topIller=[...ilMap.entries()].sort((a,b)=>b[1]-a[1]).slice(0,8);
+
+    // Kişi sıklığı
+    const kisiMap=new Map();
+    T.forEach(t=>t.katilimcilar.forEach(k=>{kisiMap.set(k.kisi,(kisiMap.get(k.kisi)||0)+1);}));
+    const topKisiler=[...kisiMap.entries()].sort((a,b)=>b[1]-a[1]).slice(0,8);
+
+    // Aylık dağılım
+    const ayMap=new Array(12).fill(0);
+    T.filter(t=>!t.statu.includes("iptal")).forEach(t=>{const d=parseDate(t.baslangic);if(d)ayMap[d.getMonth()]++;});
+    const maxAy=Math.max(...ayMap,1);
+
+    // Görev dağılımı
+    const gorevMap=new Map();
+    T.forEach(t=>t.katilimcilar.forEach(k=>{const g=k.kategori||k.gorev||"Diğer";if(!gorevMap.has(g))gorevMap.set(g,new Set());gorevMap.get(g).add(norm(k.kisi));}));
+    const topGorevler=[...gorevMap.entries()].map(([g,s])=>[g,s.size]).sort((a,b)=>b[1]-a[1]).slice(0,6);
+
+    // Yıl dağılımı
+    const yilMap=new Map();
+    T.forEach(t=>{const d=parseDate(t.baslangic);if(d){const y=d.getFullYear();yilMap.set(y,(yilMap.get(y)||0)+1);}});
+    const sortedYillar=[...yilMap.entries()].sort((a,b)=>a[0]-b[0]);
+
+    body.innerHTML=`
+      <!-- KPI -->
+      <div class="ta-kpi-grid">
+        <div class="ta-kpi"><div class="ta-kpi-val">${toplam}</div><div class="ta-kpi-lbl">Toplam Turne</div></div>
+        <div class="ta-kpi"><div class="ta-kpi-val">${toplamGun}</div><div class="ta-kpi-lbl">Toplam Gün</div></div>
+        <div class="ta-kpi"><div class="ta-kpi-val">${toplamTemsil}</div><div class="ta-kpi-lbl">Toplam Temsil</div></div>
+        <div class="ta-kpi"><div class="ta-kpi-val">${personelSet.size}</div><div class="ta-kpi-lbl">Toplam Personel</div></div>
+      </div>
+      <div class="ta-kpi-grid" style="margin-bottom:12px;">
+        <div class="ta-kpi"><div class="ta-kpi-val" style="color:#2F7D4E">${tamamlanan}</div><div class="ta-kpi-lbl">Tamamlandı</div></div>
+        <div class="ta-kpi"><div class="ta-kpi-val" style="color:#3A6FB0">${devam}</div><div class="ta-kpi-lbl">Devam Ediyor</div></div>
+        <div class="ta-kpi"><div class="ta-kpi-val" style="color:#C97A12">${gelecek}</div><div class="ta-kpi-lbl">Planlandı</div></div>
+        <div class="ta-kpi"><div class="ta-kpi-val" style="color:#B53030">${iptal}</div><div class="ta-kpi-lbl">İptal</div></div>
+      </div>
+
+      <!-- AYLIK DAĞILIM -->
+      <div class="ta-stat-section">
+        <div class="ta-stat-section-title">📅 Aylık Dağılım</div>
+        <div class="ta-stat-month">
+          ${ayMap.map((n,i)=>`
+            <div class="ta-stat-month-col">
+              <div class="ta-stat-month-val">${n||""}</div>
+              <div class="ta-stat-month-bar" style="height:${Math.round((n/maxAy)*44)+2}px;opacity:${n?1:.2}"></div>
+              <div class="ta-stat-month-lbl">${AYLAR[i].slice(0,3)}</div>
+            </div>`).join("")}
+        </div>
+      </div>
+
+      <!-- YILLIK -->
+      ${sortedYillar.length>1?`<div class="ta-stat-section">
+        <div class="ta-stat-section-title">📆 Yıllara Göre</div>
+        ${sortedYillar.map(([y,n],i)=>`<div class="ta-stat-row"><span class="ta-stat-rank">${i+1}</span><span class="ta-stat-name">${y}</span><div class="ta-stat-bar-wrap"><div class="ta-stat-bar" style="width:${Math.round(n/sortedYillar[0][1]*100)}%"></div></div><span class="ta-stat-val">${n}</span></div>`).join("")}
+      </div>`:""}
+
+      <!-- EN ÇOK GİDİLEN ŞEHIRLER -->
+      <div class="ta-stat-section">
+        <div class="ta-stat-section-title">🏙 En Çok Gidilen Şehirler</div>
+        ${topIller.map(([il,n],i)=>`<div class="ta-stat-row"><span class="ta-stat-rank">${i+1}</span><span class="ta-stat-name">${il}</span><div class="ta-stat-bar-wrap"><div class="ta-stat-bar" style="width:${Math.round(n/topIller[0][1]*100)}%"></div></div><span class="ta-stat-val">${n} turne</span></div>`).join("")}
+      </div>
+
+      <!-- EN ÇOK TURNEYE GİDEN -->
+      <div class="ta-stat-section">
+        <div class="ta-stat-section-title">👤 En Aktif Personel</div>
+        ${topKisiler.map(([k,n],i)=>`<div class="ta-stat-row"><span class="ta-stat-rank">${i+1}</span><span class="ta-stat-name">${k}</span><div class="ta-stat-bar-wrap"><div class="ta-stat-bar" style="width:${Math.round(n/topKisiler[0][1]*100)}%"></div></div><span class="ta-stat-val">${n} turne</span></div>`).join("")}
+      </div>
+
+      <!-- GÖREV DAĞILIMI -->
+      <div class="ta-stat-section">
+        <div class="ta-stat-section-title">🎭 Görev Dağılımı</div>
+        ${topGorevler.map(([g,n],i)=>`<div class="ta-stat-row"><span class="ta-stat-rank">${i+1}</span><span class="ta-stat-name">${g}</span><div class="ta-stat-bar-wrap"><div class="ta-stat-bar" style="width:${Math.round(n/topGorevler[0][1]*100)}%"></div></div><span class="ta-stat-val">${n} kişi</span></div>`).join("")}
+      </div>
+
+      <!-- ÖZET METRİKLER -->
+      <div class="ta-stat-section">
+        <div class="ta-stat-section-title">📊 Özet</div>
+        <div class="ta-stat-row"><span class="ta-stat-name">Ortalama turne süresi</span><span class="ta-stat-val">${T.length?Math.round(toplamGun/T.length):0} gün</span></div>
+        <div class="ta-stat-row"><span class="ta-stat-name">Turne başına ortalama temsil</span><span class="ta-stat-val">${T.length?Math.round(toplamTemsil/T.length):0}</span></div>
+        <div class="ta-stat-row"><span class="ta-stat-name">Turne başına ortalama kadro</span><span class="ta-stat-val">${T.length?Math.round(T.reduce((s,t)=>s+t.katilimcilar.length,0)/T.length):0} kişi</span></div>
+        <div class="ta-stat-row"><span class="ta-stat-name">Tamamlanma oranı</span><span class="ta-stat-val">${toplam?Math.round(tamamlanan/toplam*100):0}%</span></div>
+      </div>
+      <div style="height:12px"></div>
+    `;
+  }
+
+  /* ─────────────────── BAŞLAT ─────────────────── */
+  addMsg({html:"👋 Merhaba! Ben <strong>Turne Asistanı</strong>'yım.\n\nOtel numaraları, firma rehberi, kişi listeleri, tarih & istatistik sorularınızı yanıtlarım.\n\n<span style='font-size:12px;color:#8A857C'>💡 Üst sekmeleri kullanarak turne <strong>düzenleyebilir</strong>, <strong>hatırlatıcı</strong> ekleyebilir ve <strong>istatistikleri</strong> görüntüleyebilirsiniz.</span>"},"bot",true);
+
+  const SUGS=["En fazla turneye giden?","Yaklaşan turneler","Ankara oteli","Nakliye firmaları","Hangi ay en yoğun?"];
+  for (const s of SUGS) { const b=document.createElement("button");b.type="button";b.className="ta-sug";b.textContent=s;b.addEventListener("click",()=>submit(s));sugs.appendChild(b); }
 
   loadData();
+  setInterval(checkReminders, 60000); // dakikada bir kontrol
 })();
