@@ -88,6 +88,12 @@
   .ta-msg.bot strong{color:#A0192E;font-weight:700;}
   .ta-msg.bot a.ta-phone{color:#A0192E;font-weight:700;text-decoration:none;border-bottom:1px dashed rgba(160,25,46,.35);}
   .ta-msg.bot a.ta-phone:hover{border-bottom-style:solid;}
+  .ta-inline-copy,.ta-inline-aktar{display:inline-flex;align-items:center;gap:4px;height:26px;padding:0 10px;
+    border-radius:7px;border:1.5px solid #E8E2D7;background:#FBF8F3;font-size:11px;font-weight:700;
+    cursor:pointer;font-family:inherit;color:#4A4A4A;transition:all .15s;margin:6px 4px 2px 0;vertical-align:middle;}
+  .ta-inline-copy:hover{border-color:#A0192E;color:#A0192E;background:#FBE8EB;}
+  .ta-inline-aktar{background:linear-gradient(135deg,#A0192E,#6B0E1E);color:#fff;border-color:transparent;}
+  .ta-inline-aktar:hover{opacity:.88;}
   .ta-badge{display:inline-block;background:#FBE8EB;color:#7A0E1E;border-radius:5px;padding:1px 6px;font-size:10.5px;font-weight:700;}
   .ta-dismiss{float:right;margin-left:8px;margin-top:-2px;background:none;border:none;cursor:pointer;
     color:rgba(160,25,46,.4);font-size:16px;line-height:1;padding:0 2px;transition:color .15s;}
@@ -193,6 +199,46 @@
   .ta-stat-month-lbl{font-size:8px;font-weight:700;color:#8A857C;}
   .ta-stat-month-val{font-size:9px;font-weight:800;color:#A0192E;}
 
+  /* ── REHBER GÖRÜNÜMÜ ── */
+  #ta-rehber-view{background:#FBF8F3;}
+  .ta-rehber-toolbar{padding:10px 12px;background:#fff;border-bottom:1px solid #E8E2D7;display:flex;gap:7px;align-items:center;flex-shrink:0;}
+  .ta-rehber-search{flex:1;border:1.5px solid #E8E2D7;border-radius:9px;padding:6px 10px 6px 30px;font-size:12.5px;
+    font-family:inherit;background:#FBF8F3;outline:none;color:#1A1A1A;transition:border-color .15s;}
+  .ta-rehber-search:focus{border-color:#A0192E;background:#fff;}
+  .ta-rehber-search-wrap{position:relative;flex:1;}
+  .ta-rehber-search-icon{position:absolute;left:9px;top:50%;transform:translateY(-50%);pointer-events:none;color:#B0A99E;}
+  .ta-rehber-filter{border:1.5px solid #E8E2D7;border-radius:9px;padding:6px 8px;font-size:11.5px;
+    font-family:inherit;background:#FBF8F3;outline:none;color:#1A1A1A;cursor:pointer;}
+  .ta-rehber-filter:focus{border-color:#A0192E;}
+  .ta-rehber-body{flex:1;overflow-y:auto;padding:10px;}
+  .ta-rehber-body::-webkit-scrollbar{width:4px;}.ta-rehber-body::-webkit-scrollbar-thumb{background:#D9C9BD;border-radius:4px;}
+  .ta-rehber-card{background:#fff;border:1px solid #E8E2D7;border-radius:10px;margin-bottom:8px;overflow:hidden;transition:box-shadow .15s;}
+  .ta-rehber-card:hover{box-shadow:0 3px 12px rgba(0,0,0,.09);}
+  .ta-rehber-card-head{padding:10px 12px;display:flex;align-items:flex-start;gap:8px;}
+  .ta-rehber-icon{width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;}
+  .ta-rehber-info{flex:1;min-width:0;}
+  .ta-rehber-name{font-size:13px;font-weight:700;color:#1A1A1A;line-height:1.2;word-break:break-word;}
+  .ta-rehber-tel{font-size:12px;font-weight:700;color:#A0192E;margin-top:2px;display:flex;align-items:center;gap:5px;}
+  .ta-rehber-tel a{color:#A0192E;text-decoration:none;}
+  .ta-rehber-tel a:hover{text-decoration:underline;}
+  .ta-rehber-adres{font-size:11px;color:#6A6560;margin-top:3px;line-height:1.4;}
+  .ta-rehber-tag{display:inline-block;background:#FBE8EB;color:#7A0E1E;border-radius:4px;padding:1px 6px;font-size:9.5px;font-weight:800;margin-top:4px;}
+  .ta-rehber-actions{padding:0 12px 10px;display:flex;gap:6px;}
+  .ta-rehber-btn{height:28px;padding:0 10px;border-radius:7px;border:1.5px solid #E8E2D7;background:#FBF8F3;
+    font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:4px;
+    color:#4A4A4A;transition:all .15s;}
+  .ta-rehber-btn:hover{border-color:#A0192E;color:#A0192E;background:#FBE8EB;}
+  .ta-rehber-btn.copied{border-color:#2F7D4E;color:#2F7D4E;background:#EDF7F1;}
+  .ta-rehber-btn.aktar{background:linear-gradient(135deg,#A0192E,#6B0E1E);color:#fff;border-color:transparent;}
+  .ta-rehber-btn.aktar:hover{opacity:.88;}
+  .ta-rehber-empty{text-align:center;padding:40px 20px;color:#B0A99E;font-size:12.5px;font-weight:600;}
+
+  /* Kopyalama toast */
+  #ta-toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%) translateY(10px);background:#1A1A1A;color:#fff;
+    font-size:12px;font-weight:600;padding:8px 16px;border-radius:20px;opacity:0;pointer-events:none;
+    transition:opacity .2s,transform .2s;z-index:9999;white-space:nowrap;}
+  #ta-toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
   @media(max-width:600px){
     #ta-panel{width:calc(100vw - 16px);right:8px;bottom:80px;height:calc(100vh - 100px);}
     #ta-fab{bottom:16px;right:16px;width:50px;height:50px;}
@@ -250,6 +296,10 @@
           Hatırlatıcı
           <span class="ta-tab-badge" id="ta-remind-badge" style="display:none"></span>
         </button>
+        <button class="ta-tab" data-view="rehber">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.4 2 2 0 0 1 3.6 1.22h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L7.91 8.84A16 16 0 0 0 16 16.91l.95-.95a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+          Rehber
+        </button>
         <button class="ta-tab" data-view="stats">
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2"/><path d="M7 17V13M12 17V7M17 17V11"/></svg>
           İstatistik
@@ -299,6 +349,27 @@
         <div class="ta-remind-body" id="ta-remind-body"></div>
       </div>
 
+      <!-- REHBER -->
+      <div class="ta-view" id="ta-rehber-view">
+        <div class="ta-rehber-toolbar">
+          <div class="ta-rehber-search-wrap">
+            <svg class="ta-rehber-search-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input class="ta-rehber-search" id="ta-rehber-q" type="search" placeholder="Firma, kişi, telefon ara…">
+          </div>
+          <select class="ta-rehber-filter" id="ta-rehber-cat">
+            <option value="">Tümü</option>
+            <option value="otel">🏨 Otel</option>
+            <option value="nakliye">🚛 Nakliye</option>
+            <option value="ulasim">🚌 Ulaşım</option>
+            <option value="servis">🔧 Servis</option>
+            <option value="diger">👤 Kişiler</option>
+          </select>
+        </div>
+        <div class="ta-rehber-body" id="ta-rehber-body">
+          <div class="ta-rehber-empty">Veriler yükleniyor…</div>
+        </div>
+      </div>
+
       <!-- İSTATİSTİK -->
       <div class="ta-view" id="ta-stats-view">
         <div class="ta-stat-body" id="ta-stat-body">
@@ -316,6 +387,9 @@
       </div>
     </div>`;
   document.body.appendChild(root);
+  // Toast
+  const toast = document.createElement("div"); toast.id="ta-toast"; document.body.appendChild(toast);
+  function showToast(msg, dur=1800){toast.textContent=msg;toast.classList.add("show");setTimeout(()=>toast.classList.remove("show"),dur);}
 
   const $i = id => document.getElementById(id);
   const panel = $i("ta-panel"), msgs = $i("ta-msgs"), sugs = $i("ta-sugs");
@@ -334,6 +408,7 @@
       if (tab.dataset.view === "stats" && DS) renderStats();
       if (tab.dataset.view === "remind") renderReminders();
       if (tab.dataset.view === "edit" && DS) populateEditSelect();
+      if (tab.dataset.view === "rehber" && DS) renderRehber();
     });
   });
 
@@ -504,6 +579,7 @@
       status.textContent = `${turneler.length} turne · ${cities.size} şehir · ${ppl.size} personel`;
       populateEditSelect();
       checkReminders();
+      renderRehber();  // ön-yükle
     } catch (e) {
       status.textContent = "Bağlantı hatası";
       addMsg("⚠️ Veri alınamadı: " + e.message, "bot");
@@ -557,7 +633,16 @@
 
     /* FİRMA / NUMARA */
     if (/(firma|nakliye|ulaşım|ulasim|servis|otobüs|otobus|kamyon|rehber|numara|telefon|ara(yın|yabilirim)|iletişim|irtibat)/.test(Q)) {
-      for (const f of F) { if (norm(f.ad).split(" ").filter(p=>p.length>=4).some(p=>Q.includes(p))) { let o=`📋 **${f.ad}**\n`; if(f.kaynak)o+=`   🗂 ${f.kaynak}\n`; if(f.not)o+=`   📍 ${f.not}\n`; if(f.tel)o+=`   📞 <a class="ta-phone" href="tel:${f.tel}">${fmtTel(f.tel)||f.tel}</a>\n`; return {html:o}; } }
+      for (const f of F) { if (norm(f.ad).split(" ").filter(p=>p.length>=4).some(p=>Q.includes(p))) {
+        let o=`📋 **${f.ad}**\n`;
+        if(f.kaynak)o+=`   🗂 ${f.kaynak}\n`;
+        if(f.not)o+=`   📍 ${f.not}\n`;
+        if(f.tel)o+=`   📞 <a class="ta-phone" href="tel:${f.tel}">${fmtTel(f.tel)||f.tel}</a>\n`;
+        const copyText = `${f.ad}${f.tel?"\nTel: "+(fmtTel(f.tel)||f.tel):""}${f.not?"\nAdres: "+f.not:""}`;
+        o += `\n<button class="ta-inline-copy" onclick="navigator.clipboard.writeText(${JSON.stringify(copyText)}).then(()=>{this.textContent='✓ Kopyalandı';setTimeout(()=>this.textContent='📋 Tümünü Kopyala',1800)})">📋 Tümünü Kopyala</button>`;
+        if(f.kategori==="otel")o+=` <button class="ta-inline-aktar" onclick="window.__taAktar(${JSON.stringify(f.ad)},${JSON.stringify(f.tel||'')},${JSON.stringify(f.not||'')})">📥 Forma Aktar</button>`;
+        return {html:o};
+      } }
       let cat=null;
       if (/(nakliye|kamyon)/.test(Q)) cat="nakliye";
       else if (/(otobüs|otobus|ulaşım|ulasim|servis)/.test(Q)) cat=["ulasim","servis"];
@@ -880,6 +965,123 @@
     });
   }
 
+  /* ─────────────────── REHBER SEKMESİ ─────────────────── */
+  const KAT_ICON = { otel:"🏨", nakliye:"🚛", ulasim:"🚌", servis:"🔧", diger:"👤" };
+  const KAT_BG   = { otel:"#FBE8EB", nakliye:"#EDF2FB", ulasim:"#EBF5FB", servis:"#F0FBF0", diger:"#F5F0FB" };
+
+  function renderRehber(filterQ, filterCat) {
+    const body = $i("ta-rehber-body"); if (!body || !DS) return;
+    const F = DS.firmalar || [];
+    const q  = (filterQ  || $i("ta-rehber-q")?.value  || "").trim().toLocaleLowerCase("tr");
+    const cat= (filterCat|| $i("ta-rehber-cat")?.value || "");
+
+    const filtered = F.filter(f => {
+      if (cat && f.kategori !== cat) return false;
+      if (q) { const all = norm(f.ad+" "+f.tel+" "+f.not+" "+f.kaynak); return all.includes(norm(q)); }
+      return true;
+    });
+
+    if (!filtered.length) { body.innerHTML='<div class="ta-rehber-empty">Sonuç bulunamadı 🔍</div>'; return; }
+
+    body.innerHTML = "";
+    for (const f of filtered) {
+      const icon = KAT_ICON[f.kategori] || "📋";
+      const bg   = KAT_BG[f.kategori]  || "#F8F4F0";
+      const telHref = f.tel ? `<a href="tel:${f.tel}">${fmtTel(f.tel)||f.tel}</a>` : "";
+      const tagCity = f.kaynak ? f.kaynak.split("·").pop().trim() : "";
+      const isOtel = f.kategori === "otel";
+
+      const card = document.createElement("div");
+      card.className = "ta-rehber-card";
+      card.innerHTML = `
+        <div class="ta-rehber-card-head">
+          <div class="ta-rehber-icon" style="background:${bg}">${icon}</div>
+          <div class="ta-rehber-info">
+            <div class="ta-rehber-name">${esc(f.ad)}</div>
+            ${f.tel?`<div class="ta-rehber-tel">📞 ${telHref}</div>`:""}
+            ${f.not?`<div class="ta-rehber-adres">📍 ${esc(f.not)}</div>`:""}
+            ${tagCity?`<span class="ta-rehber-tag">${esc(tagCity)}</span>`:""}
+          </div>
+        </div>
+        <div class="ta-rehber-actions">
+          <button class="ta-rehber-btn copy-btn" data-copy="${esc(f.ad+(f.tel?"\nTel: "+(fmtTel(f.tel)||f.tel):"")+(f.not?"\nAdres: "+f.not:""))}">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            Kopyala
+          </button>
+          <button class="ta-rehber-btn copy-btn" data-copy="${esc(f.tel||"")}">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.4 2 2 0 0 1 3.6 1.22h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.84A16 16 0 0 0 16 16.91l.95-.95a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+            Sadece Tel
+          </button>
+          ${isOtel ? `<button class="ta-rehber-btn aktar aktar-btn"
+            data-ad="${esc(f.ad)}" data-tel="${esc(f.tel||"")}" data-adres="${esc(f.not||"")}">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            Forma Aktar
+          </button>` : ""}
+        </div>`;
+
+      // Kopyala butonları
+      card.querySelectorAll(".copy-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const text = btn.dataset.copy || "";
+          if (!text) return;
+          navigator.clipboard.writeText(text).then(()=>{
+            btn.classList.add("copied"); btn.textContent = "✓ Kopyalandı";
+            showToast("📋 Panoya kopyalandı!");
+            setTimeout(()=>{ btn.classList.remove("copied"); btn.innerHTML = btn.dataset.copy === (f.tel||"") ? '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.4 2 2 0 0 1 3.6 1.22h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.84A16 16 0 0 0 16 16.91l.95-.95a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg> Sadece Tel' : '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Kopyala'; }, 2000);
+          }).catch(()=>showToast("❌ Kopyalama başarısız"));
+        });
+      });
+
+      // Forma Aktar butonu
+      card.querySelector(".aktar-btn")?.addEventListener("click", (e) => {
+        const btn = e.currentTarget;
+        aktarOtelFormuna(btn.dataset.ad, btn.dataset.tel, btn.dataset.adres);
+      });
+
+      body.appendChild(card);
+    }
+  }
+
+  // Rehber arama + filtre canlı güncelleme
+  document.addEventListener("input", e => { if (e.target.id === "ta-rehber-q") renderRehber(); });
+  document.addEventListener("change", e => { if (e.target.id === "ta-rehber-cat") renderRehber(); });
+
+  function aktarOtelFormuna(ad, tel, adres) {
+    window.__taAktar = aktarOtelFormuna; // ensure global stays fresh
+    // Önce düzenleme sekmesine geç
+    document.querySelectorAll(".ta-tab").forEach(t => t.classList.remove("active"));
+    document.querySelectorAll(".ta-view").forEach(v => v.classList.remove("active"));
+    const editTab = document.querySelector('.ta-tab[data-view="edit"]');
+    editTab?.classList.add("active");
+    $i("ta-edit-view")?.classList.add("active");
+    if (DS) populateEditSelect();
+
+    // Turne seçili değilse uyar, seçiliyse doldur
+    setTimeout(() => {
+      const otelInput  = $i("ef-otel");
+      const otelTel    = $i("ef-otelt");
+      const otelAdres  = $i("ef-otela");
+      if (!otelInput) {
+        showToast("⚠️ Önce bir turne seçin!", 2500);
+        return;
+      }
+      // Alanları doldur (sadece boşsa doldurmak yerine her zaman dolduruyoruz, kullanıcı isterse üzerine yazar)
+      if (ad)    { otelInput.value = ad;    otelInput.dispatchEvent(new Event("input")); flashField(otelInput); }
+      if (tel)   { otelTel.value   = tel;   otelTel.dispatchEvent(new Event("input"));   flashField(otelTel); }
+      if (adres) { otelAdres.value = adres; otelAdres.dispatchEvent(new Event("input")); flashField(otelAdres); }
+      showToast(`✅ "${ad}" forma aktarıldı`);
+      // Otel bölümüne scroll
+      otelInput.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 120);
+  }
+
+  function flashField(el) {
+    el.style.borderColor = "#A0192E";
+    el.style.background = "#FBE8EB";
+    el.style.transition = "background 0.6s, border-color 0.6s";
+    setTimeout(() => { el.style.background = "#fff"; el.style.borderColor = "#E8E2D7"; }, 1200);
+  }
+
   /* ─────────────────── İSTATİSTİK SEKMESİ ─────────────────── */
   function renderStats() {
     if (!DS) return;
@@ -992,5 +1194,6 @@
   for (const s of SUGS) { const b=document.createElement("button");b.type="button";b.className="ta-sug";b.textContent=s;b.addEventListener("click",()=>submit(s));sugs.appendChild(b); }
 
   loadData();
-  setInterval(checkReminders, 60000); // dakikada bir kontrol
+  setInterval(checkReminders, 60000);
+  window.__taAktar = aktarOtelFormuna;
 })();
