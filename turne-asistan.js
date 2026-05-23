@@ -331,17 +331,6 @@
             <div style="font-size:13px;font-weight:600;">Düzenlemek için bir turne seçin</div>
           </div>
         </div>
-        <div class="ta-edit-actions" id="ta-edit-actions" style="display:none;">
-          <button class="ta-btn ta-btn-primary" id="ta-save-btn">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-            Kaydet
-          </button>
-          <button class="ta-btn ta-btn-secondary" id="ta-reset-btn">Sıfırla</button>
-          <span class="ta-save-status" id="ta-save-status" style="display:none;">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-            Kaydedildi
-          </span>
-        </div>
       </div>
 
       <!-- HATIRLATICI -->
@@ -696,7 +685,13 @@
     if (/(yaklaşan|yaklasan|gelecek|planlı|planli|taslak|önümüzdeki|onumuzdeki)/.test(Q)) {
       const now=new Date(),up=T.filter(t=>{const d=parseDate(t.baslangic);return d&&d>=now;}).sort((a,b)=>(parseDate(a.baslangic)||0)-(parseDate(b.baslangic)||0)).slice(0,8);
       if (!up.length) return "Yaklaşan turne bulunamadı.";
-      return "Yaklaşan turneler:\n\n"+up.map(t=>`• **${t.oyun}**\n  📅 ${fmtTarihAralik(t.baslangic,t.bitis)} · 📍 ${t.il||"—"} (${t.statu})`).join("\n");
+      const ulasimIcon=(u)=>u&&/(uçak|ucak|thy|pegasus|sunexpress|hava)/i.test(u)?"✈️":"🚌";
+      let o="Yaklaşan turneler:\n\n";
+      for(const t of up){
+        o+=`• **${t.oyun}**\n  📅 ${fmtTarihAralik(t.baslangic,t.bitis)} · 📍 ${t.il||"—"} (${t.statu})\n`;
+        if(t.gidisUlasim)o+=`  ${ulasimIcon(t.gidisUlasim)} ${t.gidisUlasim}${t.gidisSaat?" · 🕐 "+t.gidisSaat:""}\n`;
+      }
+      return o;
     }
     /* KİŞİ */
     const found=findPerson(Q,T);
@@ -716,19 +711,83 @@
       for(const t of list.slice(0,10)){const duraklar=parseDurakOteller(t.duraklar).filter(d=>d.il===city);const otel=duraklar[0]?.otelAdi||t.otelAdi||"";const otelTel=duraklar[0]?.otelTel||t.otelTel||"";const ilgili=duraklar[0]?.ilgiliKisi||"";const ilgiliTel=duraklar[0]?.ilgiliTel||"";o+=`• **${t.oyun}** (${t.statu})\n  📅 ${fmtTarihAralik(t.baslangic,t.bitis)}\n`;if(otel){o+=`  🏨 ${otel}`;if(otelTel)o+=` — <a class="ta-phone" href="tel:${otelTel}">${fmtTel(otelTel)||otelTel}</a>`;o+="\n";}if(ilgili){o+=`  👤 ${ilgili}`;if(ilgiliTel)o+=` — <a class="ta-phone" href="tel:${ilgiliTel}">${fmtTel(ilgiliTel)||ilgiliTel}</a>`;o+="\n";}o+="\n";}
       return {html:o};
     }
-    /* OYUN DETAYI */
+    /* OYUN DETAYI — oyun adı yazılınca hem bilgi hem düzenle butonu */
     for (const t of T) {
       if (norm(t.oyun).split(" ").filter(p=>p.length>=4).some(p=>Q.includes(p))) {
         const dur=parseDurakOteller(t.duraklar);
+        const ulasimIcon = (u) => u && /(uçak|ucak|thy|pegasus|sunexpress|anadolu|boeing|airbus|havayolu|hava yolu|flight)/i.test(u) ? "✈️" : "🚌";
         let o=`**${t.oyun}**\n\n📅 ${fmtTarihAralik(t.baslangic,t.bitis)}\n📍 ${t.il||"—"}\n🎭 ${t.sayi||"?"} temsil · ${turneGun(t)} gün\n📊 Statü: ${t.statu}\n`;
-        if (t.gidisUlasim) o+=`🚌 Gidiş: ${t.gidisUlasim}${t.gidisSaat?" · "+t.gidisSaat:""}\n`;
-        if (t.donusUlasim) o+=`🚌 Dönüş: ${t.donusUlasim}${t.donusSaat?" · "+t.donusSaat:""}\n`;
+        if (t.gidisUlasim) o+=`${ulasimIcon(t.gidisUlasim)} Gidiş: **${t.gidisUlasim}**${t.gidisSaat?" · 🕐 "+t.gidisSaat:""}\n`;
+        if (t.donusUlasim) o+=`${ulasimIcon(t.donusUlasim)} Dönüş: **${t.donusUlasim}**${t.donusSaat?" · 🕐 "+t.donusSaat:""}\n`;
         if (dur.length) { o+="\n**Duraklar:**\n"; for(const d of dur){o+=`\n🏙 **${d.il}**${d.mekan?" — "+d.mekan:""}\n`;if(d.otelAdi){o+=`   🏨 ${d.otelAdi}`;if(d.otelTel)o+=` <a class="ta-phone" href="tel:${d.otelTel}">${fmtTel(d.otelTel)||d.otelTel}</a>`;o+="\n";}if(d.ilgiliKisi){o+=`   👤 ${d.ilgiliKisi}`;if(d.ilgiliTel)o+=` — <a class="ta-phone" href="tel:${d.ilgiliTel}">${fmtTel(d.ilgiliTel)||d.ilgiliTel}</a>`;o+="\n";}}} else if(t.otelAdi){o+=`\n🏨 **${t.otelAdi}**\n`;if(t.otelAdres)o+=`   📍 ${t.otelAdres}\n`;if(t.otelTel)o+=`   📞 <a class="ta-phone" href="tel:${t.otelTel}">${fmtTel(t.otelTel)||t.otelTel}</a>\n`;}
         if (t.katilimcilar.length) { o+=`\n👥 **${t.katilimcilar.length} kişi:** ${t.katilimcilar.slice(0,5).map(k=>k.kisi).join(", ")}`;if(t.katilimcilar.length>5)o+=` ve ${t.katilimcilar.length-5} kişi daha`;o+="\n";}
+        // Düzenle butonu
+        o += `\n<button class="ta-inline-aktar" onclick="(function(){var tabs=document.querySelectorAll('.ta-tab');var views=document.querySelectorAll('.ta-view');tabs.forEach(t=>t.classList.remove('active'));views.forEach(v=>v.classList.remove('active'));var et=document.querySelector('.ta-tab[data-view=edit]');if(et){et.classList.add('active');document.getElementById('ta-edit-view').classList.add('active');}var sel=document.getElementById('ta-edit-select');if(sel){var opts=Array.from(sel.options);var m=opts.find(o=>o.textContent.startsWith(${JSON.stringify(t.oyun)}));if(m){sel.value=m.value;sel.dispatchEvent(new Event('change'));}}})()">✏️ Turneyi Düzenle</button>`;
         return {html:o};
       }
     }
-    return "Şu sorulara cevap verebilirim 💡\n\n👤 **Kişi:** \"Çağlar'ın turne listesi\"\n🏙 **Şehir:** \"Ankara turneleri\"\n🏨 **Otel:** \"Ankara oteli telefonu\"\n📋 **Firma:** \"Nakliye firmaları\"\n📊 **İstatistik:** \"En fazla turneye giden?\"\n📅 **Tarih:** \"Nisan turneları\", \"Yaklaşan turneler\"\n✏️ **Düzenle:** Düzenle sekmesinden turneleri düzenleyebilirsiniz\n🔔 **Hatırlatıcı:** Hatırlatıcı sekmesinden hatırlatıcı ekleyebilirsiniz";
+    /* BUGÜN NE VAR */
+    if (/(bugün|bugun|bu\s*gün|today|günün|gunun)/.test(Q)) {
+      const now = new Date();
+      const todayStr = now.toDateString();
+      const bugun = T.filter(t => {
+        const bas = parseDate(t.baslangic);
+        const bit = parseDate(t.bitis) || bas;
+        return bas && bit && bas <= now && bit >= now;
+      });
+      const baslayan = T.filter(t => {
+        const d = parseDate(t.baslangic);
+        return d && d.toDateString() === todayStr;
+      });
+      const biten = T.filter(t => {
+        const d = parseDate(t.bitis);
+        return d && d.toDateString() === todayStr;
+      });
+      const yarin = T.filter(t => {
+        const d = parseDate(t.baslangic);
+        if (!d) return false;
+        const diff = Math.round((d - now) / 86400000);
+        return diff === 1;
+      });
+
+      let o = `📅 **${fmtTarih(now.toISOString().slice(0,10))}** — Günün Özeti\n\n`;
+
+      if (bugun.length) {
+        o += `🎭 **Devam Eden Turneler (${bugun.length}):**\n`;
+        for (const t of bugun) {
+          const ulasimIcon = (u) => u && /(uçak|ucak|thy|pegasus|sunexpress|hava)/i.test(u) ? "✈️" : "🚌";
+          o += `• **${t.oyun}** · 📍 ${t.il||"—"}\n  📅 ${fmtTarihAralik(t.baslangic,t.bitis)}\n`;
+          if (t.gidisUlasim) o += `  ${ulasimIcon(t.gidisUlasim)} Gidiş: ${t.gidisUlasim}${t.gidisSaat?" · 🕐 "+t.gidisSaat:""}\n`;
+          if (t.otelAdi) o += `  🏨 ${t.otelAdi}${t.otelTel?" · "+fmtTel(t.otelTel):""}\n`;
+        }
+        o += "\n";
+      }
+      if (baslayan.length) {
+        o += `🟢 **Bugün Başlayan (${baslayan.length}):**\n`;
+        for (const t of baslayan) o += `• **${t.oyun}** · 📍 ${t.il||"—"}\n`;
+        o += "\n";
+      }
+      if (biten.length) {
+        o += `🏁 **Bugün Biten (${biten.length}):**\n`;
+        for (const t of biten) o += `• **${t.oyun}** · 📍 ${t.il||"—"}\n`;
+        o += "\n";
+      }
+      if (yarin.length) {
+        o += `⏰ **Yarın Başlıyor (${yarin.length}):**\n`;
+        for (const t of yarin) {
+          const ulasimIcon = (u) => u && /(uçak|ucak|thy|pegasus|sunexpress|hava)/i.test(u) ? "✈️" : "🚌";
+          o += `• **${t.oyun}** · 📍 ${t.il||"—"} · 📅 ${fmtTarih(t.baslangic)}\n`;
+          if (t.gidisUlasim) o += `  ${ulasimIcon(t.gidisUlasim)} Gidiş: ${t.gidisUlasim}${t.gidisSaat?" · 🕐 "+t.gidisSaat:""}\n`;
+        }
+      }
+
+      if (!bugun.length && !baslayan.length && !biten.length && !yarin.length)
+        return "Bugün aktif turne yok. " + (T.filter(t=>{const d=parseDate(t.baslangic);return d&&d>now;}).length ? "Yaklaşan turneleri görmek için 'yaklaşan turneler' diyebilirsiniz." : "");
+
+      return {html: o};
+    }
+
+    return "Şu sorulara cevap verebilirim 💡\n\n👤 **Kişi:** \"Çağlar'ın turne listesi\"\n🏙 **Şehir:** \"Ankara turneleri\"\n🏨 **Otel:** \"Ankara oteli telefonu\"\n📋 **Firma:** \"Nakliye firmaları\"\n📅 **Bugün:** \"Bugün ne var?\"\n📊 **İstatistik:** \"En fazla turneye giden?\"\n✈️ **Ulaşım:** \"Münasebetsiz uçak saati\"\n✏️ **Düzenle:** Düzenle sekmesinden turneleri görüntüleyin";
   }
 
   function findPerson(Q,T) { const m=new Map();for(const t of T)for(const k of t.katilimcilar){const key=norm(k.kisi);if(!m.has(key))m.set(key,k);} for(const[nN,k]of m)if(nN.split(" ").length>=2&&Q.includes(nN))return k; for(const[nN,k]of m)if(nN.split(" ").filter(p=>p.length>=4).some(p=>Q.includes(p)))return k; return null; }
@@ -757,16 +816,37 @@
   }
 
   /* ─────────────────── DÜZENLEME SEKMESİ ─────────────────── */
-  let editOriginal = null;
+  // Düzenleme sekmesi artık sitenin kendi modalına yönlendiriyor.
+  // Bu fonksiyon "Turne Düzenle" butonunu/linkini tetikler.
+  function openSiteEditModal(oyunAdi) {
+    // Sitedeki düzenle butonunu bul — oyun adıyla eşleş
+    const allBtns = document.querySelectorAll("button, a");
+    for (const btn of allBtns) {
+      const txt = btn.textContent.trim();
+      if (/(düzenle|edit)/i.test(txt) && btn.closest("[data-oyun]")?.dataset?.oyun === oyunAdi) {
+        btn.click(); return true;
+      }
+    }
+    // Alternatif: data-id veya href ile eşleş
+    const editLinks = document.querySelectorAll("a[href*='duzenle'],a[href*='edit'],button[data-action='edit']");
+    for (const el of editLinks) {
+      if (el.textContent.includes(oyunAdi) || el.closest("[data-title]")?.dataset?.title === oyunAdi) {
+        el.click(); return true;
+      }
+    }
+    return false;
+  }
 
   function populateEditSelect() {
     if (!DS) return;
     const sel = $i("ta-edit-select");
     const cur = sel.value;
     while (sel.options.length > 1) sel.remove(1);
-    for (const t of DS.turneler) {
+    // En yeniden en eskiye sırala
+    const sorted = [...DS.turneler].sort((a,b) => (parseDate(b.baslangic)||0) - (parseDate(a.baslangic)||0));
+    for (const t of sorted) {
       const opt = document.createElement("option");
-      opt.value = t.oyun;
+      opt.value = t.oyun + "||" + t.baslangic; // unique key
       opt.textContent = `${t.oyun} — ${t.il||"?"} · ${fmtTarih(t.baslangic)}`;
       sel.appendChild(opt);
     }
@@ -774,91 +854,67 @@
   }
 
   $i("ta-edit-select")?.addEventListener("change", function() {
-    const oyun = this.value;
+    const val = this.value;
     const body = $i("ta-edit-body");
     const actions = $i("ta-edit-actions");
-    if (!oyun || !DS) { body.innerHTML='<div style="text-align:center;padding:40px 20px;color:#B0A99E;"><div style="font-size:28px;margin-bottom:8px;">✏️</div><div style="font-size:13px;font-weight:600;">Düzenlemek için bir turne seçin</div></div>'; actions.style.display="none"; return; }
-    const t = DS.turneler.find(x=>x.oyun===oyun);
+    if (!val || !DS) {
+      body.innerHTML = '<div style="text-align:center;padding:40px 20px;color:#B0A99E;"><div style="font-size:28px;margin-bottom:8px;">✏️</div><div style="font-size:13px;font-weight:600;">Düzenlemek için bir turne seçin</div></div>';
+      actions.style.display = "none"; return;
+    }
+    const [oyun, bas] = val.split("||");
+    const t = DS.turneler.find(x => x.oyun === oyun && x.baslangic === bas);
     if (!t) return;
-    editOriginal = JSON.parse(JSON.stringify(t));
-    actions.style.display="flex";
-    $i("ta-save-status").style.display="none";
 
+    actions.style.display = "none"; // asistan içinde form yok
     body.innerHTML = `
-      <div class="ta-section-title">📋 Temel Bilgiler</div>
-      <div class="ta-field"><label>Oyun Adı</label><input id="ef-oyun" value="${esc(t.oyun)}"></div>
-      <div class="ta-field-row">
-        <div class="ta-field"><label>Başlangıç</label><input id="ef-bas" type="text" value="${esc(t.baslangic)}"></div>
-        <div class="ta-field"><label>Bitiş</label><input id="ef-bit" type="text" value="${esc(t.bitis)}"></div>
-      </div>
-      <div class="ta-field-row">
-        <div class="ta-field"><label>Şehir / İl</label><input id="ef-il" value="${esc(t.il)}"></div>
-        <div class="ta-field"><label>Temsil Sayısı</label><input id="ef-sayi" type="number" min="1" value="${t.sayi||1}"></div>
-      </div>
-      <div class="ta-field"><label>Sahne / Mekan</label><input id="ef-mekan" value="${esc(t.mekan)}"></div>
-      <div class="ta-field"><label>Statü</label>
-        <select id="ef-statu">
-          ${["taslak","tamamlandi","devam-ediyor","iptal","yarıda-kesildi"].map(s=>`<option value="${s}"${t.statu===s?" selected":""}>${s}</option>`).join("")}
-        </select>
-      </div>
+      <div style="padding:16px 0 8px;">
+        <!-- Turne özet bilgi kartı -->
+        <div style="background:#fff;border:1px solid #E8E2D7;border-radius:12px;padding:14px;margin-bottom:12px;">
+          <div style="font-size:13px;font-weight:800;color:#1A1A1A;margin-bottom:6px;">🎭 ${esc(t.oyun)}</div>
+          <div style="font-size:12px;color:#6A6560;line-height:1.7;">
+            📅 ${fmtTarihAralik(t.baslangic,t.bitis)}<br>
+            📍 ${esc(t.il||"—")} ${t.mekan?"· "+esc(t.mekan):""}<br>
+            🎫 ${t.sayi||"?"} temsil · ${turneGun(t)} gün · <span style="font-weight:700;color:${t.statu.includes("tamamlan")?"#2F7D4E":t.statu.includes("iptal")?"#B53030":"#A0192E"}">${t.statu}</span>
+          </div>
+          ${t.gidisUlasim?`<div style="margin-top:6px;font-size:12px;color:#6A6560;">🚌 Gidiş: <strong>${esc(t.gidisUlasim)}</strong>${t.gidisSaat?" · ✈️ "+esc(t.gidisSaat):""}</div>`:""}
+          ${t.donusUlasim?`<div style="font-size:12px;color:#6A6560;">🔄 Dönüş: <strong>${esc(t.donusUlasim)}</strong>${t.donusSaat?" · ✈️ "+esc(t.donusSaat):""}</div>`:""}
+          ${t.otelAdi?`<div style="font-size:12px;color:#6A6560;">🏨 ${esc(t.otelAdi)}${t.otelTel?" · <a href='tel:"+t.otelTel+"' style='color:#A0192E;font-weight:700;text-decoration:none'>"+fmtTel(t.otelTel)+"</a>":""}</div>`:""}
+          ${t.not?`<div style="margin-top:6px;font-size:11.5px;color:#8A857C;background:#FBF8F3;border-radius:6px;padding:6px 8px;">📝 ${esc(t.not)}</div>`:""}
+        </div>
 
-      <div class="ta-section-title" style="margin-top:14px;">🏨 Konaklama</div>
-      <div class="ta-field"><label>Otel Adı</label><input id="ef-otel" value="${esc(t.otelAdi)}"></div>
-      <div class="ta-field"><label>Otel Telefonu</label><input id="ef-otelt" value="${esc(t.otelTel)}"></div>
-      <div class="ta-field"><label>Otel Adresi</label><input id="ef-otela" value="${esc(t.otelAdres)}"></div>
+        <!-- Düzenle butonu — sitenin kendi modalına yönlendir -->
+        <div style="background:linear-gradient(135deg,#A0192E,#6B0E1E);border-radius:12px;padding:16px;text-align:center;color:#fff;">
+          <div style="font-size:18px;margin-bottom:6px;">✏️</div>
+          <div style="font-size:13px;font-weight:800;margin-bottom:4px;">Turneyi Düzenle</div>
+          <div style="font-size:11px;opacity:.85;margin-bottom:12px;">Düzenleme için sitenin modalını açın</div>
+          <button class="ta-btn" id="ta-modal-open-btn" style="background:rgba(255,255,255,.2);color:#fff;border:1.5px solid rgba(255,255,255,.4);width:100%;justify-content:center;font-size:13px;">
+            🔗 Turne Düzenleme Sayfasını Aç
+          </button>
+        </div>
 
-      <div class="ta-section-title" style="margin-top:14px;">🚌 Ulaşım</div>
-      <div class="ta-field-row">
-        <div class="ta-field"><label>Gidiş</label><input id="ef-gidis" value="${esc(t.gidisUlasim)}"></div>
-        <div class="ta-field"><label>Gidiş Saati</label><input id="ef-gidiss" value="${esc(t.gidisSaat)}"></div>
-      </div>
-      <div class="ta-field-row">
-        <div class="ta-field"><label>Dönüş</label><input id="ef-donus" value="${esc(t.donusUlasim)}"></div>
-        <div class="ta-field"><label>Dönüş Saati</label><input id="ef-donuss" value="${esc(t.donusSaat)}"></div>
-      </div>
+        <!-- Kadro özeti -->
+        ${t.katilimcilar.length ? `
+        <div style="margin-top:12px;">
+          <div class="ta-section-title">👥 Kadro (${t.katilimcilar.length} kişi)</div>
+          ${t.katilimcilar.slice(0,20).map(k=>`<div style="padding:4px 8px;font-size:12px;border-bottom:1px solid #F0EBE5;display:flex;justify-content:space-between;"><span style="font-weight:600">${esc(k.kisi)}</span><span style="color:#8A857C;font-size:11px">${esc(k.gorev||k.kategori)}</span></div>`).join("")}
+          ${t.katilimcilar.length>20?`<div style="text-align:center;font-size:11px;color:#B0A99E;padding:6px">+${t.katilimcilar.length-20} kişi daha</div>`:""}
+        </div>` : ""}
+        <div style="height:16px"></div>
+      </div>`;
 
-      <div class="ta-section-title" style="margin-top:14px;">📝 Not</div>
-      <div class="ta-field"><textarea id="ef-not" rows="3">${esc(t.not)}</textarea></div>
-
-      <div class="ta-section-title" style="margin-top:14px;">👥 Kadro (${t.katilimcilar.length} kişi)</div>
-      ${t.katilimcilar.slice(0,30).map(k=>`<div style="padding:4px 8px;font-size:12px;border-bottom:1px solid #F0EBE5;display:flex;justify-content:space-between;"><span style="font-weight:600">${esc(k.kisi)}</span><span style="color:#8A857C;font-size:11px">${esc(k.gorev||k.kategori)}</span></div>`).join("")}
-      ${t.katilimcilar.length>30?`<div style="text-align:center;font-size:11px;color:#B0A99E;padding:6px">+${t.katilimcilar.length-30} kişi daha (tam liste turne sayfasında)</div>`:""}
-      <div style="height:16px"></div>
-    `;
+    // Modal açma butonu — sitenin turne edit sayfasını/modalını trigger et
+    $i("ta-modal-open-btn")?.addEventListener("click", () => {
+      // Önce sayfada turne adıyla eşleşen edit butonunu ara
+      const found = openSiteEditModal(t.oyun);
+      if (!found) {
+        // Bulunamazsa panel kapat, kullanıcı sayfadan bulur
+        togglePanel(false);
+        showToast("⚠️ Sayfada ilgili turneyi bulup Düzenle butonuna tıklayın", 3000);
+      }
+    });
   });
 
   function esc(s) { return (s||"").replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
-
-  $i("ta-save-btn")?.addEventListener("click", () => {
-    const oyun = $i("ta-edit-select").value; if (!oyun||!DS) return;
-    const t = DS.turneler.find(x=>x.oyun===oyun); if (!t) return;
-    t.oyun      = $i("ef-oyun").value.trim();
-    t.baslangic = $i("ef-bas").value.trim();
-    t.bitis     = $i("ef-bit").value.trim();
-    t.il        = $i("ef-il").value.trim();
-    t.sayi      = parseInt($i("ef-sayi").value)||1;
-    t.mekan     = $i("ef-mekan").value.trim();
-    t.statu     = $i("ef-statu").value;
-    t.otelAdi   = $i("ef-otel").value.trim();
-    t.otelTel   = $i("ef-otelt").value.trim();
-    t.otelAdres = $i("ef-otela").value.trim();
-    t.gidisUlasim = $i("ef-gidis").value.trim();
-    t.gidisSaat   = $i("ef-gidiss").value.trim();
-    t.donusUlasim = $i("ef-donus").value.trim();
-    t.donusSaat   = $i("ef-donuss").value.trim();
-    t.not       = $i("ef-not").value.trim();
-    populateEditSelect();
-    const ss = $i("ta-save-status"); ss.style.display="flex";
-    setTimeout(()=>ss.style.display="none",3000);
-    addMsg(`✅ **${t.oyun}** turne bilgileri güncellendi (bu oturumda geçerli).`,"bot");
-  });
-
-  $i("ta-reset-btn")?.addEventListener("click", () => {
-    if (!editOriginal) return;
-    const t = DS.turneler.find(x=>x.oyun===$i("ta-edit-select").value); if (!t) return;
-    Object.assign(t, JSON.parse(JSON.stringify(editOriginal)));
-    $i("ta-edit-select").dispatchEvent(new Event("change"));
-  });
 
   /* ─────────────────── HATIRLATICI SEKMESİ ─────────────────── */
   function loadReminders() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY)||"[]"); } catch(e){ return []; } }
@@ -880,9 +936,41 @@
     const now=new Date();
 
     const addBtn=document.createElement("div"); addBtn.className="ta-remind-add"; addBtn.innerHTML="＋ Yeni Hatırlatıcı Ekle"; addBtn.addEventListener("click",()=>showAddForm());
-    body.innerHTML=""; body.appendChild(addBtn);
 
-    if (!arr.length) { const empty=document.createElement("div"); empty.className="ta-remind-empty"; empty.innerHTML='<div class="ta-remind-empty-icon">🔔</div><div class="ta-remind-empty-text">Henüz hatırlatıcı yok</div><div style="font-size:11px;margin-top:4px;color:#C0BAB2">Turne tarihleri, ödemeler, toplantılar için hatırlatıcı ekleyin</div>'; body.appendChild(empty); return; }
+    // Dışa/içe aktar satırı
+    const syncRow = document.createElement("div");
+    syncRow.style.cssText="display:flex;gap:6px;margin-bottom:8px;";
+    syncRow.innerHTML=`
+      <button class="ta-rehber-btn" id="ta-remind-export" style="flex:1;justify-content:center;" title="Tüm hatırlatıcıları JSON olarak kopyala">
+        📤 Dışa Aktar
+      </button>
+      <button class="ta-rehber-btn" id="ta-remind-import" style="flex:1;justify-content:center;" title="JSON yapıştırarak içe aktar">
+        📥 İçe Aktar
+      </button>`;
+
+    body.innerHTML="";
+    body.appendChild(addBtn);
+    body.appendChild(syncRow);
+
+    $i("ta-remind-export")?.addEventListener("click", () => {
+      const json = JSON.stringify(loadReminders(), null, 2);
+      navigator.clipboard.writeText(json).then(()=>showToast("📤 Hatırlatıcılar kopyalandı — diğer bilgisayarda İçe Aktar'a yapıştırın",3000));
+    });
+    $i("ta-remind-import")?.addEventListener("click", () => {
+      const raw = prompt("Hatırlatıcı JSON'unu yapıştırın:");
+      if (!raw) return;
+      try {
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) throw new Error("Geçersiz format");
+        const existing = loadReminders();
+        const merged = [...existing];
+        for (const r of parsed) if (!merged.find(e=>e.id===r.id)) merged.push(r);
+        saveReminders(merged); checkReminders(); renderReminders();
+        showToast(`✅ ${parsed.length} hatırlatıcı içe aktarıldı`,2500);
+      } catch(e) { showToast("❌ Geçersiz JSON formatı",2500); }
+    });
+
+    if (!arr.length) { const empty=document.createElement("div"); empty.className="ta-remind-empty"; empty.innerHTML='<div class="ta-remind-empty-icon">🔔</div><div class="ta-remind-empty-text">Henüz hatırlatıcı yok</div><div style="font-size:11px;margin-top:4px;color:#C0BAB2">Farklı cihazlarda görmek için Dışa Aktar → İçe Aktar kullanın</div>'; body.appendChild(empty); return; }
 
     // Sırala: gecikmiş → bugün → gelecek → tamamlandı
     const sorted=[...arr].sort((a,b)=>{
