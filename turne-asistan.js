@@ -287,18 +287,10 @@
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
           Asistan
         </button>
-        <button class="ta-tab" data-view="edit">
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-          Düzenle
-        </button>
         <button class="ta-tab" data-view="remind">
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
           Hatırlatıcı
           <span class="ta-tab-badge" id="ta-remind-badge" style="display:none"></span>
-        </button>
-        <button class="ta-tab" data-view="rehber">
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.4 2 2 0 0 1 3.6 1.22h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L7.91 8.84A16 16 0 0 0 16 16.91l.95-.95a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
-          Rehber
         </button>
         <button class="ta-tab" data-view="stats">
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2"/><path d="M7 17V13M12 17V7M17 17V11"/></svg>
@@ -579,6 +571,8 @@
   const AYLAR = ["Ocak","Şubat","Mart","Nisan","Mayıs","Haziran","Temmuz","Ağustos","Eylül","Ekim","Kasım","Aralık"];
   const AY_NORM = ["ocak","şubat","mart","nisan","mayıs","haziran","temmuz","ağustos","eylül","ekim","kasım","aralık"];
   const STATU_MAP = { "tamamlandı":["tamamlan","biten","bitmiş","tamamlandi"], "taslak":["taslak","planlanan","gelecek","yaklaşan"], "iptal":["iptal"], "devam":["devam","süren","aktif"] };
+  const STATU_LABEL = { "tamamlandi":"tamamlandı", "tamamlandi̇":"tamamlandı", "devam-ediyor":"devam ediyor", "yarida-kesildi":"yarıda kesildi", "taslak":"taslak", "iptal":"iptal" };
+  function statuGoster(s) { return STATU_LABEL[s] || s; }
 
   function parseDate(s) {
     if (!s) return null;
@@ -688,7 +682,7 @@
       const ulasimIcon=(u)=>u&&/(uçak|ucak|thy|pegasus|sunexpress|hava)/i.test(u)?"✈️":"🚌";
       let o="Yaklaşan turneler:\n\n";
       for(const t of up){
-        o+=`• **${t.oyun}**\n  📅 ${fmtTarihAralik(t.baslangic,t.bitis)} · 📍 ${t.il||"—"} (${t.statu})\n`;
+        o+=`• **${t.oyun}**\n  📅 ${fmtTarihAralik(t.baslangic,t.bitis)} · 📍 ${t.il||"—"} (${statuGoster(t.statu)})\n`;
         if(t.gidisUlasim)o+=`  ${ulasimIcon(t.gidisUlasim)} ${t.gidisUlasim}${t.gidisSaat?" · 🕐 "+t.gidisSaat:""}\n`;
       }
       return o;
@@ -701,14 +695,15 @@
       const gun=list.reduce((s,t)=>s+turneGun(t),0);
       const sorted=list.sort((a,b)=>(parseDate(b.baslangic)||0)-(parseDate(a.baslangic)||0));
       const lines=sorted.slice(0,15).map(t=>{const otel=t.duraklar?.find(d=>d.otelAdi)?.otelAdi||t.otelAdi||"";return `• **${t.oyun}**\n  📅 ${fmtTarihAralik(t.baslangic,t.bitis)} · 📍 ${t.il||"—"}${otel?" · 🏨 "+otel:""}`;}).join("\n");
-      return `**${found.kisi}**${found.gorev?" · "+found.gorev:""}\n${list.length} turne · ${gun} gün yolda\n\n${lines}`;
+      const toplamTemsil=list.reduce((s,t)=>s+(t.sayi||0),0);
+      return `**${found.kisi}**${found.gorev?" · "+found.gorev:""}\n📊 ${list.length} turne · 📅 **${gun} gün** yolda · 🎭 ${toplamTemsil} temsil\n\n${lines}`;
     }
     /* ŞEHİR DETAYI */
     const city=findCity(Q,T);
     if (city) {
       const list=T.filter(t=>t.il===city||(t.duraklar||[]).some(d=>d.il===city));
       let o=`**${city}** şehrine **${list.length}** turne yapıldı.\n\n`;
-      for(const t of list.slice(0,10)){const duraklar=parseDurakOteller(t.duraklar).filter(d=>d.il===city);const otel=duraklar[0]?.otelAdi||t.otelAdi||"";const otelTel=duraklar[0]?.otelTel||t.otelTel||"";const ilgili=duraklar[0]?.ilgiliKisi||"";const ilgiliTel=duraklar[0]?.ilgiliTel||"";o+=`• **${t.oyun}** (${t.statu})\n  📅 ${fmtTarihAralik(t.baslangic,t.bitis)}\n`;if(otel){o+=`  🏨 ${otel}`;if(otelTel)o+=` — <a class="ta-phone" href="tel:${otelTel}">${fmtTel(otelTel)||otelTel}</a>`;o+="\n";}if(ilgili){o+=`  👤 ${ilgili}`;if(ilgiliTel)o+=` — <a class="ta-phone" href="tel:${ilgiliTel}">${fmtTel(ilgiliTel)||ilgiliTel}</a>`;o+="\n";}o+="\n";}
+      for(const t of list.slice(0,10)){const duraklar=parseDurakOteller(t.duraklar).filter(d=>d.il===city);const otel=duraklar[0]?.otelAdi||t.otelAdi||"";const otelTel=duraklar[0]?.otelTel||t.otelTel||"";const ilgili=duraklar[0]?.ilgiliKisi||"";const ilgiliTel=duraklar[0]?.ilgiliTel||"";o+=`• **${t.oyun}** (${statuGoster(t.statu)})\n  📅 ${fmtTarihAralik(t.baslangic,t.bitis)}\n`;if(otel){o+=`  🏨 ${otel}`;if(otelTel)o+=` — <a class="ta-phone" href="tel:${otelTel}">${fmtTel(otelTel)||otelTel}</a>`;o+="\n";}if(ilgili){o+=`  👤 ${ilgili}`;if(ilgiliTel)o+=` — <a class="ta-phone" href="tel:${ilgiliTel}">${fmtTel(ilgiliTel)||ilgiliTel}</a>`;o+="\n";}o+="\n";}
       return {html:o};
     }
     /* OYUN DETAYI — oyun adı yazılınca hem bilgi hem düzenle butonu */
@@ -716,13 +711,13 @@
       if (norm(t.oyun).split(" ").filter(p=>p.length>=4).some(p=>Q.includes(p))) {
         const dur=parseDurakOteller(t.duraklar);
         const ulasimIcon = (u) => u && /(uçak|ucak|thy|pegasus|sunexpress|anadolu|boeing|airbus|havayolu|hava yolu|flight)/i.test(u) ? "✈️" : "🚌";
-        let o=`**${t.oyun}**\n\n📅 ${fmtTarihAralik(t.baslangic,t.bitis)}\n📍 ${t.il||"—"}\n🎭 ${t.sayi||"?"} temsil · ${turneGun(t)} gün\n📊 Statü: ${t.statu}\n`;
+        let o=`**${t.oyun}**\n\n📅 ${fmtTarihAralik(t.baslangic,t.bitis)}\n📍 ${t.il||"—"}\n🎭 ${t.sayi||"?"} temsil · ${turneGun(t)} gün\n📊 Statü: ${statuGoster(t.statu)}\n`;
         if (t.gidisUlasim) o+=`${ulasimIcon(t.gidisUlasim)} Gidiş: **${t.gidisUlasim}**${t.gidisSaat?" · 🕐 "+t.gidisSaat:""}\n`;
         if (t.donusUlasim) o+=`${ulasimIcon(t.donusUlasim)} Dönüş: **${t.donusUlasim}**${t.donusSaat?" · 🕐 "+t.donusSaat:""}\n`;
         if (dur.length) { o+="\n**Duraklar:**\n"; for(const d of dur){o+=`\n🏙 **${d.il}**${d.mekan?" — "+d.mekan:""}\n`;if(d.otelAdi){o+=`   🏨 ${d.otelAdi}`;if(d.otelTel)o+=` <a class="ta-phone" href="tel:${d.otelTel}">${fmtTel(d.otelTel)||d.otelTel}</a>`;o+="\n";}if(d.ilgiliKisi){o+=`   👤 ${d.ilgiliKisi}`;if(d.ilgiliTel)o+=` — <a class="ta-phone" href="tel:${d.ilgiliTel}">${fmtTel(d.ilgiliTel)||d.ilgiliTel}</a>`;o+="\n";}}} else if(t.otelAdi){o+=`\n🏨 **${t.otelAdi}**\n`;if(t.otelAdres)o+=`   📍 ${t.otelAdres}\n`;if(t.otelTel)o+=`   📞 <a class="ta-phone" href="tel:${t.otelTel}">${fmtTel(t.otelTel)||t.otelTel}</a>\n`;}
         if (t.katilimcilar.length) { o+=`\n👥 **${t.katilimcilar.length} kişi:** ${t.katilimcilar.slice(0,5).map(k=>k.kisi).join(", ")}`;if(t.katilimcilar.length>5)o+=` ve ${t.katilimcilar.length-5} kişi daha`;o+="\n";}
         // Düzenle butonu
-        o += `\n<button class="ta-inline-aktar" onclick="(function(){var tabs=document.querySelectorAll('.ta-tab');var views=document.querySelectorAll('.ta-view');tabs.forEach(t=>t.classList.remove('active'));views.forEach(v=>v.classList.remove('active'));var et=document.querySelector('.ta-tab[data-view=edit]');if(et){et.classList.add('active');document.getElementById('ta-edit-view').classList.add('active');}var sel=document.getElementById('ta-edit-select');if(sel){var opts=Array.from(sel.options);var m=opts.find(o=>o.textContent.startsWith(${JSON.stringify(t.oyun)}));if(m){sel.value=m.value;sel.dispatchEvent(new Event('change'));}}})()">✏️ Turneyi Düzenle</button>`;
+        o += `\n<button class="ta-inline-aktar" onclick="(function(){if(typeof editTurne==='function'){editTurne(${t._rawIdx});}else{var m=document.getElementById('modal-overlay');if(m){m.classList.add('on');}}})()" >✏️ Turneyi Düzenle</button>`;
         return {html:o};
       }
     }
@@ -874,7 +869,7 @@
           <div style="font-size:12px;color:#6A6560;line-height:1.7;">
             📅 ${fmtTarihAralik(t.baslangic,t.bitis)}<br>
             📍 ${esc(t.il||"—")} ${t.mekan?"· "+esc(t.mekan):""}<br>
-            🎫 ${t.sayi||"?"} temsil · ${turneGun(t)} gün · <span style="font-weight:700;color:${t.statu.includes("tamamlan")?"#2F7D4E":t.statu.includes("iptal")?"#B53030":"#A0192E"}">${t.statu}</span>
+            🎫 ${t.sayi||"?"} temsil · ${turneGun(t)} gün · <span style="font-weight:700;color:${t.statu.includes("tamamlan")?"#2F7D4E":t.statu.includes("iptal")?"#B53030":"#A0192E"}">${statuGoster(t.statu)}</span>
           </div>
           ${t.gidisUlasim?`<div style="margin-top:6px;font-size:12px;color:#6A6560;">🚌 Gidiş: <strong>${esc(t.gidisUlasim)}</strong>${t.gidisSaat?" · ✈️ "+esc(t.gidisSaat):""}</div>`:""}
           ${t.donusUlasim?`<div style="font-size:12px;color:#6A6560;">🔄 Dönüş: <strong>${esc(t.donusUlasim)}</strong>${t.donusSaat?" · ✈️ "+esc(t.donusSaat):""}</div>`:""}
@@ -1184,16 +1179,16 @@
     const gelecek=T.filter(t=>{const d=parseDate(t.baslangic);return d&&d>now;}).length;
     const toplamGun=T.filter(t=>!t.statu.includes("iptal")).reduce((s,t)=>s+turneGun(t),0);
     const toplamTemsil=T.filter(t=>!t.statu.includes("iptal")).reduce((s,t)=>s+(t.sayi||0),0);
-    const personelSet=new Set();T.forEach(t=>t.katilimcilar.forEach(k=>personelSet.add(norm(k.kisi))));
+    const personelSet=new Set();T.filter(t=>!t.statu.includes("iptal")).forEach(t=>t.katilimcilar.forEach(k=>personelSet.add(norm(k.kisi))));
 
     // Şehir sıklığı
     const ilMap=new Map();
     T.filter(t=>!t.statu.includes("iptal")).forEach(t=>{const ils=new Set();if(t.il)ils.add(t.il);(t.duraklar||[]).forEach(d=>{if(d.il)ils.add(d.il);});ils.forEach(il=>ilMap.set(il,(ilMap.get(il)||0)+1));});
     const topIller=[...ilMap.entries()].sort((a,b)=>b[1]-a[1]).slice(0,8);
 
-    // Kişi sıklığı
+    // Kişi sıklığı (iptal hariç)
     const kisiMap=new Map();
-    T.forEach(t=>t.katilimcilar.forEach(k=>{kisiMap.set(k.kisi,(kisiMap.get(k.kisi)||0)+1);}));
+    T.filter(t=>!t.statu.includes("iptal")).forEach(t=>t.katilimcilar.forEach(k=>{kisiMap.set(k.kisi,(kisiMap.get(k.kisi)||0)+1);}));
     const topKisiler=[...kisiMap.entries()].sort((a,b)=>b[1]-a[1]).slice(0,8);
 
     // Aylık dağılım
@@ -1203,12 +1198,12 @@
 
     // Görev dağılımı
     const gorevMap=new Map();
-    T.forEach(t=>t.katilimcilar.forEach(k=>{const g=k.kategori||k.gorev||"Diğer";if(!gorevMap.has(g))gorevMap.set(g,new Set());gorevMap.get(g).add(norm(k.kisi));}));
+    T.filter(t=>!t.statu.includes("iptal")).forEach(t=>t.katilimcilar.forEach(k=>{const g=k.kategori||k.gorev||"Diğer";if(!gorevMap.has(g))gorevMap.set(g,new Set());gorevMap.get(g).add(norm(k.kisi));}));
     const topGorevler=[...gorevMap.entries()].map(([g,s])=>[g,s.size]).sort((a,b)=>b[1]-a[1]).slice(0,6);
 
     // Yıl dağılımı
     const yilMap=new Map();
-    T.forEach(t=>{const d=parseDate(t.baslangic);if(d){const y=d.getFullYear();yilMap.set(y,(yilMap.get(y)||0)+1);}});
+    T.filter(t=>!t.statu.includes("iptal")).forEach(t=>{const d=parseDate(t.baslangic);if(d){const y=d.getFullYear();yilMap.set(y,(yilMap.get(y)||0)+1);}});
     const sortedYillar=[...yilMap.entries()].sort((a,b)=>a[0]-b[0]);
 
     body.innerHTML=`
