@@ -570,8 +570,8 @@
   /* ─────────────────── YARDIMCILAR ─────────────────── */
   const AYLAR = ["Ocak","Şubat","Mart","Nisan","Mayıs","Haziran","Temmuz","Ağustos","Eylül","Ekim","Kasım","Aralık"];
   const AY_NORM = ["ocak","şubat","mart","nisan","mayıs","haziran","temmuz","ağustos","eylül","ekim","kasım","aralık"];
-  const STATU_MAP = { "tamamlandı":["tamamlan","biten","bitmiş","tamamlandi"], "taslak":["taslak","planlanan","gelecek","yaklaşan"], "iptal":["iptal"], "devam":["devam","süren","aktif"] };
-  const STATU_LABEL = { "tamamlandi":"tamamlandı", "tamamlandi̇":"tamamlandı", "devam-ediyor":"devam ediyor", "yarida-kesildi":"yarıda kesildi", "taslak":"taslak", "iptal":"iptal" };
+  const STATU_MAP = { "tamamlandı":["tamamlan","biten","bitmiş","tamamlandi"], "taslak":["taslak","planlanan","gelecek","yaklaşan"], "iptal":["iptal"], "devam":["devam","süren","aktif","onaylandi","onay-bekliyor"] };
+  const STATU_LABEL = { "tamamlandi":"tamamlandı", "tamamlandi̇":"tamamlandı", "devam-ediyor":"devam ediyor", "aktif":"devam ediyor", "onaylandi":"onaylandı", "onay-bekliyor":"onay bekliyor", "yarida-kesildi":"yarıda kesildi", "taslak":"taslak", "iptal":"iptal" };
   function statuGoster(s) { return STATU_LABEL[s] || s; }
 
   function parseDate(s) {
@@ -595,7 +595,7 @@
   function answer(q, ds) {
     const Q = norm(q), T = ds.turneler, F = ds.firmalar||[];
     let scope = T;
-    for (const [s, keys] of Object.entries(STATU_MAP)) if (keys.some(k=>Q.includes(k))) { scope=T.filter(t=>t.statu.startsWith(s.split("-")[0])); break; }
+    for (const [s, keys] of Object.entries(STATU_MAP)) if (keys.some(k=>Q.includes(k))) { const sk=s.split("-")[0]; scope=T.filter(t=>t.statu.startsWith(sk)||keys.some(kk=>t.statu===kk)); break; }
     const ym = Q.match(/\b(20\d{2})\b/);
     if (ym) { const y=+ym[1]; scope=scope.filter(t=>{const d=parseDate(t.baslangic);return d&&d.getFullYear()===y;}); }
     const mi = AY_NORM.findIndex(m=>Q.includes(m));
@@ -1174,7 +1174,7 @@
 
     const toplam=T.length;
     const tamamlanan=T.filter(t=>t.statu.startsWith("tamamlan")).length;
-    const devam=T.filter(t=>t.statu.startsWith("devam")).length;
+    const devam=T.filter(t=>t.statu.startsWith("devam")||t.statu==="aktif"||t.statu==="onaylandi"||t.statu==="onay-bekliyor").length;
     const iptal=T.filter(t=>t.statu==="iptal").length;
     const gelecek=T.filter(t=>{const d=parseDate(t.baslangic);return d&&d>now;}).length;
     const toplamGun=T.filter(t=>!t.statu.includes("iptal")).reduce((s,t)=>s+turneGun(t),0);
@@ -1198,7 +1198,7 @@
 
     // Görev dağılımı
     const gorevMap=new Map();
-    T.filter(t=>!t.statu.includes("iptal")).forEach(t=>t.katilimcilar.forEach(k=>{const g=k.kategori||k.gorev||"Diğer";if(!gorevMap.has(g))gorevMap.set(g,new Set());gorevMap.get(g).add(norm(k.kisi));}));
+    T.filter(t=>!t.statu.includes("iptal")).forEach(t=>t.katilimcilar.forEach(k=>{const rawG=k.kategori||k.gorev||"Diğer";const g=rawG==="Turne Ekstra Kadrosu"||rawG==="Ekstra"?"Ek Kadro":rawG;if(!gorevMap.has(g))gorevMap.set(g,new Set());gorevMap.get(g).add(norm(k.kisi));}));
     const topGorevler=[...gorevMap.entries()].map(([g,s])=>[g,s.size]).sort((a,b)=>b[1]-a[1]).slice(0,6);
 
     // Yıl dağılımı
