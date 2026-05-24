@@ -34349,5 +34349,221 @@ setTimeout(_turBoot, 4000);
 
 <!-- AI Asistanı istatistik.html'e taşındı — oradan erişin -->
 <script src="./turne-asistan.js" defer></script>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════
+   REHBER OTOFİLL SİSTEMİ — v1.0
+   Ulaşım firma, konaklama otel, lojistik kamyon alanlarına yazınca
+   FIRMA_REHBERI'nden otomatik tel/adres doldurur.
+   Otel alanlarında geçmiş turne kayıtlarından da doldurur.
+═══════════════════════════════════════════════════════════════════ */
+(function() {
+
+  // ── Rehberden firma ara (ad benzerliği) ─────────────────────────
+  function _rehberBul(metin) {
+    if (!metin || metin.length < 2) return null;
+    var liste = [];
+    try { liste = JSON.parse(localStorage.getItem('firma_rehber') || '[]'); } catch(e) {}
+    var q = metin.toLocaleLowerCase('tr-TR');
+    // 1. Tam eşleşme
+    var tam = liste.find(function(f){ return (f.ad||'').toLocaleLowerCase('tr-TR') === q; });
+    if (tam) return tam;
+    // 2. Başlangıç eşleşmesi
+    var bas = liste.filter(function(f){ return (f.ad||'').toLocaleLowerCase('tr-TR').indexOf(q) === 0; });
+    if (bas.length === 1) return bas[0];
+    // 3. İçerik eşleşmesi (en az 4 karakter)
+    if (q.length >= 4) {
+      var ic = liste.filter(function(f){ return (f.ad||'').toLocaleLowerCase('tr-TR').includes(q); });
+      if (ic.length === 1) return ic[0];
+    }
+    return null;
+  }
+
+  // ── Flash animasyonu ─────────────────────────────────────────────
+  function _flashGreen(el) {
+    if (!el) return;
+    el.style.transition = 'background .2s';
+    el.style.background = '#f0fdf4';
+    setTimeout(function(){ el.style.background = ''; }, 1400);
+  }
+
+  // ── Toast (varsa kullan) ─────────────────────────────────────────
+  function _toast(msg) {
+    if (typeof showToast === 'function') showToast(msg, 'success', 2000);
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  //  1. ULAŞIM — Gidiş/Dönüş Firma + Tel otofill
+  //     #m-gidis-firma → #m-gidis-firma-tel
+  //     #m-donus-firma → #m-donus-firma-tel
+  // ══════════════════════════════════════════════════════════════
+  function _ulasimFirmaAutofill(firmaInputId, telInputId) {
+    var firmaEl = document.getElementById(firmaInputId);
+    var telEl   = document.getElementById(telInputId);
+    if (!firmaEl || !telEl) return;
+    firmaEl.addEventListener('input', function() {
+      var bulgu = _rehberBul(this.value);
+      if (!bulgu) return;
+      // Firma tam eşleşince tel'i otomatik doldur
+      var tel = bulgu.tel || bulgu.tel2 || '';
+      if (tel && !telEl.value) {
+        telEl.value = tel;
+        _flashGreen(telEl);
+        _toast('📞 ' + bulgu.ad + ' → tel otomatik dolduruldu');
+      }
+    });
+    // Blur'da da çalıştır (kullanıcı seçip çıktığında)
+    firmaEl.addEventListener('change', function() {
+      firmaEl.dispatchEvent(new Event('input'));
+    });
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  //  2. KARAÇELIK ARAÇ (karaAraclarRender tarafından render edilir)
+  //     MutationObserver ile her render sonrası bağla
+  // ══════════════════════════════════════════════════════════════
+  function _bindKaraAracFirma(wrap) {
+    if (!wrap) return;
+    var textInputs = wrap.querySelectorAll('input[type="text"]');
+    textInputs.forEach(function(inp) {
+      if (inp.dataset._rehberBound) return;
+      inp.dataset._rehberBound = '1';
+      inp.addEventListener('change', function() {
+        var bulgu = _rehberBul(this.value);
+        if (!bulgu) return;
+        var tel = bulgu.tel || bulgu.tel2 || '';
+        if (!tel) return;
+        // Yanındaki tel input'unu bul (number input = kişi sayısı, bunu atla)
+        var row = this.closest('[style*="grid"]') || this.parentElement;
+        if (!row) return;
+        var telInps = row.querySelectorAll('input[type="tel"], input[placeholder*="tel" i], input[placeholder*="0xxx" i]');
+        if (telInps.length && !telInps[0].value) {
+          telInps[0].value = tel;
+          _flashGreen(telInps[0]);
+          _toast('📞 ' + bulgu.ad + ' → tel otomatik dolduruldu');
+        }
+      });
+    });
+  }
+
+  function _bindAllKaraArac() {
+    ['gidis', 'donus'].forEach(function(yon) {
+      var wrap = document.getElementById(yon + '-arac-listesi');
+      if (wrap) _bindKaraAracFirma(wrap);
+    });
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  //  3. LOJİSTİK — Kamyon Firma + Tel
+  //     #m-kamyon-firma → #m-kamyon-tel
+  // ══════════════════════════════════════════════════════════════
+  function _lojistikFirmaAutofill() {
+    var firmaEl = document.getElementById('m-kamyon-firma');
+    var telEl   = document.getElementById('m-kamyon-tel');
+    if (!firmaEl || !telEl) return;
+    function _fill() {
+      var bulgu = _rehberBul(firmaEl.value);
+      if (!bulgu) return;
+      var tel = bulgu.tel || bulgu.tel2 || '';
+      if (tel && !telEl.value) {
+        telEl.value = tel;
+        _flashGreen(telEl);
+        _toast('📞 ' + bulgu.ad + ' → tel otomatik dolduruldu');
+      }
+    }
+    firmaEl.addEventListener('input', _fill);
+    firmaEl.addEventListener('change', _fill);
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  //  4. KONAKLAMA OTEL — Rehberden de ara (geçmiş turne + rehber)
+  //     renderKonaklamaDuraklar tarafından render edilen input'lara
+  //     MutationObserver ile bağla
+  // ══════════════════════════════════════════════════════════════
+  function _bindOtelInput(inp, durakIdx) {
+    if (!inp || inp.dataset._rehberOtelBound) return;
+    inp.dataset._rehberOtelBound = '1';
+    inp.addEventListener('change', function() {
+      var card = inp.closest('.otel-durak-card');
+      if (!card) return;
+      var inputs = card.querySelectorAll('input');
+      // inputs[0]=ad, [1]=adres, [2]=tel
+      var adresEl = inputs[1];
+      var telEl   = inputs[2];
+      // Önce geçmiş turne kayıtlarından dene (_otelKayitlariniTopla)
+      var kayitlar = {};
+      try { kayitlar = _otelKayitlariniTopla(); } catch(e) {}
+      var key = (this.value||'').toLocaleLowerCase('tr-TR');
+      var bul = kayitlar[key];
+      if (!bul) {
+        var adaylar = Object.keys(kayitlar).filter(function(k){ return k.indexOf(key) === 0; });
+        if (adaylar.length === 1) bul = kayitlar[adaylar[0]];
+      }
+      // Bulunamadıysa rehberden ara
+      if (!bul) {
+        var rehberBulgu = _rehberBul(this.value);
+        if (rehberBulgu) {
+          bul = { otelAdres: rehberBulgu.not || '', otelTel: rehberBulgu.tel || rehberBulgu.tel2 || '' };
+        }
+      }
+      if (!bul) return;
+      var filled = [];
+      if (adresEl && !adresEl.value && bul.otelAdres) {
+        adresEl.value = bul.otelAdres;
+        if (typeof duraklar !== 'undefined' && duraklar[durakIdx]) duraklar[durakIdx].otelAdres = bul.otelAdres;
+        _flashGreen(adresEl);
+        filled.push('adres');
+      }
+      if (telEl && !telEl.value && bul.otelTel) {
+        telEl.value = bul.otelTel;
+        if (typeof duraklar !== 'undefined' && duraklar[durakIdx]) duraklar[durakIdx].otelTel = bul.otelTel;
+        _flashGreen(telEl);
+        filled.push('tel');
+      }
+      if (filled.length) _toast('🏨 Otel bilgisi otomatik dolduruldu (' + filled.join(', ') + ')');
+    });
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  //  5. MutationObserver — Modal içi alan değişikliklerini izle
+  // ══════════════════════════════════════════════════════════════
+  var _rafId = null;
+  function _rebind() {
+    cancelAnimationFrame(_rafId);
+    _rafId = requestAnimationFrame(function() {
+      // Ulaşım firma
+      _ulasimFirmaAutofill('m-gidis-firma', 'm-gidis-firma-tel');
+      _ulasimFirmaAutofill('m-donus-firma', 'm-donus-firma-tel');
+      // Karayolu araçları
+      _bindAllKaraArac();
+      // Lojistik
+      _lojistikFirmaAutofill();
+      // Konaklama otel inputları
+      var cards = document.querySelectorAll('.otel-durak-card');
+      cards.forEach(function(card, i) {
+        var inp = card.querySelector('input[type="text"]');
+        _bindOtelInput(inp, i);
+      });
+    });
+  }
+
+  // Modal overlay gözlemi
+  function _startObs() {
+    var overlay = document.getElementById('modal-overlay');
+    if (!overlay) { setTimeout(_startObs, 600); return; }
+    var obs = new MutationObserver(function(muts) {
+      for (var i=0; i<muts.length; i++) {
+        if (muts[i].addedNodes.length || muts[i].type === 'attributes') { _rebind(); break; }
+      }
+    });
+    obs.observe(overlay, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+    // İlk bağlama
+    _rebind();
+  }
+  _startObs();
+
+})();
+</script>
+
 </body>
 </html>
