@@ -468,6 +468,9 @@
     }
   }
 
+  // Inline butonlardan sorgu tetiklemek için global yardımcı
+  window.__taSubmit = (text) => { togglePanel(true); submit(text); };
+
   /* ─────────────────── SÜRÜKLEME ─────────────────── */
   let dragState = null, resizeState = null;
   head.addEventListener("mousedown", e => {
@@ -680,6 +683,24 @@
   }
 
   /* ─────────────────── CEVAP MOTORUu ─────────────────── */
+  function saatSelam() {
+    const h=new Date().getHours();
+    if(h>=5&&h<12) return "Günaydın";
+    if(h>=12&&h<18) return "İyi günler";
+    if(h>=18&&h<22) return "İyi akşamlar";
+    return "İyi geceler";
+  }
+
+  const SELAMLAR_KOMIK = [
+    "Sahne hazır, sen hazır mısın? 🎭",
+    "Perde açılıyor! Nasıl yardımcı olabilirim? 🎬",
+    "Tiyatro dünyasının en zeki asistanı hizmetinde! (Mütevaziyim tabii ki 😄)",
+    "Bugün kaç şehir, kaç turne? Hepsini biliyorum! 🗺️",
+    "Hem sahne arkası hem ön sahne bilgisi bende! 💡",
+    "Müzik çal, perde aç — Turne Asistanı burada! 🎶",
+    "İzmir'den dünyaya açılan sahne — merhaba! 🌍",
+  ];
+
   function answer(q, ds) {
     const Q = norm(q), T = ds.turneler, F = ds.firmalar||[];
     let scope = T;
@@ -688,6 +709,74 @@
     if (ym) { const y=+ym[1]; scope=scope.filter(t=>{const d=parseDate(t.baslangic);return d&&d.getFullYear()===y;}); }
     const mi = AY_NORM.findIndex(m=>Q.includes(m));
     if (mi>=0) scope=scope.filter(t=>{const d=parseDate(t.baslangic);return d&&d.getMonth()===mi;});
+
+    /* ── SELAM / MERHABA ── */
+    if (/^(selam|merhaba|hey|heyy|naber|nasılsın|nasilsin|iyi\s*günler|günaydın|iyi\s*akşam|iyi\s*geceler|sa|slm|mrb|selamlar)/.test(Q)) {
+      const selam=saatSelam();
+      const komik=SELAMLAR_KOMIK[Math.floor(Math.random()*SELAMLAR_KOMIK.length)];
+      const h=new Date().getHours();
+      const gunDurumu=h>=6&&h<20?"☀️":"🌙";
+      return `${gunDurumu} **${selam}!** ${komik}\n\nSana nasıl yardımcı olabilirim? Turne listesi, otel bilgisi, kadro sorgusu — her şey burada! 😊`;
+    }
+
+    /* ── NASIL SINSIN / NABER ── */
+    if (/(nasılsın|nasilsin|ne\s*yapıyorsun|ne\s*var\s*ne\s*yok|iyi\s*misin)/.test(Q)) {
+      return "Harika! 🎭 Tüm turneleri aklımda tutmak biraz yorucu ama şikayetçi değilim 😄\n\nBugün sana nasıl yardımcı olabilirim?";
+    }
+
+    /* ── AY LİSTESİ (örn. "nisan 2026" veya "nisan turneleri") ── */
+    if (mi>=0 && (Q.includes("turne")||Q.includes("program")||Q.includes("ne\s*var")||ym||scope.length<T.length)) {
+      if(scope.length===0) return `${AYLAR[mi]} ${ym?""+ym[1]:""}ayında planlanmış turne bulunamadı.`;
+      const yilStr=ym?" "+ym[1]:"";
+      let o=`📅 **${AYLAR[mi]}${yilStr} — ${scope.length} turne:**\n\n`;
+      for(const t of scope.sort((a,b)=>(parseDate(a.baslangic)||0)-(parseDate(b.baslangic)||0))){
+        o+=`• **${t.oyun}**\n  📅 ${fmtTarihAralik(t.baslangic,t.bitis)} · 📍 ${t.il||"—"} · ${statuGoster(t.statu)}\n  👥 ${t.katilimcilar.length} kişi${t.sayi?" · 🎫 "+t.sayi+" temsil":""}\n`;
+      }
+      return {html:o};
+    }
+
+    /* ── OYUN ADI → tüm turneleri listele ── */
+    const oyunBul = findOyun(Q,T);
+    if (oyunBul && !/(whatsapp|wp|karşılaştır|karsilastir|kopya|kopyala)/.test(Q)) {
+      const list=T.filter(t=>norm(t.oyun)===norm(oyunBul)).sort((a,b)=>(parseDate(b.baslangic)||0)-(parseDate(a.baslangic)||0));
+      if(list.length){
+        const toplamGun=list.reduce((s,t)=>s+turneGun(t),0);
+        const toplamTemsil=list.reduce((s,t)=>s+(t.sayi||0),0);
+        const sehirler=[...new Set(list.map(t=>t.il).filter(Boolean))];
+        let o=`🎭 **${esc(oyunBul)}** — ${list.length} turne kaydı\n`;
+        o+=`📊 Toplam: ${toplamGun} gün · ${toplamTemsil} temsil · ${sehirler.length} şehir\n\n`;
+        for(const t of list){
+          const stClr=t.statu.includes("tamamlan")?"color:#2F7D4E":t.statu.includes("iptal")?"color:#B53030":"color:#A0192E";
+          o+=`• 📅 ${fmtTarihAralik(t.baslangic,t.bitis)}\n`;
+          o+=`  📍 ${t.il||"—"}${t.mekan?" · "+t.mekan:""} · <span style="${stClr};font-weight:700">${statuGoster(t.statu)}</span>\n`;
+          o+=`  👥 ${t.katilimcilar.length} kişi${t.sayi?" · 🎫 "+t.sayi+" temsil":""}\n`;
+          if(t.otelAdi) o+=`  🏨 ${t.otelAdi}${t.otelTel?` · <a class="ta-phone" href="tel:${t.otelTel}">${fmtTel(t.otelTel)||t.otelTel}</a>`:""}\n`;
+          o+="\n";
+        }
+        o+=`<button class="ta-inline-copy" onclick="window.__taSubmit('${oyunBul} kadrosunu whatsapp gönder')">📲 WhatsApp'a Gönder</button>`;
+        return {html:o};
+      }
+    }
+
+    /* ── KISMİ İSİM ARAMASI (örn. "Mehmet") — birden fazla sonuç ── */
+    {
+      const qKelimeler=Q.trim().split(/\s+/).filter(p=>p.length>=3);
+      // Sadece 1-2 kelime yazılmışsa ve bilinen komutlardan değilse çoklu kişi kontrolü yap
+      const komutKelime=/(turne|otel|şehir|sehir|kadro|bugün|bugun|özet|ozet|lider|çakış|cakis|whatsapp|karşı|karsi|gönder|gonder|ay$|yıl|yil|toplam|eksik|yaklaş|yaklasan)/;
+      if(qKelimeler.length<=2&&!komutKelime.test(Q)){
+        const eslesen=findPersonAll(Q,T);
+        if(eslesen.length>1){
+          // Birden fazla kişi — liste göster, tıklayabilsin
+          let o=`👥 **"${q}" ile ${eslesen.length} kişi bulundu:**\n\n`;
+          for(const k of eslesen){
+            const kTurneler=T.filter(t=>t.katilimcilar.some(x=>norm(x.kisi)===norm(k.kisi)));
+            o+=`• <button class="ta-inline-copy" style="font-size:12px;padding:3px 9px;" onclick="window.__taSubmit('${k.kisi.replace(/'/g,"\\'")} turne listesi')">${esc(k.kisi)}</button>`;
+            o+=` <span style="font-size:11px;color:#8A857C">${k.gorev||k.kategori||""} · ${kTurneler.length} turne</span>\n`;
+          }
+          return {html:o};
+        }
+      }
+    }
 
     /* OTEL */
     if (/otel|konaklama|kal(ınan|dığı|acak)/.test(Q)) {
@@ -1131,28 +1220,35 @@
     }
 
     /* ── WHATSAPP KADRO GÖNDER ── */
-    if (/(whatsapp|wp|w\.a\.|wapp|kadro.*gönder|gönder.*kadro|kadro.*paylaş|paylaş.*kadro|mesaj.*kadro)/.test(Q)) {
-      // Turne bul
+    if (/(whatsapp|wp|w\.a\.|wapp|kadro.*gönder|kadro.*gonder|gönder.*kadro|gonder.*kadro|kadro.*paylaş|kadro.*paylas|paylaş.*kadro|mesaj.*kadro|whatsapp.*gönder|whatsapp.*gonder)/.test(Q)) {
+      // Önce oyun adıyla eşleş
       let tBul=null;
-      for(const t of T) if(Q.includes(norm(t.oyun))||Q.includes(norm(t.il||""))) { tBul=t; break; }
+      const oyunBulWA=findOyun(Q,T);
+      if(oyunBulWA) tBul=T.filter(t=>norm(t.oyun)===norm(oyunBulWA)).sort((a,b)=>(parseDate(b.baslangic)||0)-(parseDate(a.baslangic)||0))[0];
+      
+      // Eşleşme yoksa en yakın aktif/yaklaşan turneyi al
       if(!tBul){
-        // En yakın aktif turneyi öner
         const now=new Date();
-        tBul=T.filter(t=>!t.statu.includes("iptal")).sort((a,b)=>{
-          const dA=parseDate(a.baslangic),dB=parseDate(b.baslangic);
-          return Math.abs((dA||0)-now)-Math.abs((dB||0)-now);
-        })[0];
+        const aktif=T.filter(t=>!t.statu.includes("iptal")).sort((a,b)=>{
+          const dA=parseDate(a.baslangic), dB=parseDate(b.baslangic);
+          if(!dA&&!dB) return 0;
+          if(!dA) return 1; if(!dB) return -1;
+          const diffA=Math.abs(dA-now), diffB=Math.abs(dB-now);
+          return diffA-diffB;
+        });
+        tBul=aktif[0]||null;
       }
-      if(!tBul) return "Turne bulunamadı. Oyun adını veya şehri belirtin.";
+
+      if(!tBul) return "Turne bulunamadı. Oyun adını belirterek tekrar deneyin.";
       
       // WhatsApp mesajı oluştur
       const satirlar=[
         `🎭 *${tBul.oyun}*`,
         `📅 ${fmtTarihAralik(tBul.baslangic,tBul.bitis)}`,
         `📍 ${tBul.il||"—"}${tBul.mekan?" · "+tBul.mekan:""}`,
-        tBul.gidisUlasim?`🚌 Gidiş: ${tBul.gidisUlasim}${tBul.gidisSaat?" · "+tBul.gidisSaat:""}`:"",
-        tBul.donusUlasim?`🔄 Dönüş: ${tBul.donusUlasim}${tBul.donusSaat?" · "+tBul.donusSaat:""}`:"",
-        tBul.otelAdi?`🏨 Otel: ${tBul.otelAdi}${tBul.otelTel?" ("+fmtTel(tBul.otelTel)+")":""}`:"",
+        tBul.gidisUlasim?`🚌 Gidiş: ${tBul.gidisUlasim}${tBul.gidisSaat?" · ⏰ "+tBul.gidisSaat:""}`:"",
+        tBul.donusUlasim?`🔄 Dönüş: ${tBul.donusUlasim}${tBul.donusSaat?" · ⏰ "+tBul.donusSaat:""}`:"",
+        tBul.otelAdi?`🏨 Otel: ${tBul.otelAdi}${tBul.otelTel?" ("+( fmtTel(tBul.otelTel)||tBul.otelTel)+")":""}`:"",
         tBul.katilimcilar.length?`\n👥 *Kadro (${tBul.katilimcilar.length} kişi):*\n`+tBul.katilimcilar.map(k=>`• ${k.kisi}${k.gorev||k.kategori?" — "+(k.gorev||k.kategori):""}`)
           .join("\n"):"",
         tBul.not?`\n📝 Not: ${tBul.not}`:"",
@@ -1162,7 +1258,7 @@
       const waUrl=`https://wa.me/?text=${encoded}`;
       
       let o=`<div style="background:#F0FBF4;border:1px solid #A8D8B9;border-radius:10px;padding:10px 12px;margin-bottom:8px;">`;
-      o+=`<div style="font-size:12px;font-weight:800;color:#1A5C35;margin-bottom:6px;">📋 ${esc(tBul.oyun)} — Hazır Mesaj</div>`;
+      o+=`<div style="font-size:12px;font-weight:800;color:#1A5C35;margin-bottom:6px;">📋 ${esc(tBul.oyun)} — Kadro Mesajı</div>`;
       o+=`<pre style="font-size:11px;white-space:pre-wrap;word-break:break-word;color:#2D4A3A;line-height:1.6;background:none;margin:0;font-family:inherit;">${esc(satirlar)}</pre>`;
       o+=`</div>`;
       o+=`<a href="${waUrl}" target="_blank" style="display:inline-flex;align-items:center;gap:6px;background:#25D366;color:#fff;border-radius:8px;padding:8px 14px;font-size:12.5px;font-weight:800;text-decoration:none;margin-right:6px;">📲 WhatsApp'ta Aç</a>`;
@@ -1170,11 +1266,87 @@
       return {html:o};
     }
 
-    return "Şu sorulara cevap verebilirim 💡\n\n👤 **Kişi:** \"Çağlar'ın turne listesi\"\n🏙 **Şehir:** \"Ankara turneleri\"\n🏨 **Otel:** \"Ankara oteli telefonu\"\n📅 **Bugün:** \"Bugün ne var?\"\n📋 **Özet:** \"30 günlük özet\"\n⚠️ **Eksik:** \"Kadro eksik turneler\"\n👥 **Yük:** \"En meşgul personel\"\n📊 **İstatistik:** \"En fazla turneye giden?\"\n🔔 **Takvim:** \"Takvim notlarım\"\n🏆 **Lider:** \"Liderlik tablosu\"\n⏳ **Sayaç:** \"Bir sonraki turne ne zaman?\"\n⚠️ **Çakışma:** \"Çakışan kadro var mı?\"\n📲 **WhatsApp:** \"[Turne adı] kadrosunu WhatsApp'a gönder\"\n🔍 **Karşılaştır:** \"[Turne A] ile [Turne B] karşılaştır\"";
+    /* ── BU HAFTA ── */
+    if (/(bu\s*hafta|bu\s*hft|haftanın|haftaya)/.test(Q)&&!/(özet|ozet|rapor)/.test(Q)) {
+      const now=new Date();
+      const dayOfWeek=now.getDay();
+      const monday=new Date(now); monday.setDate(now.getDate()-(dayOfWeek===0?6:dayOfWeek-1)); monday.setHours(0,0,0,0);
+      const sunday=new Date(monday); sunday.setDate(monday.getDate()+6); sunday.setHours(23,59,59,999);
+      const hafta=T.filter(t=>{
+        const d=parseDate(t.baslangic), e=parseDate(t.bitis)||d;
+        return d&&e&&d<=sunday&&e>=monday;
+      });
+      if(!hafta.length) return "Bu hafta aktif turne yok. 😴";
+      let o=`📅 **Bu hafta (${hafta.length} turne):**\n\n`;
+      for(const t of hafta){
+        const stClr=t.statu.includes("tamamlan")?"#2F7D4E":t.statu.includes("iptal")?"#B53030":"#A0192E";
+        o+=`• **${t.oyun}** · 📍 ${t.il||"—"}\n  📅 ${fmtTarihAralik(t.baslangic,t.bitis)} · <span style="color:${stClr};font-weight:700">${statuGoster(t.statu)}</span>\n  👥 ${t.katilimcilar.length} kişi\n`;
+      }
+      return {html:o};
+    }
+
+    /* ── ŞAKA / ESPRİ ── */
+    if (/(şaka|espri|fıkra|komik|güldür|eğlen|eğlenceli)/.test(Q)) {
+      const SAKALAR=[
+        "Yönetmen sahneye çıkmadan önce ne der?\n\"Perde açılıyor!\" — Kapıya doğru değil sahneye! 🎭",
+        "Tiyatrocu neden asla kaybolmaz?\nÇünkü her zaman sahneye geri döner! 🎬",
+        "Turneye giden oyuncu ne getirir?\nHer şehirden ayrı bir anı, aynı valiz! 🧳",
+        "Kaç tiyatrocu lamba değiştirmek için gerekir?\nBiri yapar, dördü nasıl yapılacağını tartışır! 💡",
+        "Sahnede unutulan replik ne anlama gelir?\nDoğaçlama için mükemmel bir fırsat! 😄",
+      ];
+      return SAKALAR[Math.floor(Math.random()*SAKALAR.length)];
+    }
+
+    /* ── TEŞEKKÜR ── */
+    if (/(teşekkür|tesekkur|sağ\s*ol|sagol|eyvallah|süpersin|harikasın|iyisin|mükemmel)/.test(Q)) {
+      const TESEKKUR=["Rica ederim! 🎭 Her zaman buradayım!","Ne demek, asıl siz sahneyi aydınlatıyorsunuz! ✨","Yardımcı olabildimse ne mutlu! 😊"];
+      return TESEKKUR[Math.floor(Math.random()*TESEKKUR.length)];
+    }
+
+    return "Şu sorulara cevap verebilirim 💡\n\n👤 **Kişi:** \"Çağlar'ın turne listesi\" veya sadece \"Mehmet\"\n🎭 **Oyun:** \"Kaçaklar turneleri\" (oyun adını yaz)\n🏙 **Şehir:** \"Ankara turneleri\"\n🏨 **Otel:** \"Ankara oteli telefonu\"\n📅 **Ay:** \"Nisan 2026\" veya \"Mayıs turneleri\"\n📅 **Bugün:** \"Bugün ne var?\"\n📅 **Bu hafta:** \"Bu hafta ne var?\"\n📋 **Özet:** \"30 günlük özet\"\n⚠️ **Eksik:** \"Kadro eksik turneler\"\n👥 **Yük:** \"En meşgul personel\"\n📊 **İstatistik:** \"En fazla turneye giden?\"\n🔔 **Takvim:** \"Takvim notlarım\"\n🏆 **Lider:** \"Liderlik tablosu\"\n⏳ **Sayaç:** \"Bir sonraki turne ne zaman?\"\n⚠️ **Çakışma:** \"Çakışan kadro var mı?\"\n📲 **WhatsApp:** \"[Oyun adı] kadrosunu WhatsApp'a gönder\"\n🔍 **Karşılaştır:** \"[Turne A] ile [Turne B] karşılaştır\"";
   }
 
-  function findPerson(Q,T) { const m=new Map();for(const t of T)for(const k of t.katilimcilar){const key=norm(k.kisi);if(!m.has(key))m.set(key,k);} for(const[nN,k]of m)if(nN.split(" ").length>=2&&Q.includes(nN))return k; for(const[nN,k]of m)if(nN.split(" ").filter(p=>p.length>=4).some(p=>Q.includes(p)))return k; return null; }
+  function findPerson(Q,T) {
+    const m=new Map();
+    for(const t of T) for(const k of t.katilimcilar){const key=norm(k.kisi);if(!m.has(key))m.set(key,k);}
+    // Tam ad eşleşmesi
+    for(const[nN,k]of m) if(nN.split(" ").length>=2&&Q.includes(nN)) return k;
+    // Parça eşleşmesi (≥4 harf)
+    for(const[nN,k]of m) if(nN.split(" ").filter(p=>p.length>=4).some(p=>Q.includes(p))) return k;
+    return null;
+  }
+
+  // Sadece isim yazınca (örn "Mehmet") tüm eşleşenleri döndür
+  function findPersonAll(Q,T) {
+    const m=new Map();
+    for(const t of T) for(const k of t.katilimcilar){const key=norm(k.kisi);if(!m.has(key))m.set(key,k);}
+    const kelimeler=Q.trim().split(/\s+/).filter(p=>p.length>=3);
+    if(!kelimeler.length) return [];
+    return [...m.values()].filter(k=>{
+      const nN=norm(k.kisi);
+      return kelimeler.every(p=>nN.includes(p));
+    });
+  }
+
   function findCity(Q,T) { const c=new Set();for(const t of T){if(t.il)c.add(t.il);for(const d of t.duraklar||[])if(d.il)c.add(d.il);}for(const city of c)if(norm(city).length>=4&&Q.includes(norm(city)))return city;return null; }
+
+  // Oyun adı eşleşmesi — sistemdeki oyun adlarını ara
+  function findOyun(Q,T) {
+    const oyunlar=[...new Set(T.map(t=>t.oyun).filter(Boolean))];
+    // Tam eşleşme
+    for(const oy of oyunlar) if(Q===norm(oy)) return oy;
+    // Kısmi eşleşme (≥4 harf kelime)
+    for(const oy of oyunlar){
+      const parcalar=norm(oy).split(/\s+/).filter(p=>p.length>=4);
+      if(parcalar.length&&parcalar.every(p=>Q.includes(p))) return oy;
+    }
+    // Tek kelime ≥5 harf
+    for(const oy of oyunlar){
+      const parcalar=norm(oy).split(/\s+/).filter(p=>p.length>=5);
+      if(parcalar.some(p=>Q.includes(p))) return oy;
+    }
+    return null;
+  }
 
   /* ─────────────────── UI: SOHBET ─────────────────── */
   function fmtHtml(text) {
