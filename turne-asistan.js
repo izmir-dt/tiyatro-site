@@ -803,6 +803,76 @@
       return {html: o};
     }
 
+    /* TURNE EKLE YARDIMCISI */
+    if (/(yeni.*turne|turne.*ekle|ekle.*turne|turne.*oluştur|oluştur.*turne|taslak.*oluştur|hızlı.*ekle|ekle.*taslak)/.test(Q)) {
+      // Sohbetten kısmi bilgi çıkar ve modal'ı aç
+      // Oyun adı tespiti: sistemdeki oyunlardan birini ara
+      const oyunlar = DS ? [...new Set(DS.turneler.map(t=>t.oyun).filter(Boolean))] : [];
+      let oyunTespit = null;
+      for (const oy of oyunlar) if (Q.includes(norm(oy))) { oyunTespit = oy; break; }
+      
+      // Tarih tespiti: YYYY-MM-DD veya "gün ay" formatı
+      let tarihTespit = null, bitisTespit = null;
+      const tarihRe = /(\d{1,2})[.\-\/](\d{1,2})(?:[.\-\/](\d{2,4}))?/g;
+      const tarihMatches = [...Q.matchAll(tarihRe)];
+      if (tarihMatches.length >= 1) {
+        const m = tarihMatches[0];
+        const yil = m[3] ? (m[3].length===2?'20'+m[3]:m[3]) : new Date().getFullYear();
+        tarihTespit = `${yil}-${String(m[2]).padStart(2,'0')}-${String(m[1]).padStart(2,'0')}`;
+      }
+      if (tarihMatches.length >= 2) {
+        const m = tarihMatches[1];
+        const yil = m[3] ? (m[3].length===2?'20'+m[3]:m[3]) : new Date().getFullYear();
+        bitisTespit = `${yil}-${String(m[2]).padStart(2,'0')}-${String(m[1]).padStart(2,'0')}`;
+      }
+
+      // Şehir tespiti
+      const sehirTespit = findCity(Q, T);
+
+      // Formu aç ve doldur
+      window._taEklePrefill = { oyun: oyunTespit, tarih: tarihTespit, bitis: bitisTespit, il: sehirTespit };
+      
+      const btn = document.getElementById('turne-ekle-btn');
+      if (btn) btn.click();
+      else if (typeof openModal === 'function') openModal();
+      
+      // 400ms sonra formu doldur (modal render bekleniyor)
+      setTimeout(() => {
+        const pf = window._taEklePrefill || {};
+        if (pf.oyun) { const s=document.getElementById('m-oyun'); if(s){ for(const o of s.options)if(o.value===pf.oyun){s.value=pf.oyun;s.dispatchEvent(new Event('change'));break;} } }
+        if (pf.tarih) { const el=document.getElementById('m-tarih'); if(el){el.value=pf.tarih;el.dispatchEvent(new Event('change'));} }
+        if (pf.bitis) { const el=document.getElementById('m-bitis'); if(el){el.value=pf.bitis;el.dispatchEvent(new Event('change'));} }
+        if (pf.il) {
+          const durakIlEl = document.querySelector('#duraklar-container .durak-il-select, #duraklar-container select[name*="il"], #duraklar-container input[placeholder*="il" i], #duraklar-container input[placeholder*="şehir" i]');
+          if (durakIlEl) { durakIlEl.value = pf.il; durakIlEl.dispatchEvent(new Event('change')); }
+        }
+        window._taEklePrefill = null;
+      }, 450);
+
+      let konfirm = '✅ Turne ekleme formu açılıyor';
+      if (oyunTespit || tarihTespit || sehirTespit) {
+        konfirm += ' — şunlar otomatik doldurulacak:\n';
+        if (oyunTespit)  konfirm += `• 🎭 Oyun: **${oyunTespit}**\n`;
+        if (tarihTespit) konfirm += `• 📅 Başlangıç: **${tarihTespit}**\n`;
+        if (bitisTespit) konfirm += `• 📅 Bitiş: **${bitisTespit}**\n`;
+        if (sehirTespit) konfirm += `• 📍 Şehir: **${sehirTespit}**\n`;
+      } else {
+        konfirm += '.\n_Oyun adı, tarih veya şehir söylerseniz formu otomatik doldururum._';
+      }
+      return {html: konfirm};
+    }
+
+    /* TURNE KOPYALA / BENZERİ OLUŞTUR */
+    if (/(kopya|kopyala|benzer.*turne|turne.*benzer|aynı.*turne|çoğalt|cogalt)/.test(Q)) {
+      // Eşleşen turneyi bul
+      let tBul = null;
+      for (const t of T) { if (Q.includes(norm(t.oyun))||Q.includes(norm(t.il||''))) { tBul=t; break; } }
+      if (tBul) {
+        return {html: `📋 **${tBul.oyun}** turnesi kopyalanacak.\n\n<button class="ta-inline-aktar" onclick="(function(){if(typeof turneCopyala==='function'){turneCopyala(${tBul._rawIdx});}else{showToast && showToast('turneCopyala bulunamadı');}})()">📋 Taslak Olarak Kopyala</button>`};
+      }
+      return 'Kopyalanacak turneyi bulamadım. Oyun adını veya şehri belirtin.';
+    }
+
     /* KADRO EKSİKLİĞİ */
     if (/(kadro.*eksik|eksik.*kadro|atanmamış|atanmamis|kadro.*yok|kadro.*tam|doldu)/.test(Q)) {
       const aktifScope=scope.filter(t=>!t.statu.includes("iptal")&&!t.statu.includes("tamamlan"));
@@ -865,9 +935,12 @@
 
   /* ─────────────────── UI: SOHBET ─────────────────── */
   function fmtHtml(text) {
-    if (typeof text==="object"&&text.html) return text.html.split("\n").map(l=>l.replace(/\*\*([^*]+)\*\*/g,"<strong>$1</strong>")).join("\n");
+    if (typeof text==="object"&&text.html) {
+      // HTML içerikse: **bold** dönüşümünü tüm string üzerinde yap ama HTML tag'lerini atla
+      return text.html.replace(/\*\*([^*<\n]+)\*\*/g,"<strong>$1</strong>").replace(/\n/g,"<br>");
+    }
     const esc=text.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
-    return esc.replace(/\*\*([^*]+)\*\*/g,"<strong>$1</strong>");
+    return esc.replace(/\*\*([^*]+)\*\*/g,"<strong>$1</strong>").replace(/\n/g,"<br>");
   }
   function addMsg(text, who, dismissable) {
     const el=document.createElement("div");
@@ -1385,7 +1458,7 @@
   /* ─────────────────── BAŞLAT ─────────────────── */
   addMsg({html:"👋 Merhaba! Ben <strong>Turne Asistanı</strong>'yım.\n\nOtel numaraları, firma rehberi, kişi listeleri, tarih & istatistik sorularınızı yanıtlarım.\n\n<span style='font-size:12px;color:#8A857C'>💡 Üst sekmeleri kullanarak turne <strong>düzenleyebilir</strong>, <strong>hatırlatıcı</strong> ekleyebilir ve <strong>istatistikleri</strong> görüntüleyebilirsiniz.</span>"},"bot",true);
 
-  const SUGS=["30 günlük özet","Kadro eksik turneler","Bugün ne var?","En fazla turneye giden?","Takvim notlarım"];
+  const SUGS=["Yeni turne ekle","30 günlük özet","Kadro eksik turneler","Bugün ne var?","Takvim notlarım"];
   for (const s of SUGS) { const b=document.createElement("button");b.type="button";b.className="ta-sug";b.textContent=s;b.addEventListener("click",()=>submit(s));sugs.appendChild(b); }
 
   loadData().then(()=>{ setTimeout(_reminderBadgeGuncelle, 1500); });
