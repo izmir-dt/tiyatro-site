@@ -1,11 +1,11 @@
 /* ════════════════════════════════════════════════════════════════
-   TURNE ASİSTANI v5.1
+   TURNE ASİSTANI v5.2
    İzmir Devlet Tiyatrosu
    YENİ: Turne düzenleme · Hatırlatıcı · Detaylı istatistik
    ═══════════════════════════════════════════════════════════════ */
 (function () {
-  if (window.__turneAsistanLoaded === 'v5.1') return;
-  window.__turneAsistanLoaded = 'v5.1';
+  if (window.__turneAsistanLoaded === 'v5.2') return;
+  window.__turneAsistanLoaded = 'v5.2';
 
   const API = "https://turne-backend.vercel.app/api/sheets";
   const TURNE_SHEET = "TURNE_KAYITLARI";
@@ -943,6 +943,11 @@
   }
   function collectUniqueCitiesFromTour(t) {
     const cities = new Set();
+    // Yarıda kesilen turnelerde sadece ana ili say (duraklar gidilmemiş olabilir)
+    if ((t?.statu || "") === "yarida-kesildi") {
+      addCityToSet(cities, t?.il);
+      return cities;
+    }
     addCityToSet(cities, t?.il);
     for (const d of t?.duraklar || []) addCityToSet(cities, d?.il);
     return cities;
@@ -1064,13 +1069,20 @@
       const arr = raw ? JSON.parse(raw) : [];
       const d = parseDate(turne.baslangic); if (!d) return false;
       const hatirlatma = new Date(d.getTime() - gunOnce*86400000);
+      const tarihStr = hatirlatma.toISOString().slice(0,10);
+      // Aynı turne + gün kombinasyonu zaten varsa tekrar ekleme
+      const zatenVar = arr.some(r => r.turne === turne.oyun && r.date === tarihStr && !r.done);
+      if (zatenVar) return "var";
       arr.push({
         id: Date.now()+"-"+Math.random().toString(36).slice(2,7),
-        baslik: `${gunOnce} gün kala: ${turne.oyun}`,
-        tarih: hatirlatma.toISOString().slice(0,10),
+        text: `${gunOnce} gün kala: ${turne.oyun}`,
+        date: tarihStr,
         saat: "09:00",
+        type: "turne",
+        turne: turne.oyun,
         not: `${turne.oyun} — ${turne.il||""} (${fmtTarih(turne.baslangic)})`,
-        olusturma: Date.now()
+        done: false,
+        created: new Date().toISOString()
       });
       localStorage.setItem(STORAGE_KEY, JSON.stringify(arr));
       return true;
@@ -1161,6 +1173,7 @@
         }
         o+=`\n\n`;
       }
+      o+=`<div style="font-size:11px;color:#8A857C;margin-top:4px;">💡 Butona basıldığında Hatırlatıcı sekmesine otomatik eklenir.</div>`;
       return {html:o};
     }
 
@@ -1561,17 +1574,6 @@
     return null; // hiçbir extension eşleşmedi → orijinal answer devam etsin
   }
 
-  // Hatırlatıcı ekleme — global window scope
-  window.__taRem = function(key, gun) {
-    try {
-      const [oyun, bas] = key.split("|");
-      const t = DS && DS.turneler.find(x => x.oyun===oyun && x.baslangic===bas);
-      if (!t) { showToast("Turne bulunamadı"); return; }
-      if (_addRem(t, gun)) { showToast(`✅ ${gun} gün kala hatırlatıcı eklendi`); _reminderBadgeGuncelle(); }
-      else showToast("⚠️ Eklenemedi");
-    } catch(e) { showToast("Hata: "+e.message); }
-  };
-
   // Toast event listener (genişletme butonları için)
   window.addEventListener('ta-toast', e => showToast(e.detail || ""));
 
@@ -1667,7 +1669,10 @@
           }
           if (t.otelAdi && splitCityNames(t.il).some(il=>norm(il)===norm(city)) && !otels.has(t.otelAdi)) otels.set(t.otelAdi,{adres:t.otelAdres,tel:t.otelTel});
         }
-        if (otels.size) { let o=`**${city}** otel bilgileri:\n\n`; for (const [ad,inf] of otels) { o+=`🏨 **${ad}**\n`; if(inf.adres)o+=`   📍 ${inf.adres}\n`; if(inf.tel)o+=`   📞 <a class="ta-phone" href="tel:${inf.tel}">${fmtTel(inf.tel)||inf.tel}</a>\n`; if(inf.ilgili){o+=`   👤 ${inf.ilgili}`;if(inf.ilgiliTel)o+=` — <a class="ta-phone" href="tel:${inf.ilgiliTel}">${fmtTel(inf.ilgiliTel)||inf.ilgiliTel}</a>`;o+="\n";} o+="\n"; } return {html:o}; }
+        if (otels.size) { let o=`**${city}** otel bilgileri:\n\n`; for (const [ad,inf] of otels) { o+=`🏨 **${ad}**\n`; if(inf.adres)o+=`   📍 ${inf.adres}\n`; if(inf.tel)o+=`   📞 <a class="ta-phone" href="tel:${inf.tel}">${fmtTel(inf.tel)||inf.tel}</a>\n`; if(inf.ilgili){o+=`   👤 ${inf.ilgili}`;if(inf.ilgiliTel)o+=` — <a class="ta-phone" href="tel:${inf.ilgiliTel}">${fmtTel(inf.ilgiliTel)||inf.ilgiliTel}</a>`;o+="\n";} o+="\n"; }
+          const telFirmalar=(DS?.firmalar||[]).filter(f=>f.kategori==="otel"&&[...otels.keys()].some(ad=>norm(ad)===norm(f.ad)));
+          if(telFirmalar.length){for(const f of telFirmalar){if(f.tel&&![...otels.values()].some(v=>v.tel===f.tel)){o+=`🏨 **${esc(f.ad)}**\n   📞 <a class="ta-phone" href="tel:${f.tel}">${fmtTel(f.tel)||f.tel}</a>\n\n`;}}}
+          return {html:o}; }
       }
       const otelF=F.filter(f=>f.kategori==="otel");
       if (otelF.length) { let o=`Rehberdeki **${otelF.length}** otel:\n\n`; for(const f of otelF){o+=`🏨 **${f.ad}**\n`;if(f.not)o+=`   📍 ${f.not}\n`;if(f.tel)o+=`   📞 <a class="ta-phone" href="tel:${f.tel}">${fmtTel(f.tel)||f.tel}</a>\n\n`;} return {html:o}; }
@@ -1967,7 +1972,7 @@
     }
 
     /* YAKLAŞAn TURNELER / HAFTALIK ÖZET */
-    if (/(özet|ozet|haftalık|haftalik|bu\s*hafta|30.*gün|rapor|brief|genel.*bak)/.test(Q)) {
+    if (/(özet|ozet|haftalık|haftalik|bu\s*hafta|30.*gün|rapor|brief|genel.*bak)/.test(Q) && !/(istatistik|istat|sayısal|sayisal|rakam)/.test(Q)) {
       const now2=new Date(); const son30=new Date(now2.getTime()+30*24*60*60*1000);
       const yaklasan=T.filter(t=>{const d=parseDate(t.baslangic);return d&&d>=now2&&d<=son30&&!t.statu.includes("iptal");}).sort((a,b)=>(parseDate(a.baslangic)||0)-(parseDate(b.baslangic)||0));
       if(!yaklasan.length) return '30 gün içinde planlanmış turne yok.';
@@ -2013,7 +2018,8 @@
       // Kişi başına unique turne sayısı — aynı kişinin bir turnede birden fazla kayıtlanmasını önle
       const kisiTurneler=new Map(); // kisi -> Set(turne unique key)
       for(const t of T){
-        const turneKey=t.oyun+"||"+t.baslangic+"||"+t.il;
+        if(t.statu.includes("iptal")) continue;
+        const turneKey=t.oyun+"||"+t.baslangic;
         for(const k of t.katilimcilar){
           if(!kisiTurneler.has(k.kisi)) kisiTurneler.set(k.kisi,new Set());
           kisiTurneler.get(k.kisi).add(turneKey);
@@ -2181,6 +2187,11 @@
       
       // WhatsApp mesajı oluştur
       const _otelTelGecerli = tBul.otelTel && /\d{7,}/.test(String(tBul.otelTel).replace(/\D/g,""));
+      // Durak otellerini de dahil et
+      const durakOtelSatirlari = parseDurakOteller(tBul.duraklar).filter(d=>d.otelAdi).map(d=>{
+        const dTelGecerli=d.otelTel&&/\d{7,}/.test(String(d.otelTel).replace(/\D/g,""));
+        return `🏨 Otel (${d.il||"?"}): ${d.otelAdi}${dTelGecerli?" ("+fmtTel(d.otelTel)+")":""}${d.otelAdres?"\n📌 Adres: "+d.otelAdres:""}`;
+      });
       const satirlar=[
         `🎭 *${tBul.oyun}*`,
         `📅 ${fmtTarihAralik(tBul.baslangic,tBul.bitis)}`,
@@ -2189,6 +2200,7 @@
         tBul.donusUlasim?`🔄 Dönüş: ${tBul.donusUlasim}${tBul.donusSaat?" · ⏰ "+tBul.donusSaat:""}`:"",
         tBul.otelAdi?`🏨 Otel: ${tBul.otelAdi}${_otelTelGecerli?" ("+(fmtTel(tBul.otelTel)||tBul.otelTel)+")":""}`:"",
         (tBul.otelAdres?`📌 Adres: ${tBul.otelAdres}`:""),
+        ...durakOtelSatirlari,
         tBul.katilimcilar.length?`\n👥 *Kadro (${tBul.katilimcilar.length} kişi):*\n`+tBul.katilimcilar.map(k=>`• ${k.kisi}${k.gorev||k.kategori?" — "+(k.gorev||k.kategori):""}`)
           .join("\n"):"",
         tBul.not?`\n📝 Not: ${tBul.not}`:"",
@@ -2722,7 +2734,7 @@
       const otelMap=new Map();
       T.filter(t=>!t.statu.includes('iptal')).forEach(t=>{
         const tum=[{il:t.il,otelAdi:t.otelAdi,otelTel:t.otelTel,otelAdres:t.otelAdres},...(t.duraklar||[])];
-        tum.forEach(d=>{if(d.il===cityMem&&d.otelAdi){if(!otelMap.has(d.otelAdi))otelMap.set(d.otelAdi,{say:0,tel:d.otelTel||'',adres:d.otelAdres||''});otelMap.get(d.otelAdi).say++;}});
+        tum.forEach(d=>{if(norm(d.il||'')===norm(cityMem)&&d.otelAdi){if(!otelMap.has(d.otelAdi))otelMap.set(d.otelAdi,{say:0,tel:d.otelTel||'',adres:d.otelAdres||''});otelMap.get(d.otelAdi).say++;}});
       });
       if(!otelMap.size) return `**${cityMem}** için kayıtlı otel bilgisi bulunamadı.`;
       const sortedO=[...otelMap.entries()].sort((a,b)=>b[1].say-a[1].say);
@@ -2783,7 +2795,9 @@
       const getColor=(n)=>{if(!n)return '#F5F5F5';const i=Math.round(n/maxVal*100);if(i<25)return '#FDECEA';if(i<50)return '#F5B7B1';if(i<75)return '#E57373';return '#A0192E';};
       let o=`<div style="background:#fff;border:1px solid #E8E2D7;border-radius:12px;padding:12px;overflow-x:auto;"><div style="font-size:12px;font-weight:800;color:#A0192E;margin-bottom:10px;">🔥 Kadro Isı Haritası — Aylık Yoğunluk</div><table style="border-collapse:collapse;font-size:10px;width:100%;"><tr><td style="padding:2px 4px;font-weight:700;color:#8A857C;min-width:80px;"></td>${AYLAR.map(a=>`<td style="padding:2px 3px;text-align:center;font-weight:700;color:#8A857C;">${a.slice(0,3)}</td>`).join('')}</tr>`;
       for(const[kisi,aylar]of topK){
-        o+=`<tr><td style="padding:3px 4px;font-weight:600;font-size:10.5px;color:#1A1A1A;white-space:nowrap;max-width:90px;overflow:hidden;text-overflow:ellipsis;">${esc2(kisi.split(' ')[0])}</td>`;
+        const kisimlar=kisi.split(' ');
+        const kisaAd=kisimlar.length>=2?kisimlar[0]+' '+kisimlar[kisimlar.length-1]:kisi;
+        o+=`<tr><td style="padding:3px 4px;font-weight:600;font-size:10.5px;color:#1A1A1A;white-space:nowrap;max-width:90px;overflow:hidden;text-overflow:ellipsis;" title="${esc2(kisi)}">${esc2(kisaAd)}</td>`;
         for(const n of aylar) o+=`<td style="padding:2px 3px;text-align:center;"><div title="${n} turne" style="width:20px;height:20px;border-radius:4px;background:${getColor(n)};margin:auto;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:${n>=2?'#fff':'#999'};">${n||''}</div></td>`;
         o+=`</tr>`;
       }
@@ -3358,7 +3372,7 @@
     // Kişi sıklığı — unique turne key ile çift sayımı önle (iptal hariç)
     const kisiTurneSet=new Map();
     T.filter(t=>!t.statu.includes("iptal")).forEach(t=>{
-      const turneKey=t.oyun+"||"+t.baslangic+"||"+t.il;
+      const turneKey=t.oyun+"||"+t.baslangic;
       t.katilimcilar.forEach(k=>{
         if(!kisiTurneSet.has(k.kisi))kisiTurneSet.set(k.kisi,new Set());
         kisiTurneSet.get(k.kisi).add(turneKey);
@@ -3531,6 +3545,26 @@
   window.__taAktar = aktarOtelFormuna;
   // Sohbet balonlarındaki inline butonlar için global submit
   window.__taSubmit = function(text){ submit(text); };
+  // Hatırlatıcı ekleme — hatırlatıcı öneri butonlarından çağrılır
+  window.__taRem = function(safe, gunOnce) {
+    if (!DS) { showToast("Veriler yüklenmedi"); return; }
+    const parts = safe.split("|");
+    const oyunAdi = parts[0];
+    const baslangic = parts[1];
+    const t = DS.turneler.find(x => norm(x.oyun) === norm(oyunAdi) && x.baslangic === baslangic)
+             || DS.turneler.find(x => norm(x.oyun) === norm(oyunAdi));
+    if (!t) { showToast("Turne bulunamadı"); return; }
+    const sonuc = _addRem(t, gunOnce);
+    if (sonuc === "var") {
+      showToast(`⚠️ Bu hatırlatıcı zaten mevcut`, 2000);
+    } else if (sonuc) {
+      showToast(`✅ Hatırlatıcı eklendi: ${gunOnce} gün kala (${t.oyun})`, 2500);
+      checkReminders();
+      _reminderBadgeGuncelle();
+    } else {
+      showToast("❌ Hatırlatıcı eklenemedi", 2000);
+    }
+  };
   // Bingo cevabı kontrol — tip4'te "kim YOK?" sorusu için farklı mesaj
   window.__taBingoCheck = function(secim){
     const b = window.__taBingo;
