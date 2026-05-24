@@ -547,10 +547,35 @@
       "Rastgele turne",
       "Yazı mı tura mı?",
       "Zar at",
-      "2d6 at",
       "Bir şaka anlat",
     ]},
   ];
+
+  // Soru rehberinde placeholder içeren soruları çözmek için yardımcı
+  function _placeholderResolve(q) {
+    if (!/\[.*?\]/.test(q)) return q;
+    // Kişi adı placeholder'ları için listeden seç
+    if (/\[İsim\]|\[Kişi\]|\[Personel\]/.test(q)) {
+      const ppl = new Set();
+      try { (DS?.turneler || []).forEach(t => (t.katilimcilar || []).forEach(k => k.kisi && ppl.add(k.kisi))); } catch(e){}
+      const ad = window.prompt(`👤 Hangi kişi için? \n\nÖrnek: ${[...ppl].slice(0,3).join(", ") || "Çağlar"}`);
+      if (!ad || !ad.trim()) return null;
+      return q.replace(/\[İsim\]|\[Kişi\]|\[Personel\]/g, ad.trim());
+    }
+    if (/\[Oyun\]/.test(q)) {
+      const oys = new Set();
+      try { (DS?.turneler || []).forEach(t => t.oyun && oys.add(t.oyun)); } catch(e){}
+      const ad = window.prompt(`🎭 Hangi oyun? \n\nÖrnek: ${[...oys].slice(0,3).join(", ") || "Kaçaklar"}`);
+      if (!ad || !ad.trim()) return null;
+      return q.replace(/\[Oyun\]/g, ad.trim());
+    }
+    if (/\[Şehir\]/.test(q)) {
+      const ad = window.prompt("🏙 Hangi şehir? (örn. Ankara)");
+      if (!ad || !ad.trim()) return null;
+      return q.replace(/\[Şehir\]/g, ad.trim());
+    }
+    return q;
+  }
 
   function renderSorular(filter) {
     const wrap = document.getElementById("ta-sorular-list");
@@ -576,9 +601,11 @@
     wrap.querySelectorAll(".ta-sorular-q").forEach(b => {
       b.addEventListener("click", () => {
         const q = b.getAttribute("data-q");
+        const resolved = _placeholderResolve(q);
+        if (!resolved) return; // kullanıcı iptal etti
         // Sohbet sekmesine geç ve soruyu gönder
         document.querySelector('.ta-tab[data-view="chat"]')?.click();
-        submit(q);
+        submit(resolved);
       });
     });
   }
@@ -608,6 +635,16 @@
 
   // Inline butonlardan sorgu tetiklemek için global yardımcı
   window.__taSubmit = (text) => { togglePanel(true); submit(text); };
+
+  // Pano kopyalama için güvenli kayıt (büyük metinleri onclick'e gömmeden)
+  window.__taCopyStore = window.__taCopyStore || {};
+  window.__taCopy = (id, btn) => {
+    const txt = window.__taCopyStore[id]; if (!txt) return;
+    navigator.clipboard.writeText(txt).then(()=>{
+      if (btn) { const o=btn.textContent; btn.textContent='✓ Kopyalandı'; setTimeout(()=>btn.textContent=o,1800); }
+      try { showToast('Panoya kopyalandı'); } catch(e){}
+    });
+  };
 
   /* ─────────────────── SÜRÜKLEME ─────────────────── */
   let dragState = null, resizeState = null;
@@ -987,13 +1024,18 @@
       if (t.otelAdi) {
         msg+=`\n🏨 *Otel:* ${t.otelAdi}\n`;
         if (t.otelAdres) msg+=`📌 *Adres:* ${t.otelAdres}\n`;
-        if (t.otelTel) msg+=`☎️ *Tel:* ${fmtTel(t.otelTel)||t.otelTel}\n`;
+        // Yalnızca gerçek telefon görünümünde olanları yaz
+        if (t.otelTel && /\d{7,}/.test(String(t.otelTel).replace(/\D/g,""))) {
+          msg+=`☎️ *Tel:* ${fmtTel(t.otelTel)||t.otelTel}\n`;
+        }
       }
       msg+=`\n👥 *Kadro (${t.katilimcilar.length} kişi):*\n${kadro}\n`;
       if (t.not) msg+=`\n📝 *Not:* ${t.not}\n`;
       msg+=`\nİyi turneler! 🎬`;
       const wpUrl=`https://wa.me/?text=${encodeURIComponent(msg)}`;
-      const html=`✅ **${esc(t.oyun)}** için WhatsApp şablonu hazır:\n\n<div style="background:#fff;border:1px solid #E8E2D7;border-radius:10px;padding:12px;font-size:12px;white-space:pre-wrap;font-family:'DM Mono',monospace;max-height:280px;overflow:auto">${esc(msg)}</div>\n\n<button class="ta-inline-aktar" onclick="navigator.clipboard.writeText(${JSON.stringify(msg)}).then(()=>window.dispatchEvent(new CustomEvent('ta-toast',{detail:'Panoya kopyalandı'})))">📋 Kopyala</button> <a class="ta-inline-aktar" target="_blank" href="${wpUrl}" style="text-decoration:none;">📲 WhatsApp'ta Aç</a>`;
+      const _cid = "wa_"+Date.now()+"_"+Math.floor(Math.random()*1e6);
+      window.__taCopyStore[_cid] = msg;
+      const html=`✅ **${esc(t.oyun)}** için WhatsApp şablonu hazır:\n\n<div style="background:#fff;border:1px solid #E8E2D7;border-radius:10px;padding:12px;font-size:12px;white-space:pre-wrap;font-family:'DM Mono',monospace;max-height:280px;overflow:auto">${esc(msg)}</div>\n\n<button class="ta-inline-aktar" onclick="window.__taCopy('${_cid}',this)">📋 Kopyala</button> <a class="ta-inline-aktar" target="_blank" href="${wpUrl}" style="text-decoration:none;">📲 WhatsApp'ta Aç</a>`;
       return {html};
     }
 
@@ -1171,7 +1213,11 @@
     /* ── SAHNE HARİTASI (basit ısı listesi) ── */
     if (/(harita|sahne haritası|sahne haritasi|ısı haritası|isi haritasi|şehir haritası|sehir haritasi|gidilen şehir|gidilen sehir)/.test(Q)) {
       const sayim=new Map();
-      for (const t of T) if (t.il) sayim.set(t.il,(sayim.get(t.il)||0)+1);
+      const _aktifT=T.filter(t=>!t.statu.includes("iptal"));
+      for (const t of _aktifT) {
+        if (t.il) sayim.set(t.il,(sayim.get(t.il)||0)+1);
+        for (const d of t.duraklar||[]) if (d.il && d.il!==t.il) sayim.set(d.il,(sayim.get(d.il)||0)+1);
+      }
       const arr=[...sayim.entries()].sort((a,b)=>b[1]-a[1]);
       if (!arr.length) return "Henüz şehir verisi yok.";
       const max=arr[0][1];
@@ -1236,7 +1282,7 @@
     }
 
     /* ── STREAK SAYACI ── */
-    if (/(streak|sahne boş|sahne bos|kaç gün sahne|kac gun sahne|rekor)/.test(Q)) {
+    if (/(streak|sahne boş|sahne bos|kaç gün sahne|kac gun sahne|boş gün rekor|bos gun rekor)/.test(Q)) {
       const sorted=[...T].sort((a,b)=>(parseDate(a.baslangic)||0)-(parseDate(b.baslangic)||0));
       const now=_bugun();
       let aktif=0;
@@ -1513,12 +1559,14 @@
     const _isWaQuery=/(whatsapp|wp|w\.a\.|wapp|kadro.*gönder|kadro.*gonder|gönder.*kadro|gonder.*kadro|kadro.*paylaş|paylaş.*kadro|mesaj.*kadro)/.test(Q);
     const found=_isWaQuery?null:findPerson(Q,T);
     if (found) {
-      const list=T.filter(t=>t.katilimcilar.some(k=>norm(k.kisi)===norm(found.kisi)));
-      if (!list.length) return `**${found.kisi}** henüz hiçbir turneye atanmamış.`;
+      const fullList=T.filter(t=>t.katilimcilar.some(k=>norm(k.kisi)===norm(found.kisi)));
+      if (!fullList.length) return `**${found.kisi}** henüz hiçbir turneye atanmamış.`;
+      const iptalSayi=fullList.filter(t=>t.statu.includes("iptal")).length;
+      const list=fullList.filter(t=>!t.statu.includes("iptal"));
       const gun=list.reduce((s,t)=>s+turneGun(t),0);
       const sorted=list.sort((a,b)=>(parseDate(b.baslangic)||0)-(parseDate(a.baslangic)||0));
-      const lines=sorted.slice(0,15).map(t=>{const otel=t.duraklar?.find(d=>d.otelAdi)?.otelAdi||t.otelAdi||"";return `• **${t.oyun}**\n  📅 ${fmtTarihAralik(t.baslangic,t.bitis)} · 📍 ${t.il||"—"}${otel?" · 🏨 "+otel:""}`;}).join("\n");
-      const toplamTemsil=list.reduce((s,t)=>s+(t.sayi||0),0);
+      const lines=sorted.slice(0,15).map(t=>{const otel=t.duraklar?.find(d=>d.otelAdi)?.otelAdi||t.otelAdi||"";const stIco=t.statu.includes("tamamlan")?"✅":t.statu==="yarida-kesildi"?"⚠️":"📅";return `• ${stIco} **${t.oyun}**\n  📅 ${fmtTarihAralik(t.baslangic,t.bitis)} · 📍 ${t.il||"—"}${otel?" · 🏨 "+otel:""}`;}).join("\n");
+      const toplamTemsil=list.reduce((s,t)=>s+(Number(t.sayi)||0),0);
       // Milestone rozeti
       const MILESTONES=[5,10,15,20,25,30,50];
       const milestone=MILESTONES.find(m=>list.length===m);
@@ -1527,7 +1575,8 @@
         const emojis={5:"🌟",10:"🎭",15:"🏅",20:"🎖",25:"👑",30:"🏆",50:"🌟🏆🌟"};
         celebrateHtml=`<div class="ta-celebrate"><span class="ta-cel-emoji">${emojis[milestone]||"🎉"}</span>${found.kisi} — ${milestone}. Turne!<div class="ta-cel-sub">Tebrikler! Bu özel bir kilometre taşı 🎊</div></div>\n`;
       }
-      return {html: celebrateHtml + `**${found.kisi}**${found.gorev?" · "+found.gorev:""}\n📊 ${list.length} turne · 📅 **${gun} gün** yolda · 🎭 ${toplamTemsil} temsil\n\n${lines}`};
+      const iptalNote = iptalSayi>0 ? `\n_(İptal edilen ${iptalSayi} turne sayıma dahil değil.)_` : "";
+      return {html: celebrateHtml + `**${found.kisi}**${found.gorev?" · "+found.gorev:""}\n📊 ${list.length} aktif turne · 📅 **${gun} gün** yolda · 🎭 ${toplamTemsil} temsil${iptalNote}\n\n${lines}`};
     }
     /* ŞEHİR DETAYI */
     const city=findCity(Q,T);
@@ -1930,13 +1979,15 @@
       }
       
       // WhatsApp mesajı oluştur
+      const _otelTelGecerli = tBul.otelTel && /\d{7,}/.test(String(tBul.otelTel).replace(/\D/g,""));
       const satirlar=[
         `🎭 *${tBul.oyun}*`,
         `📅 ${fmtTarihAralik(tBul.baslangic,tBul.bitis)}`,
         `📍 ${tBul.il||"—"}${tBul.mekan?" · "+tBul.mekan:""}`,
         tBul.gidisUlasim?`🚌 Gidiş: ${tBul.gidisUlasim}${tBul.gidisSaat?" · ⏰ "+tBul.gidisSaat:""}`:"",
         tBul.donusUlasim?`🔄 Dönüş: ${tBul.donusUlasim}${tBul.donusSaat?" · ⏰ "+tBul.donusSaat:""}`:"",
-        tBul.otelAdi?`🏨 Otel: ${tBul.otelAdi}${tBul.otelTel?" ("+( fmtTel(tBul.otelTel)||tBul.otelTel)+")":""}`:"",
+        tBul.otelAdi?`🏨 Otel: ${tBul.otelAdi}${_otelTelGecerli?" ("+(fmtTel(tBul.otelTel)||tBul.otelTel)+")":""}`:"",
+        (tBul.otelAdres?`📌 Adres: ${tBul.otelAdres}`:""),
         tBul.katilimcilar.length?`\n👥 *Kadro (${tBul.katilimcilar.length} kişi):*\n`+tBul.katilimcilar.map(k=>`• ${k.kisi}${k.gorev||k.kategori?" — "+(k.gorev||k.kategori):""}`)
           .join("\n"):"",
         tBul.not?`\n📝 Not: ${tBul.not}`:"",
@@ -1949,8 +2000,10 @@
       o+=`<div style="font-size:12px;font-weight:800;color:#1A5C35;margin-bottom:6px;">📋 ${esc(tBul.oyun)} — Kadro Mesajı</div>`;
       o+=`<pre style="font-size:11px;white-space:pre-wrap;word-break:break-word;color:#2D4A3A;line-height:1.6;background:none;margin:0;font-family:inherit;">${esc(satirlar)}</pre>`;
       o+=`</div>`;
+      const _cid2 = "wa_"+Date.now()+"_"+Math.floor(Math.random()*1e6);
+      window.__taCopyStore[_cid2] = satirlar;
       o+=`<a href="${waUrl}" target="_blank" style="display:inline-flex;align-items:center;gap:6px;background:#25D366;color:#fff;border-radius:8px;padding:8px 14px;font-size:12.5px;font-weight:800;text-decoration:none;margin-right:6px;">📲 WhatsApp'ta Aç</a>`;
-      o+=`<button class="ta-inline-copy" onclick="navigator.clipboard.writeText(${JSON.stringify(satirlar)}).then(()=>{this.textContent='✓ Kopyalandı';setTimeout(()=>this.textContent='📋 Kopyala',1800)})">📋 Kopyala</button>`;
+      o+=`<button class="ta-inline-copy" onclick="window.__taCopy('${_cid2}',this)">📋 Kopyala</button>`;
       return {html:o};
     }
 
@@ -2017,7 +2070,8 @@
     /* ── ŞEHİR REKORU ── */
     if (/(şehir.*rekor|rekor.*şehir|en.*çok.*şehir|hangi.*şehir.*en|kaç.*kez.*gitti|kaç.*defa.*gitti|şehir.*sayısı|şehir.*analiz)/.test(Q)) {
       const ilMap=new Map();
-      for(const t of T){
+      const _scope=T.filter(t=>!t.statu.includes("iptal"));
+      for(const t of _scope){
         if(t.il){const k=t.il.toUpperCase();ilMap.set(k,(ilMap.get(k)||0)+1);}
         for(const d of t.duraklar||[]) if(d.il){const k=d.il.toUpperCase();ilMap.set(k,(ilMap.get(k)||0)+1);}
       }
@@ -2054,14 +2108,30 @@
       return `🪙 Yazı mı tura mı... döndürüyor...\n\n**${sonuc}**${detay}`;
     }
     if (/(zar.*at|at.*zar|zar\s*\d*|dice|zarım)/.test(Q)) {
-      // Kaç yüzlü zar? "3d6", "2 zar" gibi ifadeleri yakala
-      const adetM=Q.match(/(\d+)\s*(?:zar|d)/); const adet=Math.min(parseInt(adetM?.[1]||1),5);
-      const yuzM=Q.match(/d(\d+)/); const yuz=parseInt(yuzM?.[1]||6);
+      const adetM=Q.match(/(\d+)\s*(?:zar|d)/); const adet=Math.min(Math.max(parseInt(adetM?.[1]||1),1),5);
+      const yuzM=Q.match(/d(\d+)/); const yuz=Math.min(Math.max(parseInt(yuzM?.[1]||6),2),20);
       const sonuclar=Array.from({length:adet},()=>Math.floor(Math.random()*yuz)+1);
       const toplam=sonuclar.reduce((a,b)=>a+b,0);
       const zarEmojiler=["⚀","⚁","⚂","⚃","⚄","⚅"];
-      const gosterge=yuz===6?sonuclar.map(n=>zarEmojiler[n-1]).join(" "):sonuclar.join(", ");
-      return `🎲 ${adet>1?adet+"x ":""}${yuz} yüzlü zar atıldı!\n\n${gosterge}${adet>1?`\n\nToplam: **${toplam}**`:""}`;
+      const gosterge=yuz===6?sonuclar.map(n=>zarEmojiler[n-1]).join(" "):sonuclar.join(" · ");
+      // Yorum
+      const max=adet*yuz, ort=(max+adet)/2;
+      let yorum="";
+      if (adet===1 && yuz===6) {
+        const tek={1:"🌧 Bir tane geldi. Bugün dikkatli ol, küçük detaylar önemli.",
+          2:"🍃 İki. Sakin bir gün, planlı ilerle.",
+          3:"🎭 Üç — perde yarı açık, hazırlıkları gözden geçir.",
+          4:"🚀 Dört — iyi bir tempo, devam et.",
+          5:"🌟 Beş — şanslı bir gün, yeni bir adım atabilirsin.",
+          6:"🔥 Altı — full puan! Bugün bir turne için ideal bir gün."};
+        yorum="\n\n"+tek[sonuclar[0]];
+      } else {
+        if (toplam===max) yorum="\n\n🔥 Maksimum! Bugün şans tamamen senin tarafında.";
+        else if (toplam===adet) yorum="\n\n🌧 Minimum geldi. Şansını yarın tekrar deneriz.";
+        else if (toplam>ort) yorum="\n\n🌟 Ortalamanın üstünde — iyi bir hamle yapabilirsin.";
+        else yorum="\n\n🍃 Ortalama altı — sabırlı ol, sıra sende.";
+      }
+      return `🎲 **${adet>1?adet+"x":"1x"} d${yuz} atıldı**\n\n${gosterge}${adet>1?`\n\nToplam: **${toplam}** / ${max}`:""}${yorum}`;
     }
 
     /* ── TURNE HİKAYE ÖZETİ ── */
@@ -2514,7 +2584,7 @@
       return {html:o};
     }
 
-    return "Şu sorulara cevap verebilirim 💡\n\n👤 **Kişi:** \"Çağlar'ın turne listesi\"\n🎭 **Oyun:** \"Kaçaklar turneleri\"\n🏙 **Şehir:** \"Ankara turneleri\"\n🏨 **Otel:** \"Ankara oteli telefonu\"\n📅 **Ay:** \"Nisan 2026 turneleri\"\n📅 **Bugün/Hafta:** \"Bugün ne var?\" · \"Bu hafta\"\n📖 **Hikaye:** \"Kaçaklar turnesini anlat\"\n📋 **Özet:** \"30 günlük özet\"\n⚠️ **Eksik:** \"Kadro eksik turneler\"\n🏆 **Lider:** \"Liderlik tablosu\"\n⭐ **Profil:** \"En çok yol katan kim?\"\n🎯 **Skorkart:** \"Turne skorkartı\"\n📋 **Checklist:** \"Ankara turnesi kontrol listesi\"\n👥 **Ortak kadro:** \"Kaçaklar ve Hamlet ortak kimler?\"\n🏨 **Otel geçmişi:** \"Ankara otel geçmişi\"\n🏅 **Rozet:** \"[İsim] rozeti\"\n🔥 **Isı haritası:** \"Kadro ısı haritası\"\n⏳ **Sayaç:** \"Bir sonraki turne ne zaman?\"\n⚠️ **Çakışma:** \"Çakışan kadro var mı?\"\n📲 **WhatsApp:** \"Kaçaklar kadrosunu WhatsApp'a gönder\"\n⚖️ **Karşılaştır:** \"Turne karşılaştır\"\n🏙 **Şehir rekoru:** \"Şehir rekoru\"\n🗺️ **Harita:** \"Hangi şehirlere gittik?\"\n🌤️ **Hava:** \"Ankara hava durumu\"\n🍃 **Mevsim:** \"Hangi mevsimde çok turne var?\"\n📊 **İstatistik:** \"İstatistik özeti\"\n🔍 **Trivia:** \"Beni şaşırt\"\n💪 **Motivasyon:** \"Motivasyon ver\"\n🎲 **Rastgele:** \"Rastgele turne\"\n🪙 **Yazı-tura:** \"Yazı mı tura mı?\"\n🎲 **Zar:** \"Zar at\" veya \"2d6 at\"\n😄 **Şaka:** \"Bir şaka anlat\"";
+    return "Cevap bulamadım. **Soru Rehberi** sekmesinden hazır sorulara göz atabilirsin. 💡";
 
 
   }
