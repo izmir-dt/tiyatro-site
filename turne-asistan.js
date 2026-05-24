@@ -239,9 +239,26 @@
     transition:opacity .2s,transform .2s;z-index:9999;white-space:nowrap;}
   #ta-toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
 
+  /* İç uyarı / giriş modalı */
+  #ta-modal-backdrop{position:fixed;inset:0;background:rgba(20,8,4,.48);display:none;align-items:center;justify-content:center;z-index:9805;padding:18px;backdrop-filter:blur(2px);}
+  #ta-modal-backdrop.open{display:flex;}
+  #ta-modal{width:min(520px,calc(100vw - 24px));background:#1E2227;color:#fff;border:1px solid rgba(255,255,255,.12);border-radius:18px;box-shadow:0 24px 60px rgba(0,0,0,.35);padding:22px 24px;}
+  #ta-modal-title{font-size:16px;font-weight:800;line-height:1.3;margin-bottom:10px;}
+  #ta-modal-desc{font-size:12.5px;line-height:1.6;color:rgba(255,255,255,.86);margin-bottom:14px;white-space:pre-wrap;}
+  .ta-modal-input{width:100%;border:2px solid #A9C3F5;border-radius:12px;padding:11px 13px;font-size:14px;font-family:inherit;background:#181C20;color:#fff;outline:none;box-sizing:border-box;}
+  .ta-modal-input:focus{border-color:#C6D8FF;box-shadow:0 0 0 3px rgba(169,195,245,.15);}
+  .ta-modal-input::placeholder{color:rgba(255,255,255,.34);}
+  #ta-modal-textarea{min-height:150px;resize:vertical;line-height:1.5;}
+  #ta-modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px;}
+  .ta-modal-btn{min-width:92px;height:46px;border:none;border-radius:999px;font-size:14px;font-weight:800;cursor:pointer;font-family:inherit;transition:transform .12s,opacity .15s;}
+  .ta-modal-btn:hover{transform:translateY(-1px);}
+  .ta-modal-btn.cancel{background:#244F93;color:#EAF1FF;}
+  .ta-modal-btn.ok{background:#9FC0FF;color:#10346B;}
+
   @media(max-width:600px){
     #ta-panel{width:calc(100vw - 16px);right:8px;bottom:80px;height:calc(100vh - 100px);}
     #ta-fab{bottom:16px;right:16px;width:50px;height:50px;}
+    #ta-modal{padding:18px 16px;border-radius:16px;}
   }
 
   /* ── GÜNÜN SÖZÜ BANNER ── */
@@ -459,6 +476,20 @@
   document.body.appendChild(root);
   // Toast
   const toast = document.createElement("div"); toast.id="ta-toast"; document.body.appendChild(toast);
+  const promptModal = document.createElement("div");
+  promptModal.id = "ta-modal-backdrop";
+  promptModal.innerHTML = `
+    <div id="ta-modal" role="dialog" aria-modal="true" aria-labelledby="ta-modal-title">
+      <div id="ta-modal-title"></div>
+      <div id="ta-modal-desc"></div>
+      <input id="ta-modal-input" class="ta-modal-input" type="text" />
+      <textarea id="ta-modal-textarea" class="ta-modal-input" style="display:none;"></textarea>
+      <div id="ta-modal-actions">
+        <button type="button" class="ta-modal-btn cancel" id="ta-modal-cancel">İptal</button>
+        <button type="button" class="ta-modal-btn ok" id="ta-modal-ok">Tamam</button>
+      </div>
+    </div>`;
+  document.body.appendChild(promptModal);
   function showToast(msg, dur=1800){toast.textContent=msg;toast.classList.add("show");setTimeout(()=>toast.classList.remove("show"),dur);}
 
   const $i = id => document.getElementById(id);
@@ -466,6 +497,44 @@
   const input = $i("ta-input"), send = $i("ta-send"), status = $i("ta-status");
   const head = $i("ta-head"), resizeH = $i("ta-resize");
   const fabBadge = $i("ta-fab-badge"), remindBadge = $i("ta-remind-badge");
+  const modalBackdrop = $i("ta-modal-backdrop"), modalTitle = $i("ta-modal-title"), modalDesc = $i("ta-modal-desc");
+  const modalInput = $i("ta-modal-input"), modalTextarea = $i("ta-modal-textarea");
+  const modalOk = $i("ta-modal-ok"), modalCancel = $i("ta-modal-cancel");
+
+  function openInlinePrompt({ title, description = "", placeholder = "", defaultValue = "", multiline = false, okText = "Tamam", cancelText = "İptal" }) {
+    return new Promise(resolve => {
+      modalTitle.textContent = title || "Bilgi gerekli";
+      modalDesc.textContent = description || "";
+      modalOk.textContent = okText;
+      modalCancel.textContent = cancelText;
+      const field = multiline ? modalTextarea : modalInput;
+      const other = multiline ? modalInput : modalTextarea;
+      other.style.display = "none";
+      field.style.display = "block";
+      field.placeholder = placeholder || "";
+      field.value = defaultValue || "";
+      modalBackdrop.classList.add("open");
+
+      const cleanup = (value) => {
+        modalBackdrop.classList.remove("open");
+        modalOk.onclick = null;
+        modalCancel.onclick = null;
+        modalBackdrop.onclick = null;
+        field.onkeydown = null;
+        resolve(value);
+      };
+
+      modalOk.onclick = () => cleanup((field.value || "").trim());
+      modalCancel.onclick = () => cleanup(null);
+      modalBackdrop.onclick = (e) => { if (e.target === modalBackdrop) cleanup(null); };
+      field.onkeydown = (e) => {
+        if (e.key === "Escape") cleanup(null);
+        if (!multiline && e.key === "Enter") { e.preventDefault(); cleanup((field.value || "").trim()); }
+        if (multiline && (e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); cleanup((field.value || "").trim()); }
+      };
+      setTimeout(() => field.focus(), 30);
+    });
+  }
 
   /* ─────────────────── SEKMELER ─────────────────── */
   document.querySelectorAll(".ta-tab").forEach(tab => {
@@ -552,25 +621,37 @@
   ];
 
   // Soru rehberinde placeholder içeren soruları çözmek için yardımcı
-  function _placeholderResolve(q) {
+  async function _placeholderResolve(q) {
     if (!/\[.*?\]/.test(q)) return q;
     // Kişi adı placeholder'ları için listeden seç
     if (/\[İsim\]|\[Kişi\]|\[Personel\]/.test(q)) {
       const ppl = new Set();
       try { (DS?.turneler || []).forEach(t => (t.katilimcilar || []).forEach(k => k.kisi && ppl.add(k.kisi))); } catch(e){}
-      const ad = window.prompt(`👤 Hangi kişi için? \n\nÖrnek: ${[...ppl].slice(0,3).join(", ") || "Çağlar"}`);
+      const ad = await openInlinePrompt({
+        title: "Hangi kişi için?",
+        description: `Örnek: ${[...ppl].slice(0,3).join(", ") || "Çağlar"}`,
+        placeholder: "Kişi adı yazın"
+      });
       if (!ad || !ad.trim()) return null;
       return q.replace(/\[İsim\]|\[Kişi\]|\[Personel\]/g, ad.trim());
     }
     if (/\[Oyun\]/.test(q)) {
       const oys = new Set();
       try { (DS?.turneler || []).forEach(t => t.oyun && oys.add(t.oyun)); } catch(e){}
-      const ad = window.prompt(`🎭 Hangi oyun? \n\nÖrnek: ${[...oys].slice(0,3).join(", ") || "Kaçaklar"}`);
+      const ad = await openInlinePrompt({
+        title: "Hangi oyun?",
+        description: `Örnek: ${[...oys].slice(0,3).join(", ") || "Kaçaklar"}`,
+        placeholder: "Oyun adı yazın"
+      });
       if (!ad || !ad.trim()) return null;
       return q.replace(/\[Oyun\]/g, ad.trim());
     }
     if (/\[Şehir\]/.test(q)) {
-      const ad = window.prompt("🏙 Hangi şehir? (örn. Ankara)");
+      const ad = await openInlinePrompt({
+        title: "Hangi şehir?",
+        description: "Örnek: Ankara",
+        placeholder: "Şehir adı yazın"
+      });
       if (!ad || !ad.trim()) return null;
       return q.replace(/\[Şehir\]/g, ad.trim());
     }
@@ -599,9 +680,9 @@
     if (!toplam) html = `<div class="ta-sorular-empty">Aramanızla eşleşen soru bulunamadı.</div>`;
     wrap.innerHTML = html;
     wrap.querySelectorAll(".ta-sorular-q").forEach(b => {
-      b.addEventListener("click", () => {
+      b.addEventListener("click", async () => {
         const q = b.getAttribute("data-q");
-        const resolved = _placeholderResolve(q);
+        const resolved = await _placeholderResolve(q);
         if (!resolved) return; // kullanıcı iptal etti
         // Sohbet sekmesine geç ve soruyu gönder
         document.querySelector('.ta-tab[data-view="chat"]')?.click();
@@ -851,6 +932,31 @@
   function fmtTarih(s) { const d = parseDate(s); if (!d) return s||"—"; return `${String(d.getDate()).padStart(2,"0")} ${AYLAR[d.getMonth()]} ${d.getFullYear()}`; }
   function fmtTarihAralik(bas, bit) { const a=fmtTarih(bas), b=fmtTarih(bit); if (!a||a==="—") return "—"; if (a===b||!bit) return a; return `${a} – ${b}`; }
   function turneGun(t) { const a=parseDate(t.baslangic), b=parseDate(t.bitis)||a; if(!a||!b) return 1; return Math.max(1,Math.round((b-a)/86400000)+1); }
+  function splitCityNames(raw) {
+    return String(raw || "")
+      .split(/[,/;+]|\s+-\s+|\s+ve\s+/i)
+      .map(s => s.trim())
+      .filter(Boolean);
+  }
+  function addCityToSet(set, raw) {
+    for (const city of splitCityNames(raw)) set.add(city);
+  }
+  function collectUniqueCitiesFromTour(t) {
+    const cities = new Set();
+    addCityToSet(cities, t?.il);
+    for (const d of t?.duraklar || []) addCityToSet(cities, d?.il);
+    return cities;
+  }
+  function cityTurneCount(T, targetCity) {
+    const hedef = norm(targetCity || "");
+    let count = 0;
+    for (const t of T || []) {
+      if ((t.statu || "").includes("iptal")) continue;
+      const cities = collectUniqueCitiesFromTour(t);
+      if ([...cities].some(city => norm(city) === hedef)) count++;
+    }
+    return count;
+  }
   function fmtTel(tel) {
     if (!tel) return null; const c=String(tel).replace(/\s/g,"");
     if (c.match(/^0?\d{10}$/)) { const d=c.startsWith("0")?c:"0"+c; return d.replace(/(\d{4})(\d{3})(\d{2})(\d{2})/,"$1 $2 $3 $4"); }
@@ -1211,12 +1317,13 @@
     }
 
     /* ── SAHNE HARİTASI (basit ısı listesi) ── */
-    if (/(harita|sahne haritası|sahne haritasi|ısı haritası|isi haritasi|şehir haritası|sehir haritasi|gidilen şehir|gidilen sehir)/.test(Q)) {
+    if (/(sahne haritası|sahne haritasi|şehir haritası|sehir haritasi|gidilen şehir|gidilen sehir)/.test(Q)) {
       const sayim=new Map();
       const _aktifT=T.filter(t=>!t.statu.includes("iptal"));
       for (const t of _aktifT) {
-        if (t.il) sayim.set(t.il,(sayim.get(t.il)||0)+1);
-        for (const d of t.duraklar||[]) if (d.il && d.il!==t.il) sayim.set(d.il,(sayim.get(d.il)||0)+1);
+        for (const city of collectUniqueCitiesFromTour(t)) {
+          sayim.set(city,(sayim.get(city)||0)+1);
+        }
       }
       const arr=[...sayim.entries()].sort((a,b)=>b[1]-a[1]);
       if (!arr.length) return "Henüz şehir verisi yok.";
@@ -1307,22 +1414,29 @@
       if (!pool.length) return "🎲 Şu an bingo için yeterli turne yok.";
       // Sadece il'i ve kadrosu olan turneleri kullan
       const valid = pool.filter(t => t.il && Array.isArray(t.katilimcilar) && t.katilimcilar.length);
-      const tumSehirler = [...new Set(T.map(t => t.il).filter(Boolean))];
+      const tumSehirler = [...new Set(T.flatMap(t => [...collectUniqueCitiesFromTour(t)]) )];
       if (!valid.length || tumSehirler.length < 2) return "🎲 Bingo için yeterli veri yok.";
       // Rastgele bir turne ve katılımcı seç
       const turne = valid[Math.floor(Math.random() * valid.length)];
       const kisi = turne.katilimcilar[Math.floor(Math.random() * turne.katilimcilar.length)].kisi;
-      const dogru = turne.il;
+      const turneCities = [...collectUniqueCitiesFromTour(turne)];
+      const dogru = turneCities[Math.floor(Math.random() * turneCities.length)] || turne.il;
       // Doğru cevap + 3 farklı şehir
       const digerler = tumSehirler.filter(s => s && s !== dogru).sort(() => Math.random() - 0.5).slice(0, 3);
       const seçenekler = [dogru, ...digerler].sort(() => Math.random() - 0.5);
       // Bingo durumunu global'e koy (event tetikleme yerine güvenli yöntem)
       window.__taBingo = { dogru, kisi };
-      let o = `🎲 **BİNGO!**\n\n**${esc(kisi)}** şu an hangi şehirde sahnede?\n\n`;
+      const soruTipleri = [
+        `**${esc(kisi)}** bu turnede hangi şehir ayağında yer alıyor?`,
+        `**${esc(kisi)}** için doğru şehir hangisi?`,
+        `Bu turda **${esc(kisi)}** hangi şehir seçeneğinde olmalı?`,
+        `Sahnedeki ipucu: **${esc(kisi)}** — doğru şehri bul.`
+      ];
+      let o = `🎲 **BİNGO!**\n\n${soruTipleri[Math.floor(Math.random()*soruTipleri.length)]}\n\n`;
       for (const s of seçenekler) {
         o += `<button class="ta-inline-copy" onclick="window.__taBingoCheck('${s.replace(/'/g, "\\'")}')">${esc(s)}</button> `;
       }
-      o += `\n\n<span style="font-size:11px;color:#8A857C">İpucu: Bilen bilir 😉</span>`;
+      o += `\n\n<span style="font-size:11px;color:#8A857C">İpucu: Aynı turnenin şehirlerinden biri 😉</span>`;
       return { html: o };
     }
 
@@ -1463,9 +1577,14 @@
     if (/otel|konaklama|kal(ınan|dığı|acak)/.test(Q)) {
       const city=findCity(Q,T);
       if (city) {
-        const list=T.filter(t=>t.il===city||(t.duraklar||[]).some(d=>d.il===city));
+        const list=T.filter(t=>!t.statu.includes("iptal") && [...collectUniqueCitiesFromTour(t)].some(il=>norm(il)===norm(city)));
         const otels=new Map();
-        for (const t of list) { for (const d of parseDurakOteller(t.duraklar).filter(d=>d.il===city)) { if (d.otelAdi&&!otels.has(d.otelAdi)) otels.set(d.otelAdi,{adres:d.otelAdres,tel:d.otelTel,ilgili:d.ilgiliKisi,ilgiliTel:d.ilgiliTel}); } if (!otels.size&&t.otelAdi) otels.set(t.otelAdi,{adres:t.otelAdres,tel:t.otelTel}); }
+        for (const t of list) {
+          for (const d of parseDurakOteller(t.duraklar).filter(d=>splitCityNames(d.il).some(il=>norm(il)===norm(city)))) {
+            if (d.otelAdi && !otels.has(d.otelAdi)) otels.set(d.otelAdi,{adres:d.otelAdres,tel:d.otelTel,ilgili:d.ilgiliKisi,ilgiliTel:d.ilgiliTel});
+          }
+          if (t.otelAdi && splitCityNames(t.il).some(il=>norm(il)===norm(city)) && !otels.has(t.otelAdi)) otels.set(t.otelAdi,{adres:t.otelAdres,tel:t.otelTel});
+        }
         if (otels.size) { let o=`**${city}** otel bilgileri:\n\n`; for (const [ad,inf] of otels) { o+=`🏨 **${ad}**\n`; if(inf.adres)o+=`   📍 ${inf.adres}\n`; if(inf.tel)o+=`   📞 <a class="ta-phone" href="tel:${inf.tel}">${fmtTel(inf.tel)||inf.tel}</a>\n`; if(inf.ilgili){o+=`   👤 ${inf.ilgili}`;if(inf.ilgiliTel)o+=` — <a class="ta-phone" href="tel:${inf.ilgiliTel}">${fmtTel(inf.ilgiliTel)||inf.ilgiliTel}</a>`;o+="\n";} o+="\n"; } return {html:o}; }
       }
       const otelF=F.filter(f=>f.kategori==="otel");
@@ -1506,7 +1625,7 @@
       return top.length?"En fazla turneye giden kişiler:\n\n"+top.map(([k,n],i)=>`${i+1}. **${k}** — ${n} turne`).join("\n"):"Kayıt bulunamadı.";
     }
     /* EN FAZLA GÜN */
-    if (/(en\s*(fazla|cok|çok)).*(gün|gun).*(yolda|turne)/.test(Q)||/yolda.*kim/.test(Q)) {
+    if (/(en\s*(fazla|cok|çok)).*(gün|gun).*(yolda|turne)/.test(Q)||/yolda.*kim/.test(Q)||/en\s*çok\s*yol\s*katan/.test(Q)) {
       const d=new Map(); for(const t of scope){const g=turneGun(t);for(const k of t.katilimcilar)d.set(k.kisi,(d.get(k.kisi)||0)+g);}
       const top=[...d.entries()].sort((a,b)=>b[1]-a[1]).slice(0,10);
       return top.length?"En çok gün yolda:\n\n"+top.map(([k,g],i)=>`${i+1}. **${k}** — ${g} gün`).join("\n"):"Veri yok.";
@@ -1579,11 +1698,11 @@
       return {html: celebrateHtml + `**${found.kisi}**${found.gorev?" · "+found.gorev:""}\n📊 ${list.length} aktif turne · 📅 **${gun} gün** yolda · 🎭 ${toplamTemsil} temsil${iptalNote}\n\n${lines}`};
     }
     /* ŞEHİR DETAYI */
-    const city=findCity(Q,T);
+      const city=findCity(Q,T);
     if (city) {
-      const list=T.filter(t=>t.il===city||(t.duraklar||[]).some(d=>d.il===city));
-      let o=`**${city}** şehrine **${list.length}** turne yapıldı.\n\n`;
-      for(const t of list.slice(0,10)){const duraklar=parseDurakOteller(t.duraklar).filter(d=>d.il===city);const otel=duraklar[0]?.otelAdi||t.otelAdi||"";const otelTel=duraklar[0]?.otelTel||t.otelTel||"";const ilgili=duraklar[0]?.ilgiliKisi||"";const ilgiliTel=duraklar[0]?.ilgiliTel||"";o+=`• **${t.oyun}** (${statuGoster(t.statu)})\n  📅 ${fmtTarihAralik(t.baslangic,t.bitis)}\n`;if(otel){o+=`  🏨 ${otel}`;if(otelTel)o+=` — <a class="ta-phone" href="tel:${otelTel}">${fmtTel(otelTel)||otelTel}</a>`;o+="\n";}if(ilgili){o+=`  👤 ${ilgili}`;if(ilgiliTel)o+=` — <a class="ta-phone" href="tel:${ilgiliTel}">${fmtTel(ilgiliTel)||ilgiliTel}</a>`;o+="\n";}o+="\n";}
+        const list=T.filter(t=>!t.statu.includes("iptal") && [...collectUniqueCitiesFromTour(t)].some(il=>norm(il)===norm(city)));
+        let o=`**${city}** şehrine **${list.length}** turne yapıldı.\n\n`;
+        for(const t of list.slice(0,10)){const duraklar=parseDurakOteller(t.duraklar).filter(d=>splitCityNames(d.il).some(il=>norm(il)===norm(city)));const anaSehirEslesiyor=splitCityNames(t.il).some(il=>norm(il)===norm(city));const otel=duraklar[0]?.otelAdi||(anaSehirEslesiyor?t.otelAdi:"")||"";const otelTel=duraklar[0]?.otelTel||(anaSehirEslesiyor?t.otelTel:"")||"";const ilgili=duraklar[0]?.ilgiliKisi||"";const ilgiliTel=duraklar[0]?.ilgiliTel||"";o+=`• **${t.oyun}** (${statuGoster(t.statu)})\n  📅 ${fmtTarihAralik(t.baslangic,t.bitis)}\n`;if(otel){o+=`  🏨 ${otel}`;if(otelTel)o+=` — <a class="ta-phone" href="tel:${otelTel}">${fmtTel(otelTel)||otelTel}</a>`;o+="\n";}if(ilgili){o+=`  👤 ${ilgili}`;if(ilgiliTel)o+=` — <a class="ta-phone" href="tel:${ilgiliTel}">${fmtTel(ilgiliTel)||ilgiliTel}</a>`;o+="\n";}o+="\n";}
       return {html:o};
     }
     /* OYUN DETAYI — oyun adı yazılınca hem bilgi hem düzenle butonu */
@@ -2072,8 +2191,10 @@
       const ilMap=new Map();
       const _scope=T.filter(t=>!t.statu.includes("iptal"));
       for(const t of _scope){
-        if(t.il){const k=t.il.toUpperCase();ilMap.set(k,(ilMap.get(k)||0)+1);}
-        for(const d of t.duraklar||[]) if(d.il){const k=d.il.toUpperCase();ilMap.set(k,(ilMap.get(k)||0)+1);}
+        for (const city of collectUniqueCitiesFromTour(t)) {
+          const k=city.toUpperCase();
+          ilMap.set(k,(ilMap.get(k)||0)+1);
+        }
       }
       const sorted=[...ilMap.entries()].sort((a,b)=>b[1]-a[1]).slice(0,10);
       if(!sorted.length) return "Şehir verisi bulunamadı.";
@@ -2089,16 +2210,16 @@
     }
 
     /* ── TURNE MAPİ / KAÇINILMAZ EŞLEŞME ── */
-    if (/(harita|map|nereye.*gittik|hangi.*şehirler|şehir.*listesi|gidilen.*şehirler)/.test(Q)) {
+    if (/(nereye.*gittik|hangi.*şehirler|şehir.*listesi|gidilen.*şehirler)/.test(Q)) {
       const ilSet=new Set();
-      for(const t of T){
-        if(t.il) ilSet.add(t.il.trim());
-        for(const d of t.duraklar||[]) if(d.il) ilSet.add(d.il.trim());
-      }
-      const iller=[...ilSet].sort();
+      T.filter(t=>!t.statu.includes("iptal")).forEach(t=>collectUniqueCitiesFromTour(t).forEach(il=>ilSet.add(il)));
+      const iller=[...ilSet].sort((a,b)=>a.localeCompare(b,"tr"));
       if(!iller.length) return "Şehir bilgisi bulunamadı.";
-      let o=`🗺️ **Turne haritası — ${iller.length} şehir:**\n\n`;
-      o+=iller.map(il=>`📍 ${il}`).join(" · ");
+      const satirlar=[];
+      for(let i=0;i<iller.length;i+=6) satirlar.push(iller.slice(i,i+6));
+      let o=`🗺️ **Gidilen şehirler — ${iller.length} farklı şehir**\n\n`;
+      o+=satirlar.map(grup=>grup.map(il=>`📍 ${il}`).join("   ")).join("\n\n");
+      o+=`\n\n<span style="font-size:11px;color:#8A857C">Aynı şehir ikinci kez yazılmaz; iptal kayıtlar da sayılmaz.</span>`;
       return {html:o};
     }
     /* ── YAZITUTRA / ZAR ── */
@@ -2131,7 +2252,8 @@
         else if (toplam>ort) yorum="\n\n🌟 Ortalamanın üstünde — iyi bir hamle yapabilirsin.";
         else yorum="\n\n🍃 Ortalama altı — sabırlı ol, sıra sende.";
       }
-      return `🎲 **${adet>1?adet+"x":"1x"} d${yuz} atıldı**\n\n${gosterge}${adet>1?`\n\nToplam: **${toplam}** / ${max}`:""}${yorum}`;
+      const baslik = adet===1 && yuz===6 ? "🎲 **Zar atıldı**" : `🎲 **${adet} adet d${yuz} zar atıldı**`;
+      return `${baslik}\n\n${gosterge}${adet>1?`\n\nToplam: **${toplam}** / ${max}`:""}${yorum}`;
     }
 
     /* ── TURNE HİKAYE ÖZETİ ── */
@@ -2214,7 +2336,7 @@
       const aktifTurneler=T.filter(t=>!t.statu.includes("iptal"));
       const personelSet2=new Set(); T.forEach(t=>t.katilimcilar.forEach(k=>personelSet2.add(norm(k.kisi))));
       // Şehir sayısı: kullanıcı algısıyla uyumlu olsun diye SADECE ana il sayılır (duraklar hariç değil; ama eşsiz)
-      const ilSet2=new Set(); T.forEach(t=>{if(t.il)ilSet2.add(norm(t.il));(t.duraklar||[]).forEach(d=>{if(d.il)ilSet2.add(norm(d.il));});});
+      const ilSet2=new Set(); T.forEach(t=>collectUniqueCitiesFromTour(t).forEach(il=>ilSet2.add(norm(il))));
       const toplamGun2=aktifTurneler.reduce((s,t)=>s+turneGun(t),0);
       const enUzunTurne=aktifTurneler.slice().sort((a,b)=>turneGun(b)-turneGun(a))[0];
       const enKalabalikTurne=T.filter(t=>t.katilimcilar.length>0).sort((a,b)=>b.katilimcilar.length-a.katilimcilar.length)[0];
@@ -2465,10 +2587,10 @@
     }
 
     /* ── KADRO KARŞILAŞTIRMA — ortak kişiler ── */
-    if (/(ortak.*kadro|kadro.*ortak|ortak.*kişi|kişi.*ortak|iki.*turne.*kim|kesişen|hem.*hem|hangi.*turnede.*birlikte)/.test(Q)) {
+    if (/(kaçaklar.*hamlet.*ortak|hamlet.*kaçaklar.*ortak|ortak.*kadro|kadro.*ortak|ortak.*kişi|kişi.*ortak|iki.*turne.*kim|kesişen|hem.*hem|hangi.*turnede.*birlikte)/.test(Q)) {
       const esc2=(s)=>(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;');
       const oyunlar2=[...new Set(T.map(t=>t.oyun).filter(Boolean))];
-      const adaylar2=oyunlar2.filter(oy=>{const p=norm(oy).split(/\s+/).filter(p=>p.length>=4);return p.length&&p.some(p=>Q.includes(p));});
+      const adaylar2=oyunlar2.filter(oy=>{const p=norm(oy).split(/\s+/).filter(p=>p.length>=4);return p.length&&p.every(p=>Q.includes(p));});
       if(adaylar2.length<2){
         const recent2=[...T].filter(t=>t.katilimcilar.length>0).sort((a,b)=>(parseDate(b.baslangic)||0)-(parseDate(a.baslangic)||0)).slice(0,20);
         let o=`<div style="font-size:12.5px;font-weight:700;color:#1A1A1A;margin-bottom:8px;">👥 Ortak kadroyu bulmak için iki turne seç:</div><select id="ta-ort-a" style="width:100%;border:1.5px solid #E8E2D7;border-radius:8px;padding:6px 10px;font-size:12px;font-family:inherit;background:#FBF8F3;outline:none;cursor:pointer;margin-bottom:6px;"><option value="">1. Turne seç…</option>`;
@@ -2611,7 +2733,16 @@
     });
   }
 
-  function findCity(Q,T) { const c=new Set();for(const t of T){if(t.il)c.add(t.il);for(const d of t.duraklar||[])if(d.il)c.add(d.il);}for(const city of c)if(norm(city).length>=4&&Q.includes(norm(city)))return city;return null; }
+  function findCity(Q,T) {
+    const c = new Set();
+    for (const t of T) {
+      addCityToSet(c, t.il);
+      for (const d of t.duraklar || []) addCityToSet(c, d.il);
+    }
+    const sorted = [...c].sort((a,b) => norm(b).length - norm(a).length);
+    for (const city of sorted) if (norm(city).length >= 3 && Q.includes(norm(city))) return city;
+    return null;
+  }
 
   // Oyun adı eşleşmesi — sistemdeki oyun adlarını ara
   function findOyun(Q,T) {
@@ -2884,17 +3015,24 @@
       navigator.clipboard.writeText(json).then(()=>showToast("📤 Hatırlatıcılar kopyalandı — diğer bilgisayarda İçe Aktar'a yapıştırın",3000));
     });
     $i("ta-remind-import")?.addEventListener("click", () => {
-      const raw = prompt("Hatırlatıcı JSON'unu yapıştırın:");
-      if (!raw) return;
-      try {
-        const parsed = JSON.parse(raw);
-        if (!Array.isArray(parsed)) throw new Error("Geçersiz format");
-        const existing = loadReminders();
-        const merged = [...existing];
-        for (const r of parsed) if (!merged.find(e=>e.id===r.id)) merged.push(r);
-        saveReminders(merged); checkReminders(); renderReminders();
-        showToast(`✅ ${parsed.length} hatırlatıcı içe aktarıldı`,2500);
-      } catch(e) { showToast("❌ Geçersiz JSON formatı",2500); }
+      openInlinePrompt({
+        title: "Hatırlatıcıları içe aktar",
+        description: "JSON verisini aşağıya yapıştırın.\nKısayol: Ctrl/Cmd + Enter ile onaylayabilirsiniz.",
+        placeholder: "[\n  {\"id\":\"...\"}\n]",
+        multiline: true,
+        okText: "İçe Aktar"
+      }).then(raw => {
+        if (!raw) return;
+        try {
+          const parsed = JSON.parse(raw);
+          if (!Array.isArray(parsed)) throw new Error("Geçersiz format");
+          const existing = loadReminders();
+          const merged = [...existing];
+          for (const r of parsed) if (!merged.find(e=>e.id===r.id)) merged.push(r);
+          saveReminders(merged); checkReminders(); renderReminders();
+          showToast(`✅ ${parsed.length} hatırlatıcı içe aktarıldı`,2500);
+        } catch(e) { showToast("❌ Geçersiz JSON formatı",2500); }
+      });
     });
 
     if (!arr.length) { const empty=document.createElement("div"); empty.className="ta-remind-empty"; empty.innerHTML='<div class="ta-remind-empty-icon">🔔</div><div class="ta-remind-empty-text">Henüz hatırlatıcı yok</div><div style="font-size:11px;margin-top:4px;color:#C0BAB2">Farklı cihazlarda görmek için Dışa Aktar → İçe Aktar kullanın</div>'; body.appendChild(empty); return; }
@@ -3129,7 +3267,7 @@
 
     // Şehir sıklığı
     const ilMap=new Map();
-    T.filter(t=>!t.statu.includes("iptal")).forEach(t=>{const ils=new Set();if(t.il)ils.add(t.il);(t.duraklar||[]).forEach(d=>{if(d.il)ils.add(d.il);});ils.forEach(il=>ilMap.set(il,(ilMap.get(il)||0)+1));});
+    T.filter(t=>!t.statu.includes("iptal")).forEach(t=>{collectUniqueCitiesFromTour(t).forEach(il=>ilMap.set(il,(ilMap.get(il)||0)+1));});
     const topIller=[...ilMap.entries()].sort((a,b)=>b[1]-a[1]).slice(0,8);
 
     // Kişi sıklığı — unique turne key ile çift sayımı önle (iptal hariç)
