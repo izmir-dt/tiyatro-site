@@ -292,6 +292,25 @@
   .ta-cmp-val{font-weight:700;color:#1A1A1A;text-align:right;max-width:55%;}
   .ta-cmp-val.better{color:#2F7D4E;}
   .ta-cmp-val.worse{color:#B53030;}
+
+  /* ── SORU REHBERİ GÖRÜNÜMÜ ── */
+  #ta-sorular-view{background:#FBF8F3;}
+  .ta-sorular-body{flex:1;overflow-y:auto;padding:12px;}
+  .ta-sorular-body::-webkit-scrollbar{width:4px;}
+  .ta-sorular-body::-webkit-scrollbar-thumb{background:#D9C9BD;border-radius:4px;}
+  .ta-sorular-intro{font-size:12px;color:#6A6560;line-height:1.55;margin-bottom:12px;padding:10px 12px;
+    background:#fff;border:1px solid #E8E2D7;border-radius:10px;}
+  .ta-sorular-search{width:100%;border:1.5px solid #E8E2D7;border-radius:9px;padding:8px 12px;font-size:12.5px;
+    font-family:inherit;background:#fff;outline:none;color:#1A1A1A;margin-bottom:10px;transition:border-color .15s;}
+  .ta-sorular-search:focus{border-color:#A0192E;box-shadow:0 0 0 3px rgba(160,25,46,.08);}
+  .ta-sorular-cat{background:#fff;border:1px solid #E8E2D7;border-radius:10px;margin-bottom:8px;overflow:hidden;}
+  .ta-sorular-cat-head{padding:9px 12px;font-size:11px;font-weight:800;color:#A0192E;text-transform:uppercase;
+    letter-spacing:.5px;background:#FBF8F3;border-bottom:1px solid #E8E2D7;display:flex;align-items:center;gap:6px;}
+  .ta-sorular-list{padding:8px 10px;display:flex;flex-wrap:wrap;gap:5px;}
+  .ta-sorular-q{font-size:11.5px;padding:6px 11px;border:1px solid #E8E2D7;background:#FBF8F3;border-radius:999px;
+    cursor:pointer;color:#1A1A1A;font-family:inherit;transition:all .15s;text-align:left;line-height:1.3;}
+  .ta-sorular-q:hover{border-color:#A0192E;color:#A0192E;background:#FBE8EB;}
+  .ta-sorular-empty{text-align:center;padding:30px 20px;color:#B0A99E;font-size:12.5px;font-weight:600;}
   `;
   const styleEl = document.createElement("style");
   styleEl.textContent = css;
@@ -344,6 +363,10 @@
         <button class="ta-tab" data-view="stats">
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2"/><path d="M7 17V13M12 17V7M17 17V11"/></svg>
           İstatistik
+        </button>
+        <button class="ta-tab" data-view="sorular">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          Soru Rehberi
         </button>
       </div>
 
@@ -415,6 +438,18 @@
         </div>
       </div>
 
+      <!-- SORU REHBERİ -->
+      <div class="ta-view" id="ta-sorular-view">
+        <div class="ta-sorular-body" id="ta-sorular-body">
+          <div class="ta-sorular-intro">
+            Aşağıdaki sorulardan birine tıklayın; cevabı sohbet sekmesinde görün.
+            Üstteki kutuya yazarak arama da yapabilirsiniz.
+          </div>
+          <input type="search" class="ta-sorular-search" id="ta-sorular-q" placeholder="Soru ara… (örn. otel, kadro, hava)">
+          <div id="ta-sorular-list"></div>
+        </div>
+      </div>
+
       <div id="ta-resize" title="Boyutu değiştir">
         <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
           <path d="M9 1L1 9M9 5L5 9" stroke="#6B0E1E" stroke-width="1.5" stroke-linecap="round"/>
@@ -444,8 +479,111 @@
       if (tab.dataset.view === "remind") renderReminders();
       if (tab.dataset.view === "edit" && DS) populateEditSelect();
       if (tab.dataset.view === "rehber" && DS) renderRehber();
+      if (tab.dataset.view === "sorular") renderSorular();
     });
   });
+
+  /* ─────────────────── SORU REHBERİ ─────────────────── */
+  const SORU_KATEGORILERI = [
+    { baslik: "👤 Kişi & Personel", icon: "👤", sorular: [
+      "Çağlar'ın turne listesi",
+      "[İsim] turne geçmişi",
+      "En çok yol katan kim?",
+      "Personel profili: [İsim]",
+      "Kişi yükü dengesi",
+      "[İsim] rozeti",
+      "Liderlik tablosu",
+    ]},
+    { baslik: "🎭 Oyun & Kadro", icon: "🎭", sorular: [
+      "Kaçaklar turneleri",
+      "Kaçaklar turnesini anlat",
+      "Kaçaklar ve Hamlet ortak kimler?",
+      "Kaçaklar kadro önerisi",
+      "Kadro ısı haritası",
+      "Kadro eksik turneler",
+      "Çakışan kadro var mı?",
+    ]},
+    { baslik: "🏙 Şehir & Otel", icon: "🏙", sorular: [
+      "Ankara turneleri",
+      "Ankara oteli telefonu",
+      "Ankara otel geçmişi",
+      "Hangi şehirlere gittik?",
+      "Şehir rekoru",
+      "Sahne haritası",
+    ]},
+    { baslik: "📅 Tarih & Takvim", icon: "📅", sorular: [
+      "Bugün ne var?",
+      "Bu hafta",
+      "Nisan 2026 turneleri",
+      "Bir sonraki turne ne zaman?",
+      "30 günlük özet",
+      "Sezon finali sayacı",
+      "Bugün tarihte",
+    ]},
+    { baslik: "📊 İstatistik & Rapor", icon: "📊", sorular: [
+      "İstatistik özeti",
+      "Mart 2026 raporu",
+      "Turne karşılaştır",
+      "Turne skorkartı",
+      "Hangi mevsimde çok turne var?",
+    ]},
+    { baslik: "🛠 Operasyon", icon: "🛠", sorular: [
+      "Sabah brifingi",
+      "Hatırlatıcı öner",
+      "Ankara turnesi kontrol listesi",
+      "Eksik bilgili turneler",
+      "Kaçaklar kadrosunu WhatsApp'a gönder",
+    ]},
+    { baslik: "🌤 Hava & Yemek", icon: "🌤", sorular: [
+      "Ankara hava durumu",
+      "Trabzon yemek",
+      "Nerede ne yenir?",
+    ]},
+    { baslik: "🎲 Eğlence", icon: "🎲", sorular: [
+      "Beni şaşırt",
+      "Motivasyon ver",
+      "Bingo oyna",
+      "Şanslı turne",
+      "Rastgele turne",
+      "Yazı mı tura mı?",
+      "Zar at",
+      "2d6 at",
+      "Bir şaka anlat",
+    ]},
+  ];
+
+  function renderSorular(filter) {
+    const wrap = document.getElementById("ta-sorular-list");
+    if (!wrap) return;
+    const f = (filter || "").trim().toLocaleLowerCase("tr");
+    let html = "";
+    let toplam = 0;
+    for (const kat of SORU_KATEGORILERI) {
+      const list = f
+        ? kat.sorular.filter(s => s.toLocaleLowerCase("tr").includes(f))
+        : kat.sorular;
+      if (!list.length) continue;
+      toplam += list.length;
+      html += `<div class="ta-sorular-cat">
+        <div class="ta-sorular-cat-head"><span>${kat.icon}</span> ${kat.baslik.replace(kat.icon, "").trim()}</div>
+        <div class="ta-sorular-list">${
+          list.map(s => `<button type="button" class="ta-sorular-q" data-q="${s.replace(/"/g, "&quot;")}">${s}</button>`).join("")
+        }</div>
+      </div>`;
+    }
+    if (!toplam) html = `<div class="ta-sorular-empty">Aramanızla eşleşen soru bulunamadı.</div>`;
+    wrap.innerHTML = html;
+    wrap.querySelectorAll(".ta-sorular-q").forEach(b => {
+      b.addEventListener("click", () => {
+        const q = b.getAttribute("data-q");
+        // Sohbet sekmesine geç ve soruyu gönder
+        document.querySelector('.ta-tab[data-view="chat"]')?.click();
+        submit(q);
+      });
+    });
+  }
+  // Arama
+  document.getElementById("ta-sorular-q")?.addEventListener("input", e => renderSorular(e.target.value));
 
   /* ─────────────────── TOGGLE / PANEL ─────────────────── */
   $i("ta-fab").addEventListener("click", () => togglePanel(true));
@@ -1121,17 +1259,25 @@
       const aktif=T.filter(t=>{const a=parseDate(t.baslangic), b=parseDate(t.bitis)||a; return a&&b&&a<=now&&b>=now;});
       const pool=aktif.length?aktif:_yaklasan(T,30);
       if (!pool.length) return "🎲 Şu an bingo için yeterli turne yok.";
-      const sehirler=[...new Set(pool.map(t=>t.il).filter(Boolean))];
-      const kisiler=[...new Set(pool.flatMap(t=>t.katilimcilar.map(p=>p.kisi)))];
-      if (!sehirler.length||!kisiler.length) return "🎲 Bingo için yeterli veri yok.";
-      const k=kisiler[Math.floor(Math.random()*kisiler.length)];
-      const dogru=pool.find(t=>t.katilimcilar.some(p=>norm(p.kisi)===norm(k)))?.il;
-      const seçenekler=[...new Set([dogru,...sehirler])].slice(0,4).sort(()=>Math.random()-0.5);
-      let o=`🎲 **BİNGO!** \n\n**${esc(k)}** şu an hangi şehirde?\n\n`;
+      // Sadece il'i ve kadrosu olan turneleri kullan
+      const valid = pool.filter(t => t.il && Array.isArray(t.katilimcilar) && t.katilimcilar.length);
+      const tumSehirler = [...new Set(T.map(t => t.il).filter(Boolean))];
+      if (!valid.length || tumSehirler.length < 2) return "🎲 Bingo için yeterli veri yok.";
+      // Rastgele bir turne ve katılımcı seç
+      const turne = valid[Math.floor(Math.random() * valid.length)];
+      const kisi = turne.katilimcilar[Math.floor(Math.random() * turne.katilimcilar.length)].kisi;
+      const dogru = turne.il;
+      // Doğru cevap + 3 farklı şehir
+      const digerler = tumSehirler.filter(s => s && s !== dogru).sort(() => Math.random() - 0.5).slice(0, 3);
+      const seçenekler = [dogru, ...digerler].sort(() => Math.random() - 0.5);
+      // Bingo durumunu global'e koy (event tetikleme yerine güvenli yöntem)
+      window.__taBingo = { dogru, kisi };
+      let o = `🎲 **BİNGO!**\n\n**${esc(kisi)}** şu an hangi şehirde sahnede?\n\n`;
       for (const s of seçenekler) {
-        o+=`<button class="ta-inline-copy" onclick="window.dispatchEvent(new CustomEvent('ta-toast',{detail:${JSON.stringify(s===dogru?"🎉 Doğru! "+s:"❌ Yanlış, doğrusu: "+dogru)}}))">${esc(s||"—")}</button> `;
+        o += `<button class="ta-inline-copy" onclick="window.__taBingoCheck('${s.replace(/'/g, "\\'")}')">${esc(s)}</button> `;
       }
-      return {html:o};
+      o += `\n\n<span style="font-size:11px;color:#8A857C">İpucu: Bilen bilir 😉</span>`;
+      return { html: o };
     }
 
     /* ── SEZON FİNALİ SAYACI ── */
@@ -2062,36 +2208,36 @@
       const top3Sehir=enCokIlSira.slice(0,3).map(([il,n])=>`${il} (${n})`).join(", ");
 
       const TRIVIAS=[
-        enUzunTurne?`📏 En uzun turne **${turneGun(enUzunTurne)} gün** sürdü — **${enUzunTurne.oyun}** (${enUzunTurne.il||"—"})! Bavullar bunu hissetti sanırım! 🧳`:"",
-        enKisaTurne&&turneGun(enKisaTurne)<=2?`⚡ En kısa turne sadece **${turneGun(enKisaTurne)} gün**dü — **${enKisaTurne.oyun}** (${enKisaTurne.il||"—"})! Gidip gelmek için bile zaman bırakmıyor! 😅`:"",
-        enKalabalikTurne?`👥 En kalabalık turne **${enKalabalikTurne.katilimcilar.length} kişiyle** **${enKalabalikTurne.oyun}** oldu! O kadar insanı bir arada düşünün! 🎪`:"",
-        enAktif?`🏆 En aktif personel? **${enAktifAd}** — tam **${enAktif[1]} turnede** sahne aldı! Hiç durmadan! 🌟`:"",
-        ikinciAktif?`🥈 Sahnenin ikinci en sadık ismi: **${ikinciAktifAd}** — **${ikinciAktif[1]} turne**! Liderlik kapışması sürüyor! 🔥`:"",
-        top3Aktif?`🎖 Turne maratoncuları zirvesi: **${top3Aktif}**. Bu üçlü adeta turne kasırgası! 🌪️`:"",
-        enCokIl?`🏙 En çok gidilen şehir (ana il olarak) **${enCokIl[0]}** — tam **${enCokIl[1]} turne**! Artık ev gibi olmuş olmalı! 🏠`:"",
-        top3Sehir?`🗺️ Sahne haritasının zirvesi: **${top3Sehir}**. Türkiye'nin nabzı buralarda atıyor! ❤️`:"",
-        `🌍 Şimdiye kadar **${ilSet2.size}** farklı şehre (durak dahil) turne ulaştı. Türkiye haritasının önemli bir kısmı keşfedildi!`,
-        `⏱️ Tüm turne günleri toplandığında **${toplamGun2} gün** yolda geçildi! Bu yaklaşık **${Math.round(toplamGun2/30)} ay** demek! 😮`,
-        `🎭 Turnelere çıkan **${personelSet2.size}** farklı personel var. Bu bir senfoni orkestrası büyüklüğünde bir ekip!`,
-        enYogunAySay>0?`📅 En yoğun ay **${AYLAR[enYogunAyIdx]}** — o ayda tam **${enYogunAySay} turne** gerçekleşti! Sahne hiç boş kalmadı! 🔥`:"",
-        toplamTemsil2b>0?`🎫 Toplamda **${toplamTemsil2b} temsil** verildi! Her temsil için binlerce seyirci büyülendi! ✨`:"",
-        ucakTurneler.length>0?`✈️ Turnelerin **${ucakTurneler.length}** tanesi uçakla yapıldı! Gökyüzünde sahne arayan ekip! 🛫`:"",
-        otobusTurneler.length>0?`🚌 Turnelerin **${otobusTurneler.length}** tanesi otobüsle yapıldı! En güzel muhabbet yolda olur! 😄`:"",
-        ucakTurneler.length>0&&otobusTurneler.length>0?`🆚 Ulaşım kapışması: **${ucakTurneler.length}** uçak vs **${otobusTurneler.length}** otobüs! ${ucakTurneler.length>otobusTurneler.length?"Hava yolu önde! ✈️":"Kara yolu önde! 🛣️"}`:"",
-        yarida.length>0?`⚠️ **${yarida.length}** turne yarıda kesildi — bu turnelerin hikayeleri en dramatik olanlar! 🎭`:"",
-        iptal2b.length>0?`❌ Tarihte **${iptal2b.length}** iptal turne var. Her iptalin ardında bir hikaye! 📖`:"",
-        enCokGorev?`🎪 En kalabalık görev grubu: **${enCokGorevAd}** — **${enCokGorev[1]} kişi**! Sahnenin omurgası bunlar! 💪`:"",
-        enCokGorevSira.length>=3?`🏷 En kalabalık 3 görev: **${enCokGorevSira.slice(0,3).map(([k,n])=>(gorevDisplay.get(k)||k)+" ("+n+")").join(", ")}**. Görev dağılımı işte böyle! 🎭`:"",
-        enYogunYil?`📆 En yoğun yıl **${enYogunYil[0]}** oldu — o yıl tam **${enYogunYil[1]} turne** yapıldı! Rekor kırdınız! 🏆`:"",
-        ortKadro>0?`🧮 Ortalama bir turnede **${ortKadro} kişilik** kadro çıkıyor sahneye. Tam bir takım oyunu! ⚽`:"",
-        ortGun>0?`📐 Bir turne ortalama **${ortGun} gün** sürüyor. Valizi ona göre toplamak lazım! 🧳`:"",
-        hsTurne>0?`🎉 **${hsTurne}** turne Cumartesi/Pazar başladı! Hafta sonu da sahne var! 🎬`:"",
-        otelSet.size>0?`🏨 Şimdiye kadar **${otelSet.size}** farklı otel ağırladı bizi. Yastıklar her yerde farklı! 🛏️`:"",
-        enCokOyun?`🎭 En çok turneye çıkan oyun: **${enCokOyunAd}** — **${enCokOyun[1]} turne**! Repertuvarın yıldızı! ⭐`:"",
-        oyunMap.size>0?`📚 Aktif turne repertuvarında **${oyunMap.size}** farklı oyun var. Çeşitlilik bayramı! 🎉`:"",
-        ortYil>0?`📊 Yılda ortalama **${ortYil} turne** çıkıyor sahneye. İstikrarın resmi! 📈`:"",
-        soloTurne>0?`👤 **${soloTurne}** turne tek kişilik bir kadroyla yapılmış. Solo performansın gücü! 🎤`:"",
-        T.length>0?`🎬 Sistemde toplam **${T.length}** turne kaydı var (iptal & taslak dahil). Arşiv her geçen gün büyüyor! 📂`:"",
+        enUzunTurne?`📏 En uzun turne **${turneGun(enUzunTurne)} gün** sürdü — **${enUzunTurne.oyun}** (${enUzunTurne.il||"—"}). 🧳`:"",
+        enKisaTurne&&turneGun(enKisaTurne)<=2?`⚡ En kısa turne yalnızca **${turneGun(enKisaTurne)} gün** sürdü — **${enKisaTurne.oyun}** (${enKisaTurne.il||"—"}). 😅`:"",
+        enKalabalikTurne?`👥 En kalabalık kadro **${enKalabalikTurne.katilimcilar.length} kişiyle** **${enKalabalikTurne.oyun}** turnesinde sahneye çıktı. 🎪`:"",
+        enAktif?`🏆 En çok turneye çıkan personel **${enAktifAd}** — toplam **${enAktif[1]} turne**. 🌟`:"",
+        ikinciAktif?`🥈 Listenin ikincisi **${ikinciAktifAd}** — **${ikinciAktif[1]} turne**. 🔥`:"",
+        top3Aktif?`🎖 En çok yola çıkan ilk üç: **${top3Aktif}**.`:"",
+        enCokIl?`🏙 En çok gidilen şehir (ana il) **${enCokIl[0]}** — toplam **${enCokIl[1]} turne**. 🏠`:"",
+        top3Sehir?`🗺️ En çok ziyaret edilen ilk üç şehir: **${top3Sehir}**.`:"",
+        `🌍 Şimdiye kadar **${ilSet2.size}** farklı şehre (duraklar dahil) gidildi.`,
+        `⏱️ Tüm turne günleri toplandığında **${toplamGun2} gün** yolda geçirilmiş; bu yaklaşık **${Math.round(toplamGun2/30)} ay** eder. 😮`,
+        `🎭 Turnelerde görev alan toplam **${personelSet2.size}** farklı personel var.`,
+        enYogunAySay>0?`📅 En yoğun ay **${AYLAR[enYogunAyIdx]}** — o ayda **${enYogunAySay} turne** gerçekleşti. 🔥`:"",
+        toplamTemsil2b>0?`🎫 Toplamda **${toplamTemsil2b} temsil** verildi. ✨`:"",
+        ucakTurneler.length>0?`✈️ Turnelerin **${ucakTurneler.length}** tanesinde ulaşım uçakla sağlandı.`:"",
+        otobusTurneler.length>0?`🚌 Turnelerin **${otobusTurneler.length}** tanesinde ulaşım otobüsle yapıldı. 😄`:"",
+        ucakTurneler.length>0&&otobusTurneler.length>0?`🆚 Ulaşım dağılımı: **${ucakTurneler.length}** uçak / **${otobusTurneler.length}** otobüs. ${ucakTurneler.length>otobusTurneler.length?"Hava yolu önde. ✈️":"Kara yolu önde. 🛣️"}`:"",
+        yarida.length>0?`⚠️ Şu ana kadar **${yarida.length}** turne yarıda kesildi.`:"",
+        iptal2b.length>0?`❌ Sistemde **${iptal2b.length}** iptal turne kayıtlı. 📖`:"",
+        enCokGorev?`🎪 En kalabalık görev grubu **${enCokGorevAd}** — **${enCokGorev[1]} kişi**. 💪`:"",
+        enCokGorevSira.length>=3?`🏷 En kalabalık ilk üç görev: **${enCokGorevSira.slice(0,3).map(([k,n])=>(gorevDisplay.get(k)||k)+" ("+n+")").join(", ")}**.`:"",
+        enYogunYil?`📆 En yoğun yıl **${enYogunYil[0]}** — toplam **${enYogunYil[1]} turne**. 🏆`:"",
+        ortKadro>0?`🧮 Ortalama bir turnenin kadrosu **${ortKadro} kişi**. 🤝`:"",
+        ortGun>0?`📐 Bir turne ortalama **${ortGun} gün** sürüyor. 🧳`:"",
+        hsTurne>0?`🎉 **${hsTurne}** turne Cumartesi veya Pazar günü başladı.`:"",
+        otelSet.size>0?`🏨 Şimdiye kadar **${otelSet.size}** farklı otelde konaklandı. 🛏️`:"",
+        enCokOyun?`🎭 En çok turneye çıkan oyun **${enCokOyunAd}** — **${enCokOyun[1]} turne**. ⭐`:"",
+        oyunMap.size>0?`📚 Aktif turne repertuvarında **${oyunMap.size}** farklı oyun bulunuyor.`:"",
+        ortYil>0?`📊 Yılda ortalama **${ortYil} turne** sahneleniyor. 📈`:"",
+        soloTurne>0?`👤 Şu ana kadar **${soloTurne}** turne tek kişilik kadroyla yapıldı. 🎤`:"",
+        T.length>0?`🎬 Sistemde toplam **${T.length}** turne kaydı bulunuyor (iptal ve taslaklar dahil). 📂`:"",
       ].filter(Boolean);
       
       // Son gösterilen trivia'yı tekrar etme
@@ -2110,25 +2256,43 @@
     /* ── TURNE İSTATİSTİK ÖZET (sohbette) ── */
     if (/(istatistik|istat|sayısal|sayisal|özet.*sayı|özet.*istat|genel.*istat|rakamlar)/.test(Q)) {
       const now2=new Date();
-      const aktifT=T.filter(t=>!t.statu.includes("iptal"));
-      const toplam2=T.length;
-      const tamamlanan2=aktifT.filter(t=>t.statu.startsWith("tamamlan")||t.statu==="yarida-kesildi").length;
-      const devam2=aktifT.filter(t=>{const bas=parseDate(t.baslangic),bit=parseDate(t.bitis)||bas;return bas&&bit&&bas<=now2&&bit>=now2;}).length;
-      const gelecek2=aktifT.filter(t=>{const d=parseDate(t.baslangic);return d&&d>now2;}).length;
-      const iptal2=T.filter(t=>t.statu==="iptal").length;
-      const toplamGun2=aktifT.reduce((s,t)=>s+turneGun(t),0);
-      const toplamTemsil2=aktifT.reduce((s,t)=>s+(t.sayi||0),0);
-      const personelSet2=new Set();aktifT.forEach(t=>t.katilimcilar.forEach(k=>personelSet2.add(norm(k.kisi))));
-      const ilSet2=new Set();aktifT.forEach(t=>{if(t.il)ilSet2.add(t.il);(t.duraklar||[]).forEach(d=>{if(d.il)ilSet2.add(d.il);});});
-      return {html:`<div style="background:#FBE8EB;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:12px;font-weight:700;color:#7A0E1E;">📊 Genel İstatistikler</div>
+      // İptal edilenler hariç tutuluyor; "yarida-kesildi" ayrı sayılıyor
+      const aktifT     = T.filter(t => !(t.statu || "").includes("iptal"));
+      const tamamlanan = aktifT.filter(t => (t.statu || "").startsWith("tamamlan")).length;
+      const yarida2    = aktifT.filter(t => t.statu === "yarida-kesildi").length;
+      const devam2     = aktifT.filter(t => {
+        const bas = parseDate(t.baslangic), bit = parseDate(t.bitis) || bas;
+        return bas && bit && bas <= now2 && bit >= now2;
+      }).length;
+      const gelecek2   = aktifT.filter(t => { const d = parseDate(t.baslangic); return d && d > now2; }).length;
+      const iptal2     = T.filter(t => t.statu === "iptal").length;
+      const toplamGun2 = aktifT.reduce((s, t) => s + turneGun(t), 0);
+      const toplamTemsil2 = aktifT.reduce((s, t) => s + (Number(t.sayi) || 0), 0);
+      const personelSet2 = new Set();
+      aktifT.forEach(t => (t.katilimcilar || []).forEach(k => k.kisi && personelSet2.add(norm(k.kisi))));
+      // Ana il (kullanıcı algısıyla uyumlu)
+      const ilAna = new Set();
+      aktifT.forEach(t => { if (t.il) ilAna.add(t.il); });
+      // Durak dahil
+      const ilHepsi = new Set(ilAna);
+      aktifT.forEach(t => (t.duraklar || []).forEach(d => { if (d.il) ilHepsi.add(d.il); }));
+      return {html:`<div style="background:#FBE8EB;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:12px;font-weight:700;color:#7A0E1E;">📊 Genel İstatistikler <span style="font-weight:500;opacity:.75">(iptaller hariç)</span></div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;">
-          <div class="ta-kpi"><div class="ta-kpi-val">${toplam2}</div><div class="ta-kpi-lbl">Toplam Turne</div></div>
+          <div class="ta-kpi"><div class="ta-kpi-val">${aktifT.length}</div><div class="ta-kpi-lbl">Aktif Turne</div></div>
           <div class="ta-kpi"><div class="ta-kpi-val">${toplamGun2}</div><div class="ta-kpi-lbl">Toplam Gün</div></div>
           <div class="ta-kpi"><div class="ta-kpi-val">${toplamTemsil2}</div><div class="ta-kpi-lbl">Toplam Temsil</div></div>
           <div class="ta-kpi"><div class="ta-kpi-val">${personelSet2.size}</div><div class="ta-kpi-lbl">Personel</div></div>
         </div>
-        <div style="font-size:12px;line-height:2;">✅ Tamamlandı: <strong>${tamamlanan2}</strong><br>🟢 Devam ediyor: <strong>${devam2}</strong><br>📅 Planlandı: <strong>${gelecek2}</strong><br>❌ İptal: <strong>${iptal2}</strong><br>🏙 Şehir: <strong>${ilSet2.size}</strong></div>
-        <button class="ta-inline-copy" style="margin-top:8px;" onclick="document.querySelector('.ta-tab[data-view=\"stat\"]')?.click()">📊 Detaylı İstatistik</button>`};
+        <div style="font-size:12px;line-height:1.9;">
+          ✅ Tamamlandı: <strong>${tamamlanan}</strong><br>
+          🟢 Devam ediyor: <strong>${devam2}</strong><br>
+          📅 Planlandı: <strong>${gelecek2}</strong><br>
+          ⚠️ Yarıda kesilen: <strong>${yarida2}</strong><br>
+          ❌ İptal: <strong>${iptal2}</strong><br>
+          🏙 Ana il: <strong>${ilAna.size}</strong> &nbsp;·&nbsp; Durak dahil: <strong>${ilHepsi.size}</strong><br>
+          📁 Sistemdeki toplam kayıt: <strong>${T.length}</strong>
+        </div>
+        <button class="ta-inline-copy" style="margin-top:8px;" onclick="document.querySelector('.ta-tab[data-view=&quot;stats&quot;]')?.click()">📊 Detaylı İstatistik</button>`};
     }
 
     /* ── KAÇINILMAZ TAHMİN / HAVA DURUMU ── */
@@ -3030,14 +3194,34 @@
   _startCardObs();
 
   /* ─────────────────── BAŞLAT ─────────────────── */
-  addMsg({html:"👋 Merhaba! Ben <strong>Turne Asistanı</strong>'yım.\n\nOtel numaraları, firma rehberi, kişi listeleri, tarih & istatistik sorularınızı yanıtlarım.\n\n<span style='font-size:12px;color:#8A857C'>💡 Yeni: <strong>\"Beni şaşırt\"</strong>, <strong>\"Motivasyon ver\"</strong>, <strong>\"Hava durumu\"</strong>, <strong>\"Personel profili\"</strong> komutlarını deneyin! v5.0 yeni: <strong>brifing modu, harcırah, çakışma, kadro şablonu, personel karnesi, sahne haritası, bingo, yemek önerisi</strong> ve daha fazlası!</span>"},"bot",true);
+  addMsg({html:"👋 Merhaba! Ben <strong>Turne Asistanı</strong>'yım.\n\n<span style='font-size:12px;color:#8A857C'>Tüm soru örneklerini görmek için üstteki <strong>Soru Rehberi</strong> sekmesine bakabilirsiniz.</span>"},"bot",true);
 
-  const SUGS=["Sabah brifingi ☀️","Çakışma var mı? 🚨","Hatırlatıcı öner ⏰","Eksik bilgili turneler 🔍","Kişi yükü dengesi ⚖️","Sahne haritası 🗺️","Bugün tarihte 🕰️","Şanslı turne 🍀","Bingo oyna 🎲","Mart 2026 raporu 📊"];
-  for (const s of SUGS) { const b=document.createElement("button");b.type="button";b.className="ta-sug";b.textContent=s;b.addEventListener("click",()=>submit(s));sugs.appendChild(b); }
+  const SUGS = [
+    { t: "Sabah brifingi ☀️", q: "Sabah brifingi" },
+    { t: "Bugün ne var? 📅", q: "Bugün ne var?" },
+    { t: "Bingo oyna 🎲", q: "Bingo oyna" },
+    { t: "📖 Soru Rehberi", open: "sorular" },
+  ];
+  for (const s of SUGS) {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "ta-sug"; b.textContent = s.t;
+    b.addEventListener("click", () => {
+      if (s.open) document.querySelector(`.ta-tab[data-view="${s.open}"]`)?.click();
+      else submit(s.q);
+    });
+    sugs.appendChild(b);
+  }
 
   loadData().then(()=>{ setTimeout(_reminderBadgeGuncelle, 1500); });
   setInterval(()=>{ checkReminders(); _reminderBadgeGuncelle(); }, 60000);
   window.__taAktar = aktarOtelFormuna;
   // Sohbet balonlarındaki inline butonlar için global submit
   window.__taSubmit = function(text){ submit(text); };
+  // Bingo cevabı kontrol
+  window.__taBingoCheck = function(secim){
+    const b = window.__taBingo;
+    if (!b) { showToast("Bingo turu sona ermiş"); return; }
+    if (secim === b.dogru) showToast("🎉 Doğru! " + b.dogru, 2400);
+    else showToast("❌ Yanlış · Doğrusu: " + b.dogru, 2800);
+  };
 })();
