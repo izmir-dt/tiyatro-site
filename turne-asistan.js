@@ -1114,14 +1114,21 @@
 
     /* ── LİDERLİK TABLOSU ── */
     if (/(lider|sıralama|siralama|ranking|en\s*aktif|şampiyon|sampiyon|puan|turne.*şampiyon)/.test(Q)) {
-      const c=new Map();
-      for(const t of T) for(const k of t.katilimcilar) c.set(k.kisi,(c.get(k.kisi)||0)+1);
-      const top=[...c.entries()].sort((a,b)=>b[1]-a[1]).slice(0,10);
+      // Kişi başına unique turne sayısı — aynı kişinin bir turnede birden fazla kayıtlanmasını önle
+      const kisiTurneler=new Map(); // kisi -> Set(turne unique key)
+      for(const t of T){
+        const turneKey=t.oyun+"||"+t.baslangic+"||"+t.il;
+        for(const k of t.katilimcilar){
+          if(!kisiTurneler.has(k.kisi)) kisiTurneler.set(k.kisi,new Set());
+          kisiTurneler.get(k.kisi).add(turneKey);
+        }
+      }
+      const top=[...kisiTurneler.entries()].map(([kisi,s])=>[kisi,s.size]).sort((a,b)=>b[1]-a[1]).slice(0,10);
       if(!top.length) return "Liderlik tablosu için yeterli veri yok.";
       const madalya=["🥇","🥈","🥉"];
       let o=`<div style="background:#FBE8EB;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:12px;font-weight:700;color:#7A0E1E;">🏆 Turne Liderlik Tablosu</div>`;
-      for(const [kisi,n] of top) {
-        const i=top.indexOf(top.find(x=>x[0]===kisi));
+      for(let i=0;i<top.length;i++){
+        const [kisi,n]=top[i];
         const medal=madalya[i]||(i+1)+".";
         const pct=Math.round(n/top[0][1]*100);
         o+=`<div class="ta-lb-row"><span class="ta-lb-medal">${medal}</span><span class="ta-lb-name">${esc(kisi)}</span><div class="ta-lb-bar-wrap"><div class="ta-lb-bar" style="width:${pct}%"></div></div><span class="ta-lb-val">${n} turne</span></div>`;
@@ -1179,13 +1186,13 @@
 
     /* ── TURNE KARŞILAŞTIRMA ── */
     if (/(karşılaştır|karsilastir|kıyasla|kiyasla|fark.*turne|turne.*fark|vs\.?|versus)/.test(Q)) {
-      // İki turne adı veya şehir bul
-      const eslesen=T.filter(t=>Q.includes(norm(t.oyun))||Q.includes(norm(t.il||""))).slice(0,2);
+      // Sadece oyun adıyla eşleştir — şehir adıyla eşleştirme çok geniş match yapar
+      const eslesen=T.filter(t=>norm(t.oyun).split(/\s+/).filter(p=>p.length>=4).some(p=>Q.includes(p))).slice(0,2);
       if(eslesen.length<2){
-        // İnteraktif seçici göster
-        const recent=T.slice(0,12);
+        // İnteraktif seçici göster — submit() çağırmak yerine buton kendi içinde render eder
+        const recent=[...T].sort((a,b)=>(parseDate(b.baslangic)||0)-(parseDate(a.baslangic)||0)).slice(0,15);
         let o=`<div style="font-size:12.5px;font-weight:700;color:#1A1A1A;margin-bottom:8px;">🔍 Karşılaştırmak istediğin iki turneyi seç:</div>`;
-        o+=`<div id="ta-cmp-sel" style="display:flex;flex-direction:column;gap:6px;">`;
+        o+=`<div style="display:flex;flex-direction:column;gap:6px;">`;
         o+=`<select id="ta-cmp-a" style="width:100%;border:1.5px solid #E8E2D7;border-radius:8px;padding:6px 10px;font-size:12px;font-family:inherit;background:#FBF8F3;outline:none;cursor:pointer;">`;
         o+=`<option value="">1. Turne seç…</option>`;
         for(const t of recent) o+=`<option value="${esc(t.oyun+"||"+t.baslangic)}">${esc(t.oyun)} · ${esc(t.il||"?")} · ${fmtTarih(t.baslangic)}</option>`;
@@ -1194,12 +1201,9 @@
         o+=`<option value="">2. Turne seç…</option>`;
         for(const t of recent) o+=`<option value="${esc(t.oyun+"||"+t.baslangic)}">${esc(t.oyun)} · ${esc(t.il||"?")} · ${fmtTarih(t.baslangic)}</option>`;
         o+=`</select>`;
-        o+=`<button id="ta-cmp-go" class="ta-btn ta-btn-primary" style="width:100%;justify-content:center;">🔍 Karşılaştır</button>`;
+        o+=`<button id="ta-cmp-go" class="ta-btn ta-btn-primary" style="width:100%;justify-content:center;">⚖️ Karşılaştır</button>`;
         o+=`</div>`;
-        const el = {html:o};
-        // Buton eventi addMsg sonrası delegate ile handle edilecek
-        window._taCmpPending = true;
-        return el;
+        return {html:o};
       }
       const [a,b]=eslesen;
       const gA=turneGun(a),gB=turneGun(b);
@@ -1236,23 +1240,44 @@
 
     /* ── WHATSAPP KADRO GÖNDER ── */
     if (/(whatsapp|wp|w\.a\.|wapp|kadro.*gönder|kadro.*gonder|gönder.*kadro|gonder.*kadro|kadro.*paylaş|kadro.*paylas|paylaş.*kadro|mesaj.*kadro|whatsapp.*gönder|whatsapp.*gonder)/.test(Q)) {
-      // Önce oyun adıyla eşleş — "anahtar kadrosunu" gibi ifadelerden oyun adını çıkar
-      // WhatsApp kelimelerini ve genel fiilleri sorguden temizle, kalan oyun adını ara
-      const waTemizQ = Q.replace(/(whatsapp|wapp|wp|w\.a\.|kadro|gönder|gonder|paylaş|paylas|mesaj|kadrosunu|kadrosun|kadro|yolla|gönderir|gonderir)/g," ").replace(/\s+/g," ").trim();
+      // WA için özel temizleme: eylem/platform kelimelerini sil, kalan metinde oyun adı ara
+      const waTemizQ = Q
+        .replace(/(whatsapp|wapp|wp|w\.a\.)/g," ")
+        .replace(/(kadrosunu|kadrosun|kadroyu|kadro)\b/g," ")
+        .replace(/\b(gönder|gonder|paylaş|paylas|yolla|gönderir|gonderir|at|ilet|mesaj)\b/g," ")
+        .replace(/\s+/g," ").trim();
+
       let tBul=null;
-      const oyunBulWA=findOyun(waTemizQ,T);
-      if(oyunBulWA) tBul=T.filter(t=>norm(t.oyun)===norm(oyunBulWA)).sort((a,b)=>(parseDate(b.baslangic)||0)-(parseDate(a.baslangic)||0))[0];
-      
-      // Hâlâ eşleşme yoksa — oyun adı belirtmeyi iste, otomatik seçme
+      // Strict matching: oyun adındaki TÜM ≥4 harf kelimeler temizlenmiş sorguda olmalı
+      const oyunlar=[...new Set(T.map(t=>t.oyun).filter(Boolean))];
+      let eslOyun=null;
+      for(const oy of oyunlar){
+        const parcalar=norm(oy).split(/\s+/).filter(p=>p.length>=4);
+        if(parcalar.length>=1 && parcalar.every(p=>waTemizQ.includes(p))){ eslOyun=oy; break; }
+      }
+      // Minimum 2 kelimeli oyun adlarında tek kelime eşleşmesini kısıtla
+      if(!eslOyun){
+        for(const oy of oyunlar){
+          const parcalar=norm(oy).split(/\s+/).filter(p=>p.length>=5);
+          const toplamKelime=norm(oy).split(/\s+/).length;
+          // Tek kelimeli oyun adları: o kelime ≥6 harf olmalı; çok kelimeli oyun adları: en az 2 kelime eşleşmeli
+          if(toplamKelime===1 && parcalar.length && parcalar.every(p=>waTemizQ.includes(p))){ eslOyun=oy; break; }
+          if(toplamKelime>=2){
+            const eslKelimeler=parcalar.filter(p=>waTemizQ.includes(p));
+            if(eslKelimeler.length>=Math.min(2,parcalar.length)){ eslOyun=oy; break; }
+          }
+        }
+      }
+      if(eslOyun) tBul=T.filter(t=>norm(t.oyun)===norm(eslOyun)).sort((a,b)=>(parseDate(b.baslangic)||0)-(parseDate(a.baslangic)||0))[0];
+
+      // Hâlâ eşleşme yoksa — oyun listesi göster, otomatik seçme YOK
       if(!tBul){
-        const oyunListesi=T.filter(t=>!t.statu.includes("iptal")).sort((a,b)=>(parseDate(b.baslangic)||0)-(parseDate(a.baslangic)||0)).slice(0,8).map(t=>t.oyun);
-        let secimMsg=`📲 Hangi oyunun kadrosunu göndermek istersin? Oyun adını yaz:\n\n`;
-        for(const oy of oyunListesi) secimMsg+=`• **${oy}**\n`;
-        secimMsg+=`\n_Örnek: "Kaçaklar kadrosunu WhatsApp'a gönder"_`;
+        const oyunListesi=T.filter(t=>!t.statu.includes("iptal")).sort((a,b)=>(parseDate(b.baslangic)||0)-(parseDate(a.baslangic)||0)).slice(0,10).map(t=>t.oyun);
+        let secimMsg=`📲 **Hangi oyunun kadrosunu göndermek istersin?**\n\n`;
+        for(const oy of oyunListesi) secimMsg+=`• ${oy}\n`;
+        secimMsg+=`\n_Örnek: "${oyunListesi[0]||'Oyun Adı'} kadrosunu WhatsApp'a gönder"_`;
         return {html:secimMsg};
       }
-
-      if(!tBul) return "Turne bulunamadı. Oyun adını belirterek tekrar deneyin.";
       
       // WhatsApp mesajı oluştur
       const satirlar=[
@@ -1307,10 +1332,15 @@
         "Kaç tiyatrocu lamba değiştirmek için gerekir?\nBiri yapar, dördü nasıl yapılacağını tartışır! 💡",
         "Sahnede unutulan replik ne anlama gelir?\nDoğaçlama için mükemmel bir fırsat! 😄",
         "Turne koordinatörü neden hiç uyumaz?\nÇünkü otel rezervasyonları gece yarısı iptal olur! 🏨",
-        "Oyuncu otelde ne ister?\nSahne ışığı var mı diye sorar. 💡",
+        "Oyuncu otelde ne ister?\nSahne ışığı var mı diye sorar! 💡",
         "Dekor kamyonu neden hep geç kalır?\nÇünkü ağır sahneler taşıyor! 🚌",
         "Işık tasarımcısı neden en iyi arkadaştır?\nHer şeyi aydınlatır! ✨",
         "Prompter neden gülmez?\nÇünkü metni zaten biliyor — sürpriz yok! 📄",
+        "Aktör seyirciye neden teşekkür eder?\nÇünkü onlar olmasa monolog yapar! 👏",
+        "Kostüm tasarımcısı seyahat edince ne der?\nBenim kıyafetlerim mi yoksa karakterin mi? 🎀",
+        "İki tiyatrocu kahve içerken ne konuşur?\nHer ikisi de aynı anda konuşup birbirini dinlemez! ☕",
+        "Tiyatroda en uzun sahne hangisidir?\nParke dövülürken — çünkü seyirci kaçamaz! 😂",
+        "Perde neden ağladı?\nÇünkü her gece kapanıp açılmaktan yoruldu! 🎪",
       ];
       // Son gösterilen şakayı localStorage'da tut, tekrar etmesin
       let lastIdx=parseInt(localStorage.getItem("ta_last_saka")||"-1");
@@ -1367,12 +1397,63 @@
       o+=iller.map(il=>`📍 ${il}`).join(" · ");
       return {html:o};
     }
+    /* ── YAZITUTRA / ZAR ── */
+    if (/(yazı.*tura|tura.*yazı|yazıtura|yazi.*tura)/.test(Q)) {
+      const sonuc=Math.random()<0.5?"YA-ZI 📜":"TU-RA 🪙";
+      const detay=Math.random()<0.5?" (Tebrikler! 🎉)":" (Şans seninle değil bugün 😄)";
+      return `🪙 Yazı mı tura mı... döndürüyor...\n\n**${sonuc}**${detay}`;
+    }
+    if (/(zar.*at|at.*zar|zar\s*\d*|dice|zarım)/.test(Q)) {
+      // Kaç yüzlü zar? "3d6", "2 zar" gibi ifadeleri yakala
+      const adetM=Q.match(/(\d+)\s*(?:zar|d)/); const adet=Math.min(parseInt(adetM?.[1]||1),5);
+      const yuzM=Q.match(/d(\d+)/); const yuz=parseInt(yuzM?.[1]||6);
+      const sonuclar=Array.from({length:adet},()=>Math.floor(Math.random()*yuz)+1);
+      const toplam=sonuclar.reduce((a,b)=>a+b,0);
+      const zarEmojiler=["⚀","⚁","⚂","⚃","⚄","⚅"];
+      const gosterge=yuz===6?sonuclar.map(n=>zarEmojiler[n-1]).join(" "):sonuclar.join(", ");
+      return `🎲 ${adet>1?adet+"x ":""}${yuz} yüzlü zar atıldı!\n\n${gosterge}${adet>1?`\n\nToplam: **${toplam}**`:""}`;
+    }
+
+    /* ── TURNE HİKAYE ÖZETİ ── */
+    if (/(anlat|hikaye|hikâye|özetle|ozetle|turne.*hakkında|hakkında.*turne|turne.*nasıl|nasıl.*turne|turne.*neydi)/.test(Q)) {
+      // Oyun adı bul
+      const oyunBulH=findOyun(Q,T);
+      let tBul=null;
+      if(oyunBulH) tBul=T.filter(t=>norm(t.oyun)===norm(oyunBulH)).sort((a,b)=>(parseDate(b.baslangic)||0)-(parseDate(a.baslangic)||0))[0];
+      if(!tBul){
+        // En son tamamlanan veya aktif turneyi anlat
+        tBul=T.filter(t=>t.katilimcilar.length>0).sort((a,b)=>(parseDate(b.baslangic)||0)-(parseDate(a.baslangic)||0))[0];
+      }
+      if(!tBul) return "Anlatacak turne bulunamadı. Oyun adını belirtin.";
+      const gun=turneGun(tBul);
+      const kadroSay=tBul.katilimcilar.length;
+      const ulasimIcon=(u)=>u&&/(uçak|ucak|thy|pegasus|sunexpress|hava)/i.test(u)?"✈️":"🚌";
+      const ulasimMetin=tBul.gidisUlasim?`${ulasimIcon(tBul.gidisUlasim)} **${tBul.gidisUlasim}** ile yola çıkılıyor${tBul.gidisSaat?", saat **"+tBul.gidisSaat+"**'de":""}.`:"Ulaşım bilgisi henüz girilmemiş.";
+      const otelMetin=tBul.otelAdi?`Konaklama için **${tBul.otelAdi}** tercih edilmiş${tBul.otelTel?" (📞 "+fmtTel(tBul.otelTel)+")":""}.`:"Otel bilgisi henüz kayıtlı değil.";
+      const gorevler=new Map();
+      for(const k of tBul.katilimcilar){const g=k.gorev||k.kategori||"Belirtilmemiş";gorevler.set(g,(gorevler.get(g)||0)+1);}
+      const gorevMetin=[...gorevler.entries()].sort((a,b)=>b[1]-a[1]).slice(0,3).map(([g,n])=>`${n} ${g}`).join(", ");
+      const statuRenk=tBul.statu.includes("tamamlan")?"#2F7D4E":tBul.statu.includes("iptal")?"#B53030":"#A0192E";
+
+      let o=`<div style="background:linear-gradient(135deg,#FBE8EB,#FBF8F3);border:1px solid #E0D5CC;border-radius:12px;padding:14px;line-height:1.9;font-size:12.5px;">`;
+      o+=`<div style="font-size:13px;font-weight:800;color:#A0192E;margin-bottom:10px;">📖 ${esc(tBul.oyun)} — Turne Hikayesi</div>`;
+      o+=`<p style="margin:0 0 8px">🎭 <strong>${esc(tBul.oyun)}</strong>, ${fmtTarihAralik(tBul.baslangic,tBul.bitis)} tarihleri arasında <strong>${esc(tBul.il||"bilinmeyen bir şehir")}</strong>'de ${tBul.sayi?tBul.sayi+" temsil için ":""}sahne alıyor. Toplam <strong>${gun} günlük</strong> bu turnede <strong>${kadroSay} kişilik</strong> bir ekip yola çıkıyor.</p>`;
+      o+=`<p style="margin:0 0 8px">🧳 ${ulasimMetin}</p>`;
+      o+=`<p style="margin:0 0 8px">🏨 ${otelMetin}</p>`;
+      if(gorevMetin) o+=`<p style="margin:0 0 8px">🎪 Kadroda <strong>${gorevMetin}</strong> gibi görevler yer alıyor.</p>`;
+      if(tBul.not) o+=`<p style="margin:0 0 8px">📝 <em>${esc(tBul.not)}</em></p>`;
+      o+=`<div style="display:inline-block;margin-top:4px;padding:3px 10px;border-radius:6px;font-size:11px;font-weight:800;color:${statuRenk};background:${statuRenk}18;border:1px solid ${statuRenk}44;">${statuGoster(tBul.statu)}</div>`;
+      o+=`</div>`;
+      return {html:o};
+    }
+
     if (/(teşekkür|tesekkur|sağ\s*ol|sagol|eyvallah|süpersin|harikasın|iyisin|mükemmel)/.test(Q)) {
       const TESEKKUR=["Rica ederim! 🎭 Her zaman buradayım!","Ne demek, asıl siz sahneyi aydınlatıyorsunuz! ✨","Yardımcı olabildimse ne mutlu! 😊"];
       return TESEKKUR[Math.floor(Math.random()*TESEKKUR.length)];
     }
 
-    return "Şu sorulara cevap verebilirim 💡\n\n👤 **Kişi:** \"Çağlar'ın turne listesi\" veya sadece \"Mehmet\"\n🎭 **Oyun:** \"Kaçaklar turneleri\" (oyun adını yaz)\n🏙 **Şehir:** \"Ankara turneleri\"\n🏨 **Otel:** \"Ankara oteli telefonu\"\n📅 **Ay:** \"Nisan 2026\" veya \"Mayıs turneleri\"\n📅 **Bugün:** \"Bugün ne var?\"\n📅 **Bu hafta:** \"Bu hafta ne var?\"\n📋 **Özet:** \"30 günlük özet\"\n⚠️ **Eksik:** \"Kadro eksik turneler\"\n👥 **Yük:** \"En meşgul personel\"\n📊 **İstatistik:** \"En fazla turneye giden?\"\n🔔 **Takvim:** \"Takvim notlarım\"\n🏆 **Lider:** \"Liderlik tablosu\"\n⏳ **Sayaç:** \"Bir sonraki turne ne zaman?\"\n⚠️ **Çakışma:** \"Çakışan kadro var mı?\"\n📲 **WhatsApp:** \"[Oyun adı] kadrosunu WhatsApp'a gönder\"\n🔍 **Karşılaştır:** \"Turne karşılaştır\" (seçici açılır)\n🏙 **Şehir rekoru:** \"Şehir rekoru\"\n🗺️ **Harita:** \"Hangi şehirlere gittik?\"\n🎲 **Rastgele:** \"Rastgele turne\"";
+    return "Şu sorulara cevap verebilirim 💡\n\n👤 **Kişi:** \"Çağlar'ın turne listesi\"\n🎭 **Oyun:** \"Kaçaklar turneleri\"\n🏙 **Şehir:** \"Ankara turneleri\"\n🏨 **Otel:** \"Ankara oteli telefonu\"\n📅 **Ay:** \"Nisan 2026 turneleri\"\n📅 **Bugün/Hafta:** \"Bugün ne var?\" · \"Bu hafta\"\n📖 **Hikaye:** \"Kaçaklar turnesini anlat\"\n📋 **Özet:** \"30 günlük özet\"\n⚠️ **Eksik:** \"Kadro eksik turneler\"\n🏆 **Lider:** \"Liderlik tablosu\"\n⏳ **Sayaç:** \"Bir sonraki turne ne zaman?\"\n⚠️ **Çakışma:** \"Çakışan kadro var mı?\"\n📲 **WhatsApp:** \"Kaçaklar kadrosunu WhatsApp'a gönder\"\n⚖️ **Karşılaştır:** \"Turne karşılaştır\" (seçici açılır)\n🏙 **Şehir rekoru:** \"Şehir rekoru\"\n🗺️ **Harita:** \"Hangi şehirlere gittik?\"\n🎲 **Rastgele:** \"Rastgele turne\"\n🪙 **Yazı-tura:** \"Yazı mı tura mı?\"\n🎲 **Zar:** \"Zar at\" veya \"2d6 at\"\n😄 **Şaka:** \"Bir şaka anlat\"";
+
 
   }
 
@@ -1448,18 +1529,44 @@
     el.querySelectorAll('.ta-btn-copy-turne').forEach(btn=>{
       btn.addEventListener('click',()=>{ const idx=parseInt(btn.dataset.rowidx); if(typeof turneCopyala==='function')turneCopyala(idx); });
     });
-    // Karşılaştırma seçici butonu
+    // Karşılaştırma seçici butonu — submit() yerine doğrudan answer() çağır
     const cmpGo = el.querySelector('#ta-cmp-go');
     if(cmpGo) {
       cmpGo.addEventListener('click',()=>{
         const selA=el.querySelector('#ta-cmp-a')?.value;
         const selB=el.querySelector('#ta-cmp-b')?.value;
-        if(!selA||!selB){cmpGo.textContent='Lütfen iki turne seç!';setTimeout(()=>cmpGo.textContent='🔍 Karşılaştır',1500);return;}
+        if(!selA||!selB){cmpGo.textContent='Lütfen iki turne seç!';setTimeout(()=>cmpGo.textContent='⚖️ Karşılaştır',1500);return;}
+        if(selA===selB){cmpGo.textContent='Farklı iki turne seç!';setTimeout(()=>cmpGo.textContent='⚖️ Karşılaştır',1500);return;}
         const [oyunA,basA]=selA.split("||");
         const [oyunB,basB]=selB.split("||");
         const tA=DS.turneler.find(x=>x.oyun===oyunA&&x.baslangic===basA);
         const tB=DS.turneler.find(x=>x.oyun===oyunB&&x.baslangic===basB);
-        if(tA&&tB) { submit(`${tA.oyun} ile ${tB.oyun} karşılaştır`); }
+        if(!tA||!tB) return;
+        // Doğrudan karşılaştırma HTML'ini render et — submit() çağırma (loop olur)
+        const gA=turneGun(tA),gB=turneGun(tB);
+        const kA=tA.katilimcilar.length,kB=tB.katilimcilar.length;
+        const sA=tA.sayi||0,sB=tB.sayi||0;
+        const r=`<div class="ta-cmp-grid">
+          <div class="ta-cmp-col"><div class="ta-cmp-col-title">🎭 ${esc(tA.oyun)}</div>
+            <div class="ta-cmp-row"><span class="ta-cmp-key">📍 Şehir</span><span class="ta-cmp-val">${esc(tA.il||"—")}</span></div>
+            <div class="ta-cmp-row"><span class="ta-cmp-key">📅 Tarih</span><span class="ta-cmp-val" style="font-size:10.5px">${fmtTarihAralik(tA.baslangic,tA.bitis)}</span></div>
+            <div class="ta-cmp-row"><span class="ta-cmp-key">⏱ Süre</span><span class="ta-cmp-val ${gA>=gB?'better':'worse'}">${gA} gün</span></div>
+            <div class="ta-cmp-row"><span class="ta-cmp-key">👥 Kadro</span><span class="ta-cmp-val">${kA} kişi</span></div>
+            <div class="ta-cmp-row"><span class="ta-cmp-key">🎫 Temsil</span><span class="ta-cmp-val ${sA>=sB?'better':'worse'}">${sA||"—"}</span></div>
+            <div class="ta-cmp-row"><span class="ta-cmp-key">🏨 Otel</span><span class="ta-cmp-val" style="font-size:10.5px">${esc(tA.otelAdi||"—")}</span></div>
+            <div class="ta-cmp-row"><span class="ta-cmp-key">📊 Durum</span><span class="ta-cmp-val">${statuGoster(tA.statu)}</span></div>
+          </div>
+          <div class="ta-cmp-col"><div class="ta-cmp-col-title">🎭 ${esc(tB.oyun)}</div>
+            <div class="ta-cmp-row"><span class="ta-cmp-key">📍 Şehir</span><span class="ta-cmp-val">${esc(tB.il||"—")}</span></div>
+            <div class="ta-cmp-row"><span class="ta-cmp-key">📅 Tarih</span><span class="ta-cmp-val" style="font-size:10.5px">${fmtTarihAralik(tB.baslangic,tB.bitis)}</span></div>
+            <div class="ta-cmp-row"><span class="ta-cmp-key">⏱ Süre</span><span class="ta-cmp-val ${gB>=gA?'better':'worse'}">${gB} gün</span></div>
+            <div class="ta-cmp-row"><span class="ta-cmp-key">👥 Kadro</span><span class="ta-cmp-val">${kB} kişi</span></div>
+            <div class="ta-cmp-row"><span class="ta-cmp-key">🎫 Temsil</span><span class="ta-cmp-val ${sB>=sA?'better':'worse'}">${sB||"—"}</span></div>
+            <div class="ta-cmp-row"><span class="ta-cmp-key">🏨 Otel</span><span class="ta-cmp-val" style="font-size:10.5px">${esc(tB.otelAdi||"—")}</span></div>
+            <div class="ta-cmp-row"><span class="ta-cmp-key">📊 Durum</span><span class="ta-cmp-val">${statuGoster(tB.statu)}</span></div>
+          </div>
+        </div>`;
+        addMsg({html:r},"bot");
       });
     }
     msgs.appendChild(el); msgs.scrollTop=msgs.scrollHeight; return el;
