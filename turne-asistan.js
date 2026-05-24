@@ -784,8 +784,18 @@
   function formatTel(raw) {
     if (!raw) return "";
     const s = String(raw).replace(/\s/g, "");
-    if (s.includes("e+") || s.includes("E+")) return "0" + String(Math.round(parseFloat(s)));
-    return s.startsWith("0") ? s : (s.length === 10 ? "0" + s : s);
+    // Scientific notation (e.g. 5.5312e+10)
+    if (/e[+-]?\d+/i.test(s)) {
+      const num = String(Math.round(parseFloat(s)));
+      return num.startsWith("0") ? num : (num.length === 10 ? "0" + num : num);
+    }
+    // Sadece rakam/+/- karakterleri içeren string
+    const digits = s.replace(/[^\d+]/g, "");
+    if (!digits) return s; // metin/URL ise olduğu gibi döndür
+    // +90 ile başlıyorsa → 0... formatına çevir
+    if (digits.startsWith("+90") && digits.length === 13) return "0" + digits.slice(3);
+    if (digits.startsWith("90") && digits.length === 12) return "0" + digits.slice(2);
+    return digits.startsWith("0") ? digits : (digits.length === 10 ? "0" + digits : digits);
   }
 
   function parseTurneler(data) {
@@ -1145,10 +1155,9 @@
       if (t.otelAdi) {
         msg+=`\n🏨 *Otel:* ${t.otelAdi}\n`;
         if (t.otelAdres) msg+=`📌 *Adres:* ${t.otelAdres}\n`;
-        // Yalnızca gerçek telefon görünümünde olanları yaz
-        if (t.otelTel && /\d{7,}/.test(String(t.otelTel).replace(/\D/g,""))) {
-          msg+=`☎️ *Tel:* ${fmtTel(t.otelTel)||t.otelTel}\n`;
-        }
+        // Tel: ana kayıt boşsa duraktan da bak, regex'i gevşet (5+ rakam)
+        const _wTel = t.otelTel || parseDurakOteller(t.duraklar).find(d=>d.otelAdi===t.otelAdi&&d.otelTel)?.otelTel || "";
+        msg+=`☎️ *Tel:* ${_wTel&&/\d{5,}/.test(String(_wTel).replace(/\D/g,""))?(fmtTel(_wTel)||_wTel):"—"}\n`;
       }
       msg+=`\n👥 *Kadro (${t.katilimcilar.length} kişi):*\n${kadro}\n`;
       if (t.not) msg+=`\n📝 *Not:* ${t.not}\n`;
@@ -2189,11 +2198,14 @@
       }
       
       // WhatsApp mesajı oluştur
-      const _otelTelGecerli = tBul.otelTel && /\d{7,}/.test(String(tBul.otelTel).replace(/\D/g,""));
+      // Ana turne otelTel boşsa duraktan bul
+      const _otelTelRaw = tBul.otelTel || parseDurakOteller(tBul.duraklar).find(d=>d.otelAdi===tBul.otelAdi&&d.otelTel)?.otelTel || "";
+      const _otelTelGecerli = _otelTelRaw && /\d{5,}/.test(String(_otelTelRaw).replace(/\D/g,""));
       // Durak otellerini de dahil et
       const durakOtelSatirlari = parseDurakOteller(tBul.duraklar).filter(d=>d.otelAdi).map(d=>{
-        const dTelGecerli=d.otelTel&&/\d{7,}/.test(String(d.otelTel).replace(/\D/g,""));
-        return `🏨 Otel (${d.il||"?"}): ${d.otelAdi}${dTelGecerli?" ("+fmtTel(d.otelTel)+")":""}${d.otelAdres?"\n📌 Adres: "+d.otelAdres:""}`;
+        const dTelRaw=d.otelTel||"";
+        const dTelGecerli=dTelRaw&&/\d{5,}/.test(String(dTelRaw).replace(/\D/g,""));
+        return `🏨 Otel (${d.il||"?"}): ${d.otelAdi}\n☎️ Tel: ${dTelGecerli?(fmtTel(dTelRaw)||dTelRaw):"—"}${d.otelAdres?"\n📌 Adres: "+d.otelAdres:""}`;
       });
       const satirlar=[
         `🎭 *${tBul.oyun}*`,
@@ -2201,8 +2213,7 @@
         `📍 ${tBul.il||"—"}${tBul.mekan?" · "+tBul.mekan:""}`,
         tBul.gidisUlasim?`🚌 Gidiş: ${tBul.gidisUlasim}${tBul.gidisSaat?" · ⏰ "+tBul.gidisSaat:""}`:"",
         tBul.donusUlasim?`🔄 Dönüş: ${tBul.donusUlasim}${tBul.donusSaat?" · ⏰ "+tBul.donusSaat:""}`:"",
-        tBul.otelAdi?`🏨 Otel: ${tBul.otelAdi}${_otelTelGecerli?" ("+(fmtTel(tBul.otelTel)||tBul.otelTel)+")":""}`:"",
-        (tBul.otelAdres?`📌 Adres: ${tBul.otelAdres}`:""),
+        tBul.otelAdi?`🏨 Otel: ${tBul.otelAdi}\n☎️ Tel: ${_otelTelGecerli?(fmtTel(_otelTelRaw)||_otelTelRaw):"—"}${tBul.otelAdres?"\n📌 Adres: "+tBul.otelAdres:""}`:"",
         ...durakOtelSatirlari,
         tBul.katilimcilar.length?`\n👥 *Kadro (${tBul.katilimcilar.length} kişi):*\n`+tBul.katilimcilar.map(k=>`• ${k.kisi}${k.gorev||k.kategori?" — "+(k.gorev||k.kategori):""}`)
           .join("\n"):"",
@@ -2407,13 +2418,22 @@
 
     /* ── MOTİVASYON / İLHAM ── */
     if (/(motivasyon|ilham|güç\s*ver|güçlendir|hadi|haydi|yürü|cesaretlen|heyecan|coştur|enerji)/.test(Q)) {
+      // Canlı istatistikler
+      const _aktifMot = T.filter(t=>!t.statu.includes("iptal"));
+      const _turne_say = _aktifMot.length;
+      const _sehir_set = new Set(); _aktifMot.forEach(t=>collectUniqueCitiesFromTour(t).forEach(il=>_sehir_set.add(il)));
+      const _sehir_say = _sehir_set.size;
+      const _personel_set = new Set(); _aktifMot.forEach(t=>t.katilimcilar.forEach(k=>_personel_set.add(norm(k.kisi))));
+      const _personel_say = _personel_set.size;
+      const _temsil_say = _aktifMot.reduce((s,t)=>s+(t.sayi||0),0);
+      const _gun_say = _aktifMot.reduce((s,t)=>s+turneGun(t),0);
       const MOTIVASYONLAR = [
-        {msg:"Sahne ışığı yandığında tüm yorgunluk unutulur — ve siz tam da o ışığı taşıyorsunuz! 🎭✨", emoji:"🌟"},
-        {msg:"32 turne, 27 şehir, yüzlerce kişilik kadro — bu bir ekip değil, bir aile! 👨‍👩‍👧‍👦❤️", emoji:"💪"},
-        {msg:"Her yeni şehir, yeni bir seyirci kitlesi. Siz İzmir'den Türkiye'ye sahne taşıyorsunuz! 🗺️🎭", emoji:"🚀"},
-        {msg:"Valizi topla, perdeyi aç — sahne her zaman seni bekliyor! 🧳🎬", emoji:"⭐"},
-        {msg:"Bir oyun binlerce izleyicinin hayatına dokunur. Sizin emeğiniz bu dokunuşun temelinde! 🙏💫", emoji:"🎪"},
-        {msg:"Turne yorucu, ama perde açıldığında? Sihir başlıyor! Hadi bakalım! 🎉", emoji:"🔥"},
+        {msg:`Sahne ışığı yandığında tüm yorgunluk unutulur — ve siz tam da o ışığı taşıyorsunuz! 🎭✨`, emoji:"🌟"},
+        {msg:`${_turne_say} turne, ${_sehir_say} şehir, ${_personel_say} kişilik kadro — bu bir ekip değil, bir aile! 👨‍👩‍👧‍👦❤️`, emoji:"💪"},
+        {msg:`Her yeni şehir, yeni bir seyirci kitlesi. Siz İzmir'den Türkiye'ye sahne taşıyorsunuz! 🗺️🎭`, emoji:"🚀"},
+        {msg:`Valizi topla, perdeyi aç — sahne her zaman seni bekliyor! 🧳🎬`, emoji:"⭐"},
+        {msg:`${_temsil_say} temsil, ${_gun_say} gün, ${_sehir_say} şehir — bu rakamlarda emek, ter ve alkış var! 🙏💫`, emoji:"🎪"},
+        {msg:`Turne yorucu, ama perde açıldığında? Sihir başlıyor! Hadi bakalım! 🎉`, emoji:"🔥"},
       ];
       const m=MOTIVASYONLAR[Math.floor(Math.random()*MOTIVASYONLAR.length)];
       const soz=TIYATRO_SOZLERI[Math.floor(Math.random()*TIYATRO_SOZLERI.length)];
