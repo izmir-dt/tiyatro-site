@@ -1182,9 +1182,24 @@
       // İki turne adı veya şehir bul
       const eslesen=T.filter(t=>Q.includes(norm(t.oyun))||Q.includes(norm(t.il||""))).slice(0,2);
       if(eslesen.length<2){
-        // Sohbet yardımcısı
-        const ornekler=T.slice(0,3).map(t=>t.oyun).join(", ");
-        return `İki turneyi karşılaştırmak için şöyle yazabilirsin:\n\n💬 _"${T[0]?.oyun||'Oyun A'} ile ${T[1]?.oyun||'Oyun B'} karşılaştır"_\n\nMevcut turneler: ${ornekler}${T.length>3?' ve daha fazlası':''}`;
+        // İnteraktif seçici göster
+        const recent=T.slice(0,12);
+        let o=`<div style="font-size:12.5px;font-weight:700;color:#1A1A1A;margin-bottom:8px;">🔍 Karşılaştırmak istediğin iki turneyi seç:</div>`;
+        o+=`<div id="ta-cmp-sel" style="display:flex;flex-direction:column;gap:6px;">`;
+        o+=`<select id="ta-cmp-a" style="width:100%;border:1.5px solid #E8E2D7;border-radius:8px;padding:6px 10px;font-size:12px;font-family:inherit;background:#FBF8F3;outline:none;cursor:pointer;">`;
+        o+=`<option value="">1. Turne seç…</option>`;
+        for(const t of recent) o+=`<option value="${esc(t.oyun+"||"+t.baslangic)}">${esc(t.oyun)} · ${esc(t.il||"?")} · ${fmtTarih(t.baslangic)}</option>`;
+        o+=`</select>`;
+        o+=`<select id="ta-cmp-b" style="width:100%;border:1.5px solid #E8E2D7;border-radius:8px;padding:6px 10px;font-size:12px;font-family:inherit;background:#FBF8F3;outline:none;cursor:pointer;">`;
+        o+=`<option value="">2. Turne seç…</option>`;
+        for(const t of recent) o+=`<option value="${esc(t.oyun+"||"+t.baslangic)}">${esc(t.oyun)} · ${esc(t.il||"?")} · ${fmtTarih(t.baslangic)}</option>`;
+        o+=`</select>`;
+        o+=`<button id="ta-cmp-go" class="ta-btn ta-btn-primary" style="width:100%;justify-content:center;">🔍 Karşılaştır</button>`;
+        o+=`</div>`;
+        const el = {html:o};
+        // Buton eventi addMsg sonrası delegate ile handle edilecek
+        window._taCmpPending = true;
+        return el;
       }
       const [a,b]=eslesen;
       const gA=turneGun(a),gB=turneGun(b);
@@ -1221,22 +1236,20 @@
 
     /* ── WHATSAPP KADRO GÖNDER ── */
     if (/(whatsapp|wp|w\.a\.|wapp|kadro.*gönder|kadro.*gonder|gönder.*kadro|gonder.*kadro|kadro.*paylaş|kadro.*paylas|paylaş.*kadro|mesaj.*kadro|whatsapp.*gönder|whatsapp.*gonder)/.test(Q)) {
-      // Önce oyun adıyla eşleş
+      // Önce oyun adıyla eşleş — "anahtar kadrosunu" gibi ifadelerden oyun adını çıkar
+      // WhatsApp kelimelerini ve genel fiilleri sorguden temizle, kalan oyun adını ara
+      const waTemizQ = Q.replace(/(whatsapp|wapp|wp|w\.a\.|kadro|gönder|gonder|paylaş|paylas|mesaj|kadrosunu|kadrosun|kadro|yolla|gönderir|gonderir)/g," ").replace(/\s+/g," ").trim();
       let tBul=null;
-      const oyunBulWA=findOyun(Q,T);
+      const oyunBulWA=findOyun(waTemizQ,T);
       if(oyunBulWA) tBul=T.filter(t=>norm(t.oyun)===norm(oyunBulWA)).sort((a,b)=>(parseDate(b.baslangic)||0)-(parseDate(a.baslangic)||0))[0];
       
-      // Eşleşme yoksa en yakın aktif/yaklaşan turneyi al
+      // Hâlâ eşleşme yoksa — oyun adı belirtmeyi iste, otomatik seçme
       if(!tBul){
-        const now=new Date();
-        const aktif=T.filter(t=>!t.statu.includes("iptal")).sort((a,b)=>{
-          const dA=parseDate(a.baslangic), dB=parseDate(b.baslangic);
-          if(!dA&&!dB) return 0;
-          if(!dA) return 1; if(!dB) return -1;
-          const diffA=Math.abs(dA-now), diffB=Math.abs(dB-now);
-          return diffA-diffB;
-        });
-        tBul=aktif[0]||null;
+        const oyunListesi=T.filter(t=>!t.statu.includes("iptal")).sort((a,b)=>(parseDate(b.baslangic)||0)-(parseDate(a.baslangic)||0)).slice(0,8).map(t=>t.oyun);
+        let secimMsg=`📲 Hangi oyunun kadrosunu göndermek istersin? Oyun adını yaz:\n\n`;
+        for(const oy of oyunListesi) secimMsg+=`• **${oy}**\n`;
+        secimMsg+=`\n_Örnek: "Kaçaklar kadrosunu WhatsApp'a gönder"_`;
+        return {html:secimMsg};
       }
 
       if(!tBul) return "Turne bulunamadı. Oyun adını belirterek tekrar deneyin.";
@@ -1293,17 +1306,74 @@
         "Turneye giden oyuncu ne getirir?\nHer şehirden ayrı bir anı, aynı valiz! 🧳",
         "Kaç tiyatrocu lamba değiştirmek için gerekir?\nBiri yapar, dördü nasıl yapılacağını tartışır! 💡",
         "Sahnede unutulan replik ne anlama gelir?\nDoğaçlama için mükemmel bir fırsat! 😄",
+        "Turne koordinatörü neden hiç uyumaz?\nÇünkü otel rezervasyonları gece yarısı iptal olur! 🏨",
+        "Oyuncu otelde ne ister?\nSahne ışığı var mı diye sorar. 💡",
+        "Dekor kamyonu neden hep geç kalır?\nÇünkü ağır sahneler taşıyor! 🚌",
+        "Işık tasarımcısı neden en iyi arkadaştır?\nHer şeyi aydınlatır! ✨",
+        "Prompter neden gülmez?\nÇünkü metni zaten biliyor — sürpriz yok! 📄",
       ];
-      return SAKALAR[Math.floor(Math.random()*SAKALAR.length)];
+      // Son gösterilen şakayı localStorage'da tut, tekrar etmesin
+      let lastIdx=parseInt(localStorage.getItem("ta_last_saka")||"-1");
+      let idx;
+      do { idx=Math.floor(Math.random()*SAKALAR.length); } while(idx===lastIdx&&SAKALAR.length>1);
+      localStorage.setItem("ta_last_saka",idx);
+      return SAKALAR[idx];
     }
 
-    /* ── TEŞEKKÜR ── */
+    /* ── RASTGELE TURNE TRİVİA ── */
+    if (/(rastgele|sürpriz|surpriz|ne çıkar|ne cikar|şansıma|şansa bırak|sana bıraktım)/.test(Q)) {
+      const aktifT=T.filter(t=>!t.statu.includes("iptal")&&t.katilimcilar.length>0);
+      if(!aktifT.length) return "Yeterli turne verisi yok. 🎲";
+      const t=aktifT[Math.floor(Math.random()*aktifT.length)];
+      const gun=turneGun(t);
+      const trivia=[
+        `🎲 **Rastgele turne:** **${t.oyun}**\n📍 ${t.il||"—"} · 📅 ${fmtTarihAralik(t.baslangic,t.bitis)}\n👥 ${t.katilimcilar.length} kişilik kadro · ⏱ ${gun} gün`,
+        `🎰 **Bugünkü sürpriz:** **${t.oyun}** — ${t.il||"?"}'da ${t.sayi||"?"} temsil!`,
+        `🎭 Rastgele seçtim: **${t.oyun}** · ${fmtTarih(t.baslangic)} tarihinde ${t.il||"?"}'a gidiyor. ${t.katilimcilar.length>0?t.katilimcilar[Math.floor(Math.random()*t.katilimcilar.length)].kisi+" da bu turnede! 👋":""}`
+      ];
+      return {html:trivia[Math.floor(Math.random()*trivia.length)]};
+    }
+
+    /* ── ŞEHİR REKORU ── */
+    if (/(şehir.*rekor|rekor.*şehir|en.*çok.*şehir|hangi.*şehir.*en|kaç.*kez.*gitti|kaç.*defa.*gitti|şehir.*sayısı|şehir.*analiz)/.test(Q)) {
+      const ilMap=new Map();
+      for(const t of T){
+        if(t.il){const k=t.il.toUpperCase();ilMap.set(k,(ilMap.get(k)||0)+1);}
+        for(const d of t.duraklar||[]) if(d.il){const k=d.il.toUpperCase();ilMap.set(k,(ilMap.get(k)||0)+1);}
+      }
+      const sorted=[...ilMap.entries()].sort((a,b)=>b[1]-a[1]).slice(0,10);
+      if(!sorted.length) return "Şehir verisi bulunamadı.";
+      const madalya=["🥇","🥈","🥉"];
+      let o=`<div style="background:#FBE8EB;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:12px;font-weight:700;color:#7A0E1E;">🏙 Şehir Rekoru — En Çok Gidilen</div>`;
+      for(const [il,n] of sorted){
+        const i=sorted.indexOf(sorted.find(x=>x[0]===il));
+        const medal=madalya[i]||(i+1)+".";
+        const pct=Math.round(n/sorted[0][1]*100);
+        o+=`<div class="ta-lb-row"><span class="ta-lb-medal">${medal}</span><span class="ta-lb-name">${esc(il)}</span><div class="ta-lb-bar-wrap"><div class="ta-lb-bar" style="width:${pct}%"></div></div><span class="ta-lb-val">${n} turne</span></div>`;
+      }
+      return {html:o};
+    }
+
+    /* ── TURNE MAPİ / KAÇINILMAZ EŞLEŞME ── */
+    if (/(harita|map|nereye.*gittik|hangi.*şehirler|şehir.*listesi|gidilen.*şehirler)/.test(Q)) {
+      const ilSet=new Set();
+      for(const t of T){
+        if(t.il) ilSet.add(t.il.trim());
+        for(const d of t.duraklar||[]) if(d.il) ilSet.add(d.il.trim());
+      }
+      const iller=[...ilSet].sort();
+      if(!iller.length) return "Şehir bilgisi bulunamadı.";
+      let o=`🗺️ **Turne haritası — ${iller.length} şehir:**\n\n`;
+      o+=iller.map(il=>`📍 ${il}`).join(" · ");
+      return {html:o};
+    }
     if (/(teşekkür|tesekkur|sağ\s*ol|sagol|eyvallah|süpersin|harikasın|iyisin|mükemmel)/.test(Q)) {
       const TESEKKUR=["Rica ederim! 🎭 Her zaman buradayım!","Ne demek, asıl siz sahneyi aydınlatıyorsunuz! ✨","Yardımcı olabildimse ne mutlu! 😊"];
       return TESEKKUR[Math.floor(Math.random()*TESEKKUR.length)];
     }
 
-    return "Şu sorulara cevap verebilirim 💡\n\n👤 **Kişi:** \"Çağlar'ın turne listesi\" veya sadece \"Mehmet\"\n🎭 **Oyun:** \"Kaçaklar turneleri\" (oyun adını yaz)\n🏙 **Şehir:** \"Ankara turneleri\"\n🏨 **Otel:** \"Ankara oteli telefonu\"\n📅 **Ay:** \"Nisan 2026\" veya \"Mayıs turneleri\"\n📅 **Bugün:** \"Bugün ne var?\"\n📅 **Bu hafta:** \"Bu hafta ne var?\"\n📋 **Özet:** \"30 günlük özet\"\n⚠️ **Eksik:** \"Kadro eksik turneler\"\n👥 **Yük:** \"En meşgul personel\"\n📊 **İstatistik:** \"En fazla turneye giden?\"\n🔔 **Takvim:** \"Takvim notlarım\"\n🏆 **Lider:** \"Liderlik tablosu\"\n⏳ **Sayaç:** \"Bir sonraki turne ne zaman?\"\n⚠️ **Çakışma:** \"Çakışan kadro var mı?\"\n📲 **WhatsApp:** \"[Oyun adı] kadrosunu WhatsApp'a gönder\"\n🔍 **Karşılaştır:** \"[Turne A] ile [Turne B] karşılaştır\"";
+    return "Şu sorulara cevap verebilirim 💡\n\n👤 **Kişi:** \"Çağlar'ın turne listesi\" veya sadece \"Mehmet\"\n🎭 **Oyun:** \"Kaçaklar turneleri\" (oyun adını yaz)\n🏙 **Şehir:** \"Ankara turneleri\"\n🏨 **Otel:** \"Ankara oteli telefonu\"\n📅 **Ay:** \"Nisan 2026\" veya \"Mayıs turneleri\"\n📅 **Bugün:** \"Bugün ne var?\"\n📅 **Bu hafta:** \"Bu hafta ne var?\"\n📋 **Özet:** \"30 günlük özet\"\n⚠️ **Eksik:** \"Kadro eksik turneler\"\n👥 **Yük:** \"En meşgul personel\"\n📊 **İstatistik:** \"En fazla turneye giden?\"\n🔔 **Takvim:** \"Takvim notlarım\"\n🏆 **Lider:** \"Liderlik tablosu\"\n⏳ **Sayaç:** \"Bir sonraki turne ne zaman?\"\n⚠️ **Çakışma:** \"Çakışan kadro var mı?\"\n📲 **WhatsApp:** \"[Oyun adı] kadrosunu WhatsApp'a gönder\"\n🔍 **Karşılaştır:** \"Turne karşılaştır\" (seçici açılır)\n🏙 **Şehir rekoru:** \"Şehir rekoru\"\n🗺️ **Harita:** \"Hangi şehirlere gittik?\"\n🎲 **Rastgele:** \"Rastgele turne\"";
+
   }
 
   function findPerson(Q,T) {
@@ -1378,6 +1448,20 @@
     el.querySelectorAll('.ta-btn-copy-turne').forEach(btn=>{
       btn.addEventListener('click',()=>{ const idx=parseInt(btn.dataset.rowidx); if(typeof turneCopyala==='function')turneCopyala(idx); });
     });
+    // Karşılaştırma seçici butonu
+    const cmpGo = el.querySelector('#ta-cmp-go');
+    if(cmpGo) {
+      cmpGo.addEventListener('click',()=>{
+        const selA=el.querySelector('#ta-cmp-a')?.value;
+        const selB=el.querySelector('#ta-cmp-b')?.value;
+        if(!selA||!selB){cmpGo.textContent='Lütfen iki turne seç!';setTimeout(()=>cmpGo.textContent='🔍 Karşılaştır',1500);return;}
+        const [oyunA,basA]=selA.split("||");
+        const [oyunB,basB]=selB.split("||");
+        const tA=DS.turneler.find(x=>x.oyun===oyunA&&x.baslangic===basA);
+        const tB=DS.turneler.find(x=>x.oyun===oyunB&&x.baslangic===basB);
+        if(tA&&tB) { submit(`${tA.oyun} ile ${tB.oyun} karşılaştır`); }
+      });
+    }
     msgs.appendChild(el); msgs.scrollTop=msgs.scrollHeight; return el;
   }
   function addTyping() { const el=document.createElement("div");el.className="ta-msg bot";el.innerHTML='<div class="ta-typing"><span></span><span></span><span></span></div>';msgs.appendChild(el);msgs.scrollTop=msgs.scrollHeight;return el; }
@@ -1887,9 +1971,9 @@
   _startCardObs();
 
   /* ─────────────────── BAŞLAT ─────────────────── */
-  addMsg({html:"👋 Merhaba! Ben <strong>Turne Asistanı</strong>'yım.\n\nOtel numaraları, firma rehberi, kişi listeleri, tarih & istatistik sorularınızı yanıtlarım.\n\n<span style='font-size:12px;color:#8A857C'>💡 Üst sekmeleri kullanarak turne <strong>düzenleyebilir</strong>, <strong>hatırlatıcı</strong> ekleyebilir ve <strong>istatistikleri</strong> görüntüleyebilirsiniz.</span>"},"bot",true);
+  addMsg({html:"👋 Merhaba! Ben <strong>Turne Asistanı</strong>'yım.\n\nOtel numaraları, firma rehberi, kişi listeleri, tarih & istatistik sorularınızı yanıtlarım.\n\n<span style='font-size:12px;color:#8A857C'>💡 Üst sekmeleri kullanarak <strong>hatırlatıcı</strong> ekleyebilir ve <strong>istatistikleri</strong> görüntüleyebilirsiniz.</span>"},"bot",true);
 
-  const SUGS=["Bir sonraki turne ne zaman?","Liderlik tablosu","Çakışan kadro var mı?","30 günlük özet","Kadro eksik turneler"];
+  const SUGS=["Bir sonraki turne ne zaman?","Liderlik tablosu","Çakışan kadro var mı?","Turne karşılaştır","Şehir rekoru","Rastgele turne"];
   for (const s of SUGS) { const b=document.createElement("button");b.type="button";b.className="ta-sug";b.textContent=s;b.addEventListener("click",()=>submit(s));sugs.appendChild(b); }
 
   loadData().then(()=>{ setTimeout(_reminderBadgeGuncelle, 1500); });
