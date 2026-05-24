@@ -718,8 +718,9 @@
         if (dur.length) { o+="\n**Duraklar:**\n"; for(const d of dur){o+=`\n🏙 **${d.il}**${d.mekan?" — "+d.mekan:""}\n`;if(d.otelAdi){o+=`   🏨 ${d.otelAdi}`;if(d.otelTel)o+=` <a class="ta-phone" href="tel:${d.otelTel}">${fmtTel(d.otelTel)||d.otelTel}</a>`;o+="\n";}if(d.ilgiliKisi){o+=`   👤 ${d.ilgiliKisi}`;if(d.ilgiliTel)o+=` — <a class="ta-phone" href="tel:${d.ilgiliTel}">${fmtTel(d.ilgiliTel)||d.ilgiliTel}</a>`;o+="\n";}}} else if(t.otelAdi){o+=`\n🏨 **${t.otelAdi}**\n`;if(t.otelAdres)o+=`   📍 ${t.otelAdres}\n`;if(t.otelTel)o+=`   📞 <a class="ta-phone" href="tel:${t.otelTel}">${fmtTel(t.otelTel)||t.otelTel}</a>\n`;}
         if (t.katilimcilar.length) { o+=`\n👥 **${t.katilimcilar.length} kişi:** ${t.katilimcilar.slice(0,5).map(k=>k.kisi).join(", ")}`;if(t.katilimcilar.length>5)o+=` ve ${t.katilimcilar.length-5} kişi daha`;o+="\n";}
         // Düzenle butonu
-        o += `\n<button class="ta-inline-aktar" onclick="(function(){if(typeof editTurne==='function'){editTurne(${t._rawIdx});}else{var m=document.getElementById('modal-overlay');if(m){m.classList.add('on');}}})()" >✏️ Turneyi Düzenle</button>`;
-        o += `\n<button class="ta-inline-copy" onclick="(function(){window._pendingRemineTurne=${JSON.stringify(t.oyun)};togglePanel(true);var rt=document.querySelector('.ta-tab[data-view=remind]');if(rt){document.querySelectorAll('.ta-tab').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.ta-view').forEach(x=>x.classList.remove('active'));rt.classList.add('active');document.getElementById('ta-remind-view').classList.add('active');renderReminders();}setTimeout(showAddForm,100);})()" style="border-color:#2F7D4E;color:#2F7D4E">🔔 Hatırlatıcı Ekle</button>`;
+        const _esc=(s)=>(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+        o += `\n<button class="ta-inline-aktar ta-btn-edit-turne" data-rowidx="${t._rawIdx}">✏️ Turneyi Düzenle</button>`;
+        o += `\n<button class="ta-inline-copy ta-btn-remind-turne" data-oyun="${_esc(t.oyun)}" style="border-color:#2F7D4E;color:#2F7D4E">🔔 Hatırlatıcı Ekle</button>`;
         return {html:o};
       }
     }
@@ -868,7 +869,7 @@
       let tBul = null;
       for (const t of T) { if (Q.includes(norm(t.oyun))||Q.includes(norm(t.il||''))) { tBul=t; break; } }
       if (tBul) {
-        return {html: `📋 **${tBul.oyun}** turnesi kopyalanacak.\n\n<button class="ta-inline-aktar" onclick="(function(){if(typeof turneCopyala==='function'){turneCopyala(${tBul._rawIdx});}else{showToast && showToast('turneCopyala bulunamadı');}})()">📋 Taslak Olarak Kopyala</button>`};
+        return {html: `📋 **${tBul.oyun}** turnesi kopyalanacak.\n\n<button class="ta-inline-aktar ta-btn-copy-turne" data-rowidx="${tBul._rawIdx}">📋 Taslak Olarak Kopyala</button>`};
       }
       return 'Kopyalanacak turneyi bulamadım. Oyun adını veya şehri belirtin.';
     }
@@ -947,6 +948,22 @@
     el.className="ta-msg "+(who==="user"?"user":"bot");
     el.innerHTML=who==="bot"?fmtHtml(text):(text+"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
     if (dismissable&&who==="bot") { const btn=document.createElement("button");btn.className="ta-dismiss";btn.title="Kapat";btn.innerHTML="×";btn.addEventListener("click",()=>el.remove());el.insertBefore(btn,el.firstChild); }
+    // Event delegation: data-attribute butonları için
+    el.querySelectorAll('.ta-btn-edit-turne').forEach(btn=>{
+      btn.addEventListener('click',()=>{ const idx=parseInt(btn.dataset.rowidx); if(typeof editTurne==='function')editTurne(idx); else{const m=document.getElementById('modal-overlay');if(m)m.classList.add('on');} });
+    });
+    el.querySelectorAll('.ta-btn-remind-turne').forEach(btn=>{
+      btn.addEventListener('click',()=>{
+        window._pendingRemineTurne=btn.dataset.oyun;
+        togglePanel(true);
+        const rt=document.querySelector('.ta-tab[data-view="remind"]');
+        if(rt){document.querySelectorAll('.ta-tab').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.ta-view').forEach(x=>x.classList.remove('active'));rt.classList.add('active');document.getElementById('ta-remind-view').classList.add('active');renderReminders();}
+        setTimeout(showAddForm,100);
+      });
+    });
+    el.querySelectorAll('.ta-btn-copy-turne').forEach(btn=>{
+      btn.addEventListener('click',()=>{ const idx=parseInt(btn.dataset.rowidx); if(typeof turneCopyala==='function')turneCopyala(idx); });
+    });
     msgs.appendChild(el); msgs.scrollTop=msgs.scrollHeight; return el;
   }
   function addTyping() { const el=document.createElement("div");el.className="ta-msg bot";el.innerHTML='<div class="ta-typing"><span></span><span></span><span></span></div>';msgs.appendChild(el);msgs.scrollTop=msgs.scrollHeight;return el; }
