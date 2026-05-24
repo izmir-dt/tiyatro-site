@@ -243,6 +243,55 @@
     #ta-panel{width:calc(100vw - 16px);right:8px;bottom:80px;height:calc(100vh - 100px);}
     #ta-fab{bottom:16px;right:16px;width:50px;height:50px;}
   }
+
+  /* ── GÜNÜN SÖZÜ BANNER ── */
+  #ta-quote-banner{background:linear-gradient(135deg,#6B0E1E 0%,#3a0710 100%);color:#fff;padding:8px 14px 8px 12px;
+    font-size:11px;line-height:1.55;display:flex;align-items:flex-start;gap:8px;flex-shrink:0;cursor:pointer;transition:opacity .2s;}
+  #ta-quote-banner:hover{opacity:.88;}
+  #ta-quote-banner .ta-q-icon{font-size:15px;flex-shrink:0;margin-top:1px;opacity:.8;}
+  #ta-quote-banner .ta-q-text{flex:1;font-style:italic;opacity:.93;}
+  #ta-quote-banner .ta-q-auth{display:block;font-style:normal;font-size:10px;opacity:.65;margin-top:2px;}
+  #ta-quote-banner .ta-q-close{background:none;border:none;color:rgba(255,255,255,.5);font-size:14px;cursor:pointer;padding:0 2px;flex-shrink:0;line-height:1;transition:color .15s;}
+  #ta-quote-banner .ta-q-close:hover{color:#fff;}
+
+  /* ── GERİ SAYIM ── */
+  .ta-countdown-card{background:#fff;border:1px solid #E8E2D7;border-radius:10px;padding:10px 14px;margin-bottom:8px;display:flex;align-items:center;gap:10px;}
+  .ta-countdown-num{font-size:28px;font-weight:900;color:#A0192E;line-height:1;min-width:36px;text-align:center;}
+  .ta-countdown-info{flex:1;min-width:0;}
+  .ta-countdown-label{font-size:10px;font-weight:700;color:#8A857C;text-transform:uppercase;letter-spacing:.4px;}
+  .ta-countdown-title{font-size:13px;font-weight:700;color:#1A1A1A;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .ta-countdown-date{font-size:11px;color:#8A857C;margin-top:2px;}
+
+  /* ── KUTLAMA ANİMASYONU ── */
+  @keyframes taCelebrate{0%{transform:scale(0.5) rotate(-10deg);opacity:0;}50%{transform:scale(1.15) rotate(3deg);}100%{transform:scale(1) rotate(0deg);opacity:1;}}
+  .ta-celebrate{background:linear-gradient(135deg,#FFD700,#FFA500);color:#7A3800;border-radius:12px;padding:12px 14px;margin:6px 0;animation:taCelebrate .5s ease-out;text-align:center;font-weight:800;font-size:13px;}
+  .ta-celebrate .ta-cel-emoji{font-size:28px;display:block;margin-bottom:4px;}
+  .ta-celebrate .ta-cel-sub{font-size:11px;font-weight:600;opacity:.8;margin-top:2px;}
+
+  /* ── LİDERLİK TABLOSU ── */
+  .ta-lb-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #F0EBE5;}
+  .ta-lb-row:last-child{border-bottom:none;}
+  .ta-lb-medal{font-size:14px;width:22px;text-align:center;flex-shrink:0;}
+  .ta-lb-name{flex:1;font-size:12.5px;font-weight:600;color:#1A1A1A;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .ta-lb-bar-wrap{height:5px;background:#F0EBE5;border-radius:3px;width:60px;}
+  .ta-lb-bar{height:5px;background:#A0192E;border-radius:3px;}
+  .ta-lb-val{font-size:11.5px;font-weight:800;color:#A0192E;flex-shrink:0;min-width:50px;text-align:right;}
+
+  /* ── ÇAKIŞMA UYARISI ── */
+  .ta-conflict-item{background:#FFF8F8;border:1px solid #F0C4CB;border-radius:8px;padding:9px 11px;margin-bottom:7px;}
+  .ta-conflict-name{font-size:12.5px;font-weight:800;color:#A0192E;margin-bottom:4px;}
+  .ta-conflict-tours{font-size:11.5px;color:#6A6560;line-height:1.6;}
+
+  /* ── KARŞILAŞTIRMA ── */
+  .ta-cmp-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;}
+  .ta-cmp-col{background:#fff;border:1px solid #E8E2D7;border-radius:10px;padding:10px 12px;}
+  .ta-cmp-col-title{font-size:12px;font-weight:800;color:#A0192E;margin-bottom:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .ta-cmp-row{display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px solid #F5F0EC;font-size:11.5px;}
+  .ta-cmp-row:last-child{border-bottom:none;}
+  .ta-cmp-key{color:#8A857C;font-weight:600;}
+  .ta-cmp-val{font-weight:700;color:#1A1A1A;text-align:right;max-width:55%;}
+  .ta-cmp-val.better{color:#2F7D4E;}
+  .ta-cmp-val.worse{color:#B53030;}
   `;
   const styleEl = document.createElement("style");
   styleEl.textContent = css;
@@ -300,6 +349,11 @@
 
       <!-- SOHBET -->
       <div class="ta-view active" id="ta-chat-view">
+        <div id="ta-quote-banner" style="display:none">
+          <span class="ta-q-icon">🎭</span>
+          <span class="ta-q-text"><span id="ta-q-text">…</span><span class="ta-q-auth" id="ta-q-auth"></span></span>
+          <button class="ta-q-close" id="ta-q-close" title="Kapat" aria-label="Kapat">×</button>
+        </div>
         <div id="ta-msgs"></div>
         <div id="ta-sugs"></div>
         <div id="ta-form">
@@ -407,7 +461,11 @@
 
   function togglePanel(open) {
     panel.classList.toggle("open", open);
-    if (open) { setTimeout(() => input.focus(), 250); checkReminders(); }
+    if (open) {
+      setTimeout(() => input.focus(), 250);
+      checkReminders();
+      gosterGunSozu();
+    }
   }
 
   /* ─────────────────── SÜRÜKLEME ─────────────────── */
@@ -571,6 +629,35 @@
   /* ─────────────────── YARDIMCILAR ─────────────────── */
   const AYLAR = ["Ocak","Şubat","Mart","Nisan","Mayıs","Haziran","Temmuz","Ağustos","Eylül","Ekim","Kasım","Aralık"];
   const AY_NORM = ["ocak","şubat","mart","nisan","mayıs","haziran","temmuz","ağustos","eylül","ekim","kasım","aralık"];
+
+  /* ── GÜNÜN TİYATRO SÖZÜ ── */
+  const TIYATRO_SOZLERI = [
+    {text:"Tüm dünya bir sahnedir ve insanlar sadece oyuncular.", auth:"William Shakespeare"},
+    {text:"Tiyatro, insanın kendini tanımasının en derin yoludur.", auth:"Bertolt Brecht"},
+    {text:"Sahne, gerçeğin aynasıdır; oyuncu ise o aynayı tutan el.", auth:"Konstantin Stanislavski"},
+    {text:"İyi bir oyuncu, seyirciye kendini unutturur — kötü bir oyuncu, kendini hatırlatır.", auth:"Molière"},
+    {text:"Tiyatro olmadan uygarlık olmaz; sahne, toplumun vicdanıdır.", auth:"Victor Hugo"},
+    {text:"Maskemi çıkardığımda başka bir maske buluyorum yüzümde; maskeler sonsuzdur.", auth:"Luigi Pirandello"},
+    {text:"Sahnede bir dakikalık gerçek, hayatta bir yıllık yaşantıya bedeldir.", auth:"Eleonora Duse"},
+    {text:"Oyunculuk, kendi ruhunu başkasına verme sanatıdır.", auth:"Sarah Bernhardt"},
+    {text:"Tiyatro sorular sorar; cevapları seyirciye bırakır.", auth:"Peter Brook"},
+    {text:"Sahne ışığı yandığında, dünyanın tüm sorunları kapının dışında kalır.", auth:"Arthur Miller"},
+    {text:"Her yeni şehir, yeni bir seyirci; her seyirci, yeni bir ayna.", auth:"İzmir Devlet Tiyatrosu"},
+    {text:"Turne yorucu olabilir, ama perde açıldığında her şeyi unutursunuz.", auth:"İzmir Devlet Tiyatrosu"},
+  ];
+  function gosterGunSozu() {
+    const banner = $i("ta-quote-banner");
+    if (!banner) return;
+    const shown = sessionStorage.getItem("ta_quote_shown");
+    if (shown === "1") return;
+    const idx = new Date().getDate() % TIYATRO_SOZLERI.length;
+    const soz = TIYATRO_SOZLERI[idx];
+    $i("ta-q-text").textContent = "\u201c" + soz.text + "\u201d";
+    $i("ta-q-auth").textContent = "— " + soz.auth;
+    banner.style.display = "flex";
+    $i("ta-q-close").addEventListener("click", (e) => { e.stopPropagation(); banner.style.display="none"; sessionStorage.setItem("ta_quote_shown","1"); });
+    banner.addEventListener("click", () => { banner.style.display="none"; sessionStorage.setItem("ta_quote_shown","1"); });
+  }
   const STATU_MAP = { "tamamlandı":["tamamlan","biten","bitmiş","tamamlandi"], "taslak":["taslak","planlanan","gelecek","yaklaşan"], "iptal":["iptal"], "devam":["devam","süren","aktif","onaylandi","onay-bekliyor"] };
   const STATU_LABEL = { "tamamlandi":"tamamlandı", "tamamlandi̇":"tamamlandı", "devam-ediyor":"devam ediyor", "aktif":"devam ediyor", "onaylandi":"onaylandı", "onay-bekliyor":"onay bekliyor", "yarida-kesildi":"yarıda kesildi", "taslak":"taslak", "iptal":"iptal" };
   function statuGoster(s) { return STATU_LABEL[s] || s; }
@@ -697,7 +784,15 @@
       const sorted=list.sort((a,b)=>(parseDate(b.baslangic)||0)-(parseDate(a.baslangic)||0));
       const lines=sorted.slice(0,15).map(t=>{const otel=t.duraklar?.find(d=>d.otelAdi)?.otelAdi||t.otelAdi||"";return `• **${t.oyun}**\n  📅 ${fmtTarihAralik(t.baslangic,t.bitis)} · 📍 ${t.il||"—"}${otel?" · 🏨 "+otel:""}`;}).join("\n");
       const toplamTemsil=list.reduce((s,t)=>s+(t.sayi||0),0);
-      return `**${found.kisi}**${found.gorev?" · "+found.gorev:""}\n📊 ${list.length} turne · 📅 **${gun} gün** yolda · 🎭 ${toplamTemsil} temsil\n\n${lines}`;
+      // Milestone rozeti
+      const MILESTONES=[5,10,15,20,25,30,50];
+      const milestone=MILESTONES.find(m=>list.length===m);
+      let celebrateHtml="";
+      if(milestone){
+        const emojis={5:"🌟",10:"🎭",15:"🏅",20:"🎖",25:"👑",30:"🏆",50:"🌟🏆🌟"};
+        celebrateHtml=`<div class="ta-celebrate"><span class="ta-cel-emoji">${emojis[milestone]||"🎉"}</span>${found.kisi} — ${milestone}. Turne!<div class="ta-cel-sub">Tebrikler! Bu özel bir kilometre taşı 🎊</div></div>\n`;
+      }
+      return {html: celebrateHtml + `**${found.kisi}**${found.gorev?" · "+found.gorev:""}\n📊 ${list.length} turne · 📅 **${gun} gün** yolda · 🎭 ${toplamTemsil} temsil\n\n${lines}`};
     }
     /* ŞEHİR DETAYI */
     const city=findCity(Q,T);
@@ -928,7 +1023,154 @@
       return {html:o};
     }
 
-    return "Şu sorulara cevap verebilirim 💡\n\n👤 **Kişi:** \"Çağlar'ın turne listesi\"\n🏙 **Şehir:** \"Ankara turneleri\"\n🏨 **Otel:** \"Ankara oteli telefonu\"\n📅 **Bugün:** \"Bugün ne var?\"\n📋 **Özet:** \"30 günlük özet\"\n⚠️ **Eksik:** \"Kadro eksik turneler\"\n👥 **Yük:** \"En meşgul personel\"\n📊 **İstatistik:** \"En fazla turneye giden?\"\n🔔 **Takvim:** \"Takvim notlarım\"";
+    /* ── LİDERLİK TABLOSU ── */
+    if (/(lider|sıralama|siralama|ranking|en\s*aktif|şampiyon|sampiyon|puan|turne.*şampiyon)/.test(Q)) {
+      const c=new Map();
+      for(const t of T) for(const k of t.katilimcilar) c.set(k.kisi,(c.get(k.kisi)||0)+1);
+      const top=[...c.entries()].sort((a,b)=>b[1]-a[1]).slice(0,10);
+      if(!top.length) return "Liderlik tablosu için yeterli veri yok.";
+      const madalya=["🥇","🥈","🥉"];
+      let o=`<div style="background:#FBE8EB;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:12px;font-weight:700;color:#7A0E1E;">🏆 Turne Liderlik Tablosu</div>`;
+      for(const [kisi,n] of top) {
+        const i=top.indexOf(top.find(x=>x[0]===kisi));
+        const medal=madalya[i]||(i+1)+".";
+        const pct=Math.round(n/top[0][1]*100);
+        o+=`<div class="ta-lb-row"><span class="ta-lb-medal">${medal}</span><span class="ta-lb-name">${esc(kisi)}</span><div class="ta-lb-bar-wrap"><div class="ta-lb-bar" style="width:${pct}%"></div></div><span class="ta-lb-val">${n} turne</span></div>`;
+      }
+      return {html:o};
+    }
+
+    /* ── GERİ SAYIM ── */
+    if (/(geri\s*say|ne\s*zaman.*ilk|ilk.*turne|sonraki.*turne|bir\s*sonraki)/.test(Q)) {
+      const now=new Date();
+      const yaklashan=T.filter(t=>{const d=parseDate(t.baslangic);return d&&d>now&&!t.statu.includes("iptal");}).sort((a,b)=>(parseDate(a.baslangic)||0)-(parseDate(b.baslangic)||0));
+      if(!yaklashan.length) return "Yaklaşan planlanmış turne bulunamadı.";
+      const t=yaklashan[0];
+      const gun=Math.ceil((parseDate(t.baslangic)-now)/(1000*60*60*24));
+      let o=`<div class="ta-countdown-card"><div class="ta-countdown-num">${gun}</div><div class="ta-countdown-info"><div class="ta-countdown-label">Gün sonra ⏳</div><div class="ta-countdown-title">🎭 ${esc(t.oyun)}</div><div class="ta-countdown-date">📍 ${esc(t.il||"—")} · ${fmtTarihAralik(t.baslangic,t.bitis)}</div></div></div>`;
+      if(yaklashan.length>1){
+        o+=`<div style="font-size:11.5px;font-weight:700;color:#8A857C;margin:6px 0 4px;">Diğer yaklaşan turneler:</div>`;
+        for(const tur of yaklashan.slice(1,4)){
+          const g=Math.ceil((parseDate(tur.baslangic)-now)/(1000*60*60*24));
+          o+=`<div style="font-size:12px;padding:4px 0;border-bottom:1px solid #F0EBE5;">• <strong>${esc(tur.oyun)}</strong> — ${g} gün · ${esc(tur.il||"—")}</div>`;
+        }
+      }
+      return {html:o};
+    }
+
+    /* ── ÇAKIŞAN KADRO UYARISI ── */
+    if (/(çakış|cakis|aynı.*hafta|hafta.*aynı|çift.*turne|iki.*turne.*aynı|çakışan|cakisan)/.test(Q)) {
+      const aktif=T.filter(t=>!t.statu.includes("iptal")&&!t.statu.includes("tamamlan"));
+      const kisiTurneler=new Map();
+      for(const t of aktif) for(const k of t.katilimcilar){
+        if(!kisiTurneler.has(k.kisi)) kisiTurneler.set(k.kisi,[]);
+        kisiTurneler.get(k.kisi).push(t);
+      }
+      const cakisanlar=[];
+      for(const [kisi,turneler] of kisiTurneler){
+        if(turneler.length<2) continue;
+        const pairs=[];
+        for(let i=0;i<turneler.length;i++) for(let j=i+1;j<turneler.length;j++){
+          const a=turneler[i],b=turneler[j];
+          const aB=parseDate(a.baslangic),aE=parseDate(a.bitis)||aB;
+          const bB=parseDate(b.baslangic),bE=parseDate(b.bitis)||bB;
+          if(aB&&bB&&aB<=bE&&bB<=aE) pairs.push([a,b]);
+        }
+        if(pairs.length) cakisanlar.push({kisi,pairs});
+      }
+      if(!cakisanlar.length) return "✅ Aktif turnelerde çakışan kadro tespit edilmedi.";
+      let o=`<div style="background:#FFF0F0;border:1px solid #F0C4CB;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:12px;font-weight:700;color:#A0192E;">⚠️ ${cakisanlar.length} personelde takvim çakışması var!</div>`;
+      for(const {kisi,pairs} of cakisanlar.slice(0,8)){
+        o+=`<div class="ta-conflict-item"><div class="ta-conflict-name">👤 ${esc(kisi)}</div><div class="ta-conflict-tours">`;
+        for(const [a,b] of pairs) o+=`• ${esc(a.oyun)} (${fmtTarihAralik(a.baslangic,a.bitis)}) ↔ ${esc(b.oyun)} (${fmtTarihAralik(b.baslangic,b.bitis)})<br>`;
+        o+=`</div></div>`;
+      }
+      return {html:o};
+    }
+
+    /* ── TURNE KARŞILAŞTIRMA ── */
+    if (/(karşılaştır|karsilastir|kıyasla|kiyasla|fark.*turne|turne.*fark|vs\.?|versus)/.test(Q)) {
+      // İki turne adı veya şehir bul
+      const eslesen=T.filter(t=>Q.includes(norm(t.oyun))||Q.includes(norm(t.il||""))).slice(0,2);
+      if(eslesen.length<2){
+        // Sohbet yardımcısı
+        const ornekler=T.slice(0,3).map(t=>t.oyun).join(", ");
+        return `İki turneyi karşılaştırmak için şöyle yazabilirsin:\n\n💬 _"${T[0]?.oyun||'Oyun A'} ile ${T[1]?.oyun||'Oyun B'} karşılaştır"_\n\nMevcut turneler: ${ornekler}${T.length>3?' ve daha fazlası':''}`;
+      }
+      const [a,b]=eslesen;
+      const gA=turneGun(a),gB=turneGun(b);
+      const kA=a.katilimcilar.length,kB=b.katilimcilar.length;
+      const sA=a.sayi||0,sB=b.sayi||0;
+      function cmpVal(va,vb,lbl,suffix=""){
+        const cl=typeof va==="number"&&typeof vb==="number"?(va>vb?"better":"worse"):"";
+        const clB=typeof va==="number"&&typeof vb==="number"?(vb>va?"better":"worse"):"";
+        return `<div class="ta-cmp-row"><span class="ta-cmp-key">${lbl}</span></div>
+          <div class="ta-cmp-row" style="background:#FAFAF8;"><span class="ta-cmp-val ${cl}">${va}${suffix}</span><span style="font-size:10px;color:#C0B8B0">vs</span><span class="ta-cmp-val ${clB}">${vb}${suffix}</span></div>`;
+      }
+      let o=`<div class="ta-cmp-grid">
+        <div class="ta-cmp-col"><div class="ta-cmp-col-title">🎭 ${esc(a.oyun)}</div>
+          <div class="ta-cmp-row"><span class="ta-cmp-key">📍 Şehir</span><span class="ta-cmp-val">${esc(a.il||"—")}</span></div>
+          <div class="ta-cmp-row"><span class="ta-cmp-key">📅 Tarih</span><span class="ta-cmp-val" style="font-size:10.5px">${fmtTarihAralik(a.baslangic,a.bitis)}</span></div>
+          <div class="ta-cmp-row"><span class="ta-cmp-key">⏱ Süre</span><span class="ta-cmp-val ${gA>=gB?'better':'worse'}">${gA} gün</span></div>
+          <div class="ta-cmp-row"><span class="ta-cmp-key">👥 Kadro</span><span class="ta-cmp-val">${kA} kişi</span></div>
+          <div class="ta-cmp-row"><span class="ta-cmp-key">🎫 Temsil</span><span class="ta-cmp-val ${sA>=sB?'better':'worse'}">${sA||"—"}</span></div>
+          <div class="ta-cmp-row"><span class="ta-cmp-key">🏨 Otel</span><span class="ta-cmp-val" style="font-size:10.5px">${esc(a.otelAdi||"—")}</span></div>
+          <div class="ta-cmp-row"><span class="ta-cmp-key">📊 Durum</span><span class="ta-cmp-val">${statuGoster(a.statu)}</span></div>
+        </div>
+        <div class="ta-cmp-col"><div class="ta-cmp-col-title">🎭 ${esc(b.oyun)}</div>
+          <div class="ta-cmp-row"><span class="ta-cmp-key">📍 Şehir</span><span class="ta-cmp-val">${esc(b.il||"—")}</span></div>
+          <div class="ta-cmp-row"><span class="ta-cmp-key">📅 Tarih</span><span class="ta-cmp-val" style="font-size:10.5px">${fmtTarihAralik(b.baslangic,b.bitis)}</span></div>
+          <div class="ta-cmp-row"><span class="ta-cmp-key">⏱ Süre</span><span class="ta-cmp-val ${gB>=gA?'better':'worse'}">${gB} gün</span></div>
+          <div class="ta-cmp-row"><span class="ta-cmp-key">👥 Kadro</span><span class="ta-cmp-val">${kB} kişi</span></div>
+          <div class="ta-cmp-row"><span class="ta-cmp-key">🎫 Temsil</span><span class="ta-cmp-val ${sB>=sA?'better':'worse'}">${sB||"—"}</span></div>
+          <div class="ta-cmp-row"><span class="ta-cmp-key">🏨 Otel</span><span class="ta-cmp-val" style="font-size:10.5px">${esc(b.otelAdi||"—")}</span></div>
+          <div class="ta-cmp-row"><span class="ta-cmp-key">📊 Durum</span><span class="ta-cmp-val">${statuGoster(b.statu)}</span></div>
+        </div>
+      </div>`;
+      return {html:o};
+    }
+
+    /* ── WHATSAPP KADRO GÖNDER ── */
+    if (/(whatsapp|wp|w\.a\.|wapp|kadro.*gönder|gönder.*kadro|kadro.*paylaş|paylaş.*kadro|mesaj.*kadro)/.test(Q)) {
+      // Turne bul
+      let tBul=null;
+      for(const t of T) if(Q.includes(norm(t.oyun))||Q.includes(norm(t.il||""))) { tBul=t; break; }
+      if(!tBul){
+        // En yakın aktif turneyi öner
+        const now=new Date();
+        tBul=T.filter(t=>!t.statu.includes("iptal")).sort((a,b)=>{
+          const dA=parseDate(a.baslangic),dB=parseDate(b.baslangic);
+          return Math.abs((dA||0)-now)-Math.abs((dB||0)-now);
+        })[0];
+      }
+      if(!tBul) return "Turne bulunamadı. Oyun adını veya şehri belirtin.";
+      
+      // WhatsApp mesajı oluştur
+      const satirlar=[
+        `🎭 *${tBul.oyun}*`,
+        `📅 ${fmtTarihAralik(tBul.baslangic,tBul.bitis)}`,
+        `📍 ${tBul.il||"—"}${tBul.mekan?" · "+tBul.mekan:""}`,
+        tBul.gidisUlasim?`🚌 Gidiş: ${tBul.gidisUlasim}${tBul.gidisSaat?" · "+tBul.gidisSaat:""}`:"",
+        tBul.donusUlasim?`🔄 Dönüş: ${tBul.donusUlasim}${tBul.donusSaat?" · "+tBul.donusSaat:""}`:"",
+        tBul.otelAdi?`🏨 Otel: ${tBul.otelAdi}${tBul.otelTel?" ("+fmtTel(tBul.otelTel)+")":""}`:"",
+        tBul.katilimcilar.length?`\n👥 *Kadro (${tBul.katilimcilar.length} kişi):*\n`+tBul.katilimcilar.map(k=>`• ${k.kisi}${k.gorev||k.kategori?" — "+(k.gorev||k.kategori):""}`)
+          .join("\n"):"",
+        tBul.not?`\n📝 Not: ${tBul.not}`:"",
+      ].filter(Boolean).join("\n");
+
+      const encoded=encodeURIComponent(satirlar);
+      const waUrl=`https://wa.me/?text=${encoded}`;
+      
+      let o=`<div style="background:#F0FBF4;border:1px solid #A8D8B9;border-radius:10px;padding:10px 12px;margin-bottom:8px;">`;
+      o+=`<div style="font-size:12px;font-weight:800;color:#1A5C35;margin-bottom:6px;">📋 ${esc(tBul.oyun)} — Hazır Mesaj</div>`;
+      o+=`<pre style="font-size:11px;white-space:pre-wrap;word-break:break-word;color:#2D4A3A;line-height:1.6;background:none;margin:0;font-family:inherit;">${esc(satirlar)}</pre>`;
+      o+=`</div>`;
+      o+=`<a href="${waUrl}" target="_blank" style="display:inline-flex;align-items:center;gap:6px;background:#25D366;color:#fff;border-radius:8px;padding:8px 14px;font-size:12.5px;font-weight:800;text-decoration:none;margin-right:6px;">📲 WhatsApp'ta Aç</a>`;
+      o+=`<button class="ta-inline-copy" onclick="navigator.clipboard.writeText(${JSON.stringify(satirlar)}).then(()=>{this.textContent='✓ Kopyalandı';setTimeout(()=>this.textContent='📋 Kopyala',1800)})">📋 Kopyala</button>`;
+      return {html:o};
+    }
+
+    return "Şu sorulara cevap verebilirim 💡\n\n👤 **Kişi:** \"Çağlar'ın turne listesi\"\n🏙 **Şehir:** \"Ankara turneleri\"\n🏨 **Otel:** \"Ankara oteli telefonu\"\n📅 **Bugün:** \"Bugün ne var?\"\n📋 **Özet:** \"30 günlük özet\"\n⚠️ **Eksik:** \"Kadro eksik turneler\"\n👥 **Yük:** \"En meşgul personel\"\n📊 **İstatistik:** \"En fazla turneye giden?\"\n🔔 **Takvim:** \"Takvim notlarım\"\n🏆 **Lider:** \"Liderlik tablosu\"\n⏳ **Sayaç:** \"Bir sonraki turne ne zaman?\"\n⚠️ **Çakışma:** \"Çakışan kadro var mı?\"\n📲 **WhatsApp:** \"[Turne adı] kadrosunu WhatsApp'a gönder\"\n🔍 **Karşılaştır:** \"[Turne A] ile [Turne B] karşılaştır\"";
   }
 
   function findPerson(Q,T) { const m=new Map();for(const t of T)for(const k of t.katilimcilar){const key=norm(k.kisi);if(!m.has(key))m.set(key,k);} for(const[nN,k]of m)if(nN.split(" ").length>=2&&Q.includes(nN))return k; for(const[nN,k]of m)if(nN.split(" ").filter(p=>p.length>=4).some(p=>Q.includes(p)))return k; return null; }
@@ -1475,7 +1717,7 @@
   /* ─────────────────── BAŞLAT ─────────────────── */
   addMsg({html:"👋 Merhaba! Ben <strong>Turne Asistanı</strong>'yım.\n\nOtel numaraları, firma rehberi, kişi listeleri, tarih & istatistik sorularınızı yanıtlarım.\n\n<span style='font-size:12px;color:#8A857C'>💡 Üst sekmeleri kullanarak turne <strong>düzenleyebilir</strong>, <strong>hatırlatıcı</strong> ekleyebilir ve <strong>istatistikleri</strong> görüntüleyebilirsiniz.</span>"},"bot",true);
 
-  const SUGS=["Yeni turne ekle","30 günlük özet","Kadro eksik turneler","Bugün ne var?","Takvim notlarım"];
+  const SUGS=["Bir sonraki turne ne zaman?","Liderlik tablosu","Çakışan kadro var mı?","30 günlük özet","Kadro eksik turneler"];
   for (const s of SUGS) { const b=document.createElement("button");b.type="button";b.className="ta-sug";b.textContent=s;b.addEventListener("click",()=>submit(s));sugs.appendChild(b); }
 
   loadData().then(()=>{ setTimeout(_reminderBadgeGuncelle, 1500); });
