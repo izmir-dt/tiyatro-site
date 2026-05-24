@@ -1,11 +1,11 @@
 /* ════════════════════════════════════════════════════════════════
-   TURNE ASİSTANI v5.0
+   TURNE ASİSTANI v5.1
    İzmir Devlet Tiyatrosu
    YENİ: Turne düzenleme · Hatırlatıcı · Detaylı istatistik
    ═══════════════════════════════════════════════════════════════ */
 (function () {
-  if (window.__turneAsistanLoaded === 'v5') return;
-  window.__turneAsistanLoaded = 'v5';
+  if (window.__turneAsistanLoaded === 'v5.1') return;
+  window.__turneAsistanLoaded = 'v5.1';
 
   const API = "https://turne-backend.vercel.app/api/sheets";
   const TURNE_SHEET = "TURNE_KAYITLARI";
@@ -1406,37 +1406,119 @@
       return "🎂 Doğum günü verisi henüz sisteme eklenmemiş. Kadro bilgilerine doğum tarihi alanı ekleyin, otomatik takip edebilirim.";
     }
 
-    /* ── BİNGO MİNİ OYUN ── */
+    /* ── BİNGO MİNİ OYUN — 5 farklı soru tipi ── */
     if (/(bingo|mini oyun|kim hangi şehirde|kim hangi sehirde)/.test(Q)) {
       const now=_bugun();
       const aktif=T.filter(t=>{const a=parseDate(t.baslangic), b=parseDate(t.bitis)||a; return a&&b&&a<=now&&b>=now;});
-      const pool=aktif.length?aktif:_yaklasan(T,30);
-      if (!pool.length) return "🎲 Şu an bingo için yeterli turne yok.";
-      // Sadece il'i ve kadrosu olan turneleri kullan
-      const valid = pool.filter(t => t.il && Array.isArray(t.katilimcilar) && t.katilimcilar.length);
-      const tumSehirler = [...new Set(T.flatMap(t => [...collectUniqueCitiesFromTour(t)]) )];
-      if (!valid.length || tumSehirler.length < 2) return "🎲 Bingo için yeterli veri yok.";
-      // Rastgele bir turne ve katılımcı seç
+      const pool=aktif.length?aktif:_yaklasan(T,60);
+      const tumTurneler=T.filter(t=>!t.statu.includes("iptal"));
+      if (!pool.length && !tumTurneler.length) return "🎲 Bingo için yeterli turne yok.";
+      const geniPool = pool.length ? pool : tumTurneler;
+      const valid = geniPool.filter(t => t.katilimcilar && t.katilimcilar.length >= 2 && t.il);
+      if (!valid.length) return "🎲 Bingo için kadro bilgisi olan turne bulunamadı.";
+
+      const tumSehirler = [...new Set(tumTurneler.flatMap(t => [...collectUniqueCitiesFromTour(t)]).filter(Boolean))];
+      const tumOyunlar = [...new Set(tumTurneler.map(t=>t.oyun).filter(Boolean))];
+      const tumKisiler = [...new Set(tumTurneler.flatMap(t=>t.katilimcilar.map(k=>k.kisi)).filter(Boolean))];
+
+      // Rastgele soru tipini seç (0–4)
+      let lastBingoTip = parseInt(sessionStorage.getItem("ta_last_bingo_tip") || "-1");
+      let tip; do { tip = Math.floor(Math.random()*5); } while(tip===lastBingoTip);
+      sessionStorage.setItem("ta_last_bingo_tip", tip);
+
       const turne = valid[Math.floor(Math.random() * valid.length)];
-      const kisi = turne.katilimcilar[Math.floor(Math.random() * turne.katilimcilar.length)].kisi;
-      const turneCities = [...collectUniqueCitiesFromTour(turne)];
-      const dogru = turneCities[Math.floor(Math.random() * turneCities.length)] || turne.il;
-      // Doğru cevap + 3 farklı şehir
-      const digerler = tumSehirler.filter(s => s && s !== dogru).sort(() => Math.random() - 0.5).slice(0, 3);
-      const seçenekler = [dogru, ...digerler].sort(() => Math.random() - 0.5);
-      // Bingo durumunu global'e koy (event tetikleme yerine güvenli yöntem)
-      window.__taBingo = { dogru, kisi };
-      const soruTipleri = [
-        `**${esc(kisi)}** bu turnede hangi şehir ayağında yer alıyor?`,
-        `**${esc(kisi)}** için doğru şehir hangisi?`,
-        `Bu turda **${esc(kisi)}** hangi şehir seçeneğinde olmalı?`,
-        `Sahnedeki ipucu: **${esc(kisi)}** — doğru şehri bul.`
-      ];
-      let o = `🎲 **BİNGO!**\n\n${soruTipleri[Math.floor(Math.random()*soruTipleri.length)]}\n\n`;
-      for (const s of seçenekler) {
-        o += `<button class="ta-inline-copy" onclick="window.__taBingoCheck('${s.replace(/'/g, "\\'")}')">${esc(s)}</button> `;
+      let soru = "", dogru = "", secenekler = [], ipucu = "", badge = "";
+
+      if (tip === 0) {
+        // Tip 0: Bu kişi hangi şehirde?
+        const kisi = turne.katilimcilar[Math.floor(Math.random()*turne.katilimcilar.length)].kisi;
+        const turneCities = [...collectUniqueCitiesFromTour(turne)];
+        dogru = turneCities[Math.floor(Math.random()*turneCities.length)] || turne.il;
+        const digerler = tumSehirler.filter(s=>s&&s!==dogru).sort(()=>Math.random()-.5).slice(0,3);
+        secenekler = [dogru,...digerler].sort(()=>Math.random()-.5);
+        soru = `**${esc(kisi)}** bu turnede hangi şehir ayağına gidiyor?`;
+        ipucu = "Aynı turnenin şehirlerinden biri 😉";
+        badge = "🏙";
+        window.__taBingo = { dogru, kisi };
+
+      } else if (tip === 1) {
+        // Tip 1: Bu turnenin kaç kişilik kadrosu var?
+        const gercek = turne.katilimcilar.length;
+        dogru = String(gercek);
+        const farkliSayilar = new Set([gercek]);
+        while(farkliSayilar.size < 4) { const r = gercek + Math.floor(Math.random()*6)-3; if(r>0&&r!==gercek) farkliSayilar.add(r); }
+        secenekler = [...farkliSayilar].sort(()=>Math.random()-.5).map(String);
+        soru = `🎭 **${esc(turne.oyun)}** turnesinde kaç kişilik kadro yer alıyor?`;
+        ipucu = "Kadro listesine bakabilirsin 👀";
+        badge = "👥";
+        window.__taBingo = { dogru, kisi: turne.oyun };
+
+      } else if (tip === 2) {
+        // Tip 2: Bu kişi hangi oyunda?
+        const kisi2 = turne.katilimcilar[Math.floor(Math.random()*turne.katilimcilar.length)].kisi;
+        dogru = turne.oyun;
+        const digerOyunlar = tumOyunlar.filter(o=>o!==dogru).sort(()=>Math.random()-.5).slice(0,3);
+        secenekler = [dogru,...digerOyunlar].sort(()=>Math.random()-.5);
+        soru = `**${esc(kisi2)}** şu anda hangi oyunun turnesinde?`;
+        ipucu = "Yaklaşan/aktif turnelerden biri 🎭";
+        badge = "🎭";
+        window.__taBingo = { dogru, kisi: kisi2 };
+
+      } else if (tip === 3) {
+        // Tip 3: Bu turne kaç gün sürüyor?
+        const gercekGun = turneGun(turne);
+        dogru = String(gercekGun);
+        const farkliGunler = new Set([gercekGun]);
+        while(farkliGunler.size < 4) { const r = Math.max(1,gercekGun + Math.floor(Math.random()*5)-2); if(r!==gercekGun) farkliGunler.add(r); }
+        secenekler = [...farkliGunler].sort(()=>Math.random()-.5).map(String);
+        soru = `📅 **${esc(turne.oyun)}** (${esc(turne.il||"?")}) turnesi kaç gün sürüyor?`;
+        ipucu = `${fmtTarihAralik(turne.baslangic,turne.bitis)} tarihlerine bak 📆`;
+        badge = "📅";
+        window.__taBingo = { dogru, kisi: turne.oyun };
+
+      } else {
+        // Tip 4: Bu kadrodan kim YOK? (yanlış kişiyi bul)
+        if (turne.katilimcilar.length >= 3 && tumKisiler.length >= 4) {
+          const kadroda = turne.katilimcilar.map(k=>k.kisi);
+          const yabanci = tumKisiler.filter(k=>!kadroda.includes(k)).sort(()=>Math.random()-.5)[0];
+          if (yabanci) {
+            dogru = yabanci; // YOK olan kişi "doğru" cevap
+            const ucDogruKisi = kadroda.sort(()=>Math.random()-.5).slice(0,3);
+            secenekler = [dogru,...ucDogruKisi].sort(()=>Math.random()-.5);
+            soru = `🕵️ Aşağıdakilerden hangisi **${esc(turne.oyun)}** turne kadrosunda **YOK**?`;
+            ipucu = "Biri sahte! Kadroda olmayan ismi bul 🔍";
+            badge = "🕵️";
+            window.__taBingo = { dogru, kisi: turne.oyun, tip4: true };
+          } else {
+            // fallback → tip 0
+            const kisi3 = turne.katilimcilar[0].kisi;
+            const turneCities3 = [...collectUniqueCitiesFromTour(turne)];
+            dogru = turneCities3[0] || turne.il;
+            const digerler3 = tumSehirler.filter(s=>s&&s!==dogru).sort(()=>Math.random()-.5).slice(0,3);
+            secenekler = [dogru,...digerler3].sort(()=>Math.random()-.5);
+            soru = `**${esc(kisi3)}** bu turnede hangi şehir ayağına gidiyor?`;
+            ipucu = "Aynı turnenin şehirlerinden biri 😉";
+            badge = "🏙";
+            window.__taBingo = { dogru, kisi: kisi3 };
+          }
+        } else {
+          // fallback → tip 0
+          const kisi3 = turne.katilimcilar[0].kisi;
+          dogru = turne.il;
+          const digerler3 = tumSehirler.filter(s=>s&&s!==dogru).sort(()=>Math.random()-.5).slice(0,3);
+          secenekler = [dogru,...digerler3].sort(()=>Math.random()-.5);
+          soru = `**${esc(kisi3)}** bu turnede hangi şehre gidiyor?`;
+          ipucu = "Aynı turnenin şehirlerinden biri 😉";
+          badge = "🏙";
+          window.__taBingo = { dogru, kisi: kisi3 };
+        }
       }
-      o += `\n\n<span style="font-size:11px;color:#8A857C">İpucu: Aynı turnenin şehirlerinden biri 😉</span>`;
+
+      let o = `🎲 **BİNGO!**\n\n${soru}\n\n`;
+      for (const s of secenekler) {
+        o += `<button class="ta-inline-copy" onclick="window.__taBingoCheck('${s.replace(/'/g,"\\'").replace(/"/g,"&quot;")}')">${esc(s)}</button> `;
+      }
+      o += `\n\n<span style="font-size:11px;color:#8A857C">İpucu: ${ipucu}</span>`;
       return { html: o };
     }
 
@@ -2333,34 +2415,36 @@
     /* ── BENİ ŞAŞIRT / TRİVİA ── */
     if (/(şaşırt|sasirt|trivia|bilgi\s*ver|ilginç|tuhaf|merak|keşif|beni.*şaşırt|bakalım\s*ne|ne\s*biliyorsun)/.test(Q)) {
       // ——— Normalize kişi & görev: aynı kişi/görev farklı yazımlarda parçalanmasın
-      const aktifTurneler=T.filter(t=>!t.statu.includes("iptal"));
-      const personelSet2=new Set(); T.forEach(t=>t.katilimcilar.forEach(k=>personelSet2.add(norm(k.kisi))));
-      // Şehir sayısı: kullanıcı algısıyla uyumlu olsun diye SADECE ana il sayılır (duraklar hariç değil; ama eşsiz)
-      const ilSet2=new Set(); T.forEach(t=>collectUniqueCitiesFromTour(t).forEach(il=>ilSet2.add(norm(il))));
+      // İptal hariç "gerçek" aktif turneler (yarıda kesildi dahil — gidilmiş sayılır)
+      const aktifTurneler=T.filter(t=>!t.statu.includes("iptal")&&t.statu!=="yarida-kesildi");
+      const tumIptalDisi=T.filter(t=>!t.statu.includes("iptal")); // yarıda kesildi dahil
+      const personelSet2=new Set(); tumIptalDisi.forEach(t=>t.katilimcilar.forEach(k=>personelSet2.add(norm(k.kisi))));
+      // Şehir: iptal hariç (yarıda kesilenler de gidilmiş sayılır)
+      const ilSet2=new Set(); tumIptalDisi.forEach(t=>collectUniqueCitiesFromTour(t).forEach(il=>ilSet2.add(norm(il))));
       const toplamGun2=aktifTurneler.reduce((s,t)=>s+turneGun(t),0);
       const enUzunTurne=aktifTurneler.slice().sort((a,b)=>turneGun(b)-turneGun(a))[0];
-      const enKalabalikTurne=T.filter(t=>t.katilimcilar.length>0).sort((a,b)=>b.katilimcilar.length-a.katilimcilar.length)[0];
-      // kişi turne sayısı — norm anahtarla say, ekranda en sık kullanılan yazımı göster
+      const enKalabalikTurne=tumIptalDisi.filter(t=>t.katilimcilar.length>0).sort((a,b)=>b.katilimcilar.length-a.katilimcilar.length)[0];
+      // kişi turne sayısı — norm anahtarla say, iptal hariç
       const kisiTurneler2=new Map(); const kisiDisplay=new Map();
-      T.forEach(t=>{const seen=new Set();t.katilimcilar.forEach(k=>{const key=norm(k.kisi);if(!key||seen.has(key))return;seen.add(key);
+      tumIptalDisi.forEach(t=>{const seen=new Set();t.katilimcilar.forEach(k=>{const key=norm(k.kisi);if(!key||seen.has(key))return;seen.add(key);
         kisiTurneler2.set(key,(kisiTurneler2.get(key)||0)+1);
         if(!kisiDisplay.has(key)) kisiDisplay.set(key,k.kisi);
       });});
       const enAktifSira=[...kisiTurneler2.entries()].sort((a,b)=>b[1]-a[1]);
       const enAktif=enAktifSira[0];
       const enAktifAd=enAktif?(kisiDisplay.get(enAktif[0])||enAktif[0]):"";
-      // Şehir — sadece ANA il (duraklar hariç) → kullanıcı algısıyla uyumlu
+      // Şehir — sadece ANA il, iptal hariç
       const ilMap2=new Map();
-      aktifTurneler.forEach(t=>{if(t.il){const k=t.il.toLocaleUpperCase("tr");ilMap2.set(k,(ilMap2.get(k)||0)+1);}});
+      tumIptalDisi.forEach(t=>{if(t.il){const k=t.il.toLocaleUpperCase("tr");ilMap2.set(k,(ilMap2.get(k)||0)+1);}});
       const enCokIlSira=[...ilMap2.entries()].sort((a,b)=>b[1]-a[1]);
       const enCokIl=enCokIlSira[0];
-      // Ek istatistikler
-      const ayMap2=new Array(12).fill(0);aktifTurneler.forEach(t=>{const d=parseDate(t.baslangic);if(d)ayMap2[d.getMonth()]++;});
+      // Ek istatistikler — iptal hariç
+      const ayMap2=new Array(12).fill(0);tumIptalDisi.forEach(t=>{const d=parseDate(t.baslangic);if(d)ayMap2[d.getMonth()]++;});
       const enYogunAyIdx=ayMap2.indexOf(Math.max(...ayMap2));
       const enYogunAySay=ayMap2[enYogunAyIdx];
-      const toplamTemsil2b=aktifTurneler.reduce((s,t)=>s+(t.sayi||0),0);
-      const ucakTurneler=T.filter(t=>t.gidisUlasim&&/(uçak|ucak|thy|pegasus|sunexpress|hava)/i.test(t.gidisUlasim));
-      const otobusTurneler=T.filter(t=>t.gidisUlasim&&/(otobüs|otobus|kiralık|kiralk|servis)/i.test(t.gidisUlasim));
+      const toplamTemsil2b=tumIptalDisi.reduce((s,t)=>s+(t.sayi||0),0);
+      const ucakTurneler=tumIptalDisi.filter(t=>t.gidisUlasim&&/(uçak|ucak|thy|pegasus|sunexpress|hava)/i.test(t.gidisUlasim));
+      const otobusTurneler=tumIptalDisi.filter(t=>t.gidisUlasim&&/(otobüs|otobus|kiralık|kiralk|servis)/i.test(t.gidisUlasim));
       const enKisaTurne=aktifTurneler.filter(t=>turneGun(t)>0).sort((a,b)=>turneGun(a)-turneGun(b))[0];
       const yarida=T.filter(t=>t.statu==="yarida-kesildi");
       const iptal2b=T.filter(t=>t.statu==="iptal");
@@ -2429,7 +2513,8 @@
         oyunMap.size>0?`📚 Aktif turne repertuvarında **${oyunMap.size}** farklı oyun bulunuyor.`:"",
         ortYil>0?`📊 Yılda ortalama **${ortYil} turne** sahneleniyor. 📈`:"",
         soloTurne>0?`👤 Şu ana kadar **${soloTurne}** turne tek kişilik kadroyla yapıldı. 🎤`:"",
-        T.length>0?`🎬 Sistemde toplam **${T.length}** turne kaydı bulunuyor (iptal ve taslaklar dahil). 📂`:"",
+        T.length>0?`🎬 Sistemde toplam **${T.length}** turne kaydı bulunuyor (iptal dahil). 📂`:"",
+        aktifTurneler.length>0?`✅ Bunların **${aktifTurneler.length}** tanesi aktif (tamamlanan + planlanan, iptal ve yarıda kesildi hariç). 📊`:"",
       ].filter(Boolean);
       
       // Son gösterilen trivia'yı tekrar etme
@@ -3422,14 +3507,47 @@
 
   loadData().then(()=>{ setTimeout(_reminderBadgeGuncelle, 1500); });
   setInterval(()=>{ checkReminders(); _reminderBadgeGuncelle(); }, 60000);
+
+  // Yeni turne kaydedilince veya silinince veriyi yenile
+  // 1) turne.html custom event (dispatch edilirse)
+  window.addEventListener('turne-saved', ()=>{ loadData(); });
+  window.addEventListener('turne-deleted', ()=>{ loadData(); });
+  // 2) Manuel yenileme yardımcısı
+  window.__taRefreshData = ()=>{ loadData(); showToast("🔄 Veriler yenileniyor…", 1500); };
+  // 3) turne.html fetchTurneler / tumUIGuncelle tamamlanınca otomatik algıla:
+  //    liste-content'in child sayısı değişince 3 sn sonra yenile
+  (function _autoRefreshWatcher() {
+    const grid = document.getElementById('liste-content');
+    if (!grid) { setTimeout(_autoRefreshWatcher, 2000); return; }
+    let _lastCount = grid.children.length;
+    new MutationObserver(_debounce(() => {
+      const newCount = grid.children.length;
+      if (newCount !== _lastCount) {
+        _lastCount = newCount;
+        setTimeout(() => loadData(), 500); // yarım saniye bekle, fetch tamamlansın
+      }
+    }, 800)).observe(grid, { childList: true });
+  })();
   window.__taAktar = aktarOtelFormuna;
   // Sohbet balonlarındaki inline butonlar için global submit
   window.__taSubmit = function(text){ submit(text); };
-  // Bingo cevabı kontrol
+  // Bingo cevabı kontrol — tip4'te "kim YOK?" sorusu için farklı mesaj
   window.__taBingoCheck = function(secim){
     const b = window.__taBingo;
     if (!b) { showToast("Bingo turu sona ermiş"); return; }
-    if (secim === b.dogru) showToast("🎉 Doğru! " + b.dogru, 2400);
-    else showToast("❌ Yanlış · Doğrusu: " + b.dogru, 2800);
+    window.__taBingo = null; // bir kere cevaplandı, iptal et
+    if (secim === b.dogru) {
+      if (b.tip4) {
+        addMsg({html:`✅ **Doğru!** **${esc(secim)}** bu turnede **yok**. Kadro okumasın kalbe! 🔍`}, "bot");
+      } else {
+        addMsg({html:`🎉 **Doğru!** Cevap: **${esc(b.dogru)}** ${b.kisi?`<br><span style="font-size:11px;color:#8A857C">— ${esc(b.kisi)}</span>`:""}<br><button class="ta-inline-copy" onclick="window.__taSubmit('bingo oyna')">🔄 Yeni soru</button>`}, "bot");
+      }
+    } else {
+      if (b.tip4) {
+        addMsg({html:`❌ **Yanlış.** ${esc(secim)} aslında bu turnede **var**. Doğru cevap: **${esc(b.dogru)}** kadro dışında.<br><button class="ta-inline-copy" onclick="window.__taSubmit('bingo oyna')">🔄 Tekrar dene</button>`}, "bot");
+      } else {
+        addMsg({html:`❌ **Yanlış.** Seçtiğin: ${esc(secim)} · Doğru cevap: **${esc(b.dogru)}** ${b.kisi?`<br><span style="font-size:11px;color:#8A857C">— ${esc(b.kisi)}</span>`:""}<br><button class="ta-inline-copy" onclick="window.__taSubmit('bingo oyna')">🔄 Tekrar dene</button>`}, "bot");
+      }
+    }
   };
 })();
