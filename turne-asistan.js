@@ -1505,47 +1505,104 @@
 
     /* ── BENİ ŞAŞIRT / TRİVİA ── */
     if (/(şaşırt|sasirt|trivia|bilgi\s*ver|ilginç|tuhaf|merak|keşif|beni.*şaşırt|bakalım\s*ne|ne\s*biliyorsun)/.test(Q)) {
-      const personelSet2=new Set(); T.forEach(t=>t.katilimcilar.forEach(k=>personelSet2.add(k.kisi)));
-      const ilSet2=new Set(); T.forEach(t=>{if(t.il)ilSet2.add(t.il);(t.duraklar||[]).forEach(d=>{if(d.il)ilSet2.add(d.il);});});
-      const toplamGun2=T.filter(t=>!t.statu.includes("iptal")).reduce((s,t)=>s+turneGun(t),0);
-      const enUzunTurne=T.filter(t=>!t.statu.includes("iptal")).sort((a,b)=>turneGun(b)-turneGun(a))[0];
+      // ——— Normalize kişi & görev: aynı kişi/görev farklı yazımlarda parçalanmasın
+      const aktifTurneler=T.filter(t=>!t.statu.includes("iptal"));
+      const personelSet2=new Set(); T.forEach(t=>t.katilimcilar.forEach(k=>personelSet2.add(norm(k.kisi))));
+      // Şehir sayısı: kullanıcı algısıyla uyumlu olsun diye SADECE ana il sayılır (duraklar hariç değil; ama eşsiz)
+      const ilSet2=new Set(); T.forEach(t=>{if(t.il)ilSet2.add(norm(t.il));(t.duraklar||[]).forEach(d=>{if(d.il)ilSet2.add(norm(d.il));});});
+      const toplamGun2=aktifTurneler.reduce((s,t)=>s+turneGun(t),0);
+      const enUzunTurne=aktifTurneler.slice().sort((a,b)=>turneGun(b)-turneGun(a))[0];
       const enKalabalikTurne=T.filter(t=>t.katilimcilar.length>0).sort((a,b)=>b.katilimcilar.length-a.katilimcilar.length)[0];
-      const kisiTurneler2=new Map();
-      T.forEach(t=>t.katilimcilar.forEach(k=>{if(!kisiTurneler2.has(k.kisi))kisiTurneler2.set(k.kisi,0);kisiTurneler2.set(k.kisi,kisiTurneler2.get(k.kisi)+1);}));
-      const enAktif=[...kisiTurneler2.entries()].sort((a,b)=>b[1]-a[1])[0];
-      const ilMap2=new Map();T.filter(t=>!t.statu.includes("iptal")).forEach(t=>{const ils=new Set();if(t.il)ils.add(t.il.toUpperCase());(t.duraklar||[]).forEach(d=>{if(d.il)ils.add(d.il.toUpperCase());});ils.forEach(il=>ilMap2.set(il,(ilMap2.get(il)||0)+1));});
-      const enCokIl=[...ilMap2.entries()].sort((a,b)=>b[1]-a[1])[0];
-      
-      // Extra stats for more trivia
-      const ayMap2=new Array(12).fill(0);T.filter(t=>!t.statu.includes("iptal")).forEach(t=>{const d=parseDate(t.baslangic);if(d)ayMap2[d.getMonth()]++;});
+      // kişi turne sayısı — norm anahtarla say, ekranda en sık kullanılan yazımı göster
+      const kisiTurneler2=new Map(); const kisiDisplay=new Map();
+      T.forEach(t=>{const seen=new Set();t.katilimcilar.forEach(k=>{const key=norm(k.kisi);if(!key||seen.has(key))return;seen.add(key);
+        kisiTurneler2.set(key,(kisiTurneler2.get(key)||0)+1);
+        if(!kisiDisplay.has(key)) kisiDisplay.set(key,k.kisi);
+      });});
+      const enAktifSira=[...kisiTurneler2.entries()].sort((a,b)=>b[1]-a[1]);
+      const enAktif=enAktifSira[0];
+      const enAktifAd=enAktif?(kisiDisplay.get(enAktif[0])||enAktif[0]):"";
+      // Şehir — sadece ANA il (duraklar hariç) → kullanıcı algısıyla uyumlu
+      const ilMap2=new Map();
+      aktifTurneler.forEach(t=>{if(t.il){const k=t.il.toLocaleUpperCase("tr");ilMap2.set(k,(ilMap2.get(k)||0)+1);}});
+      const enCokIlSira=[...ilMap2.entries()].sort((a,b)=>b[1]-a[1]);
+      const enCokIl=enCokIlSira[0];
+      // Ek istatistikler
+      const ayMap2=new Array(12).fill(0);aktifTurneler.forEach(t=>{const d=parseDate(t.baslangic);if(d)ayMap2[d.getMonth()]++;});
       const enYogunAyIdx=ayMap2.indexOf(Math.max(...ayMap2));
       const enYogunAySay=ayMap2[enYogunAyIdx];
-      const toplamTemsil2b=T.filter(t=>!t.statu.includes("iptal")).reduce((s,t)=>s+(t.sayi||0),0);
+      const toplamTemsil2b=aktifTurneler.reduce((s,t)=>s+(t.sayi||0),0);
       const ucakTurneler=T.filter(t=>t.gidisUlasim&&/(uçak|ucak|thy|pegasus|sunexpress|hava)/i.test(t.gidisUlasim));
       const otobusTurneler=T.filter(t=>t.gidisUlasim&&/(otobüs|otobus|kiralık|kiralk|servis)/i.test(t.gidisUlasim));
-      const enKisaTurne=T.filter(t=>!t.statu.includes("iptal")&&turneGun(t)>0).sort((a,b)=>turneGun(a)-turneGun(b))[0];
+      const enKisaTurne=aktifTurneler.filter(t=>turneGun(t)>0).sort((a,b)=>turneGun(a)-turneGun(b))[0];
       const yarida=T.filter(t=>t.statu==="yarida-kesildi");
-      const gorevMap2=new Map();T.filter(t=>!t.statu.includes("iptal")).forEach(t=>t.katilimcilar.forEach(k=>{const g=k.gorev||k.kategori||"—";gorevMap2.set(g,(gorevMap2.get(g)||0)+1);}));
-      const enCokGorev=[...gorevMap2.entries()].sort((a,b)=>b[1]-a[1])[0];
-      const yilMap2=new Map();T.filter(t=>!t.statu.includes("iptal")).forEach(t=>{const d=parseDate(t.baslangic);if(d)yilMap2.set(d.getFullYear(),(yilMap2.get(d.getFullYear())||0)+1);});
+      const iptal2b=T.filter(t=>t.statu==="iptal");
+      // Görev grupları — normalize edilmiş anahtarla, ekranda en sık yazımı göster
+      const gorevMap2=new Map(); const gorevDisplay=new Map();
+      aktifTurneler.forEach(t=>t.katilimcilar.forEach(k=>{
+        const ham=(k.gorev||k.kategori||"").trim(); if(!ham) return;
+        const key=norm(ham);
+        gorevMap2.set(key,(gorevMap2.get(key)||0)+1);
+        if(!gorevDisplay.has(key)) gorevDisplay.set(key,ham);
+      }));
+      const enCokGorevSira=[...gorevMap2.entries()].sort((a,b)=>b[1]-a[1]);
+      const enCokGorev=enCokGorevSira[0];
+      const enCokGorevAd=enCokGorev?(gorevDisplay.get(enCokGorev[0])||enCokGorev[0]):"";
+      const yilMap2=new Map();aktifTurneler.forEach(t=>{const d=parseDate(t.baslangic);if(d)yilMap2.set(d.getFullYear(),(yilMap2.get(d.getFullYear())||0)+1);});
       const enYogunYil=[...yilMap2.entries()].sort((a,b)=>b[1]-a[1])[0];
+      const ortKadro=aktifTurneler.length?Math.round(aktifTurneler.reduce((s,t)=>s+t.katilimcilar.length,0)/aktifTurneler.length):0;
+      const ortGun=aktifTurneler.length?Math.round(toplamGun2/aktifTurneler.length*10)/10:0;
+      // Hafta sonu turneleri
+      const hsTurne=aktifTurneler.filter(t=>{const d=parseDate(t.baslangic);return d&&(d.getDay()===0||d.getDay()===6);}).length;
+      // Otel çeşitliliği
+      const otelSet=new Set();T.forEach(t=>{if(t.otelAdi)otelSet.add(norm(t.otelAdi));});
+      // Oyun çeşitliliği
+      const oyunMap=new Map();aktifTurneler.forEach(t=>{const k=norm(t.oyun||"");if(k)oyunMap.set(k,(oyunMap.get(k)||0)+1);});
+      const enCokOyun=[...oyunMap.entries()].sort((a,b)=>b[1]-a[1])[0];
+      const enCokOyunAd=enCokOyun?(aktifTurneler.find(t=>norm(t.oyun||"")===enCokOyun[0])?.oyun||enCokOyun[0]):"";
+      // İkinci en aktif personel
+      const ikinciAktif=enAktifSira[1];
+      const ikinciAktifAd=ikinciAktif?(kisiDisplay.get(ikinciAktif[0])||ikinciAktif[0]):"";
+      // Yıl başına ortalama
+      const yilSay=yilMap2.size||1;
+      const ortYil=Math.round(aktifTurneler.length/yilSay*10)/10;
+      // Tek kişilik turne sayısı (solo)
+      const soloTurne=aktifTurneler.filter(t=>t.katilimcilar.length===1).length;
+      // Aynı oyunu paylaşan en çok personel
+      const top3Aktif=enAktifSira.slice(0,3).map(([k,n])=>`${kisiDisplay.get(k)||k} (${n})`).join(", ");
+      const top3Sehir=enCokIlSira.slice(0,3).map(([il,n])=>`${il} (${n})`).join(", ");
 
       const TRIVIAS=[
         enUzunTurne?`📏 En uzun turne **${turneGun(enUzunTurne)} gün** sürdü — **${enUzunTurne.oyun}** (${enUzunTurne.il||"—"})! Bavullar bunu hissetti sanırım! 🧳`:"",
         enKisaTurne&&turneGun(enKisaTurne)<=2?`⚡ En kısa turne sadece **${turneGun(enKisaTurne)} gün**dü — **${enKisaTurne.oyun}** (${enKisaTurne.il||"—"})! Gidip gelmek için bile zaman bırakmıyor! 😅`:"",
         enKalabalikTurne?`👥 En kalabalık turne **${enKalabalikTurne.katilimcilar.length} kişiyle** **${enKalabalikTurne.oyun}** oldu! O kadar insanı bir arada düşünün! 🎪`:"",
-        enAktif?`🏆 En aktif personel? **${enAktif[0]}** — tam **${enAktif[1]} turnede** sahne aldı! Hiç durmadan! 🌟`:"",
-        enCokIl?`🏙 En çok gidilen şehir **${enCokIl[0]}** — tam **${enCokIl[1]} kez**! Artık ev gibi olmuş olmalı! 🏠`:"",
-        `🗺️ Şimdiye kadar **${ilSet2.size}** farklı şehre turne yapıldı. Türkiye haritasının önemli bir kısmı keşfedildi!`,
+        enAktif?`🏆 En aktif personel? **${enAktifAd}** — tam **${enAktif[1]} turnede** sahne aldı! Hiç durmadan! 🌟`:"",
+        ikinciAktif?`🥈 Sahnenin ikinci en sadık ismi: **${ikinciAktifAd}** — **${ikinciAktif[1]} turne**! Liderlik kapışması sürüyor! 🔥`:"",
+        top3Aktif?`🎖 Turne maratoncuları zirvesi: **${top3Aktif}**. Bu üçlü adeta turne kasırgası! 🌪️`:"",
+        enCokIl?`🏙 En çok gidilen şehir (ana il olarak) **${enCokIl[0]}** — tam **${enCokIl[1]} turne**! Artık ev gibi olmuş olmalı! 🏠`:"",
+        top3Sehir?`🗺️ Sahne haritasının zirvesi: **${top3Sehir}**. Türkiye'nin nabzı buralarda atıyor! ❤️`:"",
+        `🌍 Şimdiye kadar **${ilSet2.size}** farklı şehre (durak dahil) turne ulaştı. Türkiye haritasının önemli bir kısmı keşfedildi!`,
         `⏱️ Tüm turne günleri toplandığında **${toplamGun2} gün** yolda geçildi! Bu yaklaşık **${Math.round(toplamGun2/30)} ay** demek! 😮`,
-        `🎭 Sistemde **${personelSet2.size}** farklı personel kayıtlı. Bu bir senfoni orkestrası büyüklüğünde bir ekip!`,
+        `🎭 Turnelere çıkan **${personelSet2.size}** farklı personel var. Bu bir senfoni orkestrası büyüklüğünde bir ekip!`,
         enYogunAySay>0?`📅 En yoğun ay **${AYLAR[enYogunAyIdx]}** — o ayda tam **${enYogunAySay} turne** gerçekleşti! Sahne hiç boş kalmadı! 🔥`:"",
         toplamTemsil2b>0?`🎫 Toplamda **${toplamTemsil2b} temsil** verildi! Her temsil için binlerce seyirci büyülendi! ✨`:"",
         ucakTurneler.length>0?`✈️ Turnelerin **${ucakTurneler.length}** tanesi uçakla yapıldı! Gökyüzünde sahne arayan ekip! 🛫`:"",
         otobusTurneler.length>0?`🚌 Turnelerin **${otobusTurneler.length}** tanesi otobüsle yapıldı! En güzel muhabbet yolda olur! 😄`:"",
+        ucakTurneler.length>0&&otobusTurneler.length>0?`🆚 Ulaşım kapışması: **${ucakTurneler.length}** uçak vs **${otobusTurneler.length}** otobüs! ${ucakTurneler.length>otobusTurneler.length?"Hava yolu önde! ✈️":"Kara yolu önde! 🛣️"}`:"",
         yarida.length>0?`⚠️ **${yarida.length}** turne yarıda kesildi — bu turnelerin hikayeleri en dramatik olanlar! 🎭`:"",
-        enCokGorev?`🎪 En kalabalık görev grubu: **${enCokGorev[0]}** — **${enCokGorev[1]} kişi**! Sahnenin omurgası bunlar! 💪`:"",
+        iptal2b.length>0?`❌ Tarihte **${iptal2b.length}** iptal turne var. Her iptalin ardında bir hikaye! 📖`:"",
+        enCokGorev?`🎪 En kalabalık görev grubu: **${enCokGorevAd}** — **${enCokGorev[1]} kişi**! Sahnenin omurgası bunlar! 💪`:"",
+        enCokGorevSira.length>=3?`🏷 En kalabalık 3 görev: **${enCokGorevSira.slice(0,3).map(([k,n])=>(gorevDisplay.get(k)||k)+" ("+n+")").join(", ")}**. Görev dağılımı işte böyle! 🎭`:"",
         enYogunYil?`📆 En yoğun yıl **${enYogunYil[0]}** oldu — o yıl tam **${enYogunYil[1]} turne** yapıldı! Rekor kırdınız! 🏆`:"",
+        ortKadro>0?`🧮 Ortalama bir turnede **${ortKadro} kişilik** kadro çıkıyor sahneye. Tam bir takım oyunu! ⚽`:"",
+        ortGun>0?`📐 Bir turne ortalama **${ortGun} gün** sürüyor. Valizi ona göre toplamak lazım! 🧳`:"",
+        hsTurne>0?`🎉 **${hsTurne}** turne Cumartesi/Pazar başladı! Hafta sonu da sahne var! 🎬`:"",
+        otelSet.size>0?`🏨 Şimdiye kadar **${otelSet.size}** farklı otel ağırladı bizi. Yastıklar her yerde farklı! 🛏️`:"",
+        enCokOyun?`🎭 En çok turneye çıkan oyun: **${enCokOyunAd}** — **${enCokOyun[1]} turne**! Repertuvarın yıldızı! ⭐`:"",
+        oyunMap.size>0?`📚 Aktif turne repertuvarında **${oyunMap.size}** farklı oyun var. Çeşitlilik bayramı! 🎉`:"",
+        ortYil>0?`📊 Yılda ortalama **${ortYil} turne** çıkıyor sahneye. İstikrarın resmi! 📈`:"",
+        soloTurne>0?`👤 **${soloTurne}** turne tek kişilik bir kadroyla yapılmış. Solo performansın gücü! 🎤`:"",
+        T.length>0?`🎬 Sistemde toplam **${T.length}** turne kaydı var (iptal & taslak dahil). Arşiv her geçen gün büyüyor! 📂`:"",
       ].filter(Boolean);
       
       // Son gösterilen trivia'yı tekrar etme
