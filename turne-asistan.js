@@ -1,11 +1,11 @@
 /* ════════════════════════════════════════════════════════════════
-   TURNE ASİSTANI v5.2
+   TURNE ASİSTANI v5.3
    İzmir Devlet Tiyatrosu
    YENİ: Turne düzenleme · Hatırlatıcı · Detaylı istatistik
    ═══════════════════════════════════════════════════════════════ */
 (function () {
-  if (window.__turneAsistanLoaded === 'v5.2') return;
-  window.__turneAsistanLoaded = 'v5.2';
+  if (window.__turneAsistanLoaded === 'v5.3') return;
+  window.__turneAsistanLoaded = 'v5.3';
 
   const API = "https://turne-backend.vercel.app/api/sheets";
   const TURNE_SHEET = "TURNE_KAYITLARI";
@@ -1123,6 +1123,9 @@
       if (eksik.length) o+=`\n⚠️ **Eksik bilgili (14 gün içinde):** ${eksik.length} turne\n`;
       const sz=_SAHNE_SOZLERI[Math.floor(Math.random()*_SAHNE_SOZLERI.length)];
       o+=`\n💭 _${sz}_`;
+      // Yaklaşan turneler varsa hatırlatıcı öner butonu ekle
+      const ykBrif=_yaklasan(T,30);
+      if(ykBrif.length) o+=`\n\n<button class="ta-inline-copy" onclick="window.__taSubmit('hatırlatıcı öner')" style="border-color:#E0A030;color:#8A6010">🔔 Hatırlatıcı Öner</button>`;
       return {html:o};
     }
 
@@ -3157,26 +3160,75 @@
       const durum=r.done?"✅ Tamamlandı":isToday?`<strong>⚡ Bugün</strong>`:isOverdue?`<strong style="color:#B53030">⚠️ Gecikmiş</strong>`:`📅 ${dateStr}`;
 
       item.innerHTML=`
-        <div class="ta-remind-icon" style="background:${r.done?"#F0EBE5":isToday?"#FBE8EB":isOverdue?"#FFF0F0":"#F8F4F0"}">${icon}</div>
-        <div class="ta-remind-content">
+        <div class="ta-remind-icon" style="background:${r.done?"#F0EBE5":isToday?"#FBE8EB":isOverdue?"#FFF0F0":"#F8F4F0"};cursor:pointer;" data-action="edit" data-id="${r.id}" title="Düzenle">${icon}</div>
+        <div class="ta-remind-content" style="cursor:pointer;" data-action="edit" data-id="${r.id}">
           <div class="ta-remind-text">${esc(r.text)}</div>
           <div class="ta-remind-meta">${durum}${r.turne?` · <strong>${esc(r.turne)}</strong>`:""}</div>
         </div>
         <div class="ta-remind-actions">
+          <button class="ta-remind-btn" data-action="edit" data-id="${r.id}" title="Düzenle" style="color:#A0192E">✎</button>
           ${!r.done?`<button class="ta-remind-btn" data-action="done" data-id="${r.id}" title="Tamamlandı">✓</button>`:`<button class="ta-remind-btn" data-action="undone" data-id="${r.id}" title="Geri al">↩</button>`}
           <button class="ta-remind-btn" data-action="delete" data-id="${r.id}" title="Sil" style="color:#B53030">✕</button>
         </div>`;
       body.appendChild(item);
     }
 
-    body.querySelectorAll(".ta-remind-btn").forEach(btn=>{
+    body.querySelectorAll("[data-action]").forEach(btn=>{
       btn.addEventListener("click",()=>{
         const id=btn.dataset.id, action=btn.dataset.action;
+        if (action==="edit") { showEditForm(id); return; }
         let arr=loadReminders();
         if (action==="done"||action==="undone") { arr=arr.map(r=>r.id===id?{...r,done:action==="done"}:r); }
         else if (action==="delete") { arr=arr.filter(r=>r.id!==id); }
         saveReminders(arr); checkReminders(); renderReminders(); _reminderBadgeGuncelle();
       });
+    });
+  }
+
+  function showEditForm(id) {
+    const body=$i("ta-remind-body"); if(!body) return;
+    // Zaten açık bir edit form varsa kapat
+    body.querySelector(".ta-remind-edit-form")?.remove();
+    const r=loadReminders().find(x=>x.id===id); if(!r) return;
+    const turneOptions=DS?DS.turneler.map(t=>`<option value="${esc(t.oyun)}"${r.turne===t.oyun?" selected":""}>${esc(t.oyun)} — ${esc(t.il||"?")} · ${fmtTarih(t.baslangic)}</option>`).join(""):"";
+    const form=document.createElement("div");
+    form.className="ta-remind-form ta-remind-edit-form";
+    form.style.cssText="border-color:#A0192E;background:#FFF8F8;";
+    form.innerHTML=`
+      <div style="font-size:11px;font-weight:800;color:#A0192E;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;">✎ Hatırlatıcıyı Düzenle</div>
+      <div class="ta-field"><label>Hatırlatıcı Metni</label><input id="ef-text" value="${esc(r.text)}" placeholder="Hatırlatıcı metni…"></div>
+      <div class="ta-field-row">
+        <div class="ta-field"><label>Tür</label>
+          <select id="ef-type">
+            <option value="diger" ${(r.type||"diger")==="diger"?"selected":""}>🔔 Genel</option>
+            <option value="turne" ${r.type==="turne"?"selected":""}>🎭 Turne</option>
+            <option value="otel" ${r.type==="otel"?"selected":""}>🏨 Otel</option>
+            <option value="ulasim" ${r.type==="ulasim"?"selected":""}>🚌 Ulaşım</option>
+            <option value="odeme" ${r.type==="odeme"?"selected":""}>💰 Ödeme</option>
+            <option value="toplanti" ${r.type==="toplanti"?"selected":""}>📅 Toplantı</option>
+          </select>
+        </div>
+        <div class="ta-field"><label>Tarih</label><input id="ef-date" type="date" value="${r.date||""}"></div>
+      </div>
+      ${turneOptions?`<div class="ta-field"><label>İlgili Turne</label><select id="ef-turne"><option value="">— Seçiniz —</option>${turneOptions}</select></div>`:""}
+      <div style="display:flex;gap:6px;margin-top:2px;">
+        <button class="ta-btn ta-btn-primary" id="ef-save" style="flex:1">💾 Kaydet</button>
+        <button class="ta-btn ta-btn-secondary" id="ef-cancel">İptal</button>
+      </div>`;
+    // İlgili item'ın hemen altına ekle
+    const items=[...body.children];
+    const targetItem=items.find(el=>el.querySelector?.(`[data-id="${id}"]`));
+    if (targetItem) targetItem.after(form);
+    else body.insertBefore(form, body.children[2]||null);
+    $i("ef-text")?.focus();
+    $i("ef-cancel")?.addEventListener("click",()=>form.remove());
+    $i("ef-save")?.addEventListener("click",()=>{
+      const text=($i("ef-text")?.value||"").trim();
+      if (!text) { $i("ef-text").style.borderColor="#A0192E"; return; }
+      let arr=loadReminders();
+      arr=arr.map(x=>x.id===id?{...x,text,type:$i("ef-type")?.value||x.type,date:$i("ef-date")?.value||x.date,turne:$i("ef-turne")?.value??x.turne}:x);
+      saveReminders(arr); checkReminders(); form.remove(); renderReminders(); _reminderBadgeGuncelle();
+      showToast("✅ Hatırlatıcı güncellendi",1800);
     });
   }
 
@@ -3506,6 +3558,7 @@
   const SUGS = [
     { t: "Sabah brifingi ☀️", q: "Sabah brifingi" },
     { t: "Bugün ne var? 📅", q: "Bugün ne var?" },
+    { t: "🔔 Hatırlatıcı öner", q: "Hatırlatıcı öner" },
     { t: "Bingo oyna 🎲", q: "Bingo oyna" },
     { t: "📖 Soru Rehberi", open: "sorular" },
   ];
@@ -3519,7 +3572,32 @@
     sugs.appendChild(b);
   }
 
-  loadData().then(()=>{ setTimeout(_reminderBadgeGuncelle, 1500); });
+  loadData().then(()=>{
+    setTimeout(_reminderBadgeGuncelle, 1500);
+    // Kullanıcı tanıma — sayfadaki kullanıcı adına göre kişisel selamlama
+    setTimeout(()=>{
+      try {
+        const kullanici = document.querySelector('.kullanici-adi, [data-kullanici], #user-name, .navbar .username')?.textContent?.trim()
+          || document.querySelector('nav')?.textContent?.match(/Alper\s+\w+/i)?.[0]
+          || document.title?.match(/Alper\s+\w+/i)?.[0]
+          || "";
+        if (!kullanici || !DS) return;
+        const normK = norm(kullanici);
+        // Sistemdeki turne kaydı var mı?
+        const kisiTurneler = DS.turneler.filter(t=>t.katilimcilar.some(k=>norm(k.kisi).includes(normK.split(" ")[0])));
+        if (!kisiTurneler.length) return;
+        const turne_say = kisiTurneler.filter(t=>!t.statu.includes("iptal")).length;
+        const gun_say = kisiTurneler.filter(t=>!t.statu.includes("iptal")).reduce((s,t)=>s+turneGun(t),0);
+        const sehirler = new Set(kisiTurneler.flatMap(t=>[...collectUniqueCitiesFromTour(t)]));
+        const hosgeldi = document.createElement("div");
+        hosgeldi.className = "ta-msg bot";
+        hosgeldi.style.cssText = "background:linear-gradient(135deg,#FBE8EB,#FFF3E8);border:1px solid #E0C4A8;font-size:12px;";
+        hosgeldi.innerHTML = `<strong style="color:#A0192E">👑 ${esc(kullanici.split(" ")[0])}'e özel:</strong> Sistemde <strong>${turne_say} turnende</strong> <strong>${gun_say} gün</strong> yoldasın, <strong>${sehirler.size} şehir</strong> gördün! 🎭`;
+        const msgs2 = document.getElementById("ta-msgs");
+        if (msgs2) { msgs2.appendChild(hosgeldi); msgs2.scrollTop = msgs2.scrollHeight; }
+      } catch(e) {}
+    }, 2500);
+  });
   setInterval(()=>{ checkReminders(); _reminderBadgeGuncelle(); }, 60000);
 
   // Yeni turne kaydedilince veya silinince veriyi yenile
