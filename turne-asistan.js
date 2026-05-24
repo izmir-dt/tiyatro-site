@@ -865,7 +865,8 @@
       return o;
     }
     /* KİŞİ */
-    const found=findPerson(Q,T);
+    const _isWaQuery=/(whatsapp|wp|w\.a\.|wapp|kadro.*gönder|kadro.*gonder|gönder.*kadro|gonder.*kadro|kadro.*paylaş|paylaş.*kadro|mesaj.*kadro)/.test(Q);
+    const found=_isWaQuery?null:findPerson(Q,T);
     if (found) {
       const list=T.filter(t=>t.katilimcilar.some(k=>norm(k.kisi)===norm(found.kisi)));
       if (!list.length) return `**${found.kisi}** henüz hiçbir turneye atanmamış.`;
@@ -892,7 +893,7 @@
       return {html:o};
     }
     /* OYUN DETAYI — oyun adı yazılınca hem bilgi hem düzenle butonu */
-    for (const t of T) {
+    if (!_isWaQuery) for (const t of T) {
       if (norm(t.oyun).split(" ").filter(p=>p.length>=4).some(p=>Q.includes(p))) {
         const dur=parseDurakOteller(t.duraklar);
         const ulasimIcon = (u) => u && /(uçak|ucak|thy|pegasus|sunexpress|anadolu|boeing|airbus|havayolu|hava yolu|flight)/i.test(u) ? "✈️" : "🚌";
@@ -1957,9 +1958,16 @@
     T.filter(t=>!t.statu.includes("iptal")).forEach(t=>{const ils=new Set();if(t.il)ils.add(t.il);(t.duraklar||[]).forEach(d=>{if(d.il)ils.add(d.il);});ils.forEach(il=>ilMap.set(il,(ilMap.get(il)||0)+1));});
     const topIller=[...ilMap.entries()].sort((a,b)=>b[1]-a[1]).slice(0,8);
 
-    // Kişi sıklığı (iptal hariç)
-    const kisiMap=new Map();
-    T.filter(t=>!t.statu.includes("iptal")).forEach(t=>t.katilimcilar.forEach(k=>{kisiMap.set(k.kisi,(kisiMap.get(k.kisi)||0)+1);}));
+    // Kişi sıklığı — unique turne key ile çift sayımı önle (iptal hariç)
+    const kisiTurneSet=new Map();
+    T.filter(t=>!t.statu.includes("iptal")).forEach(t=>{
+      const turneKey=t.oyun+"||"+t.baslangic+"||"+t.il;
+      t.katilimcilar.forEach(k=>{
+        if(!kisiTurneSet.has(k.kisi))kisiTurneSet.set(k.kisi,new Set());
+        kisiTurneSet.get(k.kisi).add(turneKey);
+      });
+    });
+    const kisiMap=new Map([...kisiTurneSet.entries()].map(([k,s])=>[k,s.size]));
     const topKisiler=[...kisiMap.entries()].sort((a,b)=>b[1]-a[1]).slice(0,8);
 
     // Aylık dağılım
@@ -2086,4 +2094,6 @@
   loadData().then(()=>{ setTimeout(_reminderBadgeGuncelle, 1500); });
   setInterval(()=>{ checkReminders(); _reminderBadgeGuncelle(); }, 60000);
   window.__taAktar = aktarOtelFormuna;
+  // Sohbet balonlarındaki inline butonlar için global submit
+  window.__taSubmit = function(text){ submit(text); };
 })();
