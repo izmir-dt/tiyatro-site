@@ -12933,6 +12933,61 @@ function _memnuniyetTumunuSil(rowIdx, sessizce) {
   document.querySelectorAll('textarea[oninput*="_memnuniyetGenelNotKaydet"]').forEach(function(t2){ t2.value = ''; });
 }
 
+
+function _odaTopluTemizle(rowIdx) {
+  var t = turneler.find(function(x){ return x._rowIdx === rowIdx; });
+  if (!t) return;
+  var kat = t.katilimcilar || [];
+  if (!kat.length) return;
+
+  // Onay modal - custom (showToast yerine confirm benzeri)
+  var toplam = kat.filter(function(p){ return p.odaTip || p.munferit || p.odaEsi; }).length;
+  if (!toplam) {
+    if (typeof showToast === 'function') showToast('Zaten tüm atamalar boş.', 'info', 2000);
+    return;
+  }
+
+  onayGoster({
+    baslik: 'Oda Atamalarını Temizle',
+    mesaj: 'Bu turnenin tüm oda atamaları (' + toplam + ' kişi) sıfırlanacak. Bu işlem geri alınamaz.',
+    ikon: '🧹',
+    ikonBg: 'hsl(0,80%,96%)',
+    tamamRenk: '#b91c1c',
+    tamamYazi: 'Evet, Temizle',
+    onOnay: function() { _odaTopluTemizleYap(rowIdx, kat, t, toplam); }
+  });
+}
+
+function _odaTopluTemizleYap(rowIdx, kat, t, toplam) {
+  // Temizle
+  kat.forEach(function(p) {
+    delete p.odaTip;
+    delete p.odaEsi;
+    delete p.munferit;
+    delete p.odaAyrilisErken;
+    delete p.odaAyrilisGec;
+    delete p.odaNot;
+  });
+
+  // odaPlanlari'ı da temizle (plan içi atamalar)
+  if (t.odaPlanlari && t.odaPlanlari.length) {
+    t.odaPlanlari.forEach(function(plan) {
+      plan.odaTipleri = {};
+      plan.odaEsleri = {};
+      plan.munferitler = plan.munferitler ? {} : {};
+    });
+  }
+
+  // Sheets'e kaydet
+  if (typeof _konaklamaSheetKaydet === 'function') _konaklamaSheetKaydet(t);
+
+  // Sekmeyi sıfırla ve yeniden render
+  _konaklamaAktifSekme = 'tumü';
+  if (typeof _renderCardDetail === 'function') _renderCardDetail(rowIdx);
+
+  if (typeof showToast === 'function') showToast('🧹 ' + toplam + ' kişinin oda ataması temizlendi', 'success', 2500);
+}
+
 function _konaklamaSekmesiHTML(t, rowIdx) {
   var kat = t.katilimcilar || [];
   if (!kat.length) {
@@ -12968,7 +13023,10 @@ function _konaklamaSekmesiHTML(t, rowIdx) {
   var html = '<div>';
 
   // PDF butonu — üstteki tekrarlayan pill butonlar kaldırıldı, sadece PDF kalır
-  html += '<div style="display:flex;align-items:center;justify-content:flex-end;padding:6px 12px;background:var(--muted);border-bottom:1px solid var(--border)">'
+  html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 12px;background:var(--muted);border-bottom:1px solid var(--border)">'
+    + '<button onclick="_odaTopluTemizle(' + rowIdx + ')" title="Tüm oda atamalarını sıfırla" style="height:28px;padding:0 11px;border:1.5px solid #b91c1c;border-radius:6px;background:transparent;font-size:10.5px;font-weight:700;cursor:pointer;color:#b91c1c;display:inline-flex;align-items:center;gap:5px;transition:all .15s" onmouseover="this.style.background=\'#fef2f2\'" onmouseout="this.style.background=\'transparent\'">'
+    + '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>'
+    + 'Toplu Temizle</button>'
     + '<button onclick="_konaklamaPdfIndir(' + rowIdx + ')" style="height:28px;padding:0 12px;border:none;border-radius:6px;background:#6b1b1b;font-size:10.5px;font-weight:700;cursor:pointer;color:#fff">&#128196; PDF</button>'
     + '</div>';
 
