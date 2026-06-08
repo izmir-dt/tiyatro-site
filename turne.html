@@ -11569,7 +11569,11 @@ function turneCard(t, kucuk) {
   // Güzergah
   var sehirler = '';
   if (t.duraklar && t.duraklar.length > 1) {
-    sehirler = t.duraklar.map(function(d){ return temizIl(d.il||'?').toLocaleUpperCase('tr-TR'); }).join(' › ');
+    sehirler = t.duraklar.map(function(d){
+      var ilStr = temizIl(d.il||'?').toLocaleUpperCase('tr-TR');
+      var ilceStr = (d.ilce && d.ilce.trim() && d.ilce.toLowerCase()!=='merkez') ? ' / '+d.ilce : '';
+      return ilStr + ilceStr;
+    }).join(' › ');
   } else {
     sehirler = temizIl(durakIlStr(t)).toLocaleUpperCase('tr-TR') || '—';
   }
@@ -12232,24 +12236,35 @@ function _renderCardDetail(rowIdx) {
     });
     return idx < 0 ? false : (idx >= _ykKesCD.kesilenIndex);
   }
-  var _byCityT = {};
+  var _byCityT = {}; // key: "İL/İLÇE" veya "İL" (büyük harf)
   (function(){
     var ps = t.programSatirlar || [];
     var oyunRows = ps.filter(function(s){ return s.program === 'Oyun'; });
     oyunRows.forEach(function(s){
-      var rawCity = (s.sehir||'').split('/')[0];
-      var k = temizIl(rawCity).toUpperCase();
-      if (!k) return;
+      var sehirFull = (s.sehir||'').trim();
+      var parts = sehirFull.split('/');
+      var rawCity = parts[0];
+      var rawIlce = parts[1] ? parts[1].trim() : '';
+      // il+ilçe bazlı key (ilçe varsa) + sadece il bazlı key — ikisine de ekle
+      var kIl = temizIl(rawCity).toUpperCase();
+      var kFull = rawIlce ? (kIl + '/' + rawIlce.toLocaleUpperCase('tr-TR')) : kIl;
+      if (!kIl) return;
       var sNorm = (typeof _normIlAdi==='function') ? _normIlAdi(rawCity) : (rawCity||'').toLowerCase().trim();
-      if (_ykCityCut(sNorm)) { _byCityT[k] = _byCityT[k]||0; return; }
-      _byCityT[k] = (_byCityT[k]||0) + (s.saat2 ? 2 : 1);
+      if (_ykCityCut(sNorm)) { _byCityT[kFull] = _byCityT[kFull]||0; return; }
+      var ekle = s.saat2 ? 2 : 1;
+      _byCityT[kFull] = (_byCityT[kFull]||0) + ekle;
     });
   })();
   function _durakTemsil(d){
-    var k = temizIl(d.il||'').toUpperCase();
+    var kIl = temizIl(d.il||'').toUpperCase();
+    var kFull = (d.ilce && d.ilce.trim() && d.ilce.toLowerCase()!=='merkez')
+      ? (kIl + '/' + d.ilce.toLocaleUpperCase('tr-TR'))
+      : kIl;
     var ilNorm = (typeof _normIlAdi==='function') ? _normIlAdi(d.il||'') : (d.il||'').toLowerCase().trim();
     if (_ykCityCut(ilNorm)) return 0;
-    if (_byCityT[k] !== undefined) return _byCityT[k];
+    // Önce il+ilçe bazlı bak, sonra sadece il bazlı
+    if (_byCityT[kFull] !== undefined) return _byCityT[kFull];
+    if (_byCityT[kIl] !== undefined) return _byCityT[kIl];
     return parseInt(d.sayi||d.temsil||d.temsilSayisi||1) || 1;
   }
   var bilgiHtml = '';
@@ -12281,7 +12296,11 @@ function _renderCardDetail(rowIdx) {
     + '<div style="display:grid;grid-template-columns:90px 1fr;padding:7px 0">'
     +   '<span style="font-size:11px;font-weight:700;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.4px;padding-top:2px;line-height:1.4">Temsil</span>'
     +   '<span style="font-size:12px;line-height:1.45">' + toplamT + ' temsil'
-    +     (durakListeSS.length>1 ? ' <span style="font-size:11px;color:var(--muted-foreground)">('+durakListeSS.map(function(d){return temizIl(d.il||'')+':'+_durakTemsil(d);}).join(', ')+')</span>' : '')
+    +     (durakListeSS.length>1 ? ' <span style="font-size:11px;color:var(--muted-foreground)">('+durakListeSS.map(function(d){
+        var lbl = temizIl(d.il||'');
+        if (d.ilce && d.ilce.trim() && d.ilce.toLowerCase()!=='merkez') lbl += '/'+d.ilce;
+        return lbl+':'+_durakTemsil(d);
+      }).join(', ')+')</span>' : '')
     +   '</span>'
     + '</div>'
     + '</div>';
@@ -27991,7 +28010,8 @@ function programGunOtoDoldur(idx, tarihStr) {
 function programSatirEkle(tarih, gun, program, saat, saat2) {
   var gecerliDuraklar = duraklar.filter(function(d){ return d.il && d.il.trim(); });
   var defaultSehir = gecerliDuraklar.length ? gecerliDuraklar[0].il + (gecerliDuraklar[0].ilce ? '/' + gecerliDuraklar[0].ilce : '') : 'İzmir';
-  programSatirlar.push({ tarih: tarih||'', gun: gun||'', program: program||'Yol', saat: saat||'', saat2: saat2||'', sehir: defaultSehir });
+  var defaultSaat = (program === 'Oyun') ? '20:00' : '';
+  programSatirlar.push({ tarih: tarih||'', gun: gun||'', program: program||'Yol', saat: saat||defaultSaat, saat2: saat2||'', sehir: defaultSehir });
   renderProgramGunler();
   try { _wzGorevGuncelle(window._aktifModalIdx || 0); } catch(e){}
   try { _wzAdimDaireGuncelle(window._aktifModalIdx || 0); } catch(e){}
@@ -28150,7 +28170,7 @@ function programTarihlerOtoDoldur() {
         var dtX = parseLocalDate(bas); dtX.setDate(dtX.getDate() + gunSayaci);
         if (dtX > endD) break;
         programSatirlar.push({ tarih: _localStr(dtX), gun: GUNLER[dtX.getDay()],
-          program: 'Oyun', saat: '20:30', sehir: dur.il + (dur.ilce ? '/' + dur.ilce : ''), oyun: durakOyun });
+          program: 'Oyun', saat: '20:00', sehir: dur.il + (dur.ilce ? '/' + dur.ilce : ''), oyun: durakOyun });
         gunSayaci++;
       }
       // Sonraki durağa geçiş günü (son durak değilse)
@@ -28175,7 +28195,7 @@ function programTarihlerOtoDoldur() {
       var sehirI = gecerliDuraklar.length ? gecerliDuraklar[0].il + (gecerliDuraklar[0].ilce ? '/' + gecerliDuraklar[0].ilce : '') : '';
       if (sure > 1 && i===sure-1) sehirI = 'İzmir';
       programSatirlar.push({ tarih: _localStr(dtI), gun: GUNLER[dtI.getDay()],
-        program: prog, saat: prog==='Oyun'?'20:30':'', sehir: sehirI, oyun: prog==='Oyun'?mOyunVal:'' });
+        program: prog, saat: prog==='Oyun'?'20:00':'', sehir: sehirI, oyun: prog==='Oyun'?mOyunVal:'' });
     }
   }
   renderProgramGunler();
