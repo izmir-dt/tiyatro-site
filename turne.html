@@ -24470,7 +24470,27 @@ function _pdfIcerik(t) {
         + '<td class="td-bold" style="white-space:nowrap">'+(s.tarih?s.tarih.split('-').reverse().join('/'):'—')+'</td>'
         + '<td class="td-std">'+(s.gun||'—')+'</td>'
         + '<td class="td-bold">'+(s.sehir ? s.sehir.toLocaleUpperCase('tr-TR') : '—')+'</td>'
-        + '<td style="font-size:10px;color:#555">'+(s.program==='Oyun'?(_temizleMekan(s.mekan)||'—'):'—')+'</td>'
+        + '<td style="font-size:10px;color:#555">'+(function(){
+            function _nrm(s){ return (s||'').toString().toLowerCase().replace(/İ/g,'i').replace(/I/g,'ı').replace(/Ğ/g,'ğ').replace(/Ü/g,'ü').replace(/Ş/g,'ş').replace(/Ö/g,'ö').replace(/Ç/g,'ç').trim(); }
+            var _mekan = _temizleMekan(s.mekan);
+            if (_mekan) return _mekan;
+            var _duraklar = (t.duraklar && t.duraklar.length) ? t.duraklar : (t.il ? [{ il:t.il, mekan:t.mekan||'', oyun:t.oyun||'' }] : []);
+            var _sehirNorm = _nrm((s.sehir||'').replace(/\/MERKEZ/gi,''));
+            if (!_sehirNorm) return _temizleMekan(t.mekan) || '\u2014';
+            var _ayniIl = _duraklar.filter(function(d){
+              var _ilNorm = _nrm((typeof _temizleIlPdf==='function'?_temizleIlPdf(d.il||''):(d.il||'')).replace(/\/MERKEZ/gi,''));
+              return (_ilNorm===_sehirNorm || _ilNorm.indexOf(_sehirNorm)>=0 || _sehirNorm.indexOf(_ilNorm)>=0) && d.mekan && d.mekan.trim();
+            });
+            if (_ayniIl.length === 1) return _temizleMekan(_ayniIl[0].mekan) || '\u2014';
+            if (_ayniIl.length > 1 && s.oyun) {
+              var _oyunNorm = _nrm(s.oyun);
+              var _eslesen = _ayniIl.find(function(d){ return _nrm(d.oyun||'') === _oyunNorm; });
+              if (_eslesen) return _temizleMekan(_eslesen.mekan) || '\u2014';
+            }
+            var _tekMekan = _ayniIl.map(function(d){ return _temizleMekan(d.mekan); }).filter(function(m,i,a){ return m && a.indexOf(m)===i; });
+            return (_tekMekan.length === 1 ? _tekMekan[0] : (_temizleMekan(t.mekan) || '\u2014'));
+          })()+'</td>'
+
         + '<td style="font-size:11px;font-weight:700;color:'+bc+'">'+programLabel+oyunHtml+'</td>'
         + '<td class="td-saat">'
         + ((s.program==='Oyun'&&s.saat) ? '<strong>'+s.saat+'</strong>' : '\u2014')
@@ -25752,11 +25772,32 @@ function _pdfProgramPersonelIcerik(t) {
         ? ' <span style="color:#1a1a1a;font-weight:800"> \u00b7 ' + s.oyun + '</span>' : '';
       var saatHtml = (s.program==='Oyun'&&s.saat) ? '<strong style="font-size:12px">' + s.saat + '</strong>' : '\u2014';
       if (s.program==='Oyun'&&s.saat2) saatHtml += ' / <strong style="font-size:12px;color:#16a34a">' + s.saat2 + '</strong>';
+      var mekanHtml = (function() {
+        function _nrm(s){ return (s||'').toString().toLowerCase().replace(/İ/g,'i').replace(/I/g,'ı').replace(/Ğ/g,'ğ').replace(/Ü/g,'ü').replace(/Ş/g,'ş').replace(/Ö/g,'ö').replace(/Ç/g,'ç').trim(); }
+        var _mekan = _temizleMekan(s.mekan);
+        if (_mekan) return _mekan;
+        var _duraklar = (t.duraklar && t.duraklar.length) ? t.duraklar : (t.il ? [{ il:t.il, mekan:t.mekan||'', oyun:t.oyun||'' }] : []);
+        var _sehirNorm = _nrm((s.sehir||'').replace(/\/MERKEZ/gi,''));
+        if (!_sehirNorm) return _temizleMekan(t.mekan) || '\u2014';
+        var _ayniIl = _duraklar.filter(function(d) {
+          var _ilNorm = _nrm((typeof _temizleIlPdf==='function'?_temizleIlPdf(d.il||''):(d.il||'')).replace(/\/MERKEZ/gi,''));
+          return (_ilNorm===_sehirNorm || _ilNorm.indexOf(_sehirNorm)>=0 || _sehirNorm.indexOf(_ilNorm)>=0) && d.mekan && d.mekan.trim();
+        });
+        if (_ayniIl.length === 1) return _temizleMekan(_ayniIl[0].mekan) || '\u2014';
+        if (_ayniIl.length > 1 && s.oyun) {
+          var _oyunNorm = _nrm(s.oyun);
+          var _eslesen = _ayniIl.find(function(d){ return _nrm(d.oyun||'') === _oyunNorm; });
+          if (_eslesen) return _temizleMekan(_eslesen.mekan) || '\u2014';
+        }
+        var _tekMekan = _ayniIl.map(function(d){ return _temizleMekan(d.mekan); }).filter(function(m,i,a){ return m && a.indexOf(m)===i; });
+        return (_tekMekan.length === 1 ? _tekMekan[0] : (_temizleMekan(t.mekan) || '\u2014'));
+      })();
+
       return '<tr style="background:' + bg + ';border-left:3px solid ' + bc + '">'
         + '<td style="padding:5px 9px;border:1px solid #e0d8d0;font-size:10.5px;font-weight:700;white-space:nowrap">' + (s.tarih ? s.tarih.split('-').reverse().join('/') : '\u2014') + '</td>'
         + '<td style="padding:5px 9px;border:1px solid #e0d8d0;font-size:12px;color:#111;font-weight:700">' + (s.gun||'\u2014') + '</td>'
         + '<td style="padding:5px 9px;border:1px solid #e0d8d0;font-size:11px;font-weight:700">' + (s.sehir ? s.sehir.toLocaleUpperCase('tr-TR') : '\u2014') + '</td>'
-        + '<td style="padding:5px 9px;border:1px solid #e0d8d0;font-size:10px;color:#555">' + (s.program==='Oyun'?(_temizleMekan(s.mekan)||'\u2014'):'\u2014') + '</td>'
+        + '<td style="padding:5px 9px;border:1px solid #e0d8d0;font-size:10px;color:#555">' + mekanHtml + '</td>'
         + '<td style="padding:5px 9px;border:1px solid #e0d8d0;font-size:10.5px;font-weight:700;color:' + bc + '">' + (s.program||'') + oyunHtml + '</td>'
         + '<td style="padding:5px 9px;border:1px solid #e0d8d0;font-size:11px;text-align:center">' + saatHtml + '</td>'
         + '</tr>';
@@ -30308,9 +30349,7 @@ function _pdfTurneDosyasiIcerik(t, opts) {
       }
       return '';
     })()||'';
-    // Sahne sadece oyun/prova günlerinde gösterilsin
-    var _gosterSahne=/oyun/i.test(s.program||'');
-    var _sahneVal=(_gosterSahne&&_sahneRaw)?_temizleMekan(_sahneRaw):'';
+    var _sahneVal=_sahneRaw?_temizleMekan(_sahneRaw):'';
     var sahneH=_sahneVal
       ?'<div style="font-weight:400;color:#666;font-size:8.5pt;margin-top:1pt;white-space:normal;line-height:1.3">'+_sahneVal+'</div>':'';
     // Program adı
