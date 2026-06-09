@@ -1471,17 +1471,17 @@ function _leafletYukle(callback) {
     .cards-group { margin-bottom:22px; }
     .cards-group-header {
       display:flex; align-items:center; gap:10px; margin-bottom:10px;
-      padding:9px 14px;
-      background:linear-gradient(135deg, hsl(38,30%,96%) 0%, hsl(38,20%,98%) 100%);
-      border:1.5px solid hsl(38,35%,82%);
+      padding:10px 16px;
+      background:linear-gradient(135deg, hsl(220,30%,96%) 0%, hsl(38,25%,97%) 100%);
+      border:1.5px solid hsl(220,20%,84%);
       border-left:4px solid var(--primary);
       border-radius:10px;
       cursor:pointer;
-      box-shadow: 0 1px 3px rgba(0,0,0,.06), 0 2px 8px -4px rgba(180,110,0,.12);
+      box-shadow: 0 1px 4px rgba(0,0,0,.07), 0 2px 10px -4px rgba(180,110,0,.10);
       transition: all .15s ease;
     }
     .cards-group-header:hover {
-      background:linear-gradient(135deg, hsl(38,45%,92%) 0%, hsl(38,30%,95%) 100%);
+      background:linear-gradient(135deg, hsl(220,40%,93%) 0%, hsl(38,35%,94%) 100%);
       border-color: hsl(38,55%,70%);
       box-shadow: 0 2px 6px rgba(0,0,0,.08), 0 4px 14px -4px rgba(180,110,0,.18);
       transform: translateY(-1px);
@@ -1492,8 +1492,23 @@ function _leafletYukle(callback) {
       border-left-color: var(--primary);
     }
     [data-theme="dark"] .cards-group-header:hover { background: hsl(222,18%,22%); }
-    .cards-group-title { font-size:13px; font-weight:800; color:var(--foreground); flex:1; letter-spacing:0.8px; text-transform:uppercase; }
-    .cards-group-count { font-size:11px; font-weight:700; color:var(--muted-foreground); background:var(--muted); padding:2px 9px; border-radius:20px; border:1px solid var(--border); white-space:nowrap; }
+    .cards-group-title {
+      font-size:15px; font-weight:900; color:var(--foreground);
+      flex:1; letter-spacing:-.2px; text-transform:none;
+    }
+    .cards-group-count {
+      font-size:11px; font-weight:800;
+      color:hsl(220,55%,32%);
+      background:hsl(220,55%,93%);
+      padding:3px 10px; border-radius:20px;
+      border:1.5px solid hsl(220,45%,78%);
+      white-space:nowrap;
+    }
+    [data-theme="dark"] .cards-group-count {
+      color:hsl(220,65%,72%);
+      background:hsl(220,30%,22%);
+      border-color:hsl(220,30%,35%);
+    }
     .harita-tablo-row { cursor:pointer; transition:background .15s; }
     .harita-tablo-row:hover { background: hsl(38,50%,97%); }
     .leaflet-container {  }
@@ -10045,6 +10060,69 @@ let kisiModalSecili = [];
 function statuRenk(val) {
   return STATU_OPTS.find(x => x.val === val) || { val: val, label: val || 'Taslak', bg:'#e5e7eb', fg:'#374151', border:'#d1d5db', headerBg:'#1f2937', headerFg:'#f3f4f6', headerBorder:'#374151' , calIcon:'◇' };
 }
+
+// ── Kart üzerinden hızlı statü değiştirme ──────────────────────────────────
+var _kartStatuMenu = null;
+function kartStatuToggle(e, rowIdx) {
+  e.stopPropagation();
+  // Varsa kapat
+  if (_kartStatuMenu) { _kartStatuMenu.remove(); _kartStatuMenu = null; return; }
+  var t = turneler.find(function(x){ return x._rowIdx === rowIdx; });
+  if (!t) return;
+  var btn = e.currentTarget;
+  var rect = btn.getBoundingClientRect();
+  var menu = document.createElement('div');
+  _kartStatuMenu = menu;
+  menu.style.cssText = 'position:fixed;z-index:9999;background:var(--card);border:1.5px solid var(--border);border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.15);padding:5px;min-width:168px;animation:fadeInScale .12s ease-out';
+  menu.style.top  = (rect.bottom + 4) + 'px';
+  menu.style.left = rect.left + 'px';
+  // Sağa taşma önleme
+  setTimeout(function(){
+    var mw = menu.offsetWidth;
+    if (rect.left + mw > window.innerWidth - 8) menu.style.left = (window.innerWidth - mw - 8) + 'px';
+  }, 0);
+  STATU_OPTS.forEach(function(opt) {
+    var item = document.createElement('button');
+    var isActive = t.statu === opt.val;
+    item.type = 'button';
+    item.style.cssText = 'width:100%;display:flex;align-items:center;gap:8px;padding:7px 10px;border:none;border-radius:7px;cursor:pointer;font-size:12px;font-weight:' + (isActive ? '800' : '600') + ';background:' + (isActive ? opt.bg : 'transparent') + ';color:' + opt.fg + ';text-align:left;transition:background .12s';
+    item.innerHTML = opt.svg + '<span>' + opt.label + '</span>' + (isActive ? '<svg style="margin-left:auto;flex-shrink:0" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>' : '');
+    item.onmouseenter = function(){ if (!isActive) this.style.background = opt.bg; };
+    item.onmouseleave = function(){ if (!isActive) this.style.background = 'transparent'; };
+    item.onclick = function(ev) {
+      ev.stopPropagation();
+      if (t.statu === opt.val) { menu.remove(); _kartStatuMenu = null; return; }
+      var prevStatu = t.statu;
+      t.statu = opt.val;
+      menu.remove(); _kartStatuMenu = null;
+      renderListe();
+      renderCalendar && renderCalendar();
+      apiFetch('/' + encodeURIComponent(TURNE_SHEET) + '/cell', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ row: rowIdx + 2, col: 7, value: opt.val })
+      }).then(function(res) {
+        if (res.ok) {
+          showToast && showToast('✓ Durum güncellendi: ' + opt.label, 'success', 2200);
+        } else {
+          t.statu = prevStatu; renderListe();
+          showToast && showToast('Durum kaydedilemedi', 'error', 2500);
+        }
+      }).catch(function() {
+        t.statu = prevStatu; renderListe();
+        showToast && showToast('Bağlantı hatası', 'error', 2500);
+      });
+    };
+    menu.appendChild(item);
+  });
+  document.body.appendChild(menu);
+  // Dışarı tıklamada kapat
+  setTimeout(function(){
+    function _kapsat(ev) {
+      if (!menu.contains(ev.target)) { menu.remove(); _kartStatuMenu = null; document.removeEventListener('click', _kapsat, true); }
+    }
+    document.addEventListener('click', _kapsat, true);
+  }, 10);
+}
 function turneSuresi(t) {
   try {
     if (t.baslangicTarih && t.bitisTarih && t.bitisTarih >= t.baslangicTarih) {
@@ -11599,11 +11677,14 @@ function renderListe() {
       var ayGizli = (window._ayTamamlandiGizli||{})[key];
 
       html += '<div class="cards-group">'
-        + '<div class="cards-group-header" onclick="grupToggle(\'__ay__' + key + '\')" style="border-left:3px solid var(--primary)">'
-        + '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="transition:.2s;transform:rotate(' + (collapsed?'-90':'0') + 'deg)"><polyline points="6,9 12,15 18,9"/></svg>'
-        + '<span class="cards-group-title" style="display:flex;align-items:center;gap:6px">'
-        +   '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2.5"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>'
-        +   g.label + ayDurumBadge
+        + '<div class="cards-group-header" onclick="grupToggle(\'__ay__' + key + '\')" style="border-left:4px solid var(--primary)">'
+        + '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="transition:.2s;transform:rotate(' + (collapsed?'-90':'0') + 'deg);flex-shrink:0"><polyline points="6,9 12,15 18,9"/></svg>'
+        + '<span class="cards-group-title" style="display:flex;align-items:center;gap:8px">'
+        +   '<span style="display:inline-flex;align-items:baseline;gap:5px">'
+        +     '<span style="font-size:16px;font-weight:900;letter-spacing:-.3px;color:var(--foreground)">' + _AYLAR_TR[new Date(key).getMonth()] + '</span>'
+        +     '<span style="font-size:12px;font-weight:700;color:var(--muted-foreground);letter-spacing:0">' + key.slice(0,4) + '</span>'
+        +   '</span>'
+        +   ayDurumBadge
         +   '<button onclick="event.stopPropagation();if(!window._ayKucuk)window._ayKucuk={};window._ayKucuk[\'' + key + '\']=!window._ayKucuk[\'' + key + '\'];renderListe()" '
           + 'title="Kartları küçült / büyüt" '
           + 'style="height:20px;width:20px;border-radius:4px;border:1px solid ' + ((window._ayKucuk||{})[key] ? 'hsl(215,60%,60%)' : 'var(--border)') + ';'
@@ -12061,7 +12142,9 @@ function turneCard(t, kucuk) {
         return '<div style="padding:8px 12px;background:' + (st.bandBg||st.dot) + ';display:flex;align-items:center;justify-content:space-between;flex-shrink:0;gap:8px;border-bottom:1px solid rgba(0,0,0,.10)">'
           + '<span style="display:inline-flex;align-items:center;gap:6px;min-width:0">'
           +   '<span class="toplu-cb-icon" style="display:' + (_topluSecModuAktif ? 'inline-flex' : 'none') + ';width:16px;height:16px;border-radius:4px;border:1.5px solid rgba(255,255,255,.6);background:rgba(0,0,0,.15);align-items:center;justify-content:center;flex-shrink:0;transition:all .15s"></span>'
-          +   '<span style="font-size:12px;font-weight:700;color:' + (st.bandFg||'#fff') + ';display:inline-flex;align-items:center;gap:5px;letter-spacing:0;white-space:nowrap"><span style="width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.85);display:inline-block;flex-shrink:0"></span>' + st.label + '</span>'
+          +   (window._goruntuleme_modu
+                ? '<span style="font-size:12px;font-weight:700;color:' + (st.bandFg||'#fff') + ';display:inline-flex;align-items:center;gap:5px;letter-spacing:0;white-space:nowrap"><span style="width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.85);display:inline-block;flex-shrink:0"></span>' + st.label + '</span>'
+                : '<button type="button" onclick="event.stopPropagation();kartStatuToggle(event,' + t._rowIdx + ')" title="Durumu değiştir" style="font-size:12px;font-weight:700;color:' + (st.bandFg||'#fff') + ';display:inline-flex;align-items:center;gap:5px;letter-spacing:0;white-space:nowrap;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.28);border-radius:6px;padding:3px 8px 3px 6px;cursor:pointer;transition:background .12s" onmouseenter="this.style.background=\'rgba(255,255,255,.22)\'" onmouseleave="this.style.background=\'rgba(255,255,255,.12)\'"><span style="width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.85);display:inline-block;flex-shrink:0"></span>' + st.label + '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="opacity:.7;margin-left:1px"><polyline points="6 9 12 15 18 9"/></svg></button>')
           + '</span>'
           + '<span style="display:inline-flex;align-items:center;gap:6px;flex-shrink:0">'
           +   (t._ekGrupSay ? '<span style="font-size:9.5px;font-weight:800;color:hsl(270,55%,38%);background:rgba(255,255,255,.92);padding:2px 8px;border-radius:10px;border:1px solid hsl(270,45%,78%);letter-spacing:.2px;white-space:nowrap"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0;vertical-align:middle;margin-right:2px"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>' + t._ekGrupSay + ' ek grup</span>' : '')
@@ -12118,9 +12201,16 @@ function turneCard(t, kucuk) {
         var onayRaw = _olurNoChipHtml(t);
         var onayInline = onayRaw.replace('<div class="olur-chip-wrap">','').replace(/<\/div>\s*$/,'');
         return '<div class="tk-title-block">'
-          +   '<div class="tk-oyun-adi' + (t.oyun ? '' : ' no-oyun') + '" style="font-size:18px;font-weight:900;letter-spacing:-.5px;line-height:1.2;color:' + (t.oyun ? 'var(--foreground)' : 'hsl(0,72%,42%)') + '">' + (t.oyun||'⚠ Oyun seçilmedi') + '</div>'
+          +   '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:10px">'
+          +     '<div class="tk-oyun-adi' + (t.oyun ? '' : ' no-oyun') + '" style="font-size:18px;font-weight:900;letter-spacing:-.5px;line-height:1.2;flex:1;min-width:0;color:' + (t.oyun ? 'var(--foreground)' : 'hsl(0,72%,42%)') + '">' + (t.oyun||'⚠ Oyun seçilmedi') + '</div>'
+          +     (sure > 0 ? '<span style="flex-shrink:0;display:inline-flex;align-items:center;gap:3px;font-size:12px;font-weight:800;padding:4px 10px;border-radius:20px;background:hsl(38,85%,90%);color:hsl(38,65%,25%);border:1.5px solid hsl(38,70%,72%);white-space:nowrap;letter-spacing:-.2px;margin-top:1px"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><polyline points="12,7 12,12 15,14"/></svg>' + sure + ' gün</span>' : '')
+          +   '</div>'
           +   '<div class="tk-date-row">' + dateContent + '</div>'
-          +   (onayInline.trim() ? '<div class="tk-meta-row" style="margin-top:7px">' + onayInline + '</div>' : '')
+          +   (onayInline.trim()
+                ? '<div style="margin:0 -14px;padding:7px 14px 0;border-top:2px solid hsl(220,18%,88%);margin-top:8px">'
+                  + '<div class="tk-meta-row">' + onayInline + '</div>'
+                  + '</div>'
+                : '')
           +   (_festivalAdi
               ? '<div style="margin:8px -14px -11px;padding:6px 14px;background:linear-gradient(90deg,hsl(345,55%,38%),hsl(345,60%,46%));display:flex;align-items:center;gap:6px">'
                 + '<svg width="11" height="11" viewBox="0 0 24 24" fill="rgba(255,255,255,.95)" style="flex-shrink:0"><polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26 12,2"/></svg>'
