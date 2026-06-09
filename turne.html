@@ -10781,7 +10781,40 @@ async function fetchTurneler(zorlaYenile) {
       })(),
       programSatirlar: (() => {
         var raw = (r[40]||'');
-        try { var p = JSON.parse(raw); return Array.isArray(p) ? p : []; } catch(e) { return []; }
+        try {
+          var p = JSON.parse(raw);
+          if (!Array.isArray(p)) return [];
+          // Tarih kayması düzeltmesi: programSatirlar içindeki tarihler baslangicTarih ile
+          // uyumsuzsa (farklı ay/yıl), tarihleri baslangicTarih'e göre kaydır.
+          var basISO = (r[2]||'').trim();
+          if (basISO && basISO.match(/^\d{4}-\d{2}-\d{2}$/) && p.length > 0) {
+            var firstTarih = (p[0].tarih||'');
+            if (firstTarih.match(/^\d{4}-\d{2}-\d{2}$/)) {
+              var expectedYear = parseInt(basISO.slice(0,4));
+              var expectedMonth = parseInt(basISO.slice(5,7));
+              var psYear = parseInt(firstTarih.slice(0,4));
+              var psMonth = parseInt(firstTarih.slice(5,7));
+              var ayFark = (psYear*12+psMonth) - (expectedYear*12+expectedMonth);
+              if (Math.abs(ayFark) > 2) {
+                // Tüm programSatirlar tarihlerini aynı fark kadar kaydır
+                var GUNLER = ['Pazar','Pazartesi','Salı','Çarşamba','Perşembe','Cuma','Cumartesi'];
+                return p.map(function(s) {
+                  if (!s.tarih || !s.tarih.match(/^\d{4}-\d{2}-\d{2}$/)) return s;
+                  // Orijinal tarihten gün sayısını hesapla, başlangıç farkına göre yeni tarih oluştur
+                  var origMs = new Date(parseInt(s.tarih.slice(0,4)), parseInt(s.tarih.slice(5,7))-1, parseInt(s.tarih.slice(8,10))).getTime();
+                  var firstMs = new Date(psYear, psMonth-1, parseInt(firstTarih.slice(8,10))).getTime();
+                  var basMs   = new Date(expectedYear, expectedMonth-1, parseInt(basISO.slice(8,10))).getTime();
+                  var offsetMs = origMs - firstMs;
+                  var newMs = basMs + offsetMs;
+                  var newD = new Date(newMs);
+                  var newISO = newD.getFullYear() + '-' + String(newD.getMonth()+1).padStart(2,'0') + '-' + String(newD.getDate()).padStart(2,'0');
+                  return Object.assign({}, s, { tarih: newISO, gun: GUNLER[newD.getDay()] });
+                });
+              }
+            }
+          }
+          return p;
+        } catch(e) { return []; }
       })(),
       afisUrl:        (r[41] || '').trim(),
       anaGrupId:      (function(){
@@ -22833,8 +22866,22 @@ function _calGunEvents(key) {
     var bas = t.baslangicTarih || t.tarih || '';
     var bit = t.bitisTarih || t.tarih || '';
     if (t.programSatirlar && t.programSatirlar.length > 0) {
+      // Güvenlik: programSatirlar'ın bu gün için eşleşmesi + baslangicTarih/bitisTarih ile makul aralıkta olması
       var gunSat = t.programSatirlar.filter(function(s){ return s.tarih === key; });
       if (!gunSat.length) return false;
+      // Ek kontrol: eğer bas ve bit mevcutsa, key bu aralığın çok dışındaysa (>90 gün) gösterme
+      if (bas && bit) {
+        var keyYear = parseInt(key.slice(0,4)), keyMonth = parseInt(key.slice(5,7)), keyDay = parseInt(key.slice(8,10));
+        var basYear = parseInt(bas.slice(0,4)), basMonth = parseInt(bas.slice(5,7)), basDay = parseInt(bas.slice(8,10));
+        var bitYear = parseInt(bit.slice(0,4)), bitMonth = parseInt(bit.slice(5,7)), bitDay = parseInt(bit.slice(8,10));
+        if (!isNaN(keyYear) && !isNaN(basYear) && !isNaN(bitYear)) {
+          var keyMs = new Date(keyYear, keyMonth-1, keyDay).getTime();
+          var basMs = new Date(basYear, basMonth-1, basDay).getTime();
+          var bitMs = new Date(bitYear, bitMonth-1, bitDay).getTime();
+          var tolerans = 90 * 86400000; // 90 gün tolerans
+          if (keyMs < basMs - tolerans || keyMs > bitMs + tolerans) return false;
+        }
+      }
       if (calTipFiltre) return gunSat.some(function(s){ return s.program === calTipFiltre; });
       return true;
     }
