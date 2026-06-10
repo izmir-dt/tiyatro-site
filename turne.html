@@ -96,8 +96,8 @@ body { unicode-bidi: plaintext; }
   border-radius:8px;
 }
 .tk-meta-row{display:flex;align-items:center;gap:5px;flex-wrap:wrap;row-gap:4px;min-height:0;margin-top:7px}
-.tk-date-pair{display:inline-flex;align-items:center;gap:8px;flex-wrap:nowrap;flex-shrink:1;min-width:0;overflow:hidden}
-.tk-date-seg{display:inline-flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:1}
+.tk-date-pair{display:inline-flex;align-items:center;gap:8px;flex-wrap:nowrap;flex-shrink:0;min-width:0;overflow:hidden}
+.tk-date-seg{display:inline-flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0}
 .tk-date-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
 
 /* Tarih metinleri — hiyerarşi net */
@@ -758,7 +758,7 @@ function _leafletYukle(callback) {
     }
 
     /* TURNE KARTLARI */
-    .cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; justify-content: stretch; align-items: stretch; }
+    .cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; align-items: stretch; }
     /* ── TURNE LİSTE GÖRÜNÜMÜ ── */
     .turne-list-view { display: none; }
     .turne-list-view.active { display: block; }
@@ -7607,10 +7607,10 @@ table td:first-child[style*="text-align:center"] {
 
 /* ── Büyük ekranlarda grid ── */
 @media (min-width: 1440px) {
-  .cards-grid { grid-template-columns: repeat(3, 1fr) !important; }
+  .cards-grid { grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)) !important; }
 }
 @media (min-width: 1100px) and (max-width: 1439px) {
-  .cards-grid { grid-template-columns: repeat(2, 1fr) !important; }
+  .cards-grid { grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)) !important; }
 }
 </style>
 
@@ -7632,6 +7632,20 @@ table td:first-child[style*="text-align:center"] {
 .turne-card-footer button { transition: transform .15s ease, background .15s ease, box-shadow .15s ease, border-color .15s ease !important; }
 .turne-card-footer button:hover { transform: translateY(-1px); box-shadow: 0 2px 6px rgba(0,0,0,.08); }
 </style>
+
+<style id="compact-card-mod">
+/* ── REFINED CARD MOD ── */
+.turne-card { border-radius: 12px !important; min-height: 0 !important; }
+.cards-grid { gap: 16px !important; }
+.turne-card-header { padding: 10px 14px !important; }
+.turne-card-title { font-size: 14px !important; font-weight: 750 !important; line-height: 1.3 !important; }
+.turne-card-body, .tc-body { padding: 8px 14px !important; }
+.turne-card-footer { padding: 7px 14px !important; }
+.turne-info-row { font-size: 11px !important; margin-bottom: 5px !important; }
+.badge-statu { font-size: 10.5px !important; padding: 2px 9px !important; }
+.turne-card-badge { font-size: 10.5px !important; padding: 2px 8px !important; }
+</style>
+
 </head>
 <body>
 <a href="#main-content" style="position:absolute;left:-999px;top:auto;width:1px;height:1px;overflow:hidden;z-index:9999;background:#fff;padding:8px 16px;font-size:14px;font-weight:600;color:#2C2C2C;text-decoration:none;border-radius:4px" onfocus="this.style.left='6px';this.style.width='auto';this.style.height='auto'" onblur="this.style.left='-999px';this.style.width='1px';this.style.height='1px'">Ana içeriğe geç</a>
@@ -12056,7 +12070,44 @@ function turneCard(t, kucuk) {
     } else {
       otelKisa = otel;
     }
-    otelPillHtml = '<span style="font-size:11px;padding:4px 11px;border-radius:9px;background:hsl(42,50%,92%);color:hsl(42,60%,25%);font-weight:600;max-width:100%;display:inline-flex;align-items:center;gap:5px;line-height:1.45;word-break:break-word;overflow-wrap:anywhere;white-space:normal" title="' + otelKisa.replace(/"/g,'&quot;') + '"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;opacity:.7"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9,22 9,12 15,12 15,22"/></svg>' + otelKisa + '</span>';
+    // Oda özeti — odaPlanlari üzerinden hesapla (planlar sekmesiyle tutarlı)
+    var _planlar = t.odaPlanlari || [];
+    var _tekOda = 0, _ciftOda = 0, _munfOda = 0;
+    if (_planlar.length > 0) {
+      // Tüm planların birleşik özeti (ilk plan veya en dolu plan)
+      // Her plan bağımsız olduğundan ilk planı göster, yoksa katılımcıdan hesapla
+      var _ilkPlan = _planlar[0];
+      var _odaTip = _ilkPlan.odaTipleri || {};
+      var _munfMap = _ilkPlan.munferitler || {};
+      var _kat2 = t.katilimcilar || [];
+      _kat2.forEach(function(p) {
+        var tip = _odaTip[p.kisi];
+        var mnf = _munfMap[p.kisi];
+        if (mnf) { _munfOda++; }
+        else if (tip === 'tek') { _tekOda++; }
+        else if (tip === 'cift') { _ciftOda++; }
+      });
+      _ciftOda = Math.ceil(_ciftOda / 2);
+    } else {
+      // Plan yoksa katılımcı odaTip'inden hesapla
+      var _kat = t.katilimcilar || [];
+      _tekOda  = _kat.filter(function(p){ return p.odaTip === 'tek' && !p.munferit; }).length;
+      _ciftOda = Math.ceil(_kat.filter(function(p){ return p.odaTip === 'cift' && !p.munferit; }).length / 2);
+      _munfOda = _kat.filter(function(p){ return p.munferit; }).length;
+    }
+    var _odaParcalar = [];
+    if (_tekOda)  _odaParcalar.push(_tekOda + ' tek');
+    if (_ciftOda) _odaParcalar.push(_ciftOda + ' çift');
+    if (_munfOda) _odaParcalar.push(_munfOda + ' mnf');
+    var _odaOzet = _odaParcalar.join(' · ');
+    var _planSay = _planlar.length > 1 ? ' <span style="font-size:9px;opacity:.7">(' + _planlar.length + ' plan)</span>' : '';
+    var _odaChip = _odaOzet
+      ? '<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px;background:hsl(200,55%,92%);color:hsl(200,65%,28%);border:1px solid hsl(200,45%,82%);white-space:nowrap;display:inline-flex;align-items:center;gap:3px;flex-shrink:0"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="flex-shrink:0;opacity:.8"><path d=\"M2 4v16\"/><path d=\"M22 4v16\"/><path d=\"M2 8h20\"/><path d=\"M2 16h20\"/><path d=\"M10 8v8\"/></svg>' + _odaOzet + _planSay + '</span>'
+      : '';
+    otelPillHtml = '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
+      + '<span style="font-size:11px;padding:4px 11px;border-radius:9px;background:hsl(42,50%,92%);color:hsl(42,60%,25%);font-weight:600;max-width:100%;display:inline-flex;align-items:center;gap:5px;line-height:1.45;word-break:break-word;overflow-wrap:anywhere;white-space:normal" title="' + otelKisa.replace(/"/g,'&quot;') + '"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;opacity:.7"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9,22 9,12 15,12 15,22"/></svg>' + otelKisa + '</span>'
+      + _odaChip
+      + '</div>';
   }
 
   var _notGoster = (t.not || '').replace(/\[Festival:[^\]]*\]\s*/g, '').replace(/\[Yarıda Kesildi:[^\]]*\]\s*/g, '').replace(/\[Olur:[^\]]*\]\s*/gi, '').replace(/\[Olur2:[^\]]*\]\s*/gi, '').replace(/\[LastEdit:[^\]]*\]\s*/g, '').trim();
