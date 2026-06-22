@@ -11996,6 +11996,150 @@ input:focus,select:focus,textarea:focus {
 
 
 
+
+
+/* ════════════════════════════════════════════════════════════
+   PATCH 37 — Dar kart üst-bar otomatik sıkıştırma + favicon
+   Kart genişliği daraldıkça header band içindeki öğeler
+   sıkışıp gizlenir; geniş kartta hiçbir şey değişmez.
+   ════════════════════════════════════════════════════════════ */
+.turne-card {
+  container-type: inline-size;
+  container-name: tcard;
+}
+.tk-header-band {
+  min-width: 0;
+}
+.tk-header-band > span {
+  min-width: 0;
+}
+
+/* Orta-dar (≤ 260px): turne no fontunu küçült, ek-grup yazısını kısalt */
+@container tcard (max-width: 260px) {
+  .tk-header-band span[title^="Onay No"] { font-size: 10.5px !important; }
+  .tk-header-band span[title^="Ek Onay"] { font-size: 9.5px !important; }
+}
+
+/* Dar (≤ 230px): + Ek yazısı gizli, sadece + işareti */
+@container tcard (max-width: 230px) {
+  .tk-header-band button[title="Ek Onay No ekle"] {
+    font-size: 0 !important;
+    padding: 1px 5px !important;
+  }
+  .tk-header-band button[title="Ek Onay No ekle"]::before {
+    content: "+";
+    font-size: 11px;
+    font-weight: 800;
+  }
+  /* "Devam ediyor" pill: metni gizle, sadece kırmızı nokta kalsın */
+  .tk-header-band span[style*="border-radius:999px"] {
+    font-size: 0 !important;
+    padding: 0 !important;
+    width: 14px !important;
+    min-width: 14px !important;
+    height: 14px !important;
+    border-radius: 50% !important;
+    background: #dc2626 !important;
+    border: 2px solid #fff !important;
+    animation: tkDevamPulse 1.6s ease-in-out infinite;
+  }
+  @keyframes tkDevamPulse {
+    0%,100% { box-shadow: 0 0 0 0 rgba(220,38,38,.55); }
+    50%     { box-shadow: 0 0 0 5px rgba(220,38,38,0); }
+  }
+  /* Onay No ekle butonu kompakt */
+  .tk-header-band button[title="Onay No ekle"] {
+    font-size: 0 !important;
+    padding: 2px 5px !important;
+  }
+  .tk-header-band button[title="Onay No ekle"] svg { width: 10px !important; height: 10px !important; }
+}
+
+/* Çok dar (≤ 195px): ikinci onay no gizle, durum etiketinde ok ikonunu küçült */
+@container tcard (max-width: 195px) {
+  .tk-header-band span[title^="Ek Onay"] { display: none !important; }
+  .tk-header-band button[onclick*="kartStatuToggle"] {
+    padding: 2px 5px 2px 4px !important;
+    font-size: 11px !important;
+  }
+  .tk-header-band button[onclick*="kartStatuToggle"] svg { display: none; }
+  .tk-header-band span[title^="Onay No"] { max-width: 55px; overflow: hidden; text-overflow: ellipsis; }
+}
+
+/* Başlık + tarih satırı dar kartta sıkışsın */
+@container tcard (max-width: 230px) {
+  .tk-oyun-adi { font-size: clamp(12px, 4.6cqi, 16px) !important; }
+}
+
+/* ════════════════════════════════════════════════════════════
+   PATCH 37b — Çoğalt picker modalı
+   ════════════════════════════════════════════════════════════ */
+#cogalt-picker-overlay {
+  position: fixed; inset: 0; z-index: 10000;
+  background: rgba(4,6,14,.62);
+  display: none;
+  align-items: center; justify-content: center;
+  backdrop-filter: blur(2px);
+}
+#cogalt-picker-overlay.on { display: flex; animation: fadeInUp .18s ease-out; }
+#cogalt-picker-box {
+  width: min(520px, 92vw);
+  max-height: 78vh;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 24px 60px -10px rgba(0,0,0,.4);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+#cogalt-picker-box .cp-head {
+  padding: 16px 18px 12px;
+  border-bottom: 1px solid hsl(220,18%,90%);
+  display: flex; align-items: center; gap: 10px;
+}
+#cogalt-picker-box .cp-head h3 {
+  font-size: 15px; font-weight: 800; color: hsl(220,18%,18%);
+  letter-spacing: -.2px; flex: 1;
+}
+#cogalt-picker-box .cp-head .cp-close {
+  width: 28px; height: 28px; border-radius: 7px;
+  background: hsl(220,18%,94%); border: none; cursor: pointer;
+  font-size: 16px; color: hsl(220,12%,40%);
+  display: inline-flex; align-items: center; justify-content: center;
+}
+#cogalt-picker-box .cp-head .cp-close:hover { background: hsl(220,18%,88%); }
+#cogalt-picker-search {
+  margin: 12px 18px 8px;
+  height: 36px; padding: 0 12px;
+  border: 1.5px solid hsl(220,18%,86%);
+  border-radius: 8px; font-size: 13px;
+  outline: none;
+}
+#cogalt-picker-search:focus { border-color: hsl(38,75%,55%); }
+#cogalt-picker-list {
+  flex: 1; overflow-y: auto;
+  padding: 4px 12px 14px;
+}
+.cp-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px;
+  border-radius: 9px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all .12s;
+}
+.cp-item:hover { background: hsl(38,80%,96%); border-color: hsl(38,75%,80%); }
+.cp-item-main { flex: 1; min-width: 0; }
+.cp-item-oyun { font-weight: 800; font-size: 13px; color: hsl(220,18%,18%); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cp-item-meta { font-size: 11px; color: hsl(220,12%,48%); margin-top: 2px; }
+.cp-item-arrow { color: hsl(38,75%,45%); font-size: 16px; opacity: .6; }
+.cp-empty { padding: 24px; text-align: center; color: hsl(220,12%,55%); font-size: 13px; }
+.cp-hint {
+  padding: 10px 18px;
+  background: hsl(38,90%,96%);
+  border-top: 1px solid hsl(38,75%,82%);
+  font-size: 11.5px; color: hsl(38,75%,28%);
+  display: flex; align-items: center; gap: 8px;
+}
 </style>
 
 <meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"/>
@@ -12010,7 +12154,7 @@ function parseLocalDate(str) {
 
     // Mobil yönlendirme devre dışı — aynı sayfa mobilde de açılır (404 düzeltmesi)
   </script>
-<link id="favicon" rel="icon" type="image/png" href=""/>
+<link id="favicon" rel="icon" type="image/png" href="data:image/png;base64,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"/>
 
 <title>Turne Yönetimi – İzmir Devlet Tiyatrosu</title>
 <meta name="description" content="İzmir Devlet Tiyatrosu Turne Yönetim Sistemi – turneler, kadro, harita ve takvim bilgilerini görüntüleyin."/>
@@ -12865,9 +13009,10 @@ function _leafletYukle(callback) {
 <button class="btn btn-primary" id="turne-ekle-btn" onclick="openModal()" style="height:36px;display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:800;padding:0 18px;border-radius:7px;letter-spacing:.1px;box-shadow:0 2px 10px rgba(180,110,0,.4)">
 <svg fill="none" height="14" stroke="currentColor" stroke-linecap="round" stroke-width="2.5" viewbox="0 0 24 24" width="14"><line x1="12" x2="12" y1="5" y2="19"></line><line x1="5" x2="19" y1="12" y2="12"></line></svg> Turne Ekle
         </button>
-<button class="btn btn-primary mobil-gizle" onclick="document.getElementById('olurFab').click()" style="height:36px;align-items:center;justify-content:center;padding:0 11px;border-radius:7px;box-shadow:0 2px 10px rgba(180,110,0,.4)" title="Turne Oluru Oluştur">
-<svg fill="none" height="15" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.4" viewbox="0 0 24 24" width="15"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" x2="15" y1="13" y2="13"/><line x1="9" x2="15" y1="17" y2="17"/></svg>
-</button>
+<!-- PATCH 37: Akıllı Çoğaltma (Turne Ekle ile aynı stil, sadece ikon) -->
+<button class="btn btn-primary" id="turne-cogalt-btn" onclick="openCogaltPicker()" style="height:36px;display:inline-flex;align-items:center;justify-content:center;width:42px;padding:0;border-radius:7px;box-shadow:0 2px 10px rgba(180,110,0,.4)" title="Turneyi Çoğalt — var olan turneyi şablon kopyala">
+<svg fill="none" height="18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.4" viewbox="0 0 24 24" width="18"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        </button>
 </div>
 </div>
 <div class="scroll-area">
@@ -14385,6 +14530,7 @@ const STATU_OPTS = [
 
 let tumPersonel = [];
 let turneler    = [];
+window.__getTurneler = function(){ return turneler; };
 let _turneYukleniyor = true;
 let calYear, calMonth, calSelectedDay = null;
 var calNotes = {}; // key: 'YYYY-MM-DD' → not metni (localStorage'dan yüklenir)
@@ -16999,7 +17145,7 @@ function turneCard(t, kucuk) {
                 + '<svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Onay No'
                 + '</button>'
               : '');
-        return '<div style="padding:8px 12px;background:' + (st.bandBg||st.dot) + ';display:flex;align-items:center;justify-content:space-between;flex-shrink:0;gap:8px;border-bottom:1px solid rgba(0,0,0,.10)">'
+        return '<div class="tk-header-band" style="padding:8px 12px;background:' + (st.bandBg||st.dot) + ';display:flex;align-items:center;justify-content:space-between;flex-shrink:0;gap:8px;border-bottom:1px solid rgba(0,0,0,.10)">'
           + '<span style="display:inline-flex;align-items:center;gap:6px;min-width:0">'
           +   '<span class="toplu-cb-icon" style="display:' + (_topluSecModuAktif ? 'inline-flex' : 'none') + ';width:16px;height:16px;border-radius:4px;border:1.5px solid rgba(255,255,255,.6);background:rgba(0,0,0,.15);align-items:center;justify-content:center;flex-shrink:0;transition:all .15s"></span>'
           +   (window._goruntuleme_modu
@@ -38232,6 +38378,102 @@ setTimeout(_turBoot, 4000);
     }
   });
   try { mo.observe(document.body, { childList: true, subtree: true }); } catch(e){}
+})();
+</script>
+
+<!-- PATCH 37: Çoğalt picker modalı -->
+<div id="cogalt-picker-overlay" onclick="if(event.target===this)closeCogaltPicker()">
+  <div id="cogalt-picker-box" role="dialog" aria-modal="true" aria-labelledby="cp-title">
+    <div class="cp-head">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="hsl(38,75%,45%)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+      <h3 id="cp-title">Şablon olarak hangi turneyi kopyalayalım?</h3>
+      <button class="cp-close" onclick="closeCogaltPicker()" title="Kapat">×</button>
+    </div>
+    <input id="cogalt-picker-search" type="text" placeholder="Oyun, şehir veya turne no ara…" oninput="renderCogaltList(this.value)" autocomplete="off"/>
+    <div id="cogalt-picker-list"></div>
+    <div class="cp-hint">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      Tarihler ve turne no boş gelir — diğer alanlar (oyun, kadro, ulaşım, otel, lojistik) seçilen turneden kopyalanır.
+    </div>
+  </div>
+</div>
+<script>
+/* PATCH 37: Akıllı Çoğaltma */
+(function(){
+  window.openCogaltPicker = function() {
+    var ov = document.getElementById('cogalt-picker-overlay');
+    if (!ov) return;
+    ov.classList.add('on');
+    renderCogaltList('');
+    setTimeout(function(){
+      var s = document.getElementById('cogalt-picker-search');
+      if (s) { s.value = ''; s.focus(); }
+    }, 50);
+  };
+  window.closeCogaltPicker = function() {
+    var ov = document.getElementById('cogalt-picker-overlay');
+    if (ov) ov.classList.remove('on');
+  };
+  window.renderCogaltList = function(q) {
+    var list = document.getElementById('cogalt-picker-list');
+    if (!list) return;
+    var arr = ((window.__getTurneler && window.__getTurneler()) || window.turneler || []).slice();
+    // En yeniden eskiye sırala
+    arr.sort(function(a, b){
+      var da = a.baslangicTarih || a.bitisTarih || '';
+      var db = b.baslangicTarih || b.bitisTarih || '';
+      return db.localeCompare(da);
+    });
+    q = (q || '').toLowerCase().trim();
+    if (q) {
+      arr = arr.filter(function(t){
+        var hay = ((t.oyun||'') + ' ' + (t.iller||'') + ' ' + (t.sehir||'') + ' ' + ((window._getOlurNo?window._getOlurNo(t):'')||'')).toLowerCase();
+        return hay.indexOf(q) !== -1;
+      });
+    }
+    arr = arr.slice(0, 40);
+    if (!arr.length) {
+      list.innerHTML = '<div class="cp-empty">Eşleşen turne yok.</div>';
+      return;
+    }
+    list.innerHTML = arr.map(function(t){
+      var oyun = (t.oyun || '(Oyun yok)').replace(/</g,'&lt;');
+      var no = (window._getOlurNo ? window._getOlurNo(t) : '') || '';
+      var tarih = t.baslangicTarih || '';
+      var meta = [no, tarih, t.iller || t.sehir || ''].filter(Boolean).join(' · ').replace(/</g,'&lt;');
+      return '<div class="cp-item" onclick="applyCogalt('+t._rowIdx+')">' +
+        '<div class="cp-item-main">' +
+          '<div class="cp-item-oyun">'+oyun+'</div>' +
+          '<div class="cp-item-meta">'+meta+'</div>' +
+        '</div>' +
+        '<div class="cp-item-arrow">→</div>' +
+      '</div>';
+    }).join('');
+  };
+  window.applyCogalt = function(rowIdx) {
+    closeCogaltPicker();
+    // Yeni turne modalını aç, sonra _anaTurneSecildi ile alanları doldur
+    openModal();
+    setTimeout(function(){
+      try {
+        var hidden = document.getElementById('m-ana-turne-id');
+        if (hidden) hidden.value = String(rowIdx);
+        if (typeof _anaTurneSecildi === 'function') _anaTurneSecildi(String(rowIdx));
+        // Modal başlığını güncelle
+        var mt = document.getElementById('modal-title');
+        if (mt) mt.textContent = 'Turne Çoğalt — yeni tarih seç';
+        // Bilgi toast
+        if (typeof showToast === 'function') showToast('Şablon yüklendi — tarih ve şehir gir, kaydet', 'success');
+      } catch(e) { console.error('[cogalt]', e); }
+    }, 350);
+  };
+  // ESC ile kapat
+  document.addEventListener('keydown', function(e){
+    if (e.key === 'Escape') {
+      var ov = document.getElementById('cogalt-picker-overlay');
+      if (ov && ov.classList.contains('on')) closeCogaltPicker();
+    }
+  });
 })();
 </script>
 </body>
