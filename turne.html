@@ -38608,5 +38608,415 @@ setTimeout(_turBoot, 4000);
 })();
 </script>
 
+
+<!-- ============================================================
+     PATCH 38 — Gelişmiş Filtre Paneli + Ay Navigasyonu (Kitap Sayfası)
+     ============================================================ -->
+<style id="patch38-styles">
+  /* Eski toolbar dropdownlarını gizle (Zaman / Oyun / İl / Ay) */
+  #sezon-bar #filter-zaman,
+  #sezon-bar #filter-oyun,
+  #sezon-bar #filter-il,
+  #sezon-bar #tur-filter-ay { display:none !important; }
+  #sezon-bar label[for="filter-zaman"],
+  #sezon-bar label[for="filter-oyun"],
+  #sezon-bar label[for="filter-il"] { display:none !important; }
+
+  /* ── Filtreler butonu ── */
+  .gf-btn {
+    height:34px; padding:0 14px; border-radius:20px;
+    border:1.5px solid var(--border); background:var(--card);
+    color:var(--foreground); font-size:12px; font-weight:700;
+    display:inline-flex; align-items:center; gap:7px; cursor:pointer;
+    transition:all .15s; flex-shrink:0; letter-spacing:.1px;
+  }
+  .gf-btn:hover { border-color:hsl(36,80%,55%); background:hsl(36,30%,97%); }
+  .gf-btn.active {
+    border-color:hsl(36,85%,48%);
+    background:linear-gradient(135deg,hsl(36,90%,96%),hsl(36,80%,92%));
+    color:hsl(30,60%,25%);
+    box-shadow:0 2px 8px -2px hsla(36,85%,48%,.35);
+  }
+  .gf-btn .gf-badge {
+    min-width:18px; height:18px; padding:0 5px; border-radius:9px;
+    background:linear-gradient(135deg,hsl(36,90%,50%),hsl(30,85%,42%));
+    color:#fff; font-size:10px; font-weight:800;
+    display:inline-flex; align-items:center; justify-content:center;
+    box-shadow:0 1px 3px rgba(180,110,0,.4);
+  }
+
+  /* ── Filtre paneli (sağ slide-over) ── */
+  .gf-overlay {
+    position:fixed; inset:0; background:rgba(15,20,30,.4);
+    z-index:9997; opacity:0; pointer-events:none; transition:opacity .2s;
+    backdrop-filter:blur(2px);
+  }
+  .gf-overlay.open { opacity:1; pointer-events:auto; }
+  .gf-panel {
+    position:fixed; top:0; right:-420px; width:380px; max-width:92vw; height:100dvh;
+    background:var(--card); border-left:1px solid var(--border);
+    box-shadow:-16px 0 48px rgba(0,0,0,.22); z-index:9998;
+    display:flex; flex-direction:column;
+    transition:right .28s cubic-bezier(.4,0,.2,1);
+    font-family:"DM Sans",sans-serif;
+  }
+  .gf-panel.open { right:0; }
+  .gf-panel-head {
+    padding:20px 22px 16px; border-bottom:1px solid var(--border);
+    display:flex; align-items:center; justify-content:space-between;
+    background:linear-gradient(180deg,hsl(36,40%,97%),hsl(36,30%,94%));
+  }
+  .gf-panel-head h3 {
+    font-size:16px; font-weight:900; letter-spacing:-.4px; color:hsl(25,40%,18%);
+    display:flex; align-items:center; gap:8px;
+  }
+  .gf-close {
+    width:34px; height:34px; border-radius:9px; border:none;
+    background:transparent; cursor:pointer; font-size:22px;
+    color:var(--muted-foreground); display:flex; align-items:center; justify-content:center;
+    transition:all .15s;
+  }
+  .gf-close:hover { background:hsl(220,15%,92%); color:var(--foreground); }
+  .gf-body { flex:1; overflow-y:auto; padding:20px 22px; }
+  .gf-field { margin-bottom:18px; }
+  .gf-field > label {
+    display:block; font-size:10px; font-weight:800; letter-spacing:.6px;
+    text-transform:uppercase; color:hsl(25,25%,40%); margin-bottom:8px;
+  }
+  .gf-field select {
+    width:100%; height:40px; padding:0 14px; border-radius:10px;
+    border:1.5px solid var(--border); background:var(--card);
+    font-size:13px; font-weight:600; color:var(--foreground); cursor:pointer;
+    transition:border-color .15s, box-shadow .15s;
+    appearance:none; -webkit-appearance:none;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2.5' stroke-linecap='round'><polyline points='6 9 12 15 18 9'/></svg>");
+    background-repeat:no-repeat; background-position:right 12px center;
+    padding-right:34px;
+  }
+  .gf-field select:focus {
+    outline:none; border-color:hsl(36,85%,50%);
+    box-shadow:0 0 0 3px hsla(36,85%,50%,.18);
+  }
+  .gf-field select.has-value {
+    border-color:hsl(36,85%,55%);
+    background-color:hsl(36,60%,97%);
+  }
+  .gf-foot {
+    padding:14px 22px 18px; border-top:1px solid var(--border);
+    display:flex; gap:10px;
+  }
+  .gf-foot button {
+    flex:1; height:40px; border-radius:10px; font-size:12px; font-weight:800;
+    cursor:pointer; transition:all .15s; letter-spacing:.2px;
+  }
+  .gf-clear {
+    background:transparent; border:1.5px solid var(--border); color:var(--foreground);
+  }
+  .gf-clear:hover { border-color:hsl(0,65%,55%); color:hsl(0,65%,42%); background:hsl(0,60%,98%); }
+  .gf-apply {
+    background:linear-gradient(135deg,hsl(36,90%,50%),hsl(30,85%,42%));
+    border:none; color:#fff;
+    box-shadow:0 3px 12px -2px rgba(180,110,0,.5);
+  }
+  .gf-apply:hover { filter:brightness(1.06); transform:translateY(-1px); }
+
+  /* ── Ay navigasyon okları (kitap sayfası) ── */
+  .ay-nav-arrows {
+    display:inline-flex; gap:5px; margin-left:auto;
+    flex-shrink:0; padding-right:4px;
+  }
+  .ay-nav-btn {
+    width:30px; height:30px; border-radius:8px;
+    border:1.5px solid var(--border); background:var(--card);
+    cursor:pointer; display:inline-flex; align-items:center; justify-content:center;
+    color:var(--foreground); transition:all .15s; padding:0;
+  }
+  .ay-nav-btn:hover:not(:disabled) {
+    border-color:hsl(36,85%,50%);
+    background:linear-gradient(135deg,hsl(36,80%,95%),hsl(36,70%,92%));
+    color:hsl(30,60%,25%); transform:translateY(-1px);
+    box-shadow:0 3px 10px -3px hsla(36,80%,45%,.4);
+  }
+  .ay-nav-btn:active:not(:disabled) { transform:translateY(0); }
+  .ay-nav-btn:disabled { opacity:.3; cursor:not-allowed; }
+  .ay-nav-btn svg { width:15px; height:15px; }
+  .ay-nav-label {
+    font-size:10px; font-weight:700; color:var(--muted-foreground);
+    letter-spacing:.4px; text-transform:uppercase; padding:0 4px;
+    display:inline-flex; align-items:center;
+  }
+  @keyframes gfPulse {
+    0% { box-shadow:0 0 0 0 hsla(36,85%,55%,.55); }
+    100% { box-shadow:0 0 0 14px hsla(36,85%,55%,0); }
+  }
+  .cards-group.gf-highlight > .cards-group-header {
+    animation:gfPulse 1s ease-out 1;
+    background:hsl(36,70%,95%) !important;
+  }
+</style>
+
+<script id="patch38-script">
+(function(){
+  var AYLAR = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
+
+  function $(id){ return document.getElementById(id); }
+
+  function buildToolbarBtn(){
+    var bar = $('sezon-bar');
+    if (!bar || $('gf-btn')) return;
+    var btn = document.createElement('button');
+    btn.id = 'gf-btn';
+    btn.className = 'gf-btn';
+    btn.type = 'button';
+    btn.innerHTML =
+      '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">'
+      + '<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>'
+      + '<span>Filtreler</span>'
+      + '<span class="gf-badge" id="gf-badge" style="display:none">0</span>';
+    btn.onclick = openPanel;
+    var statu = $('statu-dd');
+    if (statu && statu.parentNode === bar && statu.nextSibling) bar.insertBefore(btn, statu.nextSibling);
+    else bar.appendChild(btn);
+  }
+
+  function buildPanel(){
+    if ($('gf-panel')) return;
+    var ov = document.createElement('div');
+    ov.id='gf-overlay'; ov.className='gf-overlay'; ov.onclick = closePanel;
+    var p  = document.createElement('div');
+    p.id='gf-panel'; p.className='gf-panel';
+    p.innerHTML =
+      '<div class="gf-panel-head">'
+      +   '<h3>'
+      +     '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>'
+      +     'Gelişmiş Filtreler'
+      +   '</h3>'
+      +   '<button class="gf-close" type="button" aria-label="Kapat">×</button>'
+      + '</div>'
+      + '<div class="gf-body">'
+      +   '<div class="gf-field"><label>⏱ Zaman</label>'
+      +     '<select id="gf-zaman">'
+      +       '<option value="tum">Tüm Zamanlar</option>'
+      +       '<option value="gelecek">🔜 Yaklaşan</option>'
+      +       '<option value="aktif">▶ Devam Eden</option>'
+      +       '<option value="gecmis">✓ Geçmiş</option>'
+      +     '</select></div>'
+      +   '<div class="gf-field"><label>📅 Ay</label>'
+      +     '<select id="gf-ay"><option value="">Tüm Aylar</option></select>'
+      +   '</div>'
+      +   '<div class="gf-field"><label>🎭 Oyun</label>'
+      +     '<select id="gf-oyun"><option value="">Tüm Oyunlar</option></select>'
+      +   '</div>'
+      +   '<div class="gf-field"><label>📍 İl</label>'
+      +     '<select id="gf-il"><option value="">Tüm İller</option></select>'
+      +   '</div>'
+      + '</div>'
+      + '<div class="gf-foot">'
+      +   '<button class="gf-clear" type="button">✕ Temizle</button>'
+      +   '<button class="gf-apply" type="button">Tamam</button>'
+      + '</div>';
+    document.body.appendChild(ov);
+    document.body.appendChild(p);
+
+    var aySel = $('gf-ay');
+    AYLAR.forEach(function(a,i){
+      var o = document.createElement('option');
+      o.value = String(i+1).padStart(2,'0');
+      o.textContent = a;
+      aySel.appendChild(o);
+    });
+
+    p.querySelector('.gf-close').onclick = closePanel;
+    p.querySelector('.gf-apply').onclick = closePanel;
+    p.querySelector('.gf-clear').onclick = clearAll;
+
+    $('gf-zaman').onchange = function(){ proxy('filter-zaman', this.value); markSelect(this); updateBadge(); };
+    $('gf-ay').onchange    = function(){ proxy('tur-filter-ay', this.value); markSelect(this); updateBadge(); };
+    $('gf-oyun').onchange  = function(){ proxy('filter-oyun', this.value); markSelect(this); updateBadge(); };
+    $('gf-il').onchange    = function(){ proxy('filter-il', this.value); markSelect(this); updateBadge(); };
+  }
+
+  function proxy(id, val){
+    var el = $(id); if (!el) return;
+    el.value = val;
+    el.classList.toggle('aktif-filtre', !!val && val !== 'tum');
+    el.dispatchEvent(new Event('change', { bubbles:true }));
+  }
+
+  function markSelect(s){ if (s) s.classList.toggle('has-value', !!s.value && s.value !== 'tum'); }
+
+  function syncToPanel(){
+    var z = $('filter-zaman'), gz = $('gf-zaman');
+    if (z && gz) { gz.value = z.value || 'tum'; markSelect(gz); }
+    var a = $('tur-filter-ay'), ga = $('gf-ay');
+    if (a && ga) { ga.value = a.value || ''; markSelect(ga); }
+    ['oyun','il'].forEach(function(k){
+      var src = $('filter-'+k), dst = $('gf-'+k);
+      if (!src || !dst) return;
+      var placeholder = dst.options[0] ? dst.options[0].outerHTML : '<option value="">—</option>';
+      dst.innerHTML = '';
+      // Re-add placeholder using a fresh element
+      var ph = document.createElement('option'); ph.value=''; ph.textContent = (k==='oyun'?'Tüm Oyunlar':'Tüm İller');
+      dst.appendChild(ph);
+      Array.from(src.options).forEach(function(o){
+        if (!o.value) return; // skip src placeholder
+        var n = document.createElement('option');
+        n.value = o.value; n.textContent = o.textContent;
+        dst.appendChild(n);
+      });
+      dst.value = src.value || '';
+      markSelect(dst);
+    });
+  }
+
+  function activeCount(){
+    var n = 0;
+    var z = $('filter-zaman'); if (z && z.value && z.value !== 'tum') n++;
+    var a = $('tur-filter-ay'); if (a && a.value) n++;
+    var o = $('filter-oyun'); if (o && o.value) n++;
+    var i = $('filter-il'); if (i && i.value) n++;
+    return n;
+  }
+
+  function updateBadge(){
+    var n = activeCount();
+    var b = $('gf-badge'), btn = $('gf-btn');
+    if (b){ b.textContent = n; b.style.display = n ? 'inline-flex' : 'none'; }
+    if (btn) btn.classList.toggle('active', n > 0);
+  }
+
+  function openPanel(){
+    buildPanel(); syncToPanel(); updateBadge();
+    $('gf-panel').classList.add('open');
+    $('gf-overlay').classList.add('open');
+  }
+  function closePanel(){
+    var p = $('gf-panel'); if (p) p.classList.remove('open');
+    var o = $('gf-overlay'); if (o) o.classList.remove('open');
+  }
+  function clearAll(){
+    proxy('filter-zaman', 'tum');
+    proxy('tur-filter-ay', '');
+    proxy('filter-oyun', '');
+    proxy('filter-il', '');
+    syncToPanel(); updateBadge();
+  }
+
+  // ── Ay navigasyon okları ──────────────────────────────
+  function collectMonthGroups(){
+    var out = [];
+    document.querySelectorAll('.cards-group').forEach(function(g){
+      var hdr = g.querySelector('.cards-group-header');
+      if (!hdr) return;
+      var onc = hdr.getAttribute('onclick') || '';
+      var m = onc.match(/__ay__([0-9\-]+)/);
+      if (!m) return;
+      out.push({ key:m[1], el:g, hdr:hdr });
+    });
+    // DOM order is reverse-chronological (newest first)
+    return out;
+  }
+
+  function ayLabel(key){
+    var parts = (key||'').split('-');
+    if (parts.length < 2) return '';
+    var mi = parseInt(parts[1],10) - 1;
+    return (AYLAR[mi]||'') + ' ' + parts[0];
+  }
+
+  function injectMonthNav(){
+    var groups = collectMonthGroups();
+    groups.forEach(function(mg, idx){
+      var old = mg.hdr.querySelector('.ay-nav-arrows');
+      if (old) old.remove();
+      // DOM order = newest→oldest. "Önceki ay" (eskiye doğru) = idx+1, "Sonraki ay" (yeniye doğru) = idx-1
+      var prev = idx < groups.length - 1 ? groups[idx+1] : null;
+      var next = idx > 0 ? groups[idx-1] : null;
+
+      var nav = document.createElement('span');
+      nav.className = 'ay-nav-arrows';
+      nav.onclick = function(e){ e.stopPropagation(); };
+
+      var prevBtn = document.createElement('button');
+      prevBtn.type='button'; prevBtn.className='ay-nav-btn';
+      prevBtn.title = prev ? ('← ' + ayLabel(prev.key)) : 'Önceki ay yok';
+      prevBtn.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>';
+      if (!prev) prevBtn.disabled = true;
+      prevBtn.onclick = function(e){ e.stopPropagation(); if (prev) scrollToGroup(prev.el); };
+
+      var nextBtn = document.createElement('button');
+      nextBtn.type='button'; nextBtn.className='ay-nav-btn';
+      nextBtn.title = next ? ('→ ' + ayLabel(next.key)) : 'Sonraki ay yok';
+      nextBtn.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>';
+      if (!next) nextBtn.disabled = true;
+      nextBtn.onclick = function(e){ e.stopPropagation(); if (next) scrollToGroup(next.el); };
+
+      nav.appendChild(prevBtn);
+      nav.appendChild(nextBtn);
+      mg.hdr.appendChild(nav);
+    });
+  }
+
+  function scrollToGroup(el){
+    var scroller = el.closest('.scroll-area');
+    if (!scroller) scroller = document.scrollingElement || document.documentElement;
+    try {
+      var elTop = el.getBoundingClientRect().top;
+      var scTop = scroller.getBoundingClientRect ? scroller.getBoundingClientRect().top : 0;
+      var top = elTop - scTop + (scroller.scrollTop||0) - 8;
+      if (scroller.scrollTo) scroller.scrollTo({ top: top, behavior:'smooth' });
+      else scroller.scrollTop = top;
+    } catch(_){
+      el.scrollIntoView({ behavior:'smooth', block:'start' });
+    }
+    el.classList.add('gf-highlight');
+    setTimeout(function(){ el.classList.remove('gf-highlight'); }, 1000);
+  }
+
+  // Wrap renderListe so arrows + badge stay in sync after every re-render
+  function wrapRender(){
+    if (typeof window.renderListe !== 'function' || window.renderListe.__gfWrapped) return;
+    var orig = window.renderListe;
+    window.renderListe = function(){
+      var r = orig.apply(this, arguments);
+      setTimeout(function(){ injectMonthNav(); syncToPanel(); updateBadge(); }, 0);
+      return r;
+    };
+    window.renderListe.__gfWrapped = true;
+  }
+
+  function boot(){
+    buildToolbarBtn();
+    wrapRender();
+    setTimeout(function(){ wrapRender(); injectMonthNav(); updateBadge(); }, 400);
+    setTimeout(function(){ wrapRender(); injectMonthNav(); updateBadge(); }, 1200);
+    // Safety: catch later re-renders
+    var main = document.getElementById('main-content');
+    if (main && 'MutationObserver' in window){
+      var pending = false;
+      var mo = new MutationObserver(function(){
+        if (pending) return;
+        pending = true;
+        requestAnimationFrame(function(){
+          pending = false;
+          var hdrs = document.querySelectorAll('.cards-group-header');
+          var missing = false;
+          hdrs.forEach(function(h){
+            var onc = h.getAttribute('onclick')||'';
+            if (/__ay__/.test(onc) && !h.querySelector('.ay-nav-arrows')) missing = true;
+          });
+          if (missing) injectMonthNav();
+          updateBadge();
+        });
+      });
+      mo.observe(main, { childList:true, subtree:true });
+    }
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
+})();
+</script>
+
 </body>
 </html>
