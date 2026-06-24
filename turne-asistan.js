@@ -942,7 +942,7 @@
   function fmtTarih(s) { const d = parseDate(s); if (!d) return s||"—"; return `${String(d.getDate()).padStart(2,"0")} ${AYLAR[d.getMonth()]} ${d.getFullYear()}`; }
   function fmtTarihAralik(bas, bit) { const a=fmtTarih(bas), b=fmtTarih(bit); if (!a||a==="—") return "—"; if (a===b||!bit) return a; return `${a} – ${b}`; }
   function turneGun(t) { const a=parseDate(t.baslangic), b=parseDate(t.bitis)||a; if(!a||!b) return 1; return Math.max(1,Math.round((b-a)/86400000)+1); }
-  function benzersizGunSay(liste) { var aralıklar=[]; liste.forEach(function(t){ var b=parseDate(t.baslangic),e=parseDate(t.bitis)||b; if(!b)return; if(!e||e<b)e=b; aralıklar.push([b.getTime(),e.getTime()]); }); if(!aralıklar.length)return 0; aralıklar.sort(function(a,b){return a[0]-b[0];}); var birl=[aralıklar[0]]; for(var i=1;i<aralıklar.length;i++){var son=birl[birl.length-1],cur=aralıklar[i]; if(cur[0]<=son[1]+86400000){if(cur[1]>son[1])son[1]=cur[1];}else{birl.push(cur);}} return birl.reduce(function(s,r){return s+Math.round((r[1]-r[0])/86400000)+1;},0); }
+  function benzersizGunSay(liste) { var araliklar=[]; liste.forEach(function(t){ var b=parseDate(t.baslangic),e=parseDate(t.bitis)||b; if(!b)return; if(!e||e<b)e=b; araliklar.push([b.getTime(),e.getTime()]); }); if(!araliklar.length)return 0; araliklar.sort(function(a,b){return a[0]-b[0];}); var birl=[araliklar[0]]; for(var i=1;i<araliklar.length;i++){var son=birl[birl.length-1],cur=araliklar[i]; if(cur[0]<=son[1]+86400000){if(cur[1]>son[1])son[1]=cur[1];}else{birl.push(cur);}} return birl.reduce(function(s,r){return s+Math.round((r[1]-r[0])/86400000)+1;},0); }
   function splitCityNames(raw) {
     return String(raw || "")
       .split(/[,/;+]|\s+-\s+|\s+ve\s+/i)
