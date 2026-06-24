@@ -15075,6 +15075,24 @@ function turneSuresi(t) {
     return 1;
   } catch { return 1; }
 }
+function benzersizGunSayHarita(liste) {
+  var aralıklar = [];
+  liste.forEach(function(t) {
+    var b = parseLocalDate(t.baslangicTarih), e = parseLocalDate(t.bitisTarih) || b;
+    if (!b) return;
+    if (!e || e < b) e = b;
+    aralıklar.push([b.getTime(), e.getTime()]);
+  });
+  if (!aralıklar.length) return 0;
+  aralıklar.sort(function(a,b){ return a[0]-b[0]; });
+  var birl = [aralıklar[0]];
+  for (var i = 1; i < aralıklar.length; i++) {
+    var son = birl[birl.length-1], cur = aralıklar[i];
+    if (cur[0] <= son[1] + 86400000) { if (cur[1] > son[1]) son[1] = cur[1]; }
+    else { birl.push(cur); }
+  }
+  return birl.reduce(function(s,r){ return s + Math.round((r[1]-r[0])/86400000) + 1; }, 0);
+}
 function formatTarih(tarih, kisalt) {
   if (!tarih) return '—';
   try {
@@ -18691,38 +18709,39 @@ function _konaklamaSekmesiHTML(t, rowIdx) {
     if (!tekler.length) {
       html += '<div style="padding:24px 16px;text-align:center;color:var(--muted-foreground);font-size:12px">Tek odada kimse yok.</div>';
     } else {
-      html += '<div style="padding:10px 12px;display:grid;grid-template-columns:1fr;gap:6px">';
+      html += '<div style="padding:10px 12px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">';
       tekler.forEach(function(p) {
         var i = kat.indexOf(p);
         var tkAyrilis = p.erkenAyrildi ? 'erken' : (p.gecAyrildi ? 'gec' : '');
         var tkBg = tkAyrilis==='erken' ? '#fff8ed' : (tkAyrilis==='gec' ? '#f0f4ff' : '#fdf5f5');
         var tkBdr = tkAyrilis==='erken' ? '1.5px solid #d97706' : (tkAyrilis==='gec' ? '1.5px solid #2563eb' : '1.5px solid #6b1b1b');
-        html += '<div class="konak-tek-kart" style="border:' + tkBdr + ';border-radius:10px;padding:10px 12px;background:' + tkBg + ';min-width:0;overflow:hidden;position:relative;animation:_rowIn .2s ease forwards">'
-          + '<div style="display:flex;align-items:center;justify-content:space-between;gap:6px">'
+        html += '<div class="konak-tek-kart" style="border:' + tkBdr + ';border-radius:10px;padding:12px 13px;background:' + tkBg + ';min-width:0;overflow:hidden;position:relative;animation:_rowIn .2s ease forwards">'
+          + '<div style="display:flex;align-items:flex-start;gap:5px">'
           + '<div style="flex:1;min-width:0">'
           + '<div style="display:flex;align-items:baseline;gap:5px;flex-wrap:wrap">'
-          + '<span style="font-size:12px;font-weight:700;color:#1a1a1a">' + p.kisi + '</span>'
+          + '<span style="font-size:12.5px;font-weight:700;color:#1a1a1a">' + p.kisi + '</span>'
+          + (p.odaNot ? '<span style="font-size:11px;font-weight:600;color:#6b1b1b">(' + p.odaNot + ')</span>' : '')
           + '</div>'
-          + '<div style="font-size:10.5px;color:#555;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px">' + (p.gorev||p.kategori||'') + '</div>'
+          + '<div style="font-size:11px;color:#555;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px">' + (p.gorev||p.kategori||'') + '</div>'
           + '</div>'
-          + '<div style="display:flex;flex-direction:row;gap:3px;flex-shrink:0;align-items:center">'
+          + '<div style="display:flex;flex-direction:column;gap:3px;flex-shrink:0">'
           + '<button onclick="_konaklamaAyrilisToggle(' + t._rowIdx + ',' + i + ',\'erken\')" '
-          + 'style="height:22px;padding:0 7px;border:1px solid ' + (tkAyrilis==='erken'?'#d97706':'#e0c8c8') + ';border-radius:4px;background:' + (tkAyrilis==='erken'?'#d97706':'#fff') + ';color:' + (tkAyrilis==='erken'?'#fff':'#999') + ';font-size:9.5px;cursor:pointer;white-space:nowrap;font-weight:700">'
+          + 'style="height:20px;padding:0 6px;border:1px solid ' + (tkAyrilis==='erken'?'#d97706':'#e0c8c8') + ';border-radius:4px;background:' + (tkAyrilis==='erken'?'#d97706':'#fff') + ';color:' + (tkAyrilis==='erken'?'#fff':'#999') + ';font-size:9.5px;cursor:pointer;white-space:nowrap;font-weight:700">'
           + (tkAyrilis==='erken'?'Erken [x]':'Erken') + '</button>'
           + '<button onclick="_konaklamaAyrilisToggle(' + t._rowIdx + ',' + i + ',\'gec\')" '
-          + 'style="height:22px;padding:0 7px;border:1px solid ' + (tkAyrilis==='gec'?'#2563eb':'#e0c8c8') + ';border-radius:4px;background:' + (tkAyrilis==='gec'?'#2563eb':'#fff') + ';color:' + (tkAyrilis==='gec'?'#fff':'#999') + ';font-size:9.5px;cursor:pointer;white-space:nowrap;font-weight:700">'
+          + 'style="height:20px;padding:0 6px;border:1px solid ' + (tkAyrilis==='gec'?'#2563eb':'#e0c8c8') + ';border-radius:4px;background:' + (tkAyrilis==='gec'?'#2563eb':'#fff') + ';color:' + (tkAyrilis==='gec'?'#fff':'#999') + ';font-size:9.5px;cursor:pointer;white-space:nowrap;font-weight:700">'
           + (tkAyrilis==='gec'?'Gec [x]':'Gec') + '</button>'
           + '<button onclick="_konaklamaMunferitSec(' + t._rowIdx + ',' + i + ')" '
           + 'title="Münferit konaklama" '
-          + 'style="height:22px;padding:0 7px;border:1px solid ' + (p.munferit?'#6b1b1b':'#e0c8c8') + ';border-radius:4px;background:' + (p.munferit?'#6b1b1b':'#fff') + ';color:' + (p.munferit?'#fff':'#999') + ';font-size:9.5px;font-weight:700;cursor:pointer;white-space:nowrap">Mnf</button>'
+          + 'style="flex-shrink:0;height:20px;padding:0 6px;border:1px solid ' + (p.munferit?'#6b1b1b':'#e0c8c8') + ';border-radius:4px;background:' + (p.munferit?'#6b1b1b':'#fff') + ';color:' + (p.munferit?'#fff':'#999') + ';font-size:9.5px;font-weight:700;cursor:pointer;white-space:nowrap">Mnf</button>'
           + '<button onclick="_konaklamaOdaTipSec(' + t._rowIdx + ',' + i + ',\'\')" '
           + 'title="Atamayı kaldır" '
-          + 'style="height:22px;width:22px;border:1px solid #e0c8c8;border-radius:4px;background:#fff;color:#999;font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;line-height:1">×</button>'
+          + 'style="flex-shrink:0;height:20px;width:20px;border:1px solid #e0c8c8;border-radius:4px;background:#fff;color:#999;font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;line-height:1">×</button>'
           + '</div>'
           + '</div>'
           + '<input type="text" placeholder="not / tarih" value="' + (p.odaNot||'').replace(/"/g,'&quot;') + '"'
           + ' onblur="_konaklamaNotKaydet(' + t._rowIdx + ',' + i + ',this.value)"'
-          + ' style="margin-top:6px;width:100%;height:26px;padding:0 8px;border:1px solid #e0c8c8;border-radius:5px;font-size:11px;background:#fff;color:#444;box-sizing:border-box">'
+          + ' style="margin-top:7px;width:100%;height:27px;padding:0 8px;border:1px solid #e0c8c8;border-radius:5px;font-size:11px;background:#fff;color:#444;box-sizing:border-box">'
           + '</div>';
       });
       html += '</div>';
@@ -27826,7 +27845,6 @@ function haritaIstatistikGoster() {
   // İl sayıları
   var ilSay = {};
   var toplamKm = 0;
-  var toplamGun = 0;
   var sezonSay = {};
 
   // listeAktif: yarıda kesildi için sadece gidildi !== false olan durakları hesapla
@@ -27843,7 +27861,6 @@ function haritaIstatistikGoster() {
   }
 
   listeAktif.forEach(function(t) {
-    toplamGun += turneSuresi(t);
     var yil = (t.baslangicTarih || t.tarih || '').split('-')[0];
     if (yil) sezonSay[yil] = (sezonSay[yil]||0) + 1;
     durakIllerListesi(t).forEach(function(il) { _istatIlEkle(il); });
@@ -27854,11 +27871,13 @@ function haritaIstatistikGoster() {
       ? t.duraklar.filter(function(d){ return d.gidildi !== false; })
       : (t.il ? [{il:t.il}] : []);
     if (!gidilenDuraklar.length) return;
-    toplamGun += turneSuresi(t);
     var yil = (t.baslangicTarih || t.tarih || '').split('-')[0];
     if (yil) sezonSay[yil] = (sezonSay[yil]||0) + 1;
     gidilenDuraklar.forEach(function(d) { _istatIlEkle(d.il); });
   });
+
+  // Çakışan günleri birleştirerek benzersiz toplam gün hesapla
+  var toplamGun = benzersizGunSayHarita(listeAktif.concat(listeYK));
 
   var enCokIller = Object.entries(ilSay).sort(function(a,b){ return b[1]-a[1]; }).slice(0,5);
   var sezonlar = Object.entries(sezonSay).sort(function(a,b){ return b[0].localeCompare(a[0]); });
