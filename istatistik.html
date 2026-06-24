@@ -461,6 +461,8 @@ function updateThemeIcon(t){var s=document.getElementById('ic-sun'),m=document.g
 // HELPERS
 // ============================================================
 function parseLocalDate(s){if(!s)return null;var p=s.split('-');if(p.length!==3)return new Date(s);return new Date(+p[0],+p[1]-1,+p[2]);}
+// Çakışan turne günlerini birleştirip benzersiz gün sayısını döner (interval union)
+function toplamBenzersizGun(turneler){var aralıklar=[];turneler.forEach(function(t){var b=parseLocalDate(t.baslangicTarih),e=parseLocalDate(t.bitisTarih);if(!b)return;if(!e||e<b)e=b;aralıklar.push([b.getTime(),e.getTime()]);});if(!aralıklar.length)return 0;aralıklar.sort(function(a,b){return a[0]-b[0];});var birlesik=[aralıklar[0]];for(var i=1;i<aralıklar.length;i++){var son=birlesik[birlesik.length-1],cur=aralıklar[i];if(cur[0]<=son[1]+86400000){if(cur[1]>son[1])son[1]=cur[1];}else{birlesik.push(cur);}}return birlesik.reduce(function(s,r){return s+Math.round((r[1]-r[0])/86400000)+1;},0);}
 function formatTarih(t){if(!t)return '—';try{var a=['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'];var p=t.split('-');return p[2]+' '+a[+p[1]-1]+' '+p[0];}catch(e){return t;}}
 function turneSuresi(t){try{if(t.baslangicTarih&&t.bitisTarih&&t.bitisTarih>=t.baslangicTarih)return Math.max(1,Math.round((parseLocalDate(t.bitisTarih)-parseLocalDate(t.baslangicTarih))/86400000)+1);return 1;}catch(e){return 1;}}
 function durakIller(t){if(t.duraklar&&t.duraklar.length)return [...new Set(t.duraklar.map(d=>d.il).filter(Boolean))];return t.il?[t.il]:[];}
@@ -628,7 +630,7 @@ var KICONS={
 };
 function renderKpi(){
   var t=filteredTurneler,a=t.filter(x=>x.statu!=='iptal');
-  var tg=a.reduce((s,x)=>s+turneSuresi(x),0);
+  var tg=toplamBenzersizGun(a);
   var tt=a.reduce((s,x)=>s+durakTemsil(x),0);
   var ilSet=new Set();a.forEach(x=>durakIller(x).forEach(il=>ilSet.add(temizIl(il))));
   var bug=new Date().toISOString().slice(0,10);
@@ -804,7 +806,7 @@ function exportCsv(){
 // ─── PDF ───
 function pdfRapor(){
   var t=filteredTurneler,a=t.filter(x=>x.statu!=='iptal');
-  var tg=a.reduce((s,x)=>s+turneSuresi(x),0),tt=a.reduce((s,x)=>s+durakTemsil(x),0);
+  var tg=toplamBenzersizGun(a),tt=a.reduce((s,x)=>s+durakTemsil(x),0);
   var ilSet=new Set();a.forEach(x=>durakIller(x).forEach(il=>ilSet.add(temizIl(il))));
   var kS=new Set();a.forEach(x=>x.katilimcilar.forEach(k=>kS.add(k.kisi)));
   var ilMap={};a.forEach(x=>durakIller(x).forEach(il=>{var n=temizIl(il);if(n)ilMap[n]=(ilMap[n]||0)+1;}));
