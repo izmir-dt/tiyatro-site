@@ -3899,7 +3899,7 @@
     for (const t of list) for (const k of t.katilimcilar||[]) if (k.kisi) pSet.add(k.kisi.trim());
     const cSet = new Set();
     for (const t of list) { if (t.il) cSet.add(t.il); for (const d of t.duraklar||[]) if (d.il) cSet.add(d.il); }
-    const days = list.reduce((s,t)=>s+_rapDays(t),0);
+    const days = benzersizGunSay(list);
     const el = $i("ta-rap-preview");
     if (el) el.innerHTML = `📦 Kapsam: <b>${list.length}</b> turne · <b>${pSet.size}</b> personel · <b>${cSet.size}</b> şehir · <b>${days}</b> gün`;
   }
@@ -4222,7 +4222,7 @@
       for (const d of t.duraklar||[]) if (d.il) cSet.add(d.il);
       for (const k of t.katilimcilar||[]) if (k.kisi) pSet.add(k.kisi.trim());
     }
-    const days = list.reduce((s,t)=>s+_rapDays(t),0);
+    const days = benzersizGunSay(list);
     return [
       ["İzmir Devlet Tiyatrosu — Turne Raporu"],
       [],
