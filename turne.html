@@ -1154,7 +1154,7 @@ html, body {
 }
 .cards-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)) !important;
+  grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr)) !important;
   gap: 16px !important;
   align-items: stretch !important;
   overflow-x: hidden !important;
@@ -11138,7 +11138,7 @@ input:focus,select:focus,textarea:focus {
     width: 340px !important;
   }
   .cards-grid {
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)) !important;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)) !important;
     gap: 10px !important;
   }
   .stats-grid-4 {
@@ -11460,7 +11460,7 @@ input:focus,select:focus,textarea:focus {
 
 @media (min-width: 1100px) and (max-width: 1439px) {
   .cards-grid {
-    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)) !important;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)) !important;
   }
 }
 
@@ -11877,7 +11877,7 @@ input:focus,select:focus,textarea:focus {
 /* 1) FLUİD GRİD — auto-fill + minmax ile tamamen doğal responsive */
 .cards-grid {
   display: grid !important;
-  grid-template-columns: repeat(auto-fill, minmax(min(380px, 100%), 1fr)) !important;
+  grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr)) !important;
   gap: clamp(12px, 1.2vw, 22px) !important;
   align-items: stretch !important;
   align-content: start !important;
@@ -11906,7 +11906,7 @@ input:focus,select:focus,textarea:focus {
 
 /* Küçük kart görünümü */
 .cards-grid.cards-grid-kucuk {
-  grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr)) !important;
+  grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr)) !important;
   gap: 12px !important;
 }
 
@@ -12148,6 +12148,58 @@ input:focus,select:focus,textarea:focus {
   border-top: 1px solid hsl(38,75%,82%);
   font-size: 11.5px; color: hsl(38,75%,28%);
   display: flex; align-items: center; gap: 8px;
+}
+
+
+/* === MOBİL RESPONSİVE DÜZELTMELERİ (eklendi) === */
+@media (max-width: 768px){
+  body{ overflow-y:auto !important; height:auto !important; min-height:100dvh !important; }
+  .cards-grid, .cards-grid-kucuk{
+    grid-template-columns: repeat(auto-fill, minmax(min(260px,100%),1fr)) !important;
+    gap: 10px !important;
+  }
+  .turne-card{ min-width:0 !important; }
+  .turne-card *{ min-width:0; }
+  .turne-card-header{
+    display:grid !important;
+    grid-template-columns: minmax(0,1fr) auto !important;
+    align-items:center !important;
+    gap:8px !important;
+  }
+  .turne-card-title, .tk-oyun-adi{
+    min-width:0 !important;
+    overflow-wrap:anywhere !important;
+    hyphens:auto !important;
+    white-space:normal !important;
+    display:-webkit-box;
+    -webkit-line-clamp:2;
+    -webkit-box-orient:vertical;
+    overflow:hidden;
+  }
+  .tk-date-row{ flex-wrap:wrap !important; overflow:visible !important; }
+  .turne-card-footer{ flex-wrap:wrap !important; }
+  .turne-card-footer .btn, .turne-card-footer button{ flex:1 1 auto !important; min-width:0 !important; }
+  .tabs-bar, .filters-bar{
+    flex-wrap:wrap !important;
+    gap:6px !important;
+    overflow-x:auto;
+  }
+  .tabs-bar > *, .filters-bar > *{ flex:0 0 auto; }
+  .cal-wrap{ overflow-x:auto; }
+  .cal-day{ min-width:0; }
+  .cal-day *{ min-width:0; }
+  .app-main, main, .section-wrap{
+    padding-bottom: calc(72px + env(safe-area-inset-bottom)) !important;
+  }
+}
+@media (max-width: 480px){
+  .turne-card [style*="font-size:8px"],
+  .turne-card [style*="font-size:9px"],
+  .turne-card [style*="font-size:9.5px"],
+  .turne-card [style*="font-size:10px"],
+  .turne-card [style*="font-size:10.5px"]{
+    font-size: 11px !important;
+  }
 }
 </style>
 
@@ -15075,6 +15127,24 @@ function turneSuresi(t) {
     return 1;
   } catch { return 1; }
 }
+function benzersizGunSayHarita(liste) {
+  var aralıklar = [];
+  liste.forEach(function(t) {
+    var b = parseLocalDate(t.baslangicTarih), e = parseLocalDate(t.bitisTarih) || b;
+    if (!b) return;
+    if (!e || e < b) e = b;
+    aralıklar.push([b.getTime(), e.getTime()]);
+  });
+  if (!aralıklar.length) return 0;
+  aralıklar.sort(function(a,b){ return a[0]-b[0]; });
+  var birl = [aralıklar[0]];
+  for (var i = 1; i < aralıklar.length; i++) {
+    var son = birl[birl.length-1], cur = aralıklar[i];
+    if (cur[0] <= son[1] + 86400000) { if (cur[1] > son[1]) son[1] = cur[1]; }
+    else { birl.push(cur); }
+  }
+  return birl.reduce(function(s,r){ return s + Math.round((r[1]-r[0])/86400000) + 1; }, 0);
+}
 function formatTarih(tarih, kisalt) {
   if (!tarih) return '—';
   try {
@@ -17293,7 +17363,7 @@ function turneCard(t, kucuk) {
     + '</div>'))
 
     // ── ALT EYLEM BANDI — küçük modda gizle
-    + (_kucuk ? '' : ('<div class=\"turne-card-footer\" style=\"display:flex;align-items:center;gap:5px;flex-wrap:nowrap;min-width:0;border-top:1px solid hsl(220,16%,90%);padding:9px 16px\">'
+    + (_kucuk ? '' : ('<div class=\"turne-card-footer\" style=\"display:flex;align-items:center;gap:4px;flex-wrap:nowrap;min-width:0;border-top:1px solid hsl(220,16%,90%);padding:8px 12px\">'
     + (window._goruntuleme_modu ? '' :
         '<button class=\"btn btn-primary\" style=\"height:32px;font-size:11.5px;padding:0 12px;border-radius:7px;display:inline-flex;align-items:center;gap:4px;font-weight:800;flex-shrink:0;white-space:nowrap;letter-spacing:.2px\" onclick=\"event.stopPropagation();openKisiModal(' + t._rowIdx + ')\" title=\"Turneye katılacak kişileri yönet\">'
       + '<svg width=\"11\" height=\"11\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.5\" stroke-linecap=\"round\"><path d=\"M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2\"/><circle cx=\"9\" cy=\"7\" r=\"4\"/><line x1=\"23\" y1=\"11\" x2=\"17\" y2=\"11\"/><line x1=\"20\" y1=\"8\" x2=\"20\" y2=\"14\"/></svg>'
@@ -17302,20 +17372,18 @@ function turneCard(t, kucuk) {
     + (window._goruntuleme_modu ? '<span class="_sync-badge" data-rowidx="' + t._rowIdx + '" style="font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px;display:inline-flex;align-items:center;gap:3px;white-space:nowrap;background:hsl(142,50%,94%);color:hsl(142,50%,28%);border:1px solid hsl(142,50%,78%)">✓ Güncel</span>' : '')
     + '<div style=\"flex:1;min-width:0\"></div>'
     + (window._goruntuleme_modu ? '' :
-        '<button class=\"btn btn-outline\" style=\"height:30px;font-size:11.5px;padding:0 9px;border-radius:7px;display:inline-flex;align-items:center;gap:3px;flex-shrink:0;white-space:nowrap\" onclick=\"event.stopPropagation();editTurne(' + t._rowIdx + ')\" title=\"Turne bilgilerini düzenle\">'
-      + '<svg width=\"11\" height=\"11\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"><path d=\"M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7\"/><path d=\"M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z\"/></svg>'
-      + 'D\u00fczenle'
+        '<button class=\"btn btn-outline\" style=\"height:30px;width:30px;padding:0;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0\" onclick=\"event.stopPropagation();editTurne(' + t._rowIdx + ')\" title=\"Turne bilgilerini düzenle\">'
+      + '<svg width=\"13\" height=\"13\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"><path d=\"M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7\"/><path d=\"M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z\"/></svg>'
       + '</button>')
-    + '<button class=\"btn btn-outline\" style=\"height:30px;font-size:11.5px;padding:0 9px;border-radius:7px;display:inline-flex;align-items:center;gap:3px;flex-shrink:0;white-space:nowrap\" onclick=\"event.stopPropagation();gorevlendirmePdf(' + t._rowIdx + ')\" title=\"PDF: G\u00f6revlendirme yaz\u0131s\u0131 + kadro listesi\">'
-    + '<svg width=\"11\" height=\"11\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"><path d=\"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z\"/><polyline points=\"14,2 14,8 20,8\"/></svg>'
-    + 'PDF'
+    + '<button class=\"btn btn-outline\" style=\"height:30px;width:30px;padding:0;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0\" onclick=\"event.stopPropagation();gorevlendirmePdf(' + t._rowIdx + ')\" title=\"PDF: Görevlendirme yazısı + kadro listesi\">'
+    + '<svg width=\"13\" height=\"13\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"><path d=\"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z\"/><polyline points=\"14,2 14,8 20,8\"/></svg>'
     + '</button>'
     + (window._goruntuleme_modu ? '' :
-        '<button class=\"btn btn-outline\" style=\"height:30px;font-size:11.5px;padding:0 9px;border-radius:7px;display:inline-flex;align-items:center;gap:3px;flex-shrink:0;white-space:nowrap\" onclick=\"event.stopPropagation();turneCopyala(' + t._rowIdx + ')\" title=\"Taslak olarak kopyala\">'
-      + '<svg width=\"11\" height=\"11\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"9\" y=\"9\" width=\"13\" height=\"13\" rx=\"2\"/><path d=\"M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1\"/></svg>Kopyala'
+        '<button class=\"btn btn-outline\" style=\"height:30px;width:30px;padding:0;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0\" onclick=\"event.stopPropagation();turneCopyala(' + t._rowIdx + ')\" title=\"Taslak olarak kopyala\">'
+      + '<svg width=\"13\" height=\"13\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"9\" y=\"9\" width=\"13\" height=\"13\" rx=\"2\"/><path d=\"M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1\"/></svg>'
       + '</button>'
-      + '<button style=\"height:30px;font-size:11.5px;padding:0 9px;border-radius:7px;border:1px solid hsl(0,55%,82%);background:hsl(0,80%,97%);color:hsl(0,68%,42%);cursor:pointer;display:inline-flex;align-items:center;gap:3px;flex-shrink:0;white-space:nowrap;font-weight:600\" title=\"Turneyi sil (onay gerekir)\" onclick=\"event.stopPropagation();deleteTurneOnay(' + t._rowIdx + ', \'' + (t.oyun||'Turne').replace(/'/g,'\\x27') + '\')\">'
-      + '<svg width=\"11\" height=\"11\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.5\" stroke-linecap=\"round\"><polyline points=\"3,6 5,6 21,6\"/><path d=\"M19,6l-1,14a2,2,0,0,1-2,2H8a2,2,0,0,1-2-2L5,6\"/><path d=\"M10,11v6M14,11v6\"/></svg>Sil'
+      + '<button style=\"height:30px;width:30px;padding:0;border-radius:7px;border:1px solid hsl(0,55%,82%);background:hsl(0,80%,97%);color:hsl(0,68%,42%);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;font-weight:600\" title=\"Turneyi sil (onay gerekir)\" onclick=\"event.stopPropagation();deleteTurneOnay(' + t._rowIdx + ', \'' + (t.oyun||'Turne').replace(/'/g,'\\x27') + '\')\">'
+      + '<svg width=\"13\" height=\"13\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.5\" stroke-linecap=\"round\"><polyline points=\"3,6 5,6 21,6\"/><path d=\"M19,6l-1,14a2,2,0,0,1-2,2H8a2,2,0,0,1-2-2L5,6\"/><path d=\"M10,11v6M14,11v6\"/></svg>'
       + '</button>')
     + '</div>'))
     + '</div>';
@@ -27829,7 +27897,6 @@ function haritaIstatistikGoster() {
   // İl sayıları
   var ilSay = {};
   var toplamKm = 0;
-  var toplamGun = 0;
   var sezonSay = {};
 
   // listeAktif: yarıda kesildi için sadece gidildi !== false olan durakları hesapla
@@ -27846,7 +27913,6 @@ function haritaIstatistikGoster() {
   }
 
   listeAktif.forEach(function(t) {
-    toplamGun += turneSuresi(t);
     var yil = (t.baslangicTarih || t.tarih || '').split('-')[0];
     if (yil) sezonSay[yil] = (sezonSay[yil]||0) + 1;
     durakIllerListesi(t).forEach(function(il) { _istatIlEkle(il); });
@@ -27857,11 +27923,13 @@ function haritaIstatistikGoster() {
       ? t.duraklar.filter(function(d){ return d.gidildi !== false; })
       : (t.il ? [{il:t.il}] : []);
     if (!gidilenDuraklar.length) return;
-    toplamGun += turneSuresi(t);
     var yil = (t.baslangicTarih || t.tarih || '').split('-')[0];
     if (yil) sezonSay[yil] = (sezonSay[yil]||0) + 1;
     gidilenDuraklar.forEach(function(d) { _istatIlEkle(d.il); });
   });
+
+  // Çakışan günleri birleştirerek benzersiz toplam gün hesapla
+  var toplamGun = benzersizGunSayHarita(listeAktif.concat(listeYK));
 
   var enCokIller = Object.entries(ilSay).sort(function(a,b){ return b[1]-a[1]; }).slice(0,5);
   var sezonlar = Object.entries(sezonSay).sort(function(a,b){ return b[0].localeCompare(a[0]); });
@@ -29447,21 +29515,20 @@ function calGenelRaporPdf() {
   if (!turneler.length) { alert('Henüz turne kaydı yok.'); return; }
   var bugun = new Date().toLocaleDateString('tr-TR',{day:'numeric',month:'long',year:'numeric'});
 
-  var __origTurneler_pdf = turneler;
-  var turneler = __origTurneler_pdf.filter(function(t){ return !t.anaGrupId; });
+  var _turneler = turneler.filter(function(t){ return !t.anaGrupId; });
   var sezonlar = {};
-  turneler.forEach(function(t) {
+  _turneler.forEach(function(t) {
     var yil = (t.baslangicTarih||t.tarih||'').split('-')[0]||'?';
     var sezon = yil+'–'+(parseInt(yil)+1);
     if (!sezonlar[sezon]) sezonlar[sezon] = [];
     sezonlar[sezon].push(t);
   });
 
-  var toplamSure   = turneler.reduce(function(s,t){return s+(typeof turneSuresi==='function'?turneSuresi(t):0);},0);
-  var toplamTemsil = turneler.reduce(function(s,t){return s+(typeof durakToplamTemsil==='function'?durakToplamTemsil(t):0);},0);
+  var toplamSure   = _turneler.reduce(function(s,t){return s+(typeof turneSuresi==='function'?turneSuresi(t):0);},0);
+  var toplamTemsil = _turneler.reduce(function(s,t){return s+(typeof durakToplamTemsil==='function'?durakToplamTemsil(t):0);},0);
   var ilSayisi = (function(){
     var s={};
-    turneler.forEach(function(t){ if(typeof durakIllerListesi==='function') durakIllerListesi(t).forEach(function(il){s[il.split('/')[0].trim()]=1;}); });
+    _turneler.forEach(function(t){ if(typeof durakIllerListesi==='function') durakIllerListesi(t).forEach(function(il){s[il.split('/')[0].trim()]=1;}); });
     return Object.keys(s).length;
   })();
 
@@ -29472,7 +29539,7 @@ function calGenelRaporPdf() {
     return '<tr>'      +'<td style="font-weight:700">'+sezon+'</td>'      +'<td class="c">'+st.length+'</td>'      +'<td class="c">'+sure+' gün</td>'      +'<td class="c">'+temsil+'</td>'      +'</tr>';
   }).join('');
 
-  var turneRows = turneler.slice().sort(function(a,b){
+  var turneRows = _turneler.slice().sort(function(a,b){
     return (b.baslangicTarih||b.tarih||'').localeCompare(a.baslangicTarih||a.tarih||'');
   }).map(function(t, i) {
     var sr     = typeof statuRenk==='function' ? statuRenk(t.statu||'') : {};
@@ -29496,7 +29563,7 @@ function calGenelRaporPdf() {
     +'</div>'
     +'<div class="rapor-tarih">'+bugun+'</div>'
     +'</div>'
-    +'<h1>Genel Turne Raporu</h1>'    +'<div class="ozet" style="grid-template-columns:repeat(5,1fr)">'    +'<div class="ozet-kart"><span class="sayi">'+turneler.length+'</span><span class="etiket">Toplam Turne</span></div>'    +'<div class="ozet-kart"><span class="sayi">'+toplamSure+'</span><span class="etiket">Toplam Gün</span></div>'    +'<div class="ozet-kart"><span class="sayi">'+toplamTemsil+'</span><span class="etiket">Toplam Temsil</span></div>'    +'<div class="ozet-kart"><span class="sayi">'+ilSayisi+'</span><span class="etiket">Ziyaret İl</span></div>'    +'<div class="ozet-kart"><span class="sayi">'+Object.keys(sezonlar).length+'</span><span class="etiket">Sezon</span></div>'    +'</div>'    +'<h2>Sezon Özeti</h2>'    +'<table style="width:auto;min-width:320pt;border-collapse:collapse"><thead><tr style="background:#6b1b1b">'    +'<th style="min-width:80pt;color:#fff;padding:7pt 10pt;font-size:10pt;font-weight:700;border:1pt solid #5a1717">Sezon</th>'    +'<th class="c" style="min-width:50pt;color:#fff;padding:7pt 10pt;font-size:10pt;font-weight:700;border:1pt solid #5a1717">Turne</th>'    +'<th class="c" style="min-width:70pt;color:#fff;padding:7pt 10pt;font-size:10pt;font-weight:700;border:1pt solid #5a1717">Toplam Gün</th>'    +'<th class="c" style="min-width:50pt;color:#fff;padding:7pt 10pt;font-size:10pt;font-weight:700;border:1pt solid #5a1717">Temsil</th>'    +'</tr></thead><tbody>'+sezonRows+'</tbody></table>'    +'<h2>Tüm Turneler</h2>'    +'<table><thead><tr>'    +'<th class="c" style="width:22pt">No</th>'    +'<th>Oyun</th>'    +'<th>Şehir / Güzergah</th>'    +'<th>Tarih</th>'    +'<th class="c">Süre</th>'    +'<th class="c">Temsil</th>'    +'<th class="c">Kadro</th>'    +'<th class="c">Yıl</th>'    +'<th>Statü</th>'    +'</tr></thead><tbody>'+turneRows+'</tbody></table>'    +'<'+'script>window.onload=function(){window.print();};<\/script>'    +'</body></html>';
+    +'<h1>Genel Turne Raporu</h1>'    +'<div class="ozet" style="grid-template-columns:repeat(5,1fr)">'    +'<div class="ozet-kart"><span class="sayi">'+_turneler.length+'</span><span class="etiket">Toplam Turne</span></div>'    +'<div class="ozet-kart"><span class="sayi">'+toplamSure+'</span><span class="etiket">Toplam Gün</span></div>'    +'<div class="ozet-kart"><span class="sayi">'+toplamTemsil+'</span><span class="etiket">Toplam Temsil</span></div>'    +'<div class="ozet-kart"><span class="sayi">'+ilSayisi+'</span><span class="etiket">Ziyaret İl</span></div>'    +'<div class="ozet-kart"><span class="sayi">'+Object.keys(sezonlar).length+'</span><span class="etiket">Sezon</span></div>'    +'</div>'    +'<h2>Sezon Özeti</h2>'    +'<table style="width:auto;min-width:320pt;border-collapse:collapse"><thead><tr style="background:#6b1b1b">'    +'<th style="min-width:80pt;color:#fff;padding:7pt 10pt;font-size:10pt;font-weight:700;border:1pt solid #5a1717">Sezon</th>'    +'<th class="c" style="min-width:50pt;color:#fff;padding:7pt 10pt;font-size:10pt;font-weight:700;border:1pt solid #5a1717">Turne</th>'    +'<th class="c" style="min-width:70pt;color:#fff;padding:7pt 10pt;font-size:10pt;font-weight:700;border:1pt solid #5a1717">Toplam Gün</th>'    +'<th class="c" style="min-width:50pt;color:#fff;padding:7pt 10pt;font-size:10pt;font-weight:700;border:1pt solid #5a1717">Temsil</th>'    +'</tr></thead><tbody>'+sezonRows+'</tbody></table>'    +'<h2>Tüm Turneler</h2>'    +'<table><thead><tr>'    +'<th class="c" style="width:22pt">No</th>'    +'<th>Oyun</th>'    +'<th>Şehir / Güzergah</th>'    +'<th>Tarih</th>'    +'<th class="c">Süre</th>'    +'<th class="c">Temsil</th>'    +'<th class="c">Kadro</th>'    +'<th class="c">Yıl</th>'    +'<th>Statü</th>'    +'</tr></thead><tbody>'+turneRows+'</tbody></table>'    +'<'+'script>window.onload=function(){window.print();};<\/script>'    +'</body></html>';
 
   var win = window.open('', '_blank');
   if (!win) { alert('Pop-up engelleyiciyi kapatın.'); return; }
