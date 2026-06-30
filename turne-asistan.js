@@ -555,6 +555,39 @@
             Excel İndir (.xlsx)
           </button>
           <div class="ta-rap-foot">SheetJS · Tüm hesaplamalar tarayıcıda yapılır</div>
+
+          <!-- ── AYLIK PDF RAPOR ── -->
+          <div class="ta-rap-card" style="margin-top:14px;">
+            <h4>📄 Aylık PDF Rapor</h4>
+            <div style="font-size:11.5px;color:#5A4D42;line-height:1.5;margin-bottom:10px;">
+              Seçilen ayın <b>resmi</b> turne faaliyet raporunu PDF olarak oluşturur.
+            </div>
+            <div class="ta-rap-row">
+              <label>Ay
+                <select id="ta-pdf-ay"></select>
+              </label>
+              <label>Yıl
+                <select id="ta-pdf-yil"></select>
+              </label>
+            </div>
+            <button class="ta-rap-dl" id="ta-pdf-aylik-btn" style="margin-top:8px;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              Aylık PDF Oluştur
+            </button>
+          </div>
+
+          <!-- ── GENEL PDF RAPOR ── -->
+          <div class="ta-rap-card">
+            <h4>📑 Genel PDF Rapor</h4>
+            <div style="font-size:11.5px;color:#5A4D42;line-height:1.5;margin-bottom:10px;">
+              Tüm dönem için <b>resmi</b> genel turne faaliyet raporu (özet + sezon dökümü + turne listesi).
+            </div>
+            <button class="ta-rap-dl" id="ta-pdf-genel-btn">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>
+              Genel PDF Oluştur
+            </button>
+            <div class="ta-rap-foot" style="margin-top:6px;">Times New Roman · A4 · 2.5cm kenar · iptaller hariç</div>
+          </div>
         </div>
       </div>
 
@@ -1846,7 +1879,7 @@
     if (/(toplam|kac|kaç).*(turne)/.test(Q)) {
       const now2=new Date();
       const aktifScope=scope.filter(t=>!t.statu.includes("iptal"));
-      const g=aktifScope.reduce((s,t)=>s+turneGun(t),0);
+      const g=benzersizGunSay(aktifScope);
       const tm=aktifScope.reduce((s,t)=>s+(t.sayi||0),0);
       const tamam=aktifScope.filter(t=>t.statu.startsWith("tamamlan")||t.statu==="yarida-kesildi").length;
       const devamS=aktifScope.filter(t=>{const bas=parseDate(t.baslangic),bit=parseDate(t.bitis)||bas;return bas&&bit&&bas<=now2&&bit>=now2;}).length;
@@ -2519,7 +2552,7 @@
       const _personel_set = new Set(); _aktifMot.forEach(t=>t.katilimcilar.forEach(k=>_personel_set.add(norm(k.kisi))));
       const _personel_say = _personel_set.size;
       const _temsil_say = _aktifMot.reduce((s,t)=>s+(t.sayi||0),0);
-      const _gun_say = _aktifMot.reduce((s,t)=>s+turneGun(t),0);
+      const _gun_say = benzersizGunSay(_aktifMot);
       const MOTIVASYONLAR = [
         {msg:`Sahne ışığı yandığında tüm yorgunluk unutulur — ve siz tam da o ışığı taşıyorsunuz! 🎭✨`, emoji:"🌟"},
         {msg:`${_turne_say} turne, ${_sehir_say} şehir, ${_personel_say} kişilik kadro — bu bir ekip değil, bir aile! 👨‍👩‍👧‍👦❤️`, emoji:"💪"},
@@ -2549,7 +2582,7 @@
       const personelSet2=new Set(); tumIptalDisi.forEach(t=>t.katilimcilar.forEach(k=>personelSet2.add(norm(k.kisi))));
       // Şehir: iptal hariç (yarıda kesilenler de gidilmiş sayılır)
       const ilSet2=new Set(); tumIptalDisi.forEach(t=>collectUniqueCitiesFromTour(t).forEach(il=>ilSet2.add(norm(il))));
-      const toplamGun2=aktifTurneler.reduce((s,t)=>s+turneGun(t),0);
+      const toplamGun2=benzersizGunSay(aktifTurneler);
       const enUzunTurne=aktifTurneler.slice().sort((a,b)=>turneGun(b)-turneGun(a))[0];
       const enKalabalikTurne=tumIptalDisi.filter(t=>t.katilimcilar.length>0).sort((a,b)=>b.katilimcilar.length-a.katilimcilar.length)[0];
       // kişi turne sayısı — norm anahtarla say, iptal hariç
@@ -2671,7 +2704,7 @@
       }).length;
       const gelecek2   = aktifT.filter(t => { const d = parseDate(t.baslangic); return d && d > now2; }).length;
       const iptal2     = T.filter(t => t.statu === "iptal").length;
-      const toplamGun2 = aktifT.reduce((s, t) => s + turneGun(t), 0);
+      const toplamGun2 = benzersizGunSay(aktifT);
       const toplamTemsil2 = aktifT.reduce((s, t) => s + (Number(t.sayi) || 0), 0);
       const personelSet2 = new Set();
       aktifT.forEach(t => (t.katilimcilar || []).forEach(k => k.kisi && personelSet2.add(norm(k.kisi))));
@@ -3855,16 +3888,296 @@
     sel.innerHTML = '<option value="">Tüm yıllar</option>' + sorted.map(y=>`<option value="${y}">${y}</option>`).join("");
   }
 
+
+  /* ═══════════════════════════════════════════════════════════════
+     RESMİ PDF RAPORLARI — Aylık & Genel Turne Faaliyet Raporu
+     Times New Roman 12pt · A4 · 2.5cm kenar · sade resmi başlık
+     ═══════════════════════════════════════════════════════════════ */
+  function _pdfPopulateAyYil() {
+    const ayEl = $i("ta-pdf-ay"), yilEl = $i("ta-pdf-yil");
+    if (!ayEl || !yilEl) return;
+    const AYLAR_TR = ["Ocak","Şubat","Mart","Nisan","Mayıs","Haziran","Temmuz","Ağustos","Eylül","Ekim","Kasım","Aralık"];
+    const now = new Date();
+    if (!ayEl.options.length) {
+      ayEl.innerHTML = AYLAR_TR.map((a,i)=>`<option value="${i}">${a}</option>`).join("");
+      ayEl.value = String(now.getMonth());
+    }
+    if (!yilEl.options.length) {
+      const yillar = new Set([now.getFullYear()]);
+      (DS?.turneler || []).forEach(t => { const d=parseDate(t.baslangic); if(d) yillar.add(d.getFullYear()); });
+      const sorted = [...yillar].sort((a,b)=>b-a);
+      yilEl.innerHTML = sorted.map(y=>`<option value="${y}">${y}</option>`).join("");
+      yilEl.value = String(now.getFullYear());
+    }
+  }
+
+  function _pdfFmtDate(d) {
+    const dd = String(d.getDate()).padStart(2,"0");
+    const mm = String(d.getMonth()+1).padStart(2,"0");
+    return `${dd}.${mm}.${d.getFullYear()}`;
+  }
+  function _pdfFmtDateTime(d) {
+    return _pdfFmtDate(d) + " " + String(d.getHours()).padStart(2,"0") + ":" + String(d.getMinutes()).padStart(2,"0");
+  }
+  function _pdfEsc(s) {
+    return String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  }
+  function _pdfStatuLabel(s) { return statuGoster(s||"") || "—"; }
+
+  function _pdfResmiCSS() {
+    return `<style>
+      @page { size: A4; margin: 2.5cm 2.5cm 3cm 2.5cm;
+        @bottom-center { content: "Sayfa " counter(page) " / " counter(pages); font-family: "Times New Roman", Times, serif; font-size: 10pt; color: #333; }
+        @bottom-left   { content: var(--olusturma); font-family: "Times New Roman", Times, serif; font-size: 9pt; color: #555; }
+      }
+      * { box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+      html, body { font-family: "Times New Roman", Times, serif; font-size: 12pt; color: #000; background:#fff; margin:0; padding:0; line-height: 1.45; }
+      .meta { text-align: right; font-size: 11pt; margin-bottom: 18pt; line-height: 1.6; }
+      .meta div { margin: 0; }
+      .meta b { font-weight: 700; }
+      h1.belge-baslik { text-align: center; font-size: 14pt; font-weight: 700; text-transform: uppercase; letter-spacing: .5pt; margin: 6pt 0 18pt; }
+      h2 { font-size: 12pt; font-weight: 700; color: #5a0f0f; border-bottom: 1.5pt solid #c0a0a0; padding-bottom: 4pt; margin: 18pt 0 8pt; text-transform: uppercase; letter-spacing: .3pt; page-break-after: avoid; }
+      .ozet { display: grid; gap: 8pt; grid-template-columns: repeat(4,1fr); margin-bottom: 14pt; }
+      .ozet-kart { border: 1pt solid #c8a4a4; border-radius: 4pt; padding: 8pt 6pt; text-align: center; background:#fdf5f5; page-break-inside: avoid; }
+      .ozet-kart .sayi { display:block; font-size: 18pt; font-weight: 700; color: #6b1b1b; line-height: 1; }
+      .ozet-kart .etiket { display:block; font-size: 9pt; color: #444; text-transform: uppercase; letter-spacing: .4pt; margin-top: 4pt; font-weight: 600; }
+      table { width: 100%; border-collapse: collapse; font-size: 11pt; margin-top: 4pt; }
+      thead { display: table-header-group; }
+      thead tr { background:#6b1b1b; }
+      thead th { color:#fff; padding: 6pt 8pt; font-size: 11pt; font-weight: 700; text-align: left; border: 0.75pt solid #5a1717; }
+      thead th.c { text-align: center; }
+      tbody tr { page-break-inside: avoid; }
+      tbody tr:nth-child(even) { background:#faf8f6; }
+      td { padding: 5pt 8pt; border-bottom: 0.5pt solid #e5ddd5; vertical-align: top; font-size: 11pt; }
+      td.c { text-align: center; }
+      td.dim { color:#333; font-size: 10.5pt; }
+      .badge { display:inline-block; padding:1pt 6pt; border-radius:3pt; font-size:9.5pt; font-weight:700; }
+      .gun-no { font-weight: 700; color:#6b1b1b; text-align:center; width: 28pt; background:#fdf5f5; }
+      .gun-ad { font-size: 9.5pt; text-align:center; width: 32pt; background:#fdf5f5; text-transform: uppercase; }
+      .etkinlik { font-weight: 700; }
+      .saat-hucre { text-align:center; font-weight:700; width: 50pt; }
+      .konu-satir { margin-top: 6pt; font-size: 11pt; }
+    </style>`;
+  }
+
+  function _pdfBaslikBlok(belgeBaslik, konu) {
+    const bugun = _pdfFmtDate(new Date());
+    return `<div class="meta">
+      <div><b>Sayı:</b> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</div>
+      <div><b>Tarih:</b> ${bugun}</div>
+      <div><b>Konu:</b> ${_pdfEsc(konu)}</div>
+    </div>
+    <h1 class="belge-baslik">${_pdfEsc(belgeBaslik)}</h1>`;
+  }
+
+  function _pdfAc(html) {
+    const olusturma = `'Oluşturma: ${_pdfFmtDateTime(new Date())}'`;
+    // CSS var(--olusturma) için style hack: @page içinde JS değişkeni kullanılamaz; bunun yerine doğrudan footer'a span ekleyelim ↓
+    const finalHtml = html.replace("__OLUSTURMA__", `Oluşturma: ${_pdfFmtDateTime(new Date())}`);
+    const w = window.open("", "_blank");
+    if (!w) { alert("Lütfen pop-up engelleyiciyi kapatın."); return; }
+    w.document.write(finalHtml);
+    w.document.close();
+  }
+
+  function _pdfTurneSatiri(t, idx) {
+    const sure = turneGun(t);
+    const kadro = (t.katilimcilar || []).length;
+    const temsil = Number(t.sayi) || 0;
+    const iller = (() => {
+      const arr = [];
+      if (t.il) arr.push(t.il);
+      (t.duraklar || []).forEach(d => { if (d.il && !arr.includes(d.il)) arr.push(d.il); });
+      return arr.join(", ");
+    })();
+    const bas = fmtTarih(t.baslangic);
+    const bit = t.bitis && t.bitis !== t.baslangic ? " – " + fmtTarih(t.bitis) : "";
+    return `<tr>
+      <td class="c">${idx}</td>
+      <td><b>${_pdfEsc(t.oyun||"—")}</b></td>
+      <td class="dim">${_pdfEsc(iller||"—")}</td>
+      <td class="dim">${_pdfEsc(bas+bit)}</td>
+      <td class="c">${sure} gün</td>
+      <td class="c">${temsil||"—"}</td>
+      <td class="c">${kadro}</td>
+      <td>${_pdfEsc(_pdfStatuLabel(t.statu))}</td>
+    </tr>`;
+  }
+
+  function _pdfAylikIndir() {
+    if (!DS || !DS.turneler) { alert("Veri yüklenmemiş."); return; }
+    const ay = parseInt($i("ta-pdf-ay").value, 10);
+    const yil = parseInt($i("ta-pdf-yil").value, 10);
+    const AYLAR_TR = ["Ocak","Şubat","Mart","Nisan","Mayıs","Haziran","Temmuz","Ağustos","Eylül","Ekim","Kasım","Aralık"];
+    const ayAdi = `${AYLAR_TR[ay]} ${yil}`;
+    const sonGun = new Date(yil, ay+1, 0).getDate();
+    const ayBas = new Date(yil, ay, 1);
+    const ayBit = new Date(yil, ay, sonGun, 23, 59, 59);
+
+    // Bu ayla kesişen, iptal hariç turneler
+    const ayTurneler = DS.turneler.filter(t => {
+      if ((t.statu||"").includes("iptal")) return false;
+      const b = parseDate(t.baslangic); let e = parseDate(t.bitis) || b;
+      if (!b) return false;
+      return b <= ayBit && e >= ayBas;
+    });
+
+    if (!ayTurneler.length) {
+      alert(ayAdi + " ayında turne yok.");
+      return;
+    }
+
+    // Benzersiz turne günü (sadece bu ay içinde)
+    const gunSet = new Set();
+    ayTurneler.forEach(t => {
+      let b = parseDate(t.baslangic); let e = parseDate(t.bitis) || b;
+      if (!b) return;
+      // ay'a kırp
+      if (b < ayBas) b = new Date(ayBas);
+      if (e > ayBit) e = new Date(ayBit);
+      for (let d = new Date(b); d <= e; d.setDate(d.getDate()+1)) {
+        gunSet.add(d.getFullYear()+"-"+(d.getMonth()+1)+"-"+d.getDate());
+      }
+    });
+    const benzersizGun = gunSet.size;
+
+    const sehirSet = new Set();
+    ayTurneler.forEach(t => { if (t.il) sehirSet.add(t.il); (t.duraklar||[]).forEach(d=>{ if(d.il) sehirSet.add(d.il);}); });
+    const personelSet = new Set();
+    ayTurneler.forEach(t => (t.katilimcilar||[]).forEach(k => k.kisi && personelSet.add(norm(k.kisi))));
+    const toplamTemsil = ayTurneler.reduce((s,t)=>s+(Number(t.sayi)||0),0);
+
+    const sorted = ayTurneler.slice().sort((a,b)=> (parseDate(a.baslangic)||0) - (parseDate(b.baslangic)||0));
+    const rows = sorted.map((t,i)=>_pdfTurneSatiri(t, i+1)).join("");
+
+    const html = `<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8">
+      <title>${_pdfEsc(ayAdi)} Aylık Turne Faaliyet Raporu</title>
+      ${_pdfResmiCSS()}
+    </head><body>
+      ${_pdfBaslikBlok(`${ayAdi} Aylık Turne Faaliyet Raporu`, "Aylık Turne Faaliyet Raporu")}
+      <h2>Özet</h2>
+      <div class="ozet">
+        <div class="ozet-kart"><span class="sayi">${ayTurneler.length}</span><span class="etiket">Turne</span></div>
+        <div class="ozet-kart"><span class="sayi">${benzersizGun}</span><span class="etiket">Faaliyet Günü</span></div>
+        <div class="ozet-kart"><span class="sayi">${toplamTemsil}</span><span class="etiket">Toplam Temsil</span></div>
+        <div class="ozet-kart"><span class="sayi">${sehirSet.size}</span><span class="etiket">Şehir</span></div>
+      </div>
+      <div class="konu-satir"><b>Personel sayısı (benzersiz):</b> ${personelSet.size}</div>
+      <h2>Turne Listesi</h2>
+      <table>
+        <thead><tr>
+          <th class="c" style="width:24pt">No</th>
+          <th>Oyun</th>
+          <th>Şehir / Güzergâh</th>
+          <th>Tarih</th>
+          <th class="c">Süre</th>
+          <th class="c">Temsil</th>
+          <th class="c">Kadro</th>
+          <th>Statü</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div style="position:fixed;bottom:1cm;left:2.5cm;font-size:9pt;color:#555;">__OLUSTURMA__</div>
+      <script>window.onload=function(){setTimeout(function(){window.print();},150);};<\/script>
+    </body></html>`;
+
+    _pdfAc(html);
+  }
+
+  function _pdfGenelIndir() {
+    if (!DS || !DS.turneler) { alert("Veri yüklenmemiş."); return; }
+    const aktif = DS.turneler.filter(t => !(t.statu||"").includes("iptal"));
+    if (!aktif.length) { alert("Kayıt yok."); return; }
+
+    // Sezon = yıl–yıl+1 (Ekim-Eylül tipik tiyatro sezonu, ama burada başlangıç yılına göre)
+    const sezonlar = {};
+    aktif.forEach(t => {
+      const d = parseDate(t.baslangic);
+      const yil = d ? d.getFullYear() : "?";
+      const key = yil + "–" + (typeof yil==="number"?(yil+1):"?");
+      (sezonlar[key] = sezonlar[key] || []).push(t);
+    });
+
+    const toplamGun = benzersizGunSay(aktif);
+    const toplamTemsil = aktif.reduce((s,t)=>s+(Number(t.sayi)||0),0);
+    const sehirSet = new Set();
+    aktif.forEach(t => { if (t.il) sehirSet.add(t.il); (t.duraklar||[]).forEach(d=>{ if(d.il) sehirSet.add(d.il);}); });
+    const personelSet = new Set();
+    aktif.forEach(t => (t.katilimcilar||[]).forEach(k => k.kisi && personelSet.add(norm(k.kisi))));
+
+    const sezonRows = Object.keys(sezonlar).sort().reverse().map(sezon => {
+      const st = sezonlar[sezon];
+      const sure = benzersizGunSay(st);
+      const temsil = st.reduce((s,t)=>s+(Number(t.sayi)||0),0);
+      return `<tr>
+        <td><b>${_pdfEsc(sezon)}</b></td>
+        <td class="c">${st.length}</td>
+        <td class="c">${sure} gün</td>
+        <td class="c">${temsil}</td>
+      </tr>`;
+    }).join("");
+
+    const sorted = aktif.slice().sort((a,b)=> (parseDate(b.baslangic)||0) - (parseDate(a.baslangic)||0));
+    const turneRows = sorted.map((t,i)=>_pdfTurneSatiri(t, i+1)).join("");
+
+    const html = `<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8">
+      <title>Genel Turne Faaliyet Raporu</title>
+      ${_pdfResmiCSS()}
+    </head><body>
+      ${_pdfBaslikBlok("Genel Turne Faaliyet Raporu", "Genel Turne Faaliyet Raporu")}
+      <h2>Özet</h2>
+      <div class="ozet" style="grid-template-columns:repeat(5,1fr)">
+        <div class="ozet-kart"><span class="sayi">${aktif.length}</span><span class="etiket">Turne</span></div>
+        <div class="ozet-kart"><span class="sayi">${toplamGun}</span><span class="etiket">Faaliyet Günü</span></div>
+        <div class="ozet-kart"><span class="sayi">${toplamTemsil}</span><span class="etiket">Toplam Temsil</span></div>
+        <div class="ozet-kart"><span class="sayi">${sehirSet.size}</span><span class="etiket">Şehir</span></div>
+        <div class="ozet-kart"><span class="sayi">${personelSet.size}</span><span class="etiket">Personel</span></div>
+      </div>
+      <div class="konu-satir"><b>Sezon sayısı:</b> ${Object.keys(sezonlar).length}</div>
+
+      <h2>Sezon Özeti</h2>
+      <table style="width:auto;min-width:60%">
+        <thead><tr>
+          <th>Sezon</th><th class="c">Turne</th><th class="c">Faaliyet Günü</th><th class="c">Temsil</th>
+        </tr></thead>
+        <tbody>${sezonRows}</tbody>
+      </table>
+
+      <h2>Tüm Turneler</h2>
+      <table>
+        <thead><tr>
+          <th class="c" style="width:24pt">No</th>
+          <th>Oyun</th>
+          <th>Şehir / Güzergâh</th>
+          <th>Tarih</th>
+          <th class="c">Süre</th>
+          <th class="c">Temsil</th>
+          <th class="c">Kadro</th>
+          <th>Statü</th>
+        </tr></thead>
+        <tbody>${turneRows}</tbody>
+      </table>
+      <div style="position:fixed;bottom:1cm;left:2.5cm;font-size:9pt;color:#555;">__OLUSTURMA__</div>
+      <script>window.onload=function(){setTimeout(function(){window.print();},150);};<\/script>
+    </body></html>`;
+
+    _pdfAc(html);
+  }
+
+
   function renderRapor() {
     if (!DS) return;
     _rapPopulateYears();
     _rapUpdatePreview();
+    _pdfPopulateAyYil();
     // Bind listeners once
     if (!renderRapor._bound) {
       ["ta-rap-yil","ta-rap-statu","ta-rap-kisi"].forEach(id => {
         const el = $i(id); if (el) el.addEventListener("input", _rapUpdatePreview);
       });
       $i("ta-rap-dl")?.addEventListener("click", _rapDownload);
+      $i("ta-pdf-aylik-btn")?.addEventListener("click", _pdfAylikIndir);
+      $i("ta-pdf-genel-btn")?.addEventListener("click", _pdfGenelIndir);
       renderRapor._bound = true;
     }
   }
