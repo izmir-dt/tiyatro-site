@@ -339,6 +339,13 @@
   .ta-rap-dl:active{transform:translateY(0);}
   .ta-rap-dl:disabled{opacity:.6;cursor:wait;transform:none;}
   .ta-rap-foot{font-size:10px;color:#8A857C;text-align:center;font-style:italic;}
+  .ta-rap-subtabs{display:flex;gap:6px;background:#fff;border:1px solid #E8E2D7;border-radius:10px;padding:4px;flex-shrink:0;}
+  .ta-rap-subtab{flex:1;padding:8px 6px;border:none;border-radius:7px;background:transparent;font-size:12px;font-weight:700;
+    color:#8A857C;cursor:pointer;font-family:inherit;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:5px;}
+  .ta-rap-subtab:hover{color:#A0192E;}
+  .ta-rap-subtab.active{color:#fff;background:linear-gradient(135deg,#A0192E,#6B0E1E);box-shadow:0 2px 6px rgba(107,14,30,.25);}
+  .ta-rap-subpanel{display:none;flex-direction:column;gap:12px;}
+  .ta-rap-subpanel.active{display:flex;}
 
   .ta-sorular-body{flex:1;overflow-y:auto;padding:12px;}
   .ta-sorular-body::-webkit-scrollbar{width:4px;}
@@ -505,88 +512,100 @@
       <div class="ta-view" id="ta-rapor-view">
         <div class="ta-rap-body" id="ta-rap-body">
           <div class="ta-rap-intro">
-            📑 <b>Raporlama Merkezi</b> — turne verilerinden çok sayfalı Excel raporu oluşturur.
-            Filtreleri seçip <b>Excel İndir</b>'e basın.
-          </div>
-          <div class="ta-rap-card">
-            <h4>🎯 Filtreler</h4>
-            <div class="ta-rap-row">
-              <label>Yıl
-                <select id="ta-rap-yil"><option value="">Tüm yıllar</option></select>
-              </label>
-              <label>Durum
-                <select id="ta-rap-statu">
-                  <option value="aktif">İptaller hariç</option>
-                  <option value="">Tümü</option>
-                  <option value="tamamlandi">Tamamlandı</option>
-                  <option value="planli">Planlı / Onaylı</option>
-                </select>
-              </label>
-            </div>
-            <div class="ta-rap-row">
-              <label>Personel adı (opsiyonel)
-                <input id="ta-rap-kisi" type="search" placeholder="Örn. Çağlar">
-              </label>
-            </div>
-          </div>
-          <div class="ta-rap-card">
-            <h4>📊 Rapor Sayfaları</h4>
-            <div class="ta-rap-checks" id="ta-rap-checks">
-              <label class="ta-rap-check"><input type="checkbox" value="personel_ozet" checked>
-                <span><span class="ta-rap-title">Personel Özet</span>
-                <span class="ta-rap-desc">Kişi · toplam turne · gün · şehir · oyun · ilk/son turne</span></span></label>
-              <label class="ta-rap-check"><input type="checkbox" value="personel_detay" checked>
-                <span><span class="ta-rap-title">Personel Detay</span>
-                <span class="ta-rap-desc">Her kişinin gittiği turnelerin satır satır listesi</span></span></label>
-              <label class="ta-rap-check"><input type="checkbox" value="turne_listesi" checked>
-                <span><span class="ta-rap-title">Turne Listesi</span>
-                <span class="ta-rap-desc">Tüm turneler · oyun · şehir · mekân · tarih · kadro</span></span></label>
-              <label class="ta-rap-check"><input type="checkbox" value="sehir_ozet" checked>
-                <span><span class="ta-rap-title">Şehir Özeti</span>
-                <span class="ta-rap-desc">Şehir başına turne, gün, oyun, personel sayısı</span></span></label>
-              <label class="ta-rap-check"><input type="checkbox" value="oyun_ozet" checked>
-                <span><span class="ta-rap-title">Oyun Özeti</span>
-                <span class="ta-rap-desc">Oyun başına turne, şehir, gün, personel sayısı</span></span></label>
-            </div>
-          </div>
-          <div class="ta-rap-preview" id="ta-rap-preview">Hazırlanıyor…</div>
-          <button class="ta-rap-dl" id="ta-rap-dl">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            Excel İndir (.xlsx)
-          </button>
-          <div class="ta-rap-foot">SheetJS · Tüm hesaplamalar tarayıcıda yapılır</div>
-
-          <!-- ── AYLIK PDF RAPOR ── -->
-          <div class="ta-rap-card" style="margin-top:14px;">
-            <h4>📄 Aylık PDF Rapor</h4>
-            <div style="font-size:11.5px;color:#5A4D42;line-height:1.5;margin-bottom:10px;">
-              Seçilen ayın <b>resmi</b> turne faaliyet raporunu PDF olarak oluşturur.
-            </div>
-            <div class="ta-rap-row">
-              <label>Ay
-                <select id="ta-pdf-ay"></select>
-              </label>
-              <label>Yıl
-                <select id="ta-pdf-yil"></select>
-              </label>
-            </div>
-            <button class="ta-rap-dl" id="ta-pdf-aylik-btn" style="margin-top:8px;">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-              Aylık PDF Oluştur
-            </button>
+            📑 <b>Raporlama Merkezi</b> — turne verilerinden Excel ve PDF raporları oluşturur.
+            Aşağıdan rapor türünü seçin.
           </div>
 
-          <!-- ── GENEL PDF RAPOR ── -->
-          <div class="ta-rap-card">
-            <h4>📑 Genel PDF Rapor</h4>
-            <div style="font-size:11.5px;color:#5A4D42;line-height:1.5;margin-bottom:10px;">
-              Tüm dönem için <b>resmi</b> genel turne faaliyet raporu (özet + sezon dökümü + turne listesi).
+          <div class="ta-rap-subtabs" id="ta-rap-subtabs">
+            <button class="ta-rap-subtab active" data-rapsub="excel">📊 Excel Raporları</button>
+            <button class="ta-rap-subtab" data-rapsub="pdf">📄 PDF Raporları</button>
+          </div>
+
+          <!-- ── EXCEL RAPORLARI ── -->
+          <div class="ta-rap-subpanel active" id="ta-rap-panel-excel">
+            <div class="ta-rap-card">
+              <h4>🎯 Filtreler</h4>
+              <div class="ta-rap-row">
+                <label>Yıl
+                  <select id="ta-rap-yil"><option value="">Tüm yıllar</option></select>
+                </label>
+                <label>Durum
+                  <select id="ta-rap-statu">
+                    <option value="aktif">İptaller hariç</option>
+                    <option value="">Tümü</option>
+                    <option value="tamamlandi">Tamamlandı</option>
+                    <option value="planli">Planlı / Onaylı</option>
+                  </select>
+                </label>
+              </div>
+              <div class="ta-rap-row">
+                <label>Personel adı (opsiyonel)
+                  <input id="ta-rap-kisi" type="search" placeholder="Örn. Çağlar">
+                </label>
+              </div>
             </div>
-            <button class="ta-rap-dl" id="ta-pdf-genel-btn">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>
-              Genel PDF Oluştur
+            <div class="ta-rap-card">
+              <h4>📊 Rapor Sayfaları</h4>
+              <div class="ta-rap-checks" id="ta-rap-checks">
+                <label class="ta-rap-check"><input type="checkbox" value="personel_ozet" checked>
+                  <span><span class="ta-rap-title">Personel Özet</span>
+                  <span class="ta-rap-desc">Kişi · toplam turne · gün · şehir · oyun · ilk/son turne</span></span></label>
+                <label class="ta-rap-check"><input type="checkbox" value="personel_detay" checked>
+                  <span><span class="ta-rap-title">Personel Detay</span>
+                  <span class="ta-rap-desc">Her kişinin gittiği turnelerin satır satır listesi</span></span></label>
+                <label class="ta-rap-check"><input type="checkbox" value="turne_listesi" checked>
+                  <span><span class="ta-rap-title">Turne Listesi</span>
+                  <span class="ta-rap-desc">Tüm turneler · oyun · şehir · mekân · tarih · kadro</span></span></label>
+                <label class="ta-rap-check"><input type="checkbox" value="sehir_ozet" checked>
+                  <span><span class="ta-rap-title">Şehir Özeti</span>
+                  <span class="ta-rap-desc">Şehir başına turne, gün, oyun, personel sayısı</span></span></label>
+                <label class="ta-rap-check"><input type="checkbox" value="oyun_ozet" checked>
+                  <span><span class="ta-rap-title">Oyun Özeti</span>
+                  <span class="ta-rap-desc">Oyun başına turne, şehir, gün, personel sayısı</span></span></label>
+              </div>
+            </div>
+            <div class="ta-rap-preview" id="ta-rap-preview">Hazırlanıyor…</div>
+            <button class="ta-rap-dl" id="ta-rap-dl">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Excel İndir (.xlsx)
             </button>
-            <div class="ta-rap-foot" style="margin-top:6px;">Times New Roman · A4 · 2.5cm kenar · iptaller hariç</div>
+            <div class="ta-rap-foot">SheetJS · Tüm hesaplamalar tarayıcıda yapılır</div>
+          </div>
+
+          <!-- ── PDF RAPORLARI ── -->
+          <div class="ta-rap-subpanel" id="ta-rap-panel-pdf">
+            <!-- ── AYLIK PDF RAPOR ── -->
+            <div class="ta-rap-card">
+              <h4>📄 Aylık PDF Rapor</h4>
+              <div style="font-size:11.5px;color:#5A4D42;line-height:1.5;margin-bottom:10px;">
+                Seçilen ayın <b>resmi</b> turne faaliyet raporunu PDF olarak oluşturur.
+              </div>
+              <div class="ta-rap-row">
+                <label>Ay
+                  <select id="ta-pdf-ay"></select>
+                </label>
+                <label>Yıl
+                  <select id="ta-pdf-yil"></select>
+                </label>
+              </div>
+              <button class="ta-rap-dl" id="ta-pdf-aylik-btn" style="margin-top:8px;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                Aylık PDF Oluştur
+              </button>
+            </div>
+
+            <!-- ── GENEL PDF RAPOR ── -->
+            <div class="ta-rap-card">
+              <h4>📑 Genel PDF Rapor</h4>
+              <div style="font-size:11.5px;color:#5A4D42;line-height:1.5;margin-bottom:10px;">
+                Tüm dönem için <b>resmi</b> genel turne faaliyet raporu (özet + sezon dökümü + turne listesi).
+              </div>
+              <button class="ta-rap-dl" id="ta-pdf-genel-btn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>
+                Genel PDF Oluştur
+              </button>
+              <div class="ta-rap-foot" style="margin-top:6px;">Times New Roman · A4 · 2.5cm kenar · iptaller hariç</div>
+            </div>
           </div>
         </div>
       </div>
@@ -1067,6 +1086,11 @@
   function fmtTarih(s) { const d = parseDate(s); if (!d) return s||"—"; return `${String(d.getDate()).padStart(2,"0")} ${AYLAR[d.getMonth()]} ${d.getFullYear()}`; }
   function fmtTarihAralik(bas, bit) { const a=fmtTarih(bas), b=fmtTarih(bit); if (!a||a==="—") return "—"; if (a===b||!bit) return a; return `${a} – ${b}`; }
   function turneGun(t) { const a=parseDate(t.baslangic), b=parseDate(t.bitis)||a; if(!a||!b) return 1; return Math.max(1,Math.round((b-a)/86400000)+1); }
+  // Tiyatro sezonu: Eylül–Ağustos arası tek sezon kabul edilir (örn. Ekim 2025 – Haziran 2026 hepsi "2025–26").
+  // Ocak–Ağustos arası tarihler bir önceki yılda başlayan sezona, Eylül–Aralık ise o yıl başlayan yeni sezona aittir.
+  function sezonYillari(d) { if (!d) return null; const y = d.getFullYear(); const ay = d.getMonth(); return ay >= 8 ? [y, y+1] : [y-1, y]; }
+  function sezonEtiket(d) { const sy = sezonYillari(d); if (!sy) return "?"; return sy[0] + "–" + String(sy[1]).slice(-2); }
+  function sezonAnahtar(d) { const sy = sezonYillari(d); if (!sy) return "?"; return sy[0] + "–" + sy[1]; }
   function benzersizGunSay(liste) { var araliklar=[]; liste.forEach(function(t){ var b=parseDate(t.baslangic),e=parseDate(t.bitis)||b; if(!b)return; if(!e||e<b)e=b; araliklar.push([b.getTime(),e.getTime()]); }); if(!araliklar.length)return 0; araliklar.sort(function(a,b){return a[0]-b[0];}); var birl=[araliklar[0]]; for(var i=1;i<araliklar.length;i++){var son=birl[birl.length-1],cur=araliklar[i]; if(cur[0]<=son[1]+86400000){if(cur[1]>son[1])son[1]=cur[1];}else{birl.push(cur);}} return birl.reduce(function(s,r){return s+Math.round((r[1]-r[0])/86400000)+1;},0); }
   function splitCityNames(raw) {
     return String(raw || "")
@@ -2620,7 +2644,7 @@
       const enCokGorevSira=[...gorevMap2.entries()].sort((a,b)=>b[1]-a[1]);
       const enCokGorev=enCokGorevSira[0];
       const enCokGorevAd=enCokGorev?(gorevDisplay.get(enCokGorev[0])||enCokGorev[0]):"";
-      const yilMap2=new Map();aktifTurneler.forEach(t=>{const d=parseDate(t.baslangic);if(d)yilMap2.set(d.getFullYear(),(yilMap2.get(d.getFullYear())||0)+1);});
+      const yilMap2=new Map();aktifTurneler.forEach(t=>{const d=parseDate(t.baslangic);if(d){const y=sezonEtiket(d);yilMap2.set(y,(yilMap2.get(y)||0)+1);}});
       const enYogunYil=[...yilMap2.entries()].sort((a,b)=>b[1]-a[1])[0];
       const ortKadro=aktifTurneler.length?Math.round(aktifTurneler.reduce((s,t)=>s+t.katilimcilar.length,0)/aktifTurneler.length):0;
       const ortGun=aktifTurneler.length?Math.round(toplamGun2/aktifTurneler.length*10)/10:0;
@@ -2635,7 +2659,7 @@
       // İkinci en aktif personel
       const ikinciAktif=enAktifSira[1];
       const ikinciAktifAd=ikinciAktif?(kisiDisplay.get(ikinciAktif[0])||ikinciAktif[0]):"";
-      // Yıl başına ortalama
+      // Sezon başına ortalama
       const yilSay=yilMap2.size||1;
       const ortYil=Math.round(aktifTurneler.length/yilSay*10)/10;
       // Tek kişilik turne sayısı (solo)
@@ -2665,14 +2689,14 @@
         iptal2b.length>0?`❌ Sistemde **${iptal2b.length}** iptal turne kayıtlı. 📖`:"",
         enCokGorev?`🎪 En kalabalık görev grubu **${enCokGorevAd}** — **${enCokGorev[1]} kişi**. 💪`:"",
         enCokGorevSira.length>=3?`🏷 En kalabalık ilk üç görev: **${enCokGorevSira.slice(0,3).map(([k,n])=>(gorevDisplay.get(k)||k)+" ("+n+")").join(", ")}**.`:"",
-        enYogunYil?`📆 En yoğun yıl **${enYogunYil[0]}** — toplam **${enYogunYil[1]} turne**. 🏆`:"",
+        enYogunYil?`📆 En yoğun sezon **${enYogunYil[0]}** — toplam **${enYogunYil[1]} turne**. 🏆`:"",
         ortKadro>0?`🧮 Ortalama bir turnenin kadrosu **${ortKadro} kişi**. 🤝`:"",
         ortGun>0?`📐 Bir turne ortalama **${ortGun} gün** sürüyor. 🧳`:"",
         hsTurne>0?`🎉 **${hsTurne}** turne Cumartesi veya Pazar günü başladı.`:"",
         otelSet.size>0?`🏨 Şimdiye kadar **${otelSet.size}** farklı otelde konaklandı. 🛏️`:"",
         enCokOyun?`🎭 En çok turneye çıkan oyun **${enCokOyunAd}** — **${enCokOyun[1]} turne**. ⭐`:"",
         oyunMap.size>0?`📚 Aktif turne repertuvarında **${oyunMap.size}** farklı oyun bulunuyor.`:"",
-        ortYil>0?`📊 Yılda ortalama **${ortYil} turne** sahneleniyor. 📈`:"",
+        ortYil>0?`📊 Sezon başına ortalama **${ortYil} turne** sahneleniyor. 📈`:"",
         soloTurne>0?`👤 Şu ana kadar **${soloTurne}** turne tek kişilik kadroyla yapıldı. 🎤`:"",
         T.length>0?`🎬 Sistemde toplam **${T.length}** turne kaydı bulunuyor (iptal dahil). 📂`:"",
         aktifTurneler.length>0?`✅ Bunların **${aktifTurneler.length}** tanesi aktif (tamamlanan + planlanan, iptal ve yarıda kesildi hariç). 📊`:"",
@@ -3589,10 +3613,10 @@
     T.filter(t=>!t.statu.includes("iptal")).forEach(t=>t.katilimcilar.forEach(k=>{const rawG=k.kategori||k.gorev||"Diğer";const g=rawG==="Turne Ekstra Kadrosu"||rawG==="Ekstra"?"Ek Kadro":rawG;if(!gorevMap.has(g))gorevMap.set(g,new Set());gorevMap.get(g).add(norm(k.kisi));}));
     const topGorevler=[...gorevMap.entries()].map(([g,s])=>[g,s.size]).sort((a,b)=>b[1]-a[1]).slice(0,6);
 
-    // Yıl dağılımı
+    // Sezon dağılımı (takvim yılına göre değil, Eylül–Ağustos tiyatro sezonuna göre)
     const yilMap=new Map();
-    T.filter(t=>!t.statu.includes("iptal")).forEach(t=>{const d=parseDate(t.baslangic);if(d){const y=d.getFullYear();yilMap.set(y,(yilMap.get(y)||0)+1);}});
-    const sortedYillar=[...yilMap.entries()].sort((a,b)=>a[0]-b[0]);
+    T.filter(t=>!t.statu.includes("iptal")).forEach(t=>{const d=parseDate(t.baslangic);if(d){const y=sezonEtiket(d);yilMap.set(y,(yilMap.get(y)||0)+1);}});
+    const sortedYillar=[...yilMap.entries()].sort((a,b)=>a[0].localeCompare(b[0]));
 
     body.innerHTML=`
       <!-- KPI -->
@@ -3627,7 +3651,7 @@
 
       <!-- YILLIK -->
       ${sortedYillar.length>1?`<div class="ta-stat-section">
-        <div class="ta-stat-section-title">📆 Yıllara Göre</div>
+        <div class="ta-stat-section-title">📆 Sezonlara Göre</div>
         ${sortedYillar.map(([y,n],i)=>`<div class="ta-stat-row"><span class="ta-stat-rank">${i+1}</span><span class="ta-stat-name">${y}</span><div class="ta-stat-bar-wrap"><div class="ta-stat-bar" style="width:${Math.round(n/sortedYillar[0][1]*100)}%"></div></div><span class="ta-stat-val">${n}</span></div>`).join("")}
       </div>`:""}
 
@@ -4089,12 +4113,11 @@
     const aktif = DS.turneler.filter(t => !(t.statu||"").includes("iptal"));
     if (!aktif.length) { alert("Kayıt yok."); return; }
 
-    // Sezon = yıl–yıl+1 (Ekim-Eylül tipik tiyatro sezonu, ama burada başlangıç yılına göre)
+    // Sezon = Eylül–Ağustos arası tek tiyatro sezonu (örn. "2025–26"); takvim yılına göre değil, sezona göre gruplanır
     const sezonlar = {};
     aktif.forEach(t => {
       const d = parseDate(t.baslangic);
-      const yil = d ? d.getFullYear() : "?";
-      const key = yil + "–" + (typeof yil==="number"?(yil+1):"?");
+      const key = d ? sezonAnahtar(d) : "?";
       (sezonlar[key] = sezonlar[key] || []).push(t);
     });
 
@@ -4178,6 +4201,14 @@
       $i("ta-rap-dl")?.addEventListener("click", _rapDownload);
       $i("ta-pdf-aylik-btn")?.addEventListener("click", _pdfAylikIndir);
       $i("ta-pdf-genel-btn")?.addEventListener("click", _pdfGenelIndir);
+      document.querySelectorAll(".ta-rap-subtab").forEach(st => {
+        st.addEventListener("click", () => {
+          document.querySelectorAll(".ta-rap-subtab").forEach(t => t.classList.remove("active"));
+          document.querySelectorAll(".ta-rap-subpanel").forEach(p => p.classList.remove("active"));
+          st.classList.add("active");
+          $i("ta-rap-panel-" + st.dataset.rapsub)?.classList.add("active");
+        });
+      });
       renderRapor._bound = true;
     }
   }
