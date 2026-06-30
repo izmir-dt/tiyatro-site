@@ -1,11 +1,11 @@
 /* ════════════════════════════════════════════════════════════════
-   TURNE ASİSTANI v5.3
+   TURNE ASİSTANI v5.4
    İzmir Devlet Tiyatrosu
    YENİ: Turne düzenleme · Hatırlatıcı · Detaylı istatistik
    ═══════════════════════════════════════════════════════════════ */
 (function () {
-  if (window.__turneAsistanLoaded === 'v5.3') return;
-  window.__turneAsistanLoaded = 'v5.3';
+  if (window.__turneAsistanLoaded === 'v5.4') return;
+  window.__turneAsistanLoaded = 'v5.4';
 
   const API = "https://turne-backend.vercel.app/api/sheets";
   const TURNE_SHEET = "TURNE_KAYITLARI";
@@ -312,6 +312,33 @@
 
   /* ── SORU REHBERİ GÖRÜNÜMÜ ── */
   #ta-sorular-view{background:#FBF8F3;}
+  /* ─── RAPOR (Raporlama Merkezi) ─── */
+  #ta-rapor-view{background:#FBF8F3;}
+  .ta-rap-body{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:12px;}
+  .ta-rap-body::-webkit-scrollbar{width:4px;} .ta-rap-body::-webkit-scrollbar-thumb{background:#D9C9BD;border-radius:4px;}
+  .ta-rap-intro{font-size:12px;color:#5A4D42;line-height:1.5;background:#fff;border:1px solid #E8E2D7;border-radius:10px;padding:10px 12px;}
+  .ta-rap-intro b{color:#6B0E1E;}
+  .ta-rap-card{background:#fff;border:1px solid #E8E2D7;border-radius:12px;padding:12px;}
+  .ta-rap-card h4{font-size:11px;font-weight:800;color:#A0192E;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;}
+  .ta-rap-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;}
+  .ta-rap-row:last-child{margin-bottom:0;}
+  .ta-rap-row label{flex:1;min-width:120px;font-size:11px;color:#5A4D42;font-weight:600;display:flex;flex-direction:column;gap:4px;}
+  .ta-rap-row select,.ta-rap-row input[type=search]{padding:6px 8px;border:1px solid #D9C9BD;border-radius:8px;font-size:12px;background:#FBF8F3;font-weight:500;color:#2A2520;width:100%;}
+  .ta-rap-row select:focus,.ta-rap-row input[type=search]:focus{outline:none;border-color:#A0192E;background:#fff;}
+  .ta-rap-checks{display:flex;flex-direction:column;gap:6px;}
+  .ta-rap-check{display:flex;align-items:flex-start;gap:8px;padding:8px 10px;background:#FBF8F3;border:1px solid #E8E2D7;border-radius:8px;cursor:pointer;transition:all .15s;}
+  .ta-rap-check:hover{background:#fff;border-color:#A0192E;}
+  .ta-rap-check input{margin-top:2px;accent-color:#A0192E;cursor:pointer;}
+  .ta-rap-check .ta-rap-title{font-size:12px;font-weight:700;color:#2A2520;display:block;}
+  .ta-rap-check .ta-rap-desc{font-size:11px;color:#8A857C;display:block;margin-top:2px;line-height:1.4;}
+  .ta-rap-preview{font-size:11px;color:#5A4D42;background:#FFF8E7;border:1px dashed #E0C97A;border-radius:8px;padding:8px 10px;font-weight:600;}
+  .ta-rap-preview b{color:#6B0E1E;}
+  .ta-rap-dl{width:100%;padding:12px;border:none;border-radius:10px;background:linear-gradient(135deg,#A0192E,#6B0E1E);color:#fff;font-size:13px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 4px 12px rgba(107,14,30,.3);transition:transform .12s,box-shadow .2s;}
+  .ta-rap-dl:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(107,14,30,.4);}
+  .ta-rap-dl:active{transform:translateY(0);}
+  .ta-rap-dl:disabled{opacity:.6;cursor:wait;transform:none;}
+  .ta-rap-foot{font-size:10px;color:#8A857C;text-align:center;font-style:italic;}
+
   .ta-sorular-body{flex:1;overflow-y:auto;padding:12px;}
   .ta-sorular-body::-webkit-scrollbar{width:4px;}
   .ta-sorular-body::-webkit-scrollbar-thumb{background:#D9C9BD;border-radius:4px;}
@@ -384,6 +411,10 @@
         <button class="ta-tab" data-view="sorular">
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
           Soru Rehberi
+        </button>
+        <button class="ta-tab" data-view="rapor">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>
+          Rapor
         </button>
       </div>
 
@@ -464,6 +495,64 @@
           </div>
           <input type="search" class="ta-sorular-search" id="ta-sorular-q" placeholder="Soru ara… (örn. otel, kadro, hava)">
           <div id="ta-sorular-list"></div>
+        </div>
+      </div>
+
+      
+      <!-- RAPORLAMA MERKEZİ -->
+      <div class="ta-view" id="ta-rapor-view">
+        <div class="ta-rap-body" id="ta-rap-body">
+          <div class="ta-rap-intro">
+            📑 <b>Raporlama Merkezi</b> — turne verilerinden çok sayfalı Excel raporu oluşturur.
+            Filtreleri seçip <b>Excel İndir</b>'e basın.
+          </div>
+          <div class="ta-rap-card">
+            <h4>🎯 Filtreler</h4>
+            <div class="ta-rap-row">
+              <label>Yıl
+                <select id="ta-rap-yil"><option value="">Tüm yıllar</option></select>
+              </label>
+              <label>Durum
+                <select id="ta-rap-statu">
+                  <option value="aktif">İptaller hariç</option>
+                  <option value="">Tümü</option>
+                  <option value="tamamlandi">Tamamlandı</option>
+                  <option value="planli">Planlı / Onaylı</option>
+                </select>
+              </label>
+            </div>
+            <div class="ta-rap-row">
+              <label>Personel adı (opsiyonel)
+                <input id="ta-rap-kisi" type="search" placeholder="Örn. Çağlar">
+              </label>
+            </div>
+          </div>
+          <div class="ta-rap-card">
+            <h4>📊 Rapor Sayfaları</h4>
+            <div class="ta-rap-checks" id="ta-rap-checks">
+              <label class="ta-rap-check"><input type="checkbox" value="personel_ozet" checked>
+                <span><span class="ta-rap-title">Personel Özet</span>
+                <span class="ta-rap-desc">Kişi · toplam turne · gün · şehir · oyun · ilk/son turne</span></span></label>
+              <label class="ta-rap-check"><input type="checkbox" value="personel_detay" checked>
+                <span><span class="ta-rap-title">Personel Detay</span>
+                <span class="ta-rap-desc">Her kişinin gittiği turnelerin satır satır listesi</span></span></label>
+              <label class="ta-rap-check"><input type="checkbox" value="turne_listesi" checked>
+                <span><span class="ta-rap-title">Turne Listesi</span>
+                <span class="ta-rap-desc">Tüm turneler · oyun · şehir · mekân · tarih · kadro</span></span></label>
+              <label class="ta-rap-check"><input type="checkbox" value="sehir_ozet" checked>
+                <span><span class="ta-rap-title">Şehir Özeti</span>
+                <span class="ta-rap-desc">Şehir başına turne, gün, oyun, personel sayısı</span></span></label>
+              <label class="ta-rap-check"><input type="checkbox" value="oyun_ozet" checked>
+                <span><span class="ta-rap-title">Oyun Özeti</span>
+                <span class="ta-rap-desc">Oyun başına turne, şehir, gün, personel sayısı</span></span></label>
+            </div>
+          </div>
+          <div class="ta-rap-preview" id="ta-rap-preview">Hazırlanıyor…</div>
+          <button class="ta-rap-dl" id="ta-rap-dl">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Excel İndir (.xlsx)
+          </button>
+          <div class="ta-rap-foot">SheetJS · Tüm hesaplamalar tarayıcıda yapılır</div>
         </div>
       </div>
 
@@ -549,6 +638,7 @@
       if (tab.dataset.view === "edit" && DS) populateEditSelect();
       if (tab.dataset.view === "rehber" && DS) renderRehber();
       if (tab.dataset.view === "sorular") renderSorular();
+      if (tab.dataset.view === "rapor" && DS) renderRapor();
     });
   });
 
@@ -3683,4 +3773,281 @@
       }
     }
   };
+
+
+  /* ═══════════════════════════════════════════════════════════════
+     RAPORLAMA MERKEZİ — Excel (.xlsx) çıktı üretici
+     ═══════════════════════════════════════════════════════════════ */
+  const RAP_SHEETJS = "https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js";
+  let _xlsxLoading = null;
+  function loadXLSX() {
+    if (window.XLSX) return Promise.resolve(window.XLSX);
+    if (_xlsxLoading) return _xlsxLoading;
+    _xlsxLoading = new Promise((res, rej) => {
+      const sc = document.createElement("script");
+      sc.src = RAP_SHEETJS;
+      sc.onload = () => res(window.XLSX);
+      sc.onerror = () => rej(new Error("SheetJS yüklenemedi"));
+      document.head.appendChild(sc);
+    });
+    return _xlsxLoading;
+  }
+
+  function _rapParseDate(s) {
+    if (!s) return null;
+    const m = String(s).trim().match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (m) return new Date(+m[1], +m[2]-1, +m[3]);
+    const m2 = String(s).trim().match(/^(\d{1,2})[.\/](\d{1,2})[.\/](\d{4})/);
+    if (m2) return new Date(+m2[3], +m2[2]-1, +m2[1]);
+    const d = new Date(s); return isNaN(d) ? null : d;
+  }
+  function _rapDays(t) {
+    const a = _rapParseDate(t.baslangic), b = _rapParseDate(t.bitis || t.baslangic);
+    if (!a) return 1;
+    if (!b) return 1;
+    return Math.max(1, Math.round((b - a) / 86400000) + 1);
+  }
+  function _rapISO(s) {
+    const d = _rapParseDate(s); if (!d) return s || "";
+    const p = n => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`;
+  }
+  function _rapYear(t) { const d = _rapParseDate(t.baslangic); return d ? d.getFullYear() : null; }
+
+  function _rapFilter() {
+    if (!DS) return [];
+    const yil = $i("ta-rap-yil").value;
+    const durum = $i("ta-rap-statu").value;
+    const kisi = ($i("ta-rap-kisi").value || "").trim().toLowerCase();
+    return DS.turneler.filter(t => {
+      if (yil && _rapYear(t) != +yil) return false;
+      const st = (t.statu || "").toLowerCase();
+      if (durum === "aktif" && /(iptal|iptal-edildi|cancelled)/.test(st)) return false;
+      if (durum === "tamamlandi" && !/tamam/.test(st)) return false;
+      if (durum === "planli" && !/(planl|onay|hazır|hazir|taslak)/.test(st)) return false;
+      if (kisi) {
+        const has = (t.katilimcilar||[]).some(k => (k.kisi||"").toLowerCase().includes(kisi));
+        if (!has) return false;
+      }
+      return true;
+    });
+  }
+
+  function _rapUpdatePreview() {
+    if (!DS) return;
+    const list = _rapFilter();
+    const pSet = new Set();
+    for (const t of list) for (const k of t.katilimcilar||[]) if (k.kisi) pSet.add(k.kisi.trim());
+    const cSet = new Set();
+    for (const t of list) { if (t.il) cSet.add(t.il); for (const d of t.duraklar||[]) if (d.il) cSet.add(d.il); }
+    const days = list.reduce((s,t)=>s+_rapDays(t),0);
+    const el = $i("ta-rap-preview");
+    if (el) el.innerHTML = `📦 Kapsam: <b>${list.length}</b> turne · <b>${pSet.size}</b> personel · <b>${cSet.size}</b> şehir · <b>${days}</b> gün`;
+  }
+
+  function _rapPopulateYears() {
+    const sel = $i("ta-rap-yil"); if (!sel || !DS) return;
+    const years = new Set();
+    for (const t of DS.turneler) { const y = _rapYear(t); if (y) years.add(y); }
+    const sorted = [...years].sort((a,b)=>b-a);
+    sel.innerHTML = '<option value="">Tüm yıllar</option>' + sorted.map(y=>`<option value="${y}">${y}</option>`).join("");
+  }
+
+  function renderRapor() {
+    if (!DS) return;
+    _rapPopulateYears();
+    _rapUpdatePreview();
+    // Bind listeners once
+    if (!renderRapor._bound) {
+      ["ta-rap-yil","ta-rap-statu","ta-rap-kisi"].forEach(id => {
+        const el = $i(id); if (el) el.addEventListener("input", _rapUpdatePreview);
+      });
+      $i("ta-rap-dl")?.addEventListener("click", _rapDownload);
+      renderRapor._bound = true;
+    }
+  }
+
+  /* ─── Workbook builders ─── */
+  function _rapBuildSummary(list, filters) {
+    const pSet = new Set(), cSet = new Set(), oSet = new Set();
+    for (const t of list) {
+      if (t.oyun) oSet.add(t.oyun);
+      if (t.il) cSet.add(t.il);
+      for (const d of t.duraklar||[]) if (d.il) cSet.add(d.il);
+      for (const k of t.katilimcilar||[]) if (k.kisi) pSet.add(k.kisi.trim());
+    }
+    const days = list.reduce((s,t)=>s+_rapDays(t),0);
+    return [
+      ["İzmir Devlet Tiyatrosu — Turne Raporu"],
+      [],
+      ["Oluşturulma", new Date().toLocaleString("tr-TR")],
+      ["Yıl filtresi", filters.yil || "Tüm yıllar"],
+      ["Durum filtresi", filters.durum === "aktif" ? "İptaller hariç" : (filters.durum || "Tümü")],
+      ["Personel filtresi", filters.kisi || "—"],
+      [],
+      ["TOPLAMLAR"],
+      ["Turne sayısı", list.length],
+      ["Toplam gün", days],
+      ["Farklı oyun", oSet.size],
+      ["Farklı şehir", cSet.size],
+      ["Farklı personel", pSet.size],
+    ];
+  }
+
+  function _rapBuildTurneListesi(list) {
+    const rows = [["Oyun","Şehir","Mekân","Başlangıç","Bitiş","Gün","Temsil","Kadro","Statü","Not"]];
+    for (const t of list) {
+      rows.push([
+        t.oyun||"", t.il||"", t.mekan||"",
+        _rapISO(t.baslangic), _rapISO(t.bitis),
+        _rapDays(t), t.sayi||1,
+        (t.katilimcilar||[]).length,
+        t.statu||"", t.not||""
+      ]);
+    }
+    return rows;
+  }
+
+  function _rapBuildPersonelDetay(list) {
+    const rows = [["Personel","Görev","Kategori","Oyun","Şehir","Başlangıç","Bitiş","Gün","Statü"]];
+    for (const t of list) {
+      for (const k of t.katilimcilar||[]) {
+        if (!k.kisi) continue;
+        rows.push([
+          k.kisi.trim(), k.gorev||"", k.kategori||"",
+          t.oyun||"", t.il||"",
+          _rapISO(t.baslangic), _rapISO(t.bitis),
+          _rapDays(t), t.statu||""
+        ]);
+      }
+    }
+    rows.sort((a,b) => {
+      if (a[0] === "Personel") return -1;
+      if (b[0] === "Personel") return 1;
+      return String(a[0]).localeCompare(String(b[0]), "tr") || String(a[5]).localeCompare(String(b[5]));
+    });
+    return rows;
+  }
+
+  function _rapBuildPersonelOzet(list) {
+    const m = new Map();
+    for (const t of list) {
+      for (const k of t.katilimcilar||[]) {
+        const ad = (k.kisi||"").trim(); if (!ad) continue;
+        if (!m.has(ad)) m.set(ad, { ad, turne:0, gun:0, sehirler:new Set(), oyunlar:new Set(), gorevler:new Set(), ilk:null, son:null });
+        const o = m.get(ad);
+        o.turne++; o.gun += _rapDays(t);
+        if (t.il) o.sehirler.add(t.il);
+        if (t.oyun) o.oyunlar.add(t.oyun);
+        if (k.gorev) o.gorevler.add(k.gorev);
+        const d1 = _rapParseDate(t.baslangic), d2 = _rapParseDate(t.bitis||t.baslangic);
+        if (d1 && (!o.ilk || d1 < o.ilk)) o.ilk = d1;
+        if (d2 && (!o.son || d2 > o.son)) o.son = d2;
+      }
+    }
+    const arr = [...m.values()].sort((a,b)=>b.turne-a.turne || b.gun-a.gun);
+    const rows = [["Personel","Turne Sayısı","Toplam Gün","Şehir Sayısı","Oyun Sayısı","Görev(ler)","İlk Turne","Son Turne"]];
+    const fmt = d => d ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}` : "";
+    for (const o of arr) rows.push([o.ad, o.turne, o.gun, o.sehirler.size, o.oyunlar.size, [...o.gorevler].join(", "), fmt(o.ilk), fmt(o.son)]);
+    return rows;
+  }
+
+  function _rapBuildSehirOzet(list) {
+    const m = new Map();
+    for (const t of list) {
+      const sehirler = new Set();
+      if (t.il) sehirler.add(t.il);
+      for (const d of t.duraklar||[]) if (d.il) sehirler.add(d.il);
+      for (const sehir of sehirler) {
+        if (!m.has(sehir)) m.set(sehir, { sehir, turne:0, gun:0, oyunlar:new Set(), personel:new Set() });
+        const o = m.get(sehir);
+        o.turne++; o.gun += _rapDays(t);
+        if (t.oyun) o.oyunlar.add(t.oyun);
+        for (const k of t.katilimcilar||[]) if (k.kisi) o.personel.add(k.kisi.trim());
+      }
+    }
+    const arr = [...m.values()].sort((a,b)=>b.turne-a.turne);
+    const rows = [["Şehir","Turne Sayısı","Toplam Gün","Farklı Oyun","Farklı Personel"]];
+    for (const o of arr) rows.push([o.sehir, o.turne, o.gun, o.oyunlar.size, o.personel.size]);
+    return rows;
+  }
+
+  function _rapBuildOyunOzet(list) {
+    const m = new Map();
+    for (const t of list) {
+      const ad = t.oyun||""; if (!ad) continue;
+      if (!m.has(ad)) m.set(ad, { ad, turne:0, gun:0, sehirler:new Set(), personel:new Set() });
+      const o = m.get(ad);
+      o.turne++; o.gun += _rapDays(t);
+      if (t.il) o.sehirler.add(t.il);
+      for (const d of t.duraklar||[]) if (d.il) o.sehirler.add(d.il);
+      for (const k of t.katilimcilar||[]) if (k.kisi) o.personel.add(k.kisi.trim());
+    }
+    const arr = [...m.values()].sort((a,b)=>b.turne-a.turne);
+    const rows = [["Oyun","Turne Sayısı","Farklı Şehir","Toplam Gün","Farklı Personel"]];
+    for (const o of arr) rows.push([o.ad, o.turne, o.sehirler.size, o.gun, o.personel.size]);
+    return rows;
+  }
+
+  function _rapAutoCols(rows) {
+    if (!rows.length) return [];
+    const cols = rows[0].length;
+    const widths = new Array(cols).fill(8);
+    for (const r of rows) for (let i=0;i<cols;i++) {
+      const v = r[i]; if (v == null) continue;
+      const len = String(v).length;
+      if (len > widths[i]) widths[i] = Math.min(len, 50);
+    }
+    return widths.map(w => ({ wch: w + 2 }));
+  }
+
+  async function _rapDownload() {
+    const btn = $i("ta-rap-dl");
+    const selected = [...document.querySelectorAll("#ta-rap-checks input:checked")].map(c=>c.value);
+    if (!selected.length) { showToast("En az bir rapor seçin"); return; }
+    if (!DS) { showToast("Veri henüz yüklenmedi"); return; }
+    btn.disabled = true; const origHTML = btn.innerHTML; btn.innerHTML = "⏳ Excel hazırlanıyor…";
+    try {
+      const XLSX = await loadXLSX();
+      const filters = {
+        yil: $i("ta-rap-yil").value,
+        durum: $i("ta-rap-statu").value,
+        kisi: ($i("ta-rap-kisi").value||"").trim()
+      };
+      const list = _rapFilter();
+      const wb = XLSX.utils.book_new();
+
+      const sum = _rapBuildSummary(list, filters);
+      const wsSum = XLSX.utils.aoa_to_sheet(sum);
+      wsSum["!cols"] = [{wch:24},{wch:30}];
+      XLSX.utils.book_append_sheet(wb, wsSum, "Özet");
+
+      const map = {
+        personel_ozet:  ["Personel Ozet",  _rapBuildPersonelOzet],
+        personel_detay: ["Personel Detay", _rapBuildPersonelDetay],
+        turne_listesi:  ["Turne Listesi",  _rapBuildTurneListesi],
+        sehir_ozet:     ["Sehir Ozeti",    _rapBuildSehirOzet],
+        oyun_ozet:      ["Oyun Ozeti",     _rapBuildOyunOzet],
+      };
+      for (const key of selected) {
+        const def = map[key]; if (!def) continue;
+        const rows = def[1](list);
+        const ws = XLSX.utils.aoa_to_sheet(rows);
+        ws["!cols"] = _rapAutoCols(rows);
+        if (rows.length) ws["!autofilter"] = { ref: XLSX.utils.encode_range({s:{r:0,c:0},e:{r:rows.length-1,c:rows[0].length-1}}) };
+        XLSX.utils.book_append_sheet(wb, ws, def[0]);
+      }
+
+      const today = new Date();
+      const fname = `IDT-Turne-Raporu-${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,"0")}-${String(today.getDate()).padStart(2,"0")}.xlsx`;
+      XLSX.writeFile(wb, fname);
+      showToast("✅ Excel indirildi");
+    } catch (e) {
+      console.error(e);
+      showToast("❌ Hata: " + (e.message || e));
+    } finally {
+      btn.disabled = false; btn.innerHTML = origHTML;
+    }
+  }
+
 })();
