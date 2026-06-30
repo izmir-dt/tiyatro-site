@@ -3931,26 +3931,81 @@
     return rows;
   }
 
+  /* ── Yardımcılar: görev temizleme & resmi tarih formatı ── */
+  const _RAP_AYLAR = ["Ocak","Şubat","Mart","Nisan","Mayıs","Haziran","Temmuz","Ağustos","Eylül","Ekim","Kasım","Aralık"];
+  function _rapNormGorev(s) {
+    // Parantezli açıklamayı at, fazla boşlukları sadeleştir, başlık formatına çevir
+    let x = String(s||"").replace(/\([^)]*\)/g, " ").replace(/\s+/g, " ").trim();
+    if (!x) return "";
+    // Türkçe locale ile başlık biçimi (her kelimenin baş harfi büyük)
+    return x.toLocaleLowerCase("tr").split(" ").map(w => w ? w[0].toLocaleUpperCase("tr") + w.slice(1) : w).join(" ");
+  }
+  function _rapFmtTrTarih(d1, d2) {
+    if (!d1) return "";
+    if (!d2) d2 = d1;
+    const g1=d1.getDate(), m1=d1.getMonth(), y1=d1.getFullYear();
+    const g2=d2.getDate(), m2=d2.getMonth(), y2=d2.getFullYear();
+    if (y1===y2 && m1===m2 && g1===g2) return `${g1} ${_RAP_AYLAR[m1]} ${y1}`;
+    if (y1===y2 && m1===m2) return `${g1}-${g2} ${_RAP_AYLAR[m1]} ${y1}`;
+    if (y1===y2) return `${g1} ${_RAP_AYLAR[m1]} - ${g2} ${_RAP_AYLAR[m2]} ${y1}`;
+    return `${g1} ${_RAP_AYLAR[m1]} ${y1} - ${g2} ${_RAP_AYLAR[m2]} ${y2}`;
+  }
+
   function _rapBuildPersonelOzet(list) {
     const m = new Map();
     for (const t of list) {
       for (const k of t.katilimcilar||[]) {
         const ad = (k.kisi||"").trim(); if (!ad) continue;
-        if (!m.has(ad)) m.set(ad, { ad, turne:0, gun:0, sehirler:new Set(), oyunlar:new Set(), gorevler:new Set(), ilk:null, son:null });
+        if (!m.has(ad)) m.set(ad, {
+          ad, turne:0, gun:0,
+          sehirler:new Set(), oyunlar:new Set(),
+          gorevMap:new Map(), // normKey -> {display, count}
+          dokum:[],           // {d1,d2,gun,oyun,iptal}
+          ilk:null, son:null
+        });
         const o = m.get(ad);
         o.turne++; o.gun += _rapDays(t);
         if (t.il) o.sehirler.add(t.il);
         if (t.oyun) o.oyunlar.add(t.oyun);
-        if (k.gorev) o.gorevler.add(k.gorev);
+        if (k.gorev) {
+          const norm = _rapNormGorev(k.gorev);
+          if (norm) {
+            const cur = o.gorevMap.get(norm) || { display: norm, count: 0 };
+            cur.count++;
+            o.gorevMap.set(norm, cur);
+          }
+        }
         const d1 = _rapParseDate(t.baslangic), d2 = _rapParseDate(t.bitis||t.baslangic);
         if (d1 && (!o.ilk || d1 < o.ilk)) o.ilk = d1;
         if (d2 && (!o.son || d2 > o.son)) o.son = d2;
+        o.dokum.push({
+          d1, d2: d2 || d1,
+          gun: _rapDays(t),
+          oyun: (t.oyun||"").trim() || "—",
+          iptal: /iptal/i.test(t.statu||"")
+        });
       }
     }
     const arr = [...m.values()].sort((a,b)=>b.turne-a.turne || b.gun-a.gun);
-    const rows = [["Personel","Turne Sayısı","Toplam Gün","Şehir Sayısı","Oyun Sayısı","Görev(ler)","İlk Turne","Son Turne"]];
-    const fmt = d => d ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}` : "";
-    for (const o of arr) rows.push([o.ad, o.turne, o.gun, o.sehirler.size, o.oyunlar.size, [...o.gorevler].join(", "), fmt(o.ilk), fmt(o.son)]);
+    const rows = [["Personel","Turne Sayısı","Toplam Gün","Gidilen Şehir","Görev Aldığı Oyun","Görevler","İlk Turne","Son Turne","Turne Dökümü"]];
+    const fmtISO = d => d ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}` : "";
+    for (const o of arr) {
+      const gorevler = [...o.gorevMap.values()]
+        .map(v => v.display)
+        .sort((a,b)=>a.localeCompare(b,"tr"))
+        .join(", ");
+      const dokum = o.dokum
+        .slice()
+        .sort((a,b) => (a.d1?+a.d1:0) - (b.d1?+b.d1:0))
+        .map(it => {
+          const tarih = _rapFmtTrTarih(it.d1, it.d2);
+          const gunStr = it.gun ? ` (${it.gun} Gün)` : "";
+          const pref = it.iptal ? "[İPTAL] " : "";
+          return `${pref}${it.oyun} — ${tarih}${gunStr}`;
+        })
+        .join("; ");
+      rows.push([o.ad, o.turne, o.gun, o.sehirler.size, o.oyunlar.size, gorevler, fmtISO(o.ilk), fmtISO(o.son), dokum]);
+    }
     return rows;
   }
 
@@ -3969,7 +4024,7 @@
       }
     }
     const arr = [...m.values()].sort((a,b)=>b.turne-a.turne);
-    const rows = [["Şehir","Turne Sayısı","Toplam Gün","Farklı Oyun","Farklı Personel"]];
+    const rows = [["Şehir","Turne Sayısı","Toplam Gün","Sahnelenen Oyunlar","Görev Alan Personel"]];
     for (const o of arr) rows.push([o.sehir, o.turne, o.gun, o.oyunlar.size, o.personel.size]);
     return rows;
   }
@@ -3986,7 +4041,7 @@
       for (const k of t.katilimcilar||[]) if (k.kisi) o.personel.add(k.kisi.trim());
     }
     const arr = [...m.values()].sort((a,b)=>b.turne-a.turne);
-    const rows = [["Oyun","Turne Sayısı","Farklı Şehir","Toplam Gün","Farklı Personel"]];
+    const rows = [["Oyun","Turne Sayısı","Gidilen Şehirler","Toplam Gün","Görev Alan Personel"]];
     for (const o of arr) rows.push([o.ad, o.turne, o.sehirler.size, o.gun, o.personel.size]);
     return rows;
   }
@@ -4019,10 +4074,8 @@
       const list = _rapFilter();
       const wb = XLSX.utils.book_new();
 
-      const sum = _rapBuildSummary(list, filters);
-      const wsSum = XLSX.utils.aoa_to_sheet(sum);
-      wsSum["!cols"] = [{wch:24},{wch:30}];
-      XLSX.utils.book_append_sheet(wb, wsSum, "Özet");
+
+
 
       const map = {
         personel_ozet:  ["Personel Ozet",  _rapBuildPersonelOzet],
