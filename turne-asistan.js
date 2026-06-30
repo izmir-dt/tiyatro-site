@@ -67,9 +67,9 @@
 
   /* SEKMELİ NAVİGASYON */
   #ta-tabs{display:flex;background:#fff;border-bottom:1px solid #E8E2D7;flex-shrink:0;}
-  .ta-tab{flex:1;padding:8px 4px;border:none;background:transparent;font-size:11px;font-weight:700;
+  .ta-tab{flex:1;padding:8px 3px;border:none;background:transparent;font-size:10.5px;font-weight:700;
     color:#8A857C;cursor:pointer;font-family:inherit;transition:all .15s;border-bottom:2px solid transparent;
-    display:flex;align-items:center;justify-content:center;gap:4px;}
+    display:flex;align-items:center;justify-content:center;gap:3px;white-space:nowrap;line-height:1.1;}
   .ta-tab:hover{color:#A0192E;background:#FBF8F3;}
   .ta-tab.active{color:#A0192E;border-bottom-color:#A0192E;background:#FBF8F3;}
   .ta-tab-badge{background:#A0192E;color:#fff;border-radius:99px;font-size:9px;font-weight:800;
@@ -3780,7 +3780,7 @@
   /* ═══════════════════════════════════════════════════════════════
      RAPORLAMA MERKEZİ — Excel (.xlsx) çıktı üretici
      ═══════════════════════════════════════════════════════════════ */
-  const RAP_SHEETJS = "https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js";
+  const RAP_SHEETJS = "https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js";
   let _xlsxLoading = null;
   function loadXLSX() {
     if (window.XLSX) return Promise.resolve(window.XLSX);
@@ -3934,10 +3934,14 @@
   /* ── Yardımcılar: görev temizleme & resmi tarih formatı ── */
   const _RAP_AYLAR = ["Ocak","Şubat","Mart","Nisan","Mayıs","Haziran","Temmuz","Ağustos","Eylül","Ekim","Kasım","Aralık"];
   function _rapNormGorev(s) {
-    // Parantezli açıklamayı at, fazla boşlukları sadeleştir, başlık formatına çevir
-    let x = String(s||"").replace(/\([^)]*\)/g, " ").replace(/\s+/g, " ").trim();
+    let x = String(s||"");
+    // Parantezli açıklamayı at
+    x = x.replace(/\([^)]*\)/g, " ");
+    // " - ..." veya "- ..." sonrasını (tarih/açıklama) at
+    x = x.split(/\s[-–—]\s|\s[-–—]$/)[0];
+    // Trailing tireleri ve fazla boşlukları temizle
+    x = x.replace(/[-–—\s]+$/g, "").replace(/\s+/g, " ").trim();
     if (!x) return "";
-    // Türkçe locale ile başlık biçimi (her kelimenin baş harfi büyük)
     return x.toLocaleLowerCase("tr").split(" ").map(w => w ? w[0].toLocaleUpperCase("tr") + w.slice(1) : w).join(" ");
   }
   function _rapFmtTrTarih(d1, d2) {
@@ -3954,19 +3958,36 @@
   function _rapBuildPersonelOzet(list) {
     const m = new Map();
     for (const t of list) {
+      const seenInTurne = new Set();
       for (const k of t.katilimcilar||[]) {
         const ad = (k.kisi||"").trim(); if (!ad) continue;
         if (!m.has(ad)) m.set(ad, {
           ad, turne:0, gun:0,
           sehirler:new Set(), oyunlar:new Set(),
-          gorevMap:new Map(), // normKey -> {display, count}
-          dokum:[],           // {d1,d2,gun,oyun,iptal}
+          gorevMap:new Map(),
+          dokum:[],
           ilk:null, son:null
         });
         const o = m.get(ad);
-        o.turne++; o.gun += _rapDays(t);
-        if (t.il) o.sehirler.add(t.il);
-        if (t.oyun) o.oyunlar.add(t.oyun);
+        // Aynı turnede aynı kişi birden fazla görevle olabilir → turne/gün/döküm bir kez sayılsın
+        const turneKey = ad + "|" + (t.id || (t.oyun||"")+"|"+(t.baslangic||""));
+        const firstTimeInTurne = !seenInTurne.has(turneKey);
+        if (firstTimeInTurne) {
+          seenInTurne.add(turneKey);
+          o.turne++;
+          o.gun += _rapDays(t);
+          if (t.il) o.sehirler.add(t.il);
+          if (t.oyun) o.oyunlar.add(t.oyun);
+          const d1 = _rapParseDate(t.baslangic), d2 = _rapParseDate(t.bitis||t.baslangic);
+          if (d1 && (!o.ilk || d1 < o.ilk)) o.ilk = d1;
+          if (d2 && (!o.son || d2 > o.son)) o.son = d2;
+          o.dokum.push({
+            d1, d2: d2 || d1,
+            gun: _rapDays(t),
+            oyun: (t.oyun||"").trim() || "—",
+            iptal: /iptal/i.test(t.statu||"")
+          });
+        }
         if (k.gorev) {
           const norm = _rapNormGorev(k.gorev);
           if (norm) {
@@ -3975,19 +3996,10 @@
             o.gorevMap.set(norm, cur);
           }
         }
-        const d1 = _rapParseDate(t.baslangic), d2 = _rapParseDate(t.bitis||t.baslangic);
-        if (d1 && (!o.ilk || d1 < o.ilk)) o.ilk = d1;
-        if (d2 && (!o.son || d2 > o.son)) o.son = d2;
-        o.dokum.push({
-          d1, d2: d2 || d1,
-          gun: _rapDays(t),
-          oyun: (t.oyun||"").trim() || "—",
-          iptal: /iptal/i.test(t.statu||"")
-        });
       }
     }
     const arr = [...m.values()].sort((a,b)=>b.turne-a.turne || b.gun-a.gun);
-    const rows = [["Personel","Turne Sayısı","Toplam Gün","Gidilen Şehir","Görev Aldığı Oyun","Görevler","İlk Turne","Son Turne","Turne Dökümü"]];
+    const rows = [["Personel","Turne Sayısı","Görevler","Toplam Gün","Gidilen Şehir","Görev Aldığı Oyun","İlk Turne","Son Turne","Turne Dökümü"]];
     const fmtISO = d => d ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}` : "";
     for (const o of arr) {
       const gorevler = [...o.gorevMap.values()]
@@ -4004,7 +4016,7 @@
           return `${pref}${it.oyun} — ${tarih}${gunStr}`;
         })
         .join("; ");
-      rows.push([o.ad, o.turne, o.gun, o.sehirler.size, o.oyunlar.size, gorevler, fmtISO(o.ilk), fmtISO(o.son), dokum]);
+      rows.push([o.ad, o.turne, gorevler, o.gun, o.sehirler.size, o.oyunlar.size, fmtISO(o.ilk), fmtISO(o.son), dokum]);
     }
     return rows;
   }
@@ -4053,11 +4065,50 @@
     for (const r of rows) for (let i=0;i<cols;i++) {
       const v = r[i]; if (v == null) continue;
       const len = String(v).length;
-      if (len > widths[i]) widths[i] = Math.min(len, 50);
+      if (len > widths[i]) widths[i] = Math.min(len, 60);
     }
     return widths.map(w => ({ wch: w + 2 }));
   }
 
+  // İDT bordo teması — tüm hücrelere kenarlık, başlığa dolgu, satırlara zebra
+  function _rapStyleSheet(ws, rows) {
+    if (!rows.length) return;
+    const border = { style: "thin", color: { rgb: "C9BFAE" } };
+    const borders = { top: border, bottom: border, left: border, right: border };
+    const headerStyle = {
+      font: { bold: true, color: { rgb: "FFFFFF" }, sz: 11, name: "Calibri" },
+      fill: { patternType: "solid", fgColor: { rgb: "A0192E" } },
+      alignment: { horizontal: "center", vertical: "center", wrapText: true },
+      border: { top: border, bottom: { style: "medium", color: { rgb: "7A1322" } }, left: border, right: border }
+    };
+    const bodyBase = {
+      font: { sz: 10, name: "Calibri", color: { rgb: "2A2520" } },
+      alignment: { vertical: "center", wrapText: true },
+      border: borders
+    };
+    const zebra = { fill: { patternType: "solid", fgColor: { rgb: "FBF8F3" } } };
+    const nCols = rows[0].length;
+    for (let r = 0; r < rows.length; r++) {
+      for (let c = 0; c < nCols; c++) {
+        const addr = XLSX.utils.encode_cell({ r, c });
+        if (!ws[addr]) ws[addr] = { t: "s", v: "" };
+        if (r === 0) {
+          ws[addr].s = headerStyle;
+        } else {
+          const isZebra = (r % 2 === 0);
+          ws[addr].s = isZebra
+            ? Object.assign({}, bodyBase, { fill: zebra.fill })
+            : bodyBase;
+        }
+      }
+    }
+    // Satır yükseklikleri
+    ws["!rows"] = rows.map((_,i) => i === 0 ? { hpt: 26 } : { hpt: 18 });
+    ws["!freeze"] = { xSplit: 0, ySplit: 1 };
+    ws["!sheetView"] = [{ state: "frozen", ySplit: 1 }];
+  }
+
+  let XLSX; // dış scope referansı, _rapStyleSheet için
   async function _rapDownload() {
     const btn = $i("ta-rap-dl");
     const selected = [...document.querySelectorAll("#ta-rap-checks input:checked")].map(c=>c.value);
@@ -4065,7 +4116,7 @@
     if (!DS) { showToast("Veri henüz yüklenmedi"); return; }
     btn.disabled = true; const origHTML = btn.innerHTML; btn.innerHTML = "⏳ Excel hazırlanıyor…";
     try {
-      const XLSX = await loadXLSX();
+      XLSX = await loadXLSX();
       const filters = {
         yil: $i("ta-rap-yil").value,
         durum: $i("ta-rap-statu").value,
@@ -4073,9 +4124,6 @@
       };
       const list = _rapFilter();
       const wb = XLSX.utils.book_new();
-
-
-
 
       const map = {
         personel_ozet:  ["Personel Ozet",  _rapBuildPersonelOzet],
@@ -4090,6 +4138,7 @@
         const ws = XLSX.utils.aoa_to_sheet(rows);
         ws["!cols"] = _rapAutoCols(rows);
         if (rows.length) ws["!autofilter"] = { ref: XLSX.utils.encode_range({s:{r:0,c:0},e:{r:rows.length-1,c:rows[0].length-1}}) };
+        _rapStyleSheet(ws, rows);
         XLSX.utils.book_append_sheet(wb, ws, def[0]);
       }
 
