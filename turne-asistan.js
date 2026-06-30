@@ -1,11 +1,12 @@
 /* ════════════════════════════════════════════════════════════════
-   TURNE ASİSTANI v5.3
+   TURNE ASİSTANI v5.5
    İzmir Devlet Tiyatrosu
    YENİ: Turne düzenleme · Hatırlatıcı · Detaylı istatistik
    ═══════════════════════════════════════════════════════════════ */
 (function () {
-  if (window.__turneAsistanLoaded === 'v5.3') return;
-  window.__turneAsistanLoaded = 'v5.3';
+  if (window.__turneAsistanLoaded === 'v5.5') return;
+  ["ta-fab", "ta-panel", "ta-toast", "ta-prompt-modal", "ta-style"].forEach(id => document.getElementById(id)?.remove());
+  window.__turneAsistanLoaded = 'v5.5';
 
   const API = "https://turne-backend.vercel.app/api/sheets";
   const TURNE_SHEET = "TURNE_KAYITLARI";
@@ -66,9 +67,9 @@
 
   /* SEKMELİ NAVİGASYON */
   #ta-tabs{display:flex;background:#fff;border-bottom:1px solid #E8E2D7;flex-shrink:0;}
-  .ta-tab{flex:1;padding:8px 4px;border:none;background:transparent;font-size:11px;font-weight:700;
+  .ta-tab{flex:1;padding:8px 3px;border:none;background:transparent;font-size:10.5px;font-weight:700;
     color:#8A857C;cursor:pointer;font-family:inherit;transition:all .15s;border-bottom:2px solid transparent;
-    display:flex;align-items:center;justify-content:center;gap:4px;}
+    display:flex;align-items:center;justify-content:center;gap:3px;white-space:nowrap;line-height:1.1;}
   .ta-tab:hover{color:#A0192E;background:#FBF8F3;}
   .ta-tab.active{color:#A0192E;border-bottom-color:#A0192E;background:#FBF8F3;}
   .ta-tab-badge{background:#A0192E;color:#fff;border-radius:99px;font-size:9px;font-weight:800;
@@ -312,6 +313,33 @@
 
   /* ── SORU REHBERİ GÖRÜNÜMÜ ── */
   #ta-sorular-view{background:#FBF8F3;}
+  /* ─── RAPOR (Raporlama Merkezi) ─── */
+  #ta-rapor-view{background:#FBF8F3;}
+  .ta-rap-body{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:12px;}
+  .ta-rap-body::-webkit-scrollbar{width:4px;} .ta-rap-body::-webkit-scrollbar-thumb{background:#D9C9BD;border-radius:4px;}
+  .ta-rap-intro{font-size:12px;color:#5A4D42;line-height:1.5;background:#fff;border:1px solid #E8E2D7;border-radius:10px;padding:10px 12px;}
+  .ta-rap-intro b{color:#6B0E1E;}
+  .ta-rap-card{background:#fff;border:1px solid #E8E2D7;border-radius:12px;padding:12px;}
+  .ta-rap-card h4{font-size:11px;font-weight:800;color:#A0192E;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;}
+  .ta-rap-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;}
+  .ta-rap-row:last-child{margin-bottom:0;}
+  .ta-rap-row label{flex:1;min-width:120px;font-size:11px;color:#5A4D42;font-weight:600;display:flex;flex-direction:column;gap:4px;}
+  .ta-rap-row select,.ta-rap-row input[type=search]{padding:6px 8px;border:1px solid #D9C9BD;border-radius:8px;font-size:12px;background:#FBF8F3;font-weight:500;color:#2A2520;width:100%;}
+  .ta-rap-row select:focus,.ta-rap-row input[type=search]:focus{outline:none;border-color:#A0192E;background:#fff;}
+  .ta-rap-checks{display:flex;flex-direction:column;gap:6px;}
+  .ta-rap-check{display:flex;align-items:flex-start;gap:8px;padding:8px 10px;background:#FBF8F3;border:1px solid #E8E2D7;border-radius:8px;cursor:pointer;transition:all .15s;}
+  .ta-rap-check:hover{background:#fff;border-color:#A0192E;}
+  .ta-rap-check input{margin-top:2px;accent-color:#A0192E;cursor:pointer;}
+  .ta-rap-check .ta-rap-title{font-size:12px;font-weight:700;color:#2A2520;display:block;}
+  .ta-rap-check .ta-rap-desc{font-size:11px;color:#8A857C;display:block;margin-top:2px;line-height:1.4;}
+  .ta-rap-preview{font-size:11px;color:#5A4D42;background:#FFF8E7;border:1px dashed #E0C97A;border-radius:8px;padding:8px 10px;font-weight:600;}
+  .ta-rap-preview b{color:#6B0E1E;}
+  .ta-rap-dl{width:100%;padding:12px;border:none;border-radius:10px;background:linear-gradient(135deg,#A0192E,#6B0E1E);color:#fff;font-size:13px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 4px 12px rgba(107,14,30,.3);transition:transform .12s,box-shadow .2s;}
+  .ta-rap-dl:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(107,14,30,.4);}
+  .ta-rap-dl:active{transform:translateY(0);}
+  .ta-rap-dl:disabled{opacity:.6;cursor:wait;transform:none;}
+  .ta-rap-foot{font-size:10px;color:#8A857C;text-align:center;font-style:italic;}
+
   .ta-sorular-body{flex:1;overflow-y:auto;padding:12px;}
   .ta-sorular-body::-webkit-scrollbar{width:4px;}
   .ta-sorular-body::-webkit-scrollbar-thumb{background:#D9C9BD;border-radius:4px;}
@@ -330,6 +358,7 @@
   .ta-sorular-empty{text-align:center;padding:30px 20px;color:#B0A99E;font-size:12.5px;font-weight:600;}
   `;
   const styleEl = document.createElement("style");
+  styleEl.id = "ta-style";
   styleEl.textContent = css;
   document.head.appendChild(styleEl);
 
@@ -384,6 +413,10 @@
         <button class="ta-tab" data-view="sorular">
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
           Soru Rehberi
+        </button>
+        <button class="ta-tab" data-view="rapor">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>
+          Rapor
         </button>
       </div>
 
@@ -464,6 +497,97 @@
           </div>
           <input type="search" class="ta-sorular-search" id="ta-sorular-q" placeholder="Soru ara… (örn. otel, kadro, hava)">
           <div id="ta-sorular-list"></div>
+        </div>
+      </div>
+
+      
+      <!-- RAPORLAMA MERKEZİ -->
+      <div class="ta-view" id="ta-rapor-view">
+        <div class="ta-rap-body" id="ta-rap-body">
+          <div class="ta-rap-intro">
+            📑 <b>Raporlama Merkezi</b> — turne verilerinden çok sayfalı Excel raporu oluşturur.
+            Filtreleri seçip <b>Excel İndir</b>'e basın.
+          </div>
+          <div class="ta-rap-card">
+            <h4>🎯 Filtreler</h4>
+            <div class="ta-rap-row">
+              <label>Yıl
+                <select id="ta-rap-yil"><option value="">Tüm yıllar</option></select>
+              </label>
+              <label>Durum
+                <select id="ta-rap-statu">
+                  <option value="aktif">İptaller hariç</option>
+                  <option value="">Tümü</option>
+                  <option value="tamamlandi">Tamamlandı</option>
+                  <option value="planli">Planlı / Onaylı</option>
+                </select>
+              </label>
+            </div>
+            <div class="ta-rap-row">
+              <label>Personel adı (opsiyonel)
+                <input id="ta-rap-kisi" type="search" placeholder="Örn. Çağlar">
+              </label>
+            </div>
+          </div>
+          <div class="ta-rap-card">
+            <h4>📊 Rapor Sayfaları</h4>
+            <div class="ta-rap-checks" id="ta-rap-checks">
+              <label class="ta-rap-check"><input type="checkbox" value="personel_ozet" checked>
+                <span><span class="ta-rap-title">Personel Özet</span>
+                <span class="ta-rap-desc">Kişi · toplam turne · gün · şehir · oyun · ilk/son turne</span></span></label>
+              <label class="ta-rap-check"><input type="checkbox" value="personel_detay" checked>
+                <span><span class="ta-rap-title">Personel Detay</span>
+                <span class="ta-rap-desc">Her kişinin gittiği turnelerin satır satır listesi</span></span></label>
+              <label class="ta-rap-check"><input type="checkbox" value="turne_listesi" checked>
+                <span><span class="ta-rap-title">Turne Listesi</span>
+                <span class="ta-rap-desc">Tüm turneler · oyun · şehir · mekân · tarih · kadro</span></span></label>
+              <label class="ta-rap-check"><input type="checkbox" value="sehir_ozet" checked>
+                <span><span class="ta-rap-title">Şehir Özeti</span>
+                <span class="ta-rap-desc">Şehir başına turne, gün, oyun, personel sayısı</span></span></label>
+              <label class="ta-rap-check"><input type="checkbox" value="oyun_ozet" checked>
+                <span><span class="ta-rap-title">Oyun Özeti</span>
+                <span class="ta-rap-desc">Oyun başına turne, şehir, gün, personel sayısı</span></span></label>
+            </div>
+          </div>
+          <div class="ta-rap-preview" id="ta-rap-preview">Hazırlanıyor…</div>
+          <button class="ta-rap-dl" id="ta-rap-dl">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Excel İndir (.xlsx)
+          </button>
+          <div class="ta-rap-foot">SheetJS · Tüm hesaplamalar tarayıcıda yapılır</div>
+
+          <!-- ── AYLIK PDF RAPOR ── -->
+          <div class="ta-rap-card" style="margin-top:14px;">
+            <h4>📄 Aylık PDF Rapor</h4>
+            <div style="font-size:11.5px;color:#5A4D42;line-height:1.5;margin-bottom:10px;">
+              Seçilen ayın <b>resmi</b> turne faaliyet raporunu PDF olarak oluşturur.
+            </div>
+            <div class="ta-rap-row">
+              <label>Ay
+                <select id="ta-pdf-ay"></select>
+              </label>
+              <label>Yıl
+                <select id="ta-pdf-yil"></select>
+              </label>
+            </div>
+            <button class="ta-rap-dl" id="ta-pdf-aylik-btn" style="margin-top:8px;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              Aylık PDF Oluştur
+            </button>
+          </div>
+
+          <!-- ── GENEL PDF RAPOR ── -->
+          <div class="ta-rap-card">
+            <h4>📑 Genel PDF Rapor</h4>
+            <div style="font-size:11.5px;color:#5A4D42;line-height:1.5;margin-bottom:10px;">
+              Tüm dönem için <b>resmi</b> genel turne faaliyet raporu (özet + sezon dökümü + turne listesi).
+            </div>
+            <button class="ta-rap-dl" id="ta-pdf-genel-btn">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>
+              Genel PDF Oluştur
+            </button>
+            <div class="ta-rap-foot" style="margin-top:6px;">Times New Roman · A4 · 2.5cm kenar · iptaller hariç</div>
+          </div>
         </div>
       </div>
 
@@ -549,6 +673,7 @@
       if (tab.dataset.view === "edit" && DS) populateEditSelect();
       if (tab.dataset.view === "rehber" && DS) renderRehber();
       if (tab.dataset.view === "sorular") renderSorular();
+      if (tab.dataset.view === "rapor" && DS) renderRapor();
     });
   });
 
@@ -1754,7 +1879,7 @@
     if (/(toplam|kac|kaç).*(turne)/.test(Q)) {
       const now2=new Date();
       const aktifScope=scope.filter(t=>!t.statu.includes("iptal"));
-      const g=aktifScope.reduce((s,t)=>s+turneGun(t),0);
+      const g=benzersizGunSay(aktifScope);
       const tm=aktifScope.reduce((s,t)=>s+(t.sayi||0),0);
       const tamam=aktifScope.filter(t=>t.statu.startsWith("tamamlan")||t.statu==="yarida-kesildi").length;
       const devamS=aktifScope.filter(t=>{const bas=parseDate(t.baslangic),bit=parseDate(t.bitis)||bas;return bas&&bit&&bas<=now2&&bit>=now2;}).length;
@@ -2427,7 +2552,7 @@
       const _personel_set = new Set(); _aktifMot.forEach(t=>t.katilimcilar.forEach(k=>_personel_set.add(norm(k.kisi))));
       const _personel_say = _personel_set.size;
       const _temsil_say = _aktifMot.reduce((s,t)=>s+(t.sayi||0),0);
-      const _gun_say = _aktifMot.reduce((s,t)=>s+turneGun(t),0);
+      const _gun_say = benzersizGunSay(_aktifMot);
       const MOTIVASYONLAR = [
         {msg:`Sahne ışığı yandığında tüm yorgunluk unutulur — ve siz tam da o ışığı taşıyorsunuz! 🎭✨`, emoji:"🌟"},
         {msg:`${_turne_say} turne, ${_sehir_say} şehir, ${_personel_say} kişilik kadro — bu bir ekip değil, bir aile! 👨‍👩‍👧‍👦❤️`, emoji:"💪"},
@@ -2457,7 +2582,7 @@
       const personelSet2=new Set(); tumIptalDisi.forEach(t=>t.katilimcilar.forEach(k=>personelSet2.add(norm(k.kisi))));
       // Şehir: iptal hariç (yarıda kesilenler de gidilmiş sayılır)
       const ilSet2=new Set(); tumIptalDisi.forEach(t=>collectUniqueCitiesFromTour(t).forEach(il=>ilSet2.add(norm(il))));
-      const toplamGun2=aktifTurneler.reduce((s,t)=>s+turneGun(t),0);
+      const toplamGun2=benzersizGunSay(aktifTurneler);
       const enUzunTurne=aktifTurneler.slice().sort((a,b)=>turneGun(b)-turneGun(a))[0];
       const enKalabalikTurne=tumIptalDisi.filter(t=>t.katilimcilar.length>0).sort((a,b)=>b.katilimcilar.length-a.katilimcilar.length)[0];
       // kişi turne sayısı — norm anahtarla say, iptal hariç
@@ -2579,7 +2704,7 @@
       }).length;
       const gelecek2   = aktifT.filter(t => { const d = parseDate(t.baslangic); return d && d > now2; }).length;
       const iptal2     = T.filter(t => t.statu === "iptal").length;
-      const toplamGun2 = aktifT.reduce((s, t) => s + turneGun(t), 0);
+      const toplamGun2 = benzersizGunSay(aktifT);
       const toplamTemsil2 = aktifT.reduce((s, t) => s + (Number(t.sayi) || 0), 0);
       const personelSet2 = new Set();
       aktifT.forEach(t => (t.katilimcilar || []).forEach(k => k.kisi && personelSet2.add(norm(k.kisi))));
@@ -3683,4 +3808,663 @@
       }
     }
   };
+
+
+  /* ═══════════════════════════════════════════════════════════════
+     RAPORLAMA MERKEZİ — Excel (.xlsx) çıktı üretici
+     ═══════════════════════════════════════════════════════════════ */
+  const RAP_SHEETJS = "https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js";
+  let _xlsxLoading = null;
+  function loadXLSX() {
+    if (window.XLSX) return Promise.resolve(window.XLSX);
+    if (_xlsxLoading) return _xlsxLoading;
+    _xlsxLoading = new Promise((res, rej) => {
+      const sc = document.createElement("script");
+      sc.src = RAP_SHEETJS;
+      sc.onload = () => res(window.XLSX);
+      sc.onerror = () => rej(new Error("SheetJS yüklenemedi"));
+      document.head.appendChild(sc);
+    });
+    return _xlsxLoading;
+  }
+
+  function _rapParseDate(s) {
+    if (!s) return null;
+    const m = String(s).trim().match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (m) return new Date(+m[1], +m[2]-1, +m[3]);
+    const m2 = String(s).trim().match(/^(\d{1,2})[.\/](\d{1,2})[.\/](\d{4})/);
+    if (m2) return new Date(+m2[3], +m2[2]-1, +m2[1]);
+    const d = new Date(s); return isNaN(d) ? null : d;
+  }
+  function _rapDays(t) {
+    const a = _rapParseDate(t.baslangic), b = _rapParseDate(t.bitis || t.baslangic);
+    if (!a) return 1;
+    if (!b) return 1;
+    return Math.max(1, Math.round((b - a) / 86400000) + 1);
+  }
+  function _rapISO(s) {
+    const d = _rapParseDate(s); if (!d) return s || "";
+    const p = n => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`;
+  }
+  function _rapYear(t) { const d = _rapParseDate(t.baslangic); return d ? d.getFullYear() : null; }
+
+  function _rapFilter() {
+    if (!DS) return [];
+    const yil = $i("ta-rap-yil").value;
+    const durum = $i("ta-rap-statu").value;
+    const kisi = ($i("ta-rap-kisi").value || "").trim().toLowerCase();
+    return DS.turneler.filter(t => {
+      if (yil && _rapYear(t) != +yil) return false;
+      const st = (t.statu || "").toLowerCase();
+      if (durum === "aktif" && /(iptal|iptal-edildi|cancelled)/.test(st)) return false;
+      if (durum === "tamamlandi" && !/tamam/.test(st)) return false;
+      if (durum === "planli" && !/(planl|onay|hazır|hazir|taslak)/.test(st)) return false;
+      if (kisi) {
+        const has = (t.katilimcilar||[]).some(k => (k.kisi||"").toLowerCase().includes(kisi));
+        if (!has) return false;
+      }
+      return true;
+    });
+  }
+
+  function _rapUpdatePreview() {
+    if (!DS) return;
+    const list = _rapFilter();
+    const pSet = new Set();
+    for (const t of list) for (const k of t.katilimcilar||[]) if (k.kisi) pSet.add(k.kisi.trim());
+    const cSet = new Set();
+    for (const t of list) { if (t.il) cSet.add(t.il); for (const d of t.duraklar||[]) if (d.il) cSet.add(d.il); }
+    const days = list.reduce((s,t)=>s+_rapDays(t),0);
+    const el = $i("ta-rap-preview");
+    if (el) el.innerHTML = `📦 Kapsam: <b>${list.length}</b> turne · <b>${pSet.size}</b> personel · <b>${cSet.size}</b> şehir · <b>${days}</b> gün`;
+  }
+
+  function _rapPopulateYears() {
+    const sel = $i("ta-rap-yil"); if (!sel || !DS) return;
+    const years = new Set();
+    for (const t of DS.turneler) { const y = _rapYear(t); if (y) years.add(y); }
+    const sorted = [...years].sort((a,b)=>b-a);
+    sel.innerHTML = '<option value="">Tüm yıllar</option>' + sorted.map(y=>`<option value="${y}">${y}</option>`).join("");
+  }
+
+
+  /* ═══════════════════════════════════════════════════════════════
+     RESMİ PDF RAPORLARI — Aylık & Genel Turne Faaliyet Raporu
+     Times New Roman 12pt · A4 · 2.5cm kenar · sade resmi başlık
+     ═══════════════════════════════════════════════════════════════ */
+  function _pdfPopulateAyYil() {
+    const ayEl = $i("ta-pdf-ay"), yilEl = $i("ta-pdf-yil");
+    if (!ayEl || !yilEl) return;
+    const AYLAR_TR = ["Ocak","Şubat","Mart","Nisan","Mayıs","Haziran","Temmuz","Ağustos","Eylül","Ekim","Kasım","Aralık"];
+    const now = new Date();
+    if (!ayEl.options.length) {
+      ayEl.innerHTML = AYLAR_TR.map((a,i)=>`<option value="${i}">${a}</option>`).join("");
+      ayEl.value = String(now.getMonth());
+    }
+    if (!yilEl.options.length) {
+      const yillar = new Set([now.getFullYear()]);
+      (DS?.turneler || []).forEach(t => { const d=parseDate(t.baslangic); if(d) yillar.add(d.getFullYear()); });
+      const sorted = [...yillar].sort((a,b)=>b-a);
+      yilEl.innerHTML = sorted.map(y=>`<option value="${y}">${y}</option>`).join("");
+      yilEl.value = String(now.getFullYear());
+    }
+  }
+
+  function _pdfFmtDate(d) {
+    const dd = String(d.getDate()).padStart(2,"0");
+    const mm = String(d.getMonth()+1).padStart(2,"0");
+    return `${dd}.${mm}.${d.getFullYear()}`;
+  }
+  function _pdfFmtDateTime(d) {
+    return _pdfFmtDate(d) + " " + String(d.getHours()).padStart(2,"0") + ":" + String(d.getMinutes()).padStart(2,"0");
+  }
+  function _pdfEsc(s) {
+    return String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  }
+  function _pdfStatuLabel(s) { return statuGoster(s||"") || "—"; }
+
+  function _pdfResmiCSS() {
+    return `<style>
+      @page { size: A4; margin: 2.5cm 2.5cm 3cm 2.5cm;
+        @bottom-center { content: "Sayfa " counter(page) " / " counter(pages); font-family: "Times New Roman", Times, serif; font-size: 10pt; color: #333; }
+        @bottom-left   { content: var(--olusturma); font-family: "Times New Roman", Times, serif; font-size: 9pt; color: #555; }
+      }
+      * { box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+      html, body { font-family: "Times New Roman", Times, serif; font-size: 12pt; color: #000; background:#fff; margin:0; padding:0; line-height: 1.45; }
+      .meta { text-align: right; font-size: 11pt; margin-bottom: 18pt; line-height: 1.6; }
+      .meta div { margin: 0; }
+      .meta b { font-weight: 700; }
+      h1.belge-baslik { text-align: center; font-size: 14pt; font-weight: 700; text-transform: uppercase; letter-spacing: .5pt; margin: 6pt 0 18pt; }
+      h2 { font-size: 12pt; font-weight: 700; color: #5a0f0f; border-bottom: 1.5pt solid #c0a0a0; padding-bottom: 4pt; margin: 18pt 0 8pt; text-transform: uppercase; letter-spacing: .3pt; page-break-after: avoid; }
+      .ozet { display: grid; gap: 8pt; grid-template-columns: repeat(4,1fr); margin-bottom: 14pt; }
+      .ozet-kart { border: 1pt solid #c8a4a4; border-radius: 4pt; padding: 8pt 6pt; text-align: center; background:#fdf5f5; page-break-inside: avoid; }
+      .ozet-kart .sayi { display:block; font-size: 18pt; font-weight: 700; color: #6b1b1b; line-height: 1; }
+      .ozet-kart .etiket { display:block; font-size: 9pt; color: #444; text-transform: uppercase; letter-spacing: .4pt; margin-top: 4pt; font-weight: 600; }
+      table { width: 100%; border-collapse: collapse; font-size: 11pt; margin-top: 4pt; }
+      thead { display: table-header-group; }
+      thead tr { background:#6b1b1b; }
+      thead th { color:#fff; padding: 6pt 8pt; font-size: 11pt; font-weight: 700; text-align: left; border: 0.75pt solid #5a1717; }
+      thead th.c { text-align: center; }
+      tbody tr { page-break-inside: avoid; }
+      tbody tr:nth-child(even) { background:#faf8f6; }
+      td { padding: 5pt 8pt; border-bottom: 0.5pt solid #e5ddd5; vertical-align: top; font-size: 11pt; }
+      td.c { text-align: center; }
+      td.dim { color:#333; font-size: 10.5pt; }
+      .badge { display:inline-block; padding:1pt 6pt; border-radius:3pt; font-size:9.5pt; font-weight:700; }
+      .gun-no { font-weight: 700; color:#6b1b1b; text-align:center; width: 28pt; background:#fdf5f5; }
+      .gun-ad { font-size: 9.5pt; text-align:center; width: 32pt; background:#fdf5f5; text-transform: uppercase; }
+      .etkinlik { font-weight: 700; }
+      .saat-hucre { text-align:center; font-weight:700; width: 50pt; }
+      .konu-satir { margin-top: 6pt; font-size: 11pt; }
+    </style>`;
+  }
+
+  function _pdfBaslikBlok(belgeBaslik, konu) {
+    const bugun = _pdfFmtDate(new Date());
+    return `<div class="meta">
+      <div><b>Sayı:</b> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</div>
+      <div><b>Tarih:</b> ${bugun}</div>
+      <div><b>Konu:</b> ${_pdfEsc(konu)}</div>
+    </div>
+    <h1 class="belge-baslik">${_pdfEsc(belgeBaslik)}</h1>`;
+  }
+
+  function _pdfAc(html) {
+    const olusturma = `'Oluşturma: ${_pdfFmtDateTime(new Date())}'`;
+    // CSS var(--olusturma) için style hack: @page içinde JS değişkeni kullanılamaz; bunun yerine doğrudan footer'a span ekleyelim ↓
+    const finalHtml = html.replace("__OLUSTURMA__", `Oluşturma: ${_pdfFmtDateTime(new Date())}`);
+    const w = window.open("", "_blank");
+    if (!w) { alert("Lütfen pop-up engelleyiciyi kapatın."); return; }
+    w.document.write(finalHtml);
+    w.document.close();
+  }
+
+  function _pdfTurneSatiri(t, idx) {
+    const sure = turneGun(t);
+    const kadro = (t.katilimcilar || []).length;
+    const temsil = Number(t.sayi) || 0;
+    const iller = (() => {
+      const arr = [];
+      if (t.il) arr.push(t.il);
+      (t.duraklar || []).forEach(d => { if (d.il && !arr.includes(d.il)) arr.push(d.il); });
+      return arr.join(", ");
+    })();
+    const bas = fmtTarih(t.baslangic);
+    const bit = t.bitis && t.bitis !== t.baslangic ? " – " + fmtTarih(t.bitis) : "";
+    return `<tr>
+      <td class="c">${idx}</td>
+      <td><b>${_pdfEsc(t.oyun||"—")}</b></td>
+      <td class="dim">${_pdfEsc(iller||"—")}</td>
+      <td class="dim">${_pdfEsc(bas+bit)}</td>
+      <td class="c">${sure} gün</td>
+      <td class="c">${temsil||"—"}</td>
+      <td class="c">${kadro}</td>
+      <td>${_pdfEsc(_pdfStatuLabel(t.statu))}</td>
+    </tr>`;
+  }
+
+  function _pdfAylikIndir() {
+    if (!DS || !DS.turneler) { alert("Veri yüklenmemiş."); return; }
+    const ay = parseInt($i("ta-pdf-ay").value, 10);
+    const yil = parseInt($i("ta-pdf-yil").value, 10);
+    const AYLAR_TR = ["Ocak","Şubat","Mart","Nisan","Mayıs","Haziran","Temmuz","Ağustos","Eylül","Ekim","Kasım","Aralık"];
+    const ayAdi = `${AYLAR_TR[ay]} ${yil}`;
+    const sonGun = new Date(yil, ay+1, 0).getDate();
+    const ayBas = new Date(yil, ay, 1);
+    const ayBit = new Date(yil, ay, sonGun, 23, 59, 59);
+
+    // Bu ayla kesişen, iptal hariç turneler
+    const ayTurneler = DS.turneler.filter(t => {
+      if ((t.statu||"").includes("iptal")) return false;
+      const b = parseDate(t.baslangic); let e = parseDate(t.bitis) || b;
+      if (!b) return false;
+      return b <= ayBit && e >= ayBas;
+    });
+
+    if (!ayTurneler.length) {
+      alert(ayAdi + " ayında turne yok.");
+      return;
+    }
+
+    // Benzersiz turne günü (sadece bu ay içinde)
+    const gunSet = new Set();
+    ayTurneler.forEach(t => {
+      let b = parseDate(t.baslangic); let e = parseDate(t.bitis) || b;
+      if (!b) return;
+      // ay'a kırp
+      if (b < ayBas) b = new Date(ayBas);
+      if (e > ayBit) e = new Date(ayBit);
+      for (let d = new Date(b); d <= e; d.setDate(d.getDate()+1)) {
+        gunSet.add(d.getFullYear()+"-"+(d.getMonth()+1)+"-"+d.getDate());
+      }
+    });
+    const benzersizGun = gunSet.size;
+
+    const sehirSet = new Set();
+    ayTurneler.forEach(t => { if (t.il) sehirSet.add(t.il); (t.duraklar||[]).forEach(d=>{ if(d.il) sehirSet.add(d.il);}); });
+    const personelSet = new Set();
+    ayTurneler.forEach(t => (t.katilimcilar||[]).forEach(k => k.kisi && personelSet.add(norm(k.kisi))));
+    const toplamTemsil = ayTurneler.reduce((s,t)=>s+(Number(t.sayi)||0),0);
+
+    const sorted = ayTurneler.slice().sort((a,b)=> (parseDate(a.baslangic)||0) - (parseDate(b.baslangic)||0));
+    const rows = sorted.map((t,i)=>_pdfTurneSatiri(t, i+1)).join("");
+
+    const html = `<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8">
+      <title>${_pdfEsc(ayAdi)} Aylık Turne Faaliyet Raporu</title>
+      ${_pdfResmiCSS()}
+    </head><body>
+      ${_pdfBaslikBlok(`${ayAdi} Aylık Turne Faaliyet Raporu`, "Aylık Turne Faaliyet Raporu")}
+      <h2>Özet</h2>
+      <div class="ozet">
+        <div class="ozet-kart"><span class="sayi">${ayTurneler.length}</span><span class="etiket">Turne</span></div>
+        <div class="ozet-kart"><span class="sayi">${benzersizGun}</span><span class="etiket">Faaliyet Günü</span></div>
+        <div class="ozet-kart"><span class="sayi">${toplamTemsil}</span><span class="etiket">Toplam Temsil</span></div>
+        <div class="ozet-kart"><span class="sayi">${sehirSet.size}</span><span class="etiket">Şehir</span></div>
+      </div>
+      <div class="konu-satir"><b>Personel sayısı (benzersiz):</b> ${personelSet.size}</div>
+      <h2>Turne Listesi</h2>
+      <table>
+        <thead><tr>
+          <th class="c" style="width:24pt">No</th>
+          <th>Oyun</th>
+          <th>Şehir / Güzergâh</th>
+          <th>Tarih</th>
+          <th class="c">Süre</th>
+          <th class="c">Temsil</th>
+          <th class="c">Kadro</th>
+          <th>Statü</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div style="position:fixed;bottom:1cm;left:2.5cm;font-size:9pt;color:#555;">__OLUSTURMA__</div>
+      <script>window.onload=function(){setTimeout(function(){window.print();},150);};<\/script>
+    </body></html>`;
+
+    _pdfAc(html);
+  }
+
+  function _pdfGenelIndir() {
+    if (!DS || !DS.turneler) { alert("Veri yüklenmemiş."); return; }
+    const aktif = DS.turneler.filter(t => !(t.statu||"").includes("iptal"));
+    if (!aktif.length) { alert("Kayıt yok."); return; }
+
+    // Sezon = yıl–yıl+1 (Ekim-Eylül tipik tiyatro sezonu, ama burada başlangıç yılına göre)
+    const sezonlar = {};
+    aktif.forEach(t => {
+      const d = parseDate(t.baslangic);
+      const yil = d ? d.getFullYear() : "?";
+      const key = yil + "–" + (typeof yil==="number"?(yil+1):"?");
+      (sezonlar[key] = sezonlar[key] || []).push(t);
+    });
+
+    const toplamGun = benzersizGunSay(aktif);
+    const toplamTemsil = aktif.reduce((s,t)=>s+(Number(t.sayi)||0),0);
+    const sehirSet = new Set();
+    aktif.forEach(t => { if (t.il) sehirSet.add(t.il); (t.duraklar||[]).forEach(d=>{ if(d.il) sehirSet.add(d.il);}); });
+    const personelSet = new Set();
+    aktif.forEach(t => (t.katilimcilar||[]).forEach(k => k.kisi && personelSet.add(norm(k.kisi))));
+
+    const sezonRows = Object.keys(sezonlar).sort().reverse().map(sezon => {
+      const st = sezonlar[sezon];
+      const sure = benzersizGunSay(st);
+      const temsil = st.reduce((s,t)=>s+(Number(t.sayi)||0),0);
+      return `<tr>
+        <td><b>${_pdfEsc(sezon)}</b></td>
+        <td class="c">${st.length}</td>
+        <td class="c">${sure} gün</td>
+        <td class="c">${temsil}</td>
+      </tr>`;
+    }).join("");
+
+    const sorted = aktif.slice().sort((a,b)=> (parseDate(b.baslangic)||0) - (parseDate(a.baslangic)||0));
+    const turneRows = sorted.map((t,i)=>_pdfTurneSatiri(t, i+1)).join("");
+
+    const html = `<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8">
+      <title>Genel Turne Faaliyet Raporu</title>
+      ${_pdfResmiCSS()}
+    </head><body>
+      ${_pdfBaslikBlok("Genel Turne Faaliyet Raporu", "Genel Turne Faaliyet Raporu")}
+      <h2>Özet</h2>
+      <div class="ozet" style="grid-template-columns:repeat(5,1fr)">
+        <div class="ozet-kart"><span class="sayi">${aktif.length}</span><span class="etiket">Turne</span></div>
+        <div class="ozet-kart"><span class="sayi">${toplamGun}</span><span class="etiket">Faaliyet Günü</span></div>
+        <div class="ozet-kart"><span class="sayi">${toplamTemsil}</span><span class="etiket">Toplam Temsil</span></div>
+        <div class="ozet-kart"><span class="sayi">${sehirSet.size}</span><span class="etiket">Şehir</span></div>
+        <div class="ozet-kart"><span class="sayi">${personelSet.size}</span><span class="etiket">Personel</span></div>
+      </div>
+      <div class="konu-satir"><b>Sezon sayısı:</b> ${Object.keys(sezonlar).length}</div>
+
+      <h2>Sezon Özeti</h2>
+      <table style="width:auto;min-width:60%">
+        <thead><tr>
+          <th>Sezon</th><th class="c">Turne</th><th class="c">Faaliyet Günü</th><th class="c">Temsil</th>
+        </tr></thead>
+        <tbody>${sezonRows}</tbody>
+      </table>
+
+      <h2>Tüm Turneler</h2>
+      <table>
+        <thead><tr>
+          <th class="c" style="width:24pt">No</th>
+          <th>Oyun</th>
+          <th>Şehir / Güzergâh</th>
+          <th>Tarih</th>
+          <th class="c">Süre</th>
+          <th class="c">Temsil</th>
+          <th class="c">Kadro</th>
+          <th>Statü</th>
+        </tr></thead>
+        <tbody>${turneRows}</tbody>
+      </table>
+      <div style="position:fixed;bottom:1cm;left:2.5cm;font-size:9pt;color:#555;">__OLUSTURMA__</div>
+      <script>window.onload=function(){setTimeout(function(){window.print();},150);};<\/script>
+    </body></html>`;
+
+    _pdfAc(html);
+  }
+
+
+  function renderRapor() {
+    if (!DS) return;
+    _rapPopulateYears();
+    _rapUpdatePreview();
+    _pdfPopulateAyYil();
+    // Bind listeners once
+    if (!renderRapor._bound) {
+      ["ta-rap-yil","ta-rap-statu","ta-rap-kisi"].forEach(id => {
+        const el = $i(id); if (el) el.addEventListener("input", _rapUpdatePreview);
+      });
+      $i("ta-rap-dl")?.addEventListener("click", _rapDownload);
+      $i("ta-pdf-aylik-btn")?.addEventListener("click", _pdfAylikIndir);
+      $i("ta-pdf-genel-btn")?.addEventListener("click", _pdfGenelIndir);
+      renderRapor._bound = true;
+    }
+  }
+
+  /* ─── Workbook builders ─── */
+  function _rapBuildSummary(list, filters) {
+    const pSet = new Set(), cSet = new Set(), oSet = new Set();
+    for (const t of list) {
+      if (t.oyun) oSet.add(t.oyun);
+      if (t.il) cSet.add(t.il);
+      for (const d of t.duraklar||[]) if (d.il) cSet.add(d.il);
+      for (const k of t.katilimcilar||[]) if (k.kisi) pSet.add(k.kisi.trim());
+    }
+    const days = list.reduce((s,t)=>s+_rapDays(t),0);
+    return [
+      ["İzmir Devlet Tiyatrosu — Turne Raporu"],
+      [],
+      ["Oluşturulma", new Date().toLocaleString("tr-TR")],
+      ["Yıl filtresi", filters.yil || "Tüm yıllar"],
+      ["Durum filtresi", filters.durum === "aktif" ? "İptaller hariç" : (filters.durum || "Tümü")],
+      ["Personel filtresi", filters.kisi || "—"],
+      [],
+      ["TOPLAMLAR"],
+      ["Turne sayısı", list.length],
+      ["Toplam gün", days],
+      ["Farklı oyun", oSet.size],
+      ["Farklı şehir", cSet.size],
+      ["Farklı personel", pSet.size],
+    ];
+  }
+
+  function _rapBuildTurneListesi(list) {
+    const rows = [["Oyun","Şehir","Mekân","Başlangıç","Bitiş","Gün","Temsil","Kadro","Statü","Not"]];
+    for (const t of list) {
+      rows.push([
+        t.oyun||"", t.il||"", t.mekan||"",
+        _rapISO(t.baslangic), _rapISO(t.bitis),
+        _rapDays(t), t.sayi||1,
+        (t.katilimcilar||[]).length,
+        t.statu||"", t.not||""
+      ]);
+    }
+    return rows;
+  }
+
+  function _rapBuildPersonelDetay(list) {
+    const rows = [["Personel","Görev","Kategori","Oyun","Şehir","Başlangıç","Bitiş","Gün","Statü"]];
+    for (const t of list) {
+      for (const k of t.katilimcilar||[]) {
+        if (!k.kisi) continue;
+        rows.push([
+          k.kisi.trim(), k.gorev||"", k.kategori||"",
+          t.oyun||"", t.il||"",
+          _rapISO(t.baslangic), _rapISO(t.bitis),
+          _rapDays(t), t.statu||""
+        ]);
+      }
+    }
+    rows.sort((a,b) => {
+      if (a[0] === "Personel") return -1;
+      if (b[0] === "Personel") return 1;
+      return String(a[0]).localeCompare(String(b[0]), "tr") || String(a[5]).localeCompare(String(b[5]));
+    });
+    return rows;
+  }
+
+  /* ── Yardımcılar: görev temizleme & resmi tarih formatı ── */
+  const _RAP_AYLAR = ["Ocak","Şubat","Mart","Nisan","Mayıs","Haziran","Temmuz","Ağustos","Eylül","Ekim","Kasım","Aralık"];
+  function _rapNormGorev(s) {
+    let x = String(s||"");
+    // Parantezli açıklamayı at
+    x = x.replace(/\([^)]*\)/g, " ");
+    // " - ..." veya "- ..." sonrasını (tarih/açıklama) at
+    x = x.split(/\s[-–—]\s|\s[-–—]$/)[0];
+    // Trailing tireleri ve fazla boşlukları temizle
+    x = x.replace(/[-–—\s]+$/g, "").replace(/\s+/g, " ").trim();
+    if (!x) return "";
+    return x.toLocaleLowerCase("tr").split(" ").map(w => w ? w[0].toLocaleUpperCase("tr") + w.slice(1) : w).join(" ");
+  }
+  function _rapFmtTrTarih(d1, d2) {
+    if (!d1) return "";
+    if (!d2) d2 = d1;
+    const g1=d1.getDate(), m1=d1.getMonth(), y1=d1.getFullYear();
+    const g2=d2.getDate(), m2=d2.getMonth(), y2=d2.getFullYear();
+    if (y1===y2 && m1===m2 && g1===g2) return `${g1} ${_RAP_AYLAR[m1]} ${y1}`;
+    if (y1===y2 && m1===m2) return `${g1}-${g2} ${_RAP_AYLAR[m1]} ${y1}`;
+    if (y1===y2) return `${g1} ${_RAP_AYLAR[m1]} - ${g2} ${_RAP_AYLAR[m2]} ${y1}`;
+    return `${g1} ${_RAP_AYLAR[m1]} ${y1} - ${g2} ${_RAP_AYLAR[m2]} ${y2}`;
+  }
+
+  function _rapBuildPersonelOzet(list) {
+    const m = new Map();
+    for (const t of list) {
+      const seenInTurne = new Set();
+      for (const k of t.katilimcilar||[]) {
+        const ad = (k.kisi||"").trim(); if (!ad) continue;
+        if (!m.has(ad)) m.set(ad, {
+          ad, turne:0, gun:0,
+          sehirler:new Set(), oyunlar:new Set(),
+          gorevMap:new Map(),
+          dokum:[],
+          ilk:null, son:null
+        });
+        const o = m.get(ad);
+        // Aynı turnede aynı kişi birden fazla görevle olabilir → turne/gün/döküm bir kez sayılsın
+        const turneKey = ad + "|" + (t.id || (t.oyun||"")+"|"+(t.baslangic||""));
+        const firstTimeInTurne = !seenInTurne.has(turneKey);
+        if (firstTimeInTurne) {
+          seenInTurne.add(turneKey);
+          o.turne++;
+          o.gun += _rapDays(t);
+          if (t.il) o.sehirler.add(t.il);
+          if (t.oyun) o.oyunlar.add(t.oyun);
+          const d1 = _rapParseDate(t.baslangic), d2 = _rapParseDate(t.bitis||t.baslangic);
+          if (d1 && (!o.ilk || d1 < o.ilk)) o.ilk = d1;
+          if (d2 && (!o.son || d2 > o.son)) o.son = d2;
+          o.dokum.push({
+            d1, d2: d2 || d1,
+            gun: _rapDays(t),
+            oyun: (t.oyun||"").trim() || "—",
+            iptal: /iptal/i.test(t.statu||"")
+          });
+        }
+        if (k.gorev) {
+          const norm = _rapNormGorev(k.gorev);
+          if (norm) {
+            const cur = o.gorevMap.get(norm) || { display: norm, count: 0 };
+            cur.count++;
+            o.gorevMap.set(norm, cur);
+          }
+        }
+      }
+    }
+    const arr = [...m.values()].sort((a,b)=>b.turne-a.turne || b.gun-a.gun);
+    const rows = [["Personel","Turne Sayısı","Görevler","Toplam Gün","Gidilen Şehir","Görev Aldığı Oyun","İlk Turne","Son Turne","Turne Dökümü"]];
+    const fmtISO = d => d ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}` : "";
+    for (const o of arr) {
+      const gorevler = [...o.gorevMap.values()]
+        .map(v => v.display)
+        .sort((a,b)=>a.localeCompare(b,"tr"))
+        .join(", ");
+      const dokum = o.dokum
+        .slice()
+        .sort((a,b) => (a.d1?+a.d1:0) - (b.d1?+b.d1:0))
+        .map(it => {
+          const tarih = _rapFmtTrTarih(it.d1, it.d2);
+          const gunStr = it.gun ? ` (${it.gun} Gün)` : "";
+          const pref = it.iptal ? "[İPTAL] " : "";
+          return `${pref}${it.oyun} — ${tarih}${gunStr}`;
+        })
+        .join("; ");
+      rows.push([o.ad, o.turne, gorevler, o.gun, o.sehirler.size, o.oyunlar.size, fmtISO(o.ilk), fmtISO(o.son), dokum]);
+    }
+    return rows;
+  }
+
+  function _rapBuildSehirOzet(list) {
+    const m = new Map();
+    for (const t of list) {
+      const sehirler = new Set();
+      if (t.il) sehirler.add(t.il);
+      for (const d of t.duraklar||[]) if (d.il) sehirler.add(d.il);
+      for (const sehir of sehirler) {
+        if (!m.has(sehir)) m.set(sehir, { sehir, turne:0, gun:0, oyunlar:new Set(), personel:new Set() });
+        const o = m.get(sehir);
+        o.turne++; o.gun += _rapDays(t);
+        if (t.oyun) o.oyunlar.add(t.oyun);
+        for (const k of t.katilimcilar||[]) if (k.kisi) o.personel.add(k.kisi.trim());
+      }
+    }
+    const arr = [...m.values()].sort((a,b)=>b.turne-a.turne);
+    const rows = [["Şehir","Turne Sayısı","Toplam Gün","Sahnelenen Oyunlar","Görev Alan Personel"]];
+    for (const o of arr) rows.push([o.sehir, o.turne, o.gun, o.oyunlar.size, o.personel.size]);
+    return rows;
+  }
+
+  function _rapBuildOyunOzet(list) {
+    const m = new Map();
+    for (const t of list) {
+      const ad = t.oyun||""; if (!ad) continue;
+      if (!m.has(ad)) m.set(ad, { ad, turne:0, gun:0, sehirler:new Set(), personel:new Set() });
+      const o = m.get(ad);
+      o.turne++; o.gun += _rapDays(t);
+      if (t.il) o.sehirler.add(t.il);
+      for (const d of t.duraklar||[]) if (d.il) o.sehirler.add(d.il);
+      for (const k of t.katilimcilar||[]) if (k.kisi) o.personel.add(k.kisi.trim());
+    }
+    const arr = [...m.values()].sort((a,b)=>b.turne-a.turne);
+    const rows = [["Oyun","Turne Sayısı","Gidilen Şehirler","Toplam Gün","Görev Alan Personel"]];
+    for (const o of arr) rows.push([o.ad, o.turne, o.sehirler.size, o.gun, o.personel.size]);
+    return rows;
+  }
+
+  function _rapAutoCols(rows) {
+    if (!rows.length) return [];
+    const cols = rows[0].length;
+    const widths = new Array(cols).fill(8);
+    for (const r of rows) for (let i=0;i<cols;i++) {
+      const v = r[i]; if (v == null) continue;
+      const len = String(v).length;
+      if (len > widths[i]) widths[i] = Math.min(len, 60);
+    }
+    return widths.map(w => ({ wch: w + 2 }));
+  }
+
+  // İDT bordo teması — tüm hücrelere kenarlık, başlığa dolgu, satırlara zebra
+  function _rapStyleSheet(ws, rows) {
+    if (!rows.length) return;
+    const border = { style: "thin", color: { rgb: "C9BFAE" } };
+    const borders = { top: border, bottom: border, left: border, right: border };
+    const headerStyle = {
+      font: { bold: true, color: { rgb: "FFFFFF" }, sz: 11, name: "Calibri" },
+      fill: { patternType: "solid", fgColor: { rgb: "A0192E" } },
+      alignment: { horizontal: "center", vertical: "center", wrapText: true },
+      border: { top: border, bottom: { style: "medium", color: { rgb: "7A1322" } }, left: border, right: border }
+    };
+    const bodyBase = {
+      font: { sz: 10, name: "Calibri", color: { rgb: "2A2520" } },
+      alignment: { vertical: "center", wrapText: true },
+      border: borders
+    };
+    const zebra = { fill: { patternType: "solid", fgColor: { rgb: "FBF8F3" } } };
+    const nCols = rows[0].length;
+    for (let r = 0; r < rows.length; r++) {
+      for (let c = 0; c < nCols; c++) {
+        const addr = XLSX.utils.encode_cell({ r, c });
+        if (!ws[addr]) ws[addr] = { t: "s", v: "" };
+        if (r === 0) {
+          ws[addr].s = headerStyle;
+        } else {
+          const isZebra = (r % 2 === 0);
+          ws[addr].s = isZebra
+            ? Object.assign({}, bodyBase, { fill: zebra.fill })
+            : bodyBase;
+        }
+      }
+    }
+    // Satır yükseklikleri
+    ws["!rows"] = rows.map((_,i) => i === 0 ? { hpt: 26 } : { hpt: 18 });
+    ws["!freeze"] = { xSplit: 0, ySplit: 1 };
+    ws["!sheetView"] = [{ state: "frozen", ySplit: 1 }];
+  }
+
+  let XLSX; // dış scope referansı, _rapStyleSheet için
+  async function _rapDownload() {
+    const btn = $i("ta-rap-dl");
+    const selected = [...document.querySelectorAll("#ta-rap-checks input:checked")].map(c=>c.value);
+    if (!selected.length) { showToast("En az bir rapor seçin"); return; }
+    if (!DS) { showToast("Veri henüz yüklenmedi"); return; }
+    btn.disabled = true; const origHTML = btn.innerHTML; btn.innerHTML = "⏳ Excel hazırlanıyor…";
+    try {
+      XLSX = await loadXLSX();
+      const filters = {
+        yil: $i("ta-rap-yil").value,
+        durum: $i("ta-rap-statu").value,
+        kisi: ($i("ta-rap-kisi").value||"").trim()
+      };
+      const list = _rapFilter();
+      const wb = XLSX.utils.book_new();
+
+      const map = {
+        personel_ozet:  ["Personel Ozet",  _rapBuildPersonelOzet],
+        personel_detay: ["Personel Detay", _rapBuildPersonelDetay],
+        turne_listesi:  ["Turne Listesi",  _rapBuildTurneListesi],
+        sehir_ozet:     ["Sehir Ozeti",    _rapBuildSehirOzet],
+        oyun_ozet:      ["Oyun Ozeti",     _rapBuildOyunOzet],
+      };
+      for (const key of selected) {
+        const def = map[key]; if (!def) continue;
+        const rows = def[1](list);
+        const ws = XLSX.utils.aoa_to_sheet(rows);
+        ws["!cols"] = _rapAutoCols(rows);
+        if (rows.length) ws["!autofilter"] = { ref: XLSX.utils.encode_range({s:{r:0,c:0},e:{r:rows.length-1,c:rows[0].length-1}}) };
+        _rapStyleSheet(ws, rows);
+        XLSX.utils.book_append_sheet(wb, ws, def[0]);
+      }
+
+      const today = new Date();
+      const fname = `IDT-Turne-Raporu-${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,"0")}-${String(today.getDate()).padStart(2,"0")}.xlsx`;
+      XLSX.writeFile(wb, fname);
+      showToast("✅ Excel indirildi");
+    } catch (e) {
+      console.error(e);
+      showToast("❌ Hata: " + (e.message || e));
+    } finally {
+      btn.disabled = false; btn.innerHTML = origHTML;
+    }
+  }
+
 })();
