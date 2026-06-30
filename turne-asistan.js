@@ -1,11 +1,12 @@
 /* ════════════════════════════════════════════════════════════════
-   TURNE ASİSTANI v5.4
+   TURNE ASİSTANI v5.5
    İzmir Devlet Tiyatrosu
    YENİ: Turne düzenleme · Hatırlatıcı · Detaylı istatistik
    ═══════════════════════════════════════════════════════════════ */
 (function () {
-  if (window.__turneAsistanLoaded === 'v5.4') return;
-  window.__turneAsistanLoaded = 'v5.4';
+  if (window.__turneAsistanLoaded === 'v5.5') return;
+  ["ta-fab", "ta-panel", "ta-toast", "ta-prompt-modal", "ta-style"].forEach(id => document.getElementById(id)?.remove());
+  window.__turneAsistanLoaded = 'v5.5';
 
   const API = "https://turne-backend.vercel.app/api/sheets";
   const TURNE_SHEET = "TURNE_KAYITLARI";
@@ -357,6 +358,7 @@
   .ta-sorular-empty{text-align:center;padding:30px 20px;color:#B0A99E;font-size:12.5px;font-weight:600;}
   `;
   const styleEl = document.createElement("style");
+  styleEl.id = "ta-style";
   styleEl.textContent = css;
   document.head.appendChild(styleEl);
 
