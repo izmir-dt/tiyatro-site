@@ -18893,12 +18893,9 @@ function _konaklamaSekmesiHTML(t, rowIdx) {
             + '</div>'
             + '<div style="font-size:11px;color:#555;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px">' + (p.gorev||p.kategori||'') + '</div>'
             + '</div>'
-            + '<button onclick="_konaklamaAyrilisToggle(' + t._rowIdx + ',' + i + ',\'erken\')" '
-            + 'class="konak-ayrilis-btn" style="height:24px;padding:0 8px;border:1.5px solid ' + (cAyrilis==='erken'?'#d97706':'#e0c8c8') + ';border-radius:5px;background:' + (cAyrilis==='erken'?'#d97706':'rgba(255,255,255,.6)') + ';color:' + (cAyrilis==='erken'?'#fff':'#aaa') + ';font-size:10px;cursor:pointer;white-space:nowrap;font-weight:800;transition:all .14s">'
-            + (cAyrilis==='erken'?'Erken [x]':'Erken') + '</button>'
-            + '<button onclick="_konaklamaAyrilisToggle(' + t._rowIdx + ',' + i + ',\'gec\')" '
-            + 'class="konak-ayrilis-btn" style="height:24px;padding:0 8px;border:1.5px solid ' + (cAyrilis==='gec'?'#2563eb':'#e0c8c8') + ';border-radius:5px;background:' + (cAyrilis==='gec'?'#2563eb':'rgba(255,255,255,.6)') + ';color:' + (cAyrilis==='gec'?'#fff':'#aaa') + ';font-size:10px;cursor:pointer;white-space:nowrap;font-weight:800;transition:all .14s">'
-            + (cAyrilis==='gec'?'Gec [x]':'Gec') + '</button>'
+            + '<button onclick="_konaklamaMunferitSec(' + t._rowIdx + ',' + i + ')" '
+            + 'title="Münferit konaklama" '
+            + 'class="konak-ayrilis-btn" style="height:24px;padding:0 8px;border:1.5px solid ' + (p.munferit?'#6b1b1b':'#e0c8c8') + ';border-radius:5px;background:' + (p.munferit?'#6b1b1b':'rgba(255,255,255,.6)') + ';color:' + (p.munferit?'#fff':'#aaa') + ';font-size:10px;cursor:pointer;white-space:nowrap;font-weight:800;transition:all .14s">Mnf</button>'
             + '<button onclick="_konaklamaOdaTipSec(' + t._rowIdx + ',' + i + ',\'\')" '
             + 'title="Atamayı kaldır" '
             + 'style="flex-shrink:0;height:24px;width:24px;border:1px solid #e0c8c8;border-radius:5px;background:#fff;color:#999;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center">×</button>'
@@ -18971,12 +18968,6 @@ function _konaklamaSekmesiHTML(t, rowIdx) {
           + '<div style="font-size:11px;color:#555;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px">' + (p.gorev||p.kategori||'') + '</div>'
           + '</div>'
           + '<div style="display:flex;flex-direction:column;gap:3px;flex-shrink:0">'
-          + '<button onclick="_konaklamaAyrilisToggle(' + t._rowIdx + ',' + i + ',\'erken\')" '
-          + 'style="height:20px;padding:0 6px;border:1px solid ' + (tkAyrilis==='erken'?'#d97706':'#e0c8c8') + ';border-radius:4px;background:' + (tkAyrilis==='erken'?'#d97706':'#fff') + ';color:' + (tkAyrilis==='erken'?'#fff':'#999') + ';font-size:9.5px;cursor:pointer;white-space:nowrap;font-weight:700">'
-          + (tkAyrilis==='erken'?'Erken [x]':'Erken') + '</button>'
-          + '<button onclick="_konaklamaAyrilisToggle(' + t._rowIdx + ',' + i + ',\'gec\')" '
-          + 'style="height:20px;padding:0 6px;border:1px solid ' + (tkAyrilis==='gec'?'#2563eb':'#e0c8c8') + ';border-radius:4px;background:' + (tkAyrilis==='gec'?'#2563eb':'#fff') + ';color:' + (tkAyrilis==='gec'?'#fff':'#999') + ';font-size:9.5px;cursor:pointer;white-space:nowrap;font-weight:700">'
-          + (tkAyrilis==='gec'?'Gec [x]':'Gec') + '</button>'
           + '<button onclick="_konaklamaMunferitSec(' + t._rowIdx + ',' + i + ')" '
           + 'title="Münferit konaklama" '
           + 'style="flex-shrink:0;height:20px;padding:0 6px;border:1px solid ' + (p.munferit?'#6b1b1b':'#e0c8c8') + ';border-radius:4px;background:' + (p.munferit?'#6b1b1b':'#fff') + ';color:' + (p.munferit?'#fff':'#999') + ';font-size:9.5px;font-weight:700;cursor:pointer;white-space:nowrap">Mnf</button>'
@@ -33179,8 +33170,37 @@ function _konaklamaOdaEslemeyeGec() {
   var inp = document.getElementById('edit-rowidx');
   var rowIdx = inp ? parseInt(inp.value) : NaN;
   if (isNaN(rowIdx)) {
-    if (typeof showToast === 'function') showToast('Önce turneyi kaydedin; oda eşleme kayıtlı turneler için açılır.', 'info', 3200);
-    else alert('Önce turneyi kaydedin.');
+    // İlk giriş — turne henüz kaydedilmemiş. Önce turneyi kaydet, sonra oda eşlemeye otomatik geç.
+    var _oyunEl = document.getElementById('m-oyun');
+    var _tarihEl = document.getElementById('m-tarih');
+    var _oyunAdiOnce = _oyunEl ? _oyunEl.value.trim() : '';
+    var _basTarihOnce = _tarihEl ? _tarihEl.value.trim() : '';
+    if (!_oyunAdiOnce || !_basTarihOnce) {
+      if (typeof showToast === 'function') showToast('Oda eşlemeye geçmeden önce Oyun Adı ve Başlangıç Tarihi girip kaydedin.', 'info', 3500);
+      else alert('Önce Oyun Adı ve Başlangıç Tarihi girip kaydedin.');
+      return;
+    }
+    if (typeof saveTurne !== 'function') { if (typeof showToast === 'function') showToast('Önce turneyi kaydedin.', 'info', 3200); return; }
+    if (typeof showToast === 'function') showToast('Turne kaydediliyor, oda eşlemeye yönlendiriliyorsunuz…', 'info', 2500);
+    Promise.resolve(saveTurne()).then(function() {
+      setTimeout(function() {
+        var yeni = (window.turneler || []).filter(function(x) {
+          return !x.anaGrupId && x.oyun === _oyunAdiOnce && x.baslangic === _basTarihOnce;
+        }).sort(function(a, b) { return b._rowIdx - a._rowIdx; })[0];
+        if (!yeni) {
+          if (typeof showToast === 'function') showToast('Turne kaydedildi. Kart üzerinden açıp Konaklama sekmesinden devam edebilirsiniz.', 'success', 4000);
+          return;
+        }
+        try { window._cdAktifTab = 'konaklama'; } catch(e){}
+        try { _cdAktifTab = 'konaklama'; } catch(e){}
+        if (typeof openCardDetail === 'function') openCardDetail(yeni._rowIdx);
+        setTimeout(function(){
+          try { _cdAktifTab = 'konaklama'; } catch(e){}
+          try { window._cdAktifTab = 'konaklama'; } catch(e){}
+          if (typeof _renderCardDetail === 'function') _renderCardDetail(yeni._rowIdx);
+        }, 30);
+      }, 700); // arka planda devam eden Sheets kaydının turneler dizisine yansıması için bekle
+    });
     return;
   }
   // Pencere değişkeni — kart detayı açılırken konaklama sekmesinden başlasın
