@@ -997,7 +997,16 @@
       }
 
       const anaGrupId = (r[iAna] || "").toString().trim();
-      return { oyun, il, mekan, baslangic: bas, bitis: bit, sayi, not, statu, otelAdi, otelAdres, otelTel, gidisUlasim, gidisSaat, donusUlasim, donusSaat, duraklar, katilimcilar, anaGrupId, _rawIdx: rows.indexOf(r) };
+
+      // Kolon 43 — odaPlanlari + memnuniyet birleşik hücre (turne.html ile aynı format)
+      let odaPlanlari = [];
+      try {
+        const raw43 = (r[43] || "").trim();
+        if (raw43.startsWith("{")) { const combo = JSON.parse(raw43); if (combo && combo._oda) odaPlanlari = combo._oda; }
+        else if (raw43.startsWith("[")) { const op = JSON.parse(raw43); if (Array.isArray(op)) odaPlanlari = op; }
+      } catch(e) {}
+
+      return { oyun, il, mekan, baslangic: bas, bitis: bit, sayi, not, statu, otelAdi, otelAdres, otelTel, gidisUlasim, gidisSaat, donusUlasim, donusSaat, duraklar, katilimcilar, anaGrupId, odaPlanlari, _rawIdx: rows.indexOf(r) };
     }).filter(t => t && !t.anaGrupId);
   }
 
@@ -1816,6 +1825,35 @@
           }
           return {html:o};
         }
+      }
+    }
+
+    /* ODA TİPİ (TEK / ÇİFT / MÜNFERİT) SORGUSU — örn: "Süleyman Tavan kaç defa tek odada kaldı" */
+    if (/\boda/.test(Q) && (/(kaç|kac|defa|kez|kere)/.test(Q) || /\bkal(dı|di|mış|mis)/.test(Q))) {
+      const odaKisi = findPerson(Q,T);
+      if (odaKisi) {
+        const hedefNorm = norm(odaKisi.kisi);
+        const tumTur = T.filter(t=>!t.statu.includes("iptal") && t.katilimcilar.some(k=>norm(k.kisi)===hedefNorm));
+        const tekList=[], ciftList=[], munfList=[];
+        for (const t of tumTur) {
+          const durumlar = odaDurumTespit(t, hedefNorm);
+          if (!durumlar) continue;
+          if (durumlar.has('tek')) tekList.push(t);
+          if (durumlar.has('cift')) ciftList.push(t);
+          if (durumlar.has('munferit')) munfList.push(t);
+        }
+        if (tekList.length || ciftList.length || munfList.length) {
+          let o=`🛏 **${odaKisi.kisi}** — oda geçmişi:\n\n`;
+          o+=`🛏 Tek oda: **${tekList.length}** defa\n`;
+          o+=`🛏🛏 Çift oda: **${ciftList.length}** defa\n`;
+          o+=`🚪 Münferit: **${munfList.length}** defa\n`;
+          const grupYaz=(baslik,liste)=>{ if(!liste.length) return ""; let s=`\n**${baslik}:**\n`; for(const t of liste.sort((a,b)=>(parseDate(b.baslangic)||0)-(parseDate(a.baslangic)||0))){s+=`• **${t.oyun}** — ${fmtTarihAralik(t.baslangic,t.bitis)} · 📍 ${t.il||"—"}\n`;} return s; };
+          o+=grupYaz("Tek Oda",tekList);
+          o+=grupYaz("Çift Oda",ciftList);
+          o+=grupYaz("Münferit",munfList);
+          return {html:o};
+        }
+        return `**${odaKisi.kisi}** için kayıtlı bir oda (konaklama) ataması bulunamadı.`;
       }
     }
 
@@ -2983,6 +3021,29 @@
 
   }
 
+  // Bir kişinin belirli bir turnede tek/çift/münferit odada kalıp kalmadığını tespit eder.
+  // Kaynak: t.odaPlanlari (birden fazla durak/otel planı olabilir); plan yoksa katılımcı üzerindeki
+  // odaTip/munferit alanlarına (varsa) düşer.
+  function odaDurumTespit(t, hedefNorm) {
+    const kk = (t.katilimcilar||[]).find(k=>norm(k.kisi)===hedefNorm);
+    if (!kk) return null;
+    const adKey = kk.kisi;
+    const durumlar = new Set();
+    const plans = (t.odaPlanlari||[]).filter(p=>p && (p.odaTipleri || p.munferitler));
+    if (plans.length) {
+      for (const p of plans) {
+        if ((p.munferitler||{})[adKey]) durumlar.add('munferit');
+        else if ((p.odaTipleri||{})[adKey]==='tek') durumlar.add('tek');
+        else if ((p.odaTipleri||{})[adKey]==='cift') durumlar.add('cift');
+      }
+    } else {
+      if (kk.munferit) durumlar.add('munferit');
+      else if (kk.odaTip==='tek') durumlar.add('tek');
+      else if (kk.odaTip==='cift') durumlar.add('cift');
+    }
+    return durumlar;
+  }
+
   function findPerson(Q,T) {
     const m=new Map();
     for(const t of T) for(const k of t.katilimcilar){const key=norm(k.kisi);if(!m.has(key))m.set(key,k);}
@@ -3610,7 +3671,7 @@
 
     // Görev dağılımı
     const gorevMap=new Map();
-    T.filter(t=>!t.statu.includes("iptal")).forEach(t=>t.katilimcilar.forEach(k=>{const rawG=k.kategori||k.gorev||"Diğer";const g=rawG==="Turne Ekstra Kadrosu"||rawG==="Ekstra"?"Ek Kadro":rawG;if(!gorevMap.has(g))gorevMap.set(g,new Set());gorevMap.get(g).add(norm(k.kisi));}));
+    T.filter(t=>!t.statu.includes("iptal")).forEach(t=>t.katilimcilar.forEach(k=>{const rawG=k.kategori||k.gorev||"Diğer";const g=rawG==="Turne Ekstra Kadrosu"||rawG==="Ekstra"?"Ana Kadro Dışı Personel":rawG;if(!gorevMap.has(g))gorevMap.set(g,new Set());gorevMap.get(g).add(norm(k.kisi));}));
     const topGorevler=[...gorevMap.entries()].map(([g,s])=>[g,s.size]).sort((a,b)=>b[1]-a[1]).slice(0,6);
 
     // Sezon dağılımı (takvim yılına göre değil, 15 Ağustos–14 Ağustos tiyatro sezonuna göre)
