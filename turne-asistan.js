@@ -3671,7 +3671,7 @@
 
     // Görev dağılımı
     const gorevMap=new Map();
-    T.filter(t=>!t.statu.includes("iptal")).forEach(t=>t.katilimcilar.forEach(k=>{const rawG=k.kategori||k.gorev||"Diğer";const g=rawG==="Turne Ekstra Kadrosu"||rawG==="Ekstra"?"Ana Kadro Dışı Personel":rawG;if(!gorevMap.has(g))gorevMap.set(g,new Set());gorevMap.get(g).add(norm(k.kisi));}));
+    T.filter(t=>!t.statu.includes("iptal")).forEach(t=>t.katilimcilar.forEach(k=>{const rawKat=k.kategori||"";const isEkstra=rawKat==="Turne Ekstra Kadrosu"||rawKat==="Ekstra";const g=isEkstra?(k.gorev||"Diğer"):(k.kategori||k.gorev||"Diğer");if(!gorevMap.has(g))gorevMap.set(g,new Set());gorevMap.get(g).add(norm(k.kisi));}));
     const topGorevler=[...gorevMap.entries()].map(([g,s])=>[g,s.size]).sort((a,b)=>b[1]-a[1]).slice(0,6);
 
     // Sezon dağılımı (takvim yılına göre değil, 15 Ağustos–14 Ağustos tiyatro sezonuna göre)
