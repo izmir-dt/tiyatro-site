@@ -1839,16 +1839,18 @@
       }
     }
 
-    /* ODA TİPİ (TEK / ÇİFT / MÜNFERİT) SORGUSU — örn: "Süleyman Tavan kaç defa tek odada kaldı" */
-    if (/\boda/.test(Q) && (/(kaç|kac|defa|kez|kere)/.test(Q) || /\bkal(dı|di|mış|mis)/.test(Q))) {
+    /* ODA TİPİ (TEK / ÇİFT / MÜNFERİT) SORGUSU — örn: "Süleyman Tavan oda" / "Tavan kaç defa tek odada kaldı" */
+    if (/\boda/.test(Q)) {
       const odaKisi = findPerson(Q,T);
       if (odaKisi) {
         const hedefNorm = norm(odaKisi.kisi);
         const tumTur = T.filter(t=>!t.statu.includes("iptal") && t.katilimcilar.some(k=>norm(k.kisi)===hedefNorm));
         const kartlar=[]; // {tip, t, esiler}
+        let veriliTurSayisi=0;
         for (const t of tumTur) {
           const sonuc = odaDurumTespit(t, hedefNorm);
-          if (!sonuc) continue;
+          if (!sonuc || !sonuc.durumlar.size) continue;
+          veriliTurSayisi++;
           if (sonuc.durumlar.has('tek')) kartlar.push({tip:'tek', t});
           if (sonuc.durumlar.has('cift')) kartlar.push({tip:'cift', t, esiler:sonuc.esiler});
           if (sonuc.durumlar.has('munferit')) kartlar.push({tip:'munferit', t});
@@ -1867,9 +1869,11 @@
             if (k.tip==='cift' && k.esiler && k.esiler.size) o+=`<div class="ta-oda-kart-esi">👥 ${[...k.esiler].map(esc).join(", ")} ile</div>`;
             o+=`</div></div>`;
           }
+          const eksik = tumTur.length - veriliTurSayisi;
+          if (eksik > 0) o += `\n<div style="font-size:10.5px;color:#8A857C;margin-top:4px">ℹ️ ${odaKisi.kisi.split(" ")[0]}'in katıldığı ${tumTur.length} turneden ${eksik} tanesinde konaklama sekmesinde oda ataması yapılmamış — bu yüzden o turneler yukarıda görünmüyor.</div>`;
           return {html:o};
         }
-        return `**${odaKisi.kisi}** için kayıtlı bir oda (konaklama) ataması bulunamadı.`;
+        return `**${odaKisi.kisi}** için hiçbir turnede oda (konaklama) ataması yapılmamış — konaklama sekmesinden oda ataması girildikçe burada görünecek.`;
       }
     }
 
