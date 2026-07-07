@@ -6,7 +6,7 @@
 <title>Sezon Seç · Turne Takip</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@500;700&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700;9..40,800;9..40,900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=DM+Mono:wght@400;500&family=Playfair+Display:wght@700;900&display=swap" rel="stylesheet">
 <style>
   :root {
     --background: hsl(218,22%,86%);
@@ -28,7 +28,7 @@
     font-family:"DM Sans","Segoe UI",system-ui,-apple-system,sans-serif;
     background:var(--background);
     color:var(--foreground);
-    font-size:14px;
+    font-size:13px;
     line-height:1.5;
     -webkit-font-smoothing:antialiased;
     font-feature-settings:"kern" 1, "liga" 1, "ss01";
@@ -248,7 +248,6 @@
       var pre = JSON.parse(localStorage.getItem('_sezonOzet') || 'null');
       if (pre && pre.sezonlar && pre.sezonlar.length) return pre;
     } catch(e) {}
-    // fallback: ham veriden basit hesap
     var turneler = [];
     try { turneler = JSON.parse(localStorage.getItem('turne_cache_data') || '[]'); } catch(e){}
     var map = {};
@@ -256,14 +255,13 @@
       if (t.anaGrupId) return;
       var s = tarihSezon(t.baslangicTarih || t.tarih);
       if (!s) return;
-      if (!map[s]) map[s] = { turne:0, temsil:0, il:{}, gun:0 };
+      if (!map[s]) map[s] = { turne:0, temsil:0, il:{}, araliklar:[] };
       map[s].turne++;
-      // gün
+      // gün — aralığı biriktir, tekilleştirme render sırasında yapılacak (üst üste binen/ardışık turneler çift sayılmasın)
       try {
-        if (t.baslangicTarih && t.bitisTarih) {
-          var b = new Date(t.baslangicTarih), e = new Date(t.bitisTarih);
-          map[s].gun += Math.max(1, Math.round((e-b)/86400000)+1);
-        } else map[s].gun += 1;
+        var b = t.baslangicTarih ? new Date(t.baslangicTarih) : null;
+        var e = t.bitisTarih ? new Date(t.bitisTarih) : b;
+        if (b) { if (!e || e < b) e = b; map[s].araliklar.push([b.getTime(), e.getTime()]); }
       } catch(e){}
       // temsil
       if (t.programSatirlar && t.programSatirlar.length) {
@@ -280,8 +278,19 @@
         if (key) map[s].il[key] = 1;
       });
     });
+    function benzersizGunSay(araliklar) {
+      if (!araliklar.length) return 0;
+      var a = araliklar.slice().sort(function(x,y){ return x[0]-y[0]; });
+      var birl = [a[0]];
+      for (var i=1;i<a.length;i++){
+        var son = birl[birl.length-1], cur = a[i];
+        if (cur[0] <= son[1] + 86400000) { if (cur[1] > son[1]) son[1] = cur[1]; }
+        else birl.push(cur);
+      }
+      return birl.reduce(function(s2,r){ return s2 + Math.round((r[1]-r[0])/86400000) + 1; }, 0);
+    }
     var sezonlar = Object.keys(map).map(function(s){
-      return { id:s, turne:map[s].turne, temsil:map[s].temsil, il:Object.keys(map[s].il).length, gun:map[s].gun };
+      return { id:s, turne:map[s].turne, temsil:map[s].temsil, il:Object.keys(map[s].il).length, gun:benzersizGunSay(map[s].araliklar) };
     });
     return { sezonlar:sezonlar, guncel:guncelSezon(), sonraki:birSonrakiSezon(guncelSezon()) };
   }
