@@ -6,22 +6,53 @@
 <title>Sezon Seç · Turne Takip</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=DM+Mono:wght@400;500&family=Playfair+Display:wght@700;900&display=swap" rel="stylesheet">
+<link rel="preload" href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=DM+Mono:wght@400;500&family=Playfair+Display:wght@700;900&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
+<noscript><link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=DM+Mono:wght@400;500&family=Playfair+Display:wght@700;900&display=swap" rel="stylesheet"></noscript>
+<script>
+  // Tema tercihini ana site ile aynı anahtardan oku (_tema) — flash of wrong theme olmasın
+  (function() {
+    try {
+      var t = localStorage.getItem('_tema') || 'light';
+      if (t === 'dark' || (t === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      }
+    } catch(e) {}
+  })();
+</script>
 <style>
   :root {
-    --background: hsl(218,22%,86%);
-    --card: hsl(0,0%,100%);
-    --foreground: hsl(25,35%,12%);
-    --muted: hsl(220,24%,94%);
-    --muted-foreground: hsl(220,10%,42%);
-    --border: hsl(220,15%,82%);
-    --primary: hsl(38,72%,42%);            /* hardal */
-    --primary-glow: hsl(42,80%,55%);
-    --primary-foreground: hsl(0,0%,100%);
-    --sidebar-primary: hsl(38,72%,42%);
+    --background: hsl(36, 18%, 91%);
+    --foreground: #2C2C2C;
+    --border: hsl(36, 14%, 82%);
+    --card: #ffffff;
+    --card-elevated: hsl(36, 14%, 95%);
+    --sidebar-primary: hsl(42, 88%, 52%);
+    --primary: hsl(38, 78%, 42%);
+    --primary-foreground: #fff;
+    --muted: hsl(36, 14%, 91%);
+    --muted-foreground: #5C5652;
+    --accent: hsl(42, 60%, 88%);
+    --accent-foreground: hsl(38, 70%, 20%);
     --shadow-card: 0 1px 4px rgba(30,20,10,.06), 0 8px 24px rgba(30,20,10,.06);
     --shadow-card-hover: 0 2px 8px rgba(30,20,10,.08), 0 18px 42px rgba(30,20,10,.12);
     --radius: 14px;
+  }
+  [data-theme="dark"] {
+    --background: hsl(222, 20%, 8%);
+    --foreground: hsl(220, 15%, 96%);
+    --border: hsl(222, 14%, 20%);
+    --card: hsl(222, 17%, 11%);
+    --card-elevated: hsl(222, 15%, 14%);
+    --sidebar-primary: hsl(42, 92%, 55%);
+    --primary: hsl(238, 75%, 68%);
+    --primary-foreground: hsl(220, 20%, 8%);
+    --muted: hsl(222, 14%, 14%);
+    --muted-foreground: hsl(220, 12%, 58%);
+    --accent: hsl(238, 28%, 22%);
+    --accent-foreground: hsl(238, 85%, 82%);
+    --shadow-card: 0 1px 4px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.25);
+    --shadow-card-hover: 0 2px 8px rgba(0,0,0,.35), 0 18px 42px rgba(0,0,0,.35);
+    color-scheme: dark;
   }
   * { box-sizing:border-box; margin:0; padding:0; }
   html, body {
@@ -33,6 +64,7 @@
     -webkit-font-smoothing:antialiased;
     font-feature-settings:"kern" 1, "liga" 1, "ss01";
     min-height:100dvh;
+    transition:background-color .2s ease, color .15s ease;
   }
   .mono { font-family:"DM Mono","JetBrains Mono",ui-monospace,monospace; font-variant-numeric:tabular-nums; }
 
@@ -44,6 +76,7 @@
   }
   @keyframes fadeInUp { from { opacity:0; transform:translateY(12px);} to { opacity:1; transform:none;} }
   @keyframes cardIn   { from { opacity:0; transform:translateY(10px);} to { opacity:1; transform:none;} }
+  @keyframes panelIn  { from { opacity:0; transform:translateY(-4px); max-height:0;} to { opacity:1; transform:none; max-height:600px;} }
 
   .head-row {
     display:flex; align-items:flex-start; justify-content:space-between; gap:16px;
@@ -85,6 +118,7 @@
     grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
     gap:18px;
     margin-top:32px;
+    align-items:start;
   }
   .card {
     position:relative;
@@ -95,11 +129,11 @@
     padding:22px 22px 20px;
     box-shadow:var(--shadow-card);
     display:flex; flex-direction:column;
-    transition:transform .22s ease, box-shadow .22s ease, border-color .22s ease;
+    transition:transform .22s ease, box-shadow .22s ease, border-color .22s ease, background-color .2s ease;
     animation:cardIn .5s both;
   }
   .card:hover { transform:translateY(-2px); box-shadow:var(--shadow-card-hover); }
-  .card.empty { border-left-style:solid; border-style:dashed; border-left:5px solid var(--sidebar-primary); background:linear-gradient(180deg,var(--card),hsl(42,60%,97%)); }
+  .card.empty { border-left-style:solid; border-style:dashed; border-left:5px solid var(--sidebar-primary); background:linear-gradient(180deg,var(--card),var(--card-elevated)); }
 
   .card-head {
     display:flex; align-items:baseline; justify-content:space-between; gap:8px;
@@ -111,13 +145,14 @@
   .card-chip {
     font-size:10px; font-weight:700; letter-spacing:.8px; text-transform:uppercase;
     padding:3px 8px; border-radius:999px;
-    background:hsl(42,65%,88%); color:hsl(38,72%,28%);
+    background:var(--accent); color:var(--accent-foreground);
+    white-space:nowrap;
   }
   .card-chip.next { background:var(--muted); color:var(--muted-foreground); }
 
   .stats {
     display:grid; grid-template-columns:repeat(2,1fr); gap:8px;
-    margin-bottom:18px;
+    margin-bottom:14px;
   }
   .stat {
     background:var(--muted);
@@ -159,6 +194,57 @@
   }
   .btn-outline:hover { background:var(--primary); color:var(--primary-foreground); }
 
+  .detay-toggle {
+    width:100%;
+    background:transparent; border:none; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; gap:5px;
+    font-family:inherit; font-size:11.5px; font-weight:700;
+    color:var(--muted-foreground);
+    padding:9px 4px 12px;
+    transition:color .15s ease;
+  }
+  .detay-toggle:hover { color:var(--primary); }
+  .detay-toggle .chev { transition:transform .2s ease; font-size:9px; }
+  .detay-toggle.open .chev { transform:rotate(180deg); }
+
+  .detay-panel {
+    overflow:hidden;
+    max-height:0;
+    transition:max-height .28s ease;
+  }
+  .detay-panel.open { max-height:600px; }
+  .detay-inner {
+    display:grid; grid-template-columns:1fr 1fr; gap:14px;
+    padding-top:2px; padding-bottom:14px;
+  }
+  .detay-col-title {
+    font-size:10px; font-weight:800; letter-spacing:.6px; text-transform:uppercase;
+    color:var(--muted-foreground); margin-bottom:7px;
+  }
+  .detay-list {
+    max-height:220px; overflow-y:auto;
+    border:1px solid var(--border); border-radius:8px;
+    background:var(--card-elevated);
+    scrollbar-width:thin; scrollbar-color:var(--border) transparent;
+  }
+  .detay-row {
+    display:flex; align-items:center; justify-content:space-between; gap:8px;
+    padding:6px 9px;
+    border-bottom:1px solid var(--border);
+    font-size:11px;
+  }
+  .detay-row:last-child { border-bottom:none; }
+  .detay-name {
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+    font-weight:600; color:var(--foreground);
+  }
+  .detay-nums {
+    flex-shrink:0; display:flex; gap:6px; align-items:baseline;
+  }
+  .detay-nums b { font-size:12px; color:var(--foreground); }
+  .detay-nums span { font-size:9px; color:var(--muted-foreground); text-transform:uppercase; letter-spacing:.3px; }
+  .detay-empty { padding:14px 10px; text-align:center; font-size:11px; color:var(--muted-foreground); }
+
   .other {
     margin-top:28px; text-align:center; font-size:12.5px; color:var(--muted-foreground);
   }
@@ -183,6 +269,7 @@
   @media (max-width:560px) {
     .grid { grid-template-columns:1fr; }
     .stats { grid-template-columns:repeat(2,1fr); }
+    .detay-inner { grid-template-columns:1fr; }
     h1 { font-size:22px; }
   }
 </style>
@@ -208,7 +295,6 @@
 (function(){
   var qs = new URLSearchParams(location.search);
   var isFirst = qs.get('first') === '1';
-  var fromTurne = qs.get('from') === 'turne';
 
   // Kapat butonu davranışı
   var closeBtn = document.getElementById('closeBtn');
@@ -241,7 +327,7 @@
   }
 
   // ---------- Veri kaynağı ----------
-  // 1) Öncelik: turne.html'in yazdığı önhesaplanmış özet
+  // 1) Öncelik: turne.html'in yazdığı önhesaplanmış özet (detaylı oyun/il dökümü dahil)
   // 2) Yoksa turne_cache_data'dan hesapla
   function loadStats() {
     try {
@@ -251,31 +337,58 @@
     var turneler = [];
     try { turneler = JSON.parse(localStorage.getItem('turne_cache_data') || '[]'); } catch(e){}
     var map = {};
+    function bosSezon() { return { turne:0, temsil:0, il:{}, araliklar:[], oyunMap:{}, ilMap:{} }; }
+    function detayArtir(m, key, temsilArtis) {
+      if (!key) return;
+      if (!m[key]) m[key] = { turne:0, temsil:0 };
+      m[key].temsil += temsilArtis;
+    }
     turneler.forEach(function(t){
       if (t.anaGrupId) return;
       var s = tarihSezon(t.baslangicTarih || t.tarih);
       if (!s) return;
-      if (!map[s]) map[s] = { turne:0, temsil:0, il:{}, araliklar:[] };
-      map[s].turne++;
+      if (!map[s]) map[s] = bosSezon();
+      var S = map[s];
+      S.turne++;
       // gün — aralığı biriktir, tekilleştirme render sırasında yapılacak (üst üste binen/ardışık turneler çift sayılmasın)
       try {
         var b = t.baslangicTarih ? new Date(t.baslangicTarih) : null;
         var e = t.bitisTarih ? new Date(t.bitisTarih) : b;
-        if (b) { if (!e || e < b) e = b; map[s].araliklar.push([b.getTime(), e.getTime()]); }
+        if (b) { if (!e || e < b) e = b; S.araliklar.push([b.getTime(), e.getTime()]); }
       } catch(e){}
-      // temsil
+      // temsil (toplam) + oyun/il bazında detay
+      var oyunlarBuTurne = {}, illerBuTurne = {};
       if (t.programSatirlar && t.programSatirlar.length) {
         t.programSatirlar.forEach(function(x){
-          if (x.program === 'Oyun') map[s].temsil += x.saat2 ? 2 : 1;
+          if (x.program !== 'Oyun') return;
+          var artis = x.saat2 ? 2 : 1;
+          S.temsil += artis;
+          var oyunAdi = (x.oyun || t.oyun || '').trim();
+          var ilAdi = (x.sehir || '').split('/')[0].trim().toLocaleUpperCase('tr');
+          if (oyunAdi) { detayArtir(S.oyunMap, oyunAdi, artis); oyunlarBuTurne[oyunAdi]=1; }
+          if (ilAdi) { detayArtir(S.ilMap, ilAdi, artis); illerBuTurne[ilAdi]=1; }
         });
-      } else if (t.duraklar) {
-        t.duraklar.forEach(function(d){ map[s].temsil += (+d.sayi || 1); });
+      } else if (t.duraklar && t.duraklar.length) {
+        t.duraklar.forEach(function(d){
+          var artis = +d.sayi || 1;
+          S.temsil += artis;
+          var oyunAdi = (d.oyun || t.oyun || '').trim();
+          var ilAdi = (d.il || '').replace(/\/MERKEZ/gi,'').split('/')[0].trim().toLocaleUpperCase('tr');
+          if (oyunAdi) { detayArtir(S.oyunMap, oyunAdi, artis); oyunlarBuTurne[oyunAdi]=1; }
+          if (ilAdi) { detayArtir(S.ilMap, ilAdi, artis); illerBuTurne[ilAdi]=1; }
+        });
+      } else if (t.oyun) {
+        var artis2 = 1;
+        S.temsil += artis2;
+        t.oyun.split('/').forEach(function(o){ var ot=o.trim(); if(ot){ detayArtir(S.oyunMap, ot, artis2); oyunlarBuTurne[ot]=1; } });
       }
-      // il — normalize (boşluk temizle, /MERKEZ at, ilk parça)
+      Object.keys(oyunlarBuTurne).forEach(function(k){ S.oyunMap[k].turne++; });
+      Object.keys(illerBuTurne).forEach(function(k){ S.ilMap[k].turne++; });
+      // il seti (özet kutusu için)
       (t.duraklar || []).forEach(function(d){
         if (!d.il) return;
         var key = d.il.toLocaleUpperCase('tr').replace(/\s+/g,'').replace(/\/MERKEZ/g,'').split('/')[0];
-        if (key) map[s].il[key] = 1;
+        if (key) S.il[key] = 1;
       });
     });
     function benzersizGunSay(araliklar) {
@@ -289,8 +402,16 @@
       }
       return birl.reduce(function(s2,r){ return s2 + Math.round((r[1]-r[0])/86400000) + 1; }, 0);
     }
+    function siraliListe(m) {
+      return Object.keys(m).map(function(k){ return { ad:k, turne:m[k].turne, temsil:m[k].temsil }; })
+        .sort(function(a,b){ return b.temsil - a.temsil || b.turne - a.turne || a.ad.localeCompare(b.ad,'tr'); });
+    }
     var sezonlar = Object.keys(map).map(function(s){
-      return { id:s, turne:map[s].turne, temsil:map[s].temsil, il:Object.keys(map[s].il).length, gun:benzersizGunSay(map[s].araliklar) };
+      var S = map[s];
+      return {
+        id:s, turne:S.turne, temsil:S.temsil, il:Object.keys(S.il).length, gun:benzersizGunSay(S.araliklar),
+        detay: { oyunlar: siraliListe(S.oyunMap), iller: siraliListe(S.ilMap) }
+      };
     });
     return { sezonlar:sezonlar, guncel:guncelSezon(), sonraki:birSonrakiSezon(guncelSezon()) };
   }
@@ -306,7 +427,7 @@
     var grid = document.getElementById('grid');
     grid.innerHTML = '';
     onePlan.forEach(function(sid, i){
-      var st = idx[sid] || { id:sid, turne:0, temsil:0, il:0, gun:0 };
+      var st = idx[sid] || { id:sid, turne:0, temsil:0, il:0, gun:0, detay:{oyunlar:[],iller:[]} };
       grid.appendChild(cardEl(st, i, sid === guncel));
     });
     // Diğer sezonlar
@@ -327,10 +448,31 @@
     }
   }
 
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  }
+
+  function detayListHTML(list, birim) {
+    if (!list || !list.length) return '<div class="detay-empty">Veri yok</div>';
+    return list.map(function(x){
+      return '<div class="detay-row">' +
+        '<div class="detay-name" title="'+esc(x.ad)+'">'+esc(x.ad)+'</div>' +
+        '<div class="detay-nums mono">' +
+          '<span><b>'+x.turne+'</b> trn</span>' +
+          '<span><b>'+x.temsil+'</b> tms</span>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  }
+
   function cardEl(st, i, isGuncel) {
     var el = document.createElement('div');
     el.className = 'card' + (st.turne === 0 ? ' empty' : '');
     el.style.animationDelay = (i * 70) + 'ms';
+    var detay = st.detay || { oyunlar:[], iller:[] };
+    var detayId = 'detay-' + st.id.replace(/[^a-z0-9]/gi,'');
 
     if (st.turne === 0) {
       el.innerHTML =
@@ -355,13 +497,38 @@
           statBox('Şehir',  st.il)     +
           statBox('Gün',    st.gun)    +
         '</div>' +
+        '<button class="detay-toggle" data-detay="'+detayId+'" type="button">' +
+          '<span class="txt">Detaylı istatistik</span><span class="chev">▾</span>' +
+        '</button>' +
+        '<div class="detay-panel" id="'+detayId+'">' +
+          '<div class="detay-inner">' +
+            '<div>' +
+              '<div class="detay-col-title">Oyun bazında</div>' +
+              '<div class="detay-list">'+detayListHTML(detay.oyunlar)+'</div>' +
+            '</div>' +
+            '<div>' +
+              '<div class="detay-col-title">Şehir bazında</div>' +
+              '<div class="detay-list">'+detayListHTML(detay.iller)+'</div>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
         '<button class="btn btn-outline" data-action="go">Bu sezona git →</button>';
     }
-    el.querySelector('button').addEventListener('click', function(){
+    el.querySelector('[data-action]').addEventListener('click', function(){
       var action = this.dataset.action;
       if (action === 'new') sezonSec(st.id, true);
       else sezonSec(st.id, false);
     });
+    var toggle = el.querySelector('.detay-toggle');
+    if (toggle) {
+      toggle.addEventListener('click', function(){
+        var panel = document.getElementById(this.dataset.detay);
+        var willOpen = !panel.classList.contains('open');
+        panel.classList.toggle('open', willOpen);
+        this.classList.toggle('open', willOpen);
+        this.querySelector('.txt').textContent = willOpen ? 'Detayı gizle' : 'Detaylı istatistik';
+      });
+    }
     return el;
   }
 
