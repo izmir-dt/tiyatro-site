@@ -280,6 +280,17 @@
   .ta-countdown-title{font-size:13px;font-weight:700;color:#1A1A1A;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .ta-countdown-date{font-size:11px;color:#8A857C;margin-top:2px;}
 
+  /* ── ODA GEÇMİŞİ KARTLARI ── */
+  .ta-oda-summary{display:flex;gap:14px;flex-wrap:wrap;background:#fff;border:1px solid #E8E2D7;border-radius:10px;padding:9px 14px;margin-bottom:8px;font-size:12px;font-weight:700;color:#1A1A1A;}
+  .ta-oda-summary b{color:#A0192E;font-size:13px;}
+  .ta-oda-kart{background:#fff;border:1px solid #E8E2D7;border-radius:10px;padding:9px 12px;margin-bottom:6px;display:flex;align-items:flex-start;gap:9px;}
+  .ta-oda-kart-ico{font-size:15px;line-height:1.3;margin-top:1px;flex-shrink:0;}
+  .ta-oda-kart-info{flex:1;min-width:0;}
+  .ta-oda-kart-title{font-size:12.5px;font-weight:700;color:#1A1A1A;}
+  .ta-oda-kart-sub{font-size:11px;color:#8A857C;margin-top:2px;}
+  .ta-oda-kart-esi{font-size:11px;color:#A0192E;font-weight:600;margin-top:3px;}
+
+
   /* ── KUTLAMA ANİMASYONU ── */
   @keyframes taCelebrate{0%{transform:scale(0.5) rotate(-10deg);opacity:0;}50%{transform:scale(1.15) rotate(3deg);}100%{transform:scale(1) rotate(0deg);opacity:1;}}
   .ta-celebrate{background:linear-gradient(135deg,#FFD700,#FFA500);color:#7A3800;border-radius:12px;padding:12px 14px;margin:6px 0;animation:taCelebrate .5s ease-out;text-align:center;font-weight:800;font-size:13px;}
@@ -1834,23 +1845,28 @@
       if (odaKisi) {
         const hedefNorm = norm(odaKisi.kisi);
         const tumTur = T.filter(t=>!t.statu.includes("iptal") && t.katilimcilar.some(k=>norm(k.kisi)===hedefNorm));
-        const tekList=[], ciftList=[], munfList=[];
+        const kartlar=[]; // {tip, t, esiler}
         for (const t of tumTur) {
-          const durumlar = odaDurumTespit(t, hedefNorm);
-          if (!durumlar) continue;
-          if (durumlar.has('tek')) tekList.push(t);
-          if (durumlar.has('cift')) ciftList.push(t);
-          if (durumlar.has('munferit')) munfList.push(t);
+          const sonuc = odaDurumTespit(t, hedefNorm);
+          if (!sonuc) continue;
+          if (sonuc.durumlar.has('tek')) kartlar.push({tip:'tek', t});
+          if (sonuc.durumlar.has('cift')) kartlar.push({tip:'cift', t, esiler:sonuc.esiler});
+          if (sonuc.durumlar.has('munferit')) kartlar.push({tip:'munferit', t});
         }
-        if (tekList.length || ciftList.length || munfList.length) {
-          let o=`🛏 **${odaKisi.kisi}** — oda geçmişi:\n\n`;
-          o+=`🛏 Tek oda: **${tekList.length}** defa\n`;
-          o+=`🛏🛏 Çift oda: **${ciftList.length}** defa\n`;
-          o+=`🚪 Münferit: **${munfList.length}** defa\n`;
-          const grupYaz=(baslik,liste)=>{ if(!liste.length) return ""; let s=`\n**${baslik}:**\n`; for(const t of liste.sort((a,b)=>(parseDate(b.baslangic)||0)-(parseDate(a.baslangic)||0))){s+=`• **${t.oyun}** — ${fmtTarihAralik(t.baslangic,t.bitis)} · 📍 ${t.il||"—"}\n`;} return s; };
-          o+=grupYaz("Tek Oda",tekList);
-          o+=grupYaz("Çift Oda",ciftList);
-          o+=grupYaz("Münferit",munfList);
+        if (kartlar.length) {
+          const tekN=kartlar.filter(k=>k.tip==='tek').length, ciftN=kartlar.filter(k=>k.tip==='cift').length, munfN=kartlar.filter(k=>k.tip==='munferit').length;
+          const ICO={tek:'🛏',cift:'🛏🛏',munferit:'🚪'};
+          let o=`**${odaKisi.kisi}** — oda geçmişi\n\n`;
+          o+=`<div class="ta-oda-summary"><span>🛏 Tek: <b>${tekN}</b></span><span>🛏🛏 Çift: <b>${ciftN}</b></span><span>🚪 Münferit: <b>${munfN}</b></span></div>\n`;
+          kartlar.sort((a,b)=>(parseDate(b.t.baslangic)||0)-(parseDate(a.t.baslangic)||0));
+          for (const k of kartlar) {
+            const t=k.t;
+            o+=`<div class="ta-oda-kart"><div class="ta-oda-kart-ico">${ICO[k.tip]}</div><div class="ta-oda-kart-info">`;
+            o+=`<div class="ta-oda-kart-title">${esc(t.oyun)}</div>`;
+            o+=`<div class="ta-oda-kart-sub">${fmtTarihAralik(t.baslangic,t.bitis)} · 📍 ${esc(t.il||"—")}</div>`;
+            if (k.tip==='cift' && k.esiler && k.esiler.size) o+=`<div class="ta-oda-kart-esi">👥 ${[...k.esiler].map(esc).join(", ")} ile</div>`;
+            o+=`</div></div>`;
+          }
           return {html:o};
         }
         return `**${odaKisi.kisi}** için kayıtlı bir oda (konaklama) ataması bulunamadı.`;
@@ -3023,25 +3039,26 @@
 
   // Bir kişinin belirli bir turnede tek/çift/münferit odada kalıp kalmadığını tespit eder.
   // Kaynak: t.odaPlanlari (birden fazla durak/otel planı olabilir); plan yoksa katılımcı üzerindeki
-  // odaTip/munferit alanlarına (varsa) düşer.
+  // odaTip/munferit alanlarına (varsa) düşer. Çift odada kimle kaldığı da (varsa) döndürülür.
   function odaDurumTespit(t, hedefNorm) {
     const kk = (t.katilimcilar||[]).find(k=>norm(k.kisi)===hedefNorm);
     if (!kk) return null;
     const adKey = kk.kisi;
     const durumlar = new Set();
+    const esiler = new Set();
     const plans = (t.odaPlanlari||[]).filter(p=>p && (p.odaTipleri || p.munferitler));
     if (plans.length) {
       for (const p of plans) {
         if ((p.munferitler||{})[adKey]) durumlar.add('munferit');
         else if ((p.odaTipleri||{})[adKey]==='tek') durumlar.add('tek');
-        else if ((p.odaTipleri||{})[adKey]==='cift') durumlar.add('cift');
+        else if ((p.odaTipleri||{})[adKey]==='cift') { durumlar.add('cift'); const esi=(p.odaEsleri||{})[adKey]; if(esi) esiler.add(esi); }
       }
     } else {
       if (kk.munferit) durumlar.add('munferit');
       else if (kk.odaTip==='tek') durumlar.add('tek');
-      else if (kk.odaTip==='cift') durumlar.add('cift');
+      else if (kk.odaTip==='cift') { durumlar.add('cift'); if (kk.odaEsi) esiler.add(kk.odaEsi); }
     }
-    return durumlar;
+    return {durumlar, esiler};
   }
 
   function findPerson(Q,T) {
