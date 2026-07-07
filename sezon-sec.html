@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Sezon Seç · Turne Takip</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@500;700&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700;9..40,800;9..40,900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --background: hsl(218,22%,86%);
+    --card: hsl(0,0%,100%);
+    --foreground: hsl(25,35%,12%);
+    --muted: hsl(220,24%,94%);
+    --muted-foreground: hsl(220,10%,42%);
+    --border: hsl(220,15%,82%);
+    --primary: hsl(38,72%,42%);            /* hardal */
+    --primary-glow: hsl(42,80%,55%);
+    --primary-foreground: hsl(0,0%,100%);
+    --sidebar-primary: hsl(38,72%,42%);
+    --shadow-card: 0 1px 4px rgba(30,20,10,.06), 0 8px 24px rgba(30,20,10,.06);
+    --shadow-card-hover: 0 2px 8px rgba(30,20,10,.08), 0 18px 42px rgba(30,20,10,.12);
+    --radius: 14px;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  html, body {
+    font-family:"DM Sans","Segoe UI",system-ui,-apple-system,sans-serif;
+    background:var(--background);
+    color:var(--foreground);
+    font-size:14px;
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+    font-feature-settings:"kern" 1, "liga" 1, "ss01";
+    min-height:100dvh;
+  }
+  .mono { font-family:"DM Mono","JetBrains Mono",ui-monospace,monospace; font-variant-numeric:tabular-nums; }
+
+  .page {
+    max-width:1080px;
+    margin:0 auto;
+    padding:clamp(28px,6vw,64px) clamp(18px,4vw,40px) 64px;
+    animation:fadeInUp .45s cubic-bezier(.2,.7,.2,1);
+  }
+  @keyframes fadeInUp { from { opacity:0; transform:translateY(12px);} to { opacity:1; transform:none;} }
+  @keyframes cardIn   { from { opacity:0; transform:translateY(10px);} to { opacity:1; transform:none;} }
+
+  .head-row {
+    display:flex; align-items:flex-start; justify-content:space-between; gap:16px;
+    margin-bottom:6px;
+  }
+  .eyebrow {
+    font-size:11px; font-weight:700; letter-spacing:2.4px; text-transform:uppercase;
+    color:var(--muted-foreground);
+  }
+  h1 {
+    font-size:clamp(22px,3.4vw,32px);
+    font-weight:800;
+    letter-spacing:-.8px;
+    line-height:1.15;
+    color:var(--foreground);
+    margin-top:6px;
+  }
+  h1 em {
+    font-style:normal;
+    color:var(--primary);
+    background:linear-gradient(180deg, transparent 62%, hsl(42,80%,55%,.35) 62%);
+    padding:0 4px;
+  }
+  .subtitle {
+    font-size:14px; color:var(--muted-foreground); margin-top:10px; max-width:52ch;
+  }
+  .close-btn {
+    border:1px solid var(--border); background:var(--card);
+    width:36px; height:36px; border-radius:10px; cursor:pointer;
+    display:inline-flex; align-items:center; justify-content:center;
+    color:var(--muted-foreground); font-size:20px; line-height:1;
+    transition:all .18s ease;
+    flex-shrink:0;
+  }
+  .close-btn:hover { color:var(--foreground); border-color:var(--foreground); }
+
+  .grid {
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
+    gap:18px;
+    margin-top:32px;
+  }
+  .card {
+    position:relative;
+    background:var(--card);
+    border:1px solid var(--border);
+    border-left:5px solid var(--sidebar-primary);
+    border-radius:var(--radius);
+    padding:22px 22px 20px;
+    box-shadow:var(--shadow-card);
+    display:flex; flex-direction:column;
+    transition:transform .22s ease, box-shadow .22s ease, border-color .22s ease;
+    animation:cardIn .5s both;
+  }
+  .card:hover { transform:translateY(-2px); box-shadow:var(--shadow-card-hover); }
+  .card.empty { border-left-style:solid; border-style:dashed; border-left:5px solid var(--sidebar-primary); background:linear-gradient(180deg,var(--card),hsl(42,60%,97%)); }
+
+  .card-head {
+    display:flex; align-items:baseline; justify-content:space-between; gap:8px;
+    margin-bottom:16px;
+  }
+  .card-title {
+    font-size:17px; font-weight:800; letter-spacing:-.3px; color:var(--foreground);
+  }
+  .card-chip {
+    font-size:10px; font-weight:700; letter-spacing:.8px; text-transform:uppercase;
+    padding:3px 8px; border-radius:999px;
+    background:hsl(42,65%,88%); color:hsl(38,72%,28%);
+  }
+  .card-chip.next { background:var(--muted); color:var(--muted-foreground); }
+
+  .stats {
+    display:grid; grid-template-columns:repeat(2,1fr); gap:8px;
+    margin-bottom:18px;
+  }
+  .stat {
+    background:var(--muted);
+    border-radius:10px;
+    padding:10px 12px;
+  }
+  .stat-label {
+    font-size:10.5px; font-weight:700; letter-spacing:.6px; text-transform:uppercase;
+    color:var(--muted-foreground);
+  }
+  .stat-value {
+    font-size:24px; font-weight:800; color:var(--foreground); line-height:1.1; margin-top:2px;
+  }
+
+  .empty-body {
+    flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    text-align:center; padding:26px 8px 22px; gap:6px;
+  }
+  .empty-title { font-size:14px; font-weight:700; color:var(--foreground); }
+  .empty-sub   { font-size:12px; color:var(--muted-foreground); }
+
+  .btn {
+    width:100%; height:42px; border-radius:10px; cursor:pointer;
+    font-size:13px; font-weight:700; letter-spacing:.2px;
+    display:inline-flex; align-items:center; justify-content:center; gap:6px;
+    transition:all .18s ease;
+    font-family:inherit;
+  }
+  .btn-primary {
+    border:1.5px solid var(--primary);
+    background:var(--primary);
+    color:var(--primary-foreground);
+  }
+  .btn-primary:hover { filter:brightness(1.06); box-shadow:0 6px 16px hsl(38 72% 42% / .28); }
+  .btn-outline {
+    border:1.5px solid var(--primary);
+    background:transparent;
+    color:var(--primary);
+  }
+  .btn-outline:hover { background:var(--primary); color:var(--primary-foreground); }
+
+  .other {
+    margin-top:28px; text-align:center; font-size:12.5px; color:var(--muted-foreground);
+  }
+  .other a {
+    color:var(--primary); text-decoration:none; font-weight:700;
+    margin:0 6px; border-bottom:1px dashed transparent;
+  }
+  .other a:hover { border-bottom-color:var(--primary); }
+
+  .footer-note {
+    margin-top:44px; text-align:center; font-size:11px; color:var(--muted-foreground);
+    letter-spacing:.4px;
+  }
+
+  .empty-state {
+    margin-top:40px; text-align:center; padding:48px 20px;
+    background:var(--card); border:1px dashed var(--border); border-radius:var(--radius);
+    color:var(--muted-foreground); font-size:13px;
+  }
+  .empty-state a { color:var(--primary); font-weight:700; text-decoration:none; }
+
+  @media (max-width:560px) {
+    .grid { grid-template-columns:1fr; }
+    .stats { grid-template-columns:repeat(2,1fr); }
+    h1 { font-size:22px; }
+  }
+</style>
+</head>
+<body>
+  <main class="page">
+    <div class="head-row">
+      <div>
+        <div class="eyebrow">Turne Takip</div>
+        <h1>Hangi <em>sezona</em> bakmak istersin?</h1>
+        <p class="subtitle">Bir sezon seç — o sezonun turne listesine, haritasına ve takvimine anında geçersin.</p>
+      </div>
+      <button id="closeBtn" class="close-btn" title="Kapat" aria-label="Kapat">×</button>
+    </div>
+
+    <div id="grid" class="grid"></div>
+    <div id="other" class="other"></div>
+
+    <p class="footer-note">Turne Takip · Sezon 15 Ağustos'ta başlar</p>
+  </main>
+
+<script>
+(function(){
+  var qs = new URLSearchParams(location.search);
+  var isFirst = qs.get('first') === '1';
+  var fromTurne = qs.get('from') === 'turne';
+
+  // Kapat butonu davranışı
+  var closeBtn = document.getElementById('closeBtn');
+  if (isFirst) closeBtn.style.display = 'none';
+  closeBtn.onclick = geriDon;
+
+  function geriDon() {
+    if (document.referrer && /turne/.test(document.referrer)) { history.back(); return; }
+    location.href = 'turne_21.html';
+  }
+
+  // ---------- Sezon yardımcıları (turne_21.html ile birebir aynı kural) ----------
+  function tarihSezon(tarihStr) {
+    if (!tarihStr) return null;
+    var p = tarihStr.split('-'); if (p.length<3) return null;
+    var yil = +p[0], ay = +p[1], gun = +p[2];
+    var yeniBasladi = (ay > 8) || (ay === 8 && gun >= 15);
+    if (yeniBasladi) return yil + '-' + String(yil+1).slice(2);
+    return (yil-1) + '-' + String(yil).slice(2);
+  }
+  function guncelSezon() { return tarihSezon(new Date().toISOString().slice(0,10)); }
+  function birSonrakiSezon(s) {
+    var p = (s||guncelSezon()).split('-');
+    var y = +p[0]+1; return y + '-' + String(y+1).slice(2);
+  }
+  function sezonLabel(s) {
+    if (!s) return '?';
+    var p = s.split('-');
+    return p[0] + '–' + (p[0].slice(0,2) + p[1]) + ' Sezonu';
+  }
+
+  // ---------- Veri kaynağı ----------
+  // 1) Öncelik: turne_21.html'in yazdığı önhesaplanmış özet
+  // 2) Yoksa turne_cache_data'dan hesapla
+  function loadStats() {
+    try {
+      var pre = JSON.parse(localStorage.getItem('_sezonOzet') || 'null');
+      if (pre && pre.sezonlar && pre.sezonlar.length) return pre;
+    } catch(e) {}
+    // fallback: ham veriden basit hesap
+    var turneler = [];
+    try { turneler = JSON.parse(localStorage.getItem('turne_cache_data') || '[]'); } catch(e){}
+    var map = {};
+    turneler.forEach(function(t){
+      if (t.anaGrupId) return;
+      var s = tarihSezon(t.baslangicTarih || t.tarih);
+      if (!s) return;
+      if (!map[s]) map[s] = { turne:0, temsil:0, il:{}, gun:0 };
+      map[s].turne++;
+      // gün
+      try {
+        if (t.baslangicTarih && t.bitisTarih) {
+          var b = new Date(t.baslangicTarih), e = new Date(t.bitisTarih);
+          map[s].gun += Math.max(1, Math.round((e-b)/86400000)+1);
+        } else map[s].gun += 1;
+      } catch(e){}
+      // temsil
+      if (t.programSatirlar && t.programSatirlar.length) {
+        t.programSatirlar.forEach(function(x){
+          if (x.program === 'Oyun') map[s].temsil += x.saat2 ? 2 : 1;
+        });
+      } else if (t.duraklar) {
+        t.duraklar.forEach(function(d){ map[s].temsil += (+d.sayi || 1); });
+      }
+      // il — normalize (boşluk temizle, /MERKEZ at, ilk parça)
+      (t.duraklar || []).forEach(function(d){
+        if (!d.il) return;
+        var key = d.il.toLocaleUpperCase('tr').replace(/\s+/g,'').replace(/\/MERKEZ/g,'').split('/')[0];
+        if (key) map[s].il[key] = 1;
+      });
+    });
+    var sezonlar = Object.keys(map).map(function(s){
+      return { id:s, turne:map[s].turne, temsil:map[s].temsil, il:Object.keys(map[s].il).length, gun:map[s].gun };
+    });
+    return { sezonlar:sezonlar, guncel:guncelSezon(), sonraki:birSonrakiSezon(guncelSezon()) };
+  }
+
+  function render() {
+    var data = loadStats();
+    var guncel = data.guncel || guncelSezon();
+    var sonraki = data.sonraki || birSonrakiSezon(guncel);
+    var idx = {};
+    data.sezonlar.forEach(function(x){ idx[x.id] = x; });
+    // Ana iki kart: bu sezon + sonraki
+    var onePlan = [guncel, sonraki];
+    var grid = document.getElementById('grid');
+    grid.innerHTML = '';
+    onePlan.forEach(function(sid, i){
+      var st = idx[sid] || { id:sid, turne:0, temsil:0, il:0, gun:0 };
+      grid.appendChild(cardEl(st, i, sid === guncel));
+    });
+    // Diğer sezonlar
+    var others = data.sezonlar
+      .filter(function(x){ return onePlan.indexOf(x.id) < 0; })
+      .sort(function(a,b){ return a.id < b.id ? 1 : -1; });
+    var other = document.getElementById('other');
+    if (others.length) {
+      other.innerHTML = '<span style="opacity:.7">Diğer sezonlar:</span> ' +
+        others.map(function(x){ return '<a href="#" data-sid="'+x.id+'">'+sezonLabel(x.id)+'</a>'; }).join(' · ');
+      other.querySelectorAll('a').forEach(function(a){
+        a.addEventListener('click', function(e){ e.preventDefault(); sezonSec(a.dataset.sid); });
+      });
+    } else other.innerHTML = '';
+
+    if (!data.sezonlar.length && !localStorage.getItem('turne_cache_data')) {
+      grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1">Henüz turne verisi bulunamadı. <a href="turne_21.html">Turne Takip\'i aç</a> ve ilk turneni ekle — sonra buraya döndüğünde sezon istatistiklerin burada listelenecek.</div>';
+    }
+  }
+
+  function cardEl(st, i, isGuncel) {
+    var el = document.createElement('div');
+    el.className = 'card' + (st.turne === 0 ? ' empty' : '');
+    el.style.animationDelay = (i * 70) + 'ms';
+
+    if (st.turne === 0) {
+      el.innerHTML =
+        '<div class="card-head">' +
+          '<div class="card-title">'+sezonLabel(st.id)+'</div>' +
+          '<div class="card-chip '+(isGuncel?'':'next')+'">'+(isGuncel?'Bu sezon':'Yaklaşan')+'</div>' +
+        '</div>' +
+        '<div class="empty-body">' +
+          '<div class="empty-title">Henüz turne yok</div>' +
+          '<div class="empty-sub">Yeni sezonu ilk turneyle başlat</div>' +
+        '</div>' +
+        '<button class="btn btn-primary" data-action="new">+ Yeni turne ekle</button>';
+    } else {
+      el.innerHTML =
+        '<div class="card-head">' +
+          '<div class="card-title">'+sezonLabel(st.id)+'</div>' +
+          '<div class="card-chip '+(isGuncel?'':'next')+'">'+(isGuncel?'Bu sezon':'Yaklaşan')+'</div>' +
+        '</div>' +
+        '<div class="stats">' +
+          statBox('Turne',  st.turne)  +
+          statBox('Temsil', st.temsil) +
+          statBox('Şehir',  st.il)     +
+          statBox('Gün',    st.gun)    +
+        '</div>' +
+        '<button class="btn btn-outline" data-action="go">Bu sezona git →</button>';
+    }
+    el.querySelector('button').addEventListener('click', function(){
+      var action = this.dataset.action;
+      if (action === 'new') sezonSec(st.id, true);
+      else sezonSec(st.id, false);
+    });
+    return el;
+  }
+
+  function statBox(label, val) {
+    return '<div class="stat"><div class="stat-label">'+label+'</div>' +
+           '<div class="stat-value mono">'+val+'</div></div>';
+  }
+
+  function sezonSec(sid, yeniTurneMi) {
+    try {
+      localStorage.setItem('_secilSezon', sid);
+      if (yeniTurneMi) localStorage.setItem('_sezonYeniTurne', '1');
+    } catch(e){}
+    location.href = 'turne_21.html' + (yeniTurneMi ? '?yeniTurne=1' : '');
+  }
+
+  render();
+})();
+</script>
+</body>
+</html>
