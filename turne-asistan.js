@@ -1,12 +1,12 @@
 /* ════════════════════════════════════════════════════════════════
-   TURNE ASİSTANI v5.5
+   TURNE ASİSTANI v5.6
    İzmir Devlet Tiyatrosu
    YENİ: Turne düzenleme · Hatırlatıcı · Detaylı istatistik
    ═══════════════════════════════════════════════════════════════ */
 (function () {
-  if (window.__turneAsistanLoaded === 'v5.5') return;
+  if (window.__turneAsistanLoaded === 'v5.6') return;
   ["ta-fab", "ta-panel", "ta-toast", "ta-prompt-modal", "ta-style"].forEach(id => document.getElementById(id)?.remove());
-  window.__turneAsistanLoaded = 'v5.5';
+  window.__turneAsistanLoaded = 'v5.6';
 
   const API = "https://turne-backend.vercel.app/api/sheets";
   const TURNE_SHEET = "TURNE_KAYITLARI";
@@ -1024,7 +1024,14 @@
       if (iKat >= 0) {
         try {
           const kj = (r[iKat] || "").trim();
-          if (kj) katilimcilar = JSON.parse(kj).map(p => ({ kisi: (p.kisi||"").trim(), gorev: (p.gorev||"").trim(), kategori: (p.kategori||"").trim() })).filter(p=>p.kisi);
+          if (kj) katilimcilar = JSON.parse(kj).map(p => ({
+            kisi: (p.kisi||"").trim(),
+            gorev: (p.gorev||"").trim(),
+            kategori: (p.kategori||"").trim(),
+            odaTip: (p.odaTip||p.odaTipi||"").toString().trim(),
+            odaEsi: (p.odaEsi||p.odaArkadasi||"").toString().trim(),
+            munferit: !!p.munferit
+          })).filter(p=>p.kisi);
         } catch(e) {}
       }
 
@@ -1920,9 +1927,9 @@
           }
           const eksik = tumTur.length - veriliTurSayisi;
           if (eksik > 0) {
-            o += `<div class="ta-oda-note">ℹ️ <b>${esc(ilk)}</b> toplam <b>${tumTur.length}</b> turnede kadroda; bunlardan <b>${veriliTurSayisi}</b> tanesinin oda planı okunabildi. Kalan <b>${eksik}</b> turnede konaklama sekmesinde oda ataması henüz görünmüyor (isim tam eşleşmiyor veya plan boş olabilir).</div>`;
+            o += `<div class="ta-oda-note">ℹ️ <b>${esc(ilk)}</b> toplam <b>${tumTur.length}</b> turnede kadroda; bunlardan <b>${veriliTurSayisi}</b> tanesinde oda eşleşmesi bulundu. Kalan <b>${eksik}</b> turnede asistanın okuyabildiği oda bilgisi yok.</div>`;
           } else {
-            o += `<div class="ta-oda-note">✅ Katıldığı <b>${tumTur.length}</b> turnenin tamamında oda planı okundu.</div>`;
+            o += `<div class="ta-oda-note">✅ Katıldığı <b>${tumTur.length}</b> turnenin tamamında oda eşleşmesi bulundu.</div>`;
           }
           return {html:o};
         }
@@ -1933,8 +1940,8 @@
         o += `</div>`;
         o += `<div class="ta-oda-empty">`;
         o += `<div class="ta-oda-empty-ico">🗂️</div>`;
-        o += `<div class="ta-oda-empty-title">${tumTur.length} turnede kadroda, ancak oda planı okunamadı</div>`;
-        o += `<div class="ta-oda-empty-sub"><b>${esc(ilk)}</b> için sistemdeki oda planlarında (konaklama sekmesi) eşleşen bir kayıt bulamadım.<br>Bu genellikle şu sebeplerden olur:<br>• Konaklama sekmesinde oda ataması henüz yapılmamış<br>• Plandaki isim, katılımcı listesindeki isimle birebir aynı yazılmamış (boşluk / büyük-küçük harf farkı)<br><br>Konaklama sekmesini açıp isimleri kontrol edebilirsin.</div>`;
+        o += `<div class="ta-oda-empty-title">${tumTur.length} turnede kadroda, ancak oda eşleşmesi bulunamadı</div>`;
+        o += `<div class="ta-oda-empty-sub"><b>${esc(ilk)}</b> için sistemdeki oda planlarında ve katılımcı oda alanlarında eşleşen bir kayıt bulamadım.<br>Konaklama sekmesinde eşleşme yapıldıysa sayfayı yenileyip tekrar sorabilirsin.</div>`;
         o += `</div>`;
         return {html:o};
       }
@@ -3105,13 +3112,22 @@
   }
 
   // Bir kişinin belirli bir turnede tek/çift/münferit odada kalıp kalmadığını tespit eder.
-  // v5.5+: Plan anahtarları norm() ile karşılaştırılır (büyük/küçük harf, boşluk, "İ/I" farklarını yutar).
+  // v5.6+: Hem oda planlarını hem de katılımcı JSON içindeki odaTip/odaEsi alanlarını okur.
+  // Plan anahtarları norm() ile karşılaştırılır (büyük/küçük harf, boşluk, "İ/I" farklarını yutar).
   // Ayrıca kişi başkasının "odaEsi" değeri olarak geçiyorsa da çift oda olarak sayılır.
   function odaDurumTespit(t, hedefNorm) {
     const kk = (t.katilimcilar||[]).find(k=>norm(k.kisi)===hedefNorm);
     if (!kk) return null;
     const durumlar = new Set();
     const esiler = new Set();
+    const tipNorm = (v) => {
+      const s = norm(v).replace(/ç/g,'c');
+      if (!s) return '';
+      if (s.includes('munferit') || s.includes('münferit')) return 'munferit';
+      if (s.includes('cift') || s.includes('2') || s.includes('iki')) return 'cift';
+      if (s.includes('tek') || s.includes('1') || s.includes('bir')) return 'tek';
+      return s;
+    };
     // Normalize edilmiş bir obje sözlüğünde hedefNorm'a karşılık gelen değeri bul
     const lookupNorm = (obj) => {
       if (!obj || typeof obj !== 'object') return undefined;
@@ -3129,7 +3145,8 @@
       for (const p of plans) {
         const munfVal = lookupNorm(p.munferitler);
         if (munfVal) { durumlar.add('munferit'); continue; }
-        const tip = lookupNorm(p.odaTipleri);
+        const tip = tipNorm(lookupNorm(p.odaTipleri));
+        if (tip === 'munferit') { durumlar.add('munferit'); continue; }
         if (tip === 'tek') { durumlar.add('tek'); continue; }
         if (tip === 'cift') {
           durumlar.add('cift');
@@ -3149,8 +3166,9 @@
     // katılımcı üzerindeki alanlara düş (turne.html eski format ile uyum).
     if (!durumlar.size) {
       if (kk.munferit) durumlar.add('munferit');
-      else if (kk.odaTip==='tek') durumlar.add('tek');
-      else if (kk.odaTip==='cift') { durumlar.add('cift'); if (kk.odaEsi) esiler.add(kk.odaEsi); }
+      else if (tipNorm(kk.odaTip)==='munferit') durumlar.add('munferit');
+      else if (tipNorm(kk.odaTip)==='tek') durumlar.add('tek');
+      else if (tipNorm(kk.odaTip)==='cift') { durumlar.add('cift'); if (kk.odaEsi) esiler.add(kk.odaEsi); }
     }
     return {durumlar, esiler};
   }
