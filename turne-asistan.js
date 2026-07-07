@@ -280,15 +280,36 @@
   .ta-countdown-title{font-size:13px;font-weight:700;color:#1A1A1A;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .ta-countdown-date{font-size:11px;color:#8A857C;margin-top:2px;}
 
-  /* ── ODA GEÇMİŞİ KARTLARI ── */
-  .ta-oda-summary{display:flex;gap:14px;flex-wrap:wrap;background:#fff;border:1px solid #E8E2D7;border-radius:10px;padding:9px 14px;margin-bottom:8px;font-size:12px;font-weight:700;color:#1A1A1A;}
-  .ta-oda-summary b{color:#A0192E;font-size:13px;}
-  .ta-oda-kart{background:#fff;border:1px solid #E8E2D7;border-radius:10px;padding:9px 12px;margin-bottom:6px;display:flex;align-items:flex-start;gap:9px;}
-  .ta-oda-kart-ico{font-size:15px;line-height:1.3;margin-top:1px;flex-shrink:0;}
+  /* ── ODA GEÇMİŞİ KARTLARI (v5.5+) ── */
+  .ta-oda-head{background:linear-gradient(135deg,#A0192E,#6B0E1E);color:#fff;border-radius:14px;padding:12px 14px;margin-bottom:10px;box-shadow:0 4px 14px rgba(107,14,30,.18);}
+  .ta-oda-head-name{font-size:14px;font-weight:800;letter-spacing:.2px;display:flex;align-items:center;gap:8px;}
+  .ta-oda-head-sub{font-size:11px;opacity:.85;margin-top:3px;font-weight:500;}
+  .ta-oda-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px;}
+  .ta-oda-stat{background:#fff;border:1px solid #E8E2D7;border-radius:12px;padding:10px 8px;text-align:center;transition:transform .15s;}
+  .ta-oda-stat:hover{transform:translateY(-2px);border-color:#A0192E;}
+  .ta-oda-stat-ico{font-size:18px;line-height:1;margin-bottom:4px;}
+  .ta-oda-stat-num{font-size:20px;font-weight:900;color:#A0192E;line-height:1;}
+  .ta-oda-stat-lbl{font-size:10px;color:#6B6560;text-transform:uppercase;letter-spacing:.4px;margin-top:3px;font-weight:700;}
+  .ta-oda-section{font-size:11px;font-weight:800;color:#6B6560;text-transform:uppercase;letter-spacing:.5px;margin:12px 0 6px;padding-left:2px;}
+  .ta-oda-kart{background:#fff;border:1px solid #E8E2D7;border-left:3px solid #A0192E;border-radius:10px;padding:10px 12px;margin-bottom:6px;display:flex;align-items:flex-start;gap:10px;transition:box-shadow .15s;}
+  .ta-oda-kart:hover{box-shadow:0 3px 10px rgba(0,0,0,.06);}
+  .ta-oda-kart.tip-tek{border-left-color:#3B82C4;}
+  .ta-oda-kart.tip-cift{border-left-color:#A0192E;}
+  .ta-oda-kart.tip-munferit{border-left-color:#B8860B;}
+  .ta-oda-kart-ico{font-size:18px;line-height:1.2;flex-shrink:0;width:26px;text-align:center;}
   .ta-oda-kart-info{flex:1;min-width:0;}
-  .ta-oda-kart-title{font-size:12.5px;font-weight:700;color:#1A1A1A;}
-  .ta-oda-kart-sub{font-size:11px;color:#8A857C;margin-top:2px;}
-  .ta-oda-kart-esi{font-size:11px;color:#A0192E;font-weight:600;margin-top:3px;}
+  .ta-oda-kart-title{font-size:12.5px;font-weight:800;color:#1A1A1A;line-height:1.3;}
+  .ta-oda-kart-sub{font-size:11px;color:#8A857C;margin-top:3px;line-height:1.4;}
+  .ta-oda-kart-esi{font-size:11px;color:#A0192E;font-weight:700;margin-top:5px;display:inline-flex;align-items:center;gap:4px;background:#FBE8EB;padding:2px 8px;border-radius:99px;}
+  .ta-oda-kart-badge{display:inline-block;font-size:9.5px;font-weight:800;padding:1.5px 6px;border-radius:99px;margin-left:6px;vertical-align:middle;letter-spacing:.3px;}
+  .ta-oda-kart-badge.tek{background:#E6F0FA;color:#2C5F8E;}
+  .ta-oda-kart-badge.cift{background:#FBE8EB;color:#A0192E;}
+  .ta-oda-kart-badge.munferit{background:#FDF4E1;color:#8A6508;}
+  .ta-oda-note{background:#F5F0E8;border:1px dashed #D4C9B8;border-radius:8px;padding:8px 10px;margin-top:10px;font-size:10.5px;color:#6B6560;line-height:1.5;}
+  .ta-oda-empty{background:#fff;border:1px solid #E8E2D7;border-radius:12px;padding:18px 14px;text-align:center;}
+  .ta-oda-empty-ico{font-size:32px;margin-bottom:6px;}
+  .ta-oda-empty-title{font-size:13px;font-weight:800;color:#1A1A1A;margin-bottom:4px;}
+  .ta-oda-empty-sub{font-size:11.5px;color:#8A857C;line-height:1.5;}
 
 
   /* ── KUTLAMA ANİMASYONU ── */
@@ -1855,25 +1876,67 @@
           if (sonuc.durumlar.has('cift')) kartlar.push({tip:'cift', t, esiler:sonuc.esiler});
           if (sonuc.durumlar.has('munferit')) kartlar.push({tip:'munferit', t});
         }
+        const ilk = odaKisi.kisi.split(" ")[0];
         if (kartlar.length) {
-          const tekN=kartlar.filter(k=>k.tip==='tek').length, ciftN=kartlar.filter(k=>k.tip==='cift').length, munfN=kartlar.filter(k=>k.tip==='munferit').length;
-          const ICO={tek:'🛏',cift:'🛏🛏',munferit:'🚪'};
-          let o=`**${odaKisi.kisi}** — oda geçmişi\n\n`;
-          o+=`<div class="ta-oda-summary"><span>🛏 Tek: <b>${tekN}</b></span><span>🛏🛏 Çift: <b>${ciftN}</b></span><span>🚪 Münferit: <b>${munfN}</b></span></div>\n`;
+          const tekN=kartlar.filter(k=>k.tip==='tek').length;
+          const ciftN=kartlar.filter(k=>k.tip==='cift').length;
+          const munfN=kartlar.filter(k=>k.tip==='munferit').length;
+          const ICO={tek:'🛏️',cift:'🛏️🛏️',munferit:'🚪'};
+          const ETI={tek:'Tek Kişilik',cift:'Çift Kişilik',munferit:'Münferit'};
+
+          let o = `<div class="ta-oda-head">`;
+          o += `<div class="ta-oda-head-name">🛎️ ${esc(odaKisi.kisi)}</div>`;
+          o += `<div class="ta-oda-head-sub">Konaklama planlarına göre oda geçmişi · ${veriliTurSayisi} turne</div>`;
+          o += `</div>`;
+
+          o += `<div class="ta-oda-stats">`;
+          o += `<div class="ta-oda-stat"><div class="ta-oda-stat-ico">🛏️</div><div class="ta-oda-stat-num">${tekN}</div><div class="ta-oda-stat-lbl">Tek</div></div>`;
+          o += `<div class="ta-oda-stat"><div class="ta-oda-stat-ico">🛏️🛏️</div><div class="ta-oda-stat-num">${ciftN}</div><div class="ta-oda-stat-lbl">Çift</div></div>`;
+          o += `<div class="ta-oda-stat"><div class="ta-oda-stat-ico">🚪</div><div class="ta-oda-stat-num">${munfN}</div><div class="ta-oda-stat-lbl">Münferit</div></div>`;
+          o += `</div>`;
+
+          // En sık oda arkadaşları
+          const esArkadas = new Map();
+          for (const k of kartlar) if (k.tip==='cift' && k.esiler) for (const e of k.esiler) esArkadas.set(e,(esArkadas.get(e)||0)+1);
+          if (esArkadas.size) {
+            const top = [...esArkadas.entries()].sort((a,b)=>b[1]-a[1]).slice(0,3);
+            o += `<div class="ta-oda-section">👥 En sık oda arkadaşları</div>`;
+            o += `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:4px;">`;
+            for (const [ad,say] of top) o += `<span class="ta-oda-kart-esi">${esc(ad)} · ${say}×</span>`;
+            o += `</div>`;
+          }
+
+          o += `<div class="ta-oda-section">📅 Turne bazında detay</div>`;
           kartlar.sort((a,b)=>(parseDate(b.t.baslangic)||0)-(parseDate(a.t.baslangic)||0));
           for (const k of kartlar) {
             const t=k.t;
-            o+=`<div class="ta-oda-kart"><div class="ta-oda-kart-ico">${ICO[k.tip]}</div><div class="ta-oda-kart-info">`;
-            o+=`<div class="ta-oda-kart-title">${esc(t.oyun)}</div>`;
+            o+=`<div class="ta-oda-kart tip-${k.tip}">`;
+            o+=`<div class="ta-oda-kart-ico">${ICO[k.tip]}</div>`;
+            o+=`<div class="ta-oda-kart-info">`;
+            o+=`<div class="ta-oda-kart-title">${esc(t.oyun)}<span class="ta-oda-kart-badge ${k.tip}">${ETI[k.tip]}</span></div>`;
             o+=`<div class="ta-oda-kart-sub">${fmtTarihAralik(t.baslangic,t.bitis)} · 📍 ${esc(t.il||"—")}</div>`;
-            if (k.tip==='cift' && k.esiler && k.esiler.size) o+=`<div class="ta-oda-kart-esi">👥 ${[...k.esiler].map(esc).join(", ")} ile</div>`;
+            if (k.tip==='cift' && k.esiler && k.esiler.size) o+=`<div style="margin-top:5px"><span class="ta-oda-kart-esi">👤 ${[...k.esiler].map(esc).join(", ")} ile</span></div>`;
             o+=`</div></div>`;
           }
           const eksik = tumTur.length - veriliTurSayisi;
-          if (eksik > 0) o += `\n<div style="font-size:10.5px;color:#8A857C;margin-top:4px">ℹ️ ${odaKisi.kisi.split(" ")[0]}'in katıldığı ${tumTur.length} turneden ${eksik} tanesinde konaklama sekmesinde oda ataması yapılmamış — bu yüzden o turneler yukarıda görünmüyor.</div>`;
+          if (eksik > 0) {
+            o += `<div class="ta-oda-note">ℹ️ <b>${esc(ilk)}</b> toplam <b>${tumTur.length}</b> turnede kadroda; bunlardan <b>${veriliTurSayisi}</b> tanesinin oda planı okunabildi. Kalan <b>${eksik}</b> turnede konaklama sekmesinde oda ataması henüz görünmüyor (isim tam eşleşmiyor veya plan boş olabilir).</div>`;
+          } else {
+            o += `<div class="ta-oda-note">✅ Katıldığı <b>${tumTur.length}</b> turnenin tamamında oda planı okundu.</div>`;
+          }
           return {html:o};
         }
-        return `**${odaKisi.kisi}** için hiçbir turnede oda (konaklama) ataması yapılmamış — konaklama sekmesinden oda ataması girildikçe burada görünecek.`;
+        // Hiç kart çıkmadı — daha yumuşak ve estetik mesaj
+        let o = `<div class="ta-oda-head">`;
+        o += `<div class="ta-oda-head-name">🛎️ ${esc(odaKisi.kisi)}</div>`;
+        o += `<div class="ta-oda-head-sub">Oda geçmişi bulunamadı</div>`;
+        o += `</div>`;
+        o += `<div class="ta-oda-empty">`;
+        o += `<div class="ta-oda-empty-ico">🗂️</div>`;
+        o += `<div class="ta-oda-empty-title">${tumTur.length} turnede kadroda, ancak oda planı okunamadı</div>`;
+        o += `<div class="ta-oda-empty-sub"><b>${esc(ilk)}</b> için sistemdeki oda planlarında (konaklama sekmesi) eşleşen bir kayıt bulamadım.<br>Bu genellikle şu sebeplerden olur:<br>• Konaklama sekmesinde oda ataması henüz yapılmamış<br>• Plandaki isim, katılımcı listesindeki isimle birebir aynı yazılmamış (boşluk / büyük-küçük harf farkı)<br><br>Konaklama sekmesini açıp isimleri kontrol edebilirsin.</div>`;
+        o += `</div>`;
+        return {html:o};
       }
     }
 
@@ -3042,22 +3105,49 @@
   }
 
   // Bir kişinin belirli bir turnede tek/çift/münferit odada kalıp kalmadığını tespit eder.
-  // Kaynak: t.odaPlanlari (birden fazla durak/otel planı olabilir); plan yoksa katılımcı üzerindeki
-  // odaTip/munferit alanlarına (varsa) düşer. Çift odada kimle kaldığı da (varsa) döndürülür.
+  // v5.5+: Plan anahtarları norm() ile karşılaştırılır (büyük/küçük harf, boşluk, "İ/I" farklarını yutar).
+  // Ayrıca kişi başkasının "odaEsi" değeri olarak geçiyorsa da çift oda olarak sayılır.
   function odaDurumTespit(t, hedefNorm) {
     const kk = (t.katilimcilar||[]).find(k=>norm(k.kisi)===hedefNorm);
     if (!kk) return null;
-    const adKey = kk.kisi;
     const durumlar = new Set();
     const esiler = new Set();
-    const plans = (t.odaPlanlari||[]).filter(p=>p && (p.odaTipleri || p.munferitler));
+    // Normalize edilmiş bir obje sözlüğünde hedefNorm'a karşılık gelen değeri bul
+    const lookupNorm = (obj) => {
+      if (!obj || typeof obj !== 'object') return undefined;
+      for (const k in obj) if (norm(k) === hedefNorm) return obj[k];
+      return undefined;
+    };
+    // Ters arama: obj değerlerinden hedefNorm ile eşleşen anahtarı bul (odaEsi kısmi kayıtlar için)
+    const findKeyByValue = (obj) => {
+      if (!obj || typeof obj !== 'object') return null;
+      for (const k in obj) if (norm(obj[k]||'') === hedefNorm) return k;
+      return null;
+    };
+    const plans = (t.odaPlanlari||[]).filter(p=>p && (p.odaTipleri || p.munferitler || p.odaEsleri));
     if (plans.length) {
       for (const p of plans) {
-        if ((p.munferitler||{})[adKey]) durumlar.add('munferit');
-        else if ((p.odaTipleri||{})[adKey]==='tek') durumlar.add('tek');
-        else if ((p.odaTipleri||{})[adKey]==='cift') { durumlar.add('cift'); const esi=(p.odaEsleri||{})[adKey]; if(esi) esiler.add(esi); }
+        const munfVal = lookupNorm(p.munferitler);
+        if (munfVal) { durumlar.add('munferit'); continue; }
+        const tip = lookupNorm(p.odaTipleri);
+        if (tip === 'tek') { durumlar.add('tek'); continue; }
+        if (tip === 'cift') {
+          durumlar.add('cift');
+          const esi = lookupNorm(p.odaEsleri);
+          if (esi) esiler.add(esi);
+          continue;
+        }
+        // Anahtar bulunamadı — belki karşı taraf olarak odaEsleri'nde geçiyordur
+        const esKey = findKeyByValue(p.odaEsleri);
+        if (esKey) {
+          durumlar.add('cift');
+          esiler.add(esKey);
+        }
       }
-    } else {
+    }
+    // Plan yoksa VEYA plan(lar) bulundu ama bu turne için bilgi çıkmadıysa
+    // katılımcı üzerindeki alanlara düş (turne.html eski format ile uyum).
+    if (!durumlar.size) {
       if (kk.munferit) durumlar.add('munferit');
       else if (kk.odaTip==='tek') durumlar.add('tek');
       else if (kk.odaTip==='cift') { durumlar.add('cift'); if (kk.odaEsi) esiler.add(kk.odaEsi); }
