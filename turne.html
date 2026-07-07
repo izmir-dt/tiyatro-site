@@ -12992,7 +12992,23 @@ function _leafletYukle(callback) {
 <svg fill="none" height="15" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24" width="15"><rect height="18" rx="2" width="18" x="3" y="4"></rect><line x1="16" x2="16" y1="2" y2="6"></line><line x1="8" x2="8" y1="2" y2="6"></line><line x1="3" x2="21" y1="10" y2="10"></line></svg>
     Takvim
   </button>
+<button aria-label="Sezon seç" id="tab-btn-sezon" onclick="sezonOverlayGoster()" role="button" style="margin-left:auto;height:32px;padding:0 12px;border-radius:7px;border:1px solid var(--border);background:transparent;cursor:pointer;font-size:11px;font-weight:700;color:var(--muted-foreground);display:inline-flex;align-items:center;gap:5px;white-space:nowrap">
+<svg fill="none" height="13" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24" width="13"><rect height="18" rx="2" width="18" x="3" y="4"></rect><line x1="16" x2="16" y1="2" y2="6"></line><line x1="8" x2="8" y1="2" y2="6"></line><line x1="3" x2="21" y1="10" y2="10"></line></svg>
+<span id="tab-btn-sezon-label">Sezon</span>
+  </button>
 </nav>
+<!-- SEZON GİRİŞ EKRANI -->
+<div id="sezon-giris-overlay" style="display:none;position:fixed;inset:0;z-index:10000;background:var(--background);overflow-y:auto;padding:32px 16px">
+<div style="max-width:640px;margin:0 auto">
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+<h2 style="font-size:20px;font-weight:800;color:var(--foreground);margin:0;letter-spacing:-.3px">Hangi sezona bakmak istersin?</h2>
+<button id="sezon-overlay-kapat-btn" onclick="sezonOverlayKapat()" title="Kapat" style="border:none;background:transparent;font-size:22px;cursor:pointer;color:var(--muted-foreground);line-height:1;padding:4px 8px">×</button>
+</div>
+<p style="font-size:13px;color:var(--muted-foreground);margin:0 0 20px">Bir sezon seç, o sezonun turne listesine, haritasına ve takvimine geçersin.</p>
+<div id="sezon-kart-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px"></div>
+<div id="sezon-diger-linkler" style="margin-top:16px;text-align:center;font-size:12px;color:var(--muted-foreground)"></div>
+</div>
+</div>
 <!-- TURNE SİL GERİ AL BAR -->
 <div id="turne-sil-geri-bar" style="display:none;position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:9999;align-items:center;gap:10px;padding:10px 16px;background:#1e293b;border-radius:10px;font-size:12px;color:#fff;box-shadow:0 4px 20px rgba(0,0,0,.35);min-width:320px;max-width:90vw;overflow:hidden">
 <div id="turne-sil-geri-prog" style="position:absolute;bottom:0;left:0;height:3px;background:#ef4444;width:100%;border-radius:0 0 10px 10px"></div>
@@ -15500,6 +15516,7 @@ function _misafirGiris() {
 // ============================================================
 
 function tumUIGuncelle() {
+  sezonGirisKontrolEt();
   populateFilters();
   // Bellek optimizasyonu: sadece aktif sekmeyi render et.
   // Diğer sekmeler sekmeye geçildiğinde zaten güncel veriyle render edilir.
@@ -16306,16 +16323,51 @@ function grupToggle(enc) {
 }
 
 // ===== SEZON HESAPLAMA =====
-// Tiyatro sezonu: Ekim(10) → Haziran(6). Örn: Ekim 2025–Haziran 2026 → "2025–26 Sezonu"
+// Tiyatro sezonu: 15 Ağustos → 14 Ağustos. Örn: 15 Ağustos 2026 → "2026-27 Sezonu"
 function tarihSezon(tarihStr) {
   if (!tarihStr) return null;
   var d = new Date(tarihStr);
   if (isNaN(d)) return null;
   var ay = d.getMonth() + 1; // 1-12
+  var gun = d.getDate();
   var yil = d.getFullYear();
-  // Temmuz-Eylül arası sezon dışı — yine de göster, önceki sezona at
-  if (ay >= 10) return yil + '-' + String(yil+1).slice(2);     // Eki-Ara → "2025-26"
-  else           return (yil-1) + '-' + String(yil).slice(2);   // Oca-Eyl → "2024-25"
+  var yeniSezonBasladi = (ay > 8) || (ay === 8 && gun >= 15);
+  if (yeniSezonBasladi) return yil + '-' + String(yil+1).slice(2);     // 15 Ağu ve sonrası → "2025-26"
+  else                  return (yil-1) + '-' + String(yil).slice(2);   // 14 Ağu ve öncesi → "2024-25"
+}
+// Bugünün tarihine göre "içinde bulunduğumuz sezon" ve "bir sonraki sezon"
+function guncelSezon() { return tarihSezon(new Date().toISOString().slice(0,10)); }
+function birSonrakiSezon(sezon) {
+  var p = (sezon||guncelSezon()).split('-');
+  var y = parseInt(p[0], 10) + 1;
+  return y + '-' + String(y+1).slice(2);
+}
+// Bir sezonun başlangıç ayı/yılı (takvimi o aya sıçratmak için)
+function sezonBaslangicAyYil(sezon) {
+  var p = (sezon||'').split('-');
+  var y = parseInt(p[0], 10);
+  if (isNaN(y)) return null;
+  return { yil: y, ay: 7 }; // Ağustos → index 7 (0-tabanlı)
+}
+// Bir sezona ait turneleri (ana turneler, ek gruplar hariç) döndürür
+function sezonTurneleri(sezon) {
+  return turneler.filter(function(t) {
+    if (t.anaGrupId) return false;
+    return tarihSezon(t.baslangicTarih || t.tarih) === sezon;
+  });
+}
+// Bir sezonun özet istatistikleri: turne, temsil, il, gün
+function sezonIstatistik(sezon) {
+  var liste = sezonTurneleri(sezon);
+  var gun = liste.reduce(function(s,t){ return s + (typeof turneSuresi==='function' ? turneSuresi(t) : 0); }, 0);
+  var temsil = liste.reduce(function(s,t){ return s + (typeof durakToplamTemsil==='function' ? durakToplamTemsil(t) : 0); }, 0);
+  var ilSet = {};
+  liste.forEach(function(t){
+    if (typeof durakIllerListesi === 'function') {
+      durakIllerListesi(t).forEach(function(il){ ilSet[il.replace(/\/MERKEZ/gi,'').split('/')[0].trim()] = 1; });
+    }
+  });
+  return { turne: liste.length, temsil: temsil, il: Object.keys(ilSet).length, gun: gun };
 }
 function sezonLabel(sezon) {
   if (!sezon) return '?';
@@ -16326,7 +16378,116 @@ function sezonLabel(sezon) {
 // Ay ismi (Türkçe, tam)
 var _AYLAR_TR = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
 
-window._aktifSezon = '__tumü__'; // başlangıç
+window._aktifSezon = localStorage.getItem('_secilSezon') || '__tumü__'; // başlangıç
+
+// ============================================================
+// SEZON SEÇİMİ — Liste, Harita ve Takvim'i birlikte yöneten tek fonksiyon
+// ============================================================
+function sezonSec(sezon) {
+  window._aktifSezon = sezon;
+  if (sezon === '__tumü__') localStorage.removeItem('_secilSezon');
+  else localStorage.setItem('_secilSezon', sezon);
+
+  // Takvimi seçilen sezonun başlangıç ayına sıçrat (Tümü seçiliyse dokunma)
+  if (sezon !== '__tumü__' && typeof calYear !== 'undefined') {
+    var ay = sezonBaslangicAyYil(sezon);
+    if (ay) { calYear = ay.yil; calMonth = ay.ay; calSelectedDay = null; }
+  }
+
+  var overlay = document.getElementById('sezon-giris-overlay');
+  if (overlay) overlay.style.display = 'none';
+
+  var lbl = document.getElementById('tab-btn-sezon-label');
+  if (lbl) lbl.textContent = (sezon === '__tumü__') ? 'Tüm sezonlar' : sezon.replace('-', '–');
+
+  renderSezonBar();
+  if (typeof renderListe === 'function') renderListe();
+  window._haritaLastRenderKey = null; // harita dirty-check'i sıfırla, yeniden çizsin
+  if (typeof renderHarita === 'function' && document.getElementById('tab-harita') && document.getElementById('tab-harita').classList.contains('active')) renderHarita();
+  if (typeof renderCalendar === 'function') renderCalendar();
+}
+
+// ============================================================
+// SEZON GİRİŞ EKRANI (kart seçimi)
+// ============================================================
+function sezonIstatKutu(etiket, sayi) {
+  return '<div style="background:var(--muted);border-radius:8px;padding:8px 10px">'
+    + '<div style="font-size:11px;color:var(--muted-foreground);font-weight:600">' + etiket + '</div>'
+    + '<div style="font-size:19px;font-weight:800;color:var(--foreground)">' + sayi + '</div>'
+    + '</div>';
+}
+function sezonKartHTML(sezon) {
+  var ist = sezonIstatistik(sezon);
+  if (ist.turne === 0) {
+    return '<div style="background:var(--card);border:1.5px dashed var(--border);border-left:5px solid var(--sidebar-primary);border-radius:12px;padding:18px;display:flex;flex-direction:column;box-shadow:0 1px 4px rgba(0,0,0,.06),0 4px 12px rgba(0,0,0,.04)">'
+      + '<div style="font-size:15px;font-weight:800;color:var(--foreground);margin-bottom:2px">' + sezonLabel(sezon) + '</div>'
+      + '<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:6px;padding:18px 0">'
+      + '<div style="font-size:13px;color:var(--muted-foreground);font-weight:600">Henüz turne yok</div>'
+      + '<div style="font-size:11px;color:var(--muted-foreground)">Yeni sezonu ilk turneyle başlat</div>'
+      + '</div>'
+      + '<button onclick="sezonYeniTurneyleBaslat(\'' + sezon + '\')" style="width:100%;height:36px;border-radius:8px;border:1.5px solid var(--primary);background:var(--primary);color:#fff;font-size:12px;font-weight:700;cursor:pointer">+ Yeni turne ekle</button>'
+      + '</div>';
+  }
+  return '<div style="background:var(--card);border:1px solid var(--border);border-left:5px solid var(--sidebar-primary);border-radius:12px;padding:18px;box-shadow:0 1px 4px rgba(0,0,0,.06),0 4px 12px rgba(0,0,0,.04)">'
+    + '<div style="font-size:15px;font-weight:800;color:var(--foreground);margin-bottom:12px">' + sezonLabel(sezon) + '</div>'
+    + '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:14px">'
+    + sezonIstatKutu('Turne', ist.turne) + sezonIstatKutu('Temsil', ist.temsil) + sezonIstatKutu('Şehir', ist.il) + sezonIstatKutu('Gün', ist.gun)
+    + '</div>'
+    + '<button onclick="sezonSec(\'' + sezon + '\')" style="width:100%;height:36px;border-radius:8px;border:1.5px solid var(--primary);background:transparent;color:var(--primary);font-size:12px;font-weight:700;cursor:pointer">Bu sezona git</button>'
+    + '</div>';
+}
+function sezonYeniTurneyleBaslat(sezon) {
+  sezonSec(sezon);
+  switchTab('liste');
+  if (typeof openModal === 'function') openModal();
+}
+// Sezon seçim ekranı ayrı bir sayfaya taşındı: sezon-sec.html
+// Bu fonksiyon istatistikleri önhesaplar ve sayfaya yönlendirir.
+function sezonOverlayGoster() {
+  try {
+    var guncel = guncelSezon();
+    var sonraki = birSonrakiSezon(guncel);
+    var sezonSet = {};
+    (turneler || []).forEach(function(t){
+      if (t.anaGrupId) return;
+      var s = tarihSezon(t.baslangicTarih || t.tarih);
+      if (s) sezonSet[s] = true;
+    });
+    sezonSet[guncel] = true; sezonSet[sonraki] = true;
+    var sezonlar = Object.keys(sezonSet).map(function(s){
+      var ist = (typeof sezonIstatistik === 'function') ? sezonIstatistik(s) : { turne:0, temsil:0, il:0, gun:0 };
+      return { id:s, turne:ist.turne, temsil:ist.temsil, il:ist.il, gun:ist.gun };
+    });
+    localStorage.setItem('_sezonOzet', JSON.stringify({
+      sezonlar: sezonlar, guncel: guncel, sonraki: sonraki, ts: Date.now()
+    }));
+  } catch(e) {}
+  var first = localStorage.getItem('_secilSezon') ? '' : '?first=1';
+  var from = first ? '' : (first ? '' : '?from=turne');
+  location.href = 'sezon-sec.html' + (first || '?from=turne');
+}
+function sezonOverlayKapat() {
+  if (!localStorage.getItem('_secilSezon')) sezonSec('__tumü__'); else sezonSec(window._aktifSezon);
+}
+// sezon-sec.html'den ?yeniTurne=1 ile dönüş: yeni turne modalını aç
+(function(){
+  try {
+    var qs = new URLSearchParams(location.search);
+    if (qs.get('yeniTurne') === '1' || localStorage.getItem('_sezonYeniTurne') === '1') {
+      localStorage.removeItem('_sezonYeniTurne');
+      setTimeout(function(){
+        if (typeof switchTab === 'function') switchTab('liste');
+        if (typeof openModal === 'function') openModal();
+      }, 400);
+    }
+  } catch(e){}
+})();
+function sezonGirisKontrolEt() {
+  var kayitli = localStorage.getItem('_secilSezon');
+  if (!kayitli) { sezonOverlayGoster(); return; }
+  var lbl = document.getElementById('tab-btn-sezon-label');
+  if (lbl) lbl.textContent = (kayitli === '__tumü__') ? 'Tüm sezonlar' : kayitli.replace('-', '–');
+}
 
 function renderSezonBar() {
   var wrap = document.getElementById('sezon-btn-wrap');
@@ -16339,16 +16500,17 @@ function renderSezonBar() {
   });
   var sezonlar = Object.keys(sezonSet).sort().reverse(); // en yeni önce
 
-  var btns = '<button onclick="window._aktifSezon=\'__tumü__\';renderListe()" style="height:28px;padding:0 12px;font-size:11px;font-weight:700;border-radius:6px;cursor:pointer;white-space:nowrap;transition:all .15s;'
+  var btns = '<button onclick="sezonSec(\'__tumü__\')" style="height:28px;padding:0 12px;font-size:11px;font-weight:700;border-radius:6px;cursor:pointer;white-space:nowrap;transition:all .15s;'
     + (window._aktifSezon === '__tumü__' ? 'background:rgba(255,255,255,.22);color:#fff;border:1.5px solid rgba(255,255,255,.5)' : 'background:transparent;color:rgba(255,255,255,.7);border:1.5px solid rgba(255,255,255,.25)')
     + '">Tümü</button>';
 
   sezonlar.forEach(function(s) {
     var aktif = window._aktifSezon === s;
-    btns += '<button onclick="window._aktifSezon=\'' + s + '\';renderListe()" style="height:28px;padding:0 12px;font-size:11px;font-weight:700;border-radius:6px;cursor:pointer;white-space:nowrap;transition:all .15s;'
+    btns += '<button onclick="sezonSec(\'' + s + '\')" style="height:28px;padding:0 12px;font-size:11px;font-weight:700;border-radius:6px;cursor:pointer;white-space:nowrap;transition:all .15s;'
       + (aktif ? 'background:var(--sidebar-primary);color:hsl(42,70%,15%);border:1.5px solid transparent' : 'background:transparent;color:rgba(255,255,255,.7);border:1.5px solid rgba(255,255,255,.25)')
       + '">' + sezonLabel(s) + '</button>';
   });
+  btns += '<button onclick="sezonOverlayGoster()" title="Sezon kartlarını göster" style="height:28px;padding:0 10px;font-size:11px;font-weight:700;border-radius:6px;cursor:pointer;white-space:nowrap;background:transparent;color:rgba(255,255,255,.55);border:1.5px dashed rgba(255,255,255,.3);margin-left:4px">⤢ Sezonlar</button>';
   wrap.innerHTML = btns;
 }
 
@@ -26552,7 +26714,7 @@ function haritaFiltre(mod) {
 
 function renderHarita() {
   // ── Dirty-check: data/mod değişmediyse choropleth'i yeniden çizme ──
-  var _sMod  = (_haritaMod||'') + '|' + (_haritaFiltreMod||'') + '|' + (_haritaZamanFiltre||'') + '|' + (window._haritaAktifOyun||'');
+  var _sMod  = (_haritaMod||'') + '|' + (_haritaFiltreMod||'') + '|' + (_haritaZamanFiltre||'') + '|' + (window._haritaAktifOyun||'') + '|' + (window._aktifSezon||'');
   var _sTur  = (typeof turneler !== 'undefined') ? turneler.length + '|' + (turneler.map(function(t){return t._rowIdx+':'+(t.statu||'');}).join(',')) : '';
   var _sKey  = _sMod + '||' + _sTur;
   var _seciliChanged = (window._haritaLastSecili !== seciliIl);
@@ -26612,6 +26774,10 @@ function renderHarita() {
   var _haritaTurneler = (_haritaOyun
     ? turneler.filter(function(t){ return (t.oyun||'').toLowerCase().trim() === _haritaOyun.toLowerCase().trim(); })
     : turneler).filter(function(t){ return !t.anaGrupId && t.statu !== 'iptal'; });
+  // Sezon filtresi (giriş ekranından / sezon-bar'dan seçilen aktif sezon)
+  if (window._aktifSezon && window._aktifSezon !== '__tumü__') {
+    _haritaTurneler = _haritaTurneler.filter(function(t){ return tarihSezon(t.baslangicTarih || t.tarih) === window._aktifSezon; });
+  }
 
   // Yarıda Kesildi: kesilme bilgisi sağ panelde statü badge'i olarak görünür.
   var ykHaritaDurum = {};
@@ -28067,6 +28233,7 @@ function _calEvStyle(progSatir, turne) {
 // ── Gün için event listesi ──────────────────────────────────
 function _calGunEvents(key) {
   return turneler.filter(function(t) {
+    if (window._aktifSezon && window._aktifSezon !== '__tumü__' && tarihSezon(key) !== window._aktifSezon) return false;
     if (calStatuFiltre === 'noiptal' && t.statu === 'iptal') return false;
     if (calStatuFiltre && calStatuFiltre !== 'noiptal' && t.statu !== calStatuFiltre) return false;
     var bas = t.baslangicTarih || t.tarih || '';
@@ -28385,6 +28552,7 @@ function _calOzetChipsGuncelle() {
   turneler.forEach(function(t) {
     var bas = t.baslangicTarih || t.tarih || '';
     var bit = t.bitisTarih || bas;
+    if (window._aktifSezon && window._aktifSezon !== '__tumü__' && tarihSezon(bas) !== window._aktifSezon) return;
     if (bas <= ayBit && bit >= ayBas) {
       toplamTemsil += typeof durakToplamTemsil==='function' ? durakToplamTemsil(t) : 0;
     }
