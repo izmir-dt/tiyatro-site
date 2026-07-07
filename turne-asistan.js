@@ -1086,9 +1086,9 @@
   function fmtTarih(s) { const d = parseDate(s); if (!d) return s||"—"; return `${String(d.getDate()).padStart(2,"0")} ${AYLAR[d.getMonth()]} ${d.getFullYear()}`; }
   function fmtTarihAralik(bas, bit) { const a=fmtTarih(bas), b=fmtTarih(bit); if (!a||a==="—") return "—"; if (a===b||!bit) return a; return `${a} – ${b}`; }
   function turneGun(t) { const a=parseDate(t.baslangic), b=parseDate(t.bitis)||a; if(!a||!b) return 1; return Math.max(1,Math.round((b-a)/86400000)+1); }
-  // Tiyatro sezonu: Eylül–Ağustos arası tek sezon kabul edilir (örn. Ekim 2025 – Haziran 2026 hepsi "2025–26").
-  // Ocak–Ağustos arası tarihler bir önceki yılda başlayan sezona, Eylül–Aralık ise o yıl başlayan yeni sezona aittir.
-  function sezonYillari(d) { if (!d) return null; const y = d.getFullYear(); const ay = d.getMonth(); return ay >= 8 ? [y, y+1] : [y-1, y]; }
+  // Tiyatro sezonu: 15 Ağustos → 14 Ağustos tek sezon kabul edilir (turne.html ile birebir aynı kural).
+  // 15 Ağustos ve sonrası tarihler o yıl başlayan yeni sezona, 14 Ağustos ve öncesi bir önceki yılda başlayan sezona aittir.
+  function sezonYillari(d) { if (!d) return null; const y = d.getFullYear(); const ay = d.getMonth(); const gun = d.getDate(); const yeniBasladi = (ay > 7) || (ay === 7 && gun >= 15); return yeniBasladi ? [y, y+1] : [y-1, y]; }
   function sezonEtiket(d) { const sy = sezonYillari(d); if (!sy) return "?"; return sy[0] + "–" + String(sy[1]).slice(-2); }
   function sezonAnahtar(d) { const sy = sezonYillari(d); if (!sy) return "?"; return sy[0] + "–" + sy[1]; }
   function benzersizGunSay(liste) { var araliklar=[]; liste.forEach(function(t){ var b=parseDate(t.baslangic),e=parseDate(t.bitis)||b; if(!b)return; if(!e||e<b)e=b; araliklar.push([b.getTime(),e.getTime()]); }); if(!araliklar.length)return 0; araliklar.sort(function(a,b){return a[0]-b[0];}); var birl=[araliklar[0]]; for(var i=1;i<araliklar.length;i++){var son=birl[birl.length-1],cur=araliklar[i]; if(cur[0]<=son[1]+86400000){if(cur[1]>son[1])son[1]=cur[1];}else{birl.push(cur);}} return birl.reduce(function(s,r){return s+Math.round((r[1]-r[0])/86400000)+1;},0); }
@@ -3613,7 +3613,7 @@
     T.filter(t=>!t.statu.includes("iptal")).forEach(t=>t.katilimcilar.forEach(k=>{const rawG=k.kategori||k.gorev||"Diğer";const g=rawG==="Turne Ekstra Kadrosu"||rawG==="Ekstra"?"Ek Kadro":rawG;if(!gorevMap.has(g))gorevMap.set(g,new Set());gorevMap.get(g).add(norm(k.kisi));}));
     const topGorevler=[...gorevMap.entries()].map(([g,s])=>[g,s.size]).sort((a,b)=>b[1]-a[1]).slice(0,6);
 
-    // Sezon dağılımı (takvim yılına göre değil, Eylül–Ağustos tiyatro sezonuna göre)
+    // Sezon dağılımı (takvim yılına göre değil, 15 Ağustos–14 Ağustos tiyatro sezonuna göre)
     const yilMap=new Map();
     T.filter(t=>!t.statu.includes("iptal")).forEach(t=>{const d=parseDate(t.baslangic);if(d){const y=sezonEtiket(d);yilMap.set(y,(yilMap.get(y)||0)+1);}});
     const sortedYillar=[...yilMap.entries()].sort((a,b)=>a[0].localeCompare(b[0]));
@@ -4113,7 +4113,7 @@
     const aktif = DS.turneler.filter(t => !(t.statu||"").includes("iptal"));
     if (!aktif.length) { alert("Kayıt yok."); return; }
 
-    // Sezon = Eylül–Ağustos arası tek tiyatro sezonu (örn. "2025–26"); takvim yılına göre değil, sezona göre gruplanır
+    // Sezon = 15 Ağustos–14 Ağustos arası tek tiyatro sezonu (örn. "2025–26"); takvim yılına göre değil, sezona göre gruplanır
     const sezonlar = {};
     aktif.forEach(t => {
       const d = parseDate(t.baslangic);
