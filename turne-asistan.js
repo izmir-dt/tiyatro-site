@@ -949,6 +949,43 @@
   /* ─────────────────── VERİ ─────────────────── */
   function _debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
   const norm = s => (s || "").toLocaleLowerCase("tr").replace(/i̇/g, "i").replace(/\s+/g, " ").trim();
+
+  // Resmi 81 il listesi — harita (turne.html) ile aynı kaynak, "gerçek il" sayımı için
+  const TURKIYE_ILLERI = ['Adana','Adıyaman','Afyonkarahisar','Ağrı','Aksaray','Amasya','Ankara','Antalya',
+    'Ardahan','Artvin','Aydın','Balıkesir','Bartın','Batman','Bayburt','Bilecik','Bingöl','Bitlis',
+    'Bolu','Burdur','Bursa','Çanakkale','Çankırı','Çorum','Denizli','Diyarbakır','Düzce','Edirne',
+    'Elazığ','Erzincan','Erzurum','Eskişehir','Gaziantep','Giresun','Gümüşhane','Hakkari','Hatay',
+    'Iğdır','Isparta','İstanbul','İzmir','Kahramanmaraş','Karabük','Karaman','Kars','Kastamonu',
+    'Kayseri','Kilis','Kırıkkale','Kırklareli','Kırşehir','Kocaeli','Konya','Kütahya','Malatya',
+    'Manisa','Mardin','Mersin','Muğla','Muş','Nevşehir','Niğde','Ordu','Osmaniye','Rize','Sakarya',
+    'Samsun','Siirt','Sinop','Sivas','Şanlıurfa','Şırnak','Tekirdağ','Tokat','Trabzon','Tunceli',
+    'Uşak','Van','Yalova','Yozgat','Zonguldak'];
+  const _ILLER_NORM = TURKIYE_ILLERI.map(il => [norm(il), il]);
+  // Ham bir metni (durak/il alanı) resmi il adına eşler — harita'daki _ilEkle ile aynı mantık:
+  // "/" ile ayrılmış birleşik alanlarda ilk parçayı alır, resmi listede eşleşme ararsa onu, yoksa
+  // ilk harfi büyük yazılmış hâlini döner.
+  function ilKanonik(raw) {
+    const ilAdi = (raw || "").split("/")[0].trim();
+    if (!ilAdi) return "";
+    const hit = _ILLER_NORM.find(([n]) => n === norm(ilAdi));
+    if (hit) return hit[1];
+    return ilAdi.charAt(0).toLocaleUpperCase("tr") + ilAdi.slice(1);
+  }
+  // Bir turnenin "gerçek il" listesi — harita'daki durakIllerListesi ile aynı öncelik:
+  // duraklar varsa SADECE duraklardaki iller sayılır, t.il yok sayılır.
+  function gercekIllerFromTurne(t) {
+    const raw = (t.duraklar && t.duraklar.length) ? t.duraklar.map(d => d.il) : (t.il ? [t.il] : []);
+    return raw.filter(Boolean).map(ilKanonik);
+  }
+  // Bir turne listesindeki toplam benzersiz "gerçek il" sayısı (iptaller hariç — harita ile birebir aynı sayım)
+  function gercekIlSeti(turneler) {
+    const set = new Set();
+    for (const t of turneler) {
+      if ((t.statu || "").includes("iptal")) continue;
+      for (const il of gercekIllerFromTurne(t)) set.add(il);
+    }
+    return set;
+  }
   let DS = null;
 
   async function fetchSheet(name) {
@@ -1077,7 +1114,8 @@
         for (const d of t.duraklar||[]) if (d.il) cities.add(d.il);
         for (const k of t.katilimcilar) ppl.add(norm(k.kisi));
       }
-      status.textContent = `${turneler.length} turne · ${cities.size} şehir · ${ppl.size} personel`;
+      const realIller = gercekIlSeti(turneler);
+      status.textContent = `${turneler.length} turne · ${realIller.size} il · ${cities.size} yer/durak · ${ppl.size} personel`;
       populateEditSelect();
       checkReminders();
       renderRehber();  // ön-yükle
@@ -4086,12 +4124,13 @@
     if (!DS) return;
     const list = _rapFilter();
     const pSet = new Set();
-    for (const t of list) for (const k of t.katilimcilar||[]) if (k.kisi) pSet.add(k.kisi.trim());
+    for (const t of list) for (const k of t.katilimcilar||[]) if (k.kisi) pSet.add(norm(k.kisi));
     const cSet = new Set();
     for (const t of list) { if (t.il) cSet.add(t.il); for (const d of t.duraklar||[]) if (d.il) cSet.add(d.il); }
+    const realIller = gercekIlSeti(list);
     const days = benzersizGunSay(list);
     const el = $i("ta-rap-preview");
-    if (el) el.innerHTML = `📦 Kapsam: <b>${list.length}</b> turne · <b>${pSet.size}</b> personel · <b>${cSet.size}</b> şehir · <b>${days}</b> gün`;
+    if (el) el.innerHTML = `📦 Kapsam: <b>${list.length}</b> turne · <b>${pSet.size}</b> personel · <b>${realIller.size}</b> il · <b>${cSet.size}</b> yer/durak · <b>${days}</b> gün`;
   }
 
   function _rapPopulateYears() {
@@ -4410,9 +4449,10 @@
       if (t.oyun) oSet.add(t.oyun);
       if (t.il) cSet.add(t.il);
       for (const d of t.duraklar||[]) if (d.il) cSet.add(d.il);
-      for (const k of t.katilimcilar||[]) if (k.kisi) pSet.add(k.kisi.trim());
+      for (const k of t.katilimcilar||[]) if (k.kisi) pSet.add(norm(k.kisi));
     }
     const days = benzersizGunSay(list);
+    const realIller = gercekIlSeti(list);
     return [
       ["İzmir Devlet Tiyatrosu — Turne Raporu"],
       [],
@@ -4425,7 +4465,8 @@
       ["Turne sayısı", list.length],
       ["Toplam gün", days],
       ["Farklı oyun", oSet.size],
-      ["Farklı şehir", cSet.size],
+      ["Farklı il (harita ile aynı sayım)", realIller.size],
+      ["Farklı yer/durak (durak bazlı, iptaller dahil)", cSet.size],
       ["Farklı personel", pSet.size],
     ];
   }
@@ -4494,17 +4535,18 @@
     for (const t of list) {
       const seenInTurne = new Set();
       for (const k of t.katilimcilar||[]) {
-        const ad = (k.kisi||"").trim(); if (!ad) continue;
-        if (!m.has(ad)) m.set(ad, {
-          ad, turne:0, gun:0,
+        const adRaw = (k.kisi||"").trim(); if (!adRaw) continue;
+        const key = norm(adRaw);
+        if (!m.has(key)) m.set(key, {
+          ad: adRaw, turne:0, gun:0,
           sehirler:new Set(), oyunlar:new Set(),
           gorevMap:new Map(),
           dokum:[],
           ilk:null, son:null
         });
-        const o = m.get(ad);
+        const o = m.get(key);
         // Aynı turnede aynı kişi birden fazla görevle olabilir → turne/gün/döküm bir kez sayılsın
-        const turneKey = ad + "|" + (t.id || (t.oyun||"")+"|"+(t.baslangic||""));
+        const turneKey = key + "|" + (t.id || (t.oyun||"")+"|"+(t.baslangic||""));
         const firstTimeInTurne = !seenInTurne.has(turneKey);
         if (firstTimeInTurne) {
           seenInTurne.add(turneKey);
@@ -4566,7 +4608,7 @@
         const o = m.get(sehir);
         o.turne++; o.gun += _rapDays(t);
         if (t.oyun) o.oyunlar.add(t.oyun);
-        for (const k of t.katilimcilar||[]) if (k.kisi) o.personel.add(k.kisi.trim());
+        for (const k of t.katilimcilar||[]) if (k.kisi) o.personel.add(norm(k.kisi));
       }
     }
     const arr = [...m.values()].sort((a,b)=>b.turne-a.turne);
@@ -4584,7 +4626,7 @@
       o.turne++; o.gun += _rapDays(t);
       if (t.il) o.sehirler.add(t.il);
       for (const d of t.duraklar||[]) if (d.il) o.sehirler.add(d.il);
-      for (const k of t.katilimcilar||[]) if (k.kisi) o.personel.add(k.kisi.trim());
+      for (const k of t.katilimcilar||[]) if (k.kisi) o.personel.add(norm(k.kisi));
     }
     const arr = [...m.values()].sort((a,b)=>b.turne-a.turne);
     const rows = [["Oyun","Turne Sayısı","Gidilen Şehirler","Toplam Gün","Görev Alan Personel"]];
