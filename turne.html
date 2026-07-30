@@ -3970,6 +3970,39 @@ nav label.btn-outline:hover {
 .il-lbl--sel .il-lbl-cnt {
   background: hsl(38,90%,30%);
 }
+.il-lbl--ulke .il-lbl-name {
+  font-weight: 800;
+  color: hsl(214,62%,24%);
+  font-size: 10px;
+  text-transform: none;
+}
+.il-lbl--ulke .il-lbl-cnt {
+  background: hsl(214,62%,38%);
+}
+[data-theme="dark"] .il-lbl--ulke .il-lbl-name { color: hsl(206,90%,78%); }
+[data-theme="dark"] .il-lbl--ulke .il-lbl-cnt { background: hsl(206,70%,45%); }
+#mobil-sezon-btn { display: none; }
+@media (max-width: 768px) {
+  #mobil-sezon-btn {
+    display: inline-flex !important;
+    align-items: center;
+    gap: 5px;
+    height: 30px;
+    padding: 0 10px;
+    font-size: 10px;
+    font-weight: 800;
+    border: 1px solid rgba(255,255,255,.28);
+    background: rgba(255,255,255,.12);
+    color: #fff;
+    border-radius: 7px;
+    cursor: pointer;
+    white-space: nowrap;
+    max-width: 132px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  #sezon-giris-overlay { padding: 18px 12px 90px !important; }
+}
 [data-theme="dark"] .il-lbl-name {
   color: var(--foreground);
   text-shadow: 0 0 3px rgba(0,0,0,.9),
@@ -13011,6 +13044,10 @@ function _leafletYukle(callback) {
 <button class="_tema-opt" id="tema-opt-system" onclick="temaSec('system')" style="width:100%;text-align:left;padding:7px 10px;border:none;border-radius:6px;background:transparent;cursor:pointer;font-size:12px;font-weight:600;display:flex;align-items:center;gap:8px;color:var(--foreground)">💻 Sistem</button>
 </div>
 </div>
+<button aria-label="Sezon seç" id="mobil-sezon-btn" onclick="sezonOverlayGoster()" title="Sezon seç">
+<svg fill="none" height="12" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" viewbox="0 0 24 24" width="12"><rect height="18" rx="2" width="18" x="3" y="4"></rect><line x1="16" x2="16" y1="2" y2="6"></line><line x1="8" x2="8" y1="2" y2="6"></line><line x1="3" x2="21" y1="10" y2="10"></line></svg>
+<span id="mobil-sezon-label">Sezon</span>
+</button>
 <div style="width:1px;height:18px;background:rgba(255,255,255,.1);margin:0 1px;flex-shrink:0"></div>
 <!-- Çıkış -->
 <button onclick="cikisYap()" onmouseenter="this.style.background='rgba(239,68,68,.2)';this.style.color='#ff8080'" onmouseleave="this.style.background='transparent';this.style.color='rgba(255,100,100,.8)'" style="display:inline-flex;align-items:center;gap:5px;height:30px;padding:0 10px;font-size:10px;font-weight:700;border:none;background:transparent;color:rgba(255,100,100,.8);border-radius:6px;cursor:pointer;transition:all .15s;white-space:nowrap" title="Çıkış Yap">
@@ -13413,6 +13450,7 @@ function _leafletYukle(callback) {
 <span><svg fill="none" height="13" stroke="currentColor" stroke-linecap="round" stroke-width="2" style="vertical-align:-2px;margin-right:4px" viewbox="0 0 24 24" width="13"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon><line x1="8" x2="8" y1="2" y2="18"></line><line x1="16" x2="16" y1="6" y2="22"></line></svg>Türkiye Turne Haritası <span id="harita-ozet" style="font-size:11px;color:var(--muted-foreground);font-weight:500"></span></span>
 <div style="display:flex;gap:6px;font-size:10px;align-items:center">
 <button onclick="if(_leafletMap)_leafletMap.fitBounds([[36.0,26.0],[42.0,45.0]],{animate:true})" aria-label="Türkiye haritasına sığdır" style="padding:2px 8px;border-radius:12px;border:1px solid var(--border);background:var(--card);color:var(--foreground);font-size:10px;font-weight:600;cursor:pointer">🇹🇷 Türkiye</button>
+<button onclick="haritaTumunuSigdir()" aria-label="Tüm durakları göster" title="Yurt dışı dahil tüm duraklara sığdır" style="padding:2px 8px;border-radius:12px;border:1px solid var(--border);background:var(--card);color:var(--foreground);font-size:10px;font-weight:600;cursor:pointer">🌍 Tümü</button>
 <div aria-hidden="true" style="width:1px;height:16px;background:var(--border);flex-shrink:0"></div>
 <button id="hf-hepsi" onclick="haritaFiltre('hepsi')" aria-pressed="true" style="padding:2px 8px;border-radius:12px;border:1px solid var(--border);background:var(--primary);color:#fff;font-size:10px;font-weight:700;cursor:pointer">Tüm Turneler</button>
 <button id="hf-gidilen" onclick="haritaFiltre('gidilen')" aria-pressed="false" style="padding:2px 8px;border-radius:12px;border:1px solid var(--border);background:var(--card);color:var(--foreground);font-size:10px;font-weight:600;cursor:pointer">Gidilen İller</button>
@@ -16513,8 +16551,7 @@ function sezonSec(sezon) {
   var overlay = document.getElementById('sezon-giris-overlay');
   if (overlay) overlay.style.display = 'none';
 
-  var lbl = document.getElementById('tab-btn-sezon-label');
-  if (lbl) lbl.textContent = (sezon === '__tumü__') ? 'Tüm sezonlar' : sezon.replace('-', '–');
+  if (typeof _sezonEtiketGuncelle === 'function') _sezonEtiketGuncelle();
 
   renderSezonBar();
   if (typeof renderListe === 'function') renderListe();
@@ -16599,11 +16636,18 @@ function sezonOverlayKapat() {
     }
   } catch(e){}
 })();
+function _sezonEtiketGuncelle() {
+  var s = window._aktifSezon || localStorage.getItem('_secilSezon') || '__tumü__';
+  var txt = (s === '__tumü__') ? 'Tüm sezonlar' : String(s).replace('-', '–');
+  var lbl = document.getElementById('tab-btn-sezon-label');
+  if (lbl) lbl.textContent = txt;
+  var mlbl = document.getElementById('mobil-sezon-label');
+  if (mlbl) mlbl.textContent = txt;
+}
 function sezonGirisKontrolEt() {
   var kayitli = localStorage.getItem('_secilSezon');
   if (!kayitli) { sezonOverlayGoster(); return; }
-  var lbl = document.getElementById('tab-btn-sezon-label');
-  if (lbl) lbl.textContent = (kayitli === '__tumü__') ? 'Tüm sezonlar' : kayitli.replace('-', '–');
+  _sezonEtiketGuncelle();
 }
 
 function renderSezonBar() {
@@ -26871,6 +26915,222 @@ function ilDropdownKapat() {
 }
 
 let seciliIl = null;
+
+// ============================================================
+// YURT DIŞI ÜLKE KATMANI (Kosova vb.) — harita üzerinde poligon/daire
+// ============================================================
+var _dunyaGeoJSON = null, _dunyaGeoLoading = false, _dunyaGeoCallbacks = [];
+var _yurtdisiLayer = null, _yurtdisiFallbackLayers = [], _yurtdisiLabelGroup = null;
+
+// TR ülke adı -> GeoJSON'daki İngilizce ad(lar)
+var ULKE_GEO_ADLARI = {
+  'KOSOVA': ['kosovo','republic of kosovo','xkx','kos'],
+  'KKTC': ['n. cyprus','northern cyprus','cyprus u.n. buffer zone'],
+  'KUZEY MAKEDONYA': ['north macedonia','macedonia','republic of north macedonia'],
+  'ARNAVUTLUK': ['albania'], 'BOSNA-HERSEK': ['bosnia and herzegovina','bosnia and herz.'],
+  'KARADAĞ': ['montenegro'], 'SIRBİSTAN': ['serbia','republic of serbia'],
+  'BULGARİSTAN': ['bulgaria'], 'YUNANİSTAN': ['greece'], 'ROMANYA': ['romania'],
+  'MOLDOVA': ['moldova','republic of moldova'], 'UKRAYNA': ['ukraine'],
+  'MACARİSTAN': ['hungary'], 'HIRVATİSTAN': ['croatia'], 'ALMANYA': ['germany'],
+  'HOLLANDA': ['netherlands'], 'BELÇİKA': ['belgium'], 'AVUSTURYA': ['austria'],
+  'İSVİÇRE': ['switzerland'], 'FRANSA': ['france'],
+  'İNGİLTERE': ['united kingdom','england'], 'İSVEÇ': ['sweden'],
+  'İTALYA': ['italy'], 'İSPANYA': ['spain'], 'AZERBAYCAN': ['azerbaijan'],
+  'GÜRCİSTAN': ['georgia'], 'ÖZBEKİSTAN': ['uzbekistan'], 'KAZAKİSTAN': ['kazakhstan'],
+  'KIRGIZİSTAN': ['kyrgyzstan'], 'KATAR': ['qatar'],
+  'ABD': ['united states of america','united states'], 'JAPONYA': ['japan']
+};
+
+function _dunyaGeoJSONYukle(callback) {
+  if (_dunyaGeoJSON) { callback(_dunyaGeoJSON); return; }
+  try {
+    var cached = sessionStorage.getItem('_world_geojson_v1');
+    if (cached) { _dunyaGeoJSON = JSON.parse(cached); callback(_dunyaGeoJSON); return; }
+  } catch(e) {}
+  _dunyaGeoCallbacks.push(callback);
+  if (_dunyaGeoLoading) return;
+  _dunyaGeoLoading = true;
+
+  var urls = [
+    'https://cdn.jsdelivr.net/gh/nvkelso/natural-earth-vector@master/geojson/ne_110m_admin_0_countries.geojson',
+    'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson',
+    'https://cdn.jsdelivr.net/gh/datasets/geo-countries@master/data/countries.geojson'
+  ];
+  function _fw(url, ms) {
+    var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    var timer = ctrl ? setTimeout(function(){ ctrl.abort(); }, ms) : null;
+    return fetch(url, ctrl ? { signal: ctrl.signal } : {})
+      .finally(function(){ if (timer) clearTimeout(timer); });
+  }
+  function _dene(i) {
+    if (i >= urls.length) {
+      _dunyaGeoLoading = false;
+      var cbs0 = _dunyaGeoCallbacks.slice(); _dunyaGeoCallbacks = [];
+      cbs0.forEach(function(cb){ cb(null); });
+      return;
+    }
+    _fw(urls[i], 9000)
+      .then(function(r){ if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function(data){
+        _dunyaGeoJSON = data;
+        _dunyaGeoLoading = false;
+        try { sessionStorage.setItem('_world_geojson_v1', JSON.stringify(data)); } catch(e) {}
+        var cbs = _dunyaGeoCallbacks.slice(); _dunyaGeoCallbacks = [];
+        cbs.forEach(function(cb){ cb(data); });
+      })
+      .catch(function(){ _dene(i + 1); });
+  }
+  _dene(0);
+}
+
+function _ulkeFeatureKey(feature) {
+  var p = feature.properties || {};
+  var adaylar = [p.NAME, p.name, p.ADMIN, p.admin, p.NAME_LONG, p.SOVEREIGNT, p.ISO_A3, p.ADM0_A3]
+    .filter(Boolean).map(function(x){ return String(x).toLowerCase().trim(); });
+  if (!adaylar.length) return null;
+  for (var k in ULKE_GEO_ADLARI) {
+    var liste = ULKE_GEO_ADLARI[k];
+    for (var i = 0; i < liste.length; i++) {
+      if (adaylar.indexOf(liste[i]) >= 0) return k;
+    }
+  }
+  return null;
+}
+
+function _yurtdisiKatmanTemizle() {
+  if (_yurtdisiLayer) { try { _yurtdisiLayer.remove(); } catch(e){} _yurtdisiLayer = null; }
+  _yurtdisiFallbackLayers.forEach(function(l){ try { l.remove(); } catch(e){} });
+  _yurtdisiFallbackLayers = [];
+  if (_yurtdisiLabelGroup) { try { _yurtdisiLabelGroup.clearLayers(); _yurtdisiLabelGroup.remove(); } catch(e){} _yurtdisiLabelGroup = null; }
+}
+
+// Ülke etiketi (ad + turne sayısı) — her modda kalıcı
+function _ulkeEtiketEkle(key, latlng, sayi, secili) {
+  if (!_yurtdisiLabelGroup) _yurtdisiLabelGroup = L.layerGroup().addTo(_leafletMap);
+  var html = '<div class="il-lbl il-lbl--visit il-lbl--ulke' + (secili ? ' il-lbl--sel' : '') + '">'
+    + '<span class="il-lbl-name">' + key + '</span>'
+    + '<span class="il-lbl-cnt">' + sayi + '</span></div>';
+  L.marker(latlng, {
+    icon: L.divIcon({ html: html, className: '', iconSize: [0,0], iconAnchor: [0,0] }),
+    interactive: false, keyboard: false, zIndexOffset: 400,
+  }).addTo(_yurtdisiLabelGroup);
+}
+
+// Ana çizim: turne sayısı olan yurt dışı ülkeleri haritaya bas
+function haritaYurtdisiCiz(ilSayilar, mod) {
+  if (!_leafletMap) return;
+  _yurtdisiKatmanTemizle();
+  if (_haritaFiltreMod === 'gidilmeyen') return;
+
+  var ulkeSayilar = {};
+  var varMi = false;
+  (ULKE_LISTESI || []).forEach(function(u){
+    var n = ilSayilar[u] || 0;
+    if (n > 0) { ulkeSayilar[u] = n; varMi = true; }
+  });
+  if (!varMi) return;
+
+  var maxSayi = Math.max.apply(null, Object.values(ulkeSayilar).concat([1]));
+  function _renk(sayi) {
+    var ratio = Math.min(sayi / maxSayi, 1);
+    if (mod === 'heatmap' && typeof _heatmapRenk === 'function') return _heatmapRenk(ratio);
+    // Choropleth ile uyumlu amber skalası
+    var l = 78 - Math.round(ratio * 44);
+    return 'hsl(38,' + (80 - Math.round(ratio * 12)) + '%,' + l + '%)';
+  }
+
+  function _tooltip(key, sayi) {
+    var tip = '<strong>' + key + '</strong>'
+      + '<span class="tip-statu"><span class="tip-turne">' + sayi + ' turne</span></span>'
+      + '<span class="tip-statu">yurt dışı</span>';
+    return tip;
+  }
+
+  function _daireCiz() {
+    Object.keys(ulkeSayilar).forEach(function(key){
+      var ll = IL_LATLON[key] || (typeof yurtdisiLatLon === 'function' ? yurtdisiLatLon(key) : null);
+      if (!ll) return;
+      var sayi = ulkeSayilar[key];
+      var secili = (key === seciliIl);
+      var c = L.circleMarker(ll, {
+        radius: 9 + Math.min(sayi, 6) * 2,
+        fillColor: secili ? 'hsl(38,88%,52%)' : _renk(sayi),
+        fillOpacity: 0.8,
+        color: secili ? 'hsl(38,80%,30%)' : 'rgba(60,40,10,.65)',
+        weight: secili ? 2.5 : 1.6,
+      }).addTo(_leafletMap);
+      c.bindTooltip(_tooltip(key, sayi), { sticky: true, opacity: 1, className: 'harita-leaflet-tip' });
+      c.on('click', function(){ haritaIlTikla(key); });
+      _yurtdisiFallbackLayers.push(c);
+      _ulkeEtiketEkle(key, ll, sayi, secili);
+    });
+  }
+
+  _dunyaGeoJSONYukle(function(geo){
+    // Harita bu arada başka moda geçtiyse bir şey yapma
+    if (!_leafletMap) return;
+    if (!geo) { _daireCiz(); return; }
+
+    var bulunan = {};
+    _yurtdisiLayer = L.geoJSON(geo, {
+      filter: function(f){
+        var k = _ulkeFeatureKey(f);
+        return !!(k && ulkeSayilar[k]);
+      },
+      style: function(f){
+        var k = _ulkeFeatureKey(f);
+        var sayi = ulkeSayilar[k] || 0;
+        var secili = (k === seciliIl);
+        return {
+          fillColor: secili ? 'hsl(38,88%,52%)' : _renk(sayi),
+          fillOpacity: secili ? 0.95 : (mod === 'heatmap' ? 0.68 : 0.8),
+          color: secili ? 'hsl(38,80%,30%)' : 'rgba(60,40,10,.6)',
+          weight: secili ? 2.5 : 1.6,
+        };
+      },
+      onEachFeature: function(f, layer){
+        var k = _ulkeFeatureKey(f);
+        if (!k) return;
+        var sayi = ulkeSayilar[k] || 0;
+        bulunan[k] = true;
+        layer.bindTooltip(_tooltip(k, sayi), { sticky: true, opacity: 1, className: 'harita-leaflet-tip' });
+        layer.on('click', function(){ haritaIlTikla(k); });
+        var center;
+        try { center = layer.getBounds().getCenter(); } catch(e){ center = IL_LATLON[k]; }
+        if (center) _ulkeEtiketEkle(k, center, sayi, k === seciliIl);
+      }
+    }).addTo(_leafletMap);
+
+    // GeoJSON'da bulunamayan ülkeler için daire yedeği
+    Object.keys(ulkeSayilar).forEach(function(key){
+      if (bulunan[key]) return;
+      var ll = IL_LATLON[key] || (typeof yurtdisiLatLon === 'function' ? yurtdisiLatLon(key) : null);
+      if (!ll) return;
+      var sayi = ulkeSayilar[key];
+      var secili = (key === seciliIl);
+      var c = L.circleMarker(ll, {
+        radius: 9 + Math.min(sayi, 6) * 2,
+        fillColor: secili ? 'hsl(38,88%,52%)' : _renk(sayi),
+        fillOpacity: 0.8, color: 'rgba(60,40,10,.65)', weight: secili ? 2.5 : 1.6,
+      }).addTo(_leafletMap);
+      c.bindTooltip(_tooltip(key, sayi), { sticky: true, opacity: 1, className: 'harita-leaflet-tip' });
+      c.on('click', function(){ haritaIlTikla(key); });
+      _yurtdisiFallbackLayers.push(c);
+      _ulkeEtiketEkle(key, ll, sayi, secili);
+    });
+  });
+}
+
+// Tüm durakları (yurt dışı dahil) kapsayacak şekilde haritayı sığdır
+function haritaTumunuSigdir() {
+  if (!_leafletMap) return;
+  var b = window._haritaTumBounds;
+  if (b && b.length) {
+    try { _leafletMap.fitBounds(b, { animate: true, padding: [24, 24], maxZoom: 8 }); return; } catch(e) {}
+  }
+  _leafletMap.fitBounds([[36.0, 26.0], [42.0, 45.0]], { animate: true });
+}
+
 var _leafletMap = null;
 var _leafletMarkers = {};
 var _haritaFiltreMod = 'hepsi';
@@ -26991,9 +27251,19 @@ function renderHarita() {
     }
     if (sayildi) _haritaAktifTurneler.push(t);
   });
-  const ziyaretIlSayisi = Object.keys(ilSayilar).length;
+  // Yurt dışı ülkeleri ayrı say — özet metni ve harita sınırları için
+  var _ydUlkeler = Object.keys(ilSayilar).filter(function(k){ return typeof ulkeMi === 'function' && ulkeMi(k); });
+  const ziyaretIlSayisi = Object.keys(ilSayilar).length - _ydUlkeler.length;
   var _haritaBaslik = _haritaOyun ? (_haritaOyun + ' · ') : '';
-  document.getElementById('harita-ozet').textContent = _haritaBaslik + ziyaretIlSayisi + ' ilde ' + _haritaAktifTurneler.length + ' turne';
+  var _yerAdet = ziyaretIlSayisi + ' ilde';
+  if (_ydUlkeler.length) _yerAdet = ziyaretIlSayisi + ' il / ' + _ydUlkeler.length + ' ülkede';
+  document.getElementById('harita-ozet').textContent = _haritaBaslik + _yerAdet + ' ' + _haritaAktifTurneler.length + ' turne';
+
+  // Tüm durakların sınırları (🌍 Tümü butonu için)
+  try {
+    var _pts = Object.keys(ilSayilar).map(function(k){ return IL_LATLON[k]; }).filter(Boolean);
+    window._haritaTumBounds = _pts.length ? _pts : null;
+  } catch(e) { window._haritaTumBounds = null; }
 
   var _hBar = document.getElementById('harita-oyuna-don-bar');
   var _hLabel = document.getElementById('harita-oyuna-don-label');
@@ -27008,7 +27278,7 @@ function renderHarita() {
       zoomControl: true,
       attributionControl: false,
       minZoom: 5,
-      maxBounds: [[33.0, 20.0], [44.5, 50.0]],
+      maxBounds: [[24.0, -12.0], [62.0, 60.0]],
       maxBoundsViscosity: 0.3,
       scrollWheelZoom: true,
       doubleClickZoom: true,
@@ -27069,6 +27339,17 @@ function renderHarita() {
     _haritaHeatLayers.forEach(function(l){ l.remove(); }); _haritaHeatLayers = [];
     haritaChoroplethCiz(ilSayilar);
   }
+
+  // ── Yurt dışı ülkeler (Kosova vb.) her modda çizilir ──
+  try { haritaYurtdisiCiz(ilSayilar, _haritaMod); } catch(e) { console.warn('[yurtdisi harita]', e); }
+
+  // İlk çizimde yurt dışı durak varsa görünümü tüm duraklara sığdır
+  try {
+    if (!window._haritaYdSigdirildi && _ydUlkeler.length && window._haritaTumBounds) {
+      window._haritaYdSigdirildi = true;
+      _leafletMap.fitBounds(window._haritaTumBounds, { padding: [24,24], maxZoom: 7, animate: false });
+    }
+  } catch(e) {}
 
   if (seciliIl) haritaIlDetay(seciliIl, ilSayilar);
   else document.getElementById('harita-detay').innerHTML =
@@ -27973,7 +28254,8 @@ function haritaChoroplethCiz(ilSayilar) {
       var key = _featureKey(feat);
       if (!key) return;
       var sayi = ilSayilar[key] || 0;
-      if (!_shouldShow(sayi)) return;
+      // Turne sayısı olan yerlerin etiketi filtre modundan bağımsız her zaman görünür
+      if (sayi === 0 && !_shouldShow(sayi)) return;
 
       var center = lyr.getBounds().getCenter();
       var isSecili = key === seciliIl;
@@ -40108,6 +40390,39 @@ var _routeGroup = null;
 var _labelGroup = null;
 var _countGroup = null;
 var _mapEl = null;
+var _ydGroup = null, _ydLabelGroup = null;
+var _vb = {x:0,y:0,w:1000,h:460};
+var _baseVB = {x:0,y:0,w:1000,h:460};
+var _applyVB = function(){};
+function _setBaseVB(x, y, w, h){
+  x = Math.round(x); y = Math.round(y); w = Math.round(w); h = Math.round(h);
+  // En-boy oranını harita kutusuyla uyumlu tut
+  var oran = 1000/460;
+  if (w/h < oran) { var yeniW = h*oran; x -= (yeniW-w)/2; w = yeniW; }
+  else { var yeniH = w/oran; y -= (yeniH-h)/2; h = yeniH; }
+  if (_baseVB.x === x && _baseVB.y === y && _baseVB.w === w && _baseVB.h === h) return;
+  _baseVB = {x:x, y:y, w:w, h:h};
+  _vb.x = x; _vb.y = y; _vb.w = w; _vb.h = h;
+  _applyVB();
+}
+
+// Yurt dışı ülke stilleri
+(function(){
+  if (document.getElementById('tsm-yd-style')) return;
+  var st = document.createElement('style');
+  st.id = 'tsm-yd-style';
+  st.textContent = '#tr-svg-map .tsm-yd{fill:hsl(206,45%,88%);stroke:hsl(206,40%,55%);stroke-width:.7;cursor:pointer;vector-effect:non-scaling-stroke;transition:fill .12s ease}'
+    + '#tr-svg-map .tsm-yd:hover{fill:hsl(206,80%,70%);stroke:hsl(206,60%,35%);stroke-width:1.2}'
+    + '#tr-svg-map .tsm-yd.tsm-v1{fill:hsl(206,70%,80%)}#tr-svg-map .tsm-yd.tsm-v2{fill:hsl(206,68%,68%)}'
+    + '#tr-svg-map .tsm-yd.tsm-v3{fill:hsl(206,64%,54%)}#tr-svg-map .tsm-yd.tsm-v4{fill:hsl(210,60%,42%)}'
+    + '#tr-svg-map .tsm-yd.tsm-v5{fill:hsl(214,58%,30%)}'
+    + '#tr-svg-map .tsm-yd.tsm-sel{fill:hsl(0,72%,48%)!important;stroke:hsl(0,72%,28%);stroke-width:1.6}'
+    + '#tr-svg-map .tsm-yd-lbl{fill:hsl(210,55%,25%);font-size:8px}'
+    + '#tr-svg-map .tsm-yd-lbl-sel{fill:hsl(0,72%,32%)}'
+    + '[data-theme="dark"] #tr-svg-map .tsm-yd{fill:hsl(206,25%,32%);stroke:hsl(206,20%,55%)}'
+    + '[data-theme="dark"] #tr-svg-map .tsm-yd-lbl{fill:hsl(206,60%,82%)}';
+  document.head.appendChild(st);
+})();
 
 function ensureSvg(){
   var host = document.getElementById('leaflet-map');
@@ -40166,10 +40481,18 @@ function ensureSvg(){
     _cntTextByName[r.n] = c;
   });
 
+  var gYD = document.createElementNS('http://www.w3.org/2000/svg','g');
+  gYD.setAttribute('class','tsm-yd-g');
+  var gYDL = document.createElementNS('http://www.w3.org/2000/svg','g');
+  gYDL.setAttribute('class','tsm-yd-labels');
+
+  svg.appendChild(gYD);
   svg.appendChild(gIller);
   svg.appendChild(gRoute);
   svg.appendChild(gLabels);
   svg.appendChild(gCounts);
+  svg.appendChild(gYDL);
+  _ydGroup = gYD; _ydLabelGroup = gYDL;
   wrap.appendChild(svg);
 
   // Tooltip
@@ -40188,25 +40511,27 @@ function ensureSvg(){
   host.appendChild(wrap);
 
   _mapEl = svg; _routeGroup = gRoute; _labelGroup = gLabels; _countGroup = gCounts;
+  _ydSonImza = '';
 
   // Event delegation
   svg.addEventListener('click', function(e){
-    var t = e.target.closest && e.target.closest('.tsm-il');
+    var t = e.target.closest && e.target.closest('.tsm-il, .tsm-yd');
     if (!t) return;
-    var svgName = t.getAttribute('data-il');
-    var appName = svgNameToAppKey(svgName);
+    var appName = t.classList.contains('tsm-yd')
+      ? t.getAttribute('data-yd')
+      : svgNameToAppKey(t.getAttribute('data-il'));
     if (typeof haritaIlTikla === 'function') {
       try { haritaIlTikla(appName); } catch(err){ console.error(err); }
     }
   });
   svg.addEventListener('mousemove', function(e){
-    var t = e.target.closest && e.target.closest('.tsm-il');
+    var t = e.target.closest && e.target.closest('.tsm-il, .tsm-yd');
     if (!t) { if (_tooltipEl) _tooltipEl.classList.remove('on'); return; }
     if (!_tooltipEl) return;
-    var svgName = t.getAttribute('data-il');
-    var appName = svgNameToAppKey(svgName);
+    var yd = t.classList.contains('tsm-yd');
+    var appName = yd ? t.getAttribute('data-yd') : svgNameToAppKey(t.getAttribute('data-il'));
     var sayi = (window._choroplethIlSayilar||{})[appName] || 0;
-    _tooltipEl.innerHTML = '<b>'+appName+'</b>' + (sayi ? ' — '+sayi+' turne' : '');
+    _tooltipEl.innerHTML = '<b>'+appName+'</b>' + (sayi ? ' — '+sayi+' turne' : '') + (yd ? ' <span style="opacity:.7">· yurt dışı</span>' : '');
     var rect = wrap.getBoundingClientRect();
     _tooltipEl.style.left = (e.clientX - rect.left) + 'px';
     _tooltipEl.style.top = (e.clientY - rect.top - 4) + 'px';
@@ -40215,17 +40540,19 @@ function ensureSvg(){
   svg.addEventListener('mouseleave', function(){ if (_tooltipEl) _tooltipEl.classList.remove('on'); });
 
   // Zoom via viewBox
-  var vb = {x:0,y:0,w:1000,h:460};
-  function applyVB(){ svg.setAttribute('viewBox', vb.x+' '+vb.y+' '+vb.w+' '+vb.h); }
+  var vb = _vb;
+  _applyVB = function(){ svg.setAttribute('viewBox', vb.x+' '+vb.y+' '+vb.w+' '+vb.h); };
+  var applyVB = _applyVB;
+  applyVB();
   zoom.addEventListener('click', function(e){
     var b = e.target.closest('button'); if (!b) return;
     var z = b.getAttribute('data-z');
     if (z==='in')   { vb.x += vb.w*0.15; vb.y += vb.h*0.15; vb.w *= 0.7; vb.h *= 0.7; }
     else if (z==='out'){ vb.x -= vb.w*0.2; vb.y -= vb.h*0.2; vb.w *= 1.4; vb.h *= 1.4; }
-    else { vb = {x:0,y:0,w:1000,h:460}; }
+    else { vb.x=_baseVB.x; vb.y=_baseVB.y; vb.w=_baseVB.w; vb.h=_baseVB.h; }
     // clamp
-    vb.w = Math.max(200, Math.min(1400, vb.w));
-    vb.h = Math.max(92, Math.min(644, vb.h));
+    vb.w = Math.max(200, Math.min(2200, vb.w));
+    vb.h = Math.max(92, Math.min(1012, vb.h));
     applyVB();
   });
   // Wheel zoom
@@ -40235,8 +40562,8 @@ function ensureSvg(){
     var rect = svg.getBoundingClientRect();
     var mx = ((e.clientX - rect.left)/rect.width) * vb.w + vb.x;
     var my = ((e.clientY - rect.top)/rect.height) * vb.h + vb.y;
-    var nw = Math.max(200, Math.min(1400, vb.w*factor));
-    var nh = Math.max(92, Math.min(644, vb.h*factor));
+    var nw = Math.max(200, Math.min(2200, vb.w*factor));
+    var nh = Math.max(92, Math.min(1012, vb.h*factor));
     vb.x = mx - (mx - vb.x) * (nw/vb.w);
     vb.y = my - (my - vb.y) * (nh/vb.h);
     vb.w = nw; vb.h = nh;
@@ -40262,6 +40589,197 @@ function ensureSvg(){
 
   _svgReady = true;
   return true;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// YURT DIŞI ÜLKELER (Kosova vb.) — SVG harita entegrasyonu
+// ═══════════════════════════════════════════════════════════════
+var _ydGeo = null, _ydGeoLoading = false, _ydGeoCbs = [], _ydSonImza = '';
+var _proj = null;
+
+// Türkiye illerinin (cx,cy) ↔ (lon,lat) eşleşmesinden doğrusal projeksiyon çıkar
+function _projFit(){
+  if (_proj) return _proj;
+  if (typeof IL_LATLON !== 'object') return null;
+  var n=0, sx=0, sl=0, sxl=0, sll=0, sy=0, sa=0, sya=0, saa=0;
+  (window.TR_MAP_DATA||[]).forEach(function(r){
+    var ll = IL_LATLON[svgNameToAppKey(r.n)];
+    if (!ll || ll.length < 2) return;
+    var lat = +ll[0], lon = +ll[1];
+    if (!isFinite(lat) || !isFinite(lon)) return;
+    n++; sl+=lon; sx+=r.cx; sxl+=lon*r.cx; sll+=lon*lon;
+    sa+=lat; sy+=r.cy; sya+=lat*r.cy; saa+=lat*lat;
+  });
+  if (n < 10) return null;
+  var dx = (n*sll - sl*sl), dy = (n*saa - sa*sa);
+  if (!dx || !dy) return null;
+  var ax = (n*sxl - sl*sx)/dx, bx = (sx - ax*sl)/n;
+  var ay = (n*sya - sa*sy)/dy, by = (sy - ay*sa)/n;
+  _proj = {ax:ax, bx:bx, ay:ay, by:by};
+  return _proj;
+}
+function _pxy(lon, lat){
+  var p = _projFit(); if (!p) return null;
+  return [p.ax*lon + p.bx, p.ay*lat + p.by];
+}
+
+// Dünya sınırları GeoJSON (önbellekli, çoklu CDN yedekli)
+function _ydGeoYukle(cb){
+  if (_ydGeo) { cb(_ydGeo); return; }
+  try {
+    var cached = sessionStorage.getItem('_tsm_world_v1');
+    if (cached) { _ydGeo = JSON.parse(cached); cb(_ydGeo); return; }
+  } catch(e){}
+  _ydGeoCbs.push(cb);
+  if (_ydGeoLoading) return;
+  _ydGeoLoading = true;
+  var urls = [
+    'https://cdn.jsdelivr.net/gh/nvkelso/natural-earth-vector@master/geojson/ne_110m_admin_0_countries.geojson',
+    'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson'
+  ];
+  function bitir(data){
+    _ydGeo = data; _ydGeoLoading = false;
+    if (data) { try { sessionStorage.setItem('_tsm_world_v1', JSON.stringify(data)); } catch(e){} }
+    var cbs = _ydGeoCbs.slice(); _ydGeoCbs = [];
+    cbs.forEach(function(f){ f(data); });
+  }
+  function dene(i){
+    if (i >= urls.length) { bitir(null); return; }
+    fetch(urls[i])
+      .then(function(r){ if (!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+      .then(bitir)
+      .catch(function(){ dene(i+1); });
+  }
+  dene(0);
+}
+
+function _ydFeatureKey(f){
+  var harita = window.ULKE_GEO_ADLARI || {};
+  var p = f.properties || {};
+  var adaylar = [p.NAME, p.name, p.ADMIN, p.admin, p.NAME_LONG, p.SOVEREIGNT, p.ISO_A3, p.ADM0_A3]
+    .filter(Boolean).map(function(x){ return String(x).toLowerCase().trim(); });
+  for (var k in harita){
+    var liste = harita[k];
+    for (var i=0;i<liste.length;i++){ if (adaylar.indexOf(liste[i]) >= 0) return k; }
+  }
+  return null;
+}
+
+// GeoJSON geometrisini SVG path'ine çevir
+function _ydPathD(geom){
+  var polys = [];
+  if (!geom) return '';
+  if (geom.type === 'Polygon') polys = [geom.coordinates];
+  else if (geom.type === 'MultiPolygon') polys = geom.coordinates;
+  else return '';
+  var d = '';
+  polys.forEach(function(poly){
+    poly.forEach(function(ring){
+      var son = null, parca = '';
+      ring.forEach(function(c){
+        var pt = _pxy(c[0], c[1]); if (!pt) return;
+        if (son && Math.abs(pt[0]-son[0]) < 0.35 && Math.abs(pt[1]-son[1]) < 0.35) return;
+        parca += (son ? 'L' : 'M') + pt[0].toFixed(1) + ' ' + pt[1].toFixed(1);
+        son = pt;
+      });
+      if (parca) d += parca + 'Z';
+    });
+  });
+  return d;
+}
+
+// Ülkeleri çiz + gerekiyorsa görüş alanını genişlet
+function _ydCiz(counts, mode, seciliApp){
+  if (!_ydGroup) return;
+  var liste = window.ULKE_LISTESI || [];
+  var ulkeSayilar = {}, varMi = false;
+  liste.forEach(function(u){
+    var n = counts[u] || counts[(u||'').toLocaleUpperCase('tr')] || 0;
+    if (n > 0) { ulkeSayilar[u] = n; varMi = true; }
+  });
+
+  var imza = JSON.stringify(ulkeSayilar) + '|' + mode + '|' + (seciliApp||'');
+  if (imza === _ydSonImza) return;
+  _ydSonImza = imza;
+
+  while (_ydGroup.firstChild) _ydGroup.removeChild(_ydGroup.firstChild);
+  while (_ydLabelGroup.firstChild) _ydLabelGroup.removeChild(_ydLabelGroup.firstChild);
+
+  if (!varMi) { _setBaseVB(0, 0, 1000, 460); return; }
+
+  var maxSayi = 1;
+  for (var k0 in ulkeSayilar) maxSayi = Math.max(maxSayi, ulkeSayilar[k0]);
+  var tiers = computeTiers(ulkeSayilar);
+
+  var minX = 0, minY = 0, maxX = 1000, maxY = 460;
+  function bboxGenislet(x, y, r){
+    r = r || 0;
+    minX = Math.min(minX, x-r); maxX = Math.max(maxX, x+r);
+    minY = Math.min(minY, y-r); maxY = Math.max(maxY, y+r);
+  }
+
+  var NS = 'http://www.w3.org/2000/svg';
+  function etiketEkle(key, x, y, sayi, secili){
+    var t = document.createElementNS(NS,'text');
+    t.setAttribute('class','tsm-lbl tsm-yd-lbl' + (secili ? ' tsm-yd-lbl-sel' : ''));
+    t.setAttribute('x', x.toFixed(1)); t.setAttribute('y', y.toFixed(1));
+    t.textContent = key;
+    _ydLabelGroup.appendChild(t);
+    var c = document.createElementNS(NS,'text');
+    c.setAttribute('class','tsm-lbl-cnt tsm-yd-cnt');
+    c.setAttribute('x', x.toFixed(1)); c.setAttribute('y', (y+9).toFixed(1));
+    c.textContent = sayi;
+    _ydLabelGroup.appendChild(c);
+  }
+  function daireEkle(key, sayi, secili){
+    var ll = (typeof yurtdisiLatLon === 'function') ? yurtdisiLatLon(key) : null;
+    if (!ll) return;
+    var pt = _pxy(ll[1], ll[0]); if (!pt) return;
+    // Çok uzak ülkeleri harita kenarına sabitle
+    var x = Math.max(-320, Math.min(1320, pt[0]));
+    var y = Math.max(-260, Math.min(720, pt[1]));
+    var c = document.createElementNS(NS,'circle');
+    c.setAttribute('class','tsm-yd tsm-v'+tierOf(sayi, tiers)+(secili?' tsm-sel':''));
+    c.setAttribute('cx', x.toFixed(1)); c.setAttribute('cy', y.toFixed(1));
+    c.setAttribute('r', (7 + Math.min(sayi,6)).toFixed(1));
+    c.setAttribute('data-yd', key);
+    c.setAttribute('tabindex','0');
+    _ydGroup.appendChild(c);
+    bboxGenislet(x, y, 26);
+    etiketEkle(key, x, y - 14, sayi, secili);
+  }
+
+  _ydGeoYukle(function(geo){
+    var bulunan = {};
+    if (geo && geo.features && _projFit()){
+      geo.features.forEach(function(f){
+        var key = _ydFeatureKey(f);
+        if (!key || !ulkeSayilar[key] || bulunan[key]) return;
+        var d = _ydPathD(f.geometry);
+        if (!d) return;
+        var sayi = ulkeSayilar[key];
+        var secili = (key === seciliApp);
+        var p = document.createElementNS(NS,'path');
+        p.setAttribute('class','tsm-yd tsm-v'+tierOf(sayi, tiers)+(secili?' tsm-sel':''));
+        p.setAttribute('d', d);
+        p.setAttribute('data-yd', key);
+        p.setAttribute('tabindex','0');
+        _ydGroup.appendChild(p);
+        bulunan[key] = true;
+        var bb;
+        try { bb = p.getBBox(); } catch(e){ bb = null; }
+        if (bb && bb.width){
+          bboxGenislet(bb.x, bb.y, 12); bboxGenislet(bb.x+bb.width, bb.y+bb.height, 12);
+          etiketEkle(key, bb.x + bb.width/2, bb.y + bb.height/2, sayi, secili);
+        }
+      });
+    }
+    Object.keys(ulkeSayilar).forEach(function(key){
+      if (bulunan[key]) return;
+      daireEkle(key, ulkeSayilar[key], key === seciliApp);
+    });
+    _setBaseVB(minX - 10, minY - 10, (maxX - minX) + 20, (maxY - minY) + 20);
+  });
 }
 
 // Compute quantile thresholds for heat tiers
@@ -40291,7 +40809,8 @@ window.TRSvgMap = {
     var mode = opts.mode || 'normal';           // 'normal'|'heatmap'|'rota'
     var filter = opts.filter || 'hepsi';        // 'hepsi'|'gidilen'|'gidilmeyen'
     var seciliApp = opts.secili || null;
-    var showCounts = mode === 'heatmap';
+    // Turne sayıları her modda kalıcı görünür (ısı haritasındaki gibi)
+    var showCounts = filter !== 'gidilmeyen';
 
     // Map ilSayilar keys to normalized -> value
     var normCounts = {};
@@ -40337,8 +40856,12 @@ window.TRSvgMap = {
         drawRoute(opts.turneler);
       }
     }
+
+    // Yurt dışı ülkeler (Kosova vb.)
+    try { _ydCiz(ilSayilar || {}, mode, seciliApp); } catch(e){ console.warn('[yurtdisi svg]', e); }
   }
 };
+
 
 function drawRoute(turneler){
   // Build sequence: for each turne (sorted by baslangicTarih), for each durak, add point at il centroid
