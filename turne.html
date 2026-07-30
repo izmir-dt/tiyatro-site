@@ -27024,6 +27024,9 @@ function haritaYurtdisiCiz(ilSayilar, mod) {
   });
   if (!varMi) return;
 
+  window._tsmTurneUlkeleri = ulkeSayilar;
+  if (typeof window._tsmUlkeEtiketleriYenile === 'function') setTimeout(window._tsmUlkeEtiketleriYenile, 30);
+
   var maxSayi = Math.max.apply(null, Object.values(ulkeSayilar).concat([1]));
   function _renk(sayi) {
     var ratio = Math.min(sayi / maxSayi, 1);
@@ -27271,9 +27274,14 @@ function renderHarita() {
     _leafletMap = L.map('leaflet-map', {
       zoomControl: true,
       attributionControl: false,
-      minZoom: 5,
-      maxBounds: [[24.0, -12.0], [62.0, 60.0]],
-      maxBoundsViscosity: 0.3,
+      minZoom: 2,
+      maxBounds: [[-85.0, -180.0], [85.0, 180.0]],
+      maxBoundsViscosity: 1.0,
+      worldCopyJump: false,
+      tap: true,
+      tapTolerance: 18,
+      zoomSnap: 0.25,
+      wheelPxPerZoomLevel: 90,
       scrollWheelZoom: true,
       doubleClickZoom: true,
       touchZoom: true,
@@ -27290,8 +27298,13 @@ function renderHarita() {
     _leafletMap.fitBounds([[36.0, 26.0], [42.0, 45.0]]);
     L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/light_nolabels/{z}/{x}/{y}{r}.png', {
       maxZoom: 14,
+      minZoom: 2,
+      noWrap: true,
+      bounds: [[-85.0, -180.0], [85.0, 180.0]],
       subdomains: 'abcd',
+      className: 'tsm-basemap',
     }).addTo(_leafletMap);
+    try { _ulkeKatmaniKur(_leafletMap); } catch(e) { console.warn('ulke katmani', e); }
     L.control.attribution({prefix: '© OpenStreetMap, CartoDB'}).addTo(_leafletMap);
   }
 
@@ -41141,8 +41154,23 @@ textarea:focus-visible, [tabindex]:focus-visible {
 /* ── 8. Dünya haritası ─────────────────────────────────────── */
 #dunya-map-wrap { position:absolute; inset:0; background:linear-gradient(180deg,hsl(205,55%,96%),hsl(205,40%,92%)); border-radius:0 0 10px 10px; overflow:hidden; }
 #dunya-map-wrap svg { width:100%; height:100%; display:block; cursor:grab; }
-.dm-base { fill:hsl(40,12%,88%); stroke:hsl(40,10%,78%); stroke-width:.6; }
-.dm-tr { fill:hsl(38,45%,80%); stroke:hsl(38,50%,52%); stroke-width:1; }
+.dm-base { fill:hsl(42,20%,91%); stroke:hsl(38,16%,74%); stroke-width:.45; stroke-linejoin:round; }
+.dm-base:hover { fill:hsl(42,26%,87%); }
+.dm-tr { fill:hsl(38,52%,79%); stroke:hsl(38,55%,46%); stroke-width:1.1; stroke-linejoin:round; }
+.dm-ad { font-size:10px; font-weight:600; fill:hsl(30,14%,38%); text-anchor:middle; paint-order:stroke;
+         stroke:rgba(255,255,255,.92); stroke-width:2.6px; pointer-events:none; letter-spacing:.2px; }
+.dm-ad.dm-ad-buyuk { font-weight:800; fill:hsl(30,18%,30%); letter-spacing:.6px; }
+[data-theme="dark"] #dunya-map-wrap { background:linear-gradient(180deg,hsl(212,32%,16%),hsl(212,30%,12%)); }
+[data-theme="dark"] .dm-base { fill:hsl(215,14%,26%); stroke:hsl(215,12%,36%); }
+[data-theme="dark"] .dm-base:hover { fill:hsl(215,14%,31%); }
+[data-theme="dark"] .dm-ad { fill:hsl(210,16%,76%); stroke:rgba(12,18,26,.9); }
+[data-theme="dark"] .dm-ad.dm-ad-buyuk { fill:hsl(210,20%,88%); }
+[data-theme="dark"] .dm-tr { fill:hsl(38,42%,42%); stroke:hsl(38,60%,62%); }
+@media (max-width: 820px) {
+  #dunya-map-wrap svg { touch-action:none; }
+  .dm-zoom button { width:38px; height:38px; font-size:17px; }
+  .dm-ad { font-size:8.5px; }
+}
 .dm-c { cursor:pointer; stroke:#fff; stroke-width:.9; transition:filter .15s ease; }
 .dm-c:hover { filter:brightness(1.08); }
 .dm-v1 { fill:hsl(350,55%,72%); } .dm-v2 { fill:hsl(350,58%,62%); }
@@ -41500,8 +41528,49 @@ function _dmGeoYukle(cb){
   dene(0);
 }
 
+var _dmAdLbl = null, _dmAdKayit = [];
+
+// Ülkenin Türkçe adı
+function _dmUlkeAdi(f){
+  var p = f.properties || {};
+  return p.NAME_TR || p.name_tr || p.NAME || p.name || p.ADMIN || p.admin || '';
+}
+
+// Zoom'a göre ülke adlarını göster/gizle + sabit ekran boyutu
+function _dmAdlariGuncelle(){
+  if (!_dmAdKayit.length) return;
+  var olcek = _dmVB.w / 1000;           // 1 => başlangıç
+  var fs = (10 * olcek).toFixed(2);
+  var sw = (2.6 * olcek).toFixed(2);
+  var kutular = [];
+  for (var i = 0; i < _dmAdKayit.length; i++){
+    var r = _dmAdKayit[i];
+    var ekranGen = r.bw / olcek;         // ülkenin ekrandaki genişliği (px ~)
+    var metinGen = r.ad.length * 5.4;
+    var gorunur = ekranGen > Math.max(26, metinGen * 0.72);
+    // görünen alan dışındaysa çizme
+    if (gorunur && (r.cx < _dmVB.x || r.cx > _dmVB.x + _dmVB.w ||
+                    r.cy < _dmVB.y || r.cy > _dmVB.y + _dmVB.h)) gorunur = false;
+    if (gorunur){
+      var yw = metinGen * olcek, yh = 11 * olcek;
+      var kutu = [r.cx - yw/2, r.cy - yh/2, r.cx + yw/2, r.cy + yh/2];
+      for (var j = 0; j < kutular.length; j++){
+        var b = kutular[j];
+        if (!(kutu[2] < b[0] || kutu[0] > b[2] || kutu[3] < b[1] || kutu[1] > b[3])) { gorunur = false; break; }
+      }
+      if (gorunur) kutular.push(kutu);
+    }
+    r.el.style.display = gorunur ? '' : 'none';
+    if (gorunur){
+      r.el.setAttribute('font-size', fs);
+      r.el.setAttribute('stroke-width', sw);
+    }
+  }
+}
+
 function _dmApplyVB(){
   if (_dmSvg) _dmSvg.setAttribute('viewBox', _dmVB.x+' '+_dmVB.y+' '+_dmVB.w+' '+_dmVB.h);
+  try { _dmAdlariGuncelle(); } catch(e){}
 }
 
 function _dmEnsure(){
@@ -41519,9 +41588,10 @@ function _dmEnsure(){
   _dmSvg.setAttribute('role', 'img');
   _dmSvg.setAttribute('aria-label', 'Yurt dışı turne haritası');
   _dmBase = document.createElementNS(NS, 'g');
+  _dmAdLbl = document.createElementNS(NS, 'g');
   _dmData = document.createElementNS(NS, 'g');
   _dmLbl = document.createElementNS(NS, 'g');
-  _dmSvg.appendChild(_dmBase); _dmSvg.appendChild(_dmData); _dmSvg.appendChild(_dmLbl);
+  _dmSvg.appendChild(_dmBase); _dmSvg.appendChild(_dmAdLbl); _dmSvg.appendChild(_dmData); _dmSvg.appendChild(_dmLbl);
   _dmWrap.appendChild(_dmSvg);
 
   var zoom = document.createElement('div');
@@ -41572,6 +41642,67 @@ function _dmEnsure(){
     _dmVB.w = nw; _dmVB.h = nh;
     _dmApplyVB();
   }, {passive:false});
+  // Dokunmatik: tek parmak kaydırma, iki parmak yakınlaştırma
+  var _tPrev = null, _tDist = 0;
+  function _tMerkez(t1, t2){ return { x:(t1.clientX+t2.clientX)/2, y:(t1.clientY+t2.clientY)/2 }; }
+  _dmSvg.addEventListener('touchstart', function(e){
+    if (e.touches.length === 1) { _tPrev = { x:e.touches[0].clientX, y:e.touches[0].clientY }; _tDist = 0; }
+    else if (e.touches.length === 2) {
+      var a = e.touches[0], b = e.touches[1];
+      _tDist = Math.hypot(a.clientX-b.clientX, a.clientY-b.clientY);
+      _tPrev = _tMerkez(a, b);
+    }
+  }, {passive:true});
+  _dmSvg.addEventListener('touchmove', function(e){
+    var rect = _dmSvg.getBoundingClientRect();
+    if (e.touches.length === 1 && _tPrev && !_tDist){
+      e.preventDefault();
+      var t = e.touches[0];
+      _dmVB.x -= (t.clientX - _tPrev.x) * (_dmVB.w/rect.width);
+      _dmVB.y -= (t.clientY - _tPrev.y) * (_dmVB.h/rect.height);
+      _tPrev = { x:t.clientX, y:t.clientY };
+      _dmApplyVB();
+    } else if (e.touches.length === 2){
+      e.preventDefault();
+      var a = e.touches[0], b2 = e.touches[1];
+      var d = Math.hypot(a.clientX-b2.clientX, a.clientY-b2.clientY);
+      var m = _tMerkez(a, b2);
+      if (_tDist > 0 && d > 0){
+        var f = _tDist / d;
+        var mx = ((m.x - rect.left)/rect.width) * _dmVB.w + _dmVB.x;
+        var my = ((m.y - rect.top)/rect.height) * _dmVB.h + _dmVB.y;
+        var nw = Math.min(_dmBaseVB.w * 6, Math.max(_dmBaseVB.w * 0.08, _dmVB.w * f));
+        var oran = nw / _dmVB.w;
+        _dmVB.x = mx - (mx - _dmVB.x) * oran;
+        _dmVB.y = my - (my - _dmVB.y) * oran;
+        _dmVB.w = nw; _dmVB.h = _dmVB.h * oran;
+      }
+      if (_tPrev){
+        _dmVB.x -= (m.x - _tPrev.x) * (_dmVB.w/rect.width);
+        _dmVB.y -= (m.y - _tPrev.y) * (_dmVB.h/rect.height);
+      }
+      _tDist = d; _tPrev = m;
+      _dmApplyVB();
+    }
+  }, {passive:false});
+  _dmSvg.addEventListener('touchend', function(e){
+    if (e.touches.length === 0) { _tPrev = null; _tDist = 0; }
+  }, {passive:true});
+  _dmSvg.addEventListener('touchstart', function(e){
+    var t = e.target.closest && e.target.closest('.dm-c');
+    if (!t) return;
+    var ad = t.getAttribute('data-ulke');
+    var tipEl = _dmWrap.querySelector('.tsm-tip');
+    if (tipEl){
+      tipEl.innerHTML = '<b>' + ad + '</b> — ' + (t.getAttribute('data-sayi')||0) + ' turne';
+      var r2 = _dmWrap.getBoundingClientRect();
+      tipEl.style.left = (e.touches[0].clientX - r2.left) + 'px';
+      tipEl.style.top = (e.touches[0].clientY - r2.top - 8) + 'px';
+      tipEl.classList.add('on');
+      setTimeout(function(){ tipEl.classList.remove('on'); }, 2200);
+    }
+  }, {passive:true});
+
   var drag = false, dx = 0, dy = 0;
   _dmSvg.addEventListener('mousedown', function(e){ drag = true; dx = e.clientX; dy = e.clientY; _dmSvg.style.cursor='grabbing'; });
   window.addEventListener('mouseup', function(){ drag = false; if (_dmSvg) _dmSvg.style.cursor=''; });
@@ -41653,6 +41784,8 @@ function _dmCiz(){
     while (_dmBase.firstChild) _dmBase.removeChild(_dmBase.firstChild);
     while (_dmData.firstChild) _dmData.removeChild(_dmData.firstChild);
     while (_dmLbl.firstChild) _dmLbl.removeChild(_dmLbl.firstChild);
+    if (_dmAdLbl) { while (_dmAdLbl.firstChild) _dmAdLbl.removeChild(_dmAdLbl.firstChild); }
+    _dmAdKayit = [];
     _dmBos(null);
 
     if (!geo || !geo.features){
@@ -41684,14 +41817,18 @@ function _dmCiz(){
 
     _dmProj.x0 = lon0;
     _dmProj.y0 = lat1;
-    var kx = 1000 / Math.max(0.5, (lon1 - lon0));
-    var ky = 460 / Math.max(0.5, (lat1 - lat0) * 1.35);
+    var _rc = _dmWrap.getBoundingClientRect();
+    var VBW = 1000;
+    var VBH = Math.round(VBW * Math.min(2.2, Math.max(0.3, (_rc.height || 460) / (_rc.width || 1000))));
+    _dmSvg.setAttribute('viewBox', '0 0 ' + VBW + ' ' + VBH);
+
+    var kx = VBW / Math.max(0.5, (lon1 - lon0));
+    var ky = VBH / Math.max(0.5, (lat1 - lat0) * 1.35);
     _dmProj.k = Math.min(kx, ky);
 
     var w = (lon1 - lon0) * _dmProj.k;
     var h = (lat1 - lat0) * _dmProj.k * 1.35;
-    _dmBaseVB = { x: (w - 1000)/2, y: (h - 460)/2, w: 1000, h: 460 };
-    if (w < 1000) _dmBaseVB.x = (w - 1000)/2;
+    _dmBaseVB = { x: (w - VBW)/2, y: (h - VBH)/2, w: VBW, h: VBH };
     _dmVB = { x:_dmBaseVB.x, y:_dmBaseVB.y, w:_dmBaseVB.w, h:_dmBaseVB.h };
     _dmApplyVB();
 
@@ -41741,10 +41878,37 @@ function _dmCiz(){
       } else {
         p.setAttribute('class', _dmTurkiyeMi(f) ? 'dm-tr' : 'dm-base');
         _dmBase.appendChild(p);
+        // Tüm ülkelerin adı (Türkçe) — zoom'a duyarlı
+        var ad = _dmUlkeAdi(f);
+        var bbx = null;
+        try { bbx = p.getBBox(); } catch(e){}
+        if (ad && bbx && bbx.width){
+          var rank = (typeof f.properties.LABELRANK === 'number') ? f.properties.LABELRANK : 5;
+          var tx = document.createElementNS(NS, 'text');
+          tx.setAttribute('class', 'dm-ad' + (rank <= 3 ? ' dm-ad-buyuk' : ''));
+          tx.setAttribute('x', (bbx.x + bbx.width/2).toFixed(1));
+          tx.setAttribute('y', (bbx.y + bbx.height/2 + 3).toFixed(1));
+          tx.textContent = ad;
+          _dmAdLbl.appendChild(tx);
+          _dmAdKayit.push({
+            el: tx, ad: ad, rank: rank,
+            cx: bbx.x + bbx.width/2, cy: bbx.y + bbx.height/2,
+            bw: bbx.width, bh: bbx.height
+          });
+        }
       }
     });
+    try { _dmAdlariGuncelle(); } catch(e){}
   });
 }
+
+// Ekran döndürme / yeniden boyutlandırmada dünya haritasını tazele
+var _dmResizeT = null;
+window.addEventListener('resize', function(){
+  if (!_dmWrap || _dmWrap.style.display === 'none') return;
+  clearTimeout(_dmResizeT);
+  _dmResizeT = setTimeout(function(){ _dmSonImza = null; _dmCiz(); }, 220);
+});
 
 // ── Görünüm geçişi (Türkiye / Dünya) ────────────────────────
 window.haritaGorunumSec = function(gor){
@@ -41856,4 +42020,287 @@ console.log('[PATCH-40] sezon istatistiği + dünya haritası + arayüz hazır')
 })();
 </script>
 
+
+<style id="tsm-harita-mobil-styles">
+/* ====== DÜNYA HARİTASI: ince sınırlar + tüm ülke adları ====== */
+.tsm-basemap { filter: saturate(0.82) contrast(1.04) brightness(1.02); }
+[data-theme="dark"] .tsm-basemap { filter: invert(0.92) hue-rotate(180deg) saturate(0.55) brightness(0.95) contrast(0.95); }
+.leaflet-pane.tsm-pane-ulkeadi { pointer-events: none; z-index: 640; }
+.leaflet-pane.tsm-pane-sinir  { z-index: 340; }
+.tsm-ulke-adi {
+  font-size: 10.5px;
+  font-weight: 650;
+  letter-spacing: .2px;
+  line-height: 1;
+  white-space: nowrap;
+  color: hsl(28, 18%, 34%);
+  text-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 1px 2px rgba(255,255,255,.9);
+  transform: translate(-50%, -50%);
+  user-select: none;
+  pointer-events: none;
+}
+.tsm-ulke-adi.r1 { font-size: 12px; font-weight: 800; letter-spacing: .5px; text-transform: uppercase; }
+.tsm-ulke-adi.r2 { font-size: 11px; font-weight: 700; }
+.tsm-ulke-adi.r4 { font-size: 9.5px; font-weight: 600; color: hsl(28, 12%, 46%); }
+.tsm-ulke-adi.tsm-turne { color: hsl(30, 78%, 30%); font-weight: 850; font-size: 12px; }
+[data-theme="dark"] .tsm-ulke-adi {
+  color: hsl(210, 18%, 78%);
+  text-shadow: 0 0 3px rgba(10,14,20,.95), 0 0 4px rgba(10,14,20,.9);
+}
+[data-theme="dark"] .tsm-ulke-adi.r4 { color: hsl(210, 12%, 62%); }
+[data-theme="dark"] .tsm-ulke-adi.tsm-turne { color: hsl(38, 85%, 66%); }
+.tsm-ulke-adi[hidden] { display: none !important; }
+
+/* ====== MOBİL UYUM (tüm sayfalar) ====== */
+@media (max-width: 820px) {
+  /* Takvim: mobil ajanda görünümü tüm satırı kaplasın */
+  #cal-days > div[style*="padding:14px 16px"] { grid-column: 1 / -1 !important; width: 100% !important; }
+  #cal-days { grid-template-columns: repeat(7, minmax(0, 1fr)) !important; }
+  .cal-statu-row { padding: 8px 12px !important; }
+  .cal-statu-row > span:first-child { flex: 0 0 auto !important; width: auto !important; max-width: max-content !important; min-width: 0 !important; }
+  .cal-statu-btn { flex: 0 0 auto !important; white-space: nowrap !important; }
+  /* Ajanda kartlarinda basliklar harf harf bolunmesin */
+  #cal-days span, #cal-days div { word-break: normal !important; overflow-wrap: anywhere; }
+  #cal-days div[style*="justify-content:space-between"] { flex-wrap: wrap !important; }
+  #cal-days div[style*="min-width:0;flex:1"] { flex: 1 1 100% !important; min-width: 0 !important; }
+  .cal-header, .cal-wrap { max-width: 100% !important; }
+  html, body { -webkit-text-size-adjust: 100%; }
+  body { font-size: 13.5px !important; overflow-x: hidden; }
+  input, select, textarea { font-size: 16px !important; }
+
+  nav[aria-label="Ana gezinme"] {
+    flex-wrap: wrap !important;
+    row-gap: 6px !important;
+    padding: 8px 10px !important;
+    padding-top: max(8px, env(safe-area-inset-top)) !important;
+    align-items: center !important;
+  }
+  .nav-brand { flex: 1 1 auto !important; min-width: 0 !important; }
+  .nav-brand .nav-title { font-size: 12px !important; letter-spacing: .2px !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .nav-brand .nav-sub { font-size: 8.5px !important; }
+  .nav-logo img { width: 34px !important; height: 34px !important; }
+
+  .nav-right {
+    flex: 0 0 100% !important;
+    order: 3;
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    gap: 6px !important;
+    padding-bottom: 2px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .nav-right::-webkit-scrollbar { display: none; }
+  .nav-right > * { flex: 0 0 auto !important; }
+  #son-senkron-indicator { order: 99; }
+  #yedek-mesaj:empty { display: none !important; }
+
+  .tab-bar, [role="tablist"] {
+    display: flex !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    gap: 2px !important;
+  }
+  .tab-bar::-webkit-scrollbar, [role="tablist"]::-webkit-scrollbar { display: none; }
+  .tab-btn {
+    flex: 1 0 auto !important;
+    min-height: 44px !important;
+    padding: 10px 12px !important;
+    font-size: 11.5px !important;
+    justify-content: center !important;
+    white-space: nowrap !important;
+  }
+
+  button, .btn, [role="button"] { min-height: 38px; }
+  .tab-panel, .scroll-area, .section-wrap { max-width: 100vw !important; }
+  .scroll-area { -webkit-overflow-scrolling: touch; }
+
+  /* Tablolar: yatay kaydırma yerine akıcı düzen */
+  table { width: 100% !important; }
+  .harita-tablo-row { flex-wrap: wrap !important; row-gap: 2px !important; }
+
+  /* Harita sekmesi: harita üstte, detay altta */
+  .harita-layout-grid {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 10px !important;
+    height: auto !important;
+    grid-template-columns: none !important;
+  }
+  #leaflet-map {
+    height: 58dvh !important;
+    min-height: 300px !important;
+    width: 100% !important;
+    border-radius: 12px !important;
+  }
+  #harita-detay {
+    max-height: none !important;
+    height: auto !important;
+    width: 100% !important;
+  }
+  .leaflet-control-zoom a {
+    width: 40px !important;
+    height: 40px !important;
+    line-height: 40px !important;
+    font-size: 20px !important;
+  }
+  .harita-legend { font-size: 9.5px !important; padding: 6px 8px !important; }
+  .tsm-ulke-adi { font-size: 9.5px; }
+  .tsm-ulke-adi.r1 { font-size: 11px; }
+  .tsm-ulke-adi.tsm-turne { font-size: 11px; }
+
+  /* Takvim */
+  #tab-takvim table, .cal-grid { font-size: 10.5px !important; }
+  #tab-takvim .scroll-area { overflow-x: auto !important; }
+
+  /* Modallar: tam ekrana yakın, kaydırılabilir */
+  [id$="-modal-overlay"] > div,
+  .modal-box, .modal-card {
+    width: 96vw !important;
+    max-width: 96vw !important;
+    max-height: 90dvh !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+  #sp-box { width: 94vw !important; max-width: 420px !important; }
+
+  /* Alt güvenli alan (çentik) */
+  body { padding-bottom: env(safe-area-inset-bottom); }
+}
+
+@media (max-width: 480px) {
+  .nav-brand .nav-title { font-size: 11px !important; }
+  .tab-btn { font-size: 10.5px !important; padding: 10px 8px !important; }
+  .tab-btn svg { width: 13px !important; height: 13px !important; }
+  #leaflet-map { height: 52dvh !important; }
+}
+</style>
+<script id="tsm-ulke-adlari">
+/* Tüm dünya ülkelerinin adlarını (Türkçe) haritaya basar; zoom'a duyarlı,
+   çakışma önleyici. Turne yapılan ülkeler vurgulu görünür. */
+(function(){
+  var _lblKatman = null, _sinirKatman = null, _lblKayit = [], _lblMap = null;
+
+  function _geoAl(cb){
+    if (typeof _dunyaGeoJSONYukle === 'function') { _dunyaGeoJSONYukle(cb); return; }
+    if (typeof _ydGeoYukle === 'function') { _ydGeoYukle(cb); return; }
+    cb(null);
+  }
+
+  function _ad(p){
+    return p.NAME_TR || p.name_tr || p.NAME || p.name || p.ADMIN || p.admin || '';
+  }
+
+  function _nokta(f){
+    var p = f.properties || {};
+    if (typeof p.LABEL_X === 'number' && typeof p.LABEL_Y === 'number') return [p.LABEL_Y, p.LABEL_X];
+    try {
+      var g = f.geometry, best = null, bestArea = -1;
+      var polys = g.type === 'Polygon' ? [g.coordinates] : (g.type === 'MultiPolygon' ? g.coordinates : []);
+      polys.forEach(function(poly){
+        var ring = poly[0], minx=180,maxx=-180,miny=90,maxy=-90;
+        ring.forEach(function(c){
+          if (c[0]<minx) minx=c[0]; if (c[0]>maxx) maxx=c[0];
+          if (c[1]<miny) miny=c[1]; if (c[1]>maxy) maxy=c[1];
+        });
+        var a = (maxx-minx)*(maxy-miny);
+        if (a > bestArea) { bestArea = a; best = [(miny+maxy)/2, (minx+maxx)/2]; }
+      });
+      return best;
+    } catch(e) { return null; }
+  }
+
+  function _turneUlkesiMi(f){
+    try {
+      if (typeof _ulkeFeatureKey === 'function') {
+        var k = _ulkeFeatureKey(f);
+        if (k && window._tsmTurneUlkeleri && window._tsmTurneUlkeleri[k]) return true;
+      }
+    } catch(e){}
+    return false;
+  }
+
+  function _guncelle(){
+    if (!_lblMap || !_lblKayit.length) return;
+    var z = _lblMap.getZoom();
+    var kutular = [];
+    // Öncelik: turne ülkeleri, sonra düşük labelrank (büyük ülkeler)
+    for (var i = 0; i < _lblKayit.length; i++) {
+      var r = _lblKayit[i];
+      var el = r.marker.getElement();
+      if (!el) continue;
+      var rozetli = !!(r.key && window._tsmTurneUlkeleri && window._tsmTurneUlkeleri[r.key]);
+      var goster = !rozetli && ((z + 0.5) >= r.minZoom);
+      if (goster && !_lblMap.getBounds().pad(0.15).contains(r.latlng)) goster = false;
+      if (goster) {
+        var pt = _lblMap.latLngToContainerPoint(r.latlng);
+        var w = Math.max(28, r.ad.length * (r.turne ? 7.2 : 5.6)), h = 14;
+        var box = [pt.x - w/2, pt.y - h/2, pt.x + w/2, pt.y + h/2];
+        for (var j = 0; j < kutular.length; j++) {
+          var b = kutular[j];
+          if (!(box[2] < b[0] || box[0] > b[2] || box[3] < b[1] || box[1] > b[3])) { goster = false; break; }
+        }
+        if (goster) kutular.push(box);
+      }
+      el.hidden = !goster;
+    }
+  }
+
+  window._tsmUlkeEtiketleriYenile = _guncelle;
+
+  window._ulkeKatmaniKur = function(map){
+    if (!map || _lblKatman) return;
+    _lblMap = map;
+    if (!map.getPane('tsmUlkeAdi')) {
+      map.createPane('tsmUlkeAdi').className += ' tsm-pane-ulkeadi';
+      map.createPane('tsmUlkeSinir').className += ' tsm-pane-sinir';
+    }
+    _geoAl(function(geo){
+      if (!geo || !geo.features) return;
+
+      _sinirKatman = L.geoJSON(geo, {
+        pane: 'tsmUlkeSinir',
+        interactive: false,
+        style: function(){
+          return { color: 'rgba(90,74,54,.30)', weight: 0.7, fill: true, fillColor: 'hsl(42,28%,92%)', fillOpacity: 0.28 };
+        }
+      }).addTo(map);
+
+      _lblKatman = L.layerGroup([], { pane: 'tsmUlkeAdi' }).addTo(map);
+      _lblKayit = [];
+
+      geo.features.forEach(function(f){
+        var p = f.properties || {};
+        var ad = _ad(p);
+        if (!ad) return;
+        var ll = _nokta(f);
+        if (!ll) return;
+        var rank = (typeof p.LABELRANK === 'number' ? p.LABELRANK : 5);
+        var minZoom = (typeof p.MIN_LABEL === 'number' ? p.MIN_LABEL : (1.5 + rank * 0.7));
+        var anahtar = null;
+        try { if (typeof _ulkeFeatureKey === 'function') anahtar = _ulkeFeatureKey(f); } catch(e){}
+        var turne = _turneUlkesiMi(f);
+        var cls = 'tsm-ulke-adi r' + Math.max(1, Math.min(4, Math.round(rank / 2))) + (turne ? ' tsm-turne' : '');
+        var m = L.marker(ll, {
+          pane: 'tsmUlkeAdi',
+          interactive: false, keyboard: false,
+          icon: L.divIcon({ className: '', html: '<div class="' + cls + '">' + ad + '</div>', iconSize: [0,0], iconAnchor: [0,0] })
+        }).addTo(_lblKatman);
+        _lblKayit.push({ marker: m, ad: ad, key: anahtar, latlng: L.latLng(ll[0], ll[1]), minZoom: minZoom, rank: rank, turne: turne });
+      });
+
+      _lblKayit.sort(function(a,b){
+        if (a.turne !== b.turne) return a.turne ? -1 : 1;
+        return a.rank - b.rank;
+      });
+
+      map.on('zoomend moveend', _guncelle);
+      setTimeout(_guncelle, 60);
+    });
+  };
+})();
+</script>
 </body></html>
