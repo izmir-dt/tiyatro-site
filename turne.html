@@ -13449,8 +13449,7 @@ function _leafletYukle(callback) {
 <div class="section-header" style="display:flex;align-items:center;justify-content:space-between">
 <span><svg fill="none" height="13" stroke="currentColor" stroke-linecap="round" stroke-width="2" style="vertical-align:-2px;margin-right:4px" viewbox="0 0 24 24" width="13"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon><line x1="8" x2="8" y1="2" y2="18"></line><line x1="16" x2="16" y1="6" y2="22"></line></svg>Türkiye Turne Haritası <span id="harita-ozet" style="font-size:11px;color:var(--muted-foreground);font-weight:500"></span></span>
 <div style="display:flex;gap:6px;font-size:10px;align-items:center">
-<button onclick="if(_leafletMap)_leafletMap.fitBounds([[36.0,26.0],[42.0,45.0]],{animate:true})" aria-label="Türkiye haritasına sığdır" style="padding:2px 8px;border-radius:12px;border:1px solid var(--border);background:var(--card);color:var(--foreground);font-size:10px;font-weight:600;cursor:pointer">🇹🇷 Türkiye</button>
-<button onclick="haritaTumunuSigdir()" aria-label="Tüm durakları göster" title="Yurt dışı dahil tüm duraklara sığdır" style="padding:2px 8px;border-radius:12px;border:1px solid var(--border);background:var(--card);color:var(--foreground);font-size:10px;font-weight:600;cursor:pointer">🌍 Tümü</button>
+<button id="hg-tr" onclick="haritaGorunumSec('tr')" aria-pressed="true" title="Türkiye il haritası" style="padding:2px 8px;border-radius:12px;border:1px solid var(--border);background:var(--primary);color:#fff;font-size:10px;font-weight:700;cursor:pointer">🇹🇷 Türkiye</button><button id="hg-dunya" onclick="haritaGorunumSec('dunya')" aria-pressed="false" title="Yurt dışı turne haritası" style="padding:2px 8px;border-radius:12px;border:1px solid var(--border);background:var(--card);color:var(--foreground);font-size:10px;font-weight:600;cursor:pointer">🌍 Dünya</button>
 <div aria-hidden="true" style="width:1px;height:16px;background:var(--border);flex-shrink:0"></div>
 <button id="hf-hepsi" onclick="haritaFiltre('hepsi')" aria-pressed="true" style="padding:2px 8px;border-radius:12px;border:1px solid var(--border);background:var(--primary);color:#fff;font-size:10px;font-weight:700;cursor:pointer">Tüm Turneler</button>
 <button id="hf-gidilen" onclick="haritaFiltre('gidilen')" aria-pressed="false" style="padding:2px 8px;border-radius:12px;border:1px solid var(--border);background:var(--card);color:var(--foreground);font-size:10px;font-weight:600;cursor:pointer">Gidilen İller</button>
@@ -41065,6 +41064,800 @@ document.addEventListener('DOMContentLoaded', function(){
 });
 
 console.log('[TR-SVG-MAP] ready — 81 provinces loaded');
+})();
+</script>
+
+
+<!-- ═══════════════════════════════════════════════════════════════
+     PATCH 40 — Sezon Bazlı İstatistik + Ayrı Dünya Haritası + Arayüz
+     ═══════════════════════════════════════════════════════════════ -->
+<style id="patch40-styles">
+/* ── 1. Tipografi ve okunabilirlik ─────────────────────────── */
+body { font-size: 13.5px !important; }
+.section-header { font-size: 12.5px; letter-spacing: -.1px; }
+.empty-text { font-size: 13px; }
+.empty-sub { font-size: 11.5px; }
+
+/* ── 2. Harita üst bar: eşit yükseklikli, sarabilen çip grubu ─ */
+#tab-harita .section-header { gap: 10px; flex-wrap: wrap; row-gap: 8px; padding-bottom: 10px; }
+#tab-harita .section-header > div { flex-wrap: wrap; row-gap: 6px; }
+#tab-harita .section-header button {
+  height: 26px; padding: 0 10px !important; border-radius: 8px !important;
+  font-size: 10.5px !important; display: inline-flex; align-items: center; gap: 4px;
+  transition: background .15s ease, color .15s ease, border-color .15s ease, box-shadow .15s ease;
+  white-space: nowrap;
+}
+#tab-harita .section-header button:hover { border-color: var(--primary); }
+#tab-harita .section-header button[aria-pressed="true"] { box-shadow: 0 1px 4px rgba(0,0,0,.14); }
+
+/* ── 3. Odak halkası (erişilebilirlik) ─────────────────────── */
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible,
+textarea:focus-visible, [tabindex]:focus-visible {
+  outline: 2px solid var(--primary) !important;
+  outline-offset: 2px !important;
+  border-radius: 6px;
+}
+.tsm-il:focus-visible, .tsm-yd:focus-visible, .dm-c:focus-visible { outline: none !important; stroke: var(--primary); stroke-width: 2; }
+
+/* ── 4. Kart / panel dili ──────────────────────────────────── */
+.section-wrap { border-radius: 12px; box-shadow: 0 1px 3px rgba(16,24,40,.06); }
+#harita-istatistik-panel {
+  border-radius: 12px !important;
+  box-shadow: 0 14px 40px rgba(16,24,40,.20) !important;
+  max-height: 400px !important;
+}
+
+/* ── 5. Tablolar: yapışkan başlık + satır hover ────────────── */
+.turne-list-table thead th {
+  position: sticky; top: 0; z-index: 3;
+  background: var(--card, #fff);
+  box-shadow: inset 0 -1px 0 var(--border);
+}
+.turne-list-table tbody tr { transition: background .12s ease; }
+.turne-list-table tbody tr:hover { background: color-mix(in srgb, var(--primary) 5%, transparent); }
+
+/* ── 6. Düşük kontrastlı ikincil metin düzeltmesi ──────────── */
+.empty-sub, .stat-label { color: var(--muted-foreground); opacity: 1; }
+
+/* ── 7. İstatistik paneli — sezon sekmeleri ────────────────── */
+.ist-tabbar { display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-bottom:12px; }
+.ist-tab {
+  height:24px; padding:0 10px; border-radius:999px; cursor:pointer;
+  border:1px solid var(--border); background:var(--card); color:var(--foreground);
+  font-size:10.5px; font-weight:700; line-height:22px;
+  transition: background .15s ease, color .15s ease, border-color .15s ease;
+}
+.ist-tab:hover { border-color: var(--primary); }
+.ist-tab.on { background: var(--primary); color:#fff; border-color: var(--primary); }
+.ist-tab.cmp { margin-left:auto; }
+.ist-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:10px; }
+.ist-cols { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:10px; }
+.ist-box { background:var(--muted); border-radius:10px; padding:10px 12px; }
+.ist-box-t { font-size:10px; font-weight:800; color:var(--muted-foreground); text-transform:uppercase; letter-spacing:.5px; margin-bottom:8px; }
+.ist-cmp-table { width:100%; border-collapse:collapse; font-size:11.5px; }
+.ist-cmp-table th, .ist-cmp-table td { padding:6px 8px; text-align:right; white-space:nowrap; }
+.ist-cmp-table th:first-child, .ist-cmp-table td:first-child { text-align:left; }
+.ist-cmp-table thead th { font-size:9.5px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted-foreground); border-bottom:1px solid var(--border); }
+.ist-cmp-table tbody tr + tr td { border-top:1px solid var(--border); }
+.ist-cmp-table td.best { font-weight:800; color:var(--primary); }
+.ist-bar-out { height:5px; background:var(--border); border-radius:3px; overflow:hidden; }
+.ist-bar-in { height:5px; border-radius:3px; }
+
+/* ── 8. Dünya haritası ─────────────────────────────────────── */
+#dunya-map-wrap { position:absolute; inset:0; background:linear-gradient(180deg,hsl(205,55%,96%),hsl(205,40%,92%)); border-radius:0 0 10px 10px; overflow:hidden; }
+#dunya-map-wrap svg { width:100%; height:100%; display:block; cursor:grab; }
+.dm-base { fill:hsl(40,12%,88%); stroke:hsl(40,10%,78%); stroke-width:.6; }
+.dm-tr { fill:hsl(38,45%,80%); stroke:hsl(38,50%,52%); stroke-width:1; }
+.dm-c { cursor:pointer; stroke:#fff; stroke-width:.9; transition:filter .15s ease; }
+.dm-c:hover { filter:brightness(1.08); }
+.dm-v1 { fill:hsl(350,55%,72%); } .dm-v2 { fill:hsl(350,58%,62%); }
+.dm-v3 { fill:hsl(350,60%,53%); } .dm-v4 { fill:hsl(350,63%,44%); }
+.dm-v5 { fill:hsl(350,66%,35%); }
+.dm-sel { stroke:hsl(38,88%,45%); stroke-width:2.4; }
+.dm-lbl { font-size:9px; font-weight:800; fill:#fff; text-anchor:middle; paint-order:stroke; stroke:rgba(0,0,0,.35); stroke-width:2.4px; pointer-events:none; }
+.dm-cnt { font-size:8.5px; font-weight:700; fill:#fff; text-anchor:middle; paint-order:stroke; stroke:rgba(0,0,0,.35); stroke-width:2.2px; pointer-events:none; }
+.dm-lbl-sm { font-size:10px; fill:hsl(215,25%,18%); stroke:rgba(255,255,255,.9); stroke-width:3px; }
+.dm-ring { fill:none; stroke:hsl(38,88%,45%); stroke-width:1.6; opacity:.85; pointer-events:none; }
+
+.dm-zoom { position:absolute; left:10px; top:10px; display:flex; flex-direction:column; gap:4px; z-index:5; }
+.dm-zoom button { width:28px; height:28px; border-radius:8px; border:1px solid var(--border); background:var(--card); cursor:pointer; font-size:14px; font-weight:700; color:var(--foreground); }
+.dm-empty { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; font-size:12px; color:var(--muted-foreground); text-align:center; padding:24px; }
+#harita-yd-rozet { cursor:pointer; border:none; background:hsl(350,70%,95%); color:hsl(350,60%,38%); font-size:10px; font-weight:700; padding:2px 8px; border-radius:999px; margin-left:6px; }
+
+/* ── 9. Dar ekran uyumu ────────────────────────────────────── */
+@media (max-width: 900px) {
+  .ist-cols { grid-template-columns: 1fr; }
+  #tab-harita .section-header { align-items:flex-start; flex-direction:column; }
+  #harita-istatistik-panel { max-height: 70vh !important; }
+}
+</style>
+<script>
+(function(){
+'use strict';
+
+// ════════════════════════════════════════════════════════════
+// A. SEZON BAZLI HARİTA İSTATİSTİĞİ
+// ════════════════════════════════════════════════════════════
+window._istSezonSecim = null;   // null => "Tümü"
+window._istKarsilastir = false;
+
+function _istBaseListe(){
+  if (typeof turneler === 'undefined') return [];
+  var oyun = window._haritaAktifOyun || '';
+  return (oyun
+    ? turneler.filter(function(t){ return (t.oyun||'').toLowerCase().trim() === oyun.toLowerCase().trim(); })
+    : turneler).filter(function(t){ return !t.anaGrupId && t.statu !== 'iptal'; });
+}
+
+function _istSezonlar(){
+  var set = {};
+  _istBaseListe().forEach(function(t){
+    var s = (typeof tarihSezon === 'function') ? tarihSezon(t.baslangicTarih || t.tarih) : null;
+    if (s) set[s] = 1;
+  });
+  return Object.keys(set).sort().reverse();
+}
+
+function _istSezonKisa(s){
+  var p = String(s||'').split('-');
+  return p.length === 2 ? (p[0] + '–' + p[1]) : String(s||'');
+}
+
+// Bir sezon (veya tümü) için istatistik hesabı — mevcut kurallar korunur
+function _istHesap(sezon){
+  var liste = _istBaseListe();
+  if (sezon) liste = liste.filter(function(t){
+    return (typeof tarihSezon === 'function') && tarihSezon(t.baslangicTarih || t.tarih) === sezon;
+  });
+
+  var ilSay = {}, ulkeSay = {}, aySay = {}, toplamKm = 0;
+  var listeAktif = liste.filter(function(t){ return t.statu !== 'yarida-kesildi'; });
+  var listeYK = liste.filter(function(t){ return t.statu === 'yarida-kesildi'; });
+
+  function ilEkle(ilStr){
+    var ilAdi = (ilStr||'').replace(/\/MERKEZ/gi,'').split('/')[0].trim();
+    if (!ilAdi) return;
+    if (typeof ulkeMi === 'function' && ulkeMi(ilAdi)) {
+      ulkeSay[ilAdi.toLocaleUpperCase('tr')] = (ulkeSay[ilAdi.toLocaleUpperCase('tr')]||0) + 1;
+      return;
+    }
+    var key = Object.keys(IL_LATLON).find(function(k){
+      return k.toLocaleLowerCase('tr-TR') === ilAdi.toLocaleLowerCase('tr-TR');
+    }) || ilAdi;
+    ilSay[key] = (ilSay[key]||0) + 1;
+    var km = (typeof izmirenKm === 'function') ? izmirenKm(key) : 0;
+    if (km) toplamKm += km * 2;
+    else {
+      var ll = IL_LATLON[key];
+      if (ll && typeof hesaplaKm === 'function') toplamKm += hesaplaKm(IZMIR_LATLON[0], IZMIR_LATLON[1], ll[0], ll[1]) * 2;
+    }
+  }
+  function ayEkle(t){
+    var d = (t.baslangicTarih || t.tarih || '');
+    var ay = parseInt(String(d).split('-')[1], 10);
+    if (ay >= 1 && ay <= 12) aySay[ay] = (aySay[ay]||0) + 1;
+  }
+
+  listeAktif.forEach(function(t){
+    ayEkle(t);
+    (typeof durakIllerListesi === 'function' ? durakIllerListesi(t) : []).forEach(ilEkle);
+  });
+  var ykSayilan = 0;
+  listeYK.forEach(function(t){
+    var gidilen = (t.duraklar && t.duraklar.length)
+      ? t.duraklar.filter(function(d){ return d.gidildi !== false; })
+      : (t.il ? [{il:t.il}] : []);
+    if (!gidilen.length) return;
+    ykSayilan++;
+    ayEkle(t);
+    gidilen.forEach(function(d){ ilEkle(d.il); });
+  });
+
+  var gun = (typeof benzersizGunSayHarita === 'function')
+    ? benzersizGunSayHarita(listeAktif.concat(listeYK)) : 0;
+
+  return {
+    sezon: sezon,
+    il: Object.keys(ilSay).length,
+    ulke: Object.keys(ulkeSay).length,
+    turne: listeAktif.length + ykSayilan,
+    gun: gun,
+    km: Math.round(toplamKm),
+    ilSay: ilSay,
+    ulkeSay: ulkeSay,
+    aySay: aySay
+  };
+}
+
+function _istKart(ikon, deger, etiket){
+  return '<div class="ist-box" style="display:flex;align-items:center;gap:10px">'
+    + '<span style="font-size:22px;line-height:1">' + ikon + '</span>'
+    + '<div><div style="font-size:16px;font-weight:800;color:var(--foreground)">' + deger + '</div>'
+    + '<div style="font-size:10px;color:var(--muted-foreground);font-weight:600">' + etiket + '</div></div></div>';
+}
+function _istSatirBar(sol, sag, pct, renk){
+  return '<div style="margin-bottom:7px">'
+    + '<div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px;gap:8px">'
+    + '<span style="font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + sol + '</span>'
+    + '<span style="color:var(--muted-foreground);flex-shrink:0">' + sag + '</span></div>'
+    + '<div class="ist-bar-out"><div class="ist-bar-in" style="width:' + Math.max(3, pct) + '%;background:' + renk + '"></div></div>'
+    + '</div>';
+}
+function _istNum(n){ return (n||0).toLocaleString('tr-TR'); }
+
+window.istSezonSec = function(s){
+  window._istSezonSecim = (s === '__tumu__') ? null : s;
+  window._istKarsilastir = false;
+  _istPanelCiz();
+};
+window.istKarsilastirAc = function(){
+  window._istKarsilastir = !window._istKarsilastir;
+  _istPanelCiz();
+};
+
+function _istPanelCiz(){
+  var panel = document.getElementById('harita-istatistik-panel');
+  if (!panel) return;
+  var sezonlar = _istSezonlar();
+  var secim = window._istSezonSecim;
+  if (secim && sezonlar.indexOf(secim) < 0) { secim = null; window._istSezonSecim = null; }
+
+  var tabs = '<div class="ist-tabbar">'
+    + '<span style="font-size:12px;font-weight:800;color:var(--foreground);margin-right:4px">📊 Harita İstatistikleri</span>'
+    + '<button class="ist-tab' + (!secim && !window._istKarsilastir ? ' on' : '') + '" onclick="istSezonSec(\'__tumu__\')">Tümü</button>'
+    + sezonlar.map(function(s){
+        return '<button class="ist-tab' + (secim === s && !window._istKarsilastir ? ' on' : '') + '" onclick="istSezonSec(\'' + s + '\')">' + _istSezonKisa(s) + '</button>';
+      }).join('')
+    + (sezonlar.length > 1
+        ? '<button class="ist-tab cmp' + (window._istKarsilastir ? ' on' : '') + '" onclick="istKarsilastirAc()">⇄ Karşılaştır</button>'
+        : '<span style="margin-left:auto"></span>')
+    + '<button onclick="haritaIstatistikGoster()" aria-label="Kapat" style="width:24px;height:24px;border-radius:7px;border:1px solid var(--border);background:var(--card);cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;color:var(--muted-foreground)">×</button>'
+    + '</div>';
+
+  if (window._istKarsilastir) { panel.innerHTML = tabs + _istKarsilastirHTML(sezonlar); return; }
+
+  var d = _istHesap(secim);
+  var enCok = Object.entries(d.ilSay).sort(function(a,b){ return b[1]-a[1]; }).slice(0,5);
+  var maxIl = enCok.length ? enCok[0][1] : 1;
+  var ulkeler = Object.entries(d.ulkeSay).sort(function(a,b){ return b[1]-a[1]; });
+  var AY = ['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'];
+  var aylar = Object.entries(d.aySay).sort(function(a,b){ return b[1]-a[1]; });
+  var maxAy = aylar.length ? aylar[0][1] : 1;
+
+  var basligi = secim ? (_istSezonKisa(secim) + ' sezonu') : 'Tüm sezonlar';
+
+  panel.innerHTML = tabs
+    + '<div style="font-size:10.5px;color:var(--muted-foreground);font-weight:700;margin:-4px 0 8px">' + basligi + '</div>'
+    + '<div class="ist-grid">'
+    + _istKart('📍', d.il + ' İl' + (d.ulke ? ' + ' + d.ulke + ' ülke' : ''), 'Toplam ziyaret edilen')
+    + _istKart('🚌', d.turne + ' Turne', 'Toplam düzenlenen')
+    + _istKart('📅', _istNum(d.gun) + ' Gün', 'Toplam turne süresi')
+    + _istKart('🛣️', _istNum(d.km) + ' km', 'Tahmini toplam yol')
+    + '</div>'
+    + '<div class="ist-cols">'
+    + '<div class="ist-box"><div class="ist-box-t">🏆 En Çok Gidilen İller</div>'
+    + (enCok.length ? enCok.map(function(e,i){
+        return _istSatirBar((i+1) + '. ' + e[0], e[1] + ' turne', Math.round(e[1]/maxIl*100), 'hsl(350,65%,50%)');
+      }).join('') : '<div style="font-size:11px;color:var(--muted-foreground)">Henüz veri yok</div>')
+    + (ulkeler.length
+        ? '<div class="ist-box-t" style="margin-top:10px">🌍 Yurt Dışı</div>'
+          + ulkeler.map(function(e){ return _istSatirBar(e[0], e[1] + ' turne', 100, 'hsl(200,60%,45%)'); }).join('')
+        : '')
+    + '</div>'
+    + '<div class="ist-box"><div class="ist-box-t">📆 ' + (secim ? 'Aylara Göre Dağılım' : 'Sezon Dağılımı') + '</div>'
+    + (secim
+        ? (aylar.length ? aylar.map(function(e){
+            return _istSatirBar(AY[e[0]-1] || e[0], e[1] + ' turne', Math.round(e[1]/maxAy*100), 'hsl(220,65%,50%)');
+          }).join('') : '<div style="font-size:11px;color:var(--muted-foreground)">Henüz veri yok</div>')
+        : (function(){
+            var rows = sezonlar.map(function(s){ return [s, _istHesap(s)]; });
+            if (!rows.length) return '<div style="font-size:11px;color:var(--muted-foreground)">Henüz veri yok</div>';
+            var mx = Math.max.apply(null, rows.map(function(r){ return r[1].turne; })) || 1;
+            return rows.map(function(r){
+              return _istSatirBar(_istSezonKisa(r[0]) + ' Sezonu', r[1].turne + ' turne', Math.round(r[1].turne/mx*100), 'hsl(220,65%,50%)');
+            }).join('');
+          })())
+    + '</div></div>';
+}
+
+function _istKarsilastirHTML(sezonlar){
+  var veriler = sezonlar.map(function(s){ return _istHesap(s); });
+  if (!veriler.length) return '<div style="font-size:11px;color:var(--muted-foreground)">Karşılaştırılacak sezon yok</div>';
+  function en(alan){ return Math.max.apply(null, veriler.map(function(v){ return v[alan]; })); }
+  var enIl = en('il'), enTurne = en('turne'), enGun = en('gun'), enKm = en('km');
+
+  var tablo = '<div class="ist-box" style="overflow-x:auto"><table class="ist-cmp-table">'
+    + '<thead><tr><th>Sezon</th><th>İl</th><th>Turne</th><th>Gün</th><th>Km</th></tr></thead><tbody>'
+    + veriler.map(function(v){
+        return '<tr>'
+          + '<td style="font-weight:800">' + _istSezonKisa(v.sezon) + '</td>'
+          + '<td class="' + (v.il === enIl ? 'best' : '') + '">' + v.il + (v.ulke ? ' +' + v.ulke : '') + '</td>'
+          + '<td class="' + (v.turne === enTurne ? 'best' : '') + '">' + v.turne + '</td>'
+          + '<td class="' + (v.gun === enGun ? 'best' : '') + '">' + _istNum(v.gun) + '</td>'
+          + '<td class="' + (v.km === enKm ? 'best' : '') + '">' + _istNum(v.km) + '</td>'
+          + '</tr>';
+      }).join('')
+    + '</tbody></table></div>';
+
+  var mx = enTurne || 1;
+  var grafik = '<div class="ist-box" style="margin-top:10px"><div class="ist-box-t">📈 Sezon Başına Turne</div>'
+    + veriler.map(function(v){
+        return _istSatirBar(_istSezonKisa(v.sezon) + ' Sezonu', v.turne + ' turne · ' + v.il + ' il', Math.round(v.turne/mx*100), 'hsl(220,65%,50%)');
+      }).join('')
+    + '</div>';
+
+  return tablo + grafik;
+}
+
+window.haritaIstatistikGoster = function(){
+  var panel = document.getElementById('harita-istatistik-panel');
+  if (!panel) return;
+  var btn = document.getElementById('hf-istatistik');
+  if (panel.style.display !== 'none' && panel.style.display !== '') {
+    panel.style.display = 'none';
+    if (btn) { btn.style.background = 'var(--card)'; btn.style.color = 'var(--foreground)'; btn.setAttribute('aria-pressed','false'); }
+    return;
+  }
+  if (btn) { btn.style.background = 'var(--primary)'; btn.style.color = '#fff'; btn.setAttribute('aria-pressed','true'); }
+  // Panel ilk açılışta üst bardaki aktif sezonla eşleşsin
+  var aktif = window._aktifSezon;
+  window._istSezonSecim = (aktif && aktif !== '__tumü__') ? aktif : null;
+  window._istKarsilastir = false;
+  _istPanelCiz();
+  panel.style.display = 'block';
+};
+window._istPanelYenile = function(){
+  var panel = document.getElementById('harita-istatistik-panel');
+  if (panel && panel.style.display === 'block') _istPanelCiz();
+};
+
+// ════════════════════════════════════════════════════════════
+// B. AYRI DÜNYA HARİTASI
+// ════════════════════════════════════════════════════════════
+var NS = 'http://www.w3.org/2000/svg';
+var _dmWrap = null, _dmSvg = null, _dmBase = null, _dmData = null, _dmLbl = null;
+var _dmVB = {x:0,y:0,w:1000,h:460}, _dmBaseVB = {x:0,y:0,w:1000,h:460};
+var _dmGeo = null, _dmGeoDurum = 'bos'; // bos | yukleniyor | hazir | hata
+var _dmSonImza = '';
+
+window._haritaGorunum = (function(){
+  try { return localStorage.getItem('_haritaGorunum') === 'dunya' ? 'dunya' : 'tr'; } catch(e){ return 'tr'; }
+})();
+
+function _dmUlkeAdlari(){
+  return window.ULKE_GEO_ADLARI || {};
+}
+function _dmFeatureKey(f){
+  var harita = _dmUlkeAdlari();
+  var p = f.properties || {};
+  var adaylar = [p.NAME, p.name, p.ADMIN, p.admin, p.NAME_LONG, p.SOVEREIGNT, p.ISO_A3, p.ADM0_A3]
+    .filter(Boolean).map(function(x){ return String(x).toLowerCase().trim(); });
+  for (var k in harita){
+    var liste = harita[k];
+    for (var i=0;i<liste.length;i++){ if (adaylar.indexOf(liste[i]) >= 0) return k; }
+  }
+  return null;
+}
+function _dmTurkiyeMi(f){
+  var p = f.properties || {};
+  var adaylar = [p.NAME, p.name, p.ADMIN, p.admin, p.NAME_LONG, p.SOVEREIGNT]
+    .filter(Boolean).map(function(x){ return String(x).toLowerCase().trim(); });
+  return adaylar.some(function(a){ return a === 'turkey' || a === 'türkiye' || a === 'turkiye'; });
+}
+
+// Equirectangular projeksiyon (fit sonrası ölçeklenir)
+var _dmProj = { k: 5, x0: 0, y0: 0 };
+function _dmXY(lon, lat){
+  return [(lon - _dmProj.x0) * _dmProj.k, (_dmProj.y0 - lat) * _dmProj.k * 1.35];
+}
+function _dmPathD(geom){
+  var polys = [];
+  if (!geom) return '';
+  if (geom.type === 'Polygon') polys = [geom.coordinates];
+  else if (geom.type === 'MultiPolygon') polys = geom.coordinates;
+  else return '';
+  var d = '';
+  polys.forEach(function(poly){
+    poly.forEach(function(ring){
+      var son = null, parca = '';
+      ring.forEach(function(c){
+        var pt = _dmXY(c[0], c[1]);
+        if (son && Math.abs(pt[0]-son[0]) < 0.4 && Math.abs(pt[1]-son[1]) < 0.4) return;
+        parca += (son ? 'L' : 'M') + pt[0].toFixed(1) + ' ' + pt[1].toFixed(1);
+        son = pt;
+      });
+      if (parca) d += parca + 'Z';
+    });
+  });
+  return d;
+}
+function _dmGeomBBox(geom, box){
+  var polys = geom.type === 'Polygon' ? [geom.coordinates] : (geom.type === 'MultiPolygon' ? geom.coordinates : []);
+  polys.forEach(function(poly){ poly.forEach(function(ring){ ring.forEach(function(c){
+    box.minLon = Math.min(box.minLon, c[0]); box.maxLon = Math.max(box.maxLon, c[0]);
+    box.minLat = Math.min(box.minLat, c[1]); box.maxLat = Math.max(box.maxLat, c[1]);
+  }); }); });
+}
+
+function _dmGeoYukle(cb){
+  if (_dmGeo) { cb(_dmGeo); return; }
+  try {
+    var cached = sessionStorage.getItem('_tsm_world_v1') || sessionStorage.getItem('_world_geojson_v1');
+    if (cached) { _dmGeo = JSON.parse(cached); _dmGeoDurum = 'hazir'; cb(_dmGeo); return; }
+  } catch(e){}
+  if (_dmGeoDurum === 'yukleniyor') return;
+  _dmGeoDurum = 'yukleniyor';
+  var urls = [
+    'https://cdn.jsdelivr.net/gh/nvkelso/natural-earth-vector@master/geojson/ne_110m_admin_0_countries.geojson',
+    'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson'
+  ];
+  function dene(i){
+    if (i >= urls.length) { _dmGeoDurum = 'hata'; cb(null); return; }
+    fetch(urls[i])
+      .then(function(r){ if (!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+      .then(function(data){
+        _dmGeo = data; _dmGeoDurum = 'hazir';
+        try { sessionStorage.setItem('_tsm_world_v1', JSON.stringify(data)); } catch(e){}
+        cb(data);
+      })
+      .catch(function(){ dene(i+1); });
+  }
+  dene(0);
+}
+
+function _dmApplyVB(){
+  if (_dmSvg) _dmSvg.setAttribute('viewBox', _dmVB.x+' '+_dmVB.y+' '+_dmVB.w+' '+_dmVB.h);
+}
+
+function _dmEnsure(){
+  if (_dmWrap && document.body.contains(_dmWrap)) return true;
+  var mapHost = document.getElementById('leaflet-map');
+  if (!mapHost || !mapHost.parentNode) return false;
+
+  _dmWrap = document.createElement('div');
+  _dmWrap.id = 'dunya-map-wrap';
+  _dmWrap.style.display = 'none';
+
+  _dmSvg = document.createElementNS(NS, 'svg');
+  _dmSvg.setAttribute('viewBox', '0 0 1000 460');
+  _dmSvg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+  _dmSvg.setAttribute('role', 'img');
+  _dmSvg.setAttribute('aria-label', 'Yurt dışı turne haritası');
+  _dmBase = document.createElementNS(NS, 'g');
+  _dmData = document.createElementNS(NS, 'g');
+  _dmLbl = document.createElementNS(NS, 'g');
+  _dmSvg.appendChild(_dmBase); _dmSvg.appendChild(_dmData); _dmSvg.appendChild(_dmLbl);
+  _dmWrap.appendChild(_dmSvg);
+
+  var zoom = document.createElement('div');
+  zoom.className = 'dm-zoom';
+  zoom.innerHTML = '<button type="button" data-z="in" aria-label="Yakınlaştır">+</button>'
+    + '<button type="button" data-z="out" aria-label="Uzaklaştır">−</button>'
+    + '<button type="button" data-z="reset" aria-label="Sıfırla" style="font-size:11px">⟲</button>';
+  _dmWrap.appendChild(zoom);
+  zoom.addEventListener('click', function(e){
+    var b = e.target.closest('button'); if (!b) return;
+    var z = b.getAttribute('data-z');
+    if (z === 'in') { _dmVB.x += _dmVB.w*0.15; _dmVB.y += _dmVB.h*0.15; _dmVB.w *= 0.7; _dmVB.h *= 0.7; }
+    else if (z === 'out') { _dmVB.x -= _dmVB.w*0.2; _dmVB.y -= _dmVB.h*0.2; _dmVB.w *= 1.4; _dmVB.h *= 1.4; }
+    else { _dmVB = {x:_dmBaseVB.x, y:_dmBaseVB.y, w:_dmBaseVB.w, h:_dmBaseVB.h}; }
+    _dmApplyVB();
+  });
+
+  var tip = document.createElement('div');
+  tip.className = 'tsm-tip';
+  _dmWrap.appendChild(tip);
+
+  _dmSvg.addEventListener('click', function(e){
+    var t = e.target.closest && e.target.closest('.dm-c');
+    if (!t) return;
+    var ad = t.getAttribute('data-ulke');
+    if (ad && typeof haritaIlTikla === 'function') { try { haritaIlTikla(ad); } catch(err){ console.error(err); } }
+  });
+  _dmSvg.addEventListener('mousemove', function(e){
+    var t = e.target.closest && e.target.closest('.dm-c');
+    if (!t) { tip.classList.remove('on'); return; }
+    var ad = t.getAttribute('data-ulke');
+    tip.innerHTML = '<b>' + ad + '</b> — ' + (t.getAttribute('data-sayi')||0) + ' turne';
+    var rect = _dmWrap.getBoundingClientRect();
+    tip.style.left = (e.clientX - rect.left) + 'px';
+    tip.style.top = (e.clientY - rect.top - 4) + 'px';
+    tip.classList.add('on');
+  });
+  _dmSvg.addEventListener('mouseleave', function(){ tip.classList.remove('on'); });
+  _dmSvg.addEventListener('wheel', function(e){
+    e.preventDefault();
+    var f = e.deltaY > 0 ? 1.15 : 0.87;
+    var rect = _dmSvg.getBoundingClientRect();
+    var mx = ((e.clientX - rect.left)/rect.width) * _dmVB.w + _dmVB.x;
+    var my = ((e.clientY - rect.top)/rect.height) * _dmVB.h + _dmVB.y;
+    var nw = _dmVB.w * f, nh = _dmVB.h * f;
+    _dmVB.x = mx - (mx - _dmVB.x) * (nw/_dmVB.w);
+    _dmVB.y = my - (my - _dmVB.y) * (nh/_dmVB.h);
+    _dmVB.w = nw; _dmVB.h = nh;
+    _dmApplyVB();
+  }, {passive:false});
+  var drag = false, dx = 0, dy = 0;
+  _dmSvg.addEventListener('mousedown', function(e){ drag = true; dx = e.clientX; dy = e.clientY; _dmSvg.style.cursor='grabbing'; });
+  window.addEventListener('mouseup', function(){ drag = false; if (_dmSvg) _dmSvg.style.cursor=''; });
+  window.addEventListener('mousemove', function(e){
+    if (!drag) return;
+    var rect = _dmSvg.getBoundingClientRect();
+    _dmVB.x -= (e.clientX - dx) * (_dmVB.w/rect.width);
+    _dmVB.y -= (e.clientY - dy) * (_dmVB.h/rect.height);
+    dx = e.clientX; dy = e.clientY;
+    _dmApplyVB();
+  });
+
+  mapHost.parentNode.appendChild(_dmWrap);
+  return true;
+}
+
+// Aktif turnelerden ülke sayıları
+function _dmUlkeSayilari(){
+  var counts = window._choroplethIlSayilar || {};
+  var liste = window.ULKE_LISTESI || [];
+  var sonuc = {};
+  liste.forEach(function(u){
+    var n = counts[u] || counts[u.toLocaleUpperCase('tr')] || counts[u.toLocaleLowerCase('tr')] || 0;
+    if (n > 0) sonuc[u] = n;
+  });
+  // Şehir adıyla girilmiş yurt dışı durakları da ülkeye topla
+  var sehirHarita = window.YURTDISI_ULKELER || {};
+  Object.keys(counts).forEach(function(k){
+    var ku = String(k).toLocaleUpperCase('tr');
+    if (sonuc[ku]) return;
+    for (var ulke in sehirHarita){
+      if (ulke === ku) continue;
+      if (Object.keys(sehirHarita[ulke]).some(function(s){ return s === ku; })) {
+        sonuc[ulke] = (sonuc[ulke]||0) + counts[k];
+        return;
+      }
+    }
+  });
+  return sonuc;
+}
+
+function _dmTier(n, tiers){
+  if (!n) return 0;
+  if (n <= tiers[0]) return 1;
+  if (n <= tiers[1]) return 2;
+  if (n <= tiers[2]) return 3;
+  if (n <= tiers[3]) return 4;
+  return 5;
+}
+function _dmTiers(counts){
+  var vals = Object.keys(counts).map(function(k){ return counts[k]; }).filter(function(v){ return v>0; }).sort(function(a,b){ return a-b; });
+  if (!vals.length) return [1,2,3,4,5];
+  function q(p){ return vals[Math.min(vals.length-1, Math.floor(vals.length*p))]; }
+  return [q(0.2), q(0.4), q(0.6), q(0.8), vals[vals.length-1]];
+}
+
+function _dmBos(mesaj, alt){
+  if (!_dmWrap) return;
+  var eski = _dmWrap.querySelector('.dm-empty');
+  if (eski) eski.remove();
+  if (!mesaj) return;
+  var el = document.createElement('div');
+  el.className = 'dm-empty';
+  el.innerHTML = '<div style="font-size:26px">🌍</div><div style="font-weight:700;color:var(--foreground)">' + mesaj + '</div>'
+    + (alt ? '<div style="max-width:280px;line-height:1.5">' + alt + '</div>' : '');
+  _dmWrap.appendChild(el);
+}
+
+function _dmCiz(){
+  if (!_dmEnsure()) return;
+  var sayilar = _dmUlkeSayilari();
+  var secili = window.seciliIl || null;
+  var imza = JSON.stringify(sayilar) + '|' + (secili||'') + '|' + _dmGeoDurum;
+  if (imza === _dmSonImza) return;
+  _dmSonImza = imza;
+
+  _dmGeoYukle(function(geo){
+    if (!_dmWrap) return;
+    while (_dmBase.firstChild) _dmBase.removeChild(_dmBase.firstChild);
+    while (_dmData.firstChild) _dmData.removeChild(_dmData.firstChild);
+    while (_dmLbl.firstChild) _dmLbl.removeChild(_dmLbl.firstChild);
+    _dmBos(null);
+
+    if (!geo || !geo.features){
+      var satirlar = Object.keys(sayilar).sort();
+      _dmBos('Dünya haritası yüklenemedi',
+        satirlar.length
+          ? 'Yurt dışı turneleri: ' + satirlar.map(function(u){ return u + ' (' + sayilar[u] + ')'; }).join(', ')
+          : 'İnternet bağlantısı kurulunca harita otomatik yüklenecek.');
+      return;
+    }
+
+    var hedefler = [];
+    geo.features.forEach(function(f){
+      var key = _dmFeatureKey(f);
+      if ((key && sayilar[key]) || _dmTurkiyeMi(f)) hedefler.push(f);
+    });
+    if (!hedefler.length){
+      _dmBos('Yurt dışı turne yok', 'Seçili sezon/oyun için yurt dışı durağı bulunmuyor.');
+      return;
+    }
+
+    // Odak alanı: Türkiye + turne yapılan ülkeler
+    var box = {minLon:180, maxLon:-180, minLat:90, maxLat:-90};
+    hedefler.forEach(function(f){ _dmGeomBBox(f.geometry, box); });
+    var padLon = Math.max(3, (box.maxLon - box.minLon) * 0.35);
+    var padLat = Math.max(2, (box.maxLat - box.minLat) * 0.35);
+    var lon0 = box.minLon - padLon, lon1 = box.maxLon + padLon;
+    var lat0 = box.minLat - padLat, lat1 = box.maxLat + padLat;
+
+    _dmProj.x0 = lon0;
+    _dmProj.y0 = lat1;
+    var kx = 1000 / Math.max(0.5, (lon1 - lon0));
+    var ky = 460 / Math.max(0.5, (lat1 - lat0) * 1.35);
+    _dmProj.k = Math.min(kx, ky);
+
+    var w = (lon1 - lon0) * _dmProj.k;
+    var h = (lat1 - lat0) * _dmProj.k * 1.35;
+    _dmBaseVB = { x: (w - 1000)/2, y: (h - 460)/2, w: 1000, h: 460 };
+    if (w < 1000) _dmBaseVB.x = (w - 1000)/2;
+    _dmVB = { x:_dmBaseVB.x, y:_dmBaseVB.y, w:_dmBaseVB.w, h:_dmBaseVB.h };
+    _dmApplyVB();
+
+    var tiers = _dmTiers(sayilar);
+    geo.features.forEach(function(f){
+      var key = _dmFeatureKey(f);
+      var sayi = key ? (sayilar[key]||0) : 0;
+      var d = _dmPathD(f.geometry);
+      if (!d) return;
+      var p = document.createElementNS(NS, 'path');
+      p.setAttribute('d', d);
+      if (sayi > 0){
+        p.setAttribute('class', 'dm-c dm-v' + _dmTier(sayi, tiers) + (key === secili ? ' dm-sel' : ''));
+        p.setAttribute('data-ulke', key);
+        p.setAttribute('data-sayi', sayi);
+        p.setAttribute('tabindex', '0');
+        _dmData.appendChild(p);
+        var bb = null;
+        try { bb = p.getBBox(); } catch(e){}
+        if (bb && bb.width){
+          var cx = bb.x + bb.width/2, cy = bb.y + bb.height/2;
+          var kucuk = (bb.width < 30 || bb.height < 22);
+          if (kucuk){
+            // Küçük ülkeler: halka + dışarı taşan etiket
+            var ring = document.createElementNS(NS, 'circle');
+            ring.setAttribute('class', 'dm-ring');
+            ring.setAttribute('cx', cx.toFixed(1));
+            ring.setAttribute('cy', cy.toFixed(1));
+            ring.setAttribute('r', '11');
+            _dmData.appendChild(ring);
+            cy = cy - 18;
+          }
+          var t = document.createElementNS(NS, 'text');
+          t.setAttribute('class', 'dm-lbl' + (kucuk ? ' dm-lbl-sm' : ''));
+          t.setAttribute('x', cx.toFixed(1));
+          t.setAttribute('y', cy.toFixed(1));
+          t.textContent = key;
+          _dmLbl.appendChild(t);
+          var c = document.createElementNS(NS, 'text');
+          c.setAttribute('class', 'dm-cnt' + (kucuk ? ' dm-lbl-sm' : ''));
+          c.setAttribute('x', cx.toFixed(1));
+          c.setAttribute('y', (cy + 10).toFixed(1));
+          c.textContent = sayi + ' turne';
+          _dmLbl.appendChild(c);
+        }
+
+      } else {
+        p.setAttribute('class', _dmTurkiyeMi(f) ? 'dm-tr' : 'dm-base');
+        _dmBase.appendChild(p);
+      }
+    });
+  });
+}
+
+// ── Görünüm geçişi (Türkiye / Dünya) ────────────────────────
+window.haritaGorunumSec = function(gor){
+  window._haritaGorunum = (gor === 'dunya') ? 'dunya' : 'tr';
+  try { localStorage.setItem('_haritaGorunum', window._haritaGorunum); } catch(e){}
+  _dmGorunumUygula();
+  if (typeof renderHarita === 'function') renderHarita();
+};
+
+function _dmGorunumUygula(){
+  var dunya = window._haritaGorunum === 'dunya';
+  var trHost = document.getElementById('leaflet-map');
+  if (trHost) trHost.style.visibility = dunya ? 'hidden' : '';
+  if (dunya) _dmEnsure();
+  if (_dmWrap) _dmWrap.style.display = dunya ? 'block' : 'none';
+  ['tr','dunya'].forEach(function(g){
+    var b = document.getElementById('hg-' + g);
+    if (!b) return;
+    var on = (g === (dunya ? 'dunya' : 'tr'));
+    b.style.background = on ? 'var(--primary)' : 'var(--card)';
+    b.style.color = on ? '#fff' : 'var(--foreground)';
+    b.style.fontWeight = on ? '700' : '600';
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
+  // Dünya görünümünde Türkiye'ye özel kontrolleri gizle
+  ['hf-gidilen','hf-gidilmeyen','hf-rota','hf-heatmap'].forEach(function(id){
+    var b = document.getElementById(id);
+    if (!b) return;
+    b.style.removeProperty('display');
+    if (dunya) b.style.setProperty('display', 'none', 'important');
+  });
+
+  // Yoğunluk lejandı sadece Türkiye görünümünde
+  try {
+    var host = document.getElementById('leaflet-map');
+    var lej = host && host.parentNode && host.parentNode.nextElementSibling;
+    if (lej && /YOĞUNLUK/i.test(lej.textContent || '')) lej.style.display = dunya ? 'none' : '';
+  } catch(e){}
+}
+
+
+// ── renderHarita sarmalayıcı ────────────────────────────────
+var _origRender = window.renderHarita;
+window.renderHarita = function(){
+  // Türkiye haritasında yurt dışı poligonları çizilmesin
+  var origRefresh = window.TRSvgMap && window.TRSvgMap.refresh;
+  if (origRefresh && !window.TRSvgMap.__patched){
+    window.TRSvgMap.__patched = true;
+    window.TRSvgMap.refresh = function(counts, opts){
+      var temiz = {};
+      var ulkeler = window.ULKE_LISTESI || [];
+      Object.keys(counts||{}).forEach(function(k){
+        var ku = String(k).toLocaleUpperCase('tr');
+        if (ulkeler.indexOf(ku) >= 0) return;   // yurt dışı → Dünya haritasında
+        temiz[k] = counts[k];
+      });
+      return origRefresh.call(window.TRSvgMap, temiz, opts);
+    };
+  }
+
+  if (typeof _origRender === 'function') { try { _origRender.apply(this, arguments); } catch(e){ console.error(e); } }
+
+  _dmGorunumUygula();
+  var sayilar = _dmUlkeSayilari();
+  var ydToplam = Object.keys(sayilar).reduce(function(s,k){ return s + sayilar[k]; }, 0);
+
+  // Özet satırına yurt dışı rozeti
+  var oz = document.getElementById('harita-ozet');
+  if (oz){
+    var eski = document.getElementById('harita-yd-rozet');
+    if (eski) eski.remove();
+    if (ydToplam && window._haritaGorunum !== 'dunya'){
+      var r = document.createElement('button');
+      r.id = 'harita-yd-rozet';
+      r.type = 'button';
+      r.textContent = '🌍 ' + ydToplam + ' yurt dışı turne — Dünya haritasında';
+      r.title = 'Dünya haritasına geç';
+      r.onclick = function(){ haritaGorunumSec('dunya'); };
+      oz.parentNode.insertBefore(r, oz.nextSibling);
+    }
+  }
+
+  if (window._haritaGorunum === 'dunya') { _dmSonImza = ''; _dmCiz(); }
+  if (typeof window._istPanelYenile === 'function') window._istPanelYenile();
+};
+
+// Sezon değişince istatistik paneli de tazelensin
+var _origSezonSec = window.sezonSec;
+if (typeof _origSezonSec === 'function'){
+  window.sezonSec = function(s){
+    var r = _origSezonSec.apply(this, arguments);
+    window._istSezonSecim = (s && s !== '__tumü__') ? s : null;
+    if (typeof window._istPanelYenile === 'function') window._istPanelYenile();
+    return r;
+  };
+}
+
+document.addEventListener('DOMContentLoaded', function(){
+  setTimeout(function(){
+    _dmGorunumUygula();
+    var t = document.getElementById('tab-harita');
+    if (t && t.classList.contains('active') && typeof renderHarita === 'function'){
+      try { renderHarita(); } catch(e){}
+    }
+  }, 300);
+});
+
+console.log('[PATCH-40] sezon istatistiği + dünya haritası + arayüz hazır');
 })();
 </script>
 
