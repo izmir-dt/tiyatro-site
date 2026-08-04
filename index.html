@@ -123,7 +123,30 @@ footer{border-top:1px solid var(--line);padding:20px 0;color:var(--muted);font-s
 .totop.on{display:block}
 @media(max-width:720px){.hdr{flex-wrap:wrap}nav{width:100%;margin-left:0}.row .mt{max-width:40ch}}
 @media print{header,footer,.statbar,.tools,.totop{display:none!important}}
+/* ---- bildirim & toast ---- */
+.notif-wrap{position:relative;flex:0 0 auto}
+.bell{position:relative;display:grid;place-items:center;width:38px;height:38px;border-radius:11px;cursor:pointer;
+  background:var(--surface-2);border:1px solid var(--line-strong);color:inherit}
+.bell:hover{border-color:var(--accent)}
+.bell svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.bell .badge{position:absolute;top:-5px;right:-5px;min-width:18px;height:18px;padding:0 4px;border-radius:9px;
+  background:var(--accent);color:#1a1205;font-size:10.5px;font-weight:700;display:grid;place-items:center}
+.notif-pop{position:absolute;right:0;top:46px;width:min(360px,86vw);z-index:80;display:none;
+  background:var(--surface);border:1px solid var(--line-strong);border-radius:14px;box-shadow:0 18px 44px rgba(0,0,0,.5);overflow:hidden}
+.notif-pop.on{display:block}
+.notif-pop-h{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:11px 13px;border-bottom:1px solid var(--line)}
+.notif-pop-b{max-height:min(60vh,420px);overflow-y:auto;padding:6px 10px 10px}
+.notif{display:flex;gap:9px;align-items:flex-start;padding:9px 3px;border-bottom:1px solid var(--line)}
+.notif:last-child{border-bottom:0}
+.notif .nm{font-size:12.8px;font-weight:500;line-height:1.35}
+.notif .mt{font-size:11px;opacity:.6}
+.toast{position:fixed;left:50%;bottom:26px;transform:translate(-50%,20px);z-index:200;opacity:0;pointer-events:none;
+  transition:.22s;background:var(--surface);border:1px solid var(--accent);color:inherit;
+  padding:11px 18px;border-radius:12px;font-size:13px;font-weight:500;box-shadow:0 14px 34px rgba(0,0,0,.5)}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+.toast.err{border-color:#e0555f}
 </style>
+
 </head>
 <body>
 <header>
@@ -133,6 +156,17 @@ footer{border-top:1px solid var(--line);padding:20px 0;color:var(--muted);font-s
       <div><h1>Oyun Dağılım Paneli</h1><span>Kadro · Görev · Çakışma</span></div>
     </div>
     <nav id="nav"></nav>
+    <div id="notif-wrap" class="notif-wrap">
+      <button class="bell" id="bell" onclick="toggleNotifs()" title="Bildirimler" aria-label="Bildirimler">
+        <svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 8-3 8h18s-3-1-3-8"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+        <span class="badge" id="notif-badge" style="display:none">0</span>
+      </button>
+      <div class="notif-pop" id="notif-pop">
+        <div class="notif-pop-h"><b>Bildirimler</b><button class="btn sm dan" onclick="clearNotifs()">Temizle</button></div>
+        <div class="notif-pop-b" id="notif-list"></div>
+      </div>
+    </div>
+
   </div>
 </header>
 
@@ -212,14 +246,16 @@ footer{border-top:1px solid var(--line);padding:20px 0;color:var(--muted);font-s
 
 <footer class="wrap">
   <span>Oyun Dağılım Paneli · repertuvar kadro yönetimi</span>
-  <span id="src-note">Veriler canlı sayfa kaynağından okunur; yönetim düzenlemeleri tarayıcıda saklanır.</span>
+  <span id="src-note">Veriler Google e-Tablo'dan okunur; yönetim düzenlemeleri doğrudan e-Tablo'ya yazılır.</span>
 </footer>
 
 <script>
 /* ============ Veri katmanı ============ */
 const DIRECT = "https://tiyatro-backend.vercel.app/api/sheets";
 const API = location.hostname === "izmir-dt.github.io" ? DIRECT : "/api/public/sheets";
-const PIN_KEY = "idt_pin", AUTH_KEY = "idt_auth", EDIT_KEY = "idt_edits", DEFAULT_PIN = "525327";
+const NOTIF_API = API.replace(/\/sheets$/, "/notifications");
+const MAIN_SHEET = "BÜTÜN OYUNLAR";
+const PIN_KEY = "idt_pin", AUTH_KEY = "idt_auth", SEEN_KEY = "idt_notif_seen", DEFAULT_PIN = "525327";
 const PAGE_SIZE = 50;
 const cache = new Map();
 async function sheet(name){
@@ -238,34 +274,69 @@ const isCocuk = n => n.includes("Ç.O") || n.includes("(Ç)");
 const sortTr = (a,b) => String(a).localeCompare(String(b),"tr");
 const jq = v => JSON.stringify(v).replace(/"/g,"&quot;");
 
+/* sütun sırası (Google e-Tablo başlıklarına göre) */
+let COLS = {oyun:0, kategori:1, gorev:2, kisi:3}, COL_COUNT = 4, HEADERS = [];
 function parseRows(headers, rows){
   const t = headers.map(h => trLower(h).trim());
   const idx = k => t.findIndex(h => h === k || h.startsWith(k));
   const io = idx("oyun"), ik = idx("kategori"), ig = idx("görev"), ip = idx("kişi");
-  return rows.map(r => ({
-    oyun: String(r[io]??"").trim(), kategori: String(r[ik]??"").trim(),
-    gorev: String(r[ig]??"").trim(), kisi: String(r[ip]??"").trim()
+  HEADERS = headers;
+  COL_COUNT = Math.max(headers.length, 4);
+  if(io >= 0) COLS = {oyun:io, kategori:ik<0?1:ik, gorev:ig<0?2:ig, kisi:ip<0?3:ip};
+  return rows.map((r,i) => ({
+    _i: i,
+    oyun: String(r[COLS.oyun]??"").trim(), kategori: String(r[COLS.kategori]??"").trim(),
+    gorev: String(r[COLS.gorev]??"").trim(), kisi: String(r[COLS.kisi]??"").trim()
   })).filter(r => r.oyun);
 }
 const names = s => s.split(",").map(x => x.trim()).filter(Boolean);
 const rowKey = r => [r.oyun,r.kategori,r.gorev,r.kisi].join("|");
 
-/* ---- yönetim düzenlemeleri (tarayıcıda saklanır) ---- */
-let EDITS = {added:[],removed:[]};
-function loadEdits(){ try{ EDITS = Object.assign({added:[],removed:[]}, JSON.parse(localStorage.getItem(EDIT_KEY)||"{}")); }catch(e){ EDITS={added:[],removed:[]}; } }
-function saveEdits(){ localStorage.setItem(EDIT_KEY, JSON.stringify(EDITS)); rebuild(); }
-loadEdits();
+/* ============ Google e-Tablo yazma katmanı ============ */
+function toast(msg, kind){
+  let t = document.getElementById("toast");
+  if(!t){ t = document.createElement("div"); t.id = "toast"; document.body.appendChild(t); }
+  t.className = "toast on" + (kind === "err" ? " err" : "");
+  t.textContent = msg;
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.className = "toast", 3200);
+}
+async function api(path, opts){
+  const r = await fetch(API + path, Object.assign({headers:{"Content-Type":"application/json"}}, opts||{}));
+  if(!r.ok){
+    let m = "HTTP " + r.status;
+    try{ const j = await r.json(); if(j.error) m = j.error; }catch(e){}
+    throw new Error(m);
+  }
+  return r.json().catch(() => ({}));
+}
+const sheetPath = () => "/" + encodeURIComponent(MAIN_SHEET);
+function rowValues(r){
+  const v = new Array(COL_COUNT).fill("");
+  v[COLS.oyun] = r.oyun; v[COLS.kategori] = r.kategori; v[COLS.gorev] = r.gorev; v[COLS.kisi] = r.kisi;
+  return v;
+}
+const sheetAppend = r  => api(sheetPath() + "/row", {method:"POST", body:JSON.stringify({values: rowValues(r)})});
+const sheetDelete = i  => api(sheetPath() + "/row/" + i, {method:"DELETE"});
+const sheetCell = (i,c,v) => api(sheetPath() + "/cell", {method:"PUT", body:JSON.stringify({row:i, col:c, value:v})});
+let busy = false;
+async function withBusy(label, fn){
+  if(busy) return;
+  busy = true; toast(label + "…");
+  try{ await fn(); cache.delete(MAIN_SHEET); await boot(); toast("Google e-Tablo güncellendi."); loadNotifs(); }
+  catch(err){ toast("Kaydedilemedi: " + err.message, "err"); }
+  finally{ busy = false; }
+}
 
 let API_ROWS = [], DATA = [], PLAYS = [], PEOPLE = [], loaded = false;
 
 function rebuild(){
-  const rm = new Set(EDITS.removed);
-  DATA = API_ROWS.filter(r => !rm.has(rowKey(r))).concat(EDITS.added);
+  DATA = API_ROWS;
   PLAYS = buildPlays(DATA); PEOPLE = buildPeople(DATA);
   renderStats();
   const cur = (location.hash||"#panel").slice(1);
   RENDER[cur] && RENDER[cur]();
 }
+
 function buildPlays(rows){
   const m = new Map();
   rows.forEach(r => {
@@ -634,11 +705,8 @@ function renderYonetim(){
   const rows = DATA.filter(r => !q || trLower(r.oyun+" "+r.kategori+" "+r.gorev+" "+r.kisi).includes(q)).slice(0,200);
   el.innerHTML = `
   <div class="sec-head"><div><h2 class="sec-title">Yönetim Paneli</h2>
-    <p class="sec-sub">Kayıt ekleyin, düzeltin veya kaldırın. Değişiklikler bu tarayıcıda saklanır; JSON olarak yedekleyip başka cihaza taşıyabilirsiniz.</p></div>
-    <div class="tools"><button class="btn sm" onclick="exportEdits()">Değişiklikleri indir</button>
-      <button class="btn sm" onclick="document.getElementById('imp').click()">Değişiklik yükle</button>
-      <input id="imp" type="file" accept="application/json" hidden onchange="importEdits(this)">
-      <button class="btn sm dan" onclick="clearEdits()">Tümünü sıfırla</button></div></div>
+    <p class="sec-sub">Kayıt ekleyin, düzeltin veya kaldırın. Tüm değişiklikler doğrudan Google e-Tablo'ya (${esc(MAIN_SHEET)}) yazılır ve bildirim olarak kaydedilir.</p></div>
+    <div class="tools"><button class="btn sm" onclick="reloadData()">Verileri yenile</button></div></div>
 
   <div class="grid2">
     <div class="card"><div class="card-h"><h3>Yeni kayıt ekle</h3></div>
@@ -647,7 +715,7 @@ function renderYonetim(){
         <div class="fld"><label>Kategori</label><input id="a-kat" placeholder="Örn. Oyuncu, Figüran, Teknik"></div>
         <div class="fld"><label>Görev</label><input id="a-gorev" placeholder="Rol / görev"></div>
         <div class="fld"><label>Kişi</label><input id="a-kisi" placeholder="Ad Soyad (virgülle birden fazla)"></div>
-        <button class="btn pri" style="width:100%" onclick="addRow()">Kaydet</button>
+        <button class="btn pri" style="width:100%" onclick="addRow()">Google e-Tablo'ya kaydet</button>
         <div class="ok" id="a-msg"></div>
       </div></div>
 
@@ -662,69 +730,107 @@ function renderYonetim(){
   </div>
 
   <div class="card" style="margin-top:14px"><div class="card-h">
-    <h3>Kayıtlar</h3><span class="chip gold">${DATA.length} kayıt · ${EDITS.added.length} eklenen · ${EDITS.removed.length} kaldırılan</span></div>
+    <h3>Kayıtlar</h3><span class="chip gold">${DATA.length} kayıt</span></div>
     <div style="padding:12px 15px 0"><input value="${esc(adminQ)}" placeholder="Kayıt ara…" oninput="adminQ=this.value;renderYonetim();document.getElementById('adm-q')?.focus()" id="adm-q"
       style="width:100%;background:var(--surface-2);border:1px solid var(--line-strong);border-radius:10px;padding:10px 13px;outline:none"></div>
     <div class="scroller" style="margin-top:12px"><table><thead><tr><th>Oyun</th><th>Kategori</th><th>Görev</th><th>Kişi</th><th style="width:120px">İşlem</th></tr></thead>
     <tbody>${rows.map(r => `<tr><td>${esc(r.oyun)}</td><td>${esc(r.kategori)}</td><td>${esc(r.gorev)}</td><td>${esc(r.kisi)}</td>
-      <td><button class="btn sm" onclick='editRow(${jq(rowKey(r))})'>Düzenle</button>
-          <button class="btn sm dan" onclick='removeRow(${jq(rowKey(r))})'>Sil</button></td></tr>`).join("")}</tbody></table></div>
+      <td><button class="btn sm" onclick="editRow(${r._i})">Düzenle</button>
+          <button class="btn sm dan" onclick="removeRow(${r._i})">Sil</button></td></tr>`).join("")}</tbody></table></div>
   </div>
 
-  ${EDITS.removed.length ? `<div class="card" style="margin-top:14px"><div class="card-h"><h3>Kaldırılan kayıtlar</h3>
-    <span class="chip crim">${EDITS.removed.length}</span></div><div class="card-b scroller">
-    ${EDITS.removed.map(k => `<div class="row"><div class="nm" style="font-weight:500;font-size:13px">${esc(k.split("|").join("  ·  "))}</div>
-      <button class="btn sm" onclick='restoreRow(${jq(k)})'>Geri al</button></div>`).join("")}</div></div>` : ""}`;
+  <div class="card" style="margin-top:14px"><div class="card-h"><h3>Son işlemler</h3>
+    <div class="tools"><button class="btn sm dan" onclick="clearNotifs()">Bildirimleri temizle</button></div></div>
+    <div class="card-b scroller" id="notif-log">${notifRowsHtml(NOTIFS.slice(0,50))}</div>
+  </div>`;
   const inp = document.getElementById("adm-q");
   if(inp && adminQ){ inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
 }
+function reloadData(){ withBusy("Yenileniyor", async () => {}); }
 function addRow(){
   const g = id => document.getElementById(id).value.trim();
   const r = {oyun:g("a-oyun"), kategori:g("a-kat"), gorev:g("a-gorev"), kisi:g("a-kisi")};
   const msg = document.getElementById("a-msg");
   if(!r.oyun || !r.kisi){ msg.textContent = "Oyun ve kişi alanları zorunludur."; msg.className = "err"; return; }
-  EDITS.added.push(r); saveEdits();
-  const m2 = document.getElementById("a-msg"); if(m2){ m2.textContent = "Kayıt eklendi."; m2.className = "ok"; }
+  withBusy("Kaydediliyor", () => sheetAppend(r));
 }
-function findRow(key){
-  const i = EDITS.added.findIndex(r => rowKey(r) === key);
-  return {addedIndex:i, row: i >= 0 ? EDITS.added[i] : DATA.find(r => rowKey(r) === key)};
-}
-function editRow(key){
-  const {addedIndex, row} = findRow(key);
+function editRow(i){
+  const row = DATA.find(r => r._i === i);
   if(!row) return;
   const oyun = prompt("Oyun:", row.oyun); if(oyun === null) return;
   const kategori = prompt("Kategori:", row.kategori); if(kategori === null) return;
   const gorev = prompt("Görev:", row.gorev); if(gorev === null) return;
   const kisi = prompt("Kişi:", row.kisi); if(kisi === null) return;
   const nr = {oyun:oyun.trim(), kategori:kategori.trim(), gorev:gorev.trim(), kisi:kisi.trim()};
-  if(addedIndex >= 0) EDITS.added[addedIndex] = nr;
-  else { if(!EDITS.removed.includes(key)) EDITS.removed.push(key); EDITS.added.push(nr); }
-  saveEdits();
+  const changes = [];
+  if(nr.oyun !== row.oyun) changes.push([COLS.oyun, nr.oyun]);
+  if(nr.kategori !== row.kategori) changes.push([COLS.kategori, nr.kategori]);
+  if(nr.gorev !== row.gorev) changes.push([COLS.gorev, nr.gorev]);
+  if(nr.kisi !== row.kisi) changes.push([COLS.kisi, nr.kisi]);
+  if(!changes.length) return toast("Değişiklik yok.");
+  withBusy("Güncelleniyor", async () => { for(const [c,v] of changes) await sheetCell(i, c, v); });
 }
-function removeRow(key){
-  if(!confirm("Bu kayıt kaldırılsın mı?")) return;
-  const i = EDITS.added.findIndex(r => rowKey(r) === key);
-  if(i >= 0) EDITS.added.splice(i,1);
-  else if(!EDITS.removed.includes(key)) EDITS.removed.push(key);
-  saveEdits();
+function removeRow(i){
+  const row = DATA.find(r => r._i === i);
+  if(!row) return;
+  if(!confirm(`Bu kayıt Google e-Tablo'dan silinsin mi?\n\n${row.oyun} · ${row.gorev} · ${row.kisi}`)) return;
+  withBusy("Siliniyor", () => sheetDelete(i));
 }
-function restoreRow(key){ EDITS.removed = EDITS.removed.filter(k => k !== key); saveEdits(); }
-function clearEdits(){ if(confirm("Tüm yerel düzenlemeler silinsin mi?")){ EDITS = {added:[],removed:[]}; saveEdits(); } }
-function exportEdits(){
-  const blob = new Blob([JSON.stringify(EDITS,null,2)],{type:"application/json"});
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob); a.download = "panel-duzenlemeler.json"; a.click();
-  URL.revokeObjectURL(a.href);
+
+/* ============ Bildirimler ============ */
+let NOTIFS = [], notifOpen = false;
+function notifRowsHtml(list){
+  if(!list.length) return `<p class="sec-sub" style="padding:6px 2px">Henüz bildirim yok.</p>`;
+  const cls = t => trLower(t).includes("sil") ? "crim" : trLower(t).includes("ekl") ? "gold" : "";
+  return list.map(n => `<div class="notif">
+    <span class="chip ${cls(n.tur)}">${esc(n.tur||"İŞLEM")}</span>
+    <div><div class="nm">${esc(n.aciklama || [n.kisi,n.oyun,n.gorev].filter(Boolean).join(" · "))}</div>
+      <span class="mt">${esc(n.tarih||"")}</span></div></div>`).join("");
 }
-function importEdits(input){
-  const f = input.files[0]; if(!f) return;
-  const rd = new FileReader();
-  rd.onload = () => { try{ const j = JSON.parse(rd.result);
-      EDITS = {added: Array.isArray(j.added)?j.added:[], removed: Array.isArray(j.removed)?j.removed:[]}; saveEdits(); }
-    catch(e){ alert("Dosya okunamadı."); } };
-  rd.readAsText(f); input.value = "";
+async function loadNotifs(){
+  try{
+    const r = await fetch(NOTIF_API);
+    if(!r.ok) throw new Error(r.status);
+    const d = await r.json();
+    const t = (d.headers||[]).map(h => trLower(h).trim());
+    const ix = k => { const i = t.findIndex(h => h.startsWith(k)); return i < 0 ? -1 : i; };
+    const c = {tarih:Math.max(0,ix("tarih")), tur:ix("tür")<0?ix("tur"):ix("tür"), oyun:ix("oyun"), kisi:ix("kişi"), gorev:ix("görev"), aciklama:ix("açıklama")};
+    NOTIFS = (d.rows||[]).map(row => ({
+      tarih: row[c.tarih]??"", tur: c.tur<0?"":row[c.tur]??"", oyun: c.oyun<0?"":row[c.oyun]??"",
+      kisi: c.kisi<0?"":row[c.kisi]??"", gorev: c.gorev<0?"":row[c.gorev]??"", aciklama: c.aciklama<0?"":row[c.aciklama]??""
+    })).reverse();
+  }catch(e){ NOTIFS = []; }
+  renderNotifs();
+  const log = document.getElementById("notif-log");
+  if(log) log.innerHTML = notifRowsHtml(NOTIFS.slice(0,50));
 }
+function unseenCount(){
+  const seen = parseInt(localStorage.getItem(SEEN_KEY) || "0", 10);
+  return Math.max(0, NOTIFS.length - seen);
+}
+function renderNotifs(){
+  const b = document.getElementById("notif-badge"), l = document.getElementById("notif-list");
+  if(b){ const n = unseenCount(); b.textContent = n > 99 ? "99+" : n; b.style.display = n ? "grid" : "none"; }
+  if(l) l.innerHTML = notifRowsHtml(NOTIFS.slice(0,30));
+}
+function toggleNotifs(){
+  notifOpen = !notifOpen;
+  document.getElementById("notif-pop").classList.toggle("on", notifOpen);
+  if(notifOpen){ localStorage.setItem(SEEN_KEY, String(NOTIFS.length)); renderNotifs(); }
+}
+async function clearNotifs(){
+  if(!confirm("Tüm bildirimler silinsin mi?")) return;
+  try{
+    const r = await fetch(NOTIF_API, {method:"DELETE"});
+    if(!r.ok) throw new Error(r.status);
+    localStorage.setItem(SEEN_KEY, "0");
+    await loadNotifs(); toast("Bildirimler temizlendi.");
+  }catch(e){ toast("Bildirimler temizlenemedi.", "err"); }
+}
+document.addEventListener("click", e => {
+  if(notifOpen && !e.target.closest("#notif-wrap")){ notifOpen = false; document.getElementById("notif-pop").classList.remove("on"); }
+});
+
 function changePin(){
   const a = document.getElementById("p-new").value, b = document.getElementById("p-new2").value;
   const m = document.getElementById("p-msg");
@@ -740,6 +846,9 @@ const RENDER = { panel:renderPlays, kisiler:renderPeople, dagilim:renderDagilim,
 attachSugg("s1","sg1"); attachSugg("s2","sg2");
 if(location.hash) go(location.hash.slice(1));
 boot();
+loadNotifs();
+setInterval(loadNotifs, 60000);
+
 </script>
 </body>
 </html>
