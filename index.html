@@ -322,8 +322,9 @@ tr:hover td{background:var(--surface-2)}
 }
 
 /* ── Logo mask ── */
-.mask.logo-mask{background:var(--accent-wash);border-color:var(--accent-soft);overflow:hidden;padding:0}
-[data-theme="light"] .mask.logo-mask{background:var(--accent-wash);border-color:var(--accent-soft)}
+.mask.logo-mask{background:#ffffff;border-color:var(--accent-soft);overflow:hidden;padding:2px}
+.mask.logo-mask img{border-radius:8px}
+[data-theme="dark"] .mask.logo-mask{background:#ffffff;border-color:var(--line-strong);box-shadow:0 0 0 1px rgba(255,255,255,.06)}
 
 /* ── Stats mini-cards ── */
 .stat-mini-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:14px}
@@ -331,7 +332,7 @@ tr:hover td{background:var(--surface-2)}
 .stat-mini:hover{transform:translateY(-2px);box-shadow:var(--shadow)}
 .stat-mini[onclick]{cursor:pointer}
 .stat-mini[onclick]:active{transform:scale(.97);box-shadow:none}
-.ibsug{background:var(--surface-2);border:1px solid var(--line-strong);border-radius:999px;padding:6px 13px;font-size:12px;font-weight:600;cursor:pointer;color:var(--text-dim);transition:.14s}
+.ibsug{background:var(--surface-2);border:1px solid var(--line-strong);border-radius:999px;padding:6px 13px;font-size:12px;font-weight:600;cursor:pointer;color:var(--text-dim);transition:.14s;white-space:nowrap;flex:0 0 auto}
 .ibsug:hover{background:var(--accent-wash);color:var(--accent);border-color:var(--accent);transform:translateY(-1px)}
 .stat-mini .icon{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;flex:0 0 auto;font-size:18px}
 .stat-mini .icon.gold{background:var(--accent-wash)}
@@ -522,16 +523,26 @@ html{scroll-behavior:smooth}
 .data-fresh button:hover{filter:brightness(1.07)}
 .data-fresh button.busy{opacity:.6;pointer-events:none}
 @media(max-width:900px){.data-fresh .txt{display:none}.data-fresh{padding:4px 5px 4px 8px}}
+@media(max-width:640px){
+  .data-fresh{padding:0;border:none;background:none;gap:0}
+  .data-fresh .dot{width:9px;height:9px;position:absolute;top:-2px;right:-2px;box-shadow:0 0 0 2px var(--surface)}
+  .data-fresh{position:relative}
+  .data-fresh button{width:32px;height:32px;border-radius:10px;font-size:0;background:var(--surface-2);border:1px solid var(--line-strong);color:inherit;padding:0}
+  .data-fresh button::after{content:"↻";font-size:16px;line-height:32px;display:block;text-align:center;color:var(--text)}
+  .hdr{flex-wrap:nowrap}
+}
 
 /* ═══════════ v4 · Kompakt hazır cevaplar ═══════════ */
 .sug-wrap{flex:0 0 auto;padding:8px 12px 0}
-.sug-bar{display:flex;align-items:center;gap:6px}
+.sug-bar{display:flex;align-items:flex-start;gap:6px;flex-wrap:wrap}
+.sug-bar .sug-toggle{flex:0 0 auto}
+.sug-list.open{flex:1 1 100%;margin-top:6px}
 .sug-toggle{background:var(--surface-2);border:1px solid var(--line-strong);border-radius:999px;padding:4px 11px;
   font-size:11px;font-weight:700;color:var(--text-dim);cursor:pointer;white-space:nowrap;font-family:inherit}
 .sug-toggle:hover{border-color:var(--accent);color:var(--accent)}
-.sug-list{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;scrollbar-width:thin}
+.sug-list{display:none;gap:6px 8px}
 .sug-list::-webkit-scrollbar{height:5px}
-.sug-list.open{flex-wrap:wrap;overflow:visible;max-height:118px;overflow-y:auto}
+.sug-list.open{display:flex;flex-wrap:wrap;overflow:visible;max-height:160px;overflow-y:auto}
 .chat-suggestions{padding:0!important}
 
 </style>
@@ -875,7 +886,7 @@ async function withBusy(label, fn, extra){
 
 /* ============ Model ============ */
 let API_ROWS = [], DATA = [], PLAYS = [], PEOPLE = [], FIGROWS = [], FIGSHEET = {headers:[],rows:[]}, PASIF = new Set();
-let PASIF_ROWS = [];
+let PASIF_ROWS = [], PASIF_PLAY = new Set();
 let SEASON = new Map();
 function parseSeason(d){
   const m = new Map();
@@ -1144,8 +1155,9 @@ async function boot(){
   const [d, pasif, figs, season] = await Promise.all([sheet(MAIN_SHEET), sheet(PASIF_SHEET), sheet(FIG_SHEET), sheet(SEASON_SHEET)]);
   SEASON = parseSeason(season || {});
   API_ROWS = parseRows(d.headers || [], d.rows || []);
-  PASIF_ROWS = (pasif.rows||[]).map((r,i) => ({i, name: unent(String(r[0]??"").trim())})).filter(x => x.name);
-  PASIF = new Set(PASIF_ROWS.map(x => norm(x.name)));
+  PASIF_ROWS = (pasif.rows||[]).map((r,i) => ({i, name: unent(String(r[0]??"").trim()), oyun: unent(String(r[1]??"").trim())})).filter(x => x.name);
+  PASIF = new Set(PASIF_ROWS.filter(x => !x.oyun).map(x => norm(x.name)));
+  PASIF_PLAY = new Set(PASIF_ROWS.filter(x => x.oyun).map(x => norm(x.name) + "|||" + norm(x.oyun)));
   FIGSHEET = {headers:(figs.headers||[]).filter(h => String(h||"").trim()),
               rows:(figs.rows||[]).filter(r => r.some(c => String(c||"").trim()))};
   loaded = true; window.loaded = true;
@@ -1255,12 +1267,28 @@ function renderPlays(){
 }
 function selectPlay(n){ openPlay = (openPlay === n ? null : n); renderPlays(); }
 const isPasif = n => PASIF.has(norm(stripTag(n)));
+const isPasifInPlay = (n, oyun) => isPasif(n) || PASIF_PLAY.has(norm(stripTag(n)) + "|||" + norm(oyun));
+async function setPersonActiveForPlay(name, oyun, aktif){
+  const msg = aktif
+    ? `${name}, "${oyun}" oyununda yeniden AKTİF olarak işaretlenecek.`
+    : `${name}, yalnızca "${oyun}" oyununun kadrosunda PASİF olarak işaretlenecek.\n\nDiğer oyunlardaki kayıtları etkilenmez.`;
+  const ok = await uiConfirm(msg, aktif ? "Aktife al" : "Pasife al (bu oyunda)");
+  if(!ok) return;
+  await withBusy(aktif ? "Aktife alınıyor" : "Pasife alınıyor", async () => {
+    if(aktif){
+      const hit = PASIF_ROWS.filter(x => norm(x.name) === norm(name) && norm(x.oyun) === norm(oyun)).sort((a,b) => b.i - a.i);
+      for(const h of hit) await sheetDeleteFrom(PASIF_SHEET, h.i);
+    } else {
+      if(!PASIF_PLAY.has(norm(name) + "|||" + norm(oyun))) await sheetAppendTo(PASIF_SHEET, [name, oyun]);
+    }
+  }, [PASIF_SHEET]);
+}
 function playDetail(name){
   const rows = DATA.filter(r => r.oyun === name);
   const byCat = new Map();
   rows.forEach(r => { const k = r.kategori || "Diğer"; if(!byCat.has(k)) byCat.set(k,[]); byCat.get(k).push(r); });
   const people = new Set(); rows.forEach(r => names(r.kisi).forEach(n => people.add(stripTag(n))));
-  const aktifSet = [...people].filter(n => !PASIF.has(norm(n)));
+  const aktifSet = [...people].filter(n => !isPasifInPlay(n, name));
   const figs = new Set(FIGROWS.filter(r => r.oyun === name).map(r => r.kisi));
   return `<button class="back" onclick="openPlay=null;renderPlays()">← Oyun listesi</button>
   <div class="card"><div class="card-h"><div><h3>${esc(name)}</h3>
@@ -1273,9 +1301,15 @@ function playDetail(name){
       <h3 style="font-size:12.5px;letter-spacing:.08em;text-transform:uppercase">${esc(cat)}</h3>
       <span class="chip ${isFig(cat)?"crim":""}">${rs.length} kayıt</span></div>
     <div class="card-b">${rs.map(r => {
-      const pas = names(r.kisi).length && names(r.kisi).every(isPasif);
-      return `<div class="row${pas?" pasif":""}" onclick="openPerson=${jq(stripTag(names(r.kisi)[0]||""))};go('kisiler')">
-        <div class="nm">${esc(r.kisi)} ${pas?'<span class="chip">Pasif</span>':""}</div><span class="chip">${esc(r.gorev||"—")}</span></div>`;
+      const kisiAdi = stripTag(names(r.kisi)[0]||"");
+      const pasGlobal = names(r.kisi).length && names(r.kisi).every(isPasif);
+      const pasPlay = !pasGlobal && names(r.kisi).length && names(r.kisi).every(n => isPasifInPlay(n, name));
+      const pas = pasGlobal || pasPlay;
+      return `<div class="row${pas?" pasif":""}">
+        <div style="flex:1;cursor:pointer" onclick="openPerson=${jq(kisiAdi)};go('kisiler')">
+        <div class="nm">${esc(r.kisi)} ${pasGlobal?'<span class="chip">Pasif</span>':(pasPlay?'<span class="chip">Bu oyunda pasif</span>':"")}</div><span class="chip">${esc(r.gorev||"—")}</span></div>
+        ${!pasGlobal && kisiAdi ? `<button class="btn sm ${pasPlay?"pri":"dan"}" onclick="event.stopPropagation();setPersonActiveForPlay(${jq(kisiAdi)},${jq(name)},${pasPlay?"true":"false"})">${pasPlay?"Aktife al":"Pasife al (bu oyunda)"}</button>` : ""}
+      </div>`;
     }).join("")}</div></div>`).join("")}`;
 }
 
