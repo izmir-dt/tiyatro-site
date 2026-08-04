@@ -89,7 +89,9 @@ main{flex:1 1 auto;min-height:0;overflow:hidden}
 .split{display:grid;grid-template-columns:minmax(300px,380px) minmax(0,1fr);gap:14px;height:100%;min-height:0;padding:12px 0}
 .col{min-height:0;display:flex;flex-direction:column;gap:10px}
 .col.scroll{overflow-y:auto;overflow-x:hidden;padding-right:4px}
-.single{height:100%;min-height:0;overflow-y:auto;padding:14px 0 28px}
+.col.scroll>*{flex:0 0 auto}
+.col.detail .card{flex:0 0 auto}
+.single{height:100%;min-height:0;overflow-y:auto;padding:14px 18px 28px}
 
 /* ---------- generic ---------- */
 .sec-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px}
@@ -174,6 +176,22 @@ tr:hover td{background:var(--surface-2)}
 .kpi .box b{display:block;font-family:var(--font-d);font-size:24px;color:var(--accent);line-height:1.1}
 .kpi .box span{font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--muted)}
 
+/* ---- yönetim ---- */
+.adm-grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr);gap:14px;align-items:start}
+@media(max-width:900px){.adm-grid{grid-template-columns:1fr}}
+.adm-body{padding:14px 15px}
+.adm-row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:620px){.adm-row2{grid-template-columns:1fr}}
+.adm-table td .tools{flex-wrap:nowrap}
+.adm-table td:last-child{white-space:nowrap;width:1%}
+.hint{color:var(--muted);font-size:11.5px;margin-top:4px}
+.modal-bg{position:fixed;inset:0;background:rgba(10,12,16,.55);z-index:150;display:none;place-items:center;padding:18px}
+.modal-bg.on{display:grid}
+.modal{width:min(520px,100%);background:var(--surface);border:1px solid var(--line-strong);border-radius:16px;box-shadow:var(--shadow);overflow:hidden}
+.modal-h{display:flex;align-items:center;justify-content:space-between;padding:13px 16px;border-bottom:1px solid var(--line);background:var(--surface-2)}
+.modal-b{padding:16px}
+.modal-f{display:flex;justify-content:flex-end;gap:8px;padding:12px 16px;border-top:1px solid var(--line)}
+
 /* ---- bildirim & toast ---- */
 .notif-wrap{position:relative;flex:0 0 auto}
 .bell{position:relative}
@@ -231,8 +249,6 @@ tr:hover td{background:var(--surface-2)}
     </div>
   </div>
 </header>
-
-<div class="statbar"><div class="wrap"><div class="stats" id="stats"></div></div></div>
 
 <main>
   <!-- ANA PANEL: sol oyun listesi / sağ detay -->
@@ -301,7 +317,6 @@ tr:hover td{background:var(--surface-2)}
       <div class="sec-head"><div><h2 class="sec-title">İstatistik & Grafikler</h2>
         <p class="sec-sub">Sayımlar tekil kişi bazlıdır; pasif kişiler istatistiklere dahil edilmez.</p></div>
         <div class="tools"><button class="btn sm" onclick="exportExcel(statExportRows(),'istatistik')">Excel</button></div></div>
-      <div class="kpi" id="kpi"></div>
       <div class="grid2">
         <div id="cat-donut"></div>
         <div id="play-chart"></div>
@@ -355,6 +370,7 @@ applyTheme(localStorage.getItem(THEME_KEY) || "light");
 const DIRECT = "https://tiyatro-backend.vercel.app/api/sheets";
 const API = location.hostname === "izmir-dt.github.io" ? DIRECT : "/api/public/sheets";
 const NOTIF_API = API.replace(/\/sheets$/, "/notifications");
+const NOTIF_FALLBACK = DIRECT.replace(/\/sheets$/, "/notifications");
 const MAIN_SHEET = "BÜTÜN OYUNLAR";
 const FIG_SHEET = "FİGÜRAN LİSTESİ";
 const PASIF_SHEET = "PASIF_KISILER";
@@ -622,14 +638,7 @@ document.addEventListener("keydown", e => {
 
 /* ============ Yükleme ============ */
 const skel = n => Array.from({length:n},()=>'<div class="skel"></div>').join("");
-function renderStats(){
-  const cats = new Set(DATA.map(r => r.kategori).filter(Boolean));
-  const figCount = new Set(FIGROWS.map(r => r.kisi)).size;
-  document.getElementById("stats").innerHTML = [
-    [PLAYS.length,"Oyun"],[aktifPeople().length,"Aktif Kadro"],[PEOPLE.length - aktifPeople().length,"Pasif"],
-    [figCount,"Figüran"],[DATA.length,"Görev Kaydı"],[cats.size,"Kategori"]
-  ].map(([v,l]) => `<div class="stat"><b>${v}</b><span>${l}</span></div>`).join("");
-}
+function renderStats(){ /* üst istatistik şeridi kaldırıldı */ }
 async function boot(){
   document.getElementById("play-list").innerHTML = skel(7);
   const [d, pasif, figs] = await Promise.all([sheet(MAIN_SHEET), sheet(PASIF_SHEET), sheet(FIG_SHEET)]);
@@ -826,7 +835,7 @@ function catCounts(){
   });
   return [...m.entries()].map(([k,v]) => [k, v.size]).filter(x => x[1] > 0).sort((a,b) => b[1]-a[1]);
 }
-function donut(title, data, note){
+function donut(title, data, note, onclickFn){
   const total = data.reduce((s,d) => s + d[1], 0) || 1;
   const R = 92, r = 56, cx = 100, cy = 100;
   let ang = -Math.PI/2, paths = "";
@@ -834,8 +843,9 @@ function donut(title, data, note){
     const a2 = ang + (v/total) * Math.PI * 2, big = (a2-ang) > Math.PI ? 1 : 0;
     const p = (rad,a) => [cx + rad*Math.cos(a), cy + rad*Math.sin(a)];
     const [x1,y1] = p(R,ang), [x2,y2] = p(R,a2), [x3,y3] = p(r,a2), [x4,y4] = p(r,ang);
+    const cb = onclickFn ? ` onclick="${onclickFn}(${jq(n)})" style="cursor:pointer"` : "";
     paths += `<path d="M${x1} ${y1} A${R} ${R} 0 ${big} 1 ${x2} ${y2} L${x3} ${y3} A${r} ${r} 0 ${big} 0 ${x4} ${y4} Z"
-      fill="${PALETTE[i%PALETTE.length]}"><title>${esc(n)}: ${v}</title></path>`;
+      fill="${PALETTE[i%PALETTE.length]}"${cb}><title>${esc(n)}: ${v} — detay için tıklayın</title></path>`;
     ang = a2;
   });
   return `<div class="card"><div class="card-h"><h3>${title}</h3><span class="chip gold">${total}</span></div>
@@ -843,7 +853,7 @@ function donut(title, data, note){
       <svg class="donut" viewBox="0 0 200 200" width="200" height="200">${paths}
         <text x="100" y="96" text-anchor="middle" font-size="26" font-weight="800" fill="var(--text)">${total}</text>
         <text x="100" y="116" text-anchor="middle" font-size="11" fill="var(--muted)">${note}</text></svg>
-      <div class="chart-legend">${data.map(([n,v],i) => `<div class="lg"><i style="background:${PALETTE[i%PALETTE.length]}"></i>
+      <div class="chart-legend">${data.map(([n,v],i) => `<div class="lg"${onclickFn?` style="cursor:pointer" onclick="${onclickFn}(${jq(n)})"`:""}><i style="background:${PALETTE[i%PALETTE.length]}"></i>
         <span title="${esc(n)}">${esc(n)}</span><b>${v}</b></div>`).join("")}</div>
     </div></div>`;
 }
@@ -857,19 +867,21 @@ function barChart(title, data, unit, onclickFn){
       : `<div class="empty">Kayıt yok.</div>`}</div></div>`;
 }
 function goPlay(n){ openPlay = n; go("panel"); }
+function goKategori(cat){
+  go("sorgu");
+  const k = document.getElementById("f-kat"); if(!k) return;
+  k.value = cat; document.getElementById("f-oyun").value = ""; document.getElementById("f-kisi").value = "";
+  renderFilter();
+  document.getElementById("filter-res").scrollIntoView({behavior:"smooth", block:"center"});
+}
 function goPerson(n){ openPerson = n; go("kisiler"); }
 function renderGrafik(){
   if(!loaded) return;
   const cats = catCounts();
   const figCount = new Set(FIGROWS.map(r => r.kisi)).size;
   const akt = aktifPeople();
-  const avg = akt.length ? (akt.reduce((s,p)=>s+p.oyunlar.length,0)/akt.length).toFixed(1) : "0";
-  document.getElementById("kpi").innerHTML = [
-    [PLAYS.length,"Oyun"],[akt.length,"Aktif Kişi"],[figCount,"Figüran"],
-    [DATA.length,"Görev Kaydı"],[cats.length,"Kategori"],[avg,"Kişi Başı Oyun"]
-  ].map(([v,l]) => `<div class="box"><b>${v}</b><span>${l}</span></div>`).join("");
 
-  document.getElementById("cat-donut").innerHTML = donut("Kategoriye Göre Kişi Sayısı", cats.slice(0,12), "kişi");
+  document.getElementById("cat-donut").innerHTML = donut("Kategoriye Göre Kişi Sayısı", cats.slice(0,12), "kişi", "goKategori");
   document.getElementById("play-chart").innerHTML = barChart("Oyun · Personel Sayısı",
     [...PLAYS].sort((a,b)=>b.personel-a.personel).slice(0,15).map(p=>[p.name,p.personel]), " kişi", "goPlay");
   document.getElementById("person-chart").innerHTML = barChart("Kişi · Oyun Sayısı",
@@ -973,52 +985,85 @@ function renderArsiv(){
 }
 
 /* ============ Yönetim ============ */
-let adminQ = "";
+let adminQ = "", admPage = 1;
+const ADM_PAGE = 50;
+function setAdmPage(p){ admPage = p; renderYonetim(); }
 function renderYonetim(){
   const el = document.getElementById("yonetim");
   if(!unlocked()){ el.innerHTML = lockScreen("yonetim","Yönetim Paneli"); return; }
   const q = trLower(adminQ.trim());
-  const rows = DATA.filter(r => !q || trLower(r.oyun+" "+r.kategori+" "+r.gorev+" "+r.kisi).includes(q)).slice(0,200);
+  const all = DATA.filter(r => !q || trLower(r.oyun+" "+r.kategori+" "+r.gorev+" "+r.kisi).includes(q));
+  const pages = Math.max(1, Math.ceil(all.length/ADM_PAGE));
+  if(admPage > pages) admPage = pages;
+  const rows = all.slice((admPage-1)*ADM_PAGE, admPage*ADM_PAGE);
   el.innerHTML = `
   <div class="sec-head"><div><h2 class="sec-title">Yönetim Paneli</h2>
-    <p class="sec-sub">Kayıt ekleyin, düzeltin veya kaldırın. Tüm değişiklikler doğrudan Google e-Tablo'ya (${esc(MAIN_SHEET)}) yazılır.</p></div>
-    <div class="tools"><button class="btn sm" onclick="reloadData()">Verileri yenile</button></div></div>
+    <p class="sec-sub">Kayıt ekleyin, düzenleyin veya silin. Tüm değişiklikler Google e-Tablo'ya (${esc(MAIN_SHEET)}) yazılır.</p></div>
+    <div class="tools"><button class="btn sm" onclick="reloadData()">Verileri yenile</button>
+      <button class="btn sm" onclick="exportExcel([['Oyun','Kategori','Görev','Kişi']].concat(DATA.map(r=>[r.oyun,r.kategori,r.gorev,r.kisi])),'tum-kayitlar')">Excel</button></div></div>
 
-  <div class="grid2">
-    <div class="card"><div class="card-h"><h3>Yeni kayıt ekle</h3></div>
-      <div style="padding:14px 15px">
-        <div class="fld"><label>Oyun</label><input id="a-oyun" placeholder="Oyun adı"></div>
-        <div class="fld"><label>Kategori</label><input id="a-kat" placeholder="Örn. Oyuncu, Figüran, Teknik"></div>
-        <div class="fld"><label>Görev</label><input id="a-gorev" placeholder="Rol / görev"></div>
-        <div class="fld"><label>Kişi</label><input id="a-kisi" placeholder="Ad Soyad (virgülle birden fazla, figüran için 'Ad Soyad (Figüran)')"></div>
-        <button class="btn pri" style="width:100%" onclick="addRow()">Google e-Tablo'ya kaydet</button>
+  <div class="adm-grid">
+    <div class="card"><div class="card-h"><h3>Yeni kayıt ekle</h3><span class="chip gold">${DATA.length} kayıt</span></div>
+      <div class="adm-body">
+        <div class="adm-row2">
+          <div class="fld"><label>Oyun</label><input id="a-oyun" autocomplete="off" placeholder="Oyun adı"></div>
+          <div class="fld"><label>Kategori</label><input id="a-kat" autocomplete="off" placeholder="Örn. Oyuncu, Figüran, Teknik"></div>
+        </div>
+        <div class="fld"><label>Görev</label><input id="a-gorev" autocomplete="off" placeholder="Rol / görev"></div>
+        <div class="fld" style="margin-bottom:8px"><label>Kişi</label><input id="a-kisi" autocomplete="off" placeholder="Ad Soyad">
+          <div class="hint">Birden fazla kişi için virgülle ayırın. Figüran için: <b>Ad Soyad (Figüran)</b></div></div>
+        <button class="btn pri" style="width:100%;margin-top:6px" onclick="addRow()">Google e-Tablo'ya kaydet</button>
         <div class="ok" id="a-msg"></div>
       </div></div>
 
-    <div class="card"><div class="card-h"><h3>Erişim şifresi</h3></div>
-      <div style="padding:14px 15px">
-        <div class="fld"><label>Yeni şifre</label><input id="p-new" type="password" placeholder="En az 4 karakter"></div>
-        <div class="fld"><label>Yeni şifre (tekrar)</label><input id="p-new2" type="password" placeholder="Tekrar"></div>
-        <button class="btn" style="width:100%" onclick="changePin()">Şifreyi güncelle</button>
-        <div class="ok" id="p-msg"></div>
-        <p class="sec-sub" style="margin-top:12px">Kilitli bölümler (Görevli Olmayan, Arşiv, Yönetim) bu şifreyle açılır.</p>
-      </div></div>
+    <div>
+      <div class="card"><div class="card-h"><h3>Erişim şifresi</h3></div>
+        <div class="adm-body">
+          <div class="adm-row2">
+            <div class="fld"><label>Yeni şifre</label><input id="p-new" type="password" autocomplete="new-password" placeholder="En az 4 karakter"></div>
+            <div class="fld"><label>Tekrar</label><input id="p-new2" type="password" autocomplete="new-password" placeholder="Tekrar"></div>
+          </div>
+          <button class="btn" style="width:100%" onclick="changePin()">Şifreyi güncelle</button>
+          <div class="ok" id="p-msg"></div>
+          <p class="hint">Kilitli bölümler (Görevli Olmayan, Arşiv, Yönetim) bu şifreyle açılır.</p>
+        </div></div>
+
+      <div class="card" style="margin-top:14px"><div class="card-h"><h3>Son işlemler</h3>
+        <div class="tools"><button class="btn sm" onclick="loadNotifs()">Yenile</button>
+          <button class="btn sm dan" onclick="clearNotifs()">Temizle</button></div></div>
+        <div class="card-b" style="max-height:320px;overflow:auto;padding:6px 14px" id="notif-log">${notifRowsHtml(NOTIFS.slice(0,50))}</div>
+      </div>
+    </div>
   </div>
 
   <div class="card" style="margin-top:14px"><div class="card-h">
-    <h3>Kayıtlar</h3><span class="chip gold">${DATA.length} kayıt</span></div>
-    <div style="padding:12px 15px 0"><input value="${esc(adminQ)}" placeholder="Kayıt ara…" oninput="adminQ=this.value;renderYonetim()" id="adm-q"
+    <h3>Kayıtlar</h3><span class="chip gold">${all.length} kayıt</span></div>
+    <div style="padding:12px 15px"><input value="${esc(adminQ)}" placeholder="Oyun, kategori, görev veya kişi ara…" oninput="adminQ=this.value;admPage=1;renderYonetim()" id="adm-q"
       style="width:100%;background:var(--surface);border:1px solid var(--line-strong);border-radius:10px;padding:10px 13px;outline:none"></div>
-    <div style="margin-top:12px;max-height:52vh;overflow:auto"><table><thead><tr><th>Oyun</th><th>Kategori</th><th>Görev</th><th>Kişi</th><th style="width:120px">İşlem</th></tr></thead>
-    <tbody>${rows.map(r => `<tr><td>${esc(r.oyun)}</td><td>${esc(r.kategori)}</td><td>${esc(r.gorev)}</td><td>${esc(r.kisi)}</td>
-      <td><button class="btn sm" onclick="editRow(${r._i})">Düzenle</button>
-          <button class="btn sm dan" onclick="removeRow(${r._i})">Sil</button></td></tr>`).join("")}</tbody></table></div>
+    <div style="max-height:52vh;overflow:auto"><table class="adm-table"><thead><tr><th>Oyun</th><th>Kategori</th><th>Görev</th><th>Kişi</th><th>İşlem</th></tr></thead>
+    <tbody>${rows.length ? rows.map(r => `<tr><td>${esc(r.oyun)}</td><td>${esc(r.kategori)}</td><td>${esc(r.gorev)}</td><td>${esc(r.kisi)}</td>
+      <td><div class="tools"><button class="btn sm" onclick="editRow(${r._i})">Düzenle</button>
+          <button class="btn sm dan" onclick="removeRow(${r._i})">Sil</button></div></td></tr>`).join("")
+      : `<tr><td colspan="5"><div class="empty">Eşleşen kayıt yok.</div></td></tr>`}</tbody></table></div>
+    ${pages > 1 ? `<div class="pager">
+      <button class="btn sm" ${admPage<=1?"disabled":""} onclick="setAdmPage(${admPage-1})">‹ Önceki</button>
+      <span>${admPage} / ${pages} · ${all.length} kayıt</span>
+      <button class="btn sm" ${admPage>=pages?"disabled":""} onclick="setAdmPage(${admPage+1})">Sonraki ›</button></div>` : ""}
   </div>
 
-  <div class="card" style="margin-top:14px"><div class="card-h"><h3>Son işlemler</h3>
-    <div class="tools"><button class="btn sm dan" onclick="clearNotifs()">Bildirimleri temizle</button></div></div>
-    <div class="card-b" style="max-height:40vh;overflow:auto;padding:6px 14px" id="notif-log">${notifRowsHtml(NOTIFS.slice(0,50))}</div>
-  </div>`;
+  <div class="modal-bg" id="edit-modal"><div class="modal">
+    <div class="modal-h"><b>Kaydı düzenle</b><button class="btn sm" onclick="closeEdit()">Kapat</button></div>
+    <div class="modal-b">
+      <div class="adm-row2">
+        <div class="fld"><label>Oyun</label><input id="e-oyun" autocomplete="off"></div>
+        <div class="fld"><label>Kategori</label><input id="e-kat" autocomplete="off"></div>
+      </div>
+      <div class="fld"><label>Görev</label><input id="e-gorev" autocomplete="off"></div>
+      <div class="fld" style="margin-bottom:0"><label>Kişi</label><input id="e-kisi" autocomplete="off"></div>
+    </div>
+    <div class="modal-f"><button class="btn" onclick="closeEdit()">Vazgeç</button>
+      <button class="btn pri" onclick="saveEdit()">Kaydet</button></div>
+  </div></div>`;
   const inp = document.getElementById("adm-q");
   if(inp && adminQ){ inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
 }
@@ -1030,19 +1075,31 @@ function addRow(){
   if(!r.oyun || !r.kisi){ msg.textContent = "Oyun ve kişi alanları zorunludur."; msg.className = "err"; return; }
   withBusy("Kaydediliyor", () => sheetAppend(r));
 }
+let editIdx = null;
 function editRow(i){
   const row = DATA.find(r => r._i === i);
   if(!row) return;
-  const oyun = prompt("Oyun:", row.oyun); if(oyun === null) return;
-  const kategori = prompt("Kategori:", row.kategori); if(kategori === null) return;
-  const gorev = prompt("Görev:", row.gorev); if(gorev === null) return;
-  const kisi = prompt("Kişi:", row.kisi); if(kisi === null) return;
-  const nr = {oyun:oyun.trim(), kategori:kategori.trim(), gorev:gorev.trim(), kisi:kisi.trim()};
+  editIdx = i;
+  document.getElementById("e-oyun").value = row.oyun;
+  document.getElementById("e-kat").value = row.kategori;
+  document.getElementById("e-gorev").value = row.gorev;
+  document.getElementById("e-kisi").value = row.kisi;
+  document.getElementById("edit-modal").classList.add("on");
+}
+function closeEdit(){ editIdx = null; document.getElementById("edit-modal")?.classList.remove("on"); }
+function saveEdit(){
+  const row = DATA.find(r => r._i === editIdx);
+  if(!row) return closeEdit();
+  const g = id => document.getElementById(id).value.trim();
+  const nr = {oyun:g("e-oyun"), kategori:g("e-kat"), gorev:g("e-gorev"), kisi:g("e-kisi")};
+  if(!nr.oyun || !nr.kisi) return toast("Oyun ve kişi alanları zorunludur.", "err");
   const changes = [];
   if(nr.oyun !== row.oyun) changes.push([COLS.oyun, nr.oyun]);
   if(nr.kategori !== row.kategori) changes.push([COLS.kategori, nr.kategori]);
   if(nr.gorev !== row.gorev) changes.push([COLS.gorev, nr.gorev]);
   if(nr.kisi !== row.kisi) changes.push([COLS.kisi, nr.kisi]);
+  const i = editIdx;
+  closeEdit();
   if(!changes.length) return toast("Değişiklik yok.");
   withBusy("Güncelleniyor", async () => { for(const [c,v] of changes) await sheetCell(i, c, v); });
 }
@@ -1056,33 +1113,51 @@ function removeRow(i){
 /* ============ Bildirimler ============ */
 let NOTIFS = [], notifOpen = false;
 function notifRowsHtml(list){
+  if(NOTIF_ERR) return `<p class="sec-sub" style="padding:8px 2px;color:var(--danger)">${esc(NOTIF_ERR)}
+    <button class="btn sm" style="margin-left:8px" onclick="loadNotifs()">Tekrar dene</button></p>`;
   if(!list.length) return `<p class="sec-sub" style="padding:6px 2px">Henüz bildirim yok.</p>`;
-  const cls = t => trLower(t).includes("sil") ? "crim" : trLower(t).includes("ekl") ? "gold" : "";
+  const cls = t => trLower(t).includes("sil") || trLower(t).includes("çıkar") ? "crim" : trLower(t).includes("ekl") ? "gold" : "";
   return list.map(n => `<div class="notif">
     <span class="chip ${cls(n.tur)}">${esc(n.tur||"İŞLEM")}</span>
     <div><div class="nm">${esc(n.aciklama || [n.kisi,n.oyun,n.gorev].filter(Boolean).join(" · "))}</div>
       <span class="mt">${esc(n.tarih||"")}</span></div></div>`).join("");
 }
+async function fetchNotifJson(){
+  const urls = NOTIF_API === NOTIF_FALLBACK ? [NOTIF_API] : [NOTIF_API, NOTIF_FALLBACK];
+  let last;
+  for(const u of urls){
+    try{
+      const r = await fetch(u, {cache:"no-store"});
+      if(!r.ok) throw new Error("HTTP " + r.status);
+      return await r.json();
+    }catch(e){ last = e; }
+  }
+  throw last || new Error("bağlantı yok");
+}
+let NOTIF_ERR = "";
 async function loadNotifs(){
   try{
-    const r = await fetch(NOTIF_API);
-    if(!r.ok) throw new Error(r.status);
-    const d = await r.json();
+    const d = await fetchNotifJson();
+    NOTIF_ERR = "";
     const t = (d.headers||[]).map(h => trLower(h).trim());
     const ix = k => { const i = t.findIndex(h => h.startsWith(k)); return i < 0 ? -1 : i; };
-    const c = {tarih:Math.max(0,ix("tarih")), tur:ix("tür")<0?ix("tur"):ix("tür"), oyun:ix("oyun"), kisi:ix("kişi"), gorev:ix("görev"), aciklama:ix("açıklama")};
+    const turIx = [ix("işlem"), ix("tür"), ix("tur"), ix("islem")].find(i => i >= 0);
+    const c = {tarih:Math.max(0,ix("tarih")), tur:turIx===undefined?-1:turIx, oyun:ix("oyun"), kisi:ix("kişi"), gorev:ix("görev"), aciklama:ix("açıklama")};
     NOTIFS = (d.rows||[]).map(row => ({
       tarih: row[c.tarih]??"", tur: c.tur<0?"":row[c.tur]??"", oyun: c.oyun<0?"":row[c.oyun]??"",
       kisi: c.kisi<0?"":row[c.kisi]??"", gorev: c.gorev<0?"":row[c.gorev]??"", aciklama: c.aciklama<0?"":row[c.aciklama]??""
     })).reverse();
-  }catch(e){ NOTIFS = []; }
+  }catch(e){ NOTIFS = []; NOTIF_ERR = "Bildirimler yüklenemedi (" + (e.message||"bağlantı hatası") + ")."; }
   renderNotifs();
   const log = document.getElementById("notif-log");
   if(log) log.innerHTML = notifRowsHtml(NOTIFS.slice(0,50));
 }
+function notifKey(n){ return [n.tarih,n.tur,n.kisi,n.oyun,n.gorev].join("|"); }
 function unseenCount(){
-  const seen = parseInt(localStorage.getItem(SEEN_KEY) || "0", 10);
-  return Math.max(0, NOTIFS.length - seen);
+  const seen = localStorage.getItem(SEEN_KEY) || "";
+  if(!seen) return NOTIFS.length;
+  const i = NOTIFS.findIndex(n => notifKey(n) === seen);
+  return i < 0 ? NOTIFS.length : i;
 }
 function renderNotifs(){
   const b = document.getElementById("notif-badge"), l = document.getElementById("notif-list");
@@ -1092,14 +1167,14 @@ function renderNotifs(){
 function toggleNotifs(){
   notifOpen = !notifOpen;
   document.getElementById("notif-pop").classList.toggle("on", notifOpen);
-  if(notifOpen){ localStorage.setItem(SEEN_KEY, String(NOTIFS.length)); renderNotifs(); }
+  if(notifOpen){ localStorage.setItem(SEEN_KEY, NOTIFS[0] ? notifKey(NOTIFS[0]) : ""); renderNotifs(); }
 }
 async function clearNotifs(){
   if(!confirm("Tüm bildirimler silinsin mi?")) return;
   try{
     const r = await fetch(NOTIF_API, {method:"DELETE"});
     if(!r.ok) throw new Error(r.status);
-    localStorage.setItem(SEEN_KEY, "0");
+    localStorage.setItem(SEEN_KEY, "");
     await loadNotifs(); toast("Bildirimler temizlendi.");
   }catch(e){ toast("Bildirimler temizlenemedi.", "err"); }
 }
