@@ -305,13 +305,17 @@ tr:hover td{background:var(--surface-2)}
 }
 
 /* ── Logo mask ── */
-.mask.logo-mask{background:#111;border-color:#333;overflow:hidden;padding:0}
-[data-theme="light"] .mask.logo-mask{background:#1a1a1a;border-color:#444}
+.mask.logo-mask{background:var(--accent-wash);border-color:var(--accent-soft);overflow:hidden;padding:0}
+[data-theme="light"] .mask.logo-mask{background:var(--accent-wash);border-color:var(--accent-soft)}
 
 /* ── Stats mini-cards ── */
 .stat-mini-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:14px}
 .stat-mini{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;display:flex;align-items:center;gap:12px;transition:transform .18s,box-shadow .18s}
 .stat-mini:hover{transform:translateY(-2px);box-shadow:var(--shadow)}
+.stat-mini[onclick]{cursor:pointer}
+.stat-mini[onclick]:active{transform:scale(.97);box-shadow:none}
+.ibsug{background:var(--surface-2);border:1px solid var(--line-strong);border-radius:999px;padding:6px 13px;font-size:12px;font-weight:600;cursor:pointer;color:var(--text-dim);transition:.14s}
+.ibsug:hover{background:var(--accent-wash);color:var(--accent);border-color:var(--accent);transform:translateY(-1px)}
 .stat-mini .icon{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;flex:0 0 auto;font-size:18px}
 .stat-mini .icon.gold{background:var(--accent-wash)}
 .stat-mini .icon.red{background:var(--danger-wash)}
@@ -974,6 +978,77 @@ async function boot(){
   rebuild();
 }
 
+/* ── Inline AI Panel ── */
+function inlineBotPanel(){
+  const total = loaded ? PLAYS.length + " oyun · " + aktifPeople().length + " aktif kişi · " + new Set(FIGROWS.map(r=>r.kisi)).size + " figüran" : "Veriler yükleniyor…";
+  const sugs = ["Nasıl kullanılır?","İstatistik sekmeleri","Pasif kişi nedir?","Excel / PDF dışa aktar","Arşivleme nasıl yapılır?","Kişi listesi","Turne Takip","Bildirimler nasıl çalışır?"];
+  const sugHtml = sugs.map(s => '<button class="ibsug" onclick="inlineBotAsk(' + jq(s) + ')">' + esc(s) + '</button>').join("");
+  return '<div style="height:100%;display:flex;flex-direction:column;border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;background:var(--surface)">' +
+    '<div style="background:var(--accent);padding:30px 20px 24px;text-align:center;color:var(--accent-ink);flex:0 0 auto">' +
+      '<div style="width:60px;height:60px;border-radius:50%;background:rgba(255,255,255,.2);margin:0 auto 14px;display:grid;place-items:center">' +
+        '<svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>' +
+      '</div>' +
+      '<div style="font-size:18px;font-weight:800;font-family:var(--font-d);line-height:1.2">Repertuvar Takip Sistemi</div>' +
+      '<div style="font-size:11.5px;opacity:.8;margin-top:5px;letter-spacing:.06em">Akıllı Rehber Botu</div>' +
+      '<div style="font-size:12px;margin-top:12px;background:rgba(255,255,255,.18);border-radius:9px;padding:7px 12px">' + total + '</div>' +
+    '</div>' +
+    '<div style="flex:1;overflow-y:auto;padding:16px 16px 8px">' +
+      '<p style="font-size:12px;color:var(--muted);margin-bottom:14px;text-align:center">Kişi veya oyun adı aratın · Sistem hakkında soru sorun</p>' +
+      '<div style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:16px">' + sugHtml + '</div>' +
+      '<div id="inline-bot-msgs" style="display:flex;flex-direction:column;gap:8px;min-height:40px"></div>' +
+    '</div>' +
+    '<div style="display:flex;gap:8px;padding:12px 14px;border-top:1px solid var(--line);flex:0 0 auto">' +
+      '<input id="inline-bot-inp" placeholder="Kişi adı, oyun adı veya soru yazın…"' +
+        ' style="flex:1;background:var(--surface-2);border:1px solid var(--line-strong);border-radius:10px;padding:9px 12px;font-size:13px;outline:none;font-family:inherit;color:inherit;transition:border-color .14s"' +
+        ' onfocus="this.style.borderColor=\'var(--accent)\'" onblur="this.style.borderColor=\'var(--line-strong)\'"' +
+        ' onkeydown="if(event.key===\'Enter\')inlineBotSend()">' +
+      '<button onclick="inlineBotSend()" style="background:var(--accent);color:var(--accent-ink);border:none;border-radius:10px;padding:9px 16px;cursor:pointer;font-size:13px;font-weight:700;white-space:nowrap">Gönder</button>' +
+    '</div>' +
+  '</div>';
+}
+function inlineBotMsg(text, isUser){
+  const box = document.getElementById("inline-bot-msgs");
+  if(!box) return;
+  const d = document.createElement("div");
+  d.className = isUser ? "chat-msg user" : "chat-msg bot";
+  d.style.maxWidth = "90%";
+  d.innerHTML = text.replace(/\n/g,"<br>");
+  box.appendChild(d);
+  box.parentNode.scrollTop = box.parentNode.scrollHeight;
+}
+function inlineBotAsk(text){
+  inlineBotMsg(text, true);
+  setTimeout(() => {
+    if(loaded && text.length > 2){
+      const lt = trLower(text);
+      const fp = PLAYS.find(p => trLower(p.name).includes(lt));
+      if(fp){
+        const s = seasonOf(fp.name);
+        const sezon = s && s.promiyerSezonu ? "\nPrömiyer sezonu: " + s.promiyerSezonu : "";
+        inlineBotMsg("🎭 " + fp.name + "\n\n👥 " + fp.personel + " aktif kişi · " + fp.figuran + " figüran · " + fp.rowCount + " kayıt" + sezon + "\n\n📌 Detay için soldaki listeden tıklayın.", false);
+        return;
+      }
+      const fk = PEOPLE.find(p => trLower(p.name).includes(lt));
+      if(fk){
+        const oyunlar = fk.oyunlar.slice(0,5).join(", ") + (fk.oyunlar.length > 5 ? "…" : "");
+        inlineBotMsg("👤 " + fk.name + "\n\n🎭 " + fk.oyunlar.length + " oyunda görev aldı · " + (fk.aktif ? "✅ Aktif" : "⏸ Pasif") + (fk.fig ? " · Figüran" : "") + "\nGörevler: " + (fk.gorevler.slice(0,4).join(", ") || "—") + "\nOyunlar: " + oyunlar + "\n\n📌 Detay için Kişiler sekmesine gidin.", false);
+        return;
+      }
+    }
+    const match = IDT_KB.find(r => r.pat.some(p => p.test(text)));
+    if(match){ inlineBotMsg(match.rep, false); return; }
+    inlineBotMsg("🔍 Hakkında bilgi bulunamadı.\n\n• Kişi veya oyun adı yazarak arama yapabilirsiniz\n• Soldaki listeden bir oyun seçin", false);
+  }, 280);
+}
+function inlineBotSend(){
+  const inp = document.getElementById("inline-bot-inp");
+  if(!inp) return;
+  const v = (inp.value || "").trim();
+  if(!v) return;
+  inp.value = "";
+  inlineBotAsk(v);
+}
+
 /* ============ Ana panel: oyunlar ============ */
 let openPlay = null, playFilter = "tumu";
 function setPlayFilter(f){
@@ -993,16 +1068,15 @@ function renderPlays(){
   if(playFilter === "cocuk") all = all.filter(p => isCocuk(p.name));
   else if(playFilter === "yetiskin") all = all.filter(p => !isCocuk(p.name));
   const items = slice("play", all);
-  document.getElementById("play-count").textContent = all.length;
+  document.getElementById("play-count").textContent = all.length + " oyun";
   document.getElementById("play-list").innerHTML = all.length ? items.map(p => `
     <div class="row${openPlay===p.name?" sel":""}" onclick="selectPlay(${jq(p.name)})">
       <div style="min-width:0"><div class="nm">${esc(p.name)} ${isCocuk(p.name)?'<span class="chip crim">Ç.O</span>':""}</div>
         <div class="mt">${p.personel} aktif kişi${p.pasif?` · ${p.pasif} pasif`:""}${p.figuran?` · ${p.figuran} figüran`:""} · ${p.rowCount} kayıt${seasonOf(p.name)?.promiyerSezonu?` · Prömiyer ${esc(seasonOf(p.name).promiyerSezonu)}`:""}</div></div>
-      <span class="chip gold">${p.personel}</span>
+      <span class="chip gold">${p.personel} kişi</span>
     </div>`).join("") : `<div class="empty">Eşleşen oyun bulunamadı.</div>`;
   document.getElementById("play-pager").innerHTML = pager("play", all.length);
-  document.getElementById("play-detail").innerHTML = openPlay ? playDetail(openPlay)
-    : `<div class="placeholder">Soldaki listeden bir oyun seçin.<br>Kadro detayı burada açılır.</div>`;
+  document.getElementById("play-detail").innerHTML = openPlay ? playDetail(openPlay) : inlineBotPanel();
   setDetailOpen("split-panel", !!openPlay);
 }
 function selectPlay(n){ openPlay = (openPlay === n ? null : n); renderPlays(); }
@@ -1073,7 +1147,7 @@ function renderPeople(){
   if(!loaded) return;
   const all = currentPeople();
   const items = slice("person", all);
-  document.getElementById("person-count").textContent = all.length;
+  document.getElementById("person-count").textContent = all.length + " kişi";
   document.getElementById("person-list").innerHTML = all.length ? items.map(p => `
     <div class="row${openPerson===p.name?" sel":""}${p.aktif?"":" pasif"}" onclick="selectPerson(${jq(p.name)})">
       <div style="min-width:0"><div class="nm">${esc(p.name)} ${p.fig?'<span class="chip crim">Fig</span>':""}${p.aktif?"":'<span class="chip">Pasif</span>'}</div>
@@ -1133,7 +1207,7 @@ function renderDagilim(){
   const base = aktifPeople();
   const items = base.filter(p => !q || trLower(p.name).includes(q)).slice(0,200);
   const max = base[0]?.oyunlar.length || 1;
-  document.getElementById("dag-count").textContent = items.length;
+  document.getElementById("dag-count").textContent = items.length + " kişi";
   document.getElementById("dagilim").innerHTML = items.length ? items.map((p,i) => `
     <div class="row${openDag===p.name?" sel":""}" onclick="openDag=${jq(p.name)};renderDagilim()">
       <div style="flex:1;min-width:0">
@@ -1259,6 +1333,44 @@ function statModal(title, html){
   document.getElementById("stat-modal-b").innerHTML = html;
   document.getElementById("stat-modal").classList.add("on");
 }
+/* ── İstatistik KPI tıklama fonksiyonları ── */
+function statKpiOyun(){
+  const rows = [...PLAYS].sort((a,b) => b.personel - a.personel);
+  statModal("Aktif Oyunlar — " + rows.length + " oyun",
+    miniTable(["Oyun","Aktif Kişi","Figüran","Kayıt"],
+      rows.map(p => [p.name, p.personel, p.figuran || "—", p.rowCount])));
+}
+function statKpiKisi(){
+  const ak = aktifPeople();
+  statModal("Aktif Kadro — " + ak.length + " kişi",
+    miniTable(["Kişi","Oyun Sayısı","Roller"],
+      ak.map(p => [p.name, p.oyunlar.length, p.gorevler.slice(0,3).join(", ") || "—"])));
+}
+function statKpiFig(){
+  const fm = figMap();
+  const list = [...fm.entries()].sort((a,b) => b[1].length - a[1].length || sortTr(a[0],b[0]));
+  statModal("Figüranlar — " + list.length + " kişi",
+    miniTable(["Figüran","Oyun Sayısı","Oyunlar"],
+      list.map(([n,rs]) => [n, new Set(rs.map(r=>r.oyun)).size, [...new Set(rs.map(r=>r.oyun))].sort(sortTr).slice(0,4).join(", ")])));
+}
+function statKpiPasif(){
+  const pl = PEOPLE.filter(p => !p.aktif).sort((a,b) => b.oyunlar.length - a.oyunlar.length || sortTr(a.name,b.name));
+  statModal("Pasif Kadro — " + pl.length + " kişi",
+    miniTable(["Kişi","Oyun Sayısı","Figüran","Son Oyunlar"],
+      pl.map(p => [p.name, p.oyunlar.length, p.fig ? "Evet" : "—", p.oyunlar.slice(0,3).join(", ")])));
+}
+function statKpiKayit(){
+  const catM = new Map();
+  DATA.forEach(r => catM.set(r.kategori||"Diğer", (catM.get(r.kategori||"Diğer")||0)+1));
+  const catRows = [...catM.entries()].sort((a,b) => b[1]-a[1]);
+  statModal("Toplam Kayıt Özeti — " + DATA.length + " kayıt",
+    miniTable(["Kategori","Kayıt Sayısı"], catRows.map(([k,v]) => [k, v])));
+}
+function statKpiKat(){
+  statModal("Kategoriler — " + catCounts().length + " kategori",
+    miniTable(["Kategori","Tekil Kişi Sayısı"], catCounts().map(([k,v]) => [k, v])));
+}
+
 function closeStatModal(){ document.getElementById("stat-modal").classList.remove("on"); }
 document.getElementById("stat-modal").addEventListener("mousedown", e => { if(e.target.id === "stat-modal") closeStatModal(); });
 
@@ -1319,12 +1431,12 @@ function renderGrafik(){
   if(statTab === "genel"){
     const pasifCount = PEOPLE.filter(p => !p.aktif).length;
     box.innerHTML = `<div class="stat-mini-row">
-      <div class="stat-mini"><span class="icon gold">🎭</span><div><div class="val">${PLAYS.length}</div><div class="lbl">Aktif Oyun</div></div></div>
-      <div class="stat-mini"><span class="icon gold">👥</span><div><div class="val">${akt.length}</div><div class="lbl">Aktif Kişi</div></div></div>
-      <div class="stat-mini"><span class="icon red">🎪</span><div><div class="val">${figCount}</div><div class="lbl">Figüran</div></div></div>
-      <div class="stat-mini danger"><span class="icon red">⏸</span><div><div class="val">${pasifCount}</div><div class="lbl">Pasif Kişi</div></div></div>
-      <div class="stat-mini"><span class="icon green">📋</span><div><div class="val">${DATA.length}</div><div class="lbl">Toplam Kayıt</div></div></div>
-      <div class="stat-mini"><span class="icon gold">📊</span><div><div class="val">${cats.length}</div><div class="lbl">Kategori</div></div></div>
+      <div class="stat-mini" style="cursor:pointer" onclick="statKpiOyun()" title="Detay için tıklayın"><span class="icon gold">🎭</span><div><div class="val">${PLAYS.length}</div><div class="lbl">Aktif Oyun ↗</div></div></div>
+      <div class="stat-mini" style="cursor:pointer" onclick="statKpiKisi()" title="Detay için tıklayın"><span class="icon gold">👥</span><div><div class="val">${akt.length}</div><div class="lbl">Aktif Kişi ↗</div></div></div>
+      <div class="stat-mini" style="cursor:pointer" onclick="statKpiFig()" title="Detay için tıklayın"><span class="icon red">🎪</span><div><div class="val">${figCount}</div><div class="lbl">Figüran ↗</div></div></div>
+      <div class="stat-mini danger" style="cursor:pointer" onclick="statKpiPasif()" title="Detay için tıklayın"><span class="icon red">⏸</span><div><div class="val">${pasifCount}</div><div class="lbl">Pasif Kişi ↗</div></div></div>
+      <div class="stat-mini" style="cursor:pointer" onclick="statKpiKayit()" title="Detay için tıklayın"><span class="icon green">📋</span><div><div class="val">${DATA.length}</div><div class="lbl">Toplam Kayıt ↗</div></div></div>
+      <div class="stat-mini" style="cursor:pointer" onclick="statKpiKat()" title="Detay için tıklayın"><span class="icon gold">📊</span><div><div class="val">${cats.length}</div><div class="lbl">Kategori ↗</div></div></div>
     </div>
     <div class="grid2">
       ${donut("Kategoriye Göre Kişi Sayısı", cats.slice(0,12), "kişi", "statCat")}
@@ -1836,11 +1948,11 @@ setInterval(loadNotifs, 60000);
 </script>
 
 <!-- ═══ AI Rehber Botu ═══ -->
-<button id="idt-chat-btn" onclick="toggleChat()" title="Rehber &amp; Yardım">🎭<span class="notif-dot" id="chat-dot"></span></button>
+<button id="idt-chat-btn" onclick="toggleChat()" title="Rehber &amp; Yardım"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span class="notif-dot" id="chat-dot"></span></button>
 <div id="idt-chat-win">
   <div class="chat-head">
-    <div class="avatar">🤖</div>
-    <div class="info"><b>İDT Rehber</b><span>Kural tabanlı yardımcı</span></div>
+    <div class="avatar" style="background:rgba(255,255,255,0.25);border-radius:50%;display:grid;place-items:center"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
+    <div class="info"><b>Repertuvar Takip Sistemi</b><span>Akıllı Rehber Botu</span></div>
     <button class="close-btn" onclick="toggleChat()">✕</button>
   </div>
   <div class="chat-msgs" id="chat-msgs"></div>
@@ -1866,19 +1978,22 @@ const IDT_KB = [
   { pat:[/bildirim/i], rep:"Sağ üstteki zil ikonuna tıklayarak bildirimleri görebilirsiniz. Her bildirimin yanındaki ✕ ile tek tek silebilir, 'Temizle' ile hepsini kaldırabilirsiniz." },
   { pat:[/excel|pdf|dışa|export/i], rep:"Hemen her ekranda Excel ve PDF dışa aktarma butonu bulunur." },
   { pat:[/tema|koyu|aydınlık|dark|light/i], rep:"Sağ üstteki ay\/güneş ikonuna tıklayarak tema değiştirebilirsiniz. Tercih tarayıcıya kaydedilir." },
+  { pat:[/kişi listesi|kadro listesi/i], rep:"Kişiler sekmesinde 4 mod var: Aktif (görevdeki kadro), Pasif (görevden çekilenler), Tümü ve Figüran. Excel ile tüm listeyi dışa aktarabilirsiniz." },
+  { pat:[/excel|pdf|dışa|export/i], rep:"Hemen her ekranda Excel ve PDF dışa aktarma butonu bulunur. Ana Panel oyun detayında, Kişiler, Figüran, Sorgulama ve İstatistik sayfalarında aktarma seçeneği mevcuttur." },
+  { pat:[/yönetim şifre|admin şifre|şifre|parola|pin/i], rep:"Sistemde iki şifre bulunur:\n1) Yönetim \/Görevli Olmayan \/Arşiv erişim şifresi (yetkililere özel)\n2) Oyun arşivleme şifresi: 346346" },
   { pat:[/çocuk oyun|cocuk/i], rep:"Ana Panel'de 'Çocuk Oyunları' filtresiyle yalnızca Ç.O etiketli oyunlar listelenir." },
   { pat:[/turne/i], rep:"Turne Takip sayfası ayrı bir sekmededir. Navigasyon menüsündeki 'Turne Takip ↗' bağlantısından erişebilirsiniz." },
   { pat:[/sezon|prömiyer/i], rep:"İstatistik → Sezon Bilgisi sekmesinde oyunların prömiyer tarihleri ve kaç sezondur temsil edildikleri görüntülenebilir." },
   { pat:[/ne yap|nasıl kullan|yardım|rehber|başla/i], rep:"Bu sistem İzmir Devlet Tiyatrosu repertuvar takibini yönetir.\n\n🎭 Ana Panel: oyun kadroları\n👥 Kişiler: personel yönetimi\n📊 Dağılım: yük analizi\n🔍 Sorgulama: oyun karşılaştırma\n📈 İstatistik: grafikler\n🎪 Figüran: figüran takibi" },
-  { pat:[/merhaba|selam|hi |hey |nasılsın/i], rep:"Merhaba! Ben İDT Repertuvar Takip Sistemi'nin rehber botuyum 🎭\nSistem hakkında sorularınızı yanıtlayabilirim. Bir konu seçin ya da sorunuzu yazın." },
+  { pat:[/merhaba|selam|hi |hey |nasılsın/i], rep:"Merhaba! Ben Repertuvar Takip Sistemi Rehber Botuyum 🎭\nSistem hakkında sorularınızı yanıtlayabilirim. Kişi veya oyun adı aratabilirsiniz. Bir konu seçin ya da sorunuzu yazın." },
 ];
-const CHAT_SUGS = ["Nasıl kullanılır?","Pasif kişi nedir?","Arşivleme nasıl yapılır?","Çocuk oyunları filtresi","İstatistik sekmeleri","Bildirimler nasıl yönetilir?"];
+const CHAT_SUGS = ["Nasıl kullanılır?","Pasif kişi nedir?","Arşivleme nasıl yapılır?","Çocuk oyunları filtresi","İstatistik sekmeleri","Kişi listesi","Excel / PDF dışa aktar","Yönetim şifresi"];
 let chatOpen = false, chatHistory = [];
 function toggleChat(){
   chatOpen = !chatOpen;
   const win = document.getElementById("idt-chat-win");
   win.classList.toggle("open", chatOpen);
-  if(chatOpen && chatHistory.length === 0) botMsg("Merhaba! Ben İDT Rehber Botuyum 🎭\n\nSistem hakkında sorularınızı yanıtlayabilirim. Aşağıdan bir konu seçin ya da sorunuzu yazın.");
+  if(chatOpen && chatHistory.length === 0) botMsg("Merhaba! Ben Repertuvar Takip Sistemi Rehber Botuyum 🎭\n\nSistem hakkında sorularınızı yanıtlayabilirim. Kişi veya oyun adı aratabilirsiniz.\n\nAşağıdan bir konu seçin ya da sorunuzu yazın.");
   if(chatOpen) setTimeout(() => document.getElementById("chat-inp")?.focus(), 50);
   document.getElementById("chat-dot").style.display = "none";
 }
@@ -1904,7 +2019,7 @@ function userMsg(text){
 }
 function renderSugs(){
   const el = document.getElementById("chat-sugs");
-  el.innerHTML = CHAT_SUGS.map(s => `<button class="chat-sug-btn" onclick="sendChatText(${JSON.stringify(s)})">${s}</button>`).join("");
+  el.innerHTML = CHAT_SUGS.map(s => `<button class="chat-sug-btn" onclick="sendChatText(${jq(s)})">${s}</button>`).join("");
 }
 function sendChat(){
   const inp = document.getElementById("chat-inp");
@@ -1916,6 +2031,22 @@ function sendChat(){
 function sendChatText(text){
   userMsg(text);
   setTimeout(() => {
+    if(loaded && text.length > 2){
+      const lt = trLower(text);
+      const fp = PLAYS.find(p => trLower(p.name).includes(lt));
+      if(fp){
+        const s = seasonOf(fp.name);
+        const sezon = s && s.promiyerSezonu ? '\nPrömiyer sezonu: ' + s.promiyerSezonu : '';
+        botMsg('🎭 ' + fp.name + '\n\n👥 ' + fp.personel + ' aktif kişi · ' + fp.figuran + ' figüran · ' + fp.rowCount + ' kayıt\nKategoriler: ' + fp.cats.slice(0,5).join(', ') + sezon + '\n\n📌 Detay için Ana Panel\'de bu oyuna tıklayabilirsiniz.');
+        return;
+      }
+      const fk = PEOPLE.find(p => trLower(p.name).includes(lt));
+      if(fk){
+        const oyunlar = fk.oyunlar.slice(0,5).join(', ') + (fk.oyunlar.length > 5 ? '…' : '');
+        botMsg('👤 ' + fk.name + '\n\n🎭 ' + fk.oyunlar.length + ' oyunda görev aldı · ' + (fk.aktif ? '✅ Aktif' : '⏸ Pasif') + (fk.fig ? ' · Figüran' : '') + '\nGörevler: ' + (fk.gorevler.slice(0,4).join(', ') || '—') + '\nOyunlar: ' + oyunlar + '\n\n📌 Detay için Kişiler sekmesine gidin.');
+        return;
+      }
+    }
     const match = IDT_KB.find(r => r.pat.some(p => p.test(text)));
     if(match){ botMsg(match.rep); return; }
     const fb = [[/oyun/i,"Oyunlarla ilgili işlemler için Ana Panel, Sorgulama, İstatistik sekmelerini kullanabilirsiniz."],[/kişi|isim/i,"Kişilerle ilgili işlemler için Kişiler sekmesine gidin."],[/kayıt|veri/i,"Kayıtlar Google Sheets'te tutulur. Yönetim sekmesinden düzenlenebilir (şifre gerekir)."]];
