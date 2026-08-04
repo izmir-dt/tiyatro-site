@@ -239,6 +239,14 @@ tr:hover td{background:var(--surface-2)}
 .info-strip{display:flex;flex-wrap:wrap;gap:8px;padding:10px 14px;border-bottom:1px solid var(--line);background:var(--accent-wash)}
 .info-strip .it{font-size:12px;color:var(--text-dim)}
 .info-strip .it b{color:var(--accent)}
+.sub-seg{margin-bottom:10px}
+.filter-chips{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:12px}
+.fchip{border:1px solid var(--line-strong);background:var(--surface);color:var(--muted);border-radius:999px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer}
+.fchip.on{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.season-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px;align-items:start}
+@media(max-width:900px){.season-grid{grid-template-columns:1fr}}
+
+
 
 /* ---------- responsive: mobilde detay tam ekran ---------- */
 @media(max-width:960px){
@@ -342,6 +350,7 @@ tr:hover td{background:var(--surface-2)}
         <div class="search"><input id="q-person" placeholder="Kişi ara…" oninput="resetPage('person');renderPeople()"></div>
         <div class="tools"><div class="segment">
             <button id="seg-p-akt" class="on" onclick="setPeopleMode('aktif')">Aktif</button>
+            <button id="seg-p-pas" onclick="setPeopleMode('pasif')">Pasif</button>
             <button id="seg-p-all" onclick="setPeopleMode('tumu')">Tümü</button>
             <button id="seg-p-fig" onclick="setPeopleMode('figuran')">Figüran</button></div>
           <button class="btn sm" onclick="exportExcel(peopleExportRows(),'kisiler')">Excel</button></div>
@@ -557,17 +566,25 @@ function rowValues(r){
 const sheetAppend = r  => api(sheetPath() + "/row", {method:"POST", body:JSON.stringify({values: rowValues(r)})});
 const sheetDelete = i  => api(sheetPath() + "/row/" + i, {method:"DELETE"});
 const sheetCell = (i,c,v) => api(sheetPath() + "/cell", {method:"PUT", body:JSON.stringify({row:i, col:c, value:v})});
+const otherPath = n => "/" + encodeURIComponent(n);
+const sheetAppendTo = (n, values) => api(otherPath(n) + "/row", {method:"POST", body:JSON.stringify({values})});
+const sheetDeleteFrom = (n, i) => api(otherPath(n) + "/row/" + i, {method:"DELETE"});
 let busy = false;
-async function withBusy(label, fn){
+async function withBusy(label, fn, extra){
   if(busy) return;
   busy = true; toast(label + "…");
-  try{ await fn(); cache.delete(MAIN_SHEET); await boot(); toast("Google e-Tablo güncellendi."); loadNotifs(); }
+  try{
+    await fn();
+    cache.delete(MAIN_SHEET); (extra||[]).forEach(s => cache.delete(s));
+    await boot(); toast("Google e-Tablo güncellendi."); loadNotifs();
+  }
   catch(err){ toast("Kaydedilemedi: " + err.message, "err"); }
   finally{ busy = false; }
 }
 
 /* ============ Model ============ */
 let API_ROWS = [], DATA = [], PLAYS = [], PEOPLE = [], FIGROWS = [], FIGSHEET = {headers:[],rows:[]}, PASIF = new Set();
+let PASIF_ROWS = [];
 let SEASON = new Map();
 function parseSeason(d){
   const m = new Map();
@@ -615,8 +632,11 @@ function buildPlays(rows){
       if(isFig(r.kategori) || FIGTAG.test(n)) o.figs.add(c); });
     if(r.kategori) o.cats.add(r.kategori);
   });
-  return [...m.values()].map(o => ({name:o.name, personel:o.people.size, figuran:o.figs.size,
-    rowCount:o.rows, cats:[...o.cats].sort(sortTr)})).sort((a,b) => sortTr(a.name,b.name));
+  return [...m.values()].map(o => {
+    const all = [...o.people], akt = all.filter(n => !PASIF.has(norm(n)));
+    return {name:o.name, personel:akt.length, tumPersonel:all.length, pasif:all.length - akt.length,
+      figuran:[...o.figs].filter(n => !PASIF.has(norm(n))).length, rowCount:o.rows, cats:[...o.cats].sort(sortTr)};
+  }).sort((a,b) => sortTr(a.name,b.name));
 }
 function buildPeople(rows){
   const m = new Map();
@@ -815,7 +835,8 @@ async function boot(){
   const [d, pasif, figs, season] = await Promise.all([sheet(MAIN_SHEET), sheet(PASIF_SHEET), sheet(FIG_SHEET), sheet(SEASON_SHEET)]);
   SEASON = parseSeason(season || {});
   API_ROWS = parseRows(d.headers || [], d.rows || []);
-  PASIF = new Set((pasif.rows||[]).map(r => norm(r[0])).filter(Boolean));
+  PASIF_ROWS = (pasif.rows||[]).map((r,i) => ({i, name: unent(String(r[0]??"").trim())})).filter(x => x.name);
+  PASIF = new Set(PASIF_ROWS.map(x => norm(x.name)));
   FIGSHEET = {headers:(figs.headers||[]).filter(h => String(h||"").trim()),
               rows:(figs.rows||[]).filter(r => r.some(c => String(c||"").trim()))};
   loaded = true; window.loaded = true;
@@ -833,7 +854,7 @@ function renderPlays(){
   document.getElementById("play-list").innerHTML = all.length ? items.map(p => `
     <div class="row${openPlay===p.name?" sel":""}" onclick="selectPlay(${jq(p.name)})">
       <div style="min-width:0"><div class="nm">${esc(p.name)} ${isCocuk(p.name)?'<span class="chip crim">Ç.O</span>':""}</div>
-        <div class="mt">${p.personel} kişi${p.figuran?` · ${p.figuran} figüran`:""} · ${p.rowCount} kayıt${seasonOf(p.name)?.promiyerSezonu?` · Prömiyer ${esc(seasonOf(p.name).promiyerSezonu)}`:""}</div></div>
+        <div class="mt">${p.personel} aktif kişi${p.pasif?` · ${p.pasif} pasif`:""}${p.figuran?` · ${p.figuran} figüran`:""} · ${p.rowCount} kayıt${seasonOf(p.name)?.promiyerSezonu?` · Prömiyer ${esc(seasonOf(p.name).promiyerSezonu)}`:""}</div></div>
       <span class="chip gold">${p.personel}</span>
     </div>`).join("") : `<div class="empty">Eşleşen oyun bulunamadı.</div>`;
   document.getElementById("play-pager").innerHTML = pager("play", all.length);
@@ -842,36 +863,44 @@ function renderPlays(){
   setDetailOpen("split-panel", !!openPlay);
 }
 function selectPlay(n){ openPlay = (openPlay === n ? null : n); renderPlays(); }
+const isPasif = n => PASIF.has(norm(stripTag(n)));
 function playDetail(name){
   const rows = DATA.filter(r => r.oyun === name);
   const byCat = new Map();
   rows.forEach(r => { const k = r.kategori || "Diğer"; if(!byCat.has(k)) byCat.set(k,[]); byCat.get(k).push(r); });
   const people = new Set(); rows.forEach(r => names(r.kisi).forEach(n => people.add(stripTag(n))));
+  const aktifSet = [...people].filter(n => !PASIF.has(norm(n)));
   const figs = new Set(FIGROWS.filter(r => r.oyun === name).map(r => r.kisi));
   return `<button class="back" onclick="openPlay=null;renderPlays()">← Oyun listesi</button>
   <div class="card"><div class="card-h"><div><h3>${esc(name)}</h3>
-    <div class="mt" style="font-size:12px;color:var(--muted)">${people.size} kişi · ${figs.size} figüran · ${rows.length} kayıt · ${byCat.size} kategori</div></div>
+    <div class="mt" style="font-size:12px;color:var(--muted)">${aktifSet.length} aktif kişi${people.size-aktifSet.length?` · ${people.size-aktifSet.length} pasif`:""} · ${figs.size} figüran · ${rows.length} kayıt · ${byCat.size} kategori</div></div>
     <div class="tools"><button class="btn sm" onclick="exportExcel(playExportRows(${jq(name)}),'kadro')">Excel</button>
       <button class="btn sm" onclick="exportPDF(${jq(name+' — Kadro')},['Oyun','Kategori','Görev','Kişi'],playExportRows(${jq(name)}))">PDF</button></div></div>
     ${seasonStrip(name)}</div>
   ${[...byCat.entries()].map(([cat,rs]) => `<div class="card"><div class="card-h">
       <h3 style="font-size:12.5px;letter-spacing:.08em;text-transform:uppercase">${esc(cat)}</h3>
       <span class="chip ${isFig(cat)?"crim":""}">${rs.length} kayıt</span></div>
-    <div class="card-b">${rs.map(r => `<div class="row" onclick="openPerson=${jq(stripTag(names(r.kisi)[0]||""))};go('kisiler')">
-        <div class="nm">${esc(r.kisi)}</div><span class="chip">${esc(r.gorev||"—")}</span></div>`).join("")}</div></div>`).join("")}`;
+    <div class="card-b">${rs.map(r => {
+      const pas = names(r.kisi).length && names(r.kisi).every(isPasif);
+      return `<div class="row${pas?" pasif":""}" onclick="openPerson=${jq(stripTag(names(r.kisi)[0]||""))};go('kisiler')">
+        <div class="nm">${esc(r.kisi)} ${pas?'<span class="chip">Pasif</span>':""}</div><span class="chip">${esc(r.gorev||"—")}</span></div>`;
+    }).join("")}</div></div>`).join("")}`;
 }
 
 /* ============ Kişiler ============ */
 let openPerson = null, peopleMode = "aktif";
 function setPeopleMode(m){
   peopleMode = m; resetPage("person");
-  ["akt","all","fig"].forEach(k => document.getElementById("seg-p-"+k).classList.remove("on"));
-  document.getElementById(m === "aktif" ? "seg-p-akt" : m === "tumu" ? "seg-p-all" : "seg-p-fig").classList.add("on");
+  const map = {aktif:"akt", pasif:"pas", tumu:"all", figuran:"fig"};
+  ["akt","pas","all","fig"].forEach(k => document.getElementById("seg-p-"+k).classList.remove("on"));
+  document.getElementById("seg-p-" + (map[m]||"akt")).classList.add("on");
   renderPeople();
 }
 function currentPeople(){
   const q = trLower((document.getElementById("q-person")?.value||"").trim());
-  let list = peopleMode === "aktif" ? aktifPeople() : peopleMode === "figuran" ? PEOPLE.filter(p => p.fig) : PEOPLE;
+  let list = peopleMode === "aktif" ? aktifPeople()
+    : peopleMode === "pasif" ? PEOPLE.filter(p => !p.aktif)
+    : peopleMode === "figuran" ? PEOPLE.filter(p => p.fig) : PEOPLE;
   return list.filter(p => !q || trLower(p.name).includes(q));
 }
 function renderPeople(){
@@ -881,7 +910,7 @@ function renderPeople(){
   document.getElementById("person-count").textContent = all.length;
   document.getElementById("person-list").innerHTML = all.length ? items.map(p => `
     <div class="row${openPerson===p.name?" sel":""}${p.aktif?"":" pasif"}" onclick="selectPerson(${jq(p.name)})">
-      <div style="min-width:0"><div class="nm">${esc(p.name)} ${p.fig?'<span class="chip crim">Fig</span>':""}</div>
+      <div style="min-width:0"><div class="nm">${esc(p.name)} ${p.fig?'<span class="chip crim">Fig</span>':""}${p.aktif?"":'<span class="chip">Pasif</span>'}</div>
         <div class="mt">${esc(p.gorevler.slice(0,3).join(" · ")||p.cats.slice(0,3).join(" · "))}</div></div>
       <span class="chip gold">${p.oyunlar.length} oyun</span></div>`).join("")
     : `<div class="empty">Eşleşen kişi bulunamadı.</div>`;
@@ -901,6 +930,7 @@ function personDetail(name){
   <div class="card"><div class="card-h"><div><h3>${esc(name)}</h3>
     <div class="mt" style="font-size:12px;color:var(--muted)">${byPlay.size} oyun · ${rows.length} kayıt${figOyun.size?` · ${figOyun.size} figüran görevi`:""}</div></div>
     <div class="tools">${p && !p.aktif?'<span class="chip">Pasif</span>':""}${figOyun.size?'<span class="chip crim">Figüran</span>':""}
+      <button class="btn sm ${p && p.aktif?"dan":"pri"}" onclick="setPersonActive(${jq(name)},${p && p.aktif ? "false" : "true"})">${p && p.aktif ? "Pasife al" : "Aktife al"}</button>
       <button class="btn sm" onclick="exportExcel([['Oyun','Kategori','Görev']].concat(${jq(rows.map(r=>[r.oyun,r.kategori,r.gorev]))}),'kisi')">Excel</button>
       <button class="btn sm" onclick="exportPDF(${jq(name)},['Oyun','Kategori','Görev'],${jq(rows.map(r=>[r.oyun,r.kategori,r.gorev]))})">PDF</button></div></div>
     <div class="card-b">${[...byPlay.entries()].sort((a,b)=>sortTr(a[0],b[0])).map(([play,rs]) => `
@@ -910,6 +940,24 @@ function personDetail(name){
         <div class="tag-row">${[...new Set(rs.map(r=>r.kategori).filter(Boolean))].map(c=>`<span class="chip ${isFig(c)?"crim":""}">${esc(c)}</span>`).join("")}</div>
       </div>`).join("")}</div></div>`;
 }
+/* ---- Aktif / Pasif durumu (PASIF_KISILER sayfası) ---- */
+async function setPersonActive(name, aktif){
+  const msg = aktif
+    ? `${name} yeniden AKTİF olarak işaretlenecek. Kadro sayımlarına ve istatistiklere tekrar dahil edilecek.`
+    : `${name} PASİF olarak işaretlenecek.\n\nGörevini tamamlamış sayılır; kadro sayımlarında, istatistiklerde ve yük dağılımında görünmez. Geçmiş kayıtları silinmez.`;
+  const ok = await uiConfirm(msg, aktif ? "Aktife al" : "Pasife al");
+  if(!ok) return;
+  await withBusy(aktif ? "Aktife alınıyor" : "Pasife alınıyor", async () => {
+    if(aktif){
+      const hit = PASIF_ROWS.filter(x => norm(x.name) === norm(name)).sort((a,b) => b.i - a.i);
+      for(const h of hit) await sheetDeleteFrom(PASIF_SHEET, h.i);
+    } else {
+      if(!PASIF.has(norm(name))) await sheetAppendTo(PASIF_SHEET, [name]);
+    }
+  }, [PASIF_SHEET]);
+}
+
+
 
 /* ============ Dağılım ============ */
 let openDag = null;
@@ -1086,7 +1134,7 @@ function statLoad(n){
 }
 
 /* ---- istatistik sekmeleri ---- */
-let statTab = "genel";
+let statTab = "genel", seasonSub = "tablo", seasonFilter = "";
 const STAT_TABS = [["genel","Genel Bakış"],["kategori","Kategoriler"],["oyun","Oyunlar"],
   ["kisi","Kişiler"],["yuk","Yük Dağılımı"],["sezon","Sezon Bilgisi"]];
 function setStatTab(t){ statTab = t; renderGrafik(); }
@@ -1126,23 +1174,41 @@ function renderGrafik(){
     box.innerHTML = barChart("Yük Dağılımı (kaç kişi kaç oyunda)",
       [...load.entries()].sort((a,b) => a[0]-b[0]).map(([k,v]) => [k + " oyunda", v]), " kişi", "statLoadLabel");
   } else {
-    const rows = PLAYS.map(p => {
+    const allRows = PLAYS.map(p => {
       const s = seasonOf(p.name);
       return [p.name, s?.sezonSayisi ?? "", s?.promiyerTarihi ?? "", s?.promiyerSezonu ?? "", p.personel];
     });
     const bySeason = new Map();
-    rows.forEach(r => { const k = r[3] || "Belirtilmemiş"; bySeason.set(k, (bySeason.get(k)||0) + 1); });
-    box.innerHTML = `<div class="card"><div class="card-h"><h3>Oyun · Sezon Bilgisi (${esc(SEASON_SHEET)})</h3>
+    allRows.forEach(r => { const k = r[3] || "Belirtilmemiş"; bySeason.set(k, (bySeason.get(k)||0) + 1); });
+    const seasons = [...bySeason.entries()].sort((a,b) => sortTr(b[0],a[0]));
+    const rows = seasonFilter ? allRows.filter(r => (r[3] || "Belirtilmemiş") === seasonFilter) : allRows;
+
+    const subSeg = `<div class="segment sub-seg">
+      <button class="${seasonSub==="tablo"?"on":""}" onclick="setSeasonSub('tablo')">Oyun · Sezon Tablosu</button>
+      <button class="${seasonSub==="sezon"?"on":""}" onclick="setSeasonSub('sezon')">Prömiyer Sezonları</button></div>`;
+    const chips = `<div class="filter-chips">
+      <button class="fchip${seasonFilter?"":" on"}" onclick="setSeasonFilter('')">Tümü (${allRows.length})</button>
+      ${seasons.map(([k,v]) => `<button class="fchip${seasonFilter===k?" on":""}" onclick="setSeasonFilter(${jq(k)})">${esc(k)} · ${v}</button>`).join("")}</div>`;
+
+    const tablo = `<div class="card"><div class="card-h"><h3>Oyun · Sezon Bilgisi${seasonFilter?` — ${esc(seasonFilter)}`:""}</h3>
       <div class="tools"><span class="chip gold">${rows.length}</span>
         <button class="btn sm" onclick="exportExcel([['Oyun','Temsil Edildiği Sezon Sayısı','Prömiyer Tarihi','Prömiyer Sezonu','Personel']].concat(${jq(rows)}),'sezon-bilgisi')">Excel</button>
         <button class="btn sm" onclick="exportPDF('Oyun Sezon Bilgisi',['Oyun','Sezon Sayısı','Prömiyer Tarihi','Prömiyer Sezonu','Personel'],${jq(rows)})">PDF</button></div></div>
       <div style="max-height:56vh;overflow:auto"><table><thead><tr><th>Oyun</th><th>Temsil Edildiği Sezon Sayısı</th><th>Prömiyer Tarihi</th><th>Prömiyer Sezonu</th><th>Personel</th></tr></thead>
-      <tbody>${rows.map(r => `<tr style="cursor:pointer" onclick="statPlay(${jq(r[0])})">${r.map(c => `<td>${esc(c === "" ? "—" : c)}</td>`).join("")}</tr>`).join("")}</tbody></table></div></div>`
-      + barChart("Prömiyer Sezonuna Göre Oyun Sayısı",
-        [...bySeason.entries()].sort((a,b) => sortTr(b[0],a[0])).map(([k,v]) => [k, v]), " oyun");
+      <tbody>${rows.length ? rows.map(r => `<tr style="cursor:pointer" onclick="statPlay(${jq(r[0])})">${r.map(c => `<td>${esc(c === "" ? "—" : c)}</td>`).join("")}</tr>`).join("")
+        : `<tr><td colspan="5">Bu sezona ait oyun bulunamadı.</td></tr>`}</tbody></table></div></div>`;
+
+    const sezonKart = barChart("Prömiyer Sezonuna Göre Oyun Sayısı", seasons.map(([k,v]) => [k,v]), " oyun", "setSeasonFilter");
+
+    box.innerHTML = `${subSeg}${chips}<div class="season-grid">
+      ${seasonSub === "tablo" ? tablo : sezonKart}
+      ${seasonSub === "tablo" ? sezonKart : tablo}</div>`;
   }
 }
+function setSeasonSub(v){ seasonSub = v; renderGrafik(); }
+function setSeasonFilter(k){ seasonFilter = (seasonFilter === k ? "" : k); seasonSub = "tablo"; renderGrafik(); }
 function statLoadLabel(label){ statLoad(parseInt(label, 10)); }
+
 
 /* ============ Figüran ============ */
 let figMode = "liste", openFig = null;
@@ -1231,10 +1297,73 @@ function renderGorevsiz(){
   if(!unlocked()){ el.innerHTML = lockScreen("gorevsiz","Görevli Olmayan Listesi"); return; }
   sheetTable(el, "GÖREVLİ OLMAYAN", "Görevli Olmayan", "Aktif repertuvarda görev almayan kadro kayıtları.");
 }
-function renderArsiv(){
+/* ---- Arşiv oyunlar: oyun oyun gruplu ---- */
+const ARSIV_SHEET = "ARŞİV OYUNLAR";
+let ARSIV = {heads:[], rows:[], loaded:false}, arsivQ = "", arsivOpen = null;
+function toggleArsiv(n){ arsivOpen = (arsivOpen === n ? null : n); renderArsivList(); }
+function setArsivQ(v){ arsivQ = v; arsivOpen = null; renderArsivList(); }
+function arsivGroups(){
+  const q = trLower(arsivQ.trim());
+  const m = new Map();
+  ARSIV.rows.forEach(r => {
+    const name = unent(String(r[0] ?? "").trim()) || "Belirtilmemiş";
+    if(!m.has(name)) m.set(name, []);
+    m.get(name).push(r);
+  });
+  let list = [...m.entries()].sort((a,b) => sortTr(a[0], b[0]));
+  if(q) list = list.filter(([n, rs]) => trLower(n).includes(q) || rs.some(r => trLower(r.join(" ")).includes(q)));
+  return list;
+}
+function arsivAoA(name){
+  const heads = ARSIV.heads;
+  const rows = name ? arsivGroups().filter(([n]) => n === name).flatMap(([,rs]) => rs) : arsivGroups().flatMap(([,rs]) => rs);
+  return [heads].concat(rows.map(r => heads.map((_,i) => r[i] ?? "")));
+}
+function renderArsivList(){
+  const box = document.getElementById("arsiv-list");
+  if(!box) return;
+  const groups = arsivGroups();
+  const heads = ARSIV.heads;
+  document.getElementById("arsiv-count").textContent = groups.length + " oyun · " + groups.reduce((s,g) => s + g[1].length, 0) + " kayıt";
+  box.innerHTML = groups.length ? groups.map(([name, rs]) => {
+    const open = arsivOpen === name;
+    const people = new Set(rs.map(r => unent(String(r[heads.length-1] ?? "").trim())).filter(Boolean));
+    return `<div class="play-card${open?" open":""}">
+      <div class="play-head" onclick="toggleArsiv(${jq(name)})">
+        <span class="caret">${open?"▼":"▶"}</span>
+        <span class="pname">${esc(name)}</span>
+        <span class="chip">${rs.length} kayıt</span>
+        <span class="chip gold">${people.size} kişi</span>
+        <button class="btn sm" onclick="event.stopPropagation();exportPDF(${jq(name + ' — Arşiv Kadro')},${jq(heads)},arsivAoA(${jq(name)}))">PDF</button>
+      </div>
+      <div class="play-body"><div style="max-height:46vh;overflow:auto">
+        <table><thead><tr>${heads.slice(1).map(h => `<th>${esc(h)}</th>`).join("")}</tr></thead>
+        <tbody>${rs.map(r => `<tr>${heads.slice(1).map((_,i) => `<td>${esc(r[i+1] ?? "")}</td>`).join("")}</tr>`).join("")}</tbody></table>
+      </div></div></div>`;
+  }).join("") : `<div class="card"><div class="empty">Eşleşen arşiv oyunu bulunamadı.</div></div>`;
+}
+async function renderArsiv(){
   const el = document.getElementById("arsiv");
   if(!unlocked()){ el.innerHTML = lockScreen("arsiv","Arşiv Oyunlar"); return; }
-  sheetTable(el, "ARŞİV OYUNLAR", "Arşiv Oyunlar", "Repertuvardan kaldırılmış oyunların kadro kayıtları.");
+  if(!ARSIV.loaded){
+    el.innerHTML = `<h2 class="sec-title">Arşiv Oyunlar</h2><p class="sec-sub">Yükleniyor…</p>` + skel(6);
+    const d = await sheet(ARSIV_SHEET);
+    const heads = (d.headers && d.headers.length ? d.headers : ["Oyun Adı"]).filter(h => String(h||"").trim());
+    ARSIV = {heads, rows:(d.rows||[]).filter(r => r.some(c => String(c||"").trim())), loaded:true};
+  }
+  el.innerHTML = `<div class="sec-head"><div><h2 class="sec-title">Arşiv Oyunlar</h2>
+    <p class="sec-sub">Repertuvardan kaldırılmış oyunlar, oyun oyun gruplanır. Başlığa tıklayarak kadroyu açın.</p></div>
+    <div class="tools"><span class="chip gold" id="arsiv-count">—</span>
+      <button class="btn sm" onclick="exportExcel(arsivAoA(''),'arsiv-oyunlar')">Excel</button>
+      <button class="btn sm" onclick="exportPDF('Arşiv Oyunlar',${jq(ARSIV.heads)},arsivAoA(''))">PDF</button></div></div>
+  <div class="card" style="margin-bottom:14px"><div style="padding:12px 15px">
+    <input value="${esc(arsivQ)}" id="arsiv-q" placeholder="Arşiv oyunu, kategori, görev veya kişi ara…"
+      oninput="setArsivQ(this.value)"
+      style="width:100%;background:var(--surface);border:1px solid var(--line-strong);border-radius:10px;padding:10px 13px;outline:none"></div></div>
+  <div id="arsiv-list"></div>`;
+  renderArsivList();
+  const inp = document.getElementById("arsiv-q");
+  if(inp && arsivQ){ inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
 }
 
 /* ============ Yönetim ============ */
