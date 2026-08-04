@@ -1,12 +1,12 @@
 <!DOCTYPE html>
-<html lang="tr">
+<html lang="tr" data-theme="light">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>İDT Oyun Dağılım Paneli · Tiyatro Kadro Yönetimi</title>
-<meta name="description" content="Tiyatro oyunlarının kadro dağılımını, kişi bazlı görevleri, oyun çakışmalarını ve figüran listesini tek panelden sorgulayın." />
+<meta name="description" content="Tiyatro oyunlarının kadro dağılımını, kişi bazlı görevleri, oyun çakışmalarını, grafikleri ve figüran listesini tek panelden sorgulayın." />
 <meta property="og:title" content="İDT Oyun Dağılım Paneli" />
-<meta property="og:description" content="Oyun kadroları, kişi dağılımı, çakışma sorgulama, figüran listesi ve yönetim paneli." />
+<meta property="og:description" content="Oyun kadroları, kişi dağılımı, çakışma sorgulama, grafikler, figüran listesi ve yönetim paneli." />
 <meta property="og:type" content="website" />
 <meta name="twitter:card" content="summary_large_image" />
 <link rel="icon" href="/favicon.ico" />
@@ -15,124 +15,172 @@
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
+/* ================= TEMA ================= */
 :root{
-  --bg:#0f1216;            /* tek düz zemin - iç içe geçen gradyanlar kaldırıldı */
-  --surface:#161a20;
-  --surface-2:#1c222a;
-  --text:#eef1f5;
-  --text-dim:#b3bcc7;
-  --muted:#7d8894;
-  --accent:#e0a94a;        /* tek vurgu rengi */
-  --accent-soft:#f0c579;
-  --accent-ink:#161a20;
-  --danger:#e0605f;
-  --ok:#4bb894;
-  --line:#252c35;
-  --line-strong:#333c47;
+  --bg:#f5f6f8;
+  --surface:#ffffff;
+  --surface-2:#eef0f4;
+  --text:#171b21;
+  --text-dim:#4c5663;
+  --muted:#78838f;
+  --accent:#b07d18;
+  --accent-soft:#d9a63f;
+  --accent-ink:#ffffff;
+  --accent-wash:#fbf3e2;
+  --danger:#c0392b;
+  --danger-wash:#fdeceb;
+  --ok:#1f7a5c;
+  --line:#e2e6ec;
+  --line-strong:#cfd6df;
+  --shadow:0 10px 26px rgba(23,27,33,.09);
   --radius:12px;
   --font-d:'Sora',system-ui,sans-serif;
   --font-b:'Manrope',system-ui,sans-serif;
 }
+[data-theme="dark"]{
+  --bg:#0f1216; --surface:#161a20; --surface-2:#1c222a;
+  --text:#eef1f5; --text-dim:#b3bcc7; --muted:#7d8894;
+  --accent:#e0a94a; --accent-soft:#f0c579; --accent-ink:#161a20; --accent-wash:#241d10;
+  --danger:#e0605f; --danger-wash:#2a1717; --ok:#4bb894;
+  --line:#252c35; --line-strong:#333c47;
+  --shadow:0 14px 34px rgba(0,0,0,.5);
+}
 *{box-sizing:border-box;margin:0;padding:0}
-html{scroll-behavior:smooth}
-body{background:var(--bg);color:var(--text);font-family:var(--font-b);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+html,body{height:100%}
+body{background:var(--bg);color:var(--text);font-family:var(--font-b);font-size:15px;line-height:1.5;
+  -webkit-font-smoothing:antialiased;display:flex;flex-direction:column;overflow:hidden}
 a{color:inherit}
 button,input,select,textarea{font:inherit;color:inherit}
 ::selection{background:var(--accent);color:var(--accent-ink)}
-.wrap{max-width:1180px;margin:0 auto;padding:0 20px}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:var(--line-strong);border-radius:99px;border:3px solid var(--bg)}
+.wrap{max-width:1500px;margin:0 auto;padding:0 18px;width:100%}
 
 /* ---------- header ---------- */
-header{position:sticky;top:0;z-index:40;background:rgba(15,18,22,.94);backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
-.hdr{display:flex;align-items:center;gap:18px;padding:12px 0}
+header{flex:0 0 auto;z-index:40;background:var(--surface);border-bottom:1px solid var(--line)}
+.hdr{display:flex;align-items:center;gap:16px;padding:10px 0}
 .brand{display:flex;align-items:center;gap:11px;flex:0 0 auto;cursor:pointer}
-.mask{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;background:var(--surface-2);border:1px solid var(--line-strong)}
+.mask{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;background:var(--accent-wash);border:1px solid var(--line-strong)}
 .mask svg{width:19px;height:19px;stroke:var(--accent);fill:none;stroke-width:1.7}
-.brand h1{font-family:var(--font-d);font-size:17px;font-weight:700;letter-spacing:-.01em;line-height:1}
-.brand span{display:block;font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-top:4px}
+.brand h1{font-family:var(--font-d);font-size:16px;font-weight:700;letter-spacing:-.01em;line-height:1}
+.brand span{display:block;font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-top:4px}
 nav{display:flex;gap:3px;overflow-x:auto;scrollbar-width:none;margin-left:auto}
 nav::-webkit-scrollbar{display:none}
-.tab{white-space:nowrap;background:none;border:1px solid transparent;border-radius:9px;padding:8px 13px;font-size:13.5px;font-weight:600;color:var(--text-dim);cursor:pointer;transition:.15s}
-.tab:hover{color:var(--text);background:var(--surface)}
+.tab{white-space:nowrap;background:none;border:1px solid transparent;border-radius:9px;padding:7px 12px;font-size:13px;font-weight:600;color:var(--text-dim);cursor:pointer;transition:.15s}
+.tab:hover{color:var(--text);background:var(--surface-2)}
 .tab.on{color:var(--accent-ink);background:var(--accent);border-color:transparent}
 .tab .lock{font-size:10px;opacity:.7;margin-left:5px}
+.icobtn{display:grid;place-items:center;width:36px;height:36px;border-radius:10px;cursor:pointer;flex:0 0 auto;
+  background:var(--surface-2);border:1px solid var(--line-strong);color:inherit}
+.icobtn:hover{border-color:var(--accent);color:var(--accent)}
+.icobtn svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 
-/* ---------- stat bar (hero yerine) ---------- */
-.statbar{border-bottom:1px solid var(--line);background:var(--surface)}
-.stats{display:flex;flex-wrap:wrap;gap:6px 20px;padding:11px 0;align-items:baseline}
+/* ---------- stat bar ---------- */
+.statbar{flex:0 0 auto;border-bottom:1px solid var(--line);background:var(--surface)}
+.stats{display:flex;flex-wrap:wrap;gap:4px 18px;padding:8px 0;align-items:baseline}
 .stat{display:flex;align-items:baseline;gap:6px}
 .stat b{font-family:var(--font-d);font-size:14px;font-weight:700;color:var(--accent)}
-.stat span{font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--muted)}
+.stat span{font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--muted)}
+
+/* ---------- app gövde: tek ekran, panel içi kaydırma ---------- */
+main{flex:1 1 auto;min-height:0;overflow:hidden}
+.panel{display:none;height:100%;min-height:0}
+.panel.on{display:block}
+.split{display:grid;grid-template-columns:minmax(300px,380px) minmax(0,1fr);gap:14px;height:100%;min-height:0;padding:12px 0}
+.col{min-height:0;display:flex;flex-direction:column;gap:10px}
+.col.scroll{overflow-y:auto;overflow-x:hidden;padding-right:4px}
+.single{height:100%;min-height:0;overflow-y:auto;padding:14px 0 28px}
 
 /* ---------- generic ---------- */
-main{padding:20px 0 56px;min-height:52vh}
-.panel{display:none}
-.panel.on{display:block}
-.sec-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px}
-.sec-title{font-family:var(--font-d);font-size:21px;font-weight:700;letter-spacing:-.01em}
-.sec-sub{color:var(--muted);font-size:13px;margin-top:3px}
+.sec-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.sec-title{font-family:var(--font-d);font-size:19px;font-weight:700;letter-spacing:-.01em}
+.sec-sub{color:var(--muted);font-size:12.5px;margin-top:3px}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
 .card + .card{margin-top:12px}
-.card-h{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 15px;border-bottom:1px solid var(--line);background:var(--surface-2)}
-.card-h h3{font-family:var(--font-d);font-size:15px;font-weight:600}
+.card.flexcard{display:flex;flex-direction:column;min-height:0}
+.card-h{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line);background:var(--surface-2);flex:0 0 auto}
+.card-h h3{font-family:var(--font-d);font-size:14.5px;font-weight:600}
 .card-b{padding:4px 0}
-.scroller{max-height:min(62vh,620px);overflow:auto}
-.row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 15px;border-bottom:1px solid var(--line);cursor:pointer;transition:.12s}
+.card-b.grow{flex:1 1 auto;min-height:0;overflow-y:auto}
+.row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 14px;border-bottom:1px solid var(--line);cursor:pointer;transition:.12s}
 .row:last-child{border-bottom:none}
 .row:hover{background:var(--surface-2)}
-.row .nm{font-weight:600}
-.row .mt{font-size:12.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:64ch}
+.row.sel{background:var(--accent-wash);box-shadow:inset 3px 0 0 var(--accent)}
+.row .nm{font-weight:600;font-size:14px}
+.row .mt{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60ch}
+.row.pasif{opacity:.5}
 .chip{font-size:11px;font-weight:700;padding:3px 9px;border-radius:7px;border:1px solid var(--line-strong);color:var(--text-dim);background:var(--surface-2);white-space:nowrap}
-.chip.gold{color:var(--accent);border-color:#4a3d22;background:#241d10}
-.chip.crim{color:var(--danger);border-color:#4a2a2a;background:#2a1717}
-.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+.chip.gold{color:var(--accent);border-color:var(--accent-soft);background:var(--accent-wash)}
+.chip.crim{color:var(--danger);border-color:var(--danger);background:var(--danger-wash)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}
 .grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
-.search{position:relative;margin-bottom:14px}
-.search input,.fld input,.fld select,.fld textarea{width:100%;background:var(--surface);border:1px solid var(--line-strong);border-radius:10px;padding:11px 13px;outline:none;transition:.15s}
-.search input:focus,.fld input:focus,.fld select:focus,.fld textarea:focus{border-color:var(--accent)}
+.search{position:relative;flex:0 0 auto}
+.search input,.fld input,.fld select,.fld textarea{width:100%;background:var(--surface);border:1px solid var(--line-strong);border-radius:10px;padding:10px 12px;outline:none;transition:.15s}
+.search input:focus,.fld input:focus,.fld select:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
 .fld label{display:block;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;font-weight:700}
 .fld{margin-bottom:12px;position:relative}
-.sugg{position:absolute;z-index:20;left:0;right:0;top:100%;margin-top:5px;max-height:230px;overflow:auto;background:var(--surface-2);border:1px solid var(--line-strong);border-radius:10px;box-shadow:0 20px 40px rgba(0,0,0,.5)}
+.sugg{position:absolute;z-index:20;left:0;right:0;top:100%;margin-top:5px;max-height:230px;overflow:auto;background:var(--surface);border:1px solid var(--line-strong);border-radius:10px;box-shadow:var(--shadow)}
 .sugg button{display:block;width:100%;text-align:left;padding:9px 13px;background:none;border:none;cursor:pointer;font-size:13.5px}
-.sugg button:hover{background:var(--surface)}
-.btn{border:1px solid var(--line-strong);background:var(--surface-2);border-radius:9px;padding:8px 13px;font-size:13px;font-weight:700;cursor:pointer;transition:.15s}
-.btn:hover{border-color:var(--accent)}
+.sugg button:hover{background:var(--surface-2)}
+.btn{border:1px solid var(--line-strong);background:var(--surface);border-radius:9px;padding:7px 12px;font-size:13px;font-weight:700;cursor:pointer;transition:.15s}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
 .btn.pri{background:var(--accent);color:var(--accent-ink);border-color:transparent}
-.btn.pri:hover{filter:brightness(1.06)}
+.btn.pri:hover{filter:brightness(1.06);color:var(--accent-ink)}
 .btn.dan{color:var(--danger)}
-.btn.sm{padding:6px 10px;font-size:12px}
+.btn.dan:hover{border-color:var(--danger);color:var(--danger)}
+.btn.sm{padding:5px 10px;font-size:12px}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
 .tools{display:flex;gap:8px;flex-wrap:wrap}
+.segment{display:flex;border:1px solid var(--line-strong);border-radius:10px;overflow:hidden;flex:0 0 auto}
+.segment button{background:transparent;border:none;padding:7px 13px;font-size:12.5px;font-weight:700;cursor:pointer;color:var(--muted)}
+.segment button + button{border-left:1px solid var(--line-strong)}
+.segment button.on{background:var(--accent);color:var(--accent-ink)}
 .empty{text-align:center;padding:40px 18px;color:var(--muted);font-size:14px}
-.skel{height:52px;border-radius:10px;margin-bottom:8px;background:linear-gradient(90deg,var(--surface),var(--surface-2),var(--surface));background-size:200% 100%;animation:sh 1.3s infinite}
+.placeholder{height:100%;display:grid;place-items:center;text-align:center;color:var(--muted);font-size:14px;
+  border:1px dashed var(--line-strong);border-radius:var(--radius);background:var(--surface)}
+.skel{height:48px;border-radius:10px;margin:8px 14px;background:linear-gradient(90deg,var(--surface-2),var(--surface),var(--surface-2));background-size:200% 100%;animation:sh 1.3s infinite}
 @keyframes sh{from{background-position:200% 0}to{background-position:-200% 0}}
 .bar{height:8px;border-radius:99px;background:var(--surface-2);overflow:hidden}
 .bar i{display:block;height:100%;border-radius:99px;background:var(--accent)}
 table{width:100%;border-collapse:collapse;font-size:13.5px}
 th{position:sticky;top:0;z-index:1;text-align:left;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);padding:10px 14px;background:var(--surface-2);border-bottom:1px solid var(--line-strong)}
-td{padding:9px 14px;border-bottom:1px solid var(--line)}
+td{padding:8px 14px;border-bottom:1px solid var(--line)}
 tr:hover td{background:var(--surface-2)}
-.back{background:none;border:none;color:var(--accent);cursor:pointer;font-weight:700;font-size:13px;margin-bottom:12px}
+.back{background:none;border:none;color:var(--accent);cursor:pointer;font-weight:700;font-size:13px;padding:0;margin-bottom:8px;display:none}
 .tag-row{display:flex;flex-wrap:wrap;gap:6px}
-.pager{display:flex;align-items:center;justify-content:center;gap:10px;padding:12px;color:var(--muted);font-size:12.5px}
-footer{border-top:1px solid var(--line);padding:20px 0;color:var(--muted);font-size:12.5px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
-.lockbox{max-width:360px;margin:52px auto;text-align:center;padding:30px 26px;background:var(--surface);border:1px solid var(--line-strong);border-radius:16px}
+.pager{display:flex;align-items:center;justify-content:center;gap:10px;padding:10px;color:var(--muted);font-size:12.5px;border-top:1px solid var(--line)}
+.lockbox{max-width:360px;margin:52px auto;text-align:center;padding:30px 26px;background:var(--surface);border:1px solid var(--line-strong);border-radius:16px;box-shadow:var(--shadow)}
 .lockbox h3{font-family:var(--font-d);font-size:19px;margin-bottom:6px}
 .lockbox p{color:var(--muted);font-size:13px;margin-bottom:16px}
 .err{color:var(--danger);font-size:12.5px;min-height:18px;margin-top:8px}
 .ok{color:var(--ok);font-size:12.5px;min-height:18px;margin-top:8px}
-.totop{position:fixed;right:18px;bottom:18px;z-index:50;display:none;border-radius:999px;padding:10px 14px}
-.totop.on{display:block}
-@media(max-width:720px){.hdr{flex-wrap:wrap}nav{width:100%;margin-left:0}.row .mt{max-width:40ch}}
-@media print{header,footer,.statbar,.tools,.totop{display:none!important}}
+
+/* ---------- grafikler ---------- */
+.chart-legend{display:flex;flex-direction:column;gap:6px;font-size:12.5px;min-width:170px}
+.lg{display:flex;align-items:center;gap:8px}
+.lg i{width:10px;height:10px;border-radius:3px;flex:0 0 auto}
+.lg span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lg b{color:var(--text)}
+.donut-wrap{display:flex;align-items:center;gap:18px;flex-wrap:wrap;padding:16px}
+.donut{flex:0 0 auto}
+.donut path{cursor:pointer;transition:.15s}
+.donut path:hover{opacity:.82}
+.hbar{margin-bottom:10px}
+.hbar .t{display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:4px;gap:10px}
+.hbar .t span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hbar .t b{color:var(--accent);flex:0 0 auto}
+.kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:14px}
+.kpi .box{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px}
+.kpi .box b{display:block;font-family:var(--font-d);font-size:24px;color:var(--accent);line-height:1.1}
+.kpi .box span{font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--muted)}
+
 /* ---- bildirim & toast ---- */
 .notif-wrap{position:relative;flex:0 0 auto}
-.bell{position:relative;display:grid;place-items:center;width:38px;height:38px;border-radius:11px;cursor:pointer;
-  background:var(--surface-2);border:1px solid var(--line-strong);color:inherit}
-.bell:hover{border-color:var(--accent)}
-.bell svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.bell{position:relative}
 .bell .badge{position:absolute;top:-5px;right:-5px;min-width:18px;height:18px;padding:0 4px;border-radius:9px;
-  background:var(--accent);color:#1a1205;font-size:10.5px;font-weight:700;display:grid;place-items:center}
-.notif-pop{position:absolute;right:0;top:46px;width:min(360px,86vw);z-index:80;display:none;
-  background:var(--surface);border:1px solid var(--line-strong);border-radius:14px;box-shadow:0 18px 44px rgba(0,0,0,.5);overflow:hidden}
+  background:var(--accent);color:var(--accent-ink);font-size:10.5px;font-weight:700;display:grid;place-items:center}
+.notif-pop{position:absolute;right:0;top:44px;width:min(360px,86vw);z-index:80;display:none;
+  background:var(--surface);border:1px solid var(--line-strong);border-radius:14px;box-shadow:var(--shadow);overflow:hidden}
 .notif-pop.on{display:block}
 .notif-pop-h{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:11px 13px;border-bottom:1px solid var(--line)}
 .notif-pop-b{max-height:min(60vh,420px);overflow-y:auto;padding:6px 10px 10px}
@@ -142,11 +190,25 @@ footer{border-top:1px solid var(--line);padding:20px 0;color:var(--muted);font-s
 .notif .mt{font-size:11px;opacity:.6}
 .toast{position:fixed;left:50%;bottom:26px;transform:translate(-50%,20px);z-index:200;opacity:0;pointer-events:none;
   transition:.22s;background:var(--surface);border:1px solid var(--accent);color:inherit;
-  padding:11px 18px;border-radius:12px;font-size:13px;font-weight:500;box-shadow:0 14px 34px rgba(0,0,0,.5)}
+  padding:11px 18px;border-radius:12px;font-size:13px;font-weight:500;box-shadow:var(--shadow)}
 .toast.on{opacity:1;transform:translate(-50%,0)}
-.toast.err{border-color:#e0555f}
-</style>
+.toast.err{border-color:var(--danger)}
 
+/* ---------- responsive: mobilde detay tam ekran ---------- */
+@media(max-width:960px){
+  .split{grid-template-columns:1fr;padding:10px 0}
+  .split .col.detail{display:none}
+  .split.detail-open .col.list{display:none}
+  .split.detail-open .col.detail{display:flex;overflow-y:auto}
+  .back{display:inline-block}
+  body{overflow:auto}
+  main{overflow:visible}
+  .panel{height:auto}
+  .col.scroll{overflow:visible}
+  .card-b.grow{max-height:70vh}
+}
+@media print{header,footer,.statbar,.tools,.search{display:none!important}body{overflow:visible;height:auto}}
+</style>
 </head>
 <body>
 <header>
@@ -156,8 +218,9 @@ footer{border-top:1px solid var(--line);padding:20px 0;color:var(--muted);font-s
       <div><h1>Oyun Dağılım Paneli</h1><span>Kadro · Görev · Çakışma</span></div>
     </div>
     <nav id="nav"></nav>
+    <button class="icobtn" id="theme-btn" onclick="toggleTheme()" title="Tema değiştir" aria-label="Tema değiştir"></button>
     <div id="notif-wrap" class="notif-wrap">
-      <button class="bell" id="bell" onclick="toggleNotifs()" title="Bildirimler" aria-label="Bildirimler">
+      <button class="icobtn bell" id="bell" onclick="toggleNotifs()" title="Bildirimler" aria-label="Bildirimler">
         <svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 8-3 8h18s-3-1-3-8"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
         <span class="badge" id="notif-badge" style="display:none">0</span>
       </button>
@@ -166,97 +229,137 @@ footer{border-top:1px solid var(--line);padding:20px 0;color:var(--muted);font-s
         <div class="notif-pop-b" id="notif-list"></div>
       </div>
     </div>
-
   </div>
 </header>
 
 <div class="statbar"><div class="wrap"><div class="stats" id="stats"></div></div></div>
 
-<main class="wrap">
-  <!-- ANA PANEL -->
+<main>
+  <!-- ANA PANEL: sol oyun listesi / sağ detay -->
   <section class="panel on" id="p-panel">
-    <div class="search"><input id="q-play" placeholder="Oyun ara…  (örn. ARZUNUN ONDA DOKUZU)" oninput="renderPlays()"></div>
-    <div id="play-detail"></div>
-    <div id="play-list"></div>
+    <div class="wrap split" id="split-panel">
+      <div class="col list">
+        <div class="search"><input id="q-play" placeholder="Oyun ara…" oninput="resetPage('play');renderPlays()"></div>
+        <div class="card flexcard" style="flex:1;min-height:0"><div class="card-h"><h3>Oyunlar</h3><span class="chip gold" id="play-count">0</span></div>
+          <div class="card-b grow" id="play-list"></div><div id="play-pager"></div></div>
+      </div>
+      <div class="col detail scroll" id="play-detail"></div>
+    </div>
   </section>
 
   <!-- KİŞİLER -->
   <section class="panel" id="p-kisiler">
-    <div class="sec-head"><div><h2 class="sec-title">Kişiler</h2><p class="sec-sub">Bir kişiye tıklayın; görev aldığı tüm oyunları ve rollerini görün.</p></div>
-      <div class="tools"><button class="btn sm" onclick="exportExcel(peopleExportRows(),'kisiler')">Excel</button>
-      <button class="btn sm" onclick="exportPDF('Kişi Listesi',['Kişi','Oyun Sayısı','Oyunlar'],peopleExportRows())">PDF</button></div></div>
-    <div class="search"><input id="q-person" placeholder="Kişi ara…" oninput="resetPage('person');renderPeople()"></div>
-    <div id="person-detail"></div>
-    <div id="person-list"></div>
+    <div class="wrap split" id="split-kisiler">
+      <div class="col list">
+        <div class="search"><input id="q-person" placeholder="Kişi ara…" oninput="resetPage('person');renderPeople()"></div>
+        <div class="tools"><div class="segment">
+            <button id="seg-p-akt" class="on" onclick="setPeopleMode('aktif')">Aktif</button>
+            <button id="seg-p-all" onclick="setPeopleMode('tumu')">Tümü</button>
+            <button id="seg-p-fig" onclick="setPeopleMode('figuran')">Figüran</button></div>
+          <button class="btn sm" onclick="exportExcel(peopleExportRows(),'kisiler')">Excel</button></div>
+        <div class="card flexcard" style="flex:1;min-height:0"><div class="card-h"><h3>Kadro</h3><span class="chip gold" id="person-count">0</span></div>
+          <div class="card-b grow" id="person-list"></div><div id="person-pager"></div></div>
+      </div>
+      <div class="col detail scroll" id="person-detail"></div>
+    </div>
   </section>
 
   <!-- DAĞILIM -->
   <section class="panel" id="p-dagilim">
-    <div class="sec-head"><div><h2 class="sec-title">Yük Dağılımı</h2><p class="sec-sub">Kadro üyelerinin üstlendiği oyun sayısı.</p></div></div>
-    <div class="search"><input id="q-dag" placeholder="Kişi ara…" oninput="renderDagilim()"></div>
-    <div id="dagilim"></div>
+    <div class="wrap split" id="split-dagilim">
+      <div class="col list">
+        <div class="search"><input id="q-dag" placeholder="Kişi ara…" oninput="renderDagilim()"></div>
+        <div class="card flexcard" style="flex:1;min-height:0"><div class="card-h"><h3>Yük Dağılımı</h3><span class="chip gold" id="dag-count">0</span></div>
+          <div class="card-b grow" id="dagilim"></div></div>
+      </div>
+      <div class="col detail scroll" id="dag-detail"></div>
+    </div>
   </section>
 
   <!-- SORGULAMA -->
   <section class="panel" id="p-sorgu">
-    <div class="sec-head"><div><h2 class="sec-title">Sorgulama</h2><p class="sec-sub">İki oyunun ortak kadrosunu karşılaştırın veya kayıtları filtreleyin.</p></div></div>
-    <div class="grid2">
-      <div class="fld"><label>1. Oyun</label><input id="s1" placeholder="Oyun adı" autocomplete="off"><div class="sugg" id="sg1" hidden></div></div>
-      <div class="fld"><label>2. Oyun</label><input id="s2" placeholder="Oyun adı" autocomplete="off"><div class="sugg" id="sg2" hidden></div></div>
+    <div class="wrap single">
+      <div class="sec-head"><div><h2 class="sec-title">Sorgulama</h2><p class="sec-sub">İki oyunun ortak kadrosunu karşılaştırın veya kayıtları filtreleyin.</p></div></div>
+      <div class="grid2">
+        <div class="fld"><label>1. Oyun</label><input id="s1" placeholder="Oyun adı" autocomplete="off"><div class="sugg" id="sg1" hidden></div></div>
+        <div class="fld"><label>2. Oyun</label><input id="s2" placeholder="Oyun adı" autocomplete="off"><div class="sugg" id="sg2" hidden></div></div>
+      </div>
+      <div id="sorgu-res"></div>
+      <h3 class="sec-title" style="font-size:17px;margin:22px 0 10px">Kayıt Filtresi</h3>
+      <div class="grid3">
+        <div class="fld"><label>Kategori</label><input id="f-kat" oninput="renderFilter()" placeholder="Kategori"></div>
+        <div class="fld"><label>Oyun</label><input id="f-oyun" oninput="renderFilter()" placeholder="Oyun adı"></div>
+        <div class="fld"><label>Kişi</label><input id="f-kisi" oninput="renderFilter()" placeholder="Ad soyad"></div>
+      </div>
+      <div id="filter-res"></div>
     </div>
-    <div id="sorgu-res"></div>
-    <h3 class="sec-title" style="font-size:17px;margin:22px 0 10px">Kayıt Filtresi</h3>
-    <div class="grid3">
-      <div class="fld"><label>Kategori</label><input id="f-kat" oninput="renderFilter()" placeholder="Kategori"></div>
-      <div class="fld"><label>Oyun</label><input id="f-oyun" oninput="renderFilter()" placeholder="Oyun adı"></div>
-      <div class="fld"><label>Kişi</label><input id="f-kisi" oninput="renderFilter()" placeholder="Ad soyad"></div>
-    </div>
-    <div id="filter-res"></div>
   </section>
 
-  <!-- İSTATİSTİK -->
+  <!-- İSTATİSTİK / GRAFİKLER -->
   <section class="panel" id="p-grafik">
-    <div class="sec-head"><div><h2 class="sec-title">İstatistik</h2><p class="sec-sub">Kategori dağılımı ve kadro büyüklüğüne göre oyunlar.</p></div></div>
-    <div class="grid2"><div id="cat-chart"></div><div id="play-chart"></div></div>
+    <div class="wrap single">
+      <div class="sec-head"><div><h2 class="sec-title">İstatistik & Grafikler</h2>
+        <p class="sec-sub">Sayımlar tekil kişi bazlıdır; pasif kişiler istatistiklere dahil edilmez.</p></div>
+        <div class="tools"><button class="btn sm" onclick="exportExcel(statExportRows(),'istatistik')">Excel</button></div></div>
+      <div class="kpi" id="kpi"></div>
+      <div class="grid2">
+        <div id="cat-donut"></div>
+        <div id="play-chart"></div>
+      </div>
+      <div class="grid2" style="margin-top:14px">
+        <div id="person-chart"></div>
+        <div id="load-chart"></div>
+      </div>
+    </div>
   </section>
 
   <!-- FİGÜRAN -->
   <section class="panel" id="p-figuran">
-    <div class="sec-head">
-      <div><h2 class="sec-title">Figüran Listesi</h2><p class="sec-sub">Figüran kadrosu ve görev aldıkları oyunlar.</p></div>
-      <div class="tools">
-        <button class="btn sm" onclick="exportExcel(figExportRows(),'figuran-listesi')">Excel indir</button>
-        <button class="btn sm" onclick="exportPDF('Figüran Listesi',['Figüran','Oyun Sayısı','Oyunlar'],figExportRows())">PDF indir</button>
-        <button class="btn sm" onclick="exportExcel(figDetailRows(),'figuran-detay')">Detaylı Excel</button>
+    <div class="wrap split" id="split-figuran">
+      <div class="col list">
+        <div class="search"><input id="q-fig" placeholder="Figüran, oyun ara…" oninput="resetPage('fig');renderFiguran()"></div>
+        <div class="tools"><div class="segment">
+            <button id="seg-f-liste" class="on" onclick="setFigMode('liste')">Figüran Listesi</button>
+            <button id="seg-f-oyun" onclick="setFigMode('oyun')">Oyun Bazlı</button></div>
+          <button class="btn sm" onclick="exportExcel(figExportRows(),'figuran-listesi')">Excel</button>
+          <button class="btn sm" onclick="exportExcel(figDetailRows(),'figuran-detay')">Detay</button></div>
+        <div class="card flexcard" style="flex:1;min-height:0"><div class="card-h"><h3 id="fig-title">Figüranlar</h3><span class="chip crim" id="fig-count">0</span></div>
+          <div class="card-b grow" id="figuran"></div><div id="fig-pager"></div></div>
       </div>
+      <div class="col detail scroll" id="fig-detail"></div>
     </div>
-    <div class="search"><input id="q-fig" placeholder="Figüran ara…" oninput="resetPage('fig');renderFiguran()"></div>
-    <div id="figuran"></div>
   </section>
 
-  <!-- GÖREVLİ OLMAYAN (kilitli) -->
-  <section class="panel" id="p-gorevsiz"><div id="gorevsiz"></div></section>
-  <!-- ARŞİV (kilitli) -->
-  <section class="panel" id="p-arsiv"><div id="arsiv"></div></section>
-  <!-- YÖNETİM (kilitli) -->
-  <section class="panel" id="p-yonetim"><div id="yonetim"></div></section>
+  <!-- KİLİTLİ BÖLÜMLER -->
+  <section class="panel" id="p-gorevsiz"><div class="wrap single"><div id="gorevsiz"></div></div></section>
+  <section class="panel" id="p-arsiv"><div class="wrap single"><div id="arsiv"></div></div></section>
+  <section class="panel" id="p-yonetim"><div class="wrap single"><div id="yonetim"></div></div></section>
 </main>
 
-<button class="btn totop" id="totop" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑ Yukarı</button>
-
-<footer class="wrap">
-  <span>Oyun Dağılım Paneli · repertuvar kadro yönetimi</span>
-  <span id="src-note">Veriler Google e-Tablo'dan okunur; yönetim düzenlemeleri doğrudan e-Tablo'ya yazılır.</span>
-</footer>
-
 <script>
+/* ============ Tema ============ */
+const THEME_KEY = "idt_theme";
+const SUN = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
+const MOON = '<svg viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>';
+function applyTheme(t){
+  document.documentElement.setAttribute("data-theme", t);
+  const b = document.getElementById("theme-btn");
+  if(b) b.innerHTML = t === "dark" ? SUN : MOON;
+  localStorage.setItem(THEME_KEY, t);
+  if(window.loaded === true && (location.hash||"#panel").slice(1) === "grafik") renderGrafik();
+}
+function toggleTheme(){ applyTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark"); }
+applyTheme(localStorage.getItem(THEME_KEY) || "light");
+
 /* ============ Veri katmanı ============ */
 const DIRECT = "https://tiyatro-backend.vercel.app/api/sheets";
 const API = location.hostname === "izmir-dt.github.io" ? DIRECT : "/api/public/sheets";
 const NOTIF_API = API.replace(/\/sheets$/, "/notifications");
 const MAIN_SHEET = "BÜTÜN OYUNLAR";
+const FIG_SHEET = "FİGÜRAN LİSTESİ";
+const PASIF_SHEET = "PASIF_KISILER";
 const PIN_KEY = "idt_pin", AUTH_KEY = "idt_auth", SEEN_KEY = "idt_notif_seen", DEFAULT_PIN = "525327";
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 60;
 const cache = new Map();
 async function sheet(name){
   if(cache.has(name)) return cache.get(name);
@@ -268,13 +371,16 @@ async function sheet(name){
 const trLower = s => String(s).replace(/İ/g,"i").replace(/I/g,"ı").replace(/Ğ/g,"ğ").replace(/Ü/g,"ü")
   .replace(/Ş/g,"ş").replace(/Ö/g,"ö").replace(/Ç/g,"ç").toLowerCase();
 const esc = s => String(s??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+const unent = s => String(s??"").replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&nbsp;/g," ");
 const has = (h,n) => trLower(h).includes(trLower(n));
 const isFig = c => has(c||"","figüran") || has(c||"","figuran");
+const FIGTAG = /\(\s*fig[üu]ran\s*\)/i;
+const stripTag = s => s.replace(/\(\s*fig[üu]ran\s*\)/ig,"").replace(/^"+|"+$/g,"").trim();
 const isCocuk = n => n.includes("Ç.O") || n.includes("(Ç)");
 const sortTr = (a,b) => String(a).localeCompare(String(b),"tr");
 const jq = v => JSON.stringify(v).replace(/"/g,"&quot;");
+const norm = s => trLower(String(s||"").trim());
 
-/* sütun sırası (Google e-Tablo başlıklarına göre) */
 let COLS = {oyun:0, kategori:1, gorev:2, kisi:3}, COL_COUNT = 4, HEADERS = [];
 function parseRows(headers, rows){
   const t = headers.map(h => trLower(h).trim());
@@ -285,14 +391,13 @@ function parseRows(headers, rows){
   if(io >= 0) COLS = {oyun:io, kategori:ik<0?1:ik, gorev:ig<0?2:ig, kisi:ip<0?3:ip};
   return rows.map((r,i) => ({
     _i: i,
-    oyun: String(r[COLS.oyun]??"").trim(), kategori: String(r[COLS.kategori]??"").trim(),
-    gorev: String(r[COLS.gorev]??"").trim(), kisi: String(r[COLS.kisi]??"").trim()
+    oyun: unent(String(r[COLS.oyun]??"").trim()), kategori: unent(String(r[COLS.kategori]??"").trim()),
+    gorev: unent(String(r[COLS.gorev]??"").trim()), kisi: unent(String(r[COLS.kisi]??"").trim())
   })).filter(r => r.oyun);
 }
 const names = s => s.split(",").map(x => x.trim()).filter(Boolean);
-const rowKey = r => [r.oyun,r.kategori,r.gorev,r.kisi].join("|");
 
-/* ============ Google e-Tablo yazma katmanı ============ */
+/* ============ Yazma katmanı ============ */
 function toast(msg, kind){
   let t = document.getElementById("toast");
   if(!t){ t = document.createElement("div"); t.id = "toast"; document.body.appendChild(t); }
@@ -327,39 +432,63 @@ async function withBusy(label, fn){
   finally{ busy = false; }
 }
 
-let API_ROWS = [], DATA = [], PLAYS = [], PEOPLE = [], loaded = false;
+/* ============ Model ============ */
+let API_ROWS = [], DATA = [], PLAYS = [], PEOPLE = [], FIGROWS = [], FIGSHEET = {headers:[],rows:[]}, PASIF = new Set();
+var loaded = false; window.loaded = false;
 
 function rebuild(){
   DATA = API_ROWS;
-  PLAYS = buildPlays(DATA); PEOPLE = buildPeople(DATA);
+  PLAYS = buildPlays(DATA); PEOPLE = buildPeople(DATA); FIGROWS = buildFigRows(DATA);
   renderStats();
   const cur = (location.hash||"#panel").slice(1);
   RENDER[cur] && RENDER[cur]();
 }
-
 function buildPlays(rows){
   const m = new Map();
   rows.forEach(r => {
-    if(!m.has(r.oyun)) m.set(r.oyun,{name:r.oyun,people:new Set(),rows:0,cats:new Set()});
+    if(!m.has(r.oyun)) m.set(r.oyun,{name:r.oyun,people:new Set(),figs:new Set(),rows:0,cats:new Set()});
     const o = m.get(r.oyun); o.rows++;
-    names(r.kisi).forEach(n => o.people.add(n));
+    names(r.kisi).forEach(n => { const c = stripTag(n); if(c) o.people.add(c);
+      if(isFig(r.kategori) || FIGTAG.test(n)) o.figs.add(c); });
     if(r.kategori) o.cats.add(r.kategori);
   });
-  return [...m.values()].map(o => ({name:o.name,personel:o.people.size,rowCount:o.rows,cats:[...o.cats].sort(sortTr)}))
-    .sort((a,b) => sortTr(a.name,b.name));
+  return [...m.values()].map(o => ({name:o.name, personel:o.people.size, figuran:o.figs.size,
+    rowCount:o.rows, cats:[...o.cats].sort(sortTr)})).sort((a,b) => sortTr(a.name,b.name));
 }
 function buildPeople(rows){
   const m = new Map();
-  rows.forEach(r => names(r.kisi).forEach(n => {
-    if(!m.has(n)) m.set(n,{name:n,oyunlar:new Set(),gorevler:new Set(),cats:new Set()});
+  rows.forEach(r => names(r.kisi).forEach(raw => {
+    const n = stripTag(raw); if(!n) return;
+    if(!m.has(n)) m.set(n,{name:n,oyunlar:new Set(),gorevler:new Set(),cats:new Set(),fig:false});
     const p = m.get(n); p.oyunlar.add(r.oyun);
     if(r.gorev) p.gorevler.add(r.gorev);
     if(r.kategori) p.cats.add(r.kategori);
+    if(isFig(r.kategori) || FIGTAG.test(raw)) p.fig = true;
   }));
-  return [...m.values()].map(p => ({name:p.name,oyunlar:[...p.oyunlar].sort(sortTr),
-    gorevler:[...p.gorevler].sort(sortTr),cats:[...p.cats]}))
+  return [...m.values()].map(p => ({name:p.name, oyunlar:[...p.oyunlar].sort(sortTr),
+    gorevler:[...p.gorevler].sort(sortTr), cats:[...p.cats], fig:p.fig, aktif: !PASIF.has(norm(p.name))}))
     .sort((a,b) => b.oyunlar.length - a.oyunlar.length || sortTr(a.name,b.name));
 }
+/* Figüran sayım mantığı (eski sürümdeki kural):
+   - Kategorisi "Figüran" olan satırlar figürandır.
+   - Kişi hücresinde "(figüran)" etiketi varsa YALNIZCA etiketli isimler figüran sayılır,
+     etiket temizlenerek tekil kişi olarak yazılır. Etiket yoksa satırdaki tüm isimler alınır. */
+function buildFigRows(rows){
+  const out = [];
+  rows.forEach(r => {
+    const toks = names(r.kisi);
+    const tagged = toks.filter(t => FIGTAG.test(t));
+    if(tagged.length) tagged.forEach(t => { const n = stripTag(t); if(n) out.push({oyun:r.oyun,kategori:r.kategori||"Figüran",gorev:r.gorev,kisi:n}); });
+    else if(isFig(r.kategori)) toks.forEach(t => { const n = stripTag(t); if(n) out.push({oyun:r.oyun,kategori:r.kategori,gorev:r.gorev,kisi:n}); });
+  });
+  return out;
+}
+function figMap(){
+  const m = new Map();
+  FIGROWS.forEach(r => { if(!m.has(r.kisi)) m.set(r.kisi,[]); m.get(r.kisi).push(r); });
+  return m;
+}
+const aktifPeople = () => PEOPLE.filter(p => p.aktif);
 
 /* ============ Dışa aktarma ============ */
 function exportExcel(data, filename){
@@ -393,14 +522,11 @@ function exportPDF(title, headers, data){
   <script>window.onload=function(){window.print()}<\/script></body></html>`);
   w.document.close();
 }
-function figMap(){
-  const m = new Map();
-  DATA.filter(r => isFig(r.kategori)).forEach(r => names(r.kisi).forEach(n => {
-    if(!m.has(n)) m.set(n,[]); m.get(n).push(r);
-  }));
-  return m;
-}
 function figExportRows(){
+  if(figMode === "liste" && FIGSHEET.rows.length){
+    const heads = FIGSHEET.headers.length ? FIGSHEET.headers : ["Kayıt"];
+    return [heads].concat(FIGSHEET.rows.map(r => heads.map((_,i) => r[i] ?? "")));
+  }
   const rows = [["Figüran","Oyun Sayısı","Oyunlar"]];
   [...figMap().entries()].sort((a,b)=>b[1].length-a[1].length||sortTr(a[0],b[0]))
     .forEach(([n,rs]) => rows.push([n, new Set(rs.map(r=>r.oyun)).size, [...new Set(rs.map(r=>r.oyun))].sort(sortTr).join(", ")]));
@@ -408,17 +534,24 @@ function figExportRows(){
 }
 function figDetailRows(){
   const rows = [["Figüran","Oyun","Kategori","Görev"]];
-  DATA.filter(r => isFig(r.kategori)).forEach(r => names(r.kisi).forEach(n => rows.push([n,r.oyun,r.kategori,r.gorev])));
+  FIGROWS.forEach(r => rows.push([r.kisi,r.oyun,r.kategori,r.gorev]));
   return rows;
 }
 function peopleExportRows(){
-  const rows = [["Kişi","Oyun Sayısı","Oyunlar"]];
-  PEOPLE.forEach(p => rows.push([p.name, p.oyunlar.length, p.oyunlar.join(", ")]));
+  const rows = [["Kişi","Durum","Figüran","Oyun Sayısı","Oyunlar"]];
+  currentPeople().forEach(p => rows.push([p.name, p.aktif?"Aktif":"Pasif", p.fig?"Evet":"Hayır", p.oyunlar.length, p.oyunlar.join(", ")]));
   return rows;
 }
 function playExportRows(name){
   const rows = [["Oyun","Kategori","Görev","Kişi"]];
   DATA.filter(r => r.oyun === name).forEach(r => rows.push([r.oyun,r.kategori,r.gorev,r.kisi]));
+  return rows;
+}
+function statExportRows(){
+  const rows = [["Bölüm","Ad","Değer"]];
+  catCounts().forEach(([n,v]) => rows.push(["Kategori · Kişi Sayısı", n, v]));
+  [...PLAYS].sort((a,b)=>b.personel-a.personel).forEach(p => rows.push(["Oyun · Personel Sayısı", p.name, p.personel]));
+  aktifPeople().forEach(p => rows.push(["Kişi · Oyun Sayısı", p.name, p.oyunlar.length]));
   return rows;
 }
 
@@ -441,15 +574,17 @@ function go(id){
   document.querySelectorAll(".tab").forEach(b => b.classList.toggle("on", b.dataset.t === id));
   document.querySelectorAll(".panel").forEach(p => p.classList.toggle("on", p.id === "p-"+id));
   location.hash = id;
-  window.scrollTo({top:0,behavior:"instant" in window ? "auto" : "auto"});
   RENDER[id] && RENDER[id]();
 }
-window.addEventListener("scroll", () => document.getElementById("totop").classList.toggle("on", window.scrollY > 600));
+function setDetailOpen(splitId, open){
+  const el = document.getElementById(splitId);
+  if(el) el.classList.toggle("detail-open", !!open);
+}
 
 /* ============ Sayfalama ============ */
 const PAGES = {person:1, fig:1, play:1};
 function resetPage(k){ PAGES[k] = 1; }
-function setPage(k,v){ PAGES[k] = v; RENDER[k==="person"?"kisiler":k==="fig"?"figuran":"panel"](); window.scrollTo({top:0,behavior:"smooth"}); }
+function setPage(k,v){ PAGES[k] = v; ({person:renderPeople, fig:renderFiguran, play:renderPlays})[k](); }
 function pager(k, total){
   const pages = Math.max(1, Math.ceil(total/PAGE_SIZE)), cur = Math.min(PAGES[k], pages);
   if(pages <= 1) return "";
@@ -458,7 +593,10 @@ function pager(k, total){
     <span>${cur} / ${pages} · ${total} kayıt</span>
     <button class="btn sm" ${cur>=pages?"disabled":""} onclick="setPage('${k}',${cur+1})">Sonraki ›</button></div>`;
 }
-const slice = (k, arr) => arr.slice((Math.min(PAGES[k], Math.max(1,Math.ceil(arr.length/PAGE_SIZE)))-1)*PAGE_SIZE, Math.min(PAGES[k], Math.max(1,Math.ceil(arr.length/PAGE_SIZE)))*PAGE_SIZE);
+function slice(k, arr){
+  const pages = Math.max(1,Math.ceil(arr.length/PAGE_SIZE)), cur = Math.min(PAGES[k], pages);
+  return arr.slice((cur-1)*PAGE_SIZE, cur*PAGE_SIZE);
+}
 
 /* ============ Kilit ============ */
 const getPin = () => localStorage.getItem(PIN_KEY) || DEFAULT_PIN;
@@ -466,7 +604,7 @@ const unlocked = () => sessionStorage.getItem(AUTH_KEY) === "1";
 function lockScreen(target, title){
   return `<div class="lockbox">
     <h3>🔒 ${title}</h3><p>Bu bölüm yetkili kullanıcılara açıktır. Erişim şifrenizi girin.</p>
-    <input id="pin-in" type="password" placeholder="Şifre" style="width:100%;background:var(--surface-2);border:1px solid var(--line-strong);border-radius:10px;padding:11px 13px;outline:none">
+    <input id="pin-in" type="password" placeholder="Şifre" style="width:100%;background:var(--surface);border:1px solid var(--line-strong);border-radius:10px;padding:11px 13px;outline:none">
     <div class="err" id="pin-err"></div>
     <button class="btn pri" style="width:100%;margin-top:8px" onclick="tryPin('${target}')">Giriş Yap</button>
   </div>`;
@@ -486,15 +624,20 @@ document.addEventListener("keydown", e => {
 const skel = n => Array.from({length:n},()=>'<div class="skel"></div>').join("");
 function renderStats(){
   const cats = new Set(DATA.map(r => r.kategori).filter(Boolean));
+  const figCount = new Set(FIGROWS.map(r => r.kisi)).size;
   document.getElementById("stats").innerHTML = [
-    [PLAYS.length,"Oyun"],[PEOPLE.length,"Kadro Üyesi"],[DATA.length,"Görev Kaydı"],[cats.size,"Kategori"]
+    [PLAYS.length,"Oyun"],[aktifPeople().length,"Aktif Kadro"],[PEOPLE.length - aktifPeople().length,"Pasif"],
+    [figCount,"Figüran"],[DATA.length,"Görev Kaydı"],[cats.size,"Kategori"]
   ].map(([v,l]) => `<div class="stat"><b>${v}</b><span>${l}</span></div>`).join("");
 }
 async function boot(){
   document.getElementById("play-list").innerHTML = skel(7);
-  const d = await sheet("BÜTÜN OYUNLAR");
+  const [d, pasif, figs] = await Promise.all([sheet(MAIN_SHEET), sheet(PASIF_SHEET), sheet(FIG_SHEET)]);
   API_ROWS = parseRows(d.headers || [], d.rows || []);
-  loaded = true;
+  PASIF = new Set((pasif.rows||[]).map(r => norm(r[0])).filter(Boolean));
+  FIGSHEET = {headers:(figs.headers||[]).filter(h => String(h||"").trim()),
+              rows:(figs.rows||[]).filter(r => r.some(c => String(c||"").trim()))};
+  loaded = true; window.loaded = true;
   rebuild();
 }
 
@@ -502,83 +645,109 @@ async function boot(){
 let openPlay = null;
 function renderPlays(){
   if(!loaded) return;
-  const q = trLower(document.getElementById("q-play").value.trim());
-  const det = document.getElementById("play-detail"), list = document.getElementById("play-list");
-  if(openPlay){ list.innerHTML = ""; det.innerHTML = playDetail(openPlay); return; }
-  det.innerHTML = "";
+  const q = trLower((document.getElementById("q-play").value||"").trim());
   const all = PLAYS.filter(p => !q || trLower(p.name).includes(q));
   const items = slice("play", all);
-  list.innerHTML = all.length ? `<div class="card"><div class="card-b scroller">` + items.map(p => `
-    <div class="row" onclick="openPlay=${jq(p.name)};renderPlays()">
-      <div><div class="nm">${esc(p.name)} ${isCocuk(p.name)?'<span class="chip crim">Ç.O</span>':""}</div>
-        <div class="mt">${p.personel} kişi · ${p.rowCount} kayıt · ${esc(p.cats.slice(0,3).join(", "))}${p.cats.length>3?"…":""}</div></div>
+  document.getElementById("play-count").textContent = all.length;
+  document.getElementById("play-list").innerHTML = all.length ? items.map(p => `
+    <div class="row${openPlay===p.name?" sel":""}" onclick="selectPlay(${jq(p.name)})">
+      <div style="min-width:0"><div class="nm">${esc(p.name)} ${isCocuk(p.name)?'<span class="chip crim">Ç.O</span>':""}</div>
+        <div class="mt">${p.personel} kişi${p.figuran?` · ${p.figuran} figüran`:""} · ${p.rowCount} kayıt</div></div>
       <span class="chip gold">${p.personel}</span>
-    </div>`).join("") + `</div>${pager("play", all.length)}</div>` : `<div class="empty">Eşleşen oyun bulunamadı.</div>`;
+    </div>`).join("") : `<div class="empty">Eşleşen oyun bulunamadı.</div>`;
+  document.getElementById("play-pager").innerHTML = pager("play", all.length);
+  document.getElementById("play-detail").innerHTML = openPlay ? playDetail(openPlay)
+    : `<div class="placeholder">Soldaki listeden bir oyun seçin.<br>Kadro detayı burada açılır.</div>`;
+  setDetailOpen("split-panel", !!openPlay);
 }
+function selectPlay(n){ openPlay = (openPlay === n ? null : n); renderPlays(); }
 function playDetail(name){
   const rows = DATA.filter(r => r.oyun === name);
   const byCat = new Map();
   rows.forEach(r => { const k = r.kategori || "Diğer"; if(!byCat.has(k)) byCat.set(k,[]); byCat.get(k).push(r); });
-  const people = new Set(); rows.forEach(r => names(r.kisi).forEach(n => people.add(n)));
-  return `<button class="back" onclick="openPlay=null;renderPlays()">← Tüm oyunlar</button>
+  const people = new Set(); rows.forEach(r => names(r.kisi).forEach(n => people.add(stripTag(n))));
+  const figs = new Set(FIGROWS.filter(r => r.oyun === name).map(r => r.kisi));
+  return `<button class="back" onclick="openPlay=null;renderPlays()">← Oyun listesi</button>
   <div class="card"><div class="card-h"><div><h3>${esc(name)}</h3>
-    <div class="mt">${people.size} kişi · ${rows.length} kayıt · ${byCat.size} kategori</div></div>
+    <div class="mt" style="font-size:12px;color:var(--muted)">${people.size} kişi · ${figs.size} figüran · ${rows.length} kayıt · ${byCat.size} kategori</div></div>
     <div class="tools"><button class="btn sm" onclick="exportExcel(playExportRows(${jq(name)}),'kadro')">Excel</button>
       <button class="btn sm" onclick="exportPDF(${jq(name+' — Kadro')},['Oyun','Kategori','Görev','Kişi'],playExportRows(${jq(name)}))">PDF</button></div></div></div>
   ${[...byCat.entries()].map(([cat,rs]) => `<div class="card"><div class="card-h">
-      <h3 style="font-size:13px;letter-spacing:.08em;text-transform:uppercase">${esc(cat)}</h3>
-      <span class="chip">${rs.length} kayıt</span></div>
-    <div class="card-b scroller">${rs.map(r => `<div class="row" onclick="openPerson=${jq(names(r.kisi)[0]||"")};go('kisiler')">
+      <h3 style="font-size:12.5px;letter-spacing:.08em;text-transform:uppercase">${esc(cat)}</h3>
+      <span class="chip ${isFig(cat)?"crim":""}">${rs.length} kayıt</span></div>
+    <div class="card-b">${rs.map(r => `<div class="row" onclick="openPerson=${jq(stripTag(names(r.kisi)[0]||""))};go('kisiler')">
         <div class="nm">${esc(r.kisi)}</div><span class="chip">${esc(r.gorev||"—")}</span></div>`).join("")}</div></div>`).join("")}`;
 }
 
 /* ============ Kişiler ============ */
-let openPerson = null;
+let openPerson = null, peopleMode = "aktif";
+function setPeopleMode(m){
+  peopleMode = m; resetPage("person");
+  ["akt","all","fig"].forEach(k => document.getElementById("seg-p-"+k).classList.remove("on"));
+  document.getElementById(m === "aktif" ? "seg-p-akt" : m === "tumu" ? "seg-p-all" : "seg-p-fig").classList.add("on");
+  renderPeople();
+}
+function currentPeople(){
+  const q = trLower((document.getElementById("q-person")?.value||"").trim());
+  let list = peopleMode === "aktif" ? aktifPeople() : peopleMode === "figuran" ? PEOPLE.filter(p => p.fig) : PEOPLE;
+  return list.filter(p => !q || trLower(p.name).includes(q));
+}
 function renderPeople(){
   if(!loaded) return;
-  const q = trLower((document.getElementById("q-person").value||"").trim());
-  const det = document.getElementById("person-detail"), list = document.getElementById("person-list");
-  if(openPerson){ list.innerHTML = ""; det.innerHTML = personDetail(openPerson); return; }
-  det.innerHTML = "";
-  const all = PEOPLE.filter(p => !q || trLower(p.name).includes(q));
+  const all = currentPeople();
   const items = slice("person", all);
-  list.innerHTML = all.length ? `<div class="card"><div class="card-b scroller">` + items.map(p => `
-    <div class="row" onclick="openPerson=${jq(p.name)};renderPeople()">
-      <div><div class="nm">${esc(p.name)}</div><div class="mt">${esc(p.gorevler.slice(0,3).join(" · ")||p.cats.slice(0,3).join(" · "))}</div></div>
-      <span class="chip gold">${p.oyunlar.length} oyun</span></div>`).join("") + `</div>${pager("person", all.length)}</div>`
+  document.getElementById("person-count").textContent = all.length;
+  document.getElementById("person-list").innerHTML = all.length ? items.map(p => `
+    <div class="row${openPerson===p.name?" sel":""}${p.aktif?"":" pasif"}" onclick="selectPerson(${jq(p.name)})">
+      <div style="min-width:0"><div class="nm">${esc(p.name)} ${p.fig?'<span class="chip crim">Fig</span>':""}</div>
+        <div class="mt">${esc(p.gorevler.slice(0,3).join(" · ")||p.cats.slice(0,3).join(" · "))}</div></div>
+      <span class="chip gold">${p.oyunlar.length} oyun</span></div>`).join("")
     : `<div class="empty">Eşleşen kişi bulunamadı.</div>`;
+  document.getElementById("person-pager").innerHTML = pager("person", all.length);
+  document.getElementById("person-detail").innerHTML = openPerson ? personDetail(openPerson)
+    : `<div class="placeholder">Soldaki listeden bir kişi seçin.<br>Görev aldığı oyunlar burada listelenir.</div>`;
+  setDetailOpen("split-kisiler", !!openPerson);
 }
+function selectPerson(n){ openPerson = (openPerson === n ? null : n); renderPeople(); }
 function personDetail(name){
-  const rows = DATA.filter(r => names(r.kisi).includes(name));
+  const rows = DATA.filter(r => names(r.kisi).some(x => stripTag(x) === name));
+  const p = PEOPLE.find(x => x.name === name);
   const byPlay = new Map();
   rows.forEach(r => { if(!byPlay.has(r.oyun)) byPlay.set(r.oyun,[]); byPlay.get(r.oyun).push(r); });
-  return `<button class="back" onclick="openPerson=null;renderPeople()">← Tüm kişiler</button>
+  const figOyun = new Set(FIGROWS.filter(r => r.kisi === name).map(r => r.oyun));
+  return `<button class="back" onclick="openPerson=null;renderPeople()">← Kişi listesi</button>
   <div class="card"><div class="card-h"><div><h3>${esc(name)}</h3>
-    <div class="mt">${byPlay.size} oyun · ${rows.length} kayıt</div></div>
-    <div class="tools">${rows.some(r=>isFig(r.kategori))?'<span class="chip crim">Figüran</span>':""}
+    <div class="mt" style="font-size:12px;color:var(--muted)">${byPlay.size} oyun · ${rows.length} kayıt${figOyun.size?` · ${figOyun.size} figüran görevi`:""}</div></div>
+    <div class="tools">${p && !p.aktif?'<span class="chip">Pasif</span>':""}${figOyun.size?'<span class="chip crim">Figüran</span>':""}
       <button class="btn sm" onclick="exportExcel([['Oyun','Kategori','Görev']].concat(${jq(rows.map(r=>[r.oyun,r.kategori,r.gorev]))}),'kisi')">Excel</button>
       <button class="btn sm" onclick="exportPDF(${jq(name)},['Oyun','Kategori','Görev'],${jq(rows.map(r=>[r.oyun,r.kategori,r.gorev]))})">PDF</button></div></div>
-    <div class="card-b scroller">${[...byPlay.entries()].sort((a,b)=>sortTr(a[0],b[0])).map(([play,rs]) => `
+    <div class="card-b">${[...byPlay.entries()].sort((a,b)=>sortTr(a[0],b[0])).map(([play,rs]) => `
       <div class="row" onclick="openPlay=${jq(play)};go('panel')">
-        <div><div class="nm">${esc(play)}</div>
+        <div style="min-width:0"><div class="nm">${esc(play)}</div>
           <div class="mt">${esc(rs.map(r => r.gorev || r.kategori).filter(Boolean).join(" · "))}</div></div>
-        <div class="tag-row">${[...new Set(rs.map(r=>r.kategori).filter(Boolean))].map(c=>`<span class="chip">${esc(c)}</span>`).join("")}</div>
+        <div class="tag-row">${[...new Set(rs.map(r=>r.kategori).filter(Boolean))].map(c=>`<span class="chip ${isFig(c)?"crim":""}">${esc(c)}</span>`).join("")}</div>
       </div>`).join("")}</div></div>`;
 }
 
 /* ============ Dağılım ============ */
+let openDag = null;
 function renderDagilim(){
   if(!loaded) return;
   const q = trLower((document.getElementById("q-dag").value||"").trim());
-  const items = PEOPLE.filter(p => !q || trLower(p.name).includes(q)).slice(0,120);
-  const max = PEOPLE[0]?.oyunlar.length || 1;
-  document.getElementById("dagilim").innerHTML = items.length ? `<div class="card"><div class="card-b scroller">` +
-    items.map((p,i) => `<div class="row" onclick="openPerson=${jq(p.name)};go('kisiler')">
+  const base = aktifPeople();
+  const items = base.filter(p => !q || trLower(p.name).includes(q)).slice(0,200);
+  const max = base[0]?.oyunlar.length || 1;
+  document.getElementById("dag-count").textContent = items.length;
+  document.getElementById("dagilim").innerHTML = items.length ? items.map((p,i) => `
+    <div class="row${openDag===p.name?" sel":""}" onclick="openDag=${jq(p.name)};renderDagilim()">
       <div style="flex:1;min-width:0">
         <div class="nm">${i+1}. ${esc(p.name)}</div>
-        <div class="bar" style="margin-top:7px;max-width:420px"><i style="width:${Math.round(p.oyunlar.length/max*100)}%"></i></div>
-      </div><span class="chip gold">${p.oyunlar.length} oyun</span></div>`).join("") + `</div></div>`
+        <div class="bar" style="margin-top:7px"><i style="width:${Math.round(p.oyunlar.length/max*100)}%"></i></div>
+      </div><span class="chip gold">${p.oyunlar.length}</span></div>`).join("")
     : `<div class="empty">Kayıt yok.</div>`;
+  document.getElementById("dag-detail").innerHTML = openDag ? personDetail(openDag)
+    : `<div class="placeholder">Bir kişi seçin; oyun yükü detayı burada görünür.</div>`;
+  setDetailOpen("split-dagilim", !!openDag);
 }
 
 /* ============ Sorgulama ============ */
@@ -596,7 +765,8 @@ function attachSugg(inputId, boxId){
 }
 function castMap(play){
   const m = new Map();
-  DATA.filter(r => r.oyun === play).forEach(r => names(r.kisi).forEach(n => {
+  DATA.filter(r => r.oyun === play).forEach(r => names(r.kisi).forEach(raw => {
+    const n = stripTag(raw); if(!n) return;
     if(!m.has(n)) m.set(n,new Set());
     if(r.gorev) m.get(n).add(r.gorev);
   }));
@@ -611,7 +781,7 @@ function renderSorgu(){
   const onlyA = [...A.keys()].filter(n => !B.has(n)).sort(sortTr);
   const onlyB = [...B.keys()].filter(n => !A.has(n)).sort(sortTr);
   const col = (title,arr,src,cls) => `<div class="card"><div class="card-h"><h3 style="font-size:14px">${title}</h3>
-    <span class="chip ${cls}">${arr.length}</span></div><div class="card-b scroller">${arr.length ? arr.map(n =>
+    <span class="chip ${cls}">${arr.length}</span></div><div class="card-b" style="max-height:44vh;overflow:auto">${arr.length ? arr.map(n =>
     `<div class="row" onclick="openPerson=${jq(n)};go('kisiler')">
       <div class="nm">${esc(n)}</div><span class="mt">${esc([...(src.get(n)||[])].join(" · "))}</span></div>`).join("")
     : `<div class="empty" style="padding:22px">Kayıt yok.</div>`}</div></div>`;
@@ -636,37 +806,143 @@ function renderFilter(){
     <div class="tools"><span class="chip gold">${res.length} kayıt</span>
       <button class="btn sm" onclick="exportExcel(window.__filterRes,'filtre')">Excel</button>
       <button class="btn sm" onclick="exportPDF('Filtre Sonuçları',['Oyun','Kategori','Görev','Kişi'],window.__filterRes)">PDF</button></div></div>
-    <div class="scroller"><table><thead><tr><th>Oyun</th><th>Kategori</th><th>Görev</th><th>Kişi</th></tr></thead>
+    <div style="max-height:52vh;overflow:auto"><table><thead><tr><th>Oyun</th><th>Kategori</th><th>Görev</th><th>Kişi</th></tr></thead>
     <tbody>${res.slice(0,500).map(r => `<tr><td>${esc(r.oyun)}</td><td>${esc(r.kategori)}</td><td>${esc(r.gorev)}</td><td>${esc(r.kisi)}</td></tr>`).join("")}</tbody></table></div></div>`;
 }
 
-/* ============ İstatistik ============ */
+/* ============ İstatistik & grafikler (eski sürümdeki sayım mantığı) ============
+   Kategori grafiği: kategorideki TEKİL kişi sayısı (satır sayısı değil).
+   Oyun grafiği: oyundaki tekil personel sayısı.
+   Kişi grafiği: kişinin görev aldığı tekil oyun sayısı.
+   Pasif kişiler (PASIF_KISILER) sayımların dışında tutulur. */
+const PALETTE = ["#c0392b","#e67e22","#f1c40f","#27ae60","#2980b9","#8e44ad","#16a085","#d35400",
+  "#2ecc71","#3498db","#9b59b6","#1abc9c","#e74c3c","#f39c12","#6c3483","#145a32"];
+function catCounts(){
+  const m = new Map();
+  DATA.forEach(r => {
+    const c = r.kategori || "Diğer";
+    if(!m.has(c)) m.set(c,new Set());
+    names(r.kisi).forEach(raw => { const n = stripTag(raw); if(n && !PASIF.has(norm(n))) m.get(c).add(n); });
+  });
+  return [...m.entries()].map(([k,v]) => [k, v.size]).filter(x => x[1] > 0).sort((a,b) => b[1]-a[1]);
+}
+function donut(title, data, note){
+  const total = data.reduce((s,d) => s + d[1], 0) || 1;
+  const R = 92, r = 56, cx = 100, cy = 100;
+  let ang = -Math.PI/2, paths = "";
+  data.forEach(([n,v],i) => {
+    const a2 = ang + (v/total) * Math.PI * 2, big = (a2-ang) > Math.PI ? 1 : 0;
+    const p = (rad,a) => [cx + rad*Math.cos(a), cy + rad*Math.sin(a)];
+    const [x1,y1] = p(R,ang), [x2,y2] = p(R,a2), [x3,y3] = p(r,a2), [x4,y4] = p(r,ang);
+    paths += `<path d="M${x1} ${y1} A${R} ${R} 0 ${big} 1 ${x2} ${y2} L${x3} ${y3} A${r} ${r} 0 ${big} 0 ${x4} ${y4} Z"
+      fill="${PALETTE[i%PALETTE.length]}"><title>${esc(n)}: ${v}</title></path>`;
+    ang = a2;
+  });
+  return `<div class="card"><div class="card-h"><h3>${title}</h3><span class="chip gold">${total}</span></div>
+    <div class="donut-wrap">
+      <svg class="donut" viewBox="0 0 200 200" width="200" height="200">${paths}
+        <text x="100" y="96" text-anchor="middle" font-size="26" font-weight="800" fill="var(--text)">${total}</text>
+        <text x="100" y="116" text-anchor="middle" font-size="11" fill="var(--muted)">${note}</text></svg>
+      <div class="chart-legend">${data.map(([n,v],i) => `<div class="lg"><i style="background:${PALETTE[i%PALETTE.length]}"></i>
+        <span title="${esc(n)}">${esc(n)}</span><b>${v}</b></div>`).join("")}</div>
+    </div></div>`;
+}
+function barChart(title, data, unit, onclickFn){
+  const max = data[0]?.[1] || 1;
+  return `<div class="card"><div class="card-h"><h3>${title}</h3><span class="chip">${data.length}</span></div>
+    <div class="card-b" style="padding:14px 15px;max-height:420px;overflow:auto">${data.length ? data.map(([n,v]) => `
+      <div class="hbar" ${onclickFn?`style="cursor:pointer" onclick="${onclickFn}(${jq(n)})"`:""}>
+        <div class="t"><span title="${esc(n)}">${esc(n)}</span><b>${v}${unit}</b></div>
+        <div class="bar"><i style="width:${Math.round(v/max*100)}%"></i></div></div>`).join("")
+      : `<div class="empty">Kayıt yok.</div>`}</div></div>`;
+}
+function goPlay(n){ openPlay = n; go("panel"); }
+function goPerson(n){ openPerson = n; go("kisiler"); }
 function renderGrafik(){
   if(!loaded) return;
-  const cats = new Map();
-  DATA.forEach(r => { const c = r.kategori || "Diğer"; cats.set(c,(cats.get(c)||0)+1); });
-  const cl = [...cats.entries()].sort((a,b)=>b[1]-a[1]).slice(0,14), cmax = cl[0]?.[1] || 1;
-  const pl = [...PLAYS].sort((a,b)=>b.personel-a.personel).slice(0,14), pmax = pl[0]?.personel || 1;
-  const chart = (title, arr, max, fmt) => `<div class="card"><div class="card-h"><h3 style="font-size:14px">${title}</h3></div>
-    <div class="card-b" style="padding:12px 15px">${arr.map(([n,v]) => `
-      <div style="margin-bottom:11px"><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px">
-      <span>${esc(n)}</span><b style="color:var(--accent)">${v}${fmt}</b></div>
-      <div class="bar"><i style="width:${Math.round(v/max*100)}%"></i></div></div>`).join("")}</div></div>`;
-  document.getElementById("cat-chart").innerHTML = chart("Kategoriye Göre Kayıt", cl, cmax, "");
-  document.getElementById("play-chart").innerHTML = chart("En Kalabalık Kadrolar", pl.map(p=>[p.name,p.personel]), pmax, " kişi");
+  const cats = catCounts();
+  const figCount = new Set(FIGROWS.map(r => r.kisi)).size;
+  const akt = aktifPeople();
+  const avg = akt.length ? (akt.reduce((s,p)=>s+p.oyunlar.length,0)/akt.length).toFixed(1) : "0";
+  document.getElementById("kpi").innerHTML = [
+    [PLAYS.length,"Oyun"],[akt.length,"Aktif Kişi"],[figCount,"Figüran"],
+    [DATA.length,"Görev Kaydı"],[cats.length,"Kategori"],[avg,"Kişi Başı Oyun"]
+  ].map(([v,l]) => `<div class="box"><b>${v}</b><span>${l}</span></div>`).join("");
+
+  document.getElementById("cat-donut").innerHTML = donut("Kategoriye Göre Kişi Sayısı", cats.slice(0,12), "kişi");
+  document.getElementById("play-chart").innerHTML = barChart("Oyun · Personel Sayısı",
+    [...PLAYS].sort((a,b)=>b.personel-a.personel).slice(0,15).map(p=>[p.name,p.personel]), " kişi", "goPlay");
+  document.getElementById("person-chart").innerHTML = barChart("Kişi · Oyun Sayısı",
+    akt.slice(0,15).map(p=>[p.name,p.oyunlar.length]), " oyun", "goPerson");
+  const load = new Map();
+  akt.forEach(p => { const k = p.oyunlar.length; load.set(k,(load.get(k)||0)+1); });
+  document.getElementById("load-chart").innerHTML = barChart("Yük Dağılımı (kaç kişi kaç oyunda)",
+    [...load.entries()].sort((a,b)=>a[0]-b[0]).map(([k,v])=>[k + " oyunda", v]), " kişi");
 }
 
 /* ============ Figüran ============ */
+let figMode = "liste", openFig = null;
+function setFigMode(m){
+  figMode = m; openFig = null; resetPage("fig");
+  document.getElementById("seg-f-liste").classList.toggle("on", m === "liste");
+  document.getElementById("seg-f-oyun").classList.toggle("on", m === "oyun");
+  renderFiguran();
+}
 function renderFiguran(){
   if(!loaded) return;
   const q = trLower((document.getElementById("q-fig").value||"").trim());
-  const all = [...figMap().entries()].filter(([n]) => !q || trLower(n).includes(q)).sort((a,b)=>b[1].length-a[1].length||sortTr(a[0],b[0]));
-  const items = slice("fig", all);
-  document.getElementById("figuran").innerHTML = all.length ? `<div class="card"><div class="card-b scroller">` +
-    items.map(([n,rs]) => `<div class="row" onclick="openPerson=${jq(n)};go('kisiler')">
-      <div><div class="nm">${esc(n)}</div><div class="mt">${esc([...new Set(rs.map(r=>r.oyun))].join(" · "))}</div></div>
-      <span class="chip crim">${new Set(rs.map(r=>r.oyun)).size} oyun</span></div>`).join("") + `</div>${pager("fig", all.length)}</div>`
-    : `<div class="empty">Figüran kaydı bulunamadı.</div>`;
+  const box = document.getElementById("figuran");
+  document.getElementById("fig-title").textContent = figMode === "liste" ? "Figüran Listesi" : "Oyun Bazlı Figüran";
+
+  if(figMode === "oyun"){
+    const rows = FIGROWS.filter(r => !q || trLower(r.kisi+" "+r.oyun+" "+r.gorev).includes(q));
+    const items = slice("fig", rows);
+    document.getElementById("fig-count").textContent = rows.length;
+    box.innerHTML = rows.length ? items.map(r => `
+      <div class="row" onclick="openFig=${jq(r.kisi)};renderFiguran()">
+        <div style="min-width:0"><div class="nm">${esc(r.kisi)}</div>
+          <div class="mt">${esc(r.oyun)} · ${esc(r.gorev||"—")}</div></div>
+        <span class="chip crim">${esc(r.kategori||"Figüran")}</span></div>`).join("")
+      : `<div class="empty">Figüran kaydı bulunamadı.<br><span style="font-size:12px">BÜTÜN OYUNLAR sayfasına figüran kategorisiyle eklendiğinde burada görünür.</span></div>`;
+    document.getElementById("fig-pager").innerHTML = pager("fig", rows.length);
+  } else {
+    const list = [...figMap().entries()].filter(([n]) => !q || trLower(n).includes(q))
+      .sort((a,b) => b[1].length - a[1].length || sortTr(a[0],b[0]));
+    const sheetRows = FIGSHEET.rows.filter(r => !q || trLower(r.join(" ")).includes(q));
+    const items = slice("fig", list);
+    document.getElementById("fig-count").textContent = list.length;
+    box.innerHTML = (list.length ? items.map(([n,rs]) => `
+      <div class="row${openFig===n?" sel":""}" onclick="openFig=${jq(n)};renderFiguran()">
+        <div style="min-width:0"><div class="nm">${esc(n)}</div>
+          <div class="mt">${esc([...new Set(rs.map(r=>r.oyun))].join(" · "))}</div></div>
+        <span class="chip crim">${new Set(rs.map(r=>r.oyun)).size} oyun</span></div>`).join("")
+      : `<div class="empty">Figüran kaydı bulunamadı.</div>`)
+      + (sheetRows.length ? `<div class="row" style="cursor:default;background:var(--surface-2)">
+          <div class="nm" style="font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">e-Tablo: ${esc(FIG_SHEET)}</div>
+          <span class="chip">${sheetRows.length} satır</span></div>` : "");
+    document.getElementById("fig-pager").innerHTML = pager("fig", list.length);
+  }
+  document.getElementById("fig-detail").innerHTML = openFig ? figDetail(openFig) : figSheetCard();
+  setDetailOpen("split-figuran", !!openFig);
+}
+function figSheetCard(){
+  if(!FIGSHEET.rows.length) return `<div class="placeholder">Soldan bir figüran seçin.<br>${esc(FIG_SHEET)} sayfası bulunamadı.</div>`;
+  const heads = FIGSHEET.headers.length ? FIGSHEET.headers : ["Kayıt"];
+  return `<div class="card flexcard" style="height:100%"><div class="card-h">
+    <h3>${esc(FIG_SHEET)}</h3><span class="chip gold">${FIGSHEET.rows.length} satır</span></div>
+    <div class="card-b grow" style="padding:0"><table><thead><tr>${heads.map(h=>`<th>${esc(h)}</th>`).join("")}</tr></thead>
+    <tbody>${FIGSHEET.rows.slice(0,500).map(r => `<tr>${heads.map((_,i)=>`<td>${esc(r[i]??"")}</td>`).join("")}</tr>`).join("")}</tbody></table></div></div>`;
+}
+function figDetail(name){
+  const rs = FIGROWS.filter(r => r.kisi === name);
+  return `<button class="back" onclick="openFig=null;renderFiguran()">← Figüran listesi</button>
+  <div class="card"><div class="card-h"><div><h3>${esc(name)}</h3>
+    <div class="mt" style="font-size:12px;color:var(--muted)">${new Set(rs.map(r=>r.oyun)).size} oyun · ${rs.length} figüran kaydı</div></div>
+    <div class="tools"><button class="btn sm" onclick="openPerson=${jq(name)};go('kisiler')">Kişi kartı</button>
+      <button class="btn sm" onclick="exportExcel([['Oyun','Kategori','Görev']].concat(${jq(rs.map(r=>[r.oyun,r.kategori,r.gorev]))}),'figuran-kisi')">Excel</button></div></div>
+    <div class="card-b">${rs.map(r => `<div class="row" onclick="openPlay=${jq(r.oyun)};go('panel')">
+      <div style="min-width:0"><div class="nm">${esc(r.oyun)}</div><div class="mt">${esc(r.gorev||"—")}</div></div>
+      <span class="chip crim">${esc(r.kategori||"Figüran")}</span></div>`).join("")}</div></div>`;
 }
 
 /* ============ Kilitli tablolar ============ */
@@ -682,7 +958,7 @@ async function sheetTable(el, sheetName, title, note){
       <button class="btn sm" onclick="exportPDF(${jq(title)},window['__sheet_'+${jq(sheetName)}][0],window['__sheet_'+${jq(sheetName)}])">PDF</button></div></div>
     <div class="card"><div class="card-h"><h3 style="font-size:14px">${esc(sheetName)}</h3>
       <span class="chip gold">${rows.length} kayıt</span></div>
-    <div class="scroller"><table><thead><tr>${heads.map(h=>`<th>${esc(h)}</th>`).join("")}</tr></thead>
+    <div style="max-height:64vh;overflow:auto"><table><thead><tr>${heads.map(h=>`<th>${esc(h)}</th>`).join("")}</tr></thead>
     <tbody>${rows.slice(0,600).map(r => `<tr>${heads.map((_,i)=>`<td>${esc(r[i]??"")}</td>`).join("")}</tr>`).join("")}</tbody></table></div></div>`;
 }
 function renderGorevsiz(){
@@ -696,7 +972,7 @@ function renderArsiv(){
   sheetTable(el, "ARŞİV OYUNLAR", "Arşiv Oyunlar", "Repertuvardan kaldırılmış oyunların kadro kayıtları.");
 }
 
-/* ============ Yönetim (admin) paneli ============ */
+/* ============ Yönetim ============ */
 let adminQ = "";
 function renderYonetim(){
   const el = document.getElementById("yonetim");
@@ -705,7 +981,7 @@ function renderYonetim(){
   const rows = DATA.filter(r => !q || trLower(r.oyun+" "+r.kategori+" "+r.gorev+" "+r.kisi).includes(q)).slice(0,200);
   el.innerHTML = `
   <div class="sec-head"><div><h2 class="sec-title">Yönetim Paneli</h2>
-    <p class="sec-sub">Kayıt ekleyin, düzeltin veya kaldırın. Tüm değişiklikler doğrudan Google e-Tablo'ya (${esc(MAIN_SHEET)}) yazılır ve bildirim olarak kaydedilir.</p></div>
+    <p class="sec-sub">Kayıt ekleyin, düzeltin veya kaldırın. Tüm değişiklikler doğrudan Google e-Tablo'ya (${esc(MAIN_SHEET)}) yazılır.</p></div>
     <div class="tools"><button class="btn sm" onclick="reloadData()">Verileri yenile</button></div></div>
 
   <div class="grid2">
@@ -714,7 +990,7 @@ function renderYonetim(){
         <div class="fld"><label>Oyun</label><input id="a-oyun" placeholder="Oyun adı"></div>
         <div class="fld"><label>Kategori</label><input id="a-kat" placeholder="Örn. Oyuncu, Figüran, Teknik"></div>
         <div class="fld"><label>Görev</label><input id="a-gorev" placeholder="Rol / görev"></div>
-        <div class="fld"><label>Kişi</label><input id="a-kisi" placeholder="Ad Soyad (virgülle birden fazla)"></div>
+        <div class="fld"><label>Kişi</label><input id="a-kisi" placeholder="Ad Soyad (virgülle birden fazla, figüran için 'Ad Soyad (Figüran)')"></div>
         <button class="btn pri" style="width:100%" onclick="addRow()">Google e-Tablo'ya kaydet</button>
         <div class="ok" id="a-msg"></div>
       </div></div>
@@ -731,9 +1007,9 @@ function renderYonetim(){
 
   <div class="card" style="margin-top:14px"><div class="card-h">
     <h3>Kayıtlar</h3><span class="chip gold">${DATA.length} kayıt</span></div>
-    <div style="padding:12px 15px 0"><input value="${esc(adminQ)}" placeholder="Kayıt ara…" oninput="adminQ=this.value;renderYonetim();document.getElementById('adm-q')?.focus()" id="adm-q"
-      style="width:100%;background:var(--surface-2);border:1px solid var(--line-strong);border-radius:10px;padding:10px 13px;outline:none"></div>
-    <div class="scroller" style="margin-top:12px"><table><thead><tr><th>Oyun</th><th>Kategori</th><th>Görev</th><th>Kişi</th><th style="width:120px">İşlem</th></tr></thead>
+    <div style="padding:12px 15px 0"><input value="${esc(adminQ)}" placeholder="Kayıt ara…" oninput="adminQ=this.value;renderYonetim()" id="adm-q"
+      style="width:100%;background:var(--surface);border:1px solid var(--line-strong);border-radius:10px;padding:10px 13px;outline:none"></div>
+    <div style="margin-top:12px;max-height:52vh;overflow:auto"><table><thead><tr><th>Oyun</th><th>Kategori</th><th>Görev</th><th>Kişi</th><th style="width:120px">İşlem</th></tr></thead>
     <tbody>${rows.map(r => `<tr><td>${esc(r.oyun)}</td><td>${esc(r.kategori)}</td><td>${esc(r.gorev)}</td><td>${esc(r.kisi)}</td>
       <td><button class="btn sm" onclick="editRow(${r._i})">Düzenle</button>
           <button class="btn sm dan" onclick="removeRow(${r._i})">Sil</button></td></tr>`).join("")}</tbody></table></div>
@@ -741,12 +1017,12 @@ function renderYonetim(){
 
   <div class="card" style="margin-top:14px"><div class="card-h"><h3>Son işlemler</h3>
     <div class="tools"><button class="btn sm dan" onclick="clearNotifs()">Bildirimleri temizle</button></div></div>
-    <div class="card-b scroller" id="notif-log">${notifRowsHtml(NOTIFS.slice(0,50))}</div>
+    <div class="card-b" style="max-height:40vh;overflow:auto;padding:6px 14px" id="notif-log">${notifRowsHtml(NOTIFS.slice(0,50))}</div>
   </div>`;
   const inp = document.getElementById("adm-q");
   if(inp && adminQ){ inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
 }
-function reloadData(){ withBusy("Yenileniyor", async () => {}); }
+function reloadData(){ withBusy("Yenileniyor", async () => { cache.delete(PASIF_SHEET); cache.delete(FIG_SHEET); }); }
 function addRow(){
   const g = id => document.getElementById(id).value.trim();
   const r = {oyun:g("a-oyun"), kategori:g("a-kat"), gorev:g("a-gorev"), kisi:g("a-kisi")};
@@ -830,7 +1106,6 @@ async function clearNotifs(){
 document.addEventListener("click", e => {
   if(notifOpen && !e.target.closest("#notif-wrap")){ notifOpen = false; document.getElementById("notif-pop").classList.remove("on"); }
 });
-
 function changePin(){
   const a = document.getElementById("p-new").value, b = document.getElementById("p-new2").value;
   const m = document.getElementById("p-msg");
@@ -848,7 +1123,6 @@ if(location.hash) go(location.hash.slice(1));
 boot();
 loadNotifs();
 setInterval(loadNotifs, 60000);
-
 </script>
 </body>
 </html>
