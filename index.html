@@ -184,6 +184,21 @@ tr:hover td{background:var(--surface-2)}
 @media(max-width:620px){.adm-row2{grid-template-columns:1fr}}
 .adm-table td .tools{flex-wrap:nowrap}
 .adm-table td:last-child{white-space:nowrap;width:1%}
+.play-card{border:1px solid var(--line-strong);border-radius:14px;background:var(--surface);margin-bottom:10px;overflow:hidden}
+.play-head{display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;background:var(--surface-2);border-bottom:1px solid transparent}
+.play-card.open .play-head{border-bottom-color:var(--line)}
+.play-head .caret{font-size:11px;color:var(--muted);width:12px}
+.play-head .pname{font-weight:700;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.play-body{display:none}
+.play-card.open .play-body{display:block}
+.grid-tbl{width:100%;border-collapse:collapse;table-layout:fixed}
+.grid-tbl th{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);background:var(--surface-2)}
+.grid-tbl td{padding:0;border-bottom:1px solid var(--line);border-right:1px solid var(--line)}
+.grid-tbl td:last-child{border-right:0;padding:6px 8px;white-space:nowrap;text-align:right}
+.grid-tbl input{width:100%;border:0;background:transparent;padding:9px 10px;outline:none;font:inherit;color:inherit}
+.grid-tbl input:focus{background:var(--accent-wash);box-shadow:inset 0 0 0 2px var(--accent)}
+.grid-tbl tr.new-row td{background:var(--surface-2)}
+
 .hint{color:var(--muted);font-size:11.5px;margin-top:4px}
 .modal-bg{position:fixed;inset:0;background:rgba(10,12,16,.55);z-index:150;display:none;place-items:center;padding:18px}
 .modal-bg.on{display:grid}
@@ -988,84 +1003,125 @@ function renderArsiv(){
 let adminQ = "", admPage = 1;
 const ADM_PAGE = 50;
 function setAdmPage(p){ admPage = p; renderYonetim(); }
+let admOpenPlay = null;
+function toggleAdmPlay(n){ admOpenPlay = (admOpenPlay === n ? null : n); renderYonetim(); }
 function renderYonetim(){
   const el = document.getElementById("yonetim");
   if(!unlocked()){ el.innerHTML = lockScreen("yonetim","Yönetim Paneli"); return; }
   const q = trLower(adminQ.trim());
-  const all = DATA.filter(r => !q || trLower(r.oyun+" "+r.kategori+" "+r.gorev+" "+r.kisi).includes(q));
-  const pages = Math.max(1, Math.ceil(all.length/ADM_PAGE));
+  const groups = new Map();
+  DATA.forEach(r => { if(!groups.has(r.oyun)) groups.set(r.oyun, []); groups.get(r.oyun).push(r); });
+  let list = [...groups.entries()].sort((a,b) => sortTr(a[0],b[0]));
+  if(q) list = list.filter(([n,rs]) => trLower(n).includes(q) || rs.some(r => trLower(r.kategori+" "+r.gorev+" "+r.kisi).includes(q)));
+  const pages = Math.max(1, Math.ceil(list.length/10));
   if(admPage > pages) admPage = pages;
-  const rows = all.slice((admPage-1)*ADM_PAGE, admPage*ADM_PAGE);
+  const shown = list.slice((admPage-1)*10, admPage*10);
+  if(q && admOpenPlay === null && shown.length === 1) admOpenPlay = shown[0][0];
+
+  const cell = (i, col, val) => `<td><input value="${esc(val)}" autocomplete="off" onchange="cellEdit(${i},'${col}',this)"></td>`;
+  const playHtml = ([name, rs]) => {
+    const open = admOpenPlay === name;
+    const people = new Set(); rs.forEach(r => names(r.kisi).forEach(n => people.add(stripTag(n))));
+    return `<div class="play-card${open?" open":""}">
+      <div class="play-head" onclick="toggleAdmPlay(${jq(name)})">
+        <span class="caret">${open?"▼":"▶"}</span>
+        <span class="pname">${esc(name)}</span>
+        <span class="chip">${rs.length} satır</span>
+        <span class="chip gold">${people.size} kişi</span>
+        <button class="btn sm" onclick="event.stopPropagation();renamePlay(${jq(name)})">Adı düzenle</button>
+      </div>
+      <div class="play-body">
+        <table class="grid-tbl"><thead><tr><th style="width:20%">Kategori</th><th style="width:26%">Görev</th><th>Kişi</th><th style="width:118px"></th></tr></thead>
+        <tbody>
+        ${rs.map(r => `<tr>${cell(r._i,"kategori",r.kategori)}${cell(r._i,"gorev",r.gorev)}${cell(r._i,"kisi",r.kisi)}
+          <td><button class="btn sm dan" onclick="removeRow(${r._i})">Sil</button></td></tr>`).join("")}
+        <tr class="new-row">
+          <td><input placeholder="Kategori" autocomplete="off" id="n-kat-${esc(name)}"></td>
+          <td><input placeholder="Görev / rol" autocomplete="off" id="n-gor-${esc(name)}"></td>
+          <td><input placeholder="Ad Soyad (virgülle çoklu)" autocomplete="off" id="n-kis-${esc(name)}"
+              onkeydown="if(event.key==='Enter')addPerson(${jq(name)})"></td>
+          <td><button class="btn pri sm" onclick="addPerson(${jq(name)})">Kişi ekle</button></td>
+        </tr>
+        </tbody></table>
+      </div></div>`;
+  };
+
   el.innerHTML = `
   <div class="sec-head"><div><h2 class="sec-title">Yönetim Paneli</h2>
-    <p class="sec-sub">Kayıt ekleyin, düzenleyin veya silin. Tüm değişiklikler Google e-Tablo'ya (${esc(MAIN_SHEET)}) yazılır.</p></div>
-    <div class="tools"><button class="btn sm" onclick="reloadData()">Verileri yenile</button>
+    <p class="sec-sub">Oyunlar tek tek listelenir. Hücreye tıklayıp yazın, alandan çıkınca Google e-Tablo'ya (${esc(MAIN_SHEET)}) kaydedilir.</p></div>
+    <div class="tools"><button class="btn pri sm" onclick="openNewPlay()">+ Yeni oyun</button>
+      <button class="btn sm" onclick="reloadData()">Verileri yenile</button>
       <button class="btn sm" onclick="exportExcel([['Oyun','Kategori','Görev','Kişi']].concat(DATA.map(r=>[r.oyun,r.kategori,r.gorev,r.kisi])),'tum-kayitlar')">Excel</button></div></div>
 
-  <div class="adm-grid">
-    <div class="card"><div class="card-h"><h3>Yeni kayıt ekle</h3><span class="chip gold">${DATA.length} kayıt</span></div>
-      <div class="adm-body">
-        <div class="adm-row2">
-          <div class="fld"><label>Oyun</label><input id="a-oyun" autocomplete="off" placeholder="Oyun adı"></div>
-          <div class="fld"><label>Kategori</label><input id="a-kat" autocomplete="off" placeholder="Örn. Oyuncu, Figüran, Teknik"></div>
-        </div>
-        <div class="fld"><label>Görev</label><input id="a-gorev" autocomplete="off" placeholder="Rol / görev"></div>
-        <div class="fld" style="margin-bottom:8px"><label>Kişi</label><input id="a-kisi" autocomplete="off" placeholder="Ad Soyad">
-          <div class="hint">Birden fazla kişi için virgülle ayırın. Figüran için: <b>Ad Soyad (Figüran)</b></div></div>
-        <button class="btn pri" style="width:100%;margin-top:6px" onclick="addRow()">Google e-Tablo'ya kaydet</button>
-        <div class="ok" id="a-msg"></div>
-      </div></div>
+  <div class="card" style="margin-bottom:14px"><div style="padding:12px 15px">
+    <input value="${esc(adminQ)}" id="adm-q" placeholder="Oyun, kategori, görev veya kişi ara…"
+      oninput="adminQ=this.value;admPage=1;renderYonetim()"
+      style="width:100%;background:var(--surface);border:1px solid var(--line-strong);border-radius:10px;padding:10px 13px;outline:none">
+    <p class="hint" style="margin-top:8px">${list.length} oyun · ${DATA.length} kayıt</p>
+  </div></div>
 
-    <div>
-      <div class="card"><div class="card-h"><h3>Erişim şifresi</h3></div>
-        <div class="adm-body">
-          <div class="adm-row2">
-            <div class="fld"><label>Yeni şifre</label><input id="p-new" type="password" autocomplete="new-password" placeholder="En az 4 karakter"></div>
-            <div class="fld"><label>Tekrar</label><input id="p-new2" type="password" autocomplete="new-password" placeholder="Tekrar"></div>
-          </div>
-          <button class="btn" style="width:100%" onclick="changePin()">Şifreyi güncelle</button>
-          <div class="ok" id="p-msg"></div>
-          <p class="hint">Kilitli bölümler (Görevli Olmayan, Arşiv, Yönetim) bu şifreyle açılır.</p>
-        </div></div>
-
-      <div class="card" style="margin-top:14px"><div class="card-h"><h3>Son işlemler</h3>
-        <div class="tools"><button class="btn sm" onclick="loadNotifs()">Yenile</button>
-          <button class="btn sm dan" onclick="clearNotifs()">Temizle</button></div></div>
-        <div class="card-b" style="max-height:320px;overflow:auto;padding:6px 14px" id="notif-log">${notifRowsHtml(NOTIFS.slice(0,50))}</div>
-      </div>
-    </div>
-  </div>
-
-  <div class="card" style="margin-top:14px"><div class="card-h">
-    <h3>Kayıtlar</h3><span class="chip gold">${all.length} kayıt</span></div>
-    <div style="padding:12px 15px"><input value="${esc(adminQ)}" placeholder="Oyun, kategori, görev veya kişi ara…" oninput="adminQ=this.value;admPage=1;renderYonetim()" id="adm-q"
-      style="width:100%;background:var(--surface);border:1px solid var(--line-strong);border-radius:10px;padding:10px 13px;outline:none"></div>
-    <div style="max-height:52vh;overflow:auto"><table class="adm-table"><thead><tr><th>Oyun</th><th>Kategori</th><th>Görev</th><th>Kişi</th><th>İşlem</th></tr></thead>
-    <tbody>${rows.length ? rows.map(r => `<tr><td>${esc(r.oyun)}</td><td>${esc(r.kategori)}</td><td>${esc(r.gorev)}</td><td>${esc(r.kisi)}</td>
-      <td><div class="tools"><button class="btn sm" onclick="editRow(${r._i})">Düzenle</button>
-          <button class="btn sm dan" onclick="removeRow(${r._i})">Sil</button></div></td></tr>`).join("")
-      : `<tr><td colspan="5"><div class="empty">Eşleşen kayıt yok.</div></td></tr>`}</tbody></table></div>
-    ${pages > 1 ? `<div class="pager">
+  ${shown.length ? shown.map(playHtml).join("") : `<div class="card"><div class="empty">Eşleşen oyun yok.</div></div>`}
+  ${pages > 1 ? `<div class="pager">
       <button class="btn sm" ${admPage<=1?"disabled":""} onclick="setAdmPage(${admPage-1})">‹ Önceki</button>
-      <span>${admPage} / ${pages} · ${all.length} kayıt</span>
+      <span>${admPage} / ${pages} · ${list.length} oyun</span>
       <button class="btn sm" ${admPage>=pages?"disabled":""} onclick="setAdmPage(${admPage+1})">Sonraki ›</button></div>` : ""}
+
+  <div class="card" style="margin-top:16px"><div class="card-h"><h3>Son işlemler</h3>
+    <div class="tools"><button class="btn sm" onclick="loadNotifs()">Yenile</button>
+      <button class="btn sm dan" onclick="clearNotifs()">Temizle</button></div></div>
+    <div class="card-b" style="max-height:300px;overflow:auto;padding:6px 14px" id="notif-log">${notifRowsHtml(NOTIFS.slice(0,50))}</div>
   </div>
 
-  <div class="modal-bg" id="edit-modal"><div class="modal">
-    <div class="modal-h"><b>Kaydı düzenle</b><button class="btn sm" onclick="closeEdit()">Kapat</button></div>
+  <div class="modal-bg" id="new-play-modal"><div class="modal">
+    <div class="modal-h"><b>Yeni oyun ekle</b><button class="btn sm" onclick="closeNewPlay()">Kapat</button></div>
     <div class="modal-b">
+      <div class="fld"><label>Oyun adı</label><input id="np-oyun" autocomplete="off" placeholder="Oyun adı"></div>
       <div class="adm-row2">
-        <div class="fld"><label>Oyun</label><input id="e-oyun" autocomplete="off"></div>
-        <div class="fld"><label>Kategori</label><input id="e-kat" autocomplete="off"></div>
+        <div class="fld"><label>Kategori</label><input id="np-kat" autocomplete="off" placeholder="Örn. Oyuncu"></div>
+        <div class="fld"><label>Görev</label><input id="np-gorev" autocomplete="off" placeholder="Rol / görev"></div>
       </div>
-      <div class="fld"><label>Görev</label><input id="e-gorev" autocomplete="off"></div>
-      <div class="fld" style="margin-bottom:0"><label>Kişi</label><input id="e-kisi" autocomplete="off"></div>
+      <div class="fld" style="margin-bottom:0"><label>Kişi</label><input id="np-kisi" autocomplete="off" placeholder="Ad Soyad">
+        <div class="hint">Birden fazla kişi için virgülle ayırın. Figüran için: <b>Ad Soyad (Figüran)</b></div></div>
     </div>
-    <div class="modal-f"><button class="btn" onclick="closeEdit()">Vazgeç</button>
-      <button class="btn pri" onclick="saveEdit()">Kaydet</button></div>
+    <div class="modal-f"><button class="btn" onclick="closeNewPlay()">Vazgeç</button>
+      <button class="btn pri" onclick="saveNewPlay()">Google e-Tablo'ya kaydet</button></div>
   </div></div>`;
   const inp = document.getElementById("adm-q");
   if(inp && adminQ){ inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+}
+function cellEdit(i, col, elm){
+  const row = DATA.find(r => r._i === i);
+  if(!row) return;
+  const v = elm.value.trim();
+  if(v === row[col]) return;
+  if(col === "kisi" && !v){ elm.value = row.kisi; return toast("Kişi alanı boş olamaz.", "err"); }
+  withBusy("Kaydediliyor", () => sheetCell(i, COLS[col], v));
+}
+function addPerson(name){
+  const g = id => (document.getElementById(id)?.value || "").trim();
+  const kisi = g("n-kis-" + name);
+  if(!kisi) return toast("Kişi adı gerekli.", "err");
+  admOpenPlay = name;
+  withBusy("Ekleniyor", () => sheetAppend({oyun:name, kategori:g("n-kat-"+name), gorev:g("n-gor-"+name), kisi}));
+}
+function renamePlay(name){
+  const nn = prompt("Oyun adı", name);
+  if(nn === null) return;
+  const v = nn.trim();
+  if(!v || v === name) return;
+  const rows = DATA.filter(r => r.oyun === name);
+  admOpenPlay = v;
+  withBusy("Güncelleniyor", async () => { for(const r of rows) await sheetCell(r._i, COLS.oyun, v); });
+}
+function openNewPlay(){ document.getElementById("new-play-modal").classList.add("on"); setTimeout(()=>document.getElementById("np-oyun")?.focus(),30); }
+function closeNewPlay(){ document.getElementById("new-play-modal")?.classList.remove("on"); }
+function saveNewPlay(){
+  const g = id => document.getElementById(id).value.trim();
+  const r = {oyun:g("np-oyun"), kategori:g("np-kat"), gorev:g("np-gorev"), kisi:g("np-kisi")};
+  if(!r.oyun || !r.kisi) return toast("Oyun ve kişi alanları zorunludur.", "err");
+  admOpenPlay = r.oyun;
+  closeNewPlay();
+  withBusy("Kaydediliyor", () => sheetAppend(r));
 }
 function reloadData(){ withBusy("Yenileniyor", async () => { cache.delete(PASIF_SHEET); cache.delete(FIG_SHEET); }); }
 function addRow(){
@@ -1074,34 +1130,6 @@ function addRow(){
   const msg = document.getElementById("a-msg");
   if(!r.oyun || !r.kisi){ msg.textContent = "Oyun ve kişi alanları zorunludur."; msg.className = "err"; return; }
   withBusy("Kaydediliyor", () => sheetAppend(r));
-}
-let editIdx = null;
-function editRow(i){
-  const row = DATA.find(r => r._i === i);
-  if(!row) return;
-  editIdx = i;
-  document.getElementById("e-oyun").value = row.oyun;
-  document.getElementById("e-kat").value = row.kategori;
-  document.getElementById("e-gorev").value = row.gorev;
-  document.getElementById("e-kisi").value = row.kisi;
-  document.getElementById("edit-modal").classList.add("on");
-}
-function closeEdit(){ editIdx = null; document.getElementById("edit-modal")?.classList.remove("on"); }
-function saveEdit(){
-  const row = DATA.find(r => r._i === editIdx);
-  if(!row) return closeEdit();
-  const g = id => document.getElementById(id).value.trim();
-  const nr = {oyun:g("e-oyun"), kategori:g("e-kat"), gorev:g("e-gorev"), kisi:g("e-kisi")};
-  if(!nr.oyun || !nr.kisi) return toast("Oyun ve kişi alanları zorunludur.", "err");
-  const changes = [];
-  if(nr.oyun !== row.oyun) changes.push([COLS.oyun, nr.oyun]);
-  if(nr.kategori !== row.kategori) changes.push([COLS.kategori, nr.kategori]);
-  if(nr.gorev !== row.gorev) changes.push([COLS.gorev, nr.gorev]);
-  if(nr.kisi !== row.kisi) changes.push([COLS.kisi, nr.kisi]);
-  const i = editIdx;
-  closeEdit();
-  if(!changes.length) return toast("Değişiklik yok.");
-  withBusy("Güncelleniyor", async () => { for(const [c,v] of changes) await sheetCell(i, c, v); });
 }
 function removeRow(i){
   const row = DATA.find(r => r._i === i);
@@ -1181,14 +1209,6 @@ async function clearNotifs(){
 document.addEventListener("click", e => {
   if(notifOpen && !e.target.closest("#notif-wrap")){ notifOpen = false; document.getElementById("notif-pop").classList.remove("on"); }
 });
-function changePin(){
-  const a = document.getElementById("p-new").value, b = document.getElementById("p-new2").value;
-  const m = document.getElementById("p-msg");
-  if(a.length < 4){ m.textContent = "Şifre en az 4 karakter olmalı."; m.className = "err"; return; }
-  if(a !== b){ m.textContent = "Şifreler eşleşmiyor."; m.className = "err"; return; }
-  localStorage.setItem(PIN_KEY, a); m.textContent = "Şifre güncellendi."; m.className = "ok";
-}
-
 const RENDER = { panel:renderPlays, kisiler:renderPeople, dagilim:renderDagilim,
   sorgu:()=>{renderSorgu();renderFilter();}, grafik:renderGrafik, figuran:renderFiguran,
   gorevsiz:renderGorevsiz, arsiv:renderArsiv, yonetim:renderYonetim };
