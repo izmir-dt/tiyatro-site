@@ -3088,5 +3088,221 @@ window.exportPDF = function(title, headers, data){
 })();
 </script>
 
+<!-- ═══════════════ v6 GÜNCELLEME PAKETİ ═══════════════ -->
+<style>
+/* Yönetim menüsü açılmıyordu: nav overflow kırpıyordu */
+@media(min-width:901px){
+  nav#nav{overflow:visible !important;flex-wrap:wrap}
+}
+.navdd-pop{right:auto}
+@media(min-width:901px){ .navdd-pop{left:auto;right:0} }
+.prg-progress{height:6px;border-radius:99px;background:var(--surface-2);overflow:hidden;margin-top:10px;display:none}
+.prg-progress.on{display:block}
+.prg-progress > i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}
+</style>
+<script>
+/* ═══════════ v6: yönetim menüsü düzeltmesi + ortak (bulut) aylık program ═══════════ */
+(function(){
+  /* ---------- 1) Yönetim Paneli menüsü ---------- */
+  window.toggleAdminMenu = function(e){
+    if(e){ e.stopPropagation(); e.preventDefault(); }
+    const dd = document.getElementById("navdd-admin");
+    if(!dd) return;
+    dd.classList.toggle("open");
+  };
+  /* Menü butonu her yeniden çizimde de çalışsın diye delege dinleyici */
+  document.addEventListener("click", function(e){
+    const btn = e.target.closest("#navdd-admin > .tab");
+    const dd  = document.getElementById("navdd-admin");
+    if(btn){ e.preventDefault(); e.stopPropagation(); dd.classList.toggle("open"); return; }
+    if(dd && dd.classList.contains("open") && !e.target.closest("#navdd-admin")) dd.classList.remove("open");
+  }, true);
+
+  /* ---------- 2) Aylık Program artık ortak (herkes görür) ---------- */
+  const PRG_SHEET = "AYLIK PROGRAM";
+  const AYLAR = ["Ocak","Şubat","Mart","Nisan","Mayıs","Haziran","Temmuz","Ağustos","Eylül","Ekim","Kasım","Aralık"];
+  const CHUNK = 40000;              /* hücre başına base64 karakter */
+  const MAXMB = 4;
+
+  function b64(buf){
+    const b = new Uint8Array(buf); let s = "", n = 0x8000;
+    for(let i = 0; i < b.length; i += n) s += String.fromCharCode.apply(null, b.subarray(i, i + n));
+    return btoa(s);
+  }
+  function unb64(s){
+    const bin = atob(s), a = new Uint8Array(bin.length);
+    for(let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i);
+    return a;
+  }
+
+  async function prgFetch(){
+    cache.delete(PRG_SHEET);
+    let d = {rows:[]};
+    try{ d = await sheet(PRG_SHEET) || {rows:[]}; }catch(e){}
+    const raw = (d.rows||[]).map((r,i) => ({
+      i, id:String(r[0]??"").trim(), ay:+r[1]||0, yil:+r[2]||new Date().getFullYear(),
+      not:unent(String(r[3]??"").trim()), adi:unent(String(r[4]??"").trim()), boyut:+r[5]||0,
+      ts:+r[6]||0, idx:+r[7]||0, total:+r[8]||1, link:String(r[9]??"").trim(), data:String(r[10]??"")
+    })).filter(x => x.id);
+    const m = new Map();
+    raw.forEach(r => {
+      if(!m.has(r.id)) m.set(r.id, {id:r.id, ay:r.ay, yil:r.yil, not:r.not, adi:r.adi, boyut:r.boyut,
+        ts:r.ts, link:r.link, parts:[], rows:[]});
+      const g = m.get(r.id);
+      g.rows.push(r.i);
+      if(r.data) g.parts.push({idx:r.idx, data:r.data});
+      if(r.link && !g.link) g.link = r.link;
+    });
+    return [...m.values()].sort((a,b) => (b.yil - a.yil) || (b.ay - a.ay) || (b.ts - a.ts));
+  }
+
+  let PRG = [];
+  window.getProgramFiles = prgFetch;   /* ileride entegrasyon için */
+
+  window.renderProgram = async function(){
+    const box = document.getElementById("program");
+    if(!box) return;
+    box.innerHTML = '<div class="card"><div class="card-b" style="padding:26px;text-align:center;color:var(--muted)">Aylık programlar yükleniyor…</div></div>';
+    try{ PRG = await prgFetch(); }catch(e){ PRG = []; }
+    const now = new Date();
+    const yillar = []; for(let y = now.getFullYear() + 1; y >= now.getFullYear() - 4; y--) yillar.push(y);
+    box.innerHTML = `
+      <div class="card"><div class="card-h"><div><h3>Aylık Program</h3>
+        <div class="mt" style="font-size:12px;color:var(--muted)">Yüklenen PDF'ler ortak sunucuda saklanır; tüm bilgisayarlardan görünür.</div></div>
+        <span class="chip gold">${PRG.length} dosya</span></div>
+        <div class="card-b" style="padding:16px">
+          <div class="prg-form">
+            <div class="fld"><label>Ay</label>
+              <select id="prg-ay">${AYLAR.map((a,i) => `<option value="${i}"${i===now.getMonth()?" selected":""}>${a}</option>`).join("")}</select></div>
+            <div class="fld"><label>Yıl</label>
+              <select id="prg-yil">${yillar.map(y => `<option${y===now.getFullYear()?" selected":""}>${y}</option>`).join("")}</select></div>
+            <div class="fld" style="flex:1;min-width:190px"><label>Not (opsiyonel)</label>
+              <input type="text" id="prg-not" style="width:100%" placeholder="Örn. Revize 2 · Büyük Salon"></div>
+            <div class="fld"><label>&nbsp;</label>
+              <button class="btn sm" onclick="addProgramLink()">Bağlantı ekle</button></div>
+          </div>
+          <label class="prg-drop" id="prg-drop">
+            <input type="file" id="prg-file" accept="application/pdf" multiple hidden>
+            <div style="font-size:26px">📄</div>
+            <div style="font-weight:800;font-family:var(--font-d);margin-top:6px">PDF yüklemek için tıklayın veya sürükleyin</div>
+            <div style="font-size:12px;color:var(--muted);margin-top:4px">Sadece PDF · En fazla ${MAXMB} MB · Ortak sunucuya kaydedilir</div>
+          </label>
+          <div class="prg-progress" id="prg-prog"><i></i></div>
+          <button class="btn sm" style="margin-top:12px" onclick="renderProgram()">Yenile</button>
+        </div>
+      </div>
+      <div class="prg-grid" id="prg-grid">${PRG.length ? PRG.map(f => `
+        <div class="prg-card">
+          <div class="ttl">${AYLAR[f.ay]||""} ${f.yil}</div>
+          <div class="meta">${esc(f.adi || (f.link ? "Bağlantı" : ""))}${f.boyut?`<br>${(f.boyut/1024/1024).toFixed(2)} MB`:""} ${f.ts?`· ${esc(new Date(f.ts).toLocaleString("tr-TR"))}`:""}${f.not?`<br>${esc(f.not)}`:""}</div>
+          <div class="acts">
+            <button class="btn sm pri" onclick="openProgram('${f.id}')">Görüntüle</button>
+            ${f.parts.length ? `<button class="btn sm" onclick="downloadProgram('${f.id}')">İndir</button>` : ""}
+            <button class="btn sm dan" onclick="deleteProgram('${f.id}')">Sil</button>
+          </div>
+        </div>`).join("") : `<div class="empty">Henüz yüklenmiş aylık program yok.</div>`}</div>`;
+
+    const inp = document.getElementById("prg-file"), drop = document.getElementById("prg-drop");
+    inp.addEventListener("change", () => handleFiles(inp.files));
+    ["dragenter","dragover"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add("over"); }));
+    ["dragleave","drop"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove("over"); }));
+    drop.addEventListener("drop", e => handleFiles(e.dataTransfer.files));
+  };
+
+  function meta(){
+    return {
+      ay: +document.getElementById("prg-ay").value,
+      yil: +document.getElementById("prg-yil").value,
+      not: (document.getElementById("prg-not").value||"").trim()
+    };
+  }
+  function progress(p){
+    const bar = document.getElementById("prg-prog");
+    if(!bar) return;
+    bar.classList.toggle("on", p !== null);
+    if(p !== null) bar.firstElementChild.style.width = Math.round(p*100) + "%";
+  }
+
+  window.addProgramLink = async function(){
+    const url = await uiPrompt("Programın bağlantısı (Drive, OneDrive, web adresi…)", "", "Bağlantı ekle");
+    if(!url) return;
+    const m = meta(), id = "p_" + Date.now() + "_" + Math.random().toString(36).slice(2,6);
+    try{
+      await sheetAppendTo(PRG_SHEET, [id, m.ay, m.yil, m.not, "Bağlantı", 0, Date.now(), 0, 1, String(url).trim(), ""]);
+      toast("Program bağlantısı eklendi.");
+      renderProgram();
+    }catch(e){ toast(hataMsg(e), "err"); }
+  };
+
+  const hataMsg = e => 'Kaydedilemedi: ' + ((e && e.message) || "hata") + ' — Google Sayfasında "AYLIK PROGRAM" sekmesi olmalı.';
+
+  async function handleFiles(files){
+    const list = [...(files||[])].filter(f => f.type === "application/pdf" || /\.pdf$/i.test(f.name));
+    if(!list.length) return toast("Lütfen PDF dosyası seçin.", "err");
+    const m = meta();
+    try{
+      let done = 0, totalChunks = 0;
+      const prepared = [];
+      for(const f of list){
+        if(f.size > MAXMB*1024*1024){ toast(`${f.name} çok büyük (en fazla ${MAXMB} MB). Bunun yerine "Bağlantı ekle" kullanın.`, "err"); continue; }
+        const s = b64(await f.arrayBuffer());
+        const parts = [];
+        for(let i = 0; i < s.length; i += CHUNK) parts.push(s.slice(i, i + CHUNK));
+        totalChunks += parts.length;
+        prepared.push({f, parts});
+      }
+      if(!prepared.length) return;
+      progress(0);
+      for(const p of prepared){
+        const id = "p_" + Date.now() + "_" + Math.random().toString(36).slice(2,6);
+        const ts = Date.now();
+        for(let k = 0; k < p.parts.length; k++){
+          await sheetAppendTo(PRG_SHEET, [id, m.ay, m.yil, m.not, p.f.name, p.f.size, ts, k, p.parts.length, "", p.parts[k]]);
+          done++; progress(done/totalChunks);
+        }
+      }
+      progress(null);
+      toast(prepared.length + " program dosyası ortak sunucuya yüklendi.");
+      renderProgram();
+    }catch(e){ progress(null); toast(hataMsg(e), "err"); }
+  }
+
+  function blobOf(f){
+    const s = f.parts.slice().sort((a,b) => a.idx - b.idx).map(p => p.data).join("");
+    return new Blob([unb64(s)], {type:"application/pdf"});
+  }
+  const findOne = id => PRG.find(x => x.id === id);
+
+  window.openProgram = function(id){
+    const f = findOne(id); if(!f) return;
+    if(!f.parts.length && f.link) return window.open(f.link, "_blank", "noopener");
+    const url = URL.createObjectURL(blobOf(f));
+    window.open(url, "_blank");
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  };
+  window.downloadProgram = function(id){
+    const f = findOne(id); if(!f || !f.parts.length) return;
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blobOf(f));
+    a.download = f.adi || (AYLAR[f.ay] + "-" + f.yil + ".pdf");
+    a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 20000);
+  };
+  window.deleteProgram = async function(id){
+    const f = findOne(id); if(!f) return;
+    const ok = await uiConfirm("Bu program herkesten silinecek. Devam edilsin mi?", "Programı sil");
+    if(!ok) return;
+    try{
+      toast("Siliniyor…");
+      for(const i of f.rows.slice().sort((a,b) => b - a)) await sheetDeleteFrom(PRG_SHEET, i);
+      toast("Program silindi.");
+      renderProgram();
+    }catch(e){ toast("Silinemedi: " + ((e&&e.message)||"hata"), "err"); }
+  };
+
+  if(window.RENDER) window.RENDER.program = window.renderProgram;
+  if((location.hash||"").slice(1) === "program") setTimeout(() => window.go("program"), 80);
+})();
+</script>
+
 </body>
 </html>
