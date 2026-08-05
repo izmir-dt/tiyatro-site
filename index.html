@@ -721,6 +721,7 @@ html{scroll-behavior:smooth}
   <section class="panel" id="p-gorevsiz"><div class="wrap single"><div id="gorevsiz"></div></div></section>
   <section class="panel" id="p-arsiv"><div class="wrap single"><div id="arsiv"></div></div></section>
   <section class="panel" id="p-yonetim"><div class="wrap single"><div id="yonetim"></div></div></section>
+  <section class="panel" id="p-program"><div class="wrap single"><div id="program"></div></div></section>
 </main>
 
 <div class="modal-bg" id="ui-modal"><div class="modal">
@@ -2739,6 +2740,352 @@ window.exportPDFFiltered = async function(title, headers, allRows, filterCol){
 window.exportPDF = function(title, headers, data){
   return exportPDFFiltered(title, headers, data, undefined);
 };
+</script>
+
+<!-- ═══════════════ v5 GÜNCELLEME PAKETİ ═══════════════ -->
+<style>
+/* ---- Logo düzeltmesi ---- */
+.brand .mask.logo-mask{width:42px;height:42px;border-radius:12px;background:#fff;border:1px solid var(--line-strong);
+  padding:3px;display:grid;place-items:center;box-shadow:0 2px 8px rgba(28,15,15,.10);overflow:hidden}
+.brand .mask.logo-mask img{width:100%;height:100%;object-fit:contain;border-radius:9px;display:block}
+[data-theme="dark"] .brand .mask.logo-mask{background:#fff;border-color:rgba(255,255,255,.22);box-shadow:0 0 0 1px rgba(255,255,255,.08)}
+
+/* ---- Nav dropdown ---- */
+.navdd{position:relative;display:inline-block}
+.navdd-pop{position:absolute;top:calc(100% + 6px);left:0;min-width:210px;z-index:90;display:none;
+  background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);padding:6px}
+.navdd.open .navdd-pop{display:block}
+.navdd-pop button{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;text-align:left;
+  background:none;border:0;border-radius:9px;padding:9px 11px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;color:inherit}
+.navdd-pop button:hover{background:var(--surface-2);color:var(--accent)}
+.navdd-pop button.on{background:var(--accent);color:var(--accent-ink)}
+@media(max-width:900px){ .navdd{display:block;width:100%} .navdd-pop{position:static;display:block;box-shadow:none;border:0;padding:0 0 0 8px} }
+
+/* ---- Bildirim gruplama ---- */
+.notif-group{border:1px solid var(--line);border-radius:11px;margin:8px 0;overflow:hidden;background:var(--surface)}
+.notif-group>summary{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;
+  padding:9px 11px;background:var(--surface-2);font-size:12.5px;font-weight:800;font-family:var(--font-d)}
+.notif-group>summary::-webkit-details-marker{display:none}
+.notif-group>summary .cnt{font-size:11px;font-weight:700;background:var(--accent);color:var(--accent-ink);border-radius:999px;padding:2px 9px}
+.notif-group .gb{padding:2px 10px 6px}
+
+/* ---- İstatistik arama ---- */
+.stat-search{display:flex;gap:8px;align-items:center;margin:12px 0 0}
+.stat-search input{flex:1;background:var(--surface);border:1px solid var(--line-strong);border-radius:10px;
+  padding:9px 13px;font-size:13px;outline:none;font-family:inherit;color:inherit}
+.stat-search input:focus{border-color:var(--accent)}
+.stat-search .hint{font-size:11.5px;color:var(--muted);white-space:nowrap}
+
+/* ---- Aylık Program ---- */
+.prg-drop{border:2px dashed var(--line-strong);border-radius:14px;padding:26px 18px;text-align:center;background:var(--surface);cursor:pointer}
+.prg-drop:hover,.prg-drop.over{border-color:var(--accent);background:var(--accent-wash)}
+.prg-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px;margin-top:14px}
+.prg-card{border:1px solid var(--line);border-radius:13px;background:var(--surface);padding:14px;display:flex;flex-direction:column;gap:8px}
+.prg-card .ttl{font-family:var(--font-d);font-weight:800;font-size:14px}
+.prg-card .meta{font-size:11.5px;color:var(--muted)}
+.prg-card .acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:auto}
+.prg-form{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px}
+.prg-form .fld label{display:block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
+.prg-form select,.prg-form input[type=text]{background:var(--surface);border:1px solid var(--line-strong);border-radius:10px;
+  padding:9px 12px;font-size:13px;outline:none;font-family:inherit;color:inherit}
+</style>
+<script>
+/* ═══════════ v5: düzeltmeler ve yeni özellikler ═══════════ */
+(function(){
+
+  /* ---------- 1) Tek oyunda pasife alma artık sayımlara da yansır ---------- */
+  window.buildPlays = function(rows){
+    const m = new Map();
+    rows.forEach(r => {
+      if(!m.has(r.oyun)) m.set(r.oyun,{name:r.oyun,people:new Set(),figs:new Set(),rows:0,cats:new Set()});
+      const o = m.get(r.oyun); o.rows++;
+      names(r.kisi).forEach(n => { const c = stripTag(n); if(c) o.people.add(c);
+        if(isFig(r.kategori) || FIGTAG.test(n)) o.figs.add(c); });
+      if(r.kategori) o.cats.add(r.kategori);
+    });
+    return [...m.values()].map(o => {
+      const all = [...o.people];
+      const akt = all.filter(n => !isPasifInPlay(n, o.name));   /* global + oyun bazlı pasif */
+      return {name:o.name, personel:akt.length, tumPersonel:all.length, pasif:all.length - akt.length,
+        figuran:[...o.figs].filter(n => !isPasifInPlay(n, o.name)).length, rowCount:o.rows, cats:[...o.cats].sort(sortTr)};
+    }).sort((a,b) => sortTr(a.name,b.name));
+  };
+
+  window.buildPeople = function(rows){
+    const m = new Map();
+    rows.forEach(r => names(r.kisi).forEach(raw => {
+      const n = stripTag(raw); if(!n) return;
+      if(!m.has(n)) m.set(n,{name:n,oyunlar:new Set(),pasifOyun:new Set(),gorevler:new Set(),cats:new Set(),fig:false});
+      const p = m.get(n);
+      if(PASIF_PLAY.has(norm(n) + "|||" + norm(r.oyun))) p.pasifOyun.add(r.oyun);
+      else p.oyunlar.add(r.oyun);
+      if(r.gorev) p.gorevler.add(r.gorev);
+      if(r.kategori) p.cats.add(r.kategori);
+      if(isFig(r.kategori) || FIGTAG.test(raw)) p.fig = true;
+    }));
+    return [...m.values()].map(p => ({name:p.name, oyunlar:[...p.oyunlar].sort(sortTr),
+      pasifOyunlar:[...p.pasifOyun].sort(sortTr),
+      gorevler:[...p.gorevler].sort(sortTr), cats:[...p.cats], fig:p.fig, aktif: !PASIF.has(norm(p.name))}))
+      .sort((a,b) => b.oyunlar.length - a.oyunlar.length || sortTr(a.name,b.name));
+  };
+
+  /* Oyun bazlı pasife alma: satırdaki her ismi ayrı ayrı işler, hata mesajını gösterir */
+  window.setPersonActiveForPlay = async function(name, oyun, aktif){
+    const msg = aktif
+      ? `${name}, "${oyun}" oyununda yeniden AKTİF olarak işaretlenecek.`
+      : `${name}, yalnızca "${oyun}" oyununun kadrosunda PASİF olarak işaretlenecek.\n\nDiğer oyunlardaki kayıtları etkilenmez.`;
+    const ok = await uiConfirm(msg, aktif ? "Aktife al" : "Pasife al (bu oyunda)");
+    if(!ok) return;
+    const key = norm(name) + "|||" + norm(oyun);
+    try{
+      toast((aktif ? "Aktife alınıyor" : "Pasife alınıyor") + "…");
+      if(aktif){
+        const hit = PASIF_ROWS.filter(x => norm(x.name) === norm(name) && norm(x.oyun) === norm(oyun)).sort((a,b) => b.i - a.i);
+        for(const h of hit) await sheetDeleteFrom(PASIF_SHEET, h.i);
+        PASIF_PLAY.delete(key);
+      }else{
+        if(!PASIF_PLAY.has(key)) await sheetAppendTo(PASIF_SHEET, [name, oyun]);
+        PASIF_PLAY.add(key);
+      }
+      /* anında ekrana yansıt */
+      rebuild();
+      cache.delete(MAIN_SHEET); cache.delete(PASIF_SHEET);
+      await boot();
+      toast(aktif ? `${name} bu oyunda aktife alındı.` : `${name} "${oyun}" oyununda pasife alındı.`);
+      loadNotifs();
+    }catch(err){
+      toast("Kaydedilemedi: " + (err && err.message ? err.message : "bilinmeyen hata"), "err");
+    }
+  };
+
+  /* ---------- 2) Bildirimler: oyun bazlı kategorize ---------- */
+  const notifCls = t => trLower(t||"").includes("sil") || trLower(t||"").includes("çıkar") ? "crim"
+    : trLower(t||"").includes("ekl") ? "gold" : "";
+  function notifItemHtml(n, realIdx){
+    return '<div class="notif">' +
+      '<span class="chip ' + notifCls(n.tur) + '" style="flex:0 0 auto">' + esc(n.tur||"İŞLEM") + '</span>' +
+      '<div style="flex:1;min-width:0;padding-right:4px"><div class="nm">' +
+        esc(n.aciklama || [n.kisi,n.oyun,n.gorev].filter(Boolean).join(" · ")) + '</div>' +
+      '<span class="mt">' + esc(n.tarih||"") + '</span></div>' +
+      '<button class="notif-del" onclick="removeNotif(' + realIdx + ')" title="Herkesten sil">✕</button></div>';
+  }
+  /* Oyunlara göre grupla; sıralama en yeni bildirime göre */
+  window.notifGroupedHtml = function(limit){
+    if(NOTIF_ERR) return '<p class="sec-sub" style="padding:8px 2px;color:var(--danger)">' + esc(NOTIF_ERR) +
+      '<button class="btn sm" style="margin-left:8px" onclick="loadNotifs()">Tekrar dene</button></p>';
+    const list = NOTIFS.slice(0, limit || 200);
+    if(!list.length) return '<p class="sec-sub" style="padding:6px 2px">Henüz bildirim yok.</p>';
+    const groups = new Map();
+    list.forEach((n,i) => {
+      const key = (n.oyun && String(n.oyun).trim()) ? String(n.oyun).trim() : "Diğer / Oyun belirtilmemiş";
+      if(!groups.has(key)) groups.set(key, []);
+      groups.get(key).push({n, i});
+    });
+    return [...groups.entries()].map(([oyun, items], gi) =>
+      '<details class="notif-group"' + (gi < 2 ? " open" : "") + '>' +
+        '<summary><span>' + esc(oyun) + '</span><span class="cnt">' + items.length + '</span></summary>' +
+        '<div class="gb">' + items.map(it => notifItemHtml(it.n, it.i)).join("") + '</div>' +
+      '</details>').join("");
+  };
+  window.renderNotifs = function(){
+    const b = document.getElementById("notif-badge"), l = document.getElementById("notif-list");
+    if(b){ const n = unseenCount(); b.textContent = n > 99 ? "99+" : n; b.style.display = n ? "grid" : "none"; }
+    if(l) l.innerHTML = notifGroupedHtml(60);
+    const log = document.getElementById("notif-log");
+    if(log) log.innerHTML = notifGroupedHtml(200);
+  };
+  const _loadNotifs = window.loadNotifs;
+  window.loadNotifs = async function(){ await _loadNotifs.apply(this, arguments); renderNotifs(); };
+
+  /* ---------- 3) İstatistik: kişi ve oyun araması ---------- */
+  function ensureStatSearch(){
+    if(document.getElementById("stat-search-wrap")) return;
+    const seg = document.getElementById("stat-seg");
+    if(!seg) return;
+    const div = document.createElement("div");
+    div.className = "stat-search"; div.id = "stat-search-wrap";
+    div.innerHTML = '<input id="stat-q" placeholder="İstatistiklerde kişi veya oyun ara…" autocomplete="off">' +
+      '<span class="hint" id="stat-q-hint"></span>';
+    seg.parentNode.insertBefore(div, seg.nextSibling);
+    div.querySelector("input").addEventListener("input", applyStatSearch);
+  }
+  function applyStatSearch(){
+    const q = trLower((document.getElementById("stat-q")?.value || "").trim());
+    const body = document.getElementById("stat-body");
+    if(!body) return;
+    const rows = body.querySelectorAll(".hbar, .grid-tbl tbody tr, table tr");
+    let shown = 0, total = 0;
+    rows.forEach(r => {
+      if(r.closest("thead")) return;
+      total++;
+      const hit = !q || trLower(r.textContent || "").includes(q);
+      r.style.display = hit ? "" : "none";
+      if(hit) shown++;
+    });
+    const hint = document.getElementById("stat-q-hint");
+    if(hint) hint.textContent = q ? (shown + " / " + total + " kayıt") : "";
+  }
+  window.applyStatSearch = applyStatSearch;
+  const _renderGrafik = window.renderGrafik;
+  window.renderGrafik = function(){
+    _renderGrafik.apply(this, arguments);
+    ensureStatSearch();
+    applyStatSearch();
+  };
+
+  /* ---------- 4) Navigasyon: yönetim menüsü + Aylık Program ---------- */
+  const ADMIN_IDS = ["gorevsiz","arsiv","yonetim"];
+  function buildNav(){
+    const nav = document.getElementById("nav");
+    if(!nav) return;
+    const main = [
+      ["panel","Ana Panel"],["kisiler","Kişiler"],["dagilim","Dağılım"],["sorgu","Sorgulama"],
+      ["grafik","İstatistik"],["figuran","Figüran"],["program","Aylık Program"]
+    ];
+    const admin = [["gorevsiz","Görevli Olmayan"],["arsiv","Arşiv Oyunlar"],["yonetim","Yönetim"]];
+    const cur = (location.hash||"#panel").slice(1);
+    nav.innerHTML =
+      main.map(([id,l]) => '<button class="tab' + (cur===id?" on":"") + '" data-t="' + id + '" onclick="go(\'' + id + '\')">' + l + '</button>').join("") +
+      '<div class="navdd" id="navdd-admin">' +
+        '<button class="tab' + (ADMIN_IDS.includes(cur)?" on":"") + '" onclick="toggleAdminMenu(event)">Yönetim Paneli<span class="lock">🔒</span> <span style="opacity:.6">▾</span></button>' +
+        '<div class="navdd-pop">' +
+          admin.map(([id,l]) => '<button data-t="' + id + '" onclick="go(\'' + id + '\')">' + l + '<span class="lock">🔒</span></button>').join("") +
+        '</div>' +
+      '</div>' +
+      '<a class="tab link" href="turne.html" target="_blank" rel="noopener">Turne Takip <span style="opacity:.6">↗</span></a>';
+  }
+  window.toggleAdminMenu = function(e){
+    if(e){ e.stopPropagation(); }
+    document.getElementById("navdd-admin")?.classList.toggle("open");
+  };
+  document.addEventListener("click", e => {
+    const dd = document.getElementById("navdd-admin");
+    if(dd && dd.classList.contains("open") && !e.target.closest("#navdd-admin")) dd.classList.remove("open");
+  });
+  buildNav();
+
+  const _go = window.go;
+  window.go = function(id){
+    _go(id);
+    document.getElementById("navdd-admin")?.classList.remove("open");
+    const dd = document.querySelector("#navdd-admin > .tab");
+    if(dd) dd.classList.toggle("on", ADMIN_IDS.includes(id));
+    if(id === "program") renderProgram();
+  };
+
+  /* ---------- 5) Aylık Program (PDF yükleme) ---------- */
+  const DB_NAME = "idt_program_db", STORE = "files";
+  function db(){
+    return new Promise((res, rej) => {
+      const rq = indexedDB.open(DB_NAME, 1);
+      rq.onupgradeneeded = () => { if(!rq.result.objectStoreNames.contains(STORE)) rq.result.createObjectStore(STORE, {keyPath:"id"}); };
+      rq.onsuccess = () => res(rq.result);
+      rq.onerror = () => rej(rq.error);
+    });
+  }
+  function tx(mode, fn){
+    return db().then(d => new Promise((res, rej) => {
+      const t = d.transaction(STORE, mode), s = t.objectStore(STORE);
+      const out = fn(s);
+      t.oncomplete = () => res(out && out.result !== undefined ? out.result : out);
+      t.onerror = () => rej(t.error);
+    }));
+  }
+  const AYLAR = ["Ocak","Şubat","Mart","Nisan","Mayıs","Haziran","Temmuz","Ağustos","Eylül","Ekim","Kasım","Aralık"];
+  window.getProgramFiles = () => tx("readonly", s => s.getAll());   /* ileride entegrasyon için */
+
+  async function programList(){
+    const all = await tx("readonly", s => s.getAll());
+    return (all||[]).sort((a,b) => (b.yil - a.yil) || (b.ay - a.ay) || (b.ts - a.ts));
+  }
+  window.renderProgram = async function(){
+    const box = document.getElementById("program");
+    if(!box) return;
+    const now = new Date();
+    const yillar = []; for(let y = now.getFullYear() + 1; y >= now.getFullYear() - 4; y--) yillar.push(y);
+    let items = [];
+    try{ items = await programList(); }catch(e){}
+    box.innerHTML = `
+      <div class="card"><div class="card-h"><div><h3>Aylık Program</h3>
+        <div class="mt" style="font-size:12px;color:var(--muted)">Aylık program PDF'lerini yükleyin, görüntüleyin ve indirin.</div></div>
+        <span class="chip gold">${items.length} dosya</span></div>
+        <div class="card-b" style="padding:16px">
+          <div class="prg-form">
+            <div class="fld"><label>Ay</label>
+              <select id="prg-ay">${AYLAR.map((a,i) => `<option value="${i}"${i===now.getMonth()?" selected":""}>${a}</option>`).join("")}</select></div>
+            <div class="fld"><label>Yıl</label>
+              <select id="prg-yil">${yillar.map(y => `<option${y===now.getFullYear()?" selected":""}>${y}</option>`).join("")}</select></div>
+            <div class="fld" style="flex:1;min-width:200px"><label>Not (opsiyonel)</label>
+              <input type="text" id="prg-not" style="width:100%" placeholder="Örn. Revize 2 · Büyük Salon"></div>
+          </div>
+          <label class="prg-drop" id="prg-drop">
+            <input type="file" id="prg-file" accept="application/pdf" multiple hidden>
+            <div style="font-size:26px">📄</div>
+            <div style="font-weight:800;font-family:var(--font-d);margin-top:6px">PDF yüklemek için tıklayın veya sürükleyin</div>
+            <div style="font-size:12px;color:var(--muted);margin-top:4px">Sadece PDF · Dosyalar bu tarayıcıda saklanır</div>
+          </label>
+        </div>
+      </div>
+      <div class="prg-grid" id="prg-grid">${items.length ? items.map(f => `
+        <div class="prg-card">
+          <div class="ttl">${AYLAR[f.ay]} ${f.yil}</div>
+          <div class="meta">${esc(f.adi)}<br>${(f.boyut/1024/1024).toFixed(2)} MB · ${esc(new Date(f.ts).toLocaleString("tr-TR"))}${f.not?`<br>${esc(f.not)}`:""}</div>
+          <div class="acts">
+            <button class="btn sm pri" onclick="openProgram('${f.id}')">Görüntüle</button>
+            <button class="btn sm" onclick="downloadProgram('${f.id}')">İndir</button>
+            <button class="btn sm dan" onclick="deleteProgram('${f.id}')">Sil</button>
+          </div>
+        </div>`).join("") : `<div class="empty">Henüz yüklenmiş aylık program yok.</div>`}</div>`;
+
+    const inp = document.getElementById("prg-file"), drop = document.getElementById("prg-drop");
+    inp.addEventListener("change", () => handleFiles(inp.files));
+    ["dragenter","dragover"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add("over"); }));
+    ["dragleave","drop"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove("over"); }));
+    drop.addEventListener("drop", e => handleFiles(e.dataTransfer.files));
+  };
+  async function handleFiles(files){
+    const list = [...(files||[])].filter(f => f.type === "application/pdf" || /\.pdf$/i.test(f.name));
+    if(!list.length) return toast("Lütfen PDF dosyası seçin.", "err");
+    const ay = +document.getElementById("prg-ay").value;
+    const yil = +document.getElementById("prg-yil").value;
+    const not = (document.getElementById("prg-not").value||"").trim();
+    try{
+      for(const f of list){
+        const buf = await f.arrayBuffer();
+        await tx("readwrite", s => s.put({id: "p_" + Date.now() + "_" + Math.random().toString(36).slice(2,7),
+          ay, yil, not, adi: f.name, boyut: f.size, ts: Date.now(), data: buf}));
+      }
+      toast(list.length + " program dosyası yüklendi.");
+      renderProgram();
+    }catch(e){ toast("Yüklenemedi: " + (e.message||"hata"), "err"); }
+  }
+  async function getOne(id){ return tx("readonly", s => s.get(id)); }
+  function blobOf(f){ return new Blob([f.data], {type:"application/pdf"}); }
+  window.openProgram = async function(id){
+    const f = await getOne(id); if(!f) return;
+    const url = URL.createObjectURL(blobOf(f));
+    window.open(url, "_blank");
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  };
+  window.downloadProgram = async function(id){
+    const f = await getOne(id); if(!f) return;
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blobOf(f));
+    a.download = f.adi || (AYLAR[f.ay] + "-" + f.yil + ".pdf");
+    a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 20000);
+  };
+  window.deleteProgram = async function(id){
+    const ok = await uiConfirm("Bu program dosyası silinecek. Devam edilsin mi?", "Programı sil");
+    if(!ok) return;
+    await tx("readwrite", s => s.delete(id));
+    toast("Program silindi."); renderProgram();
+  };
+  if(window.RENDER) window.RENDER.program = window.renderProgram;
+
+  /* Açılışta hash program ise göster */
+  if((location.hash||"").slice(1) === "program") setTimeout(() => window.go("program"), 60);
+  renderNotifs();
+})();
 </script>
 
 </body>
