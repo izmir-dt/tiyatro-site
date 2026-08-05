@@ -3304,5 +3304,178 @@ window.exportPDF = function(title, headers, data){
 })();
 </script>
 
+<!-- ═══════════════ v7 GÜNCELLEME PAKETİ · AYLIK PROGRAM HTML ENTEGRASYONU ═══════════════ -->
+<style>
+.aph-head{display:flex;gap:12px;flex-wrap:wrap;align-items:center;justify-content:space-between}
+.aph-months{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;margin-top:14px}
+.aph-card{border:1px solid var(--line);border-radius:13px;background:var(--surface);padding:14px;display:flex;flex-direction:column;gap:8px}
+.aph-card .ttl{font-family:var(--font-d);font-weight:800;font-size:15px}
+.aph-card .meta{font-size:11.5px;color:var(--muted)}
+.aph-card .acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:auto}
+.aph-prev{margin-top:14px;border:1px solid var(--line);border-radius:13px;background:var(--surface);overflow:auto;max-height:70vh}
+.aph-prev table{border-collapse:collapse;width:100%;font-size:12px}
+.aph-prev td{border:1px solid var(--line-strong);padding:3px 6px;white-space:nowrap;vertical-align:middle}
+.aph-note{font-size:12px;color:var(--muted);margin-top:8px;line-height:1.6}
+details.aph-pdf{margin-top:18px;border:1px solid var(--line);border-radius:13px;background:var(--surface);overflow:hidden}
+details.aph-pdf>summary{cursor:pointer;padding:12px 14px;font-family:var(--font-d);font-weight:800;font-size:13.5px;background:var(--surface-2);list-style:none}
+details.aph-pdf>summary::-webkit-details-marker{display:none}
+details.aph-pdf .in{padding:12px}
+</style>
+<script>
+/* ═══════ v7: Aylık Program = AYLIK PROGRAM HTML · iki yönlü veri köprüsü ═══════ */
+(function(){
+  const PRG_URL   = "AYLIK_PROGRAM.html";           /* aynı klasörde olmalı */
+  const PRG_LSKEY = "idt_aylik_program_v3";         /* AYLIK PROGRAM HTML'in kendi kaydı */
+  const BRIDGE    = "idt_repertuvar_bridge";        /* repertuvar -> aylık program veri köprüsü */
+
+  /* ---------- 1) Repertuvar verisini köprüye yaz (AYLIK PROGRAM HTML buradan çeker) ---------- */
+  function publishBridge(){
+    try{
+      if(typeof DATA === "undefined" || !Array.isArray(DATA) || !DATA.length) return;
+      const plays = [], seen = new Set(), crew = [], ck = new Set();
+      DATA.forEach(r => {
+        const oyun = String(r.oyun||"").trim(); if(!oyun) return;
+        if(!seen.has(oyun)){ seen.add(oyun); plays.push(oyun); }
+        names(r.kisi).forEach(raw => {
+          const kisi = stripTag(raw); if(!kisi) return;
+          const kategori = String(r.kategori||"").trim() || "Oyuncu";
+          const gorev = String(r.gorev||"").trim();
+          const key = oyun+"|"+kategori+"|"+gorev+"|"+kisi;
+          if(ck.has(key)) return; ck.add(key);
+          crew.push({play:oyun, category:kategori, role:gorev, person:kisi, src:"idt"});
+        });
+      });
+      plays.sort(sortTr);
+      localStorage.setItem(BRIDGE, JSON.stringify({ts:Date.now(), plays, crew}));
+    }catch(e){}
+  }
+  window.publishProgramBridge = publishBridge;
+  const _rebuild = window.rebuild;
+  if(typeof _rebuild === "function"){
+    window.rebuild = function(){ const out = _rebuild.apply(this, arguments); publishBridge(); return out; };
+  }
+  setTimeout(publishBridge, 1500);
+  setInterval(publishBridge, 60000);
+
+  /* ---------- 2) AYLIK PROGRAM HTML kayıtlarını oku ---------- */
+  function prgState(){
+    try{ const raw = localStorage.getItem(PRG_LSKEY); return raw ? JSON.parse(raw) : null; }catch(e){ return null; }
+  }
+  function cellsOf(m){
+    const out = {};
+    if(Array.isArray(m.cells)) m.cells.forEach(([r,c,v]) => out[r+"_"+c] = {v:String(v)});
+    else Object.keys(m.cells||{}).forEach(k => out[k] = m.cells[k]);
+    return out;
+  }
+  const SKIP = /^(\d|prömiyer|anahtar|turne$|izmir devlet)/i;
+  function monthInfo(m){
+    const cells = cellsOf(m);
+    let dolu = 0; const oyunlar = new Set();
+    Object.keys(cells).forEach(k => {
+      const v = String((cells[k]||{}).v||"").trim(); if(!v) return;
+      dolu++;
+      const c = +k.split("_")[1];
+      if(c >= 2 && !/^\d{1,2}[.:]\d{2}/.test(v) && !SKIP.test(v)) oyunlar.add(v.replace(/\s*\(.*\)\s*$/,"").trim());
+    });
+    return {cells, dolu, oyunSayisi:oyunlar.size, oyunlar:[...oyunlar]};
+  }
+
+  /* ---------- 3) Önizleme tablosu (salt okunur) ---------- */
+  let PREVIEW = -1;
+  window.toggleProgramPreview = function(i){ PREVIEW = (PREVIEW === i ? -1 : i); renderProgram(); };
+  function previewHtml(m){
+    const cells = cellsOf(m);
+    const covered = new Set(), span = {};
+    (m.merges||[]).forEach(([r1,c1,r2,c2]) => {
+      span[r1+"_"+c1] = {rs:r2-r1+1, cs:c2-c1+1};
+      for(let r=r1;r<=r2;r++) for(let c=c1;c<=c2;c++) if(r!==r1||c!==c1) covered.add(r+"_"+c);
+    });
+    let h = "<table>";
+    for(let r=0;r<m.rows;r++){
+      h += "<tr>";
+      for(let c=0;c<m.cols;c++){
+        const k = r+"_"+c; if(covered.has(k)) continue;
+        const cell = cells[k]||{}, sp = span[k]||{rs:1,cs:1};
+        const st = [];
+        if(cell.bg) st.push("background:"+cell.bg);
+        if(cell.color) st.push("color:"+cell.color);
+        if(cell.bold) st.push("font-weight:700");
+        h += "<td"+(sp.rs>1?' rowspan="'+sp.rs+'"':"")+(sp.cs>1?' colspan="'+sp.cs+'"':"")+
+             (st.length?' style="'+st.join(";")+'"':"")+">"+esc(String(cell.v||""))+"</td>";
+      }
+      h += "</tr>";
+    }
+    return h + "</table>";
+  }
+
+  /* ---------- 4) Yeni Aylık Program ekranı ---------- */
+  const _pdfRender = window.renderProgram;
+  window.renderProgram = async function(){
+    const box = document.getElementById("program");
+    if(!box) return;
+    publishBridge();
+    const st = prgState();
+    const months = (st && Array.isArray(st.months)) ? st.months : [];
+    const infos = months.map(monthInfo);
+    const bridge = (() => { try{ return JSON.parse(localStorage.getItem(BRIDGE)||"null"); }catch(e){ return null; } })();
+
+    box.innerHTML = `
+      <div class="card">
+        <div class="card-h aph-head">
+          <div><h3>AYLIK PROGRAM HTML</h3>
+            <div class="mt" style="font-size:12px;color:var(--muted)">
+              AYLIK PROGRAM HTML'de tamamlanan aylık programlar burada ay ay listelenir. Düzenlemek için sayfayı açın.</div></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            <span class="chip gold">${months.length} ay</span>
+            <button class="btn sm pri" onclick="openProgramSite()">Siteyi aç · Düzenle</button>
+            <button class="btn sm" onclick="renderProgram()">Yenile</button>
+          </div>
+        </div>
+        <div class="card-b" style="padding:16px">
+          <div class="aph-note">
+            Veri akışı: <b>İDT Repertuvar → AYLIK PROGRAM HTML</b>. Oyun ve kadro bilgisi (${bridge? bridge.plays.length : 0} oyun,
+            ${bridge? bridge.crew.length : 0} kadro kaydı) otomatik olarak AYLIK PROGRAM HTML'e aktarılır; orada oyun adı yazınca
+            kadro ve çakışma bilgisi bu sitedeki verilerden gelir.
+          </div>
+          ${months.length ? "" : `<div class="aph-note" style="color:var(--danger)">
+            Henüz kayıtlı aylık program görünmüyor. <b>Siteyi aç</b> deyip AYLIK PROGRAM HTML üzerinde ay oluşturun/kaydedin,
+            sonra bu ekranda <b>Yenile</b>'ye basın. (Her iki dosya aynı klasörde/alan adında olmalıdır.)</div>`}
+          <div class="aph-months">${infos.map((inf,i) => `
+            <div class="aph-card">
+              <div class="ttl">${esc(months[i].name||("Ay "+(i+1)))}</div>
+              <div class="meta">${inf.oyunSayisi} oyun · ${inf.dolu} dolu hücre · ${months[i].rows}×${months[i].cols}</div>
+              <div class="acts">
+                <button class="btn sm pri" onclick="openProgramSite(${i})">Aç ve düzenle</button>
+                <button class="btn sm" onclick="toggleProgramPreview(${i})">${PREVIEW===i?"Önizlemeyi kapat":"Önizle"}</button>
+              </div>
+            </div>`).join("")}</div>
+          ${PREVIEW>-1 && months[PREVIEW] ? `<div class="aph-prev">${previewHtml(months[PREVIEW])}</div>` : ""}
+        </div>
+      </div>
+      <details class="aph-pdf"><summary>PDF / bağlantı arşivi (ortak sunucu)</summary><div class="in"><div id="program-pdf"></div></div></details>`;
+
+    /* Eski PDF ekranını iç kutuya çiz (id geçici olarak devredilir) */
+    try{
+      const inner = document.getElementById("program-pdf");
+      box.id = "program-outer"; inner.id = "program";
+      await _pdfRender();
+      inner.id = "program-pdf"; box.id = "program";
+    }catch(e){
+      const inner = document.getElementById("program");
+      if(inner && inner !== box) inner.id = "program-pdf";
+      box.id = "program";
+    }
+  };
+
+  window.openProgramSite = function(i){
+    const url = PRG_URL + (typeof i === "number" ? "#ay=" + i : "");
+    window.open(url, "_blank", "noopener");
+  };
+
+  if(window.RENDER) window.RENDER.program = window.renderProgram;
+  if((location.hash||"").slice(1) === "program") setTimeout(() => window.go("program"), 120);
+})();
+</script>
+
 </body>
 </html>
