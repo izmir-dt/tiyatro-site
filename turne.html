@@ -22111,7 +22111,7 @@ document.addEventListener('click', function(e) {
 function _degerlendirmeBadgeGuncelle() {
   var badge = document.getElementById('degerlendirme-badge');
   if (!badge || typeof turneler === 'undefined') return;
-  var say = turneler.filter(function(t) {
+  var say = esasTurneler().filter(function(t) {
     return t.memnuniyet && (typeof _memnuniyetDoluMu === 'function' ? _memnuniyetDoluMu(t.memnuniyet) : true);
   }).length;
   badge.textContent = say;
@@ -23535,7 +23535,7 @@ function oyunDetayPanelAc(tip, oyunEnc) {
   }
   _oyunPanelAcik = tip + oyun;
 
-  const oyunT = turneler.filter(t => t.oyun === oyun).sort((a,b) => new Date(a.baslangicTarih||a.tarih||0) - new Date(b.baslangicTarih||b.tarih||0));
+  const oyunT = esasTurneler().filter(t => t.oyun === oyun).sort((a,b) => new Date(a.baslangicTarih||a.tarih||0) - new Date(b.baslangicTarih||b.tarih||0));
   const personel = getPersonelForOyun(oyun);
 
   let icerik = '';
@@ -23650,8 +23650,9 @@ function renderKisiAra() {
     var kayitlar = eslesen.filter(function(p){ return p.kisi === kisi; });
     var oyunlar  = [...new Set(kayitlar.map(function(p){ return p.oyun; }).filter(Boolean))];
     var kat      = kayitlar[0] ? (kayitlar[0].kategori === 'Oyuncu' ? 'Sanatçı' : kayitlar[0].kategori) : '';
-    var kisiT    = turneler.filter(function(t) {
-      if (t.katilimcilar && t.katilimcilar.length) return t.katilimcilar.some(function(k){ return k.kisi === kisi; });
+    var kisiT    = esasTurneler().filter(function(t) {
+      var _kat = (typeof turneTumKatilimcilar === 'function') ? turneTumKatilimcilar(t) : (t.katilimcilar || []);
+      if (_kat && _kat.length) return _kat.some(function(k){ return k.kisi === kisi; });
       return oyunlar.some(function(o){ return t.oyun === o; });
     });
     var toplamGun = kisiT.reduce(function(s,t){ return s+turneSuresi(t); }, 0);
@@ -25278,7 +25279,7 @@ function renderOyunMgmt() {
   var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px;max-width:1000px">';
   filtreli.forEach(function(oyun) {
     var kadroSayisi = getPersonelForOyun(oyun).length;
-    var turneListesi = turneler.filter(function(t){ return t.oyun === oyun; });
+    var turneListesi = esasTurneler().filter(function(t){ return t.oyun === oyun; });
     var sanatciKats = ['Sanatçı','Oyuncu','Koro','Koro/Dans','Koro/Dans Ekibi','Solist','Dansçı','Figüran','Figüran/Müzisyen','Müzisyen','Orkestra','Kurumdan Emekli Sanatçı'];
     var personel = getPersonelForOyun(oyun);
     var sanatciSay = personel.filter(function(p){ return sanatciKats.includes(p.kategori); }).length;
@@ -29129,6 +29130,7 @@ function _calOzetChipsGuncelle() {
     if (!events.length) continue;
     turneGun++;
     events.forEach(function(t) {
+      if (typeof ekGrupMu === 'function' && ekGrupMu(t)) return; // ek grup sayılmaz
       var ps = t.programSatirlar ? t.programSatirlar.find(function(s){ return s.tarih === key; }) : null;
       var tip = ps ? ps.program : '';
       if (tip === 'Oyun') oyunGun++;
@@ -29139,7 +29141,7 @@ function _calOzetChipsGuncelle() {
   // Temsil toplam
   var ayBas = calYear + '-' + String(calMonth+1).padStart(2,'0') + '-01';
   var ayBit = calYear + '-' + String(calMonth+1).padStart(2,'0') + '-' + String(sonGun).padStart(2,'0');
-  turneler.forEach(function(t) {
+  esasTurneler().forEach(function(t) {
     var bas = t.baslangicTarih || t.tarih || '';
     var bit = t.bitisTarih || bas;
     if (window._aktifSezon && window._aktifSezon !== '__tumü__' && tarihSezon(bas) !== window._aktifSezon) return;
@@ -29603,7 +29605,7 @@ function _gorevOyunSecDoldur() {
   if (!sel) return;
   var mevcut = sel.value;
   sel.innerHTML = '<option value="">-- Turne Seçin --</option>';
-  var aktif = turneler.filter(function(t){ return t.oyun && t.baslangicTarih; });
+  var aktif = esasTurneler().filter(function(t){ return t.oyun && t.baslangicTarih; });
   aktif.sort(function(a,b){ return (b.baslangicTarih||'').localeCompare(a.baslangicTarih||''); });
   aktif.forEach(function(t) {
     var opt = document.createElement('option');
@@ -30075,7 +30077,7 @@ function kisiModalTopluSec(tip) {
 // ══════════════════════════════════════════════════   ═════════
 function iCalIndir() {
   // Özet istatistik hesapla
-  var aktif = turneler.filter(function(t){ return t.statu && t.statu !== 'iptal' && t.statu !== 'yarida-kesildi'; });
+  var aktif = esasTurneler().filter(function(t){ return t.statu && t.statu !== 'iptal' && t.statu !== 'yarida-kesildi'; });
   var etkinlikSayisi = aktif.filter(function(t){ return t.baslangicTarih || t.tarih; }).length;
 
   // Takvim uygulamaları bilgisi
@@ -34628,6 +34630,29 @@ function durakTemsilDagilimi(t) {
   return res.map(function(v) { return v === null ? 0 : v; });
 }
 
+// ============================================================
+// EK GRUPLAR ASLA TURNE SAYILMAZ (canonical)
+// anaGrupId dolu kayıtlar bir turnenin "ek grubudur"; sayım,
+// istatistik, takvim özeti ve listelerde ayrı turne sayılmaz.
+// Katılımcıları ise bağlı olduğu ana turneye dahil edilir.
+// ============================================================
+function ekGrupMu(t) { return !!(t && t.anaGrupId); }
+function esasTurneler(src) {
+  var liste = src || (typeof turneler !== 'undefined' ? turneler : []);
+  return (liste || []).filter(function(t) { return t && !ekGrupMu(t); });
+}
+function turneTumKatilimcilar(t) {
+  var out = (t && t.katilimcilar) ? t.katilimcilar.slice() : [];
+  try {
+    (typeof turneler !== 'undefined' ? turneler : []).forEach(function(x) {
+      if (x && ekGrupMu(x) && String(x.anaGrupId) === String(t._rowIdx) && x.katilimcilar) {
+        out = out.concat(x.katilimcilar);
+      }
+    });
+  } catch(e) {}
+  return out;
+}
+
 function durakToplamTemsil(t) {
   // ── Yarıda Kesildi: gerçekten yapılan temsil sayısı (kesilen şehre/sonrasına gidilmedi) ──
   if (t && (t.statu||'') === 'yarida-kesildi') {
@@ -36357,7 +36382,7 @@ async function pdfAnalizEt(arrayBuffer, dosyaAdi) {
 
     // Gecmis turnelerden eksik alanlari tamamla
     if (typeof turneler !== 'undefined' && turneData.oyun) {
-      var gecmis = turneler.filter(function(t){
+      var gecmis = esasTurneler().filter(function(t){
         return (t.oyun||'').trim().toUpperCase() === turneData.oyun.toUpperCase();
       }).sort(function(a,b){
         return (b.baslangicTarih||b.tarih||'').localeCompare(a.baslangicTarih||a.tarih||'');
