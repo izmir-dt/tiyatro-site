@@ -102,7 +102,7 @@ table.sheet td.cell.note-mark::after{content:"";position:absolute;top:0;right:0;
 .modal .row{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
 
 /* Tooltip */
-#tooltip{position:fixed;z-index:100000;max-width:min(420px,92vw);max-height:min(70vh,560px);overflow:auto;background:#1a0f0a;color:#fff;padding:10px 12px;border-radius:8px;font-size:12.5px;line-height:1.5;box-shadow:0 10px 34px rgba(0,0,0,.45);display:none;pointer-events:auto;white-space:pre-wrap;overscroll-behavior:contain;font-family:'Manrope',system-ui,sans-serif}
+#tooltip{position:fixed;z-index:100000;max-width:min(420px,92vw);max-height:min(80vh,640px);overscroll-behavior:contain;overflow:auto;background:#1a0f0a;color:#fff;padding:10px 12px;border-radius:8px;font-size:12.5px;line-height:1.5;box-shadow:0 10px 34px rgba(0,0,0,.45);display:none;pointer-events:auto;white-space:pre-wrap;overscroll-behavior:contain;font-family:'Manrope',system-ui,sans-serif}
 #tooltip .ttHead{font-weight:700;font-size:13px;margin-bottom:4px}
 #tooltip .ttWarn{color:#ffb4b4;font-weight:700}
 #tooltip .ttOk{color:#b4ffb4;font-weight:700}
@@ -159,15 +159,16 @@ table.sheet td.cell.note-mark::after{content:"";position:absolute;top:0;right:0;
 /* Print — YATAY (görseldeki renkler ekranla aynı) */
 @media print{
   @page{size:A4 landscape;margin:5mm}
-  header,nav,.controls,#tooltip,.ctxmenu,.modal-back,.tbl-wrap{display:none !important}
+  header,nav,.controls,#tooltip,.ctxmenu,.modal-back,.tbl-wrap,#idtBridgeBar,.fs-exit{display:none !important}
   section{display:none !important}
   body{background:#fff}
   #printView{display:block !important}
-  .print-month{page-break-after:always;margin-bottom:0}
+  .print-month{page-break-after:always;margin-bottom:0;overflow:hidden}
+  .print-month .psWrap{transform-origin:top left}
   .print-month:last-child{page-break-after:auto}
   .print-month h2{margin:0 0 4px;font-size:16px;text-align:center}
-  .print-month table.sheet{width:100%;font-family:'Barlow Semi Condensed',sans-serif;font-size:9px;print-color-adjust:exact;-webkit-print-color-adjust:exact}
-  .print-month table.sheet td{padding:2px 3px;height:auto}
+  .print-month table.sheet{width:100%;table-layout:fixed;font-family:'Barlow Semi Condensed',sans-serif;font-size:9px;print-color-adjust:exact;-webkit-print-color-adjust:exact}
+  .print-month table.sheet td{padding:2px 3px;height:auto;line-height:1.15}
   .print-month table.sheet td.rowh,.print-month table.sheet td.hdr.corner,.print-month table.sheet td.hdr{display:none}
   .print-month table.sheet td.dateCol{background:var(--head) !important}
   .print-month table.sheet tr.titleRow td,.print-month table.sheet tr.stageHead td,.print-month table.sheet tr.monday td{background:var(--head) !important;color:#000 !important}
@@ -177,6 +178,15 @@ table.sheet td.cell.note-mark::after{content:"";position:absolute;top:0;right:0;
   .print-month .pageNum{text-align:center;font-size:11px;margin-top:6px;color:#000}
 }
 #printView{display:none}
+/* Ekranda ölçüm yapılırken de yazdırma ile aynı ölçüler geçerli olsun
+   (fitPrintPages doğru ölçeği bulabilsin) */
+#printView .print-month{page-break-after:always;margin-bottom:0;overflow:hidden}
+#printView .print-month .psWrap{transform-origin:top left}
+#printView .print-month h2{margin:0 0 4px;font-size:16px;text-align:center}
+#printView .print-month table.sheet{width:100%;table-layout:fixed;font-family:'Barlow Semi Condensed',sans-serif;font-size:9px;print-color-adjust:exact;-webkit-print-color-adjust:exact}
+#printView .print-month table.sheet td{padding:2px 3px;height:auto;line-height:1.15}
+#printView .print-month table.sheet td.rowh,#printView .print-month table.sheet td.hdr.corner,#printView .print-month table.sheet td.hdr{display:none}
+#printView .print-month .pageNum{text-align:center;font-size:11px;margin-top:6px;color:#000}
 .pageNum{text-align:center;font-size:11px;margin-top:6px;color:var(--muted)}
 </style>
 </head>
@@ -290,7 +300,115 @@ const DEFAULT_DATA = {"months": [{"name": "MART 2026", "rows": 39, "cols": 9, "c
 
 const LSKEY = 'idt_aylik_program_v3';
 
-/* === Kişi haritası (BÜTÜN OYUNLAR sekmesinden + kullanıcı eklemeleri) === */
+/* === Kadro kaynağı: yalnızca "AYLIK PROGRAM PERSONELİ" e-Tablo sekmesi === */
+const CREW_SHEET = 'AYLIK PROGRAM PERSONELİ';
+const CREW_API   = 'https://tiyatro-backend.vercel.app/api/sheets/' + encodeURIComponent(CREW_SHEET);
+let crewState = 'idle';
+function crewKey(c){ return [c.play,c.category,c.role,c.person].map(x=>String(x||'').trim()).join('|'); }
+/* Sheet satırları + site içi düzenlemeler (yerel katman) birleştirilir */
+function applyCrew(){
+  const hidden = new Set(state.crewHidden||[]);
+  const sheetRows = (state.sheetCrew||[])
+    .filter(c => !hidden.has(crewKey(c)))
+    .map(c => ({play:c.play, category:c.category, role:c.role, person:c.person, src:'sheet'}));
+  const locals = (state.crewLocal||[]).map((c,i) => ({play:c.play, category:c.category, role:c.role, person:c.person, src:'local', _li:i}));
+  state.crew = sheetRows.concat(locals);
+  const names = new Set(state.crew.map(c=>String(c.play||'').trim()).filter(Boolean));
+  (state.playsExtra||[]).forEach(p=>{ const t=String(p||'').trim(); if(t) names.add(t); });
+  state.plays = Array.from(names);
+  rebuildPeopleMap();
+}
+function crewPendingCount(){ return (state.crewLocal||[]).length + (state.crewHidden||[]).length; }
+async function loadCrewSheet(force){
+  if(crewState==='loading') return;
+  if((state.sheetCrew||[]).length && !force) { applyCrew(); return; }
+  crewState='loading'; try{ renderPlays(); }catch(e){}
+  try{
+    const r = await fetch(CREW_API, {cache:'no-store'});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const d = await r.json();
+    const rows = (d.rows||[]).map(row=>({
+      play: String(row[0]||'').trim(),
+      category: String(row[1]||'').trim(),
+      role: String(row[2]||'').trim(),
+      person: String(row[3]||'').trim()
+    })).filter(c=>c.play && c.person);
+    if(!rows.length) throw new Error('boş');
+    state.sheetCrew = rows;
+    crewState='ok';
+  }catch(e){
+    crewState = (state.sheetCrew||[]).length ? 'cache' : 'err';
+    if(!(state.sheetCrew||[]).length && (DEFAULT_DATA.crew||[]).length){
+      state.sheetCrew = (DEFAULT_DATA.crew||[]).map(c=>({play:c.play,category:c.category,role:c.role,person:c.person}));
+      crewState='cache';
+    }
+  }
+  applyCrew(); saveState();
+  try{ buildOyunDatalist(); renderSheet(); renderPrint(); renderPlays(); }catch(e){}
+}
+/* Site içi düzenlemeler: yerel katmana yazılır, kaynak yine Personeli sekmesidir */
+function crewEditField(idx, field, val){
+  const e = state.crew[idx]; if(!e) return;
+  if(e.src==='local'){ (state.crewLocal[e._li]||{})[field] = val; }
+  else {
+    state.crewHidden = state.crewHidden||[]; state.crewHidden.push(crewKey(e));
+    const o = {play:e.play, category:e.category, role:e.role, person:e.person}; o[field]=val;
+    state.crewLocal = state.crewLocal||[]; state.crewLocal.push(o);
+  }
+  applyCrew(); saveState();
+}
+function crewDeleteAt(idx){
+  const e = state.crew[idx]; if(!e) return;
+  if(e.src==='local') state.crewLocal.splice(e._li,1);
+  else { state.crewHidden = state.crewHidden||[]; state.crewHidden.push(crewKey(e)); }
+  applyCrew(); saveState();
+}
+function crewAddRow(o){ state.crewLocal = state.crewLocal||[]; state.crewLocal.push(o); applyCrew(); saveState(); }
+function crewRenamePlay(oldName, newName){
+  (state.crew||[]).slice().forEach(e=>{
+    if(e.play!==oldName) return;
+    if(e.src==='local'){ state.crewLocal[e._li].play = newName; }
+    else {
+      state.crewHidden.push(crewKey(e));
+      state.crewLocal.push({play:newName, category:e.category, role:e.role, person:e.person});
+    }
+  });
+  state.playsExtra = (state.playsExtra||[]).map(x=>x===oldName?newName:x);
+  if(!(state.playsExtra||[]).includes(newName)) state.playsExtra.push(newName);
+  applyCrew(); saveState();
+}
+function crewDeletePlay(name){
+  (state.crew||[]).slice().forEach(e=>{ if(e.play===name && e.src==='sheet') state.crewHidden.push(crewKey(e)); });
+  state.crewLocal = (state.crewLocal||[]).filter(c=>c.play!==name);
+  state.playsExtra = (state.playsExtra||[]).filter(x=>x!==name);
+  applyCrew(); saveState();
+}
+
+/* Personeli sekmesine geri yazmak için TSV üret */
+function crewToTsv(){
+  const head = ['Oyun Adı','Kategori','Görev','Kişi'].join('\t');
+  const body = (state.crew||[]).slice()
+    .sort((a,b)=>(a.play||'').localeCompare(b.play||'','tr') || (a.category||'').localeCompare(b.category||'','tr'))
+    .map(c=>[c.play,c.category,c.role,c.person].map(x=>String(x||'').replace(/[\t\r\n]+/g,' ')).join('\t'));
+  return [head].concat(body).join('\n');
+}
+function saveCrewToSheet(){
+  const tsv = crewToTsv();
+  const done = ()=>{
+    setStatus('Kadro panoya kopyalandı — "'+CREW_SHEET+'" sekmesine yapıştırın.');
+    alert('Kadro listesi panoya kopyalandı ('+(state.crew||[]).length+' satır).\n\n'+
+      '1) Google e-Tablo\'da "'+CREW_SHEET+'" sekmesini açın\n'+
+      '2) A2 hücresini seçin\n'+
+      '3) Ctrl+V ile yapıştırın\n\n'+
+      'Not: Bu e-Tablo bağlantısı salt-okunur olduğu için tarayıcıdan doğrudan yazılamıyor; kayıt bu şekilde yapılır. Yedek dosya da indirildi.');
+  };
+  if(navigator.clipboard) navigator.clipboard.writeText(tsv).then(done, done); else done();
+  const blob = new Blob(['\ufeff'+tsv], {type:'text/tab-separated-values;charset=utf-8'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download='AYLIK-PROGRAM-PERSONELI.tsv'; a.click();
+}
+
+/* === Kişi haritası (yalnızca AYLIK PROGRAM PERSONELİ verisinden) === */
 let PEOPLE_MAP = {};
 function rebuildPeopleMap(){
   const map = {};
@@ -319,24 +437,23 @@ function loadState(){
     if(raw){
       const st = JSON.parse(raw);
       if(!st.plays) st.plays = [];
-      if(!st.crew) st.crew = [];
-      /* Dosyaya gomulu oyun/kadro bilgisi her bilgisayarda gorunsun:
-         yerel kayitta eksik olanlar dosyadaki veriden tamamlanir. */
-      const pset = new Set(st.plays);
-      (DEFAULT_DATA.plays||[]).forEach(pl => { if(!pset.has(pl)){ pset.add(pl); st.plays.push(pl); } });
-      const ck = new Set(st.crew.map(c => [c.play,c.category,c.role,c.person].join('|')));
-      (DEFAULT_DATA.crew||[]).forEach(c => {
-        const k = [c.play,c.category,c.role,c.person].join('|');
-        if(!ck.has(k)){ ck.add(k); st.crew.push({...c}); }
-      });
+      st.crew = [];
+      if(!Array.isArray(st.sheetCrew)) st.sheetCrew = [];
+      if(!Array.isArray(st.crewLocal)) st.crewLocal = [];
+      if(!Array.isArray(st.crewHidden)) st.crewHidden = [];
+      if(!Array.isArray(st.playsExtra)) st.playsExtra = [];
       return st;
     }
   }catch(e){}
   const st = JSON.parse(JSON.stringify(DEFAULT_DATA));
   st.months = st.months.map(m => normalizeMonth(m));
   st.activeIdx = 0;
-  st.plays = JSON.parse(JSON.stringify(DEFAULT_DATA.plays||[]));
-  st.crew = JSON.parse(JSON.stringify(DEFAULT_DATA.crew||[]));
+  st.plays = [];
+  st.crew = [];
+  st.sheetCrew = [];
+  st.crewLocal = [];
+  st.crewHidden = [];
+  st.playsExtra = JSON.parse(JSON.stringify(DEFAULT_DATA.plays||[]));
   return st;
 }
 function normalizeMonth(m){
@@ -351,7 +468,7 @@ function normalizeMonth(m){
 function saveState(){ localStorage.setItem(LSKEY, JSON.stringify(state)); }
 
 let state = loadState();
-rebuildPeopleMap();
+applyCrew();
 
 /* === Undo/Redo === */
 const undoStack = [], redoStack = [];
@@ -568,6 +685,7 @@ function wireCell(td){
     e.preventDefault();
     const r=+td.dataset.r, c=+td.dataset.c;
     if(!inSel(r,c)) setSel(r,c,r,c);
+    document.getElementById('tooltip').style.display='none';
     showCtx(e.clientX,e.clientY,'cell');
   });
   td.addEventListener('mouseenter', e=>{
@@ -592,16 +710,29 @@ function initTooltipInteraction(){
 function placeTooltip(ev){
   const tt=document.getElementById('tooltip');
   if(tt.style.display!=='block') return;
-  tt.style.left='-9999px'; tt.style.top='0px';
-  const r=tt.getBoundingClientRect();
-  const vw=window.innerWidth, vh=window.innerHeight, pad=10;
-  let x=ev.clientX+16, y=ev.clientY+16;
-  if(x+r.width>vw-pad) x=Math.max(pad, ev.clientX-r.width-16);
-  if(x<pad) x=pad;
-  if(y+r.height>vh-pad) y=Math.max(pad, ev.clientY-r.height-16);
-  if(y<pad) y=Math.min(pad, vh-r.height-pad<pad?pad:pad);
-  if(y+r.height>vh-pad) y=Math.max(pad, vh-r.height-pad);
-  tt.style.left=x+'px'; tt.style.top=y+'px';
+  const pad=8, gap=14;
+  const vw=window.innerWidth, vh=window.innerHeight;
+  const mx=(ev&&ev.clientX!=null)?ev.clientX:vw/2;
+  const my=(ev&&ev.clientY!=null)?ev.clientY:vh/2;
+  /* ölç */
+  tt.style.maxHeight=''; tt.style.left='-9999px'; tt.style.top='0px';
+  let r=tt.getBoundingClientRect();
+  const below=vh-my-gap-pad, above=my-gap-pad;
+  let h=r.height, top;
+  if(h<=below){ top=my+gap; }
+  else if(h<=above){ top=my-gap-h; }
+  else{
+    /* hiçbir yöne sığmıyor: en geniş alana yerleştir, içeriği kaydırılabilir yap */
+    const avail=Math.max(140, Math.min(vh-2*pad, Math.max(below,above)));
+    tt.style.maxHeight=avail+'px';
+    r=tt.getBoundingClientRect(); h=r.height;
+    top = (below>=above) ? my+gap : my-gap-h;
+  }
+  top=Math.max(pad, Math.min(top, vh-pad-h));
+  let left=mx+16;
+  if(left+r.width>vw-pad) left=mx-16-r.width;
+  left=Math.max(pad, Math.min(left, vw-pad-r.width));
+  tt.style.left=left+'px'; tt.style.top=top+'px';
 }
 function showTooltipFor(r,c,ev){
   cancelTooltipHide();
@@ -679,8 +810,9 @@ function registerPlayName(nv){
   if(!nv || isPremiereLabel(nv)) return;
   const {key} = parseGame(nv);
   if(key && !(state.plays||[]).includes(key)){
-    state.plays = state.plays||[];
-    state.plays.push(key);
+    state.playsExtra = state.playsExtra||[];
+    state.playsExtra.push(key);
+    applyCrew();
     buildOyunDatalist();
   }
 }
@@ -1000,9 +1132,18 @@ function showCtx(x,y,kind){
     b.onclick=()=>{ hideCtx(); it[1](); };
     el.appendChild(b);
   }
-  el.style.left=Math.min(x, window.innerWidth-220)+'px';
-  el.style.top=Math.min(y, window.innerHeight-el.scrollHeight-8)+'px';
+  /* Menüyü ekran içinde tut: taşarsa yukarı çevir, gerekirse kaydır */
+  const pad=8;
+  el.style.maxHeight='none'; el.style.overflowY='visible';
+  el.style.left='-9999px'; el.style.top='0px';
   el.classList.add('active');
+  const rr=el.getBoundingClientRect();
+  const vw=window.innerWidth, vh=window.innerHeight;
+  let h=rr.height;
+  if(h>vh-2*pad){ h=vh-2*pad; el.style.maxHeight=h+'px'; el.style.overflowY='auto'; }
+  let ty=y; if(ty+h>vh-pad) ty=y-h; ty=Math.max(pad, Math.min(ty, vh-h-pad));
+  let tx=x; if(tx+rr.width>vw-pad) tx=x-rr.width; tx=Math.max(pad, Math.min(tx, vw-rr.width-pad));
+  el.style.left=tx+'px'; el.style.top=ty+'px';
 }
 function hideCtx(){ document.getElementById('ctxmenu').classList.remove('active'); }
 document.addEventListener('click', e=>{ if(!e.target.closest('.ctxmenu')) hideCtx(); });
@@ -1129,7 +1270,7 @@ function renderPrint(){
   const wrap = document.getElementById('printView');
   const prev = document.getElementById('printPreview');
   const buildBlock = (m)=>{
-    let h = `<div class="print-month"><h2>${escapeHtml(m.name)}</h2><table class="sheet">`;
+    let h = `<div class="print-month"><div class="psWrap"><h2>${escapeHtml(m.name)}</h2><table class="sheet">`;
     for(let r=0;r<m.rows;r++){
       const cls = r===0 ? 'titleRow' : (r===1 ? 'stageHead' : (isMondayRow(m,r) ? 'monday' : ''));
       h += `<tr${cls?` class="${cls}"`:''}>`;
@@ -1165,14 +1306,52 @@ function renderPrint(){
     }
     h+='</table>';
     h+=`<div class="pageNum">${pageNum}</div>`;
-    h+='</div>';
+    h+='</div></div>';
     return h;
   };
   let pageNum = 0;
   const blocks = state.months.map(m=>{ pageNum++; return buildBlock(m); });
   wrap.innerHTML = blocks.join('');
   prev.innerHTML = blocks.join('<hr style="margin:14px 0;border:none;border-top:2px dashed var(--border)">');
+  fitPrintPages();
 }
+
+/* === Yazdırma/PDF: her ay tam olarak bir YATAY A4 sayfasını kaplar === */
+const A4L_W = (297-10)/25.4*96;   /* 5mm kenar boşluğu ile kullanılabilir genişlik (px) */
+const A4L_H = ((210-10)/25.4*96) * 0.93;   /* kullanılabilir yükseklik (px, güvenlik payı ile) */
+function fitPrintPages(){
+  const wrap = document.getElementById('printView');
+  if(!wrap) return;
+  const prevStyle = wrap.getAttribute('style') || '';
+  wrap.setAttribute('style','display:block;position:absolute;left:-20000px;top:0;width:'+(A4L_W*6)+'px');
+  wrap.querySelectorAll('.print-month').forEach(mo=>{
+    const ps = mo.querySelector('.psWrap');
+    if(!ps) return;
+    mo.style.width = A4L_W+'px'; mo.style.height='auto';
+    ps.style.transform='none';
+    /* Tabloyu, ölçeklendikten sonra sayfayı hem yatay hem düşey olarak
+       dolduracak genişliğe getir (W -> A4L_W*h(W)/A4L_H yakınsaması) */
+    let W = A4L_W;
+    for(let i=0;i<5;i++){
+      ps.style.width = W+'px';
+      const h = ps.getBoundingClientRect().height;
+      if(!h) break;
+      let Wn = A4L_W*h/A4L_H;
+      Wn = Math.max(A4L_W, Math.min(A4L_W*8, Wn));
+      if(Math.abs(Wn-W) < 2){ W = Wn; break; }
+      W = Wn;
+    }
+    ps.style.width = W+'px';
+    const h = ps.getBoundingClientRect().height;
+    let sc = A4L_W / W;
+    if(h*sc > A4L_H) sc = A4L_H / h;
+    ps.style.transform = 'scale('+sc+')';
+    mo.style.height = Math.floor(Math.min(A4L_H, h*sc))+'px';
+  });
+  wrap.setAttribute('style', prevStyle);
+}
+window.addEventListener('beforeprint', fitPrintPages);
+window.addEventListener('resize', ()=>{ try{ fitPrintPages(); }catch(e){} });
 
 /* === Excel (.xls / SpreadsheetML) dışa aktarım — gerçek Excel dosyası, renkler+birleşmelerle === */
 const XLS_HEAD = 'FFFF00';      // sarı (başlık / Pazartesi / tarih sütunu) — orijinal Excel'deki gibi saf sarı
@@ -1191,7 +1370,45 @@ function safeSheetName(name, used){
   used.add(n);
   return n;
 }
+/* Kırmızı (kritik) çakışmaları tara — varsa Excel'e dönüştürme engellenir */
+function findConflicts(){
+  const out=[];
+  for(const m of (state.months||[])){
+    for(let r=2;r<m.rows;r++){
+      const games = rowGames(m,r);
+      if(games.length<2) continue;
+      const cf = buildConflict(games);
+      if(!cf.hasCritical) continue;
+      for(const g of games){
+        const cell = m.cells[r+'_'+g.col] || {};
+        if(cell.ignoreConflict) continue;
+        const key = g.key;
+        if(!key || !PEOPLE_MAP[key]) continue;
+        const people = Object.entries(cf.people)
+          .filter(([pp,info]) => info.critical && PEOPLE_MAP[key][pp] && PEOPLE_MAP[key][pp].critical)
+          .map(([pp])=>pp);
+        if(people.length) out.push({month:m.name, date:dateTextOfRow(m,r), time:timeTextOfRow(m,r), game:g.raw, people});
+      }
+    }
+  }
+  return out;
+}
 function exportExcel(){
+  const cfs = findConflicts();
+  if(cfs.length){
+    const seen = new Set(); const lines=[];
+    for(const c of cfs){
+      const k = c.month+'|'+c.date+'|'+c.time;
+      if(seen.has(k)) continue; seen.add(k);
+      lines.push('• '+c.month+' — '+(c.date||'?')+(c.time?' / '+c.time:'')+' → '+Array.from(new Set(cfs.filter(x=>x.month===c.month&&x.date===c.date&&x.time===c.time).flatMap(x=>x.people))).join(', '));
+      if(lines.length>=12) break;
+    }
+    alert('⚠️ Kırmızı çakışma var — Excel dosyası oluşturulmadı.\n\n'+
+      lines.join('\n')+(cfs.length>12?'\n…':'')+
+      '\n\nÇakışmaları giderin veya ilgili hücrede sağ tık → "Çakışmayı yok say" seçeneğini kullanın.');
+    setStatus('Çakışma nedeniyle Excel oluşturulmadı.');
+    return;
+  }
   const styleCache = new Map(); // key -> styleId
   let styleSeq = 0;
   const styleDefs = [];
@@ -1259,7 +1476,12 @@ function exportExcel(){
     const colWidths = [];
     for(let c=0;c<m.cols;c++) colWidths.push(`<Column ss:Width="${c===0||c===m.cols-1?150:(c===1?55:170)}"/>`);
     sheetsXml += `<Worksheet ss:Name="${xmlEscape(sheetName)}"><Table ss:DefaultColumnWidth="80">${colWidths.join('')}${rowsXml}</Table>`+
-      `<WorksheetOptions xmlns="urn:schemas-microsoft-com:office:excel"><PageSetup><Layout x:Orientation="Landscape"/><PageMargins x:Bottom="0.3" x:Left="0.3" x:Right="0.3" x:Top="0.3"/></PageSetup><FitToPage/></WorksheetOptions></Worksheet>`;
+      `<WorksheetOptions xmlns="urn:schemas-microsoft-com:office:excel">`+
+      `<PageSetup><Layout x:Orientation="Landscape" x:CenterHorizontal="1" x:CenterVertical="1"/>`+
+      `<PageMargins x:Bottom="0.2" x:Left="0.2" x:Right="0.2" x:Top="0.2"/></PageSetup>`+
+      `<FitToPage/>`+
+      `<Print><ValidPrinterInfo/><PaperSizeIndex>9</PaperSizeIndex><Scale>100</Scale><FitWidth>1</FitWidth><FitHeight>1</FitHeight><HorizontalResolution>600</HorizontalResolution><VerticalResolution>600</VerticalResolution></Print>`+
+      `</WorksheetOptions></Worksheet>`;
   }
   const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<?mso-application progid="Excel.Sheet"?>\n<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet" xmlns:html="http://www.w3.org/TR/REC-html40">`+
     `<Styles>${styleDefs.join('')}</Styles>${sheetsXml}</Workbook>`;
@@ -1318,7 +1540,7 @@ function buildPlayDatalists(){
     if(el) el.innerHTML = [...new Set(vals.filter(Boolean))].sort((a,b)=>a.localeCompare(b,'tr'))
       .map(v=>`<option value="${escapeHtml(v)}">`).join('');
   };
-  dl('personelList', PERSONEL.map(p=>p.name));
+  dl('personelList', (state.crew||[]).map(c=>c.person).concat(PERSONEL.map(p=>p.name)));
   dl('kategoriList', (state.crew||[]).map(c=>c.category));
   dl('kisiList', (state.crew||[]).map(c=>c.person).concat(PERSONEL.map(p=>p.name)));
 }
@@ -1341,19 +1563,26 @@ function renderPlays(filter){
   /* üst istatistik şeridi */
   const people = new Set((state.crew||[]).map(c=>(c.person||'').trim()).filter(Boolean));
   const cats = new Set((state.crew||[]).map(c=>(c.category||'').trim()).filter(Boolean));
-  const prsLabel = personelState==='loading' ? '…' : (personelState==='err' ? '!' : PERSONEL.length);
+  const crewLabel = crewState==='loading' ? '…' : (crewState==='err' ? '!' : (state.crew||[]).length);
+  const pend = crewPendingCount();
   document.getElementById('plStats').innerHTML =
     `<div class="pl-stat"><div class="n">${allPlays.length}</div><div class="l">Oyun</div></div>
      <div class="pl-stat"><div class="n">${people.size}</div><div class="l">Kişi</div></div>
      <div class="pl-stat"><div class="n">${(state.crew||[]).length}</div><div class="l">Görev Kaydı</div></div>
      <div class="pl-stat"><div class="n">${cats.size}</div><div class="l">Kategori</div></div>
-     <div class="pl-stat" style="display:flex;flex-direction:column;justify-content:center">
-       <div class="n">${prsLabel}</div>
-       <div class="l">Program Personeli</div>
-       <button class="btn ghost small" id="prsReload" style="margin-top:4px">${personelState==='ok'?'Yenile':'Listeyi çek'}</button>
+     <div class="pl-stat" style="display:flex;flex-direction:column;justify-content:center;min-width:230px">
+       <div class="n">${crewLabel}</div>
+       <div class="l">${escapeHtml(CREW_SHEET)}</div>
+       <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">
+         <button class="btn ghost small" id="crewReload">${crewState==='ok'?'Yenile':'Listeyi çek'}</button>
+         <button class="btn small" id="crewSave" title="Site içi düzenlemeleri ${escapeHtml(CREW_SHEET)} sekmesine yapıştırmak için kopyala">Personeli sekmesine kaydet${pend?' ('+pend+')':''}</button>
+       </div>
+       <div class="l" style="margin-top:4px">${crewState==='err' ? 'Sekme verisi çekilemedi' : (crewState==='cache' ? 'Yerel kopya kullanılıyor' : (pend? pend+' bekleyen düzenleme' : 'Sekme ile eşit'))}</div>
      </div>`;
-  const rb = document.getElementById('prsReload');
-  if(rb) rb.onclick = ()=>loadPersonel(true);
+  const rb = document.getElementById('crewReload');
+  if(rb) rb.onclick = ()=>loadCrewSheet(true);
+  const sb = document.getElementById('crewSave');
+  if(sb) sb.onclick = saveCrewToSheet;
 
   /* sol liste */
   const list = document.getElementById('playsList');
@@ -1421,38 +1650,34 @@ function renderPlayDetail(byPlay){
         <button class="btn small" id="addCrewBtn">+ Ekle</button>
       </div>
       <div style="padding:6px 12px 10px;font-size:12px;color:var(--muted)">
-        ${personelState==='ok' ? `Ad Soyad alanı <b>${escapeHtml(PRS_SHEET)}</b> e-Tablo sayfasındaki ${PERSONEL.length} personeli önerir.`
-          : personelState==='err' ? 'Personel listesi çekilemedi — internet/e-Tablo erişimini kontrol edin.'
-          : 'Personel listesi henüz çekilmedi.'}
+        Kadro ve çakışma bilgisi <b>yalnızca ${escapeHtml(CREW_SHEET)}</b> e-Tablo sekmesinden gelir.
+        Buradaki düzenlemeler önce bu tarayıcıya kaydedilir; <b>Personeli sekmesine kaydet</b> ile sekmeye yapıştırabilirsiniz.
       </div>
     </div>`;
 
   /* inline düzenleme */
   box.querySelectorAll('.pl-row input').forEach(inp=>{
     inp.onchange = ()=>{
-      const c = state.crew[+inp.dataset.idx];
-      if(!c) return;
-      c[inp.dataset.f] = inp.value.trim();
-      rebuildPeopleMap(); saveState(); renderSheet(); renderPlays();
-      setStatus('Kadro güncellendi.');
+      crewEditField(+inp.dataset.idx, inp.dataset.f, inp.value.trim());
+      buildOyunDatalist(); renderSheet(); renderPrint(); renderPlays();
+      setStatus('Kadro güncellendi (yerel).');
     };
     inp.onkeydown = e=>{ if(e.key==='Enter') inp.blur(); };
   });
   box.querySelectorAll('[data-del]').forEach(b=>{
     b.onclick = ()=>{
-      state.crew.splice(+b.dataset.del,1);
-      rebuildPeopleMap(); saveState(); renderSheet(); renderPlays();
-      setStatus('Kayıt silindi.');
+      crewDeleteAt(+b.dataset.del);
+      renderSheet(); renderPrint(); renderPlays();
+      setStatus('Kayıt silindi (yerel).');
     };
   });
   const nameEl = document.getElementById('plName');
   const saveName = ()=>{
     const v = nameEl.textContent.trim();
     if(!v || v===p){ nameEl.textContent = p; return; }
-    state.plays = (state.plays||[]).map(x=>x===p?v:x);
-    (state.crew||[]).forEach(c=>{ if(c.play===p) c.play=v; });
+    crewRenamePlay(p, v);
     selectedPlay = v;
-    rebuildPeopleMap(); buildOyunDatalist(); saveState(); renderSheet(); renderPlays();
+    buildOyunDatalist(); renderSheet(); renderPrint(); renderPlays();
     setStatus('Oyun adı güncellendi.');
   };
   nameEl.onblur = saveName;
@@ -1465,10 +1690,9 @@ function renderPlayDetail(byPlay){
   };
   document.getElementById('plDelete').onclick = ()=>{
     if(!confirm(`"${p}" oyunu ve ekip listesi silinsin mi?`)) return;
-    state.plays = (state.plays||[]).filter(x=>x!==p);
-    state.crew = (state.crew||[]).filter(c=>c.play!==p);
+    crewDeletePlay(p);
     selectedPlay = null;
-    rebuildPeopleMap(); buildOyunDatalist(); saveState(); renderSheet(); renderPlays();
+    buildOyunDatalist(); renderSheet(); renderPrint(); renderPlays();
     setStatus('Oyun silindi.');
   };
   document.getElementById('addCrewBtn').onclick = ()=>{
@@ -1476,10 +1700,9 @@ function renderPlayDetail(byPlay){
     const role = document.getElementById('crewRole').value.trim();
     const person = document.getElementById('crewPerson').value.trim();
     if(!person){ alert('Ad Soyad zorunlu.'); return; }
-    state.crew = state.crew||[];
-    state.crew.push({play:p, category, role, person});
-    rebuildPeopleMap(); saveState(); renderSheet(); renderPlays();
-    setStatus('Kişi eklendi.');
+    crewAddRow({play:p, category, role, person});
+    renderSheet(); renderPrint(); renderPlays();
+    setStatus('Kişi eklendi (yerel).');
   };
 }
 
@@ -1563,11 +1786,11 @@ document.getElementById('addPlayBtn').onclick = ()=>{
   const inp = document.getElementById('newPlayName');
   const name = inp.value.trim();
   if(!name) return;
-  state.plays = state.plays||[];
-  if(!state.plays.includes(name)) state.plays.push(name);
+  state.playsExtra = state.playsExtra||[];
+  if(!state.playsExtra.includes(name)) state.playsExtra.push(name);
   inp.value='';
   selectedPlay = name;
-  saveState(); buildOyunDatalist(); renderPlays();
+  applyCrew(); saveState(); buildOyunDatalist(); renderPlays();
   setStatus('Oyun eklendi.');
 };
 document.getElementById('newPlayName').onkeydown = e=>{ if(e.key==='Enter') document.getElementById('addPlayBtn').click(); };
@@ -1596,6 +1819,7 @@ document.addEventListener('keydown', e=>{
 
 renderAll();
 renderPlays();
+loadCrewSheet();
 loadPersonel();
 initTooltipInteraction();
 initFullscreen();
@@ -1623,17 +1847,15 @@ setStatus('Hazır.');
       if(!silent) alert('İDT Repertuvar verisi bulunamadı.\n\nÖnce İDT Repertuvar sitesini (aynı adreste) açıp "Aylık Program" sekmesine girin; veri otomatik aktarılır.');
       return false;
     }
-    state.plays = state.plays || [];
-    state.crew  = state.crew  || [];
-    /* önceki repertuvar kayıtlarını temizle, elle eklenenler kalsın */
-    state.crew = state.crew.filter(c => c.src !== 'idt');
-    b.crew.forEach(c => state.crew.push({play:c.play, category:c.category, role:c.role, person:c.person, src:'idt'}));
-    (b.plays||[]).forEach(p => { if(!state.plays.includes(p)) state.plays.push(p); });
-    rebuildPeopleMap(); saveState(); buildOyunDatalist();
+    /* Kadro/çakışma verisi YALNIZCA "AYLIK PROGRAM PERSONELİ" sekmesinden gelir;
+       repertuvar köprüsünden sadece oyun adları alınır. */
+    state.playsExtra = state.playsExtra || [];
+    (b.plays||[]).forEach(p => { if(!state.playsExtra.includes(p)) state.playsExtra.push(p); });
+    applyCrew(); saveState(); buildOyunDatalist();
     renderPlays();
     renderSheet();
     stamp(b);
-    if(!silent) setStatus('İDT Repertuvar verisi çekildi (' + (b.plays||[]).length + ' oyun).');
+    if(!silent) setStatus('İDT Repertuvardan oyun adları alındı (' + (b.plays||[]).length + ' oyun). Kadro: ' + CREW_SHEET + '.');
     return true;
   }
   window.pullFromSite = pullFromSite;
@@ -1642,8 +1864,8 @@ setStatus('Hazır.');
     const el = document.getElementById('idtBridgeInfo');
     if(!el) return;
     el.innerHTML = b
-      ? 'Veri kaynağı: <b>İDT Repertuvar</b> · ' + (b.plays||[]).length + ' oyun · ' + (b.crew||[]).length +
-        ' kadro kaydı · son güncelleme ' + new Date(b.ts||Date.now()).toLocaleString('tr-TR')
+      ? 'Kadro kaynağı: <b>' + CREW_SHEET + '</b> · ' + (state.crew||[]).length + ' kadro kaydı · oyun adları: İDT Repertuvar (' +
+        (b.plays||[]).length + ') · son güncelleme ' + new Date(b.ts||Date.now()).toLocaleString('tr-TR')
       : 'İDT Repertuvar verisi henüz alınmadı.';
   }
 
