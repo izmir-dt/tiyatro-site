@@ -24428,13 +24428,20 @@ async function saveTurne() {
   if (programSatirlar.length && gecerliDuraklar.length) {
     gecerliDuraklar.forEach(function(dur) {
       var durSehir = dur.il + (dur.ilce ? '/' + dur.ilce : '');
-      var oyunGunSayisi = programSatirlar.filter(function(ps) {
+      var oyunGunleriBu = programSatirlar.filter(function(ps) {
         return (ps.sehir === dur.il || ps.sehir === durSehir) && ps.program === 'Oyun';
-      }).length;
+      });
+      // Çift seans (saat2 dolu) günler 2 temsil sayılır — durakToplamTemsil() ile aynı mantık
+      var oyunGunSayisi = oyunGunleriBu.reduce(function(s, ps){ return s + (ps.saat2 ? 2 : 1); }, 0);
       if (oyunGunSayisi > 0) dur.sayi = oyunGunSayisi;
     });
     duraklarJSON = JSON.stringify(gecerliDuraklar);
   }
+  // BUG FIX: "Temsil Sayısı" (sayi) daha önce, programSatirlar senkronundan ÖNCEKİ
+  // eski duraklar[].sayi değerleriyle hesaplanmıştı (satır ~24380). Senkron sonrası
+  // güncel duraklar[].sayi ile yeniden hesapla — Sheets'e yazılan "Temsil Sayısı"
+  // sütunu artık gerçek program satırlarıyla (ve çift seanslarla) uyumlu olacak.
+  sayi = gecerliDuraklar.reduce(function(s,d){ return s+(d.sayi||1); }, 0) || 1;
   // YENİ Sheets TURNE_KAYITLARI sütun sırası (41 eleman, 0-tabanlı) — Otel Rez No YOK:
   // [0-7]  oyun,il,basTarih,bitTarih,mekan,sayi,not,statu
   // [8-10] otelAdi,otelAdres,otelTel
@@ -34603,6 +34610,90 @@ function durakToplamTemsil(t) {
   }
   return t.sayi || 1;
 }
+
+// ============================================================
+// TOPLU DÜZELTME: "Temsil Sayısı" senkron hatası düzeltme aracı
+// ------------------------------------------------------------
+// SORUN: saveTurne() içinde "Temsil Sayısı" (sheet kolonu 5), programSatirlar
+// senkronundan ÖNCEKİ eski duraklar[].sayi değerleriyle hesaplanıyordu, bu yüzden
+// Sheets'teki "Temsil Sayısı" sütunu bazı kayıtlarda gerçek programdan geride kaldı.
+// Bu fonksiyon, mevcut tüm kayıtları tarar, her biri için gerçek temsil sayısını
+// (programSatirlar'daki "Oyun" günleri, çift seans=2 olacak şekilde) yeniden
+// hesaplar ve SADECE "Temsil Sayısı" (kolon 5) ile "Duraklar" (kolon 19)
+// sütunlarını Sheets'e yazar. Diğer hiçbir alana dokunmaz.
+//
+// KULLANIM: Siteyi aç, giriş yap, F12 ile konsolu aç, şunu yaz ve Enter'a bas:
+//   topluTemsilSayisiDuzelt()
+// ============================================================
+function _turneTemsilYenidenHesapla(t) {
+  var duraklar = (t.duraklar || []).map(function(d){ return Object.assign({}, d); });
+  if (t.programSatirlar && t.programSatirlar.length && duraklar.length) {
+    duraklar.forEach(function(dur) {
+      var durSehir = dur.il + (dur.ilce ? '/' + dur.ilce : '');
+      var oyunGunleriBu = t.programSatirlar.filter(function(ps) {
+        return (ps.sehir === dur.il || ps.sehir === durSehir) && ps.program === 'Oyun';
+      });
+      var oyunGunSayisi = oyunGunleriBu.reduce(function(s, ps){ return s + (ps.saat2 ? 2 : 1); }, 0);
+      if (oyunGunSayisi > 0) dur.sayi = oyunGunSayisi;
+    });
+  }
+  var toplam = duraklar.length
+    ? duraklar.reduce(function(s,d){ return s+(d.sayi||1); }, 0)
+    : (typeof durakToplamTemsil === 'function' ? durakToplamTemsil(t) : (t.sayi||1));
+  return { duraklar: duraklar, toplam: toplam || 1 };
+}
+
+async function topluTemsilSayisiDuzelt() {
+  var kayitlar = (window.turneler || []).filter(function(t){ return t.programSatirlar && t.programSatirlar.length; });
+  if (!kayitlar.length) { alert('Kontrol edilecek kayıt bulunamadı (programSatirlar boş).'); return; }
+  var onizleme = kayitlar
+    .map(function(t){ return { t: t, sonuc: _turneTemsilYenidenHesapla(t) }; })
+    .filter(function(x){ return x.sonuc.toplam !== x.t.sayi; });
+  if (!onizleme.length) {
+    alert('Kontrol edildi: ' + kayitlar.length + ' kayıt tarandı, hepsi zaten doğru. Düzeltilecek bir şey yok.');
+    return;
+  }
+  var ozet = onizleme.slice(0, 15).map(function(x){
+    return '• ' + (x.t.oyun||'(oyun yok)') + ' — ' + (x.t.baslangicTarih||'') + ' : ' + x.t.sayi + ' → ' + x.sonuc.toplam;
+  }).join('\n') + (onizleme.length > 15 ? '\n… ve ' + (onizleme.length - 15) + ' kayıt daha' : '');
+  if (!confirm(
+    onizleme.length + ' kayıtta "Temsil Sayısı" hatalı görünüyor. Aşağıdaki kayıtlar düzeltilecek ' +
+    '(SADECE Temsil Sayısı ve Duraklar sütunları güncellenir, başka hiçbir alan değişmez):\n\n' + ozet +
+    '\n\nDevam edilsin mi?'
+  )) return;
+
+  var duzeltildi = 0, hata = 0;
+  showToast(onizleme.length + ' kayıt düzeltiliyor…', 'info', 3000);
+  for (var i = 0; i < onizleme.length; i++) {
+    var t = onizleme[i].t, sonuc = onizleme[i].sonuc;
+    try {
+      var r1 = await apiFetch('/' + encodeURIComponent(TURNE_SHEET) + '/cell', {
+        method: 'PUT', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ row: t._rowIdx + 2, col: 5, value: String(sonuc.toplam) })
+      });
+      var r2 = await apiFetch('/' + encodeURIComponent(TURNE_SHEET) + '/cell', {
+        method: 'PUT', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ row: t._rowIdx + 2, col: 19, value: JSON.stringify(sonuc.duraklar) })
+      });
+      if (r1.ok && r2.ok) {
+        console.log('✓ ' + (t.oyun||'') + ' (' + t.baslangicTarih + '): ' + t.sayi + ' → ' + sonuc.toplam);
+        t.sayi = sonuc.toplam; t.duraklar = sonuc.duraklar;
+        duzeltildi++;
+      } else {
+        hata++; console.error('✗ Yazılamadı:', t.oyun, t.baslangicTarih);
+      }
+    } catch (e) {
+      hata++; console.error('✗ Hata:', t.oyun, t.baslangicTarih, e);
+    }
+    await new Promise(function(res){ setTimeout(res, 350); }); // API'yi yormamak için kısa bekleme
+  }
+  try { renderListe(); } catch(e){}
+  try { _cacheYaz('cache_turneler', window.turneler); } catch(e){}
+  var mesaj = duzeltildi + ' kayıt düzeltildi' + (hata ? ', ' + hata + ' kayıtta hata oluştu (konsola bak)' : '');
+  showToast(mesaj, hata ? 'error' : 'success', 6000);
+  console.log('TOPLU TEMSİL SAYISI DÜZELTME TAMAMLANDI — Düzeltilen:', duzeltildi, 'Hata:', hata);
+}
+window.topluTemsilSayisiDuzelt = topluTemsilSayisiDuzelt;
 
 // ============================================================
 // TURNE PROGRAMI
