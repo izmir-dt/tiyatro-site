@@ -16688,8 +16688,9 @@ function sezonDetayIstatistik(sezon) {
         if (ilAdi) { artir(ilMap, ilAdi, artis); illerBuTurne[ilAdi] = 1; }
       });
     } else if (t.duraklar && t.duraklar.length) {
-      t.duraklar.forEach(function(d) {
-        var artis = +d.sayi || 1;
+      var _dg = (typeof durakTemsilDagilimi === 'function') ? durakTemsilDagilimi(t) : [];
+      t.duraklar.forEach(function(d, _di) {
+        var artis = (_dg[_di] !== undefined) ? _dg[_di] : (+d.sayi || 1);
         var oyunAdi = (d.oyun || t.oyun || '').trim();
         var ilAdi = (d.il || '').replace(/\/MERKEZ/gi, '').split('/')[0].trim().toLocaleUpperCase('tr');
         if (oyunAdi) { artir(oyunMap, oyunAdi, artis); oyunlarBuTurne[oyunAdi] = 1; }
@@ -18313,7 +18314,14 @@ function _renderCardDetail(rowIdx) {
       _byCityT[kFull] = (_byCityT[kFull]||0) + ekle;
     });
   })();
-  function _durakTemsil(d){
+  var _dagitim = (typeof durakTemsilDagilimi === 'function') ? durakTemsilDagilimi(t) : [];
+  function _durakTemsil(d, _i){
+    // Canonical: dağıtım dizisi toplam ile birebir tutar
+    if (_dagitim.length && typeof _i === 'number' && _dagitim[_i] !== undefined) {
+      var ilNormC = (typeof _normIlAdi === 'function') ? _normIlAdi(d.il||'') : (d.il||'').toLowerCase().trim();
+      if (_ykCityCut(ilNormC)) return 0;
+      return _dagitim[_i];
+    }
     var kIl = temizIl(d.il||'').toUpperCase();
     var kFull = (d.ilce && d.ilce.trim() && d.ilce.toLowerCase()!=='merkez')
       ? (kIl + '/' + d.ilce.toLocaleUpperCase('tr-TR'))
@@ -18329,11 +18337,11 @@ function _renderCardDetail(rowIdx) {
 
   // Şehir / Sahne
   bilgiHtml += secBaslik('Şehir / Sahne');
-  bilgiHtml += durakListeSS.map(function(d){
+  bilgiHtml += durakListeSS.map(function(d, _di){
     var ilTxt  = temizIl(d.il||'—');
     var ilceTxt= (d.ilce && d.ilce.toLowerCase()!=='merkez') ? '<span style="font-size:11px;color:var(--muted-foreground)"> / '+d.ilce+'</span>' : '';
     var oyunTxt= (d.oyun && d.oyun!==t.oyun) ? ' <span style="font-size:11px;font-weight:700;color:var(--primary)">'+d.oyun+'</span>' : '';
-    var temsil = _durakTemsil(d);
+    var temsil = _durakTemsil(d, _di);
     return '<div style="padding:8px 0;border-bottom:1px solid var(--border)">'
       + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">'
       +   '<div style="font-size:13px;font-weight:800;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + ilTxt + ilceTxt + oyunTxt + '</div>'
@@ -18354,10 +18362,10 @@ function _renderCardDetail(rowIdx) {
     + '<div style="display:grid;grid-template-columns:90px 1fr;padding:7px 0">'
     +   '<span style="font-size:11px;font-weight:700;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.4px;padding-top:2px;line-height:1.4">Temsil</span>'
     +   '<span style="font-size:12px;line-height:1.45">' + toplamT + ' temsil'
-    +     (durakListeSS.length>1 ? ' <span style="font-size:11px;color:var(--muted-foreground)">('+durakListeSS.map(function(d){
+    +     (durakListeSS.length>1 ? ' <span style="font-size:11px;color:var(--muted-foreground)">('+durakListeSS.map(function(d, _dIdx){
         var lbl = temizIl(d.il||'');
         if (d.ilce && d.ilce.trim() && d.ilce.toLowerCase()!=='merkez') lbl += '/'+d.ilce;
-        return lbl+':'+_durakTemsil(d);
+        return lbl+':'+_durakTemsil(d, _dIdx);
       }).join(', ')+')</span>' : '')
     +   '</span>'
     + '</div>'
@@ -24424,24 +24432,17 @@ async function saveTurne() {
   var _katMevcut = editIdx !== '' ? (turneler.find(x=>x._rowIdx===parseInt(editIdx))||{}).katilimcilar : null;
   var katJSON = JSON.stringify(_katMevcut !== null && _katMevcut !== undefined ? _katMevcut : (kisiModalSecili || []));
   var programSatirlarJSON = programSatirlar.length ? JSON.stringify(programSatirlar) : '';
-  // Uyarı4 düzeltmesi: programSatirlar elle değiştirildiyse duraklar[].sayi'yı güncelle
+  // Temsil sayımı: programSatirlar tek kaynak. Çift temsil (saat2) = 2 sayılır,
+  // şehir eşlemesi Türkçe/büyük-küçük harf duyarsız normalize ile yapılır.
   if (programSatirlar.length && gecerliDuraklar.length) {
-    gecerliDuraklar.forEach(function(dur) {
-      var durSehir = dur.il + (dur.ilce ? '/' + dur.ilce : '');
-      var oyunGunleriBu = programSatirlar.filter(function(ps) {
-        return (ps.sehir === dur.il || ps.sehir === durSehir) && ps.program === 'Oyun';
-      });
-      // Çift seans (saat2 dolu) günler 2 temsil sayılır — durakToplamTemsil() ile aynı mantık
-      var oyunGunSayisi = oyunGunleriBu.reduce(function(s, ps){ return s + (ps.saat2 ? 2 : 1); }, 0);
-      if (oyunGunSayisi > 0) dur.sayi = oyunGunSayisi;
+    var _dgSave = durakTemsilDagilimi({ duraklar: gecerliDuraklar, programSatirlar: programSatirlar });
+    gecerliDuraklar.forEach(function(dur, _di) {
+      if (_dgSave[_di] !== undefined && _dgSave[_di] > 0) dur.sayi = _dgSave[_di];
     });
     duraklarJSON = JSON.stringify(gecerliDuraklar);
+    var _toplamSave = _dgSave.reduce(function(a,b){ return a+b; }, 0);
+    if (_toplamSave > 0) sayi = _toplamSave;
   }
-  // BUG FIX: "Temsil Sayısı" (sayi) daha önce, programSatirlar senkronundan ÖNCEKİ
-  // eski duraklar[].sayi değerleriyle hesaplanmıştı (satır ~24380). Senkron sonrası
-  // güncel duraklar[].sayi ile yeniden hesapla — Sheets'e yazılan "Temsil Sayısı"
-  // sütunu artık gerçek program satırlarıyla (ve çift seanslarla) uyumlu olacak.
-  sayi = gecerliDuraklar.reduce(function(s,d){ return s+(d.sayi||1); }, 0) || 1;
   // YENİ Sheets TURNE_KAYITLARI sütun sırası (41 eleman, 0-tabanlı) — Otel Rez No YOK:
   // [0-7]  oyun,il,basTarih,bitTarih,mekan,sayi,not,statu
   // [8-10] otelAdi,otelAdres,otelTel
@@ -34565,6 +34566,68 @@ function durakIllerListesi(t) {
   return t.il ? [t.il] : [];
 }
 
+// ============================================================
+// TEMSİL SAYIMI — TEK KAYNAK (canonical)
+// programSatirlar'daki "Oyun" satırları tek doğru kaynaktır.
+// Çift temsil (saat2 dolu) = 2 temsil sayılır.
+// Duraklara dağıtım kronolojik blok eşlemesi ile yapılır; böylece
+// şehir bazlı döküm HER ZAMAN toplam ile birebir tutar.
+// ============================================================
+function _temsilNormSehir(x) {
+  var c = (x || '').split('/')[0].trim();
+  if (typeof _normIlAdi === 'function') { try { return _normIlAdi(c); } catch(e) {} }
+  return c.toLocaleLowerCase('tr').trim();
+}
+function _temsilBloklari(t) {
+  var ps = (t && t.programSatirlar) || [];
+  var out = [], prev = null;
+  ps.forEach(function(s) {
+    if (!s || s.program !== 'Oyun') { prev = null; return; }
+    var norm = _temsilNormSehir(s.sehir);
+    var add = s.saat2 ? 2 : 1;
+    if (prev && prev.norm === norm) { prev.count += add; }
+    else { prev = { norm: norm, count: add }; out.push(prev); }
+  });
+  return out;
+}
+function durakTemsilDagilimi(t) {
+  var duraklar = (t && t.duraklar && t.duraklar.length)
+    ? t.duraklar
+    : ((t && t.il) ? [{ il: t.il, ilce: t.ilce || '', sayi: t.sayi || 1 }] : []);
+  var bloklar = _temsilBloklari(t);
+  if (!duraklar.length) return [];
+  if (!bloklar.length) {
+    return duraklar.map(function(d) { return parseInt(d.sayi || d.temsil || d.temsilSayisi || 1, 10) || 1; });
+  }
+  var res = duraklar.map(function() { return null; });
+  if (bloklar.length === duraklar.length) {
+    return bloklar.map(function(b) { return b.count; });
+  }
+  var kalan = [];
+  bloklar.forEach(function(b) {
+    var i = -1;
+    for (var k = 0; k < duraklar.length; k++) {
+      if (res[k] !== null) continue;
+      if (_temsilNormSehir(duraklar[k].il) === b.norm) { i = k; break; }
+    }
+    if (i >= 0) res[i] = b.count; else kalan.push(b.count);
+  });
+  var bosIdx = [];
+  res.forEach(function(v, i) { if (v === null) bosIdx.push(i); });
+  if (kalan.length) {
+    if (bosIdx.length) {
+      kalan.forEach(function(c, j) {
+        var hedef = bosIdx[Math.min(j, bosIdx.length - 1)];
+        res[hedef] = (res[hedef] || 0) + c;
+      });
+    } else {
+      var son = res.length - 1;
+      kalan.forEach(function(c) { res[son] += c; });
+    }
+  }
+  return res.map(function(v) { return v === null ? 0 : v; });
+}
+
 function durakToplamTemsil(t) {
   // ── Yarıda Kesildi: gerçekten yapılan temsil sayısı (kesilen şehre/sonrasına gidilmedi) ──
   if (t && (t.statu||'') === 'yarida-kesildi') {
@@ -34606,94 +34669,10 @@ function durakToplamTemsil(t) {
   }
   // programSatirlar yoksa lojistik adımındaki sayi alanına dön
   if (t.duraklar && t.duraklar.length) {
-    return t.duraklar.reduce(function(s,d){ return s+(d.sayi||1); },0);
+    return durakTemsilDagilimi(t).reduce(function(s,n){ return s+n; },0);
   }
   return t.sayi || 1;
 }
-
-// ============================================================
-// TOPLU DÜZELTME: "Temsil Sayısı" senkron hatası düzeltme aracı
-// ------------------------------------------------------------
-// SORUN: saveTurne() içinde "Temsil Sayısı" (sheet kolonu 5), programSatirlar
-// senkronundan ÖNCEKİ eski duraklar[].sayi değerleriyle hesaplanıyordu, bu yüzden
-// Sheets'teki "Temsil Sayısı" sütunu bazı kayıtlarda gerçek programdan geride kaldı.
-// Bu fonksiyon, mevcut tüm kayıtları tarar, her biri için gerçek temsil sayısını
-// (programSatirlar'daki "Oyun" günleri, çift seans=2 olacak şekilde) yeniden
-// hesaplar ve SADECE "Temsil Sayısı" (kolon 5) ile "Duraklar" (kolon 19)
-// sütunlarını Sheets'e yazar. Diğer hiçbir alana dokunmaz.
-//
-// KULLANIM: Siteyi aç, giriş yap, F12 ile konsolu aç, şunu yaz ve Enter'a bas:
-//   topluTemsilSayisiDuzelt()
-// ============================================================
-function _turneTemsilYenidenHesapla(t) {
-  var duraklar = (t.duraklar || []).map(function(d){ return Object.assign({}, d); });
-  if (t.programSatirlar && t.programSatirlar.length && duraklar.length) {
-    duraklar.forEach(function(dur) {
-      var durSehir = dur.il + (dur.ilce ? '/' + dur.ilce : '');
-      var oyunGunleriBu = t.programSatirlar.filter(function(ps) {
-        return (ps.sehir === dur.il || ps.sehir === durSehir) && ps.program === 'Oyun';
-      });
-      var oyunGunSayisi = oyunGunleriBu.reduce(function(s, ps){ return s + (ps.saat2 ? 2 : 1); }, 0);
-      if (oyunGunSayisi > 0) dur.sayi = oyunGunSayisi;
-    });
-  }
-  var toplam = duraklar.length
-    ? duraklar.reduce(function(s,d){ return s+(d.sayi||1); }, 0)
-    : (typeof durakToplamTemsil === 'function' ? durakToplamTemsil(t) : (t.sayi||1));
-  return { duraklar: duraklar, toplam: toplam || 1 };
-}
-
-async function topluTemsilSayisiDuzelt() {
-  var kayitlar = (window.turneler || []).filter(function(t){ return t.programSatirlar && t.programSatirlar.length; });
-  if (!kayitlar.length) { alert('Kontrol edilecek kayıt bulunamadı (programSatirlar boş).'); return; }
-  var onizleme = kayitlar
-    .map(function(t){ return { t: t, sonuc: _turneTemsilYenidenHesapla(t) }; })
-    .filter(function(x){ return x.sonuc.toplam !== x.t.sayi; });
-  if (!onizleme.length) {
-    alert('Kontrol edildi: ' + kayitlar.length + ' kayıt tarandı, hepsi zaten doğru. Düzeltilecek bir şey yok.');
-    return;
-  }
-  var ozet = onizleme.slice(0, 15).map(function(x){
-    return '• ' + (x.t.oyun||'(oyun yok)') + ' — ' + (x.t.baslangicTarih||'') + ' : ' + x.t.sayi + ' → ' + x.sonuc.toplam;
-  }).join('\n') + (onizleme.length > 15 ? '\n… ve ' + (onizleme.length - 15) + ' kayıt daha' : '');
-  if (!confirm(
-    onizleme.length + ' kayıtta "Temsil Sayısı" hatalı görünüyor. Aşağıdaki kayıtlar düzeltilecek ' +
-    '(SADECE Temsil Sayısı ve Duraklar sütunları güncellenir, başka hiçbir alan değişmez):\n\n' + ozet +
-    '\n\nDevam edilsin mi?'
-  )) return;
-
-  var duzeltildi = 0, hata = 0;
-  showToast(onizleme.length + ' kayıt düzeltiliyor…', 'info', 3000);
-  for (var i = 0; i < onizleme.length; i++) {
-    var t = onizleme[i].t, sonuc = onizleme[i].sonuc;
-    try {
-      var r1 = await apiFetch('/' + encodeURIComponent(TURNE_SHEET) + '/cell', {
-        method: 'PUT', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ row: t._rowIdx + 2, col: 5, value: String(sonuc.toplam) })
-      });
-      var r2 = await apiFetch('/' + encodeURIComponent(TURNE_SHEET) + '/cell', {
-        method: 'PUT', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ row: t._rowIdx + 2, col: 19, value: JSON.stringify(sonuc.duraklar) })
-      });
-      if (r1.ok && r2.ok) {
-        console.log('✓ ' + (t.oyun||'') + ' (' + t.baslangicTarih + '): ' + t.sayi + ' → ' + sonuc.toplam);
-        t.sayi = sonuc.toplam; t.duraklar = sonuc.duraklar;
-        duzeltildi++;
-      } else {
-        hata++; console.error('✗ Yazılamadı:', t.oyun, t.baslangicTarih);
-      }
-    } catch (e) {
-      hata++; console.error('✗ Hata:', t.oyun, t.baslangicTarih, e);
-    }
-    await new Promise(function(res){ setTimeout(res, 350); }); // API'yi yormamak için kısa bekleme
-  }
-  try { renderListe(); } catch(e){}
-  try { _cacheYaz('cache_turneler', window.turneler); } catch(e){}
-  var mesaj = duzeltildi + ' kayıt düzeltildi' + (hata ? ', ' + hata + ' kayıtta hata oluştu (konsola bak)' : '');
-  showToast(mesaj, hata ? 'error' : 'success', 6000);
-  console.log('TOPLU TEMSİL SAYISI DÜZELTME TAMAMLANDI — Düzeltilen:', duzeltildi, 'Hata:', hata);
-}
-window.topluTemsilSayisiDuzelt = topluTemsilSayisiDuzelt;
 
 // ============================================================
 // TURNE PROGRAMI
@@ -38800,11 +38779,13 @@ setTimeout(_turBoot, 4000);
     // Önce t.duraklar[] dizisine bak (yeni yapı), yoksa tekli t.il/t.mekan'a düş
     var _sehirRows = [];
     if(t.duraklar && t.duraklar.length) {
-      t.duraklar.filter(function(d){ return d.il; }).forEach(function(d){
+      var _dgB = (typeof durakTemsilDagilimi === 'function') ? durakTemsilDagilimi(t) : [];
+      t.duraklar.forEach(function(d, _di){
+        if (!d.il) return;
         _sehirRows.push({
           sehir: trCap(d.il || ''),
           mekan: d.mekan || '',
-          temsil: parseInt(d.sayi || d.temsil || d.temsilSayisi || 1, 10) || 1
+          temsil: (_dgB[_di] !== undefined) ? _dgB[_di] : (parseInt(d.sayi || d.temsil || d.temsilSayisi || 1, 10) || 1)
         });
       });
     }
