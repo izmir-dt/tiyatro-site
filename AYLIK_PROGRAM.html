@@ -1,0 +1,1416 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<title>İzmir Devlet Tiyatrosu — Aylık Program</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Manrope:wght@400;500;600;700&family=Barlow+Semi+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#faf7f2;--ink:#1a0f0a;--primary:#6b1220;--accent:#b8892b;
+  --border:#c9b98f;--muted:#7a6a58;--sel:#ffe08a;--selBorder:#b8892b;
+  --head:#ffff00;              /* saf sarı — orijinal Excel dosyasındaki başlık/Pazartesi rengi */
+  --headInk:#000;
+  --dateBg:#fff59d;            /* açık sarı hafta sonu tarih hücresi */
+  --weekendBg:#fff59d;         /* açık sarı hafta sonu satırı */
+  --premiere:#d00000;
+  --conflict:#ff4d4d;
+  --turne:#d00000;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;font-family:'Manrope',system-ui,sans-serif;background:var(--bg);color:var(--ink)}
+header{background:var(--primary);color:#fff;padding:12px 18px;display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+header h1{margin:0;font-family:'Fraunces',Georgia,serif;font-size:20px;font-weight:700}
+nav{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto}
+nav button{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.35);padding:6px 12px;border-radius:6px;cursor:pointer;font-size:13px;font-family:inherit}
+nav button.active{background:var(--accent);border-color:var(--accent)}
+main{padding:12px 18px 40px}
+section{display:none}
+section.active{display:block}
+.controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+.controls .group{display:flex;gap:4px;align-items:center;padding:4px 8px;background:#fff;border:1px solid var(--border);border-radius:6px}
+.controls .group b{font-size:11px;text-transform:uppercase;color:var(--muted);letter-spacing:.5px;margin-right:4px}
+select,input[type=text],button.btn{padding:5px 9px;border:1px solid var(--border);border-radius:5px;background:#fff;font-size:13px;font-family:inherit}
+button.btn{background:var(--primary);color:#fff;border:none;cursor:pointer}
+button.btn.outline{background:#fff;color:var(--primary);border:1px solid var(--primary)}
+button.btn.small{padding:4px 8px;font-size:12px}
+button.btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--border)}
+button.btn.ghost:hover{background:#f0e6d2}
+h2{font-family:'Fraunces',Georgia,serif;color:var(--primary);margin:6px 0 8px;font-size:22px}
+h3{font-family:'Fraunces',Georgia,serif;color:var(--primary);margin:0 0 6px}
+
+/* Program table (spreadsheet look) */
+.tbl-wrap{overflow:auto;background:#fff;border:1px solid #000;max-height:76vh}
+table.sheet{border-collapse:collapse;font-family:'Barlow Semi Condensed','Manrope',system-ui,sans-serif;font-size:13.5px;letter-spacing:.1px;table-layout:fixed;print-color-adjust:exact;-webkit-print-color-adjust:exact}
+table.sheet th,table.sheet td{border:1px solid #000;padding:3px 5px;vertical-align:middle;text-align:center;overflow:hidden;position:relative;font-weight:500}
+table.sheet td.hdr{background:var(--head);color:var(--headInk);font-weight:700;font-size:11px;user-select:none;cursor:pointer}
+table.sheet td.hdr.corner{background:#e2d6b8}
+table.sheet td.rowh{background:#efe6d5;font-weight:700;font-size:11px;width:34px;color:#000;user-select:none;cursor:pointer}
+table.sheet td.cell{min-width:80px;height:26px}
+
+/* Sarı üst şerit: başlık ve ay adı sütunları (kurum başlığı satırı + tarih tekrarı) */
+table.sheet tr.titleRow td{background:var(--head);color:var(--headInk);font-family:'Fraunces',Georgia,serif;font-weight:700;font-size:14px}
+
+/* Sağdaki/soldaki tarih sütununu her zaman sarı boya */
+table.sheet td.dateCol{background:var(--head);color:var(--headInk);font-weight:700}
+
+/* Pazartesi satırları: tüm sütunlar sarı zemin (oyun yok, tam sarı şerit) — hafta sonu (Cmt/Paz) sarı vurgusu YOK */
+table.sheet tr.monday td{background:var(--head);color:var(--headInk);font-weight:700}
+
+/* Manuel hücre biçimlendirme (sağ tık / araç çubuğu ile) inline style ile uygulanır ve önceliklidir */
+table.sheet td.cell[style*="background"]{ }
+
+/* Alt sahne başlığı satırı (KARŞIYAKA / BKSM / URLA / TURNE) — sarı */
+table.sheet tr.stageHead td{background:var(--head);color:var(--headInk);font-weight:700}
+
+/* Prömiyer */
+table.sheet td.cell.premiere{color:var(--premiere);font-weight:700}
+table.sheet td.cell.premiere::before{content:"★ ";color:var(--premiere)}
+
+/* Turne metni kırmızı */
+table.sheet td.cell.turne{color:var(--turne);font-weight:700}
+
+/* Çakışma: hücre kırmızı zemin */
+table.sheet td.cell.conflict{background:var(--conflict) !important;color:#fff;font-weight:700}
+
+/* Seçim */
+table.sheet td.cell.selected{background:var(--sel);outline:2px solid var(--selBorder);outline-offset:-2px;z-index:2}
+table.sheet td.cell.anchor{outline:3px solid var(--primary);outline-offset:-3px;z-index:3}
+table.sheet td.cell[contenteditable=true]{background:#fffbe8;outline:2px solid var(--primary);text-align:left}
+table.sheet td.cell.note-mark::after{content:"";position:absolute;top:0;right:0;border-top:6px solid var(--accent);border-left:6px solid transparent}
+
+/* Context menu */
+.ctxmenu{position:fixed;z-index:9999;background:#fff;border:1px solid var(--border);border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.18);min-width:200px;display:none;font-size:13px;padding:4px 0}
+.ctxmenu.active{display:block}
+.ctxmenu button{display:block;width:100%;text-align:left;padding:6px 12px;background:none;border:none;cursor:pointer;font-size:13px;font-family:inherit;color:var(--ink)}
+.ctxmenu button:hover{background:#f5ecd6}
+.ctxmenu .sep{height:1px;background:var(--border);margin:4px 0}
+
+/* Modal */
+.modal-back{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:2000;padding:16px}
+.modal-back.active{display:flex}
+.modal{background:#fff;border-radius:10px;padding:20px;max-width:460px;width:100%;max-height:90vh;overflow:auto}
+.modal label{display:block;font-weight:600;font-size:13px;margin:8px 0 4px;color:var(--primary)}
+.modal input,.modal select{width:100%}
+.modal .row{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+
+/* Tooltip */
+#tooltip{position:fixed;z-index:100000;max-width:min(420px,92vw);max-height:min(70vh,560px);overflow:auto;background:#1a0f0a;color:#fff;padding:10px 12px;border-radius:8px;font-size:12.5px;line-height:1.5;box-shadow:0 10px 34px rgba(0,0,0,.45);display:none;pointer-events:none;white-space:pre-wrap;font-family:'Manrope',system-ui,sans-serif}
+#tooltip .ttHead{font-weight:700;font-size:13px;margin-bottom:4px}
+#tooltip .ttWarn{color:#ffb4b4;font-weight:700}
+#tooltip .ttOk{color:#b4ffb4;font-weight:700}
+#tooltip .ttGame{color:#ffd400}
+#tooltip hr{border:none;border-top:1px solid #444;margin:6px 0}
+
+/* Plays */
+details{background:#fff;border:1px solid var(--border);border-radius:6px;padding:8px 12px;margin-bottom:8px}
+details summary{cursor:pointer;font-weight:600;color:var(--primary);font-family:'Fraunces',Georgia,serif}
+.crew-list{margin:6px 0 0;padding-left:18px;font-size:13px;columns:2;column-gap:24px}
+.crew-list li{margin:2px 0;break-inside:avoid}
+.cat{color:var(--accent);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.4px}
+
+.status{font-size:11px;color:var(--muted);margin-left:6px}
+
+/* Print — YATAY (görseldeki renkler ekranla aynı) */
+@media print{
+  @page{size:A4 landscape;margin:5mm}
+  header,nav,.controls,#tooltip,.ctxmenu,.modal-back,.tbl-wrap{display:none !important}
+  section{display:none !important}
+  body{background:#fff}
+  #printView{display:block !important}
+  .print-month{page-break-after:always;margin-bottom:0}
+  .print-month:last-child{page-break-after:auto}
+  .print-month h2{margin:0 0 4px;font-size:16px;text-align:center}
+  .print-month table.sheet{width:100%;font-family:'Barlow Semi Condensed',sans-serif;font-size:9px;print-color-adjust:exact;-webkit-print-color-adjust:exact}
+  .print-month table.sheet td{padding:2px 3px;height:auto}
+  .print-month table.sheet td.rowh,.print-month table.sheet td.hdr.corner,.print-month table.sheet td.hdr{display:none}
+  .print-month table.sheet td.dateCol{background:var(--head) !important}
+  .print-month table.sheet tr.titleRow td,.print-month table.sheet tr.stageHead td,.print-month table.sheet tr.monday td{background:var(--head) !important;color:#000 !important}
+  .print-month table.sheet td.cell.premiere{color:var(--premiere) !important}
+  .print-month table.sheet td.cell.turne{color:var(--turne) !important}
+  .print-month table.sheet td.cell.conflict{background:var(--conflict) !important;color:#fff !important}
+  .print-month .pageNum{text-align:center;font-size:11px;margin-top:6px;color:#000}
+}
+#printView{display:none}
+.pageNum{text-align:center;font-size:11px;margin-top:6px;color:var(--muted)}
+</style>
+</head>
+<body>
+<header>
+  <h1>İzmir Devlet Tiyatrosu — Aylık Program</h1>
+  <nav id="tabbar">
+    <button data-tab="program" class="active">Aylık Program</button>
+    <button data-tab="plays">Oyunlar &amp; Oyuncular</button>
+    <button data-tab="print">Yatay Yazdır</button>
+  </nav>
+</header>
+
+<main>
+<section id="program" class="active">
+  <div class="controls">
+    <div class="group">
+      <b>Ay</b>
+      <select id="monthSel"></select>
+      <button class="btn ghost small" id="renameMonth">Yeniden adlandır</button>
+      <button class="btn ghost small" id="addMonth" title="Yeni ay oluştur (Cumartesi 2 satır otomatik)">+ Ay</button>
+      <button class="btn ghost small" id="delMonth">Ay sil</button>
+    </div>
+    <div class="group">
+      <b>Hücre</b>
+      <button class="btn ghost small" id="mergeBtn" title="Seçili hücreleri birleştir">Birleştir</button>
+      <button class="btn ghost small" id="unmergeBtn" title="Birleşmeyi ayır">Ayır</button>
+      <button class="btn ghost small" id="premBtn" title="Prömiyer işareti">Prömiyer ★</button>
+      <button class="btn ghost small" id="clearBtn" title="İçeriği sil (Delete)">Temizle</button>
+    </div>
+    <div class="group">
+      <b>Biçim</b>
+      <button class="btn ghost small" id="bgColorBtn" title="Seçili hücrelere zemin rengi uygula">Zemin Rengi</button>
+      <button class="btn ghost small" id="fgColorBtn" title="Seçili hücrelere yazı rengi uygula">Yazı Rengi</button>
+      <button class="btn ghost small" id="boldBtn" title="Kalın yazı (aç/kapat)">Kalın</button>
+      <button class="btn ghost small" id="fmtClearBtn" title="Sadece renk/kalın biçimini temizle (metni silmez)">Temizle</button>
+      <input type="color" id="bgColorPicker" value="#ffe600" style="display:none">
+      <input type="color" id="fgColorPicker" value="#d00000" style="display:none">
+    </div>
+    <div class="group">
+      <b>Satır</b>
+      <button class="btn ghost small" id="rowAbove">Üste ekle</button>
+      <button class="btn ghost small" id="rowBelow">Alta ekle</button>
+      <button class="btn ghost small" id="rowDel">Sil</button>
+    </div>
+    <div class="group">
+      <b>Sütun</b>
+      <button class="btn ghost small" id="colLeft">Sola ekle</button>
+      <button class="btn ghost small" id="colRight">Sağa ekle</button>
+      <button class="btn ghost small" id="colDel">Sil</button>
+    </div>
+    <div class="group">
+      <button class="btn ghost small" id="undoBtn" title="Ctrl+Z">↶ Geri al</button>
+      <button class="btn ghost small" id="redoBtn" title="Ctrl+Y">↷ Yinele</button>
+    </div>
+    <div class="group">
+      <button class="btn ghost small" onclick="window.print()">Yatay Yazdır</button>
+      <button class="btn ghost small" id="expExcel" title="Excel (.xls) olarak indir — tüm aylar, renkler ve birleştirmelerle">Excel İndir</button>
+      <button class="btn ghost small" id="expJson">JSON indir</button>
+      <button class="btn ghost small" id="impJson">JSON yükle</button>
+      <button class="btn ghost small" id="resetBtn" title="Kayıtlı yerel veriyi silip başlangıç verisine dön">Sıfırla</button>
+      <input type="file" id="impFile" accept=".json" style="display:none">
+    </div>
+    <span class="status" id="status">Yükleniyor…</span>
+  </div>
+  <h2 id="monthTitle"></h2>
+  <div class="tbl-wrap"><table class="sheet" id="sheet"></table></div>
+  <p style="font-size:12px;color:var(--muted);margin-top:8px">
+    <b>Kısayollar:</b> Tıkla → seç · Shift+Tıkla → aralık · Çift tıkla → yaz · Enter/Esc · Delete → temizle · Ctrl+C/V · Ctrl+Z/Y · Sağ tık → menü · Oyunun üzerine gel → çakışma bilgisi
+  </p>
+</section>
+
+<section id="plays">
+  <div class="controls">
+    <input id="playSearch" placeholder="Oyun veya kişi ara..." style="min-width:280px">
+  </div>
+  <div class="controls" style="margin-top:6px">
+    <div class="group">
+      <b>Yeni Oyun</b>
+      <input type="text" id="newPlayName" placeholder="Oyun adı" style="min-width:180px">
+      <button class="btn ghost small" id="addPlayBtn">+ Oyun Ekle</button>
+    </div>
+    <div class="group">
+      <b>Ekip / Oyuncu Ekle</b>
+      <input type="text" id="crewPlay" list="oyunList" placeholder="Oyun" style="min-width:150px">
+      <input type="text" id="crewCategory" placeholder="Kategori (Oyuncu, Işık…)" style="min-width:150px">
+      <input type="text" id="crewRole" placeholder="Görev (opsiyonel)" style="min-width:130px">
+      <input type="text" id="crewPerson" placeholder="Ad Soyad" style="min-width:150px">
+      <button class="btn ghost small" id="addCrewBtn">+ Ekle</button>
+    </div>
+  </div>
+  <div id="playsList"></div>
+</section>
+
+<section id="print">
+  <div class="controls">
+    <button class="btn" onclick="window.print()">Yatay Yazdır / PDF olarak kaydet</button>
+    <span style="color:var(--muted);font-size:13px">Yazdırma penceresinde "Yatay / Landscape" seçin. Tüm aylar arka arkaya sayfalanır.</span>
+  </div>
+  <div id="printPreview" style="background:#fff;padding:12px;border:1px solid var(--border);border-radius:6px"></div>
+</section>
+</main>
+
+<div id="printView"></div>
+<div id="tooltip"></div>
+<div id="ctxmenu" class="ctxmenu"></div>
+
+<script>
+/* === Data === */
+const DEFAULT_DATA = {"months": [{"name": "MART 2026", "rows": 39, "cols": 9, "cells": [[0, 0, "1 MART 2026 Pazar"], [0, 1, "İZMİR DEVLET TİYATROSU MÜDÜRLÜĞÜ"], [0, 8, "1 MART 2026 Pazar"], [1, 2, "KARŞIYAKA RAGIP HAYKIR SAHNESİ"], [1, 3, "BKSM BOZKURT KURUÇ SAHNESİ"], [1, 4, "URLA AKM SAHNESİ"], [1, 5, "TURNE"], [1, 6, "TURNE"], [1, 7, "TURNE"], [2, 0, "1 MART 2026 Pazar"], [2, 1, "14.00"], [2, 3, "BÖCEK OTELİ (FUAYE-11.00-14.00)"], [2, 8, "1 MART 2026 Pazar"], [3, 0, "2 MART 2026 Pazartesi"], [3, 8, "2 MART 2026 Pazartesi"], [4, 0, "3 MART 2026 Salı"], [4, 1, "20.30"], [4, 2, "İKİ YEŞİL SUSAMURU"], [4, 3, "REMBETİKO EFSANESİ"], [4, 8, "3 MART 2026 Salı"], [5, 0, "4 MART 2026 Çarşamba"], [5, 1, "20.30"], [5, 2, "İKİ YEŞİL SUSAMURU"], [5, 3, "REMBETİKO EFSANESİ"], [5, 8, "4 MART 2026 Çarşamba"], [6, 0, "5 MART 2026 Perşembe"], [6, 1, "20.30"], [6, 2, "İKİ YEŞİL SUSAMURU"], [6, 3, "REMBETİKO EFSANESİ"], [6, 8, "5 MART 2026 Perşembe"], [7, 0, "6 MART 2026 Cuma"], [7, 1, "20.30"], [7, 2, "İKİ YEŞİL SUSAMURU"], [7, 3, "REMBETİKO EFSANESİ"], [7, 4, "YUKO (14.00)"], [7, 8, "6 MART 2026 Cuma"], [8, 0, "7 MART 2026 Cumartesi"], [8, 1, "15.00"], [8, 2, "İKİ YEŞİL SUSAMURU"], [8, 3, "REMBETİKO EFSANESİ"], [8, 8, "7 MART 2026 Cumartesi"], [9, 1, "20.30"], [9, 2, "İKİ YEŞİL SUSAMURU"], [9, 3, "REMBETİKO EFSANESİ"], [10, 0, "8 MART 2026 Pazar"], [10, 1, "14.00"], [10, 2, "YUKO"], [10, 3, "ORFİNİN MÜZİK KUTUSU"], [10, 8, "8 MART 2026 Pazar"], [11, 0, "9 MART 2026 Pazartesi"], [11, 8, "9 MART 2026 Pazartesi"], [12, 0, "10 MART 2026 Salı"], [12, 1, "20.30"], [12, 2, "YALANCININ RESMİ"], [12, 3, "SESSİZLİK"], [12, 5, "RÜSTEMOĞLU CEMALİN TUHAF HİKAYESİ"], [12, 6, "MÜNASEBETSİZ"], [12, 8, "10 MART 2026 Salı"], [13, 0, "11 MART 2026 Çarşamba"], [13, 1, "20.30"], [13, 2, "HAYALİ TEMSİL"], [13, 3, "OYUN OYUN İÇİNDE"], [13, 8, "11 MART 2026 Çarşamba"], [14, 0, "12 MART 2026 Perşembe"], [14, 1, "20.30"], [14, 2, "HAYALİ TEMSİL"], [14, 3, "OYUN OYUN İÇİNDE"], [14, 8, "12 MART 2026 Perşembe"], [15, 0, "13 MART 2026 Cuma"], [15, 1, "20.30"], [15, 2, "HAYALİ TEMSİL"], [15, 3, "OYUN OYUN İÇİNDE"], [15, 8, "13 MART 2026 Cuma"], [16, 0, "14 MART 2026 Cumartesi"], [16, 1, "15.00"], [16, 2, "HAYALİ TEMSİL"], [16, 3, "OYUN OYUN İÇİNDE"], [16, 8, "14 MART 2026 Cumartesi"], [17, 1, "20.30"], [17, 2, "HAYALİ TEMSİL"], [17, 3, "OYUN OYUN İÇİNDE"], [18, 0, "15 MART 2026 Pazar"], [18, 1, "14.00"], [18, 2, "OTOBÜS DURAĞINDA ÜÇ BENCİL"], [18, 3, "YUKO"], [18, 8, "15 MART 2026 Pazar"], [19, 0, "16 MART 2026 Pazartesi"], [19, 8, "16 MART 2026 Pazartesi"], [20, 0, "17 MART 2026 Salı"], [20, 1, "20.30"], [20, 2, "HAMLET"], [20, 3, "FARELER VE İNSANLAR"], [20, 4, "REMBETİKO EFSANESİ"], [20, 5, "YALANCININ RESMİ"], [20, 6, "İKİ YEŞİL SUSAMURU"], [20, 8, "17 MART 2026 Salı"], [21, 0, "18 MART 2026 Çarşamba"], [21, 1, "20.30"], [21, 2, "HAMLET"], [21, 3, "FARELER VE İNSANLAR"], [21, 8, "18 MART 2026 Çarşamba"], [22, 0, "19 MART 2026 Perşembe"], [22, 1, "20.30"], [22, 2, "HAMLET"], [22, 3, "FARELER VE İNSANLAR"], [22, 8, "19 MART 2026 Perşembe"], [23, 0, "20 MART 2026 Cuma"], [23, 2, "RAMAZAN BAYRAMI"], [23, 8, "20 MART 2026 Cuma"], [24, 0, "21 MART 2026 Cumartesi"], [24, 8, "21 MART 2026 Cumartesi"], [26, 0, "22 MART 2026 Pazar"], [26, 1, "14.00"], [26, 8, "22 MART 2026 Pazar"], [27, 0, "23 MART 2026 Pazartesi"], [27, 3, "GÜMÜŞ PATENLER (11.00-14.00)"], [27, 4, "ANKARA CSO-MAVİ SALON"], [27, 8, "23 MART 2026 Pazartesi"], [28, 0, "24 MART 2026 Salı"], [28, 1, "20.00"], [28, 2, "RADYOYU HÜMAYUN"], [28, 3, "FARELER VE İNSANLAR"], [28, 4, "RÜSTEMOĞLU CEMALİN TUHAF HİKAYESİ"], [28, 5, "DENİZLİ"], [28, 8, "24 MART 2026 Salı"], [29, 0, "25 MART 2026 Çarşamba"], [29, 1, "20.00"], [29, 2, "RADYOYU HÜMAYUN"], [29, 3, "FARELER VE İNSANLAR"], [29, 4, "RÜSTEMOĞLU CEMALİN TUHAF HİKAYESİ"], [29, 5, "YALANCININ RESMİ"], [29, 6, "MÜNASEBETSİZ"], [29, 8, "25 MART 2026 Çarşamba"], [30, 0, "26 MART 2026 Perşembe"], [30, 1, "20.00"], [30, 2, "RADYOYU HÜMAYUN"], [30, 3, "FARELER VE İNSANLAR"], [30, 5, "YALANCININ RESMİ"], [30, 6, "MÜNASEBETSİZ"], [30, 8, "26 MART 2026 Perşembe"], [31, 0, "27 MART 2026 Cuma"], [31, 1, "20.00"], [31, 2, "RADYOYU HÜMAYUN"], [31, 3, "FARELER VE İNSANLAR"], [31, 5, "YALANCININ RESMİ"], [31, 8, "27 MART 2026 Cuma"], [32, 0, "28 MART 2026 Cumartesi"], [32, 1, "15.00"], [32, 2, "RADYOYU HÜMAYUN"], [32, 3, "FARELER VE İNSANLAR"], [32, 5, "YALANCININ RESMİ"], [32, 8, "28 MART 2026 Cumartesi"], [33, 1, "20.00"], [33, 2, "RADYOYU HÜMAYUN"], [33, 3, "FARELER VE İNSANLAR"], [33, 5, "YALANCININ RESMİ"], [34, 0, "29 MART 2026 Pazar"], [34, 1, "14.00"], [34, 2, "KIRMIZI KANATLI BAYKUŞ (FUAYE-11.00-14.00)"], [34, 3, "GÜMÜŞ PATENLER"], [34, 8, "29 MART 2026 Pazar"], [35, 0, "30 MART 2026 Pazartesi"], [35, 1, "20.00"], [35, 8, "30 MART 2026 Pazartesi"], [36, 0, "31 MART 2026 Salı"], [36, 1, "20.00"], [36, 3, "SESSİZLİK"], [36, 5, "RÜSTEMOĞLU CEMALİN TUHAF HİKAYESİ"], [36, 6, "MÜNASEBETSİZ"], [36, 8, "31 MART 2026 Salı"], [37, 2, "* PRÖMİYER"], [38, 2, "ANAHTAR"]], "merges": [[8, 8, 9, 8], [24, 8, 25, 8], [23, 2, 25, 7], [0, 1, 0, 7], [24, 0, 25, 0], [8, 0, 9, 0], [16, 0, 17, 0], [32, 0, 33, 0], [16, 8, 17, 8], [0, 8, 1, 8], [32, 8, 33, 8], [0, 0, 1, 0]]}, {"name": "NİSAN 2026", "rows": 36, "cols": 10, "cells": [[0, 0, "1 NİSAN 2026 Çarşamba"], [0, 1, "İZMİR DEVLET TİYATROSU MÜDÜRLÜĞÜ"], [0, 9, "1 NİSAN 2026 Çarşamba"], [1, 2, "KARŞIYAKA RAGIP HAYKIR SAHNESİ"], [1, 3, "BKSM BOZKURT KURUÇ SAHNESİ"], [1, 4, "URLA AKM SAHNESİ"], [1, 5, "TURNE"], [1, 6, "TURNE"], [1, 7, "TURNE"], [1, 8, "TURNE"], [2, 0, "1 NİSAN 2026 Çarşamba"], [2, 1, "20.00"], [2, 2, "NİHAYET MAKAMI"], [2, 3, "SESSİZLİK"], [2, 5, "ADANA PGM"], [2, 6, "RÜSTEMOĞLU CEMALİN TUHAF HİKAYESİ"], [2, 9, "1 NİSAN 2026 Çarşamba"], [3, 0, "2 NİSAN 2026 Perşembe"], [3, 1, "20.00"], [3, 2, "NİHAYET MAKAMI"], [3, 3, "SESSİZLİK"], [3, 5, "GÜMÜŞ PATENLER (14.00)"], [3, 6, "FARELER VE İNSANLAR"], [3, 9, "2 NİSAN 2026 Perşembe"], [4, 0, "3 NİSAN 2026 Cuma"], [4, 1, "20.00"], [4, 2, "NİHAYET MAKAMI"], [4, 3, "SESSİZLİK -DT MUTFAK ATÖLYEDEN SAHNEYE"], [4, 5, "GÜMÜŞ PATENLER (11.00)"], [4, 6, "FARELER VE İNSANLAR"], [4, 9, "3 NİSAN 2026 Cuma"], [5, 0, "4 NİSAN 2026 Cumartesi"], [5, 1, "15.00"], [5, 2, "NİHAYET MAKAMI"], [5, 3, "SESSİZLİK"], [5, 6, "RÜSTEMOĞLU CEMALİN TUHAF HİKAYESİ"], [5, 9, "4 NİSAN 2026 Cumartesi"], [6, 1, "20.00"], [6, 2, "NİHAYET MAKAMI"], [6, 3, "SESSİZLİK"], [6, 6, "RÜSTEMOĞLU CEMALİN TUHAF HİKAYESİ"], [7, 0, "5 NİSAN 2026 Pazar"], [7, 1, "14.00"], [7, 2, "YUKO"], [7, 3, "KIRMIZI KANATLI BAYKUŞ (FUAYE-11.00-14.00)"], [7, 9, "5 NİSAN 2026 Pazar"], [8, 0, "6 NİSAN 2026 Pazartesi"], [8, 5, "BURSA"], [8, 7, "OTOBÜS DURAĞINDA ÜÇ BENCİL (10.00-14.00)"], [8, 9, "6 NİSAN 2026 Pazartesi"], [9, 0, "7 NİSAN 2026 Salı"], [9, 1, "20.00"], [9, 2, "NİHAYET MAKAMI"], [9, 3, "VE KAZANAN"], [9, 5, "REMBETİKO EFSANESİ (20.30)"], [9, 7, "OTOBÜS DURAĞINDA ÜÇ BENCİL (10.00-14.00)"], [9, 9, "7 NİSAN 2026 Salı"], [10, 0, "8 NİSAN 2026 Çarşamba"], [10, 1, "20.00"], [10, 2, "NİHAYET MAKAMI"], [10, 3, "VE KAZANAN"], [10, 5, "İLERLEME (20.30)"], [10, 6, "ADANA"], [10, 7, "OTOBÜS DURAĞINDA ÜÇ BENCİL (10.00-14.00)"], [10, 8, "KAYSERİ DT"], [10, 9, "8 NİSAN 2026 Çarşamba"], [11, 0, "9 NİSAN 2026 Perşembe"], [11, 1, "20.00"], [11, 2, "NİHAYET MAKAMI"], [11, 3, "VE KAZANAN - DT MUTFAK"], [11, 6, "OYUN OYUN İÇİNDE"], [11, 8, "KAÇAKLAR"], [11, 9, "9 NİSAN 2026 Perşembe"], [12, 0, "10 NİSAN 2026 Cuma"], [12, 1, "20.00"], [12, 2, "NİHAYET MAKAMI"], [12, 3, "VE KAZANAN"], [12, 6, "OYUN OYUN İÇİNDE"], [12, 8, "KAÇAKLAR"], [12, 9, "10 NİSAN 2026 Cuma"], [13, 0, "11 NİSAN 2026 Cumartesi"], [13, 1, "15.00"], [13, 2, "NİHAYET MAKAMI"], [13, 3, "VE KAZANAN"], [13, 6, "OYUN OYUN İÇİNDE"], [13, 8, "KAÇAKLAR"], [13, 9, "11 NİSAN 2026 Cumartesi"], [14, 1, "20.00"], [14, 2, "NİHAYET MAKAMI"], [14, 3, "VE KAZANAN"], [14, 6, "OYUN OYUN İÇİNDE"], [14, 8, "KAÇAKLAR"], [15, 0, "12 NİSAN 2026 Pazar"], [15, 1, "14.00"], [15, 2, "BÖCEK OTELİ (FUAYE-11.00-14.00)"], [15, 3, "ORFİNİN MÜZİK KUTUSU"], [15, 4, "KIRMIZI KANATLI BAYKUŞ (FUAYE-11.00-14.00)"], [15, 6, "OYUN OYUN İÇİNDE"], [15, 9, "12 NİSAN 2026 Pazar"], [16, 0, "13 NİSAN 2026 Pazartesi"], [16, 5, "ANKARA-YAŞAYAN MİRAS"], [16, 6, "SAMSUN"], [16, 9, "13 NİSAN 2026 Pazartesi"], [17, 0, "14 NİSAN 2026 Salı"], [17, 1, "20.00"], [17, 2, "YALANCININ RESMİ"], [17, 3, "MÜNASEBETSİZ"], [17, 5, "BÖCEK OTELİ (FUAYE-11.30)"], [17, 6, "OYUN OYUN İÇİNDE"], [17, 9, "14 NİSAN 2026 Salı"], [18, 0, "15 NİSAN 2026 Çarşamba"], [18, 1, "20.00"], [18, 2, "YALANCININ RESMİ"], [18, 3, "MÜNASEBETSİZ"], [18, 5, "BÖCEK OTELİ (FUAYE-11.30)"], [18, 6, "OYUN OYUN İÇİNDE"], [18, 8, "KONYA DT"], [18, 9, "15 NİSAN 2026 Çarşamba"], [19, 0, "16 NİSAN 2026 Perşembe"], [19, 1, "20.00"], [19, 2, "YALANCININ RESMİ"], [19, 3, "MÜNASEBETSİZ"], [19, 5, "BÖCEK OTELİ (FUAYE-11.30)"], [19, 6, "ÇORUM"], [19, 8, "OYUNCU BEN FEUERBACH"], [19, 9, "16 NİSAN 2026 Perşembe"], [20, 0, "17 NİSAN 2026 Cuma"], [20, 1, "20.00"], [20, 2, "YALANCININ RESMİ"], [20, 3, "MÜNASEBETSİZ"], [20, 5, "BÖCEK OTELİ (FUAYE-11.30)"], [20, 6, "OYUN OYUN İÇİNDE"], [20, 8, "OYUNCU BEN FEUERBACH"], [20, 9, "17 NİSAN 2026 Cuma"], [21, 0, "18 NİSAN 2026 Cumartesi"], [21, 1, "15.00"], [21, 2, "YALANCININ RESMİ"], [21, 3, "MÜNASEBETSİZ"], [21, 6, "OYUN OYUN İÇİNDE"], [21, 8, "OYUNCU BEN FEUERBACH"], [21, 9, "18 NİSAN 2026 Cumartesi"], [22, 1, "20.00"], [22, 2, "YALANCININ RESMİ"], [22, 3, "MÜNASEBETSİZ"], [22, 6, "OYUN OYUN İÇİNDE"], [22, 8, "OYUNCU BEN FEUERBACH"], [23, 0, "19 NİSAN 2026 Pazar"], [23, 1, "14.00"], [23, 2, "TAHSİS-RUS TİYATRO"], [23, 3, "YUKO"], [23, 9, "19 NİSAN 2026 Pazar"], [24, 0, "20 NİSAN 2026 Pazartesi"], [24, 9, "20 NİSAN 2026 Pazartesi"], [25, 0, "21 NİSAN 2026 Salı"], [25, 1, "11.00-14.00"], [25, 2, "YUKO "], [25, 3, "ORFİNİN MÜZİK KUTUSU"], [25, 9, "21 NİSAN 2026 Salı"], [26, 0, "22 NİSAN 2026 Çarşamba"], [26, 1, "11.00-14.00"], [26, 2, "YUKO"], [26, 3, "ORFİNİN MÜZİK KUTUSU"], [26, 9, "22 NİSAN 2026 Çarşamba"], [27, 0, "23 NİSAN 2026 Perşembe"], [27, 1, "11.00-14.00"], [27, 2, "BÖCEK OTELİ (FUAYE)"], [27, 3, "KIRMIZI KANATLI BAYKUŞ (FUAYE)"], [27, 6, "BURSA DT-AVP"], [27, 9, "23 NİSAN 2026 Perşembe"], [28, 0, "24 NİSAN 2026 Cuma"], [28, 1, "11.00-14.00"], [28, 2, "TEBEŞİR AĞACI (SİVAS DT)"], [28, 3, "GÜMÜŞ PATENLER"], [28, 4, "KIRMIZI KANATLI BAYKUŞ (FUAYE-11.00-14.00)"], [28, 5, "ANKARA K.H.K.B"], [28, 6, "OTOBÜS DURAĞINDA ÜÇ BENCİL (11.00-14.00)"], [28, 9, "24 NİSAN 2026 Cuma"], [29, 0, "25 NİSAN 2026 Cumartesi"], [29, 1, "11.00"], [29, 2, "TEBEŞİR AĞACI (SİVAS DT)"], [29, 3, "GÜMÜŞ PATENLER"], [29, 5, "BÖCEK OTELİ (FUAYE-11.00-14.00-MAMAK KM)\nYUKO (11.00-14.00-ODA TİAYT)"], [29, 6, "OTOBÜS DURAĞINDA ÜÇ BENCİL (14.00)"], [29, 9, "25 NİSAN 2026 Cumartesi"], [30, 4, "KIRMIZI KANATLI BAYKUŞ (FUAYE-11.00-14.00)"], [31, 0, "26 NİSAN 2026 Pazar"], [31, 1, "11.00"], [31, 2, "TEBEŞİR AĞACI (SİVAS DT)"], [31, 3, "CEZAEVİ-PROVA"], [31, 5, "BÖCEK OTELİ (FUAYE-11.00-14.00-MAMAK KM)\nYUKO (11.00-14.00-ODA TİAYT)"], [31, 6, "OTOBÜS DURAĞINDA ÜÇ BENCİL (14.00)"], [31, 9, "26 NİSAN 2026 Pazar"], [32, 0, "27 NİSAN 2026 Pazartesi"], [32, 1, "11.00-14.00"], [32, 2, "TEBEŞİR AĞACI (SİVAS DT)"], [32, 3, "CEZAEVİ-TEMSİL"], [32, 5, "ÇANKAYA ATATÜRK SANAT M"], [32, 9, "27 NİSAN 2026 Pazartesi"], [33, 0, "28 NİSAN 2026 Salı"], [33, 1, "20.00"], [33, 2, "MÜNASEBETSİZ"], [33, 3, "ARZUNUN ONDA DOKUZU"], [33, 4, "HAMLET"], [33, 5, "GÜMÜŞ PATENLER (10.00-13.00)"], [33, 9, "28 NİSAN 2026 Salı"], [34, 0, "29 NİSAN 2026 Çarşamba"], [34, 1, "20.00"], [34, 2, "KARINCALAR BİR SAVAŞ VARDI"], [34, 3, "ARZUNUN ONDA DOKUZU"], [34, 4, "HAMLET"], [34, 5, "GÜMÜŞ PATENLER (10.00-13.00)"], [34, 8, "SESSİZLİK"], [34, 9, "29 NİSAN 2026 Çarşamba"], [35, 0, "30 NİSAN 2026 Perşembe"], [35, 1, "20.00"], [35, 2, "KARINCALAR BİR SAVAŞ VARDI"], [35, 3, "ARZUNUN ONDA DOKUZU"], [35, 5, "GÜMÜŞ PATENLER (10.00-13.00)"], [35, 8, "SESSİZLİK"], [35, 9, "30 NİSAN 2026 Perşembe"]], "merges": [[13, 9, 14, 9], [29, 9, 30, 9], [21, 0, 22, 0], [5, 9, 6, 9], [21, 9, 22, 9], [5, 0, 6, 0], [0, 1, 0, 8], [0, 9, 1, 9], [13, 0, 14, 0], [29, 0, 30, 0], [0, 0, 1, 0]]}, {"name": "MAYIS 2026", "rows": 38, "cols": 10, "cells": [[0, 0, "2026 MAYIS"], [0, 2, "İZMİR DEVLET TİYATROSU MÜDÜRLÜĞÜ"], [0, 9, "2026 MAYIS"], [1, 2, "KARŞIYAKA RAGIP HAYKIR SAHNESİ"], [1, 3, "BKSM BOZKURT KURUÇ SAHNESİ"], [1, 4, "URLA AKM SAHNESİ"], [1, 5, "TURNE"], [1, 6, "TURNE"], [1, 7, "TURNE"], [1, 8, "TURNE"], [2, 0, "1 MAYIS 2026 Cuma"], [2, 1, "20.00"], [2, 2, "KARINCALAR BİR SAVAŞ VARDI"], [2, 3, "ARZUNUN ONDA DOKUZU"], [2, 5, "ŞANLIURFA KYF"], [2, 6, "ANAHTAR"], [2, 9, "1 MAYIS 2026 Cuma"], [3, 0, "2 MAYIS 2026 Cumartesi"], [3, 1, "15.00"], [3, 3, "ARZUNUN ONDA DOKUZU"], [3, 6, "ANAHTAR"], [3, 9, "2 MAYIS 2026 Cumartesi"], [4, 1, "20.00"], [4, 2, "KARINCALAR BİR SAVAŞ VARDI"], [4, 3, "ARZUNUN ONDA DOKUZU"], [4, 5, "YALANCININ RESMİ"], [4, 6, "ANAHTAR"], [5, 0, "3 MAYIS 2026 Pazar"], [5, 1, "14.00"], [5, 2, "BÖCEK OTELİ (11.00-14.00)"], [5, 3, "KIRMIZI KANATLI BAYKUŞ (11.00-14.00)"], [5, 5, "YALANCININ RESMİ"], [5, 9, "3 MAYIS 2026 Pazar"], [6, 0, "4 Mayıs 2026 Pazartesi"], [6, 8, "ANKARA-ŞİNASİ"], [6, 9, "4 MAYIS 2026 Pazartesi"], [7, 0, "5 MAYIS 2026 Salı"], [7, 1, "20.00"], [7, 2, "ANAHTAR"], [7, 3, "MEDEA"], [7, 6, "BAKIRÇAY ÜNİV."], [7, 7, "TRABZON DT"], [7, 8, "YALANCININ RESMİ"], [7, 9, "5 MAYIS 2026 Salı"], [8, 0, "6 MAYIS 2026 Çarşamba"], [8, 1, "20.00"], [8, 2, "ANAHTAR"], [8, 3, "MEDEA"], [8, 6, "NİHAYET MAKAMI"], [8, 7, "KIRMIZI KANATLI BAYKUŞ (11.00-14.00)"], [8, 8, "YALANCININ RESMİ"], [8, 9, "6 MAYIS 2026 Çarşamba"], [9, 0, "7 MAYIS 2026 Perşembe"], [9, 1, "20.00"], [9, 2, "ANAHTAR"], [9, 3, "MEDEA"], [9, 7, "KIRMIZI KANATLI BAYKUŞ (11.00-14.00)"], [9, 8, "YALANCININ RESMİ"], [9, 9, "7 MAYIS 2026 Perşembe"], [10, 0, "8 MAYIS 2026 Cuma"], [10, 1, "20.00"], [10, 2, "ANAHTAR"], [10, 3, "MEDEA"], [10, 5, "AYDIN KYF"], [10, 8, "YALANCININ RESMİ"], [10, 9, "8 MAYIS 2026 Cuma"], [11, 0, "9 MAYIS 2026 Cumartesi"], [11, 1, "15.00"], [11, 2, "ANAHTAR"], [11, 8, "YALANCININ RESMİ"], [11, 9, "9 MAYIS 2026 Cumartesi"], [12, 1, "20.00"], [12, 2, "ANAHTAR"], [12, 5, "FARELER VE İNSANLAR"], [12, 8, "YALANCININ RESMİ"], [13, 0, "10 MAYIS 2026 Pazar"], [13, 1, "14.00"], [13, 2, "OTOBÜS DURAĞINDA ÜÇ BENCİL"], [13, 5, "FARELER VE İNSANLAR (20.00)"], [13, 6, "ANTALYA FESTİVAL"], [13, 7, "GÜMÜŞ PATENLER"], [13, 9, "10 MAYIS 2026 Pazar"], [14, 0, "11 Mayıs 2026 Pazartesi"], [14, 3, "TAHSİS-İL KÜLTÜR"], [14, 6, "NİHAYET MAKAMI"], [14, 7, "TRABZON DT"], [14, 9, "11 MAYIS 2026 Pazartesi"], [15, 0, "12 MAYIS 2026 Salı"], [15, 1, "20.00"], [15, 2, "KAÇAKLAR"], [15, 3, "KARINCALAR BİR SAVAŞ VARDI"], [15, 4, "GÜMÜŞ PATENLER"], [15, 6, "NİHAYET MAKAMI"], [15, 7, "RADYOYU HÜMAYUN"], [15, 9, "12 MAYIS 2026 Salı"], [16, 0, "13 MAYIS 2026 Çarşamba"], [16, 1, "20.00"], [16, 2, "KAÇAKLAR"], [16, 3, "KARINCALAR BİR SAVAŞ VARDI"], [16, 9, "13 MAYIS 2026 Çarşamba"], [17, 0, "14 MAYIS 2026 Perşembe"], [17, 1, "20.00"], [17, 2, "KAÇAKLAR"], [17, 3, "KARINCALAR BİR SAVAŞ VARDI"], [17, 9, "14 MAYIS 2026 Perşembe"], [18, 0, "15 MAYIS 2026 Cuma"], [18, 1, "20.00"], [18, 2, "KAÇAKLAR"], [18, 3, "KARINCALAR BİR SAVAŞ VARDI"], [18, 5, "İLERLEME"], [18, 9, "15 MAYIS 2026 Cuma"], [19, 0, "16 MAYIS 2026 Cumartesi"], [19, 1, "15.00"], [19, 2, "YALANCININ RESMİ"], [19, 3, "SESSİZLİK"], [19, 9, "16 MAYIS 2026 Cumartesi"], [20, 1, "20.00"], [20, 2, "YALANCININ RESMİ"], [20, 3, "SESSİZLİK"], [21, 0, "17 MAYIS 2026 Pazar"], [21, 1, "14.00"], [21, 9, "17 MAYIS 2026 Pazar"], [22, 0, "18 MAYIS 2026 Pazartesi"], [22, 6, "SAMSUN"], [22, 7, "ELAZIĞ"], [22, 9, "18 MAYIS 2026 Pazartesi"], [23, 0, "19 MAYIS 2026 Salı"], [23, 1, "20.00"], [23, 3, "NİHAYET MAKAMI"], [23, 6, "HAMLET"], [23, 7, "ARZUNUN ONDA DOKUZU"], [23, 9, "19 MAYIS 2026 Salı"], [24, 0, "20 MAYIS 2026 Çarşamba"], [24, 1, "20.00"], [24, 3, "NİHAYET MAKAMI"], [24, 6, "HAMLET"], [24, 7, "ARZUNUN ONDA DOKUZU"], [24, 9, "20 MAYIS 2026 Çarşamba"], [25, 0, "21 MAYIS 2026 Perşembe"], [25, 1, "20.00"], [25, 6, "ÇORUM"], [25, 7, "MALATYA"], [25, 9, "21 MAYIS 2026 Perşembe"], [26, 0, "22 MAYIS 2026 Cuma"], [26, 1, "20.00"], [26, 6, "HAMLET"], [26, 7, "ARZUNUN ONDA DOKUZU"], [26, 9, "22 MAYIS 2026 Cuma"], [27, 0, "23 MAYIS 2026 Cumartesi"], [27, 1, "15.00"], [27, 6, "HAMLET"], [27, 7, "ARZUNUN ONDA DOKUZU"], [27, 9, "23 MAYIS 2026 Cumartesi"], [28, 1, "20.00"], [28, 6, "HAMLET"], [28, 7, "ARZUNUN ONDA DOKUZU"], [29, 0, "24 MAYIS 2026 Pazar"], [29, 1, "14.00"], [29, 9, "24 MAYIS 2026 Pazar"], [30, 0, "25 MAYIS 2026 Pazartesi"], [30, 9, "25 MAYIS 2026 Pazartesi"], [31, 0, "26 MAYIS 2026 Salı"], [31, 1, "20.00"], [31, 9, "26 MAYIS 2026 Salı"], [32, 0, "27 MAYIS 2026 Çarşamba"], [32, 1, "20.00"], [32, 9, "27 MAYIS 2026 Çarşamba"], [33, 0, "28 MAYIS 2026 Perşembe"], [33, 1, "20.00"], [33, 9, "28 MAYIS 2026 Perşembe"], [34, 0, "29 MAYIS 2026 Cuma"], [34, 1, "20.00"], [34, 9, "29 MAYIS 2026 Cuma"], [35, 0, "30 MAYIS 2026 Cumartesi"], [35, 1, "15.00"], [35, 9, "30 MAYIS 2026 Cumartesi"], [36, 1, "20.00"], [37, 0, "31 MAYIS 2026 Pazar"], [37, 1, "14.00"], [37, 9, "31 MAYIS 2026 Pazar"]], "merges": [[11, 0, 12, 0], [27, 0, 28, 0], [3, 0, 4, 0], [3, 9, 4, 9], [19, 9, 20, 9], [11, 9, 12, 9], [27, 9, 28, 9], [19, 0, 20, 0], [35, 0, 36, 0], [35, 9, 36, 9], [0, 0, 1, 1], [0, 2, 0, 8], [0, 9, 1, 9]]}, {"name": "HAZİRAN 2026", "rows": 38, "cols": 10, "cells": [[0, 0, "2026 HAZİRAN"], [0, 2, "İZMİR DEVLET TİYATROSU MÜDÜRLÜĞÜ"], [0, 9, "2026 HAZİRAN"], [1, 2, "KARŞIYAKA RAGIP HAYKIR SAHNESİ"], [1, 3, "BKSM BOZKURT KURUÇ SAHNESİ"], [1, 4, "URLA AKM SAHNESİ"], [1, 5, "TURNE"], [1, 6, "TURNE"], [1, 7, "TURNE"], [1, 8, "TURNE"], [2, 0, "1 HAZİRAN 2026 Pazartesi"], [2, 9, "1 HAZİRAN 2026 Pazartesi"], [3, 0, "2 HAZİRAN 2026 Salı"], [3, 1, "20.00"], [3, 9, "2 HAZİRAN 2026 Salı"], [4, 0, "3 HAZİRAN 2026 Çarşamba"], [4, 1, "20.00"], [4, 9, "3 HAZİRAN 2026 Çarşamba"], [5, 0, "4 HAZİRAN 2026 Perşembe"], [5, 1, "20.00"], [5, 9, "4 HAZİRAN 2026 Perşembe"], [6, 0, "5 HAZİRAN 2026 Cuma"], [6, 1, "20.00"], [6, 9, "5 HAZİRAN 2026 Cuma"], [7, 0, "6 HAZİRAN 2026 Cumartesi"], [7, 1, "15.00"], [7, 9, "6 HAZİRAN 2026 Cumartesi"], [8, 1, "20.00"], [9, 0, "7 HAZİRAN 2026 Pazar"], [9, 1, "14.00"], [9, 9, "7 HAZİRAN 2026 Pazar"], [10, 0, "8 HAZİRAN 2026 Pazartesi"], [10, 9, "8 HAZİRAN 2026 Pazartesi"], [11, 0, "9 HAZİRAN 2026 Salı"], [11, 1, "20.00"], [11, 9, "9 HAZİRAN 2026 Salı"], [12, 0, "10 HAZİRAN 2026 Çarşamba"], [12, 1, "20.00"], [12, 9, "10 HAZİRAN 2026 Çarşamba"], [13, 0, "11 HAZİRAN 2026 Perşembe"], [13, 1, "20.00"], [13, 9, "11 HAZİRAN 2026 Perşembe"], [14, 0, "12 HAZİRAN 2026 Cuma"], [14, 1, "20.00"], [14, 2, "İKİ YEŞİL SUSAMURU"], [14, 3, "NİZAMÜLMÜLK *"], [14, 9, "12 HAZİRAN 2026 Cuma"], [15, 0, "13 HAZİRAN 2026 Cumartesi"], [15, 1, "15.00"], [15, 3, "NİZAMÜLMÜLK"], [15, 9, "13 HAZİRAN 2026 Cumartesi"], [16, 1, "20.00"], [16, 3, "NİZAMÜLMÜLK"], [17, 0, "14 HAZİRAN 2026 Pazar"], [17, 1, "14.00"], [17, 9, "14 HAZİRAN 2026 Pazar"], [18, 0, "15 HAZİRAN 2026 Pazartesi"], [18, 9, "15 HAZİRAN 2026 Pazartesi"], [19, 0, "16 HAZİRAN 2026 Salı"], [19, 1, "20.00"], [19, 9, "16 HAZİRAN 2026 Salı"], [20, 0, "17 HAZİRAN 2026 Çarşamba"], [20, 1, "20.00"], [20, 5, "ORDU DT SAHNESİ"], [20, 9, "17 HAZİRAN 2026 Çarşamba"], [21, 0, "18 HAZİRAN 2026 Perşembe"], [21, 1, "20.00"], [21, 5, "KRAL OLMAK İSTEMEYEN ASLAN (11.00-14.00)"], [21, 9, "18 HAZİRAN 2026 Perşembe"], [22, 0, "19 HAZİRAN 2026 Cuma"], [22, 1, "20.00"], [22, 9, "19 HAZİRAN 2026 Cuma"], [23, 0, "20 HAZİRAN 2026 Cumartesi"], [23, 1, "15.00"], [23, 9, "20 HAZİRAN 2026 Cumartesi"], [24, 1, "20.00"], [25, 0, "21 HAZİRAN 2026 Pazar"], [25, 1, "14.00"], [25, 9, "21 HAZİRAN 2026 Pazar"], [26, 0, "22 HAZİRAN 2026 Pazartesi"], [26, 9, "22 HAZİRAN 2026 Pazartesi"], [27, 0, "23 HAZİRAN 2026 Salı"], [27, 1, "20.00"], [27, 9, "23 HAZİRAN 2026 Salı"], [28, 0, "24 HAZİRAN 2026 Çarşamba"], [28, 1, "20.00"], [28, 9, "24 HAZİRAN 2026 Çarşamba"], [29, 0, "25 HAZİRAN 2026 Perşembe"], [29, 1, "20.00"], [29, 9, "25 HAZİRAN 2026 Perşembe"], [30, 0, "26 HAZİRAN 2026 Cuma"], [30, 1, "20.00"], [30, 9, "26 HAZİRAN 2026 Cuma"], [31, 0, "27 HAZİRAN 2026 Cumartesi"], [31, 1, "15.00"], [31, 9, "27 HAZİRAN 2026 Cumartesi"], [32, 1, "20.00"], [33, 0, "28 HAZİRAN 2026 Pazar"], [33, 1, "14.00"], [33, 9, "28 HAZİRAN 2026 Pazar"], [34, 0, "29 HAZİRAN 2026 Pazartesi"], [34, 9, "29 HAZİRAN 2026 Pazartesi"], [35, 0, "30 HAZİRAN 2026 Salı"], [35, 1, "20.00"], [35, 9, "30 HAZİRAN 2026 Salı"], [37, 3, "* PRÖMİYER"]], "merges": [[31, 0, 32, 0], [7, 0, 8, 0], [23, 0, 24, 0], [7, 9, 8, 9], [23, 9, 24, 9], [0, 0, 1, 1], [15, 0, 16, 0], [0, 2, 0, 8], [0, 9, 1, 9], [15, 9, 16, 9], [31, 9, 32, 9]]}], "plays": ["ARZUNUN ONDA DOKUZU", "BÖCEK OTELİ", "BİR DÜŞ GİBİ CAHİDE SONKU", "FARELER VE İNSANLAR", "GÜMÜŞ PATENLER", "HAMLET", "HAYALİ TEMSİL", "KARINCALAR BİR SAVAŞ VARDI", "KAÇAKLAR", "KIRMIZI KANATLI BAYKUŞ", "KRAL OLMAK İSTEMEYEN ASLAN", "MAJESTİK", "MEDEA", "MÜNASEBETSİZ", "NİHAYET MAKAMI", "NİZAMÜLMÜLK", "ORFİNİN MÜZİK KUTUSU", "OTOBÜS DURAĞINDA ÜÇ BENCİL", "OYUN OYUN İÇİNDE", "OYUNCU BEN FEUERBACH", "RADYOYU HÜMAYUN", "REMBETİKO EFSANESİ", "RÜSTEMOĞLU CEMALİN TUHAF HİKAYESİ", "SESSİZLİK", "VE KAZANAN", "YALANCININ RESMİ", "YUKO", "İKİ YEŞİL SUSAMURU", "İKİNCİ CADDENİN MAHKUMU", "İLERLEME"], "crew": [{"play": "ARZUNUN ONDA DOKUZU", "category": "Oyuncu", "role": "Layal / Doktor", "person": "Canan Erener"}, {"play": "ARZUNUN ONDA DOKUZU", "category": "Oyuncu", "role": "Nanna / Amerikalı Kız", "person": "Menekşe Özyiğit"}, {"play": "ARZUNUN ONDA DOKUZU", "category": "Oyuncu", "role": "Hooda / Amal / Umm Ghedda", "person": "Ayşe Neşe Arat"}, {"play": "ARZUNUN ONDA DOKUZU", "category": "Figüran", "role": "Iraklı Kız", "person": "Betül Işık"}, {"play": "ARZUNUN ONDA DOKUZU", "category": "Figüran", "role": "Mulaya Korosu", "person": "Fatma Ayçin Güvercin"}, {"play": "ARZUNUN ONDA DOKUZU", "category": "Figüran", "role": "Mulaya Korosu", "person": "Gülben Başer"}, {"play": "ARZUNUN ONDA DOKUZU", "category": "Figüran", "role": "Mulaya Korosu", "person": "İpek Sonal"}, {"play": "ARZUNUN ONDA DOKUZU", "category": "Figüran", "role": "Mulaya Korosu", "person": "Müge Uyan Yeşilpınar"}, {"play": "ARZUNUN ONDA DOKUZU", "category": "Figüran", "role": "Mulaya Korosu", "person": "Neslihan Serra Ayer"}, {"play": "ARZUNUN ONDA DOKUZU", "category": "Figüran", "role": "Mulaya Korosu", "person": "Bahar Gönül Selvi Çerezcioğlu"}, {"play": "ARZUNUN ONDA DOKUZU", "category": "Figüran", "role": "Mulaya Korosu", "person": "Şükran Keçeci"}, {"play": "ARZUNUN ONDA DOKUZU", "category": "Tasarım", "role": "Kostüm Tasarımı", "person": "Medina Yavuz Almaç"}, {"play": "ARZUNUN ONDA DOKUZU", "category": "Işık – Tasarım", "role": "Işık Tasarımı", "person": "Çağlar Aytaç"}, {"play": "ARZUNUN ONDA DOKUZU", "category": "Müzisyen", "role": "Müzik", "person": "Gürkan Çakıcı"}, {"play": "ARZUNUN ONDA DOKUZU", "category": "Yönetim", "role": "Yönetmen Yardımcısı", "person": "Sevda Çiçek"}, {"play": "ARZUNUN ONDA DOKUZU", "category": "Yönetim", "role": "Yönetmen Yardımcısı", "person": "Dilber Çilem Güngör"}, {"play": "ARZUNUN ONDA DOKUZU", "category": "Yönetim", "role": "Asistan", "person": "Gülben Başer"}, {"play": "ARZUNUN ONDA DOKUZU", "category": "Yönetim", "role": "Asistan", "person": "Tayfur Çamlıbel"}, {"play": "ARZUNUN ONDA DOKUZU", "category": "Sahne Amiri", "role": "Sahne Amiri", "person": "Özlem Lale Şahin"}, {"play": "ARZUNUN ONDA DOKUZU", "category": "Sahne Amiri", "role": "Sahne Amiri", "person": "Mesut Dalaz"}, {"play": "ARZUNUN ONDA DOKUZU", "category": "Ses – Kondüvit", "role": "Kondüvit", "person": "Mehmet Şişeci"}, {"play": "ARZUNUN ONDA DOKUZU", "category": "Ses – Kondüvit", "role": "Kondüvit", "person": "Ali Avcı"}, {"play": "ARZUNUN ONDA DOKUZU", "category": "Işık Kontrol", "role": "Işık Kumanda", "person": "Çağlar Aytaç"}, {"play": "ARZUNUN ONDA DOKUZU", "category": "Işık Kontrol", "role": "Işık Kumanda", "person": "Uğur Öztürk"}, {"play": "ARZUNUN ONDA DOKUZU", "category": "Sahne", "role": "Suflöz", "person": "Gülcan Çetin"}, {"play": "ARZUNUN ONDA DOKUZU", "category": "Sahne Dekor (Sorumlu)", "role": "Dekor Sorumlusu", "person": "Selaattin Göktaş"}, {"play": "ARZUNUN ONDA DOKUZU", "category": "Dekor/Aksesuar", "role": "Aksesuar Sorumlusu", "person": "Doğan Örgül"}, {"play": "ARZUNUN ONDA DOKUZU", "category": "Kostüm", "role": "Kadın Terzi", "person": "İpek Uzyön"}, {"play": "ARZUNUN ONDA DOKUZU", "category": "Peruk – Makyaj", "role": "Perukacı", "person": "Ayşe Demir"}, {"play": "ARZUNUN ONDA DOKUZU", "category": "Peruk – Makyaj", "role": "Perukacı", "person": "İbrahim Aydın"}, {"play": "ARZUNUN ONDA DOKUZU", "category": "Tasarım", "role": "Dekor Tasarımı", "person": "Memet Ali Zeren"}, {"play": "BİR DÜŞ GİBİ CAHİDE SONKU", "category": "Oyuncu", "role": "Cahide", "person": "Güldeniz Türküstün"}, {"play": "BİR DÜŞ GİBİ CAHİDE SONKU", "category": "Oyuncu", "role": "Muhsin Ertuğrul", "person": "Murat Çidamlı"}, {"play": "BİR DÜŞ GİBİ CAHİDE SONKU", "category": "Oyuncu", "role": "Talat Artemel", "person": "Fatih Özyiğit"}, {"play": "BİR DÜŞ GİBİ CAHİDE SONKU", "category": "Oyuncu", "role": "İhsan Doruk", "person": "Ömer Polat"}, {"play": "BİR DÜŞ GİBİ CAHİDE SONKU", "category": "Oyuncu", "role": "Cahit Irgat", "person": "İ. Hakan Özgömeç"}, {"play": "BİR DÜŞ GİBİ CAHİDE SONKU", "category": "Oyuncu", "role": "Ender", "person": "Almila Su Aytutuldu"}, {"play": "BİR DÜŞ GİBİ CAHİDE SONKU", "category": "Oyuncu", "role": "Anne", "person": "Ebru Nil Aydın"}, {"play": "BİR DÜŞ GİBİ CAHİDE SONKU", "category": "Oyuncu", "role": "Baba", "person": "Deniz Genç"}, {"play": "BİR DÜŞ GİBİ CAHİDE SONKU", "category": "Oyuncu", "role": "Dış Ses 1", "person": "Ender Şeviker"}, {"play": "BİR DÜŞ GİBİ CAHİDE SONKU", "category": "Oyuncu", "role": "Kadınlar", "person": "Derya Kara Erk"}, {"play": "BİR DÜŞ GİBİ CAHİDE SONKU", "category": "Oyuncu", "role": "Kadınlar", "person": "Bengi Ebru Atakan"}, {"play": "BİR DÜŞ GİBİ CAHİDE SONKU", "category": "Oyuncu", "role": "Kadınlar", "person": "Ecem Çataloğlu"}, {"play": "BİR DÜŞ GİBİ CAHİDE SONKU", "category": "Oyuncu", "role": "Kadınlar", "person": "Gizem Cessur"}, {"play": "BİR DÜŞ GİBİ CAHİDE SONKU", "category": "Tasarım", "role": "Kostüm Tasarımı", "person": "Z. Yıldız Köse"}, {"play": "BİR DÜŞ GİBİ CAHİDE SONKU", "category": "Işık – Tasarım", "role": "Işık Tasarımı", "person": "Osman Uzgören"}, {"play": "BİR DÜŞ GİBİ CAHİDE SONKU", "category": "Müzisyen", "role": "Müzik", "person": "Kemal Günüç"}, {"play": "BİR DÜŞ GİBİ CAHİDE SONKU", "category": "Yönetim", "role": "Yönetmen Yardımcısı", "person": "Ömer Polat"}, {"play": "BİR DÜŞ GİBİ CAHİDE SONKU", "category": "Yönetim", "role": "Asistan", "person": "Ender Şeviker"}, {"play": "BİR DÜŞ GİBİ CAHİDE SONKU", "category": "Sahne Amiri", "role": "Sahne Amiri", "person": "Ramazan Özcan"}, {"play": "BİR DÜŞ GİBİ CAHİDE SONKU", "category": "Ses – Kondüvit", "role": "Kondüvit", "person": "Özlem Doğruöz"}, {"play": "BİR DÜŞ GİBİ CAHİDE SONKU", "category": "Işık Kontrol", "role": "Işık Kumanda", "person": "Fuat Fırat"}, {"play": "BİR DÜŞ GİBİ CAHİDE SONKU", "category": "Işık Kontrol", "role": "Işık Kumanda", "person": "Alper Mutlu"}, {"play": "BİR DÜŞ GİBİ CAHİDE SONKU", "category": "Sahne", "role": "Suflöz", "person": "Didem Özfuruncu"}, {"play": "BİR DÜŞ GİBİ CAHİDE SONKU", "category": "Sahne Dekor (Sorumlu)", "role": "Dekor Sorumlusu", "person": "Mustafa Akpınar"}, {"play": "BİR DÜŞ GİBİ CAHİDE SONKU", "category": "Dekor/Aksesuar", "role": "Aksesuar Sorumlusu", "person": "Yalçın Örgül"}, {"play": "BİR DÜŞ GİBİ CAHİDE SONKU", "category": "Kostüm", "role": "Kadın Terzi", "person": "Zarife Çağlar"}, {"play": "BİR DÜŞ GİBİ CAHİDE SONKU", "category": "Peruk – Makyaj", "role": "Perukacı", "person": "Sami Öztürk"}, {"play": "BİR DÜŞ GİBİ CAHİDE SONKU", "category": "Video / Görüntü", "role": "Sinevizyon Sorumlusu", "person": "Engin Altun"}, {"play": "BİR DÜŞ GİBİ CAHİDE SONKU", "category": "Tasarım", "role": "Dekor Tasarımı", "person": "Hasan Yavuz"}, {"play": "BÖCEK OTELİ", "category": "Oyuncu", "role": "Ecem Çataloğlu", "person": "Ecem Çataloğlu"}, {"play": "BÖCEK OTELİ", "category": "Oyuncu", "role": "Fatma Konu", "person": "Fatma Konu"}, {"play": "BÖCEK OTELİ", "category": "Figüran", "role": "Fatma Ayçin Güvercin", "person": "Fatma Ayçin Güvercin"}, {"play": "BÖCEK OTELİ", "category": "Figüran", "role": "Neslihan Serra Ayer", "person": "Neslihan Serra Ayer"}, {"play": "BÖCEK OTELİ", "category": "Tasarım", "role": "Kostüm Tasarımı", "person": "Ekip Çalışması"}, {"play": "BÖCEK OTELİ", "category": "Yönetim", "role": "Yönetmen Yardımcısı", "person": "Pınar Karadağ"}, {"play": "BÖCEK OTELİ", "category": "Sahne Amiri", "role": "Sahne Amiri", "person": "Hakan Eroğlu"}, {"play": "BÖCEK OTELİ", "category": "Dekor/Aksesuar", "role": "Aksesuar Sorumlusu", "person": "Gönenç Oktay"}, {"play": "BÖCEK OTELİ", "category": "Kostüm", "role": "Kadın Terzi", "person": "Hacer Eraslan"}, {"play": "FARELER VE İNSANLAR", "category": "Oyuncu", "role": "George", "person": "Arif Yavuz"}, {"play": "FARELER VE İNSANLAR", "category": "Oyuncu", "role": "George", "person": "S. Akın Kurt"}, {"play": "FARELER VE İNSANLAR", "category": "Oyuncu", "role": "Lennie", "person": "Umut Kolburan"}, {"play": "FARELER VE İNSANLAR", "category": "Oyuncu", "role": "Candy", "person": "Cemalettin Çekmece"}, {"play": "FARELER VE İNSANLAR", "category": "Oyuncu", "role": "Patron", "person": "Mustafa Turan"}, {"play": "FARELER VE İNSANLAR", "category": "Oyuncu", "role": "Slim", "person": "Ümit Dikmen"}, {"play": "FARELER VE İNSANLAR", "category": "Oyuncu", "role": "Curley", "person": "S. Akın Kurt"}, {"play": "FARELER VE İNSANLAR", "category": "Oyuncu", "role": "Curley", "person": "Uğur Kaya"}, {"play": "FARELER VE İNSANLAR", "category": "Oyuncu", "role": "Curley’in Karısı", "person": "Güneş Emir Cengiz"}, {"play": "FARELER VE İNSANLAR", "category": "Oyuncu", "role": "Carlson", "person": "Ömer Polat"}, {"play": "FARELER VE İNSANLAR", "category": "Oyuncu", "role": "Crooks", "person": "Muhammet Rıza Taşdemir"}, {"play": "FARELER VE İNSANLAR", "category": "Figüran", "role": "Kukla Oynatıcı", "person": "Fatma Ayçin Güvercin"}, {"play": "FARELER VE İNSANLAR", "category": "Figüran", "role": "Kukla Oynatıcı", "person": "Neslihan Serra Ayer"}, {"play": "FARELER VE İNSANLAR", "category": "Tasarım", "role": "Kostüm Tasarımı", "person": "Medina Yavuz Almaç"}, {"play": "FARELER VE İNSANLAR", "category": "Işık – Tasarım", "role": "Işık Tasarımı", "person": "Akın Yılmaz"}, {"play": "FARELER VE İNSANLAR", "category": "Müzisyen", "role": "Müzik", "person": "Erşah Gülerbaşlı"}, {"play": "FARELER VE İNSANLAR", "category": "Müzisyen", "role": "Müzik", "person": "Ari Barokas"}, {"play": "FARELER VE İNSANLAR", "category": "Teknik", "role": "Kukla Tasarımı", "person": "Ayten Öğütcü"}, {"play": "FARELER VE İNSANLAR", "category": "Yönetim", "role": "Yönetmen Yardımcısı", "person": "Serkan Kunter"}, {"play": "FARELER VE İNSANLAR", "category": "Yönetim", "role": "Asistan", "person": "Fatma Ayçin Güvercin"}, {"play": "FARELER VE İNSANLAR", "category": "Yönetim", "role": "Asistan", "person": "Neslihan Serra Ayer"}, {"play": "FARELER VE İNSANLAR", "category": "Sahne Amiri", "role": "Sahne Amiri", "person": "Önder Ünver"}, {"play": "FARELER VE İNSANLAR", "category": "Ses – Kondüvit", "role": "Kondüvit", "person": "Ali Avcı"}, {"play": "FARELER VE İNSANLAR", "category": "Işık Kontrol", "role": "Işık Kumanda", "person": "Osman Burak Sakallıoğlu"}, {"play": "FARELER VE İNSANLAR", "category": "Işık Kontrol", "role": "Işık Kumanda", "person": "Süleyman Tavan"}, {"play": "FARELER VE İNSANLAR", "category": "Sahne", "role": "Suflöz", "person": "Didem Özfuruncu"}, {"play": "FARELER VE İNSANLAR", "category": "Sahne Dekor (Sorumlu)", "role": "Dekor Sorumlusu", "person": "Şafak Kocatuş"}, {"play": "FARELER VE İNSANLAR", "category": "Dekor/Aksesuar", "role": "Aksesuar Sorumlusu", "person": "Bekir Koç"}, {"play": "FARELER VE İNSANLAR", "category": "Dekor/Aksesuar", "role": "Aksesuar Sorumlusu", "person": "Serhat Örgül"}, {"play": "FARELER VE İNSANLAR", "category": "Kostüm", "role": "Kadın Terzi", "person": "Hacer Eraslan"}, {"play": "FARELER VE İNSANLAR", "category": "Kostüm", "role": "Erkek Terzi", "person": "Kadri Özel"}, {"play": "FARELER VE İNSANLAR", "category": "Peruk – Makyaj", "role": "Perukacı", "person": "Talat Apaydın"}, {"play": "FARELER VE İNSANLAR", "category": "Tasarım", "role": "Dekor Tasarımı", "person": "Hasan Yavuz"}, {"play": "GÜMÜŞ PATENLER", "category": "Figüran", "role": "Hans Brinker", "person": "Koray Doğan"}, {"play": "GÜMÜŞ PATENLER", "category": "Oyuncu", "role": "Gretel Brinker", "person": "Berfin Türköz Kurt"}, {"play": "GÜMÜŞ PATENLER", "category": "Oyuncu", "role": "Bayan Brinker", "person": "Ece Güzel"}, {"play": "GÜMÜŞ PATENLER", "category": "Oyuncu", "role": "Raff Brinker", "person": "Türker Alpuğan"}, {"play": "GÜMÜŞ PATENLER", "category": "Oyuncu", "role": "Hilda Van Gleck", "person": "Meral Ceren Türk Yel"}, {"play": "GÜMÜŞ PATENLER", "category": "Oyuncu", "role": "Annie Bouman", "person": "Elif Özdemir Akçe"}, {"play": "GÜMÜŞ PATENLER", "category": "Oyuncu", "role": "Richie Korbes", "person": "Gizem Cessur"}, {"play": "GÜMÜŞ PATENLER", "category": "Oyuncu", "role": "Katrinka Lodewyk", "person": "Pelin Tozkoparan"}, {"play": "GÜMÜŞ PATENLER", "category": "Figüran", "role": "Carl Schumel", "person": "Mahir Taylan Kalfaoğlu"}, {"play": "GÜMÜŞ PATENLER", "category": "Oyuncu", "role": "Peter Van Holp", "person": "Efe Akercan"}, {"play": "GÜMÜŞ PATENLER", "category": "Figüran", "role": "Ludwing Van Holp", "person": "Ata Mert Gülmez"}, {"play": "GÜMÜŞ PATENLER", "category": "Figüran", "role": "Jacop Poot", "person": "Seyit Berkan Köse"}, {"play": "GÜMÜŞ PATENLER", "category": "Figüran", "role": "Voostenwolbert Schimmelpennich", "person": "Zeynep Aşkım Tuncer Özzeytin"}, {"play": "GÜMÜŞ PATENLER", "category": "Figüran", "role": "Benjamin Dobbs", "person": "Umut Can Koçmen"}, {"play": "GÜMÜŞ PATENLER", "category": "Figüran", "role": "Dr. Boekman", "person": "Emirhan Yeşilyuva"}, {"play": "GÜMÜŞ PATENLER", "category": "Figüran", "role": "Bayan Van Gleck", "person": "Nebahat Damla Ardal Alpuğan"}, {"play": "GÜMÜŞ PATENLER", "category": "Figüran", "role": "Bay Van Gleck", "person": "Tolga Erk"}, {"play": "GÜMÜŞ PATENLER", "category": "Figüran", "role": "Olivia Dobbs", "person": "Handan Tok Kaya"}, {"play": "GÜMÜŞ PATENLER", "category": "Figüran", "role": "Emma Lodewyk", "person": "Gizem Güneri Bayrak"}, {"play": "GÜMÜŞ PATENLER", "category": "Tasarım", "role": "Kostüm Tasarımı", "person": "Medina Yavuz Almaç"}, {"play": "GÜMÜŞ PATENLER", "category": "Işık – Tasarım", "role": "Işık Tasarımı", "person": "Eser Dursun"}, {"play": "GÜMÜŞ PATENLER", "category": "Müzisyen", "role": "Müzik", "person": "Gürkan Çakıcı"}, {"play": "GÜMÜŞ PATENLER", "category": "Hareket / Koreografi", "role": "Koreografi", "person": "Müge Uyan Yeşilpınar"}, {"play": "GÜMÜŞ PATENLER", "category": "Figüran", "role": "Korrepetitör", "person": "Emre Deniz"}, {"play": "GÜMÜŞ PATENLER", "category": "Teknik", "role": "Kukla Tasarımı", "person": "İlhan Ateş"}, {"play": "GÜMÜŞ PATENLER", "category": "Eğitmen", "role": "Paten Eğitmeni", "person": "Gamze İyiiş Güner"}, {"play": "GÜMÜŞ PATENLER", "category": "Yönetim", "role": "Yönetmen Yardımcısı", "person": "Bengi Ebru Atakan"}, {"play": "GÜMÜŞ PATENLER", "category": "Yönetim", "role": "Yönetmen Yardımcısı", "person": "Meral Ceren Türk Yel"}, {"play": "GÜMÜŞ PATENLER", "category": "Yönetim", "role": "Asistan", "person": "Betül Işık"}, {"play": "GÜMÜŞ PATENLER", "category": "Yönetim", "role": "Asistan", "person": "İpek Sonal"}, {"play": "GÜMÜŞ PATENLER", "category": "Sahne Amiri", "role": "Sahne Amiri", "person": "Aynur Güçlü"}, {"play": "GÜMÜŞ PATENLER", "category": "Ses – Kondüvit", "role": "Kondüvit", "person": "Ulaş Yakup Alan"}, {"play": "GÜMÜŞ PATENLER", "category": "Işık Kontrol", "role": "Işık Kumanda", "person": "Emrah Yıldız"}, {"play": "GÜMÜŞ PATENLER", "category": "Işık Kontrol", "role": "Işık Kumanda", "person": "Önder Yağlıdere"}, {"play": "GÜMÜŞ PATENLER", "category": "Sahne", "role": "Suflöz", "person": "Didem Özfuruncu"}, {"play": "GÜMÜŞ PATENLER", "category": "Sahne Dekor (Sorumlu)", "role": "Dekor Sorumlusu", "person": "Koray Hallı"}, {"play": "GÜMÜŞ PATENLER", "category": "Dekor/Aksesuar", "role": "Aksesuar Sorumlusu", "person": "Sıtkı Miman"}, {"play": "GÜMÜŞ PATENLER", "category": "Kostüm", "role": "Kadın Terzi", "person": "Seher Ay"}, {"play": "GÜMÜŞ PATENLER", "category": "Kostüm", "role": "Erkek Terzi", "person": "Akın Tiryaki"}, {"play": "GÜMÜŞ PATENLER", "category": "Peruk – Makyaj", "role": "Perukacı", "person": "Ayşe Demir"}, {"play": "GÜMÜŞ PATENLER", "category": "Tasarım", "role": "Dekor Tasarımı", "person": "Tayfun Çebi"}, {"play": "HAMLET", "category": "Oyuncu", "role": "Hamlet", "person": "Sezer Akçe"}, {"play": "HAMLET", "category": "Oyuncu", "role": "Gertrude", "person": "Melike Aslı Kılan"}, {"play": "HAMLET", "category": "Oyuncu", "role": "Ophelia", "person": "Berfin Türköz Kurt"}, {"play": "HAMLET", "category": "Oyuncu", "role": "Kral", "person": "B. Atila Karagöz"}, {"play": "HAMLET", "category": "Oyuncu", "role": "Hayalet", "person": "Ozan Kalkan"}, {"play": "HAMLET", "category": "Oyuncu", "role": "Laertes", "person": "Kerem Corogil"}, {"play": "HAMLET", "category": "Oyuncu", "role": "Horatio", "person": "Egecan İntepeler"}, {"play": "HAMLET", "category": "Tasarım", "role": "Kostüm Tasarımı", "person": "F. Duygu Ergüven Saykan"}, {"play": "HAMLET", "category": "Işık – Tasarım", "role": "Işık Tasarımı", "person": "Çağlar Aytaç"}, {"play": "HAMLET", "category": "Müzisyen", "role": "Müzik", "person": "Erşah Gülerbaşlı"}, {"play": "HAMLET", "category": "Hareket / Koreografi", "role": "Hareket Düzeni", "person": "Tuğçe Ulugün Tuna"}, {"play": "HAMLET", "category": "Video / Görüntü", "role": "Sinevizyon Tasarımı", "person": "Engin Altun"}, {"play": "HAMLET", "category": "Yönetim", "role": "Yönetmen Yardımcısı", "person": "Fuat Şarbalkan"}, {"play": "HAMLET", "category": "Yönetim", "role": "Asistan", "person": "Betül Işık"}, {"play": "HAMLET", "category": "Yönetim", "role": "Asistan", "person": "Handan Tok Kaya"}, {"play": "HAMLET", "category": "Sahne Amiri", "role": "Sahne Amiri", "person": "Göksu Kolburan"}, {"play": "HAMLET", "category": "Ses – Kondüvit", "role": "Kondüvit", "person": "Mehmet Şişeci"}, {"play": "HAMLET", "category": "Ses – Kondüvit", "role": "Kondüvit", "person": "Serhat Çetin"}, {"play": "HAMLET", "category": "Işık Kontrol", "role": "Işık Kumanda", "person": "Çağlar Aytaç"}, {"play": "HAMLET", "category": "Sahne", "role": "Suflöz", "person": "Didem Özfuruncu"}, {"play": "HAMLET", "category": "Sahne Dekor (Sorumlu)", "role": "Dekor Sorumlusu", "person": "Mehmet Musab Çakırefe"}, {"play": "HAMLET", "category": "Dekor/Aksesuar", "role": "Aksesuar Sorumlusu", "person": "Hüseyin Yaran"}, {"play": "HAMLET", "category": "Kostüm", "role": "Kadın Terzi", "person": "Nahile Ülger"}, {"play": "HAMLET", "category": "Kostüm", "role": "Erkek Terzi", "person": "İlker Korkmaz"}, {"play": "HAMLET", "category": "Peruk – Makyaj", "role": "Perukacı", "person": "Ayşe Demir"}, {"play": "HAMLET", "category": "Video / Görüntü", "role": "Sinevizyon Sorumlusu", "person": "Engin Altun"}, {"play": "HAMLET", "category": "Video / Görüntü", "role": "Sinevizyon Sorumlusu", "person": "Umut Kızılyaprak"}, {"play": "HAMLET", "category": "Tasarım", "role": "Dekor Tasarımı", "person": "Hasan Yavuz"}, {"play": "HAYALİ TEMSİL", "category": "Oyuncu", "role": "Dikran", "person": "İ. Hakan Özgömeç"}, {"play": "HAYALİ TEMSİL", "category": "Oyuncu", "role": "Bedia Muvahhit", "person": "Özlem Başkaya"}, {"play": "HAYALİ TEMSİL", "category": "Oyuncu", "role": "Afife Jale", "person": "Burcu Ongun Altay"}, {"play": "HAYALİ TEMSİL", "category": "Figüran", "role": "Çığırtkan", "person": "Emirhan Yeşilyuva"}, {"play": "HAYALİ TEMSİL", "category": "Figüran", "role": "Çığırtkan", "person": "Koray Doğan"}, {"play": "HAYALİ TEMSİL", "category": "Tasarım", "role": "Kostüm Tasarımı", "person": "Funda Çebi"}, {"play": "HAYALİ TEMSİL", "category": "Işık – Tasarım", "role": "Işık Tasarımı", "person": "Mustafa Derler"}, {"play": "HAYALİ TEMSİL", "category": "Müzisyen", "role": "Şarkı Sözleri", "person": "Gürol Tonbul, Nihat Demirkol"}, {"play": "HAYALİ TEMSİL", "category": "Hareket / Koreografi", "role": "Hareket Düzeni", "person": "Meltem Yorulmaz"}, {"play": "HAYALİ TEMSİL", "category": "Teknik", "role": "Kukla Tasarımı", "person": "Suat Ünverdi"}, {"play": "HAYALİ TEMSİL", "category": "Yönetim", "role": "Yönetmen Yardımcısı", "person": "Ömer Polat"}, {"play": "HAYALİ TEMSİL", "category": "Yönetim", "role": "Asistan", "person": "İlayda Algın"}, {"play": "HAYALİ TEMSİL", "category": "Yönetim", "role": "Asistan", "person": "Ece Can"}, {"play": "HAYALİ TEMSİL", "category": "Sahne Amiri", "role": "Sahne Amiri", "person": "Özlem Lale Şahin"}, {"play": "HAYALİ TEMSİL", "category": "Ses – Kondüvit", "role": "Kondüvit", "person": "Ulaş Yakup Alan"}, {"play": "HAYALİ TEMSİL", "category": "Işık Kontrol", "role": "Işık Kumanda", "person": "Çağlar Aytaç"}, {"play": "HAYALİ TEMSİL", "category": "Işık Kontrol", "role": "Işık Kumanda", "person": "Mustafa Derler"}, {"play": "HAYALİ TEMSİL", "category": "Sahne", "role": "Suflöz", "person": "Yağmur Özgenç Şahin"}, {"play": "HAYALİ TEMSİL", "category": "Sahne Dekor (Sorumlu)", "role": "Dekor Sorumlusu", "person": "Gönenç Oktay"}, {"play": "HAYALİ TEMSİL", "category": "Dekor/Aksesuar", "role": "Aksesuar Sorumlusu", "person": "Sıtkı Miman"}, {"play": "HAYALİ TEMSİL", "category": "Kostüm", "role": "Kadın Terzi", "person": "Zarife Çağlar"}, {"play": "HAYALİ TEMSİL", "category": "Kostüm", "role": "Erkek Terzi", "person": "Akın Tiryaki"}, {"play": "HAYALİ TEMSİL", "category": "Peruk – Makyaj", "role": "Perukacı", "person": "Talat Apaydın"}, {"play": "HAYALİ TEMSİL", "category": "Tasarım", "role": "Dekor Tasarımı", "person": "Tayfun Çebi"}, {"play": "İKİ YEŞİL SUSAMURU", "category": "Tasarım", "role": "Dekor Tasarımı", "person": "Murat Gülmez"}, {"play": "İKİ YEŞİL SUSAMURU", "category": "Oyuncu", "role": "Yazar", "person": "Filiz Övün"}, {"play": "İKİ YEŞİL SUSAMURU", "category": "Oyuncu", "role": "Nilsu", "person": "Mina Yorulmaz"}, {"play": "İKİ YEŞİL SUSAMURU", "category": "Oyuncu", "role": "Teoman", "person": "M. Doğukan Özman"}, {"play": "İKİ YEŞİL SUSAMURU", "category": "Oyuncu", "role": "Cahide", "person": "Sultan Gülay Toprak"}, {"play": "İKİ YEŞİL SUSAMURU", "category": "Oyuncu", "role": "Neyyire", "person": "Aylin Önal"}, {"play": "İKİ YEŞİL SUSAMURU", "category": "Oyuncu", "role": "Nilgül", "person": "Hülya Dilek Arda"}, {"play": "İKİ YEŞİL SUSAMURU", "category": "Oyuncu", "role": "Murat", "person": "Musa Zından"}, {"play": "İKİ YEŞİL SUSAMURU", "category": "Oyuncu", "role": "Anneanne", "person": "Emine Sitare Tuna"}, {"play": "İKİ YEŞİL SUSAMURU", "category": "Oyuncu", "role": "Selen", "person": "Nagehan Yazıcı"}, {"play": "İKİ YEŞİL SUSAMURU", "category": "Oyuncu", "role": "Mike / Mike'nin Babası", "person": "Ömer Devrim Akkaya"}, {"play": "İKİ YEŞİL SUSAMURU", "category": "Oyuncu", "role": "Nergis", "person": "Derya Kara Erk"}, {"play": "İKİ YEŞİL SUSAMURU", "category": "Oyuncu", "role": "Enver Ziya / Cem / Yeşiller Üyesi / Restoran Adamı / Eski Sevgili / Vapurdaki Genç", "person": "Deniz Genç"}, {"play": "İKİ YEŞİL SUSAMURU", "category": "Oyuncu", "role": "Alicia / Laura / Seval / Yeşiller Partisi Üyesi", "person": "Maya Tuğçe Us"}, {"play": "İKİ YEŞİL SUSAMURU", "category": "Oyuncu", "role": "Şule / Amanda / Yeşiller Partisi Üyesi / Öğrenci / Restoran Kadın", "person": "Bengi Ebru Atakan"}, {"play": "İKİ YEŞİL SUSAMURU", "category": "Oyuncu", "role": "Pipolu Adam / Fikret / Nilsu'nun Eski Sevgili", "person": "Uğur Kaya"}, {"play": "İKİ YEŞİL SUSAMURU", "category": "Figüran", "role": "Garson / Siyahlı Kadın / Deniz / Öğrenci / Yeşiller Partisi Üyesi / Dolmuştaki Müşteri", "person": "Zeynep Aşkım Tuncer Özzeytin"}, {"play": "İKİ YEŞİL SUSAMURU", "category": "Oyuncu", "role": "Hemşire / Yeşiller Partisi Üyesi", "person": "Meltem Yorulmaz"}, {"play": "İKİ YEŞİL SUSAMURU", "category": "Figüran", "role": "Garson / Vapurdaki Genç / Yeşiller Partisi Üyesi / Nilsu'nun Eski Sevgilisi / Dolmuştaki Müşteri", "person": "Salih Köküz"}, {"play": "İKİ YEŞİL SUSAMURU", "category": "Tasarım", "role": "Kostüm Tasarımı", "person": "Zehra Yıldız Köse"}, {"play": "İKİ YEŞİL SUSAMURU", "category": "Işık – Tasarım", "role": "Işık Tasarımı", "person": "Ruzdi Aliji"}, {"play": "İKİ YEŞİL SUSAMURU", "category": "Müzisyen", "role": "Müzik", "person": "Erşah Gülerbaşlı"}, {"play": "İKİ YEŞİL SUSAMURU", "category": "Teknik", "role": "Koreografi", "person": "Meltem Yorulmaz"}, {"play": "İKİ YEŞİL SUSAMURU", "category": "Dramaturgi", "role": "Dramaturg", "person": "Füsun Ataman"}, {"play": "İKİ YEŞİL SUSAMURU", "category": "Yönetim", "role": "Yönetmen Yardımcısı", "person": "Zeynep Hürol"}, {"play": "İKİ YEŞİL SUSAMURU", "category": "Yönetim", "role": "Yönetmen Yardımcısı", "person": "Selda Mikkola"}, {"play": "İKİ YEŞİL SUSAMURU", "category": "Yönetim", "role": "Asistan", "person": "Merve Kamar"}, {"play": "İKİ YEŞİL SUSAMURU", "category": "Yönetim", "role": "Asistan", "person": "Zeynep Aşkım Tuncer Özzeytin"}, {"play": "İKİ YEŞİL SUSAMURU", "category": "Sahne Amiri", "role": "Sahne Amiri", "person": "Mesut Dalaz"}, {"play": "İKİ YEŞİL SUSAMURU", "category": "Ses – Kondüvit", "role": "Kondüvit", "person": "Harun Düzenli"}, {"play": "İKİ YEŞİL SUSAMURU", "category": "Işık Kontrol", "role": "Işık Kumanda", "person": "Önder Yağlıdere"}, {"play": "İKİ YEŞİL SUSAMURU", "category": "Sahne", "role": "Suflöz", "person": "Ayşe Şenoğlu"}, {"play": "İKİ YEŞİL SUSAMURU", "category": "Sahne Dekor (Sorumlu)", "role": "Dekor Sorumlusu", "person": "Mustafa Akpınar"}, {"play": "İKİ YEŞİL SUSAMURU", "category": "Dekor/Aksesuar", "role": "Aksesuar Sorumlusu", "person": "Alper Erdoğan"}, {"play": "İKİ YEŞİL SUSAMURU", "category": "Kostüm", "role": "Kadın Terzi", "person": "Ümmü Kılıç"}, {"play": "İKİ YEŞİL SUSAMURU", "category": "Kostüm", "role": "Erkek Terzi", "person": "Vacit Örgül"}, {"play": "İKİ YEŞİL SUSAMURU", "category": "Peruk – Makyaj", "role": "Perukacı", "person": "Talat Apaydın"}, {"play": "İKİNCİ CADDENİN MAHKUMU", "category": "Tasarım", "role": "Dekor Tasarımı", "person": "Savaş Çevirel"}, {"play": "İKİNCİ CADDENİN MAHKUMU", "category": "Oyuncu", "role": "Mell", "person": "Ali Ulvi Hünkar"}, {"play": "İKİNCİ CADDENİN MAHKUMU", "category": "Oyuncu", "role": "Edna", "person": "Dilek Çetiner Demir"}, {"play": "İKİNCİ CADDENİN MAHKUMU", "category": "Oyuncu", "role": "Hary", "person": "Sedat Şenoğlu"}, {"play": "İKİNCİ CADDENİN MAHKUMU", "category": "Oyuncu", "role": "Pauline", "person": "Selda Mikkola"}, {"play": "İKİNCİ CADDENİN MAHKUMU", "category": "Oyuncu", "role": "Jassie", "person": "Gürşen Eren"}, {"play": "İKİNCİ CADDENİN MAHKUMU", "category": "Oyuncu", "role": "Pearl", "person": "Derya Kara Erk"}, {"play": "İKİNCİ CADDENİN MAHKUMU", "category": "Oyuncu", "role": "TV Sunucusu", "person": "Maya Tuğçe Us"}, {"play": "İKİNCİ CADDENİN MAHKUMU", "category": "Oyuncu", "role": "Spiker", "person": "Yıldız Akbıyık"}, {"play": "İKİNCİ CADDENİN MAHKUMU", "category": "Tasarım", "role": "Kostüm Tasarımı", "person": "Buket Başaran Akkaya"}, {"play": "İKİNCİ CADDENİN MAHKUMU", "category": "Işık – Tasarım", "role": "Işık Tasarımı", "person": "Mehmet Alacı"}, {"play": "İKİNCİ CADDENİN MAHKUMU", "category": "Dramaturgi", "role": "Dramaturg", "person": "Pınar Merterkek Tarcan"}, {"play": "İKİNCİ CADDENİN MAHKUMU", "category": "Yönetim", "role": "Yönetmen Yardımcısı", "person": "Gülay Toprak"}, {"play": "İKİNCİ CADDENİN MAHKUMU", "category": "Yönetim", "role": "Asistan", "person": "Maya Tuğçe Us"}, {"play": "İKİNCİ CADDENİN MAHKUMU", "category": "Sahne Amiri", "role": "Sahne Amiri", "person": "Mesut Dalaz"}, {"play": "İKİNCİ CADDENİN MAHKUMU", "category": "Ses – Kondüvit", "role": "Kondüvit", "person": "Harun Düzenli"}, {"play": "İKİNCİ CADDENİN MAHKUMU", "category": "Işık Kontrol", "role": "Işık Kumanda", "person": "Erkan Uyar"}, {"play": "İKİNCİ CADDENİN MAHKUMU", "category": "Işık Kontrol", "role": "Işık Kumanda", "person": "Mustafa Derler"}, {"play": "İKİNCİ CADDENİN MAHKUMU", "category": "Sahne", "role": "Suflöz", "person": "Selen Çiçekdağ"}, {"play": "İKİNCİ CADDENİN MAHKUMU", "category": "Sahne Dekor (Sorumlu)", "role": "Dekor Sorumlusu", "person": "Hüseyin Yaran"}, {"play": "İKİNCİ CADDENİN MAHKUMU", "category": "Sahne Dekor (Sorumlu)", "role": "Dekor Sorumlusu", "person": "Sıtkı Miman"}, {"play": "İKİNCİ CADDENİN MAHKUMU", "category": "Dekor/Aksesuar", "role": "Aksesuar Sorumlusu", "person": "Uğur Topuz"}, {"play": "İKİNCİ CADDENİN MAHKUMU", "category": "Kostüm", "role": "Kadın Terzi", "person": "Nahile Ülger"}, {"play": "İKİNCİ CADDENİN MAHKUMU", "category": "Kostüm", "role": "Erkek Terzi", "person": "Akın Tiryaki"}, {"play": "İKİNCİ CADDENİN MAHKUMU", "category": "Peruk – Makyaj", "role": "Perukacı", "person": "Talat Apaydın"}, {"play": "İLERLEME", "category": "Tasarım", "role": "Dekor Tasarımı", "person": "Hasan Yavuz"}, {"play": "İLERLEME", "category": "Oyuncu", "role": "Anne", "person": "Işın Yıldız"}, {"play": "İLERLEME", "category": "Oyuncu", "role": "Baba", "person": "B. Atila Karagöz"}, {"play": "İLERLEME", "category": "Oyuncu", "role": "Oğul", "person": "Kerem Corogil"}, {"play": "İLERLEME", "category": "Oyuncu", "role": "Kız", "person": "Berfin Türköz Kurt"}, {"play": "İLERLEME", "category": "Oyuncu", "role": "Stanko/Adam/1.Komşu", "person": "Fatih Yurdakul"}, {"play": "İLERLEME", "category": "Oyuncu", "role": "Milis (Marco)/Travesti/Gorak/2. Komşu", "person": "Ömer Polat"}, {"play": "İLERLEME", "category": "Oyuncu", "role": "Znorko/Sürekli Sırıtan Adam/Frantz/3. Komşu", "person": "Efe Akercan"}, {"play": "İLERLEME", "category": "Oyuncu", "role": "Yrvan/Pralic", "person": "Fatma Konu"}, {"play": "İLERLEME", "category": "Oyuncu", "role": "Giriş Şarkısını Seslendiren", "person": "Mesure Syuleyman Durmazer"}, {"play": "İLERLEME", "category": "Tasarım", "role": "Kostüm Tasarımı", "person": "F. Duygu Ergüven Saykan"}, {"play": "İLERLEME", "category": "Işık – Tasarım", "role": "Işık Tasarımı", "person": "Fuat Fırat"}, {"play": "İLERLEME", "category": "Müzisyen", "role": "Müzik", "person": "Oktay Köseoğlu"}, {"play": "İLERLEME", "category": "Figüran", "role": "Koreografi", "person": "Müge Uyan Yeşilpınar"}, {"play": "İLERLEME", "category": "Teknik", "role": "Repetitör", "person": "Deniz Dilmen"}, {"play": "İLERLEME", "category": "Figüran", "role": "Korrepetitör", "person": "Emre Deniz"}, {"play": "İLERLEME", "category": "Yönetim", "role": "Yönetmen Yardımcıları", "person": "Ömer Polat, Fatma Kum Ertekin"}, {"play": "İLERLEME", "category": "Yönetim", "role": "Asistan", "person": "Tayfur Çamlıbel (Figüran), Telin Sümer"}, {"play": "İLERLEME", "category": "Sahne Amiri", "role": "Sahne Amiri", "person": "Göksu Kolburan"}, {"play": "İLERLEME", "category": "Ses – Kondüvit", "role": "Kondüvit", "person": "Ali Avcı, Mehmet Şişeci"}, {"play": "İLERLEME", "category": "Işık Kontrol", "role": "Işık Kumanda", "person": "Fuat Fırat, Alper Mutlu"}, {"play": "İLERLEME", "category": "Sahne", "role": "Suflöz", "person": "Gülcan Çetin"}, {"play": "İLERLEME", "category": "Sahne Dekor (Sorumlu)", "role": "Dekor Sorumlusu", "person": "Mehmet Musab Çakırefe"}, {"play": "İLERLEME", "category": "Dekor/Aksesuar", "role": "Aksesuar Sorumlusu", "person": "Hüseyin Yaran"}, {"play": "İLERLEME", "category": "Kostüm", "role": "Kadın Terzi", "person": "Filiz Muratoğlu Karamırnak"}, {"play": "İLERLEME", "category": "Kostüm", "role": "Erkek Terzi", "person": "Kadri Özel"}, {"play": "İLERLEME", "category": "Peruk – Makyaj", "role": "Perukacı", "person": "Ayşe Demir"}, {"play": "İLERLEME", "category": "Video / Görüntü", "role": "Sinevizyon Sorumluları", "person": "Umut Kızılyaprak, Engin Altun"}, {"play": "KAÇAKLAR", "category": "Kurumdan Emekli Sanatçı", "role": "", "person": "Hülya Savaş"}, {"play": "KAÇAKLAR", "category": "Oyuncu", "role": "", "person": "Hülya Gürler Kılıç"}, {"play": "KAÇAKLAR", "category": "Tasarım", "role": "Kostüm Tasarımı", "person": "F. Duygu Ergüven Saykan"}, {"play": "KAÇAKLAR", "category": "Işık – Tasarım", "role": "Işık Tasarımı", "person": "Önder Yağlıdere"}, {"play": "KAÇAKLAR", "category": "Müzisyen", "role": "Müzik", "person": "Oktay Köseoğlu"}, {"play": "KAÇAKLAR", "category": "Teknik", "role": "Görüntü Tasarımı", "person": "Engin Altun"}, {"play": "KAÇAKLAR", "category": "Dramaturgi", "role": "Dramaturg", "person": "Alperen Kartal"}, {"play": "KAÇAKLAR", "category": "Yönetim", "role": "Yönetmen Yardımcısı", "person": "Neşe Arat"}, {"play": "KAÇAKLAR", "category": "Yönetim", "role": "Yönetmen Yardımcısı", "person": "Filiz Övün"}, {"play": "KAÇAKLAR", "category": "Yönetim", "role": "Asistan", "person": "Gülben Başer"}, {"play": "KAÇAKLAR", "category": "Yönetim", "role": "Asistan", "person": "Mustafa Koçbay"}, {"play": "KAÇAKLAR", "category": "Sahne Amiri", "role": "Sahne Amiri", "person": "Mesut Dalaz"}, {"play": "KAÇAKLAR", "category": "Sahne Amiri", "role": "Sahne Amiri", "person": "Nurhan Güncan"}, {"play": "KAÇAKLAR", "category": "Ses – Kondüvit", "role": "Kondüvit", "person": "Harun Düzenli"}, {"play": "KAÇAKLAR", "category": "Ses – Kondüvit", "role": "Kondüvit", "person": "Ali Avcı"}, {"play": "KAÇAKLAR", "category": "Işık Kontrol", "role": "Işık Kumanda", "person": "Osman Burak Sakallıoğlu"}, {"play": "KAÇAKLAR", "category": "Işık Kontrol", "role": "Işık Kumanda", "person": "Önder Yağlıdere"}, {"play": "KAÇAKLAR", "category": "Sahne", "role": "Suflöz", "person": "Ayşe Şenoğlu"}, {"play": "KAÇAKLAR", "category": "Sahne Dekor (Sorumlu)", "role": "Dekor Sorumlusu", "person": "Melih Hallı"}, {"play": "KAÇAKLAR", "category": "Dekor/Aksesuar", "role": "Aksesuar Sorumlusu", "person": "Mert Kokdaş"}, {"play": "KAÇAKLAR", "category": "Dekor/Aksesuar", "role": "Aksesuar Sorumlusu", "person": "Doğan Örgül"}, {"play": "KAÇAKLAR", "category": "Kostüm", "role": "Kadın Terzi", "person": "Hacer Eraslan"}, {"play": "KAÇAKLAR", "category": "Peruk – Makyaj", "role": "Perukacı", "person": "İbrahim Aydın"}, {"play": "KAÇAKLAR", "category": "Video / Görüntü", "role": "Sinevizyon Sorumlusu", "person": "Engin Altun"}, {"play": "KAÇAKLAR", "category": "Video / Görüntü", "role": "Sinevizyon Sorumlusu", "person": "Umut Kızılyaprak"}, {"play": "KAÇAKLAR", "category": "Tasarım", "role": "Dekor Tasarımı", "person": "Seyhan Kırca"}, {"play": "KARINCALAR BİR SAVAŞ VARDI", "category": "Tasarım", "role": "Dekor & Kostüm Tasarımı", "person": "Ali Cem Köroğlu"}, {"play": "KARINCALAR BİR SAVAŞ VARDI", "category": "Oyuncu", "role": "Asker", "person": "S. Akın Kurt"}, {"play": "KARINCALAR BİR SAVAŞ VARDI", "category": "Işık – Tasarım", "role": "Işık Tasarımı", "person": "Kerem Çetinel"}, {"play": "KARINCALAR BİR SAVAŞ VARDI", "category": "Müzisyen", "role": "Müzik", "person": "Dengin Ceyhan"}, {"play": "KARINCALAR BİR SAVAŞ VARDI", "category": "Dramaturgi", "role": "Dramaturg", "person": "Füsun Ataman"}, {"play": "KARINCALAR BİR SAVAŞ VARDI", "category": "Yönetim", "role": "Yönetmen Yardımcısı", "person": "Ersin Ayhan"}, {"play": "KARINCALAR BİR SAVAŞ VARDI", "category": "Yönetim", "role": "Asistan", "person": "Bengi Ebru Atakan"}, {"play": "KARINCALAR BİR SAVAŞ VARDI", "category": "Yönetim", "role": "Asistan", "person": "Ecem Çataloğlu"}, {"play": "KARINCALAR BİR SAVAŞ VARDI", "category": "Sahne Amiri", "role": "Sahne Amiri", "person": "Ramazan Özcan"}, {"play": "KARINCALAR BİR SAVAŞ VARDI", "category": "Ses – Kondüvit", "role": "Kondüvit", "person": "Mehmet Şişeci"}, {"play": "KARINCALAR BİR SAVAŞ VARDI", "category": "Ses – Kondüvit", "role": "Kondüvit", "person": "Ali Avcı"}, {"play": "KARINCALAR BİR SAVAŞ VARDI", "category": "Işık Kontrol", "role": "Işık Kumanda", "person": "Osman Burak Sakallıoğlu"}, {"play": "KARINCALAR BİR SAVAŞ VARDI", "category": "Işık Kontrol", "role": "Işık Kumanda", "person": "Süleyman Tavan"}, {"play": "KARINCALAR BİR SAVAŞ VARDI", "category": "Sahne", "role": "Suflöz", "person": "Ayşe Şenoğlu"}, {"play": "KARINCALAR BİR SAVAŞ VARDI", "category": "Sahne Dekor (Sorumlu)", "role": "Dekor Sorumlusu", "person": "Bekir Koç"}, {"play": "KARINCALAR BİR SAVAŞ VARDI", "category": "Dekor/Aksesuar", "role": "Aksesuar Sorumlusu", "person": "Şafak Kocatuş"}, {"play": "KARINCALAR BİR SAVAŞ VARDI", "category": "Kostüm", "role": "Erkek Terzi", "person": "Kadri Özel"}, {"play": "KARINCALAR BİR SAVAŞ VARDI", "category": "Peruk – Makyaj", "role": "Perukacı", "person": "Sami Öztürk"}, {"play": "KIRMIZI KANATLI BAYKUŞ", "category": "Tasarım", "role": "Dekor & Kostüm Tasarımı", "person": "Seyhan Kırca"}, {"play": "KIRMIZI KANATLI BAYKUŞ", "category": "Oyuncu", "role": "", "person": "Kamil Samet Selçuk"}, {"play": "KIRMIZI KANATLI BAYKUŞ", "category": "Figüran", "role": "", "person": "Ece Can"}, {"play": "KIRMIZI KANATLI BAYKUŞ", "category": "Figüran", "role": "", "person": "İlayda Algın"}, {"play": "KIRMIZI KANATLI BAYKUŞ", "category": "Figüran", "role": "", "person": "Özlem Sağlam"}, {"play": "KIRMIZI KANATLI BAYKUŞ", "category": "Işık – Tasarım", "role": "Işık Tasarımı", "person": "Umut Azem Pütün"}, {"play": "KIRMIZI KANATLI BAYKUŞ", "category": "Müzisyen", "role": "Müzik", "person": "Fırat Akarcalı"}, {"play": "KIRMIZI KANATLI BAYKUŞ", "category": "Teknik", "role": "Kukla Tasarımı", "person": "Özge Şenol"}, {"play": "KIRMIZI KANATLI BAYKUŞ", "category": "Dramaturgi", "role": "Dramaturg", "person": "Alperen Kartal"}, {"play": "KIRMIZI KANATLI BAYKUŞ", "category": "Yönetim", "role": "Yönetmen Yardımcısı", "person": "Kamil Samet Selçuk"}, {"play": "KIRMIZI KANATLI BAYKUŞ", "category": "Sahne Amiri", "role": "Sahne Amiri", "person": "Mesut Dalaz"}, {"play": "KIRMIZI KANATLI BAYKUŞ", "category": "Sahne Amiri", "role": "Sahne Amiri", "person": "Nurhan Güncan"}, {"play": "KIRMIZI KANATLI BAYKUŞ", "category": "Ses – Kondüvit", "role": "Kondüvit", "person": "Canan Mızrak Deniz"}, {"play": "KIRMIZI KANATLI BAYKUŞ", "category": "Ses – Kondüvit", "role": "Kondüvit", "person": "Ali Avcı"}, {"play": "KIRMIZI KANATLI BAYKUŞ", "category": "Işık Kontrol", "role": "Işık Kumanda", "person": "Osman Burak Sakallıoğlu"}, {"play": "KIRMIZI KANATLI BAYKUŞ", "category": "Işık Kontrol", "role": "Işık Kumanda", "person": "Önder Yağlıdere"}, {"play": "KIRMIZI KANATLI BAYKUŞ", "category": "Sahne", "role": "Suflöz", "person": "Ayşe Şenoğlu"}, {"play": "KIRMIZI KANATLI BAYKUŞ", "category": "Sahne Dekor (Sorumlu)", "role": "Dekor Sorumlusu", "person": "Mehmet Musab Çakırefe"}, {"play": "KIRMIZI KANATLI BAYKUŞ", "category": "Dekor/Aksesuar", "role": "Aksesuar Sorumlusu", "person": "Yalçın Örgül"}, {"play": "KIRMIZI KANATLI BAYKUŞ", "category": "Kostüm", "role": "Kadın Terzi", "person": "Ümmü Kılıç"}, {"play": "KIRMIZI KANATLI BAYKUŞ", "category": "Figüran", "role": "Kast", "person": "Seyit Berkan Köse"}, {"play": "KRAL OLMAK İSTEMEYEN ASLAN", "category": "Tasarım", "role": "Dekor & Kostüm Tasarımı", "person": "Ebru Çulpan"}, {"play": "KRAL OLMAK İSTEMEYEN ASLAN", "category": "Oyuncu", "role": "Tilki Tiktak", "person": "Maya Tuğçe Us"}, {"play": "KRAL OLMAK İSTEMEYEN ASLAN", "category": "Figüran", "role": "Kanguru", "person": "Merve Kamar"}, {"play": "KRAL OLMAK İSTEMEYEN ASLAN", "category": "Figüran", "role": "Teo", "person": "Tayfur Çamlıbel"}, {"play": "KRAL OLMAK İSTEMEYEN ASLAN", "category": "Oyuncu", "role": "Sincap Capcap", "person": "Ecem Çataloğlu"}, {"play": "KRAL OLMAK İSTEMEYEN ASLAN", "category": "Figüran", "role": "Maymun Momo", "person": "Mustafa Koçbay"}, {"play": "KRAL OLMAK İSTEMEYEN ASLAN", "category": "Oyuncu", "role": "Aslan Kral", "person": "Deniz Taylan Tombul"}, {"play": "KRAL OLMAK İSTEMEYEN ASLAN", "category": "Figüran", "role": "Zence-fil / Tavşan / Baykuş", "person": "Gülben Başer"}, {"play": "KRAL OLMAK İSTEMEYEN ASLAN", "category": "Oyuncu", "role": "Anne Maymun", "person": "Neslihan Serra Ayer"}, {"play": "KRAL OLMAK İSTEMEYEN ASLAN", "category": "Işık – Tasarım", "role": "Işık Tasarımı", "person": "Rahmi Özan"}, {"play": "KRAL OLMAK İSTEMEYEN ASLAN", "category": "Müzisyen", "role": "Müzik", "person": "Kemal Günüç"}, {"play": "KRAL OLMAK İSTEMEYEN ASLAN", "category": "Hareket / Koreografi", "role": "Hareket Düzeni", "person": "Müge Uyan Yeşilpınar"}, {"play": "KRAL OLMAK İSTEMEYEN ASLAN", "category": "Teknik", "role": "Kukla Tasarımı", "person": "Ayten Öğütcü"}, {"play": "KRAL OLMAK İSTEMEYEN ASLAN", "category": "Yönetim", "role": "Yönetmen Yardımcısı", "person": "Meral Ceren Türk Yel"}, {"play": "KRAL OLMAK İSTEMEYEN ASLAN", "category": "Yönetim", "role": "Asistan", "person": "Fatma Ayçin Güvercin"}, {"play": "KRAL OLMAK İSTEMEYEN ASLAN", "category": "Yönetim", "role": "Asistan", "person": "Merve Kamar"}, {"play": "KRAL OLMAK İSTEMEYEN ASLAN", "category": "Uzman", "role": "Gelişimsel Pediatri Uzmanı", "person": "Uz. Dr. Özlem Gülümser"}, {"play": "KRAL OLMAK İSTEMEYEN ASLAN", "category": "Uzman", "role": "Klinik Psikolog", "person": "Uz. Psk. Ezgi Vardal Çoşkun"}, {"play": "KRAL OLMAK İSTEMEYEN ASLAN", "category": "Sahne Amiri", "role": "Sahne Amiri", "person": "Önder Ünver"}, {"play": "KRAL OLMAK İSTEMEYEN ASLAN", "category": "Ses – Kondüvit", "role": "Kondüvit", "person": "Harun Düzenli"}, {"play": "KRAL OLMAK İSTEMEYEN ASLAN", "category": "Işık Kontrol", "role": "Işık Kumanda", "person": "Süleyman Tavan"}, {"play": "KRAL OLMAK İSTEMEYEN ASLAN", "category": "Işık Kontrol", "role": "Işık Kumanda", "person": "Önder Yağlıdere"}, {"play": "KRAL OLMAK İSTEMEYEN ASLAN", "category": "Sahne", "role": "Suflöz", "person": "Ayşe Şenoğlu"}, {"play": "KRAL OLMAK İSTEMEYEN ASLAN", "category": "Sahne Dekor (Sorumlu)", "role": "Dekor Sorumlusu", "person": "Uğur Topuz"}, {"play": "KRAL OLMAK İSTEMEYEN ASLAN", "category": "Dekor/Aksesuar", "role": "Aksesuar Sorumlusu", "person": "Hüseyin Yaran"}, {"play": "KRAL OLMAK İSTEMEYEN ASLAN", "category": "Dekor/Aksesuar", "role": "Aksesuar Sorumlusu", "person": "Şafak Kocatuş"}, {"play": "KRAL OLMAK İSTEMEYEN ASLAN", "category": "Kostüm", "role": "Kadın Terzi", "person": "Hacer Eraslan"}, {"play": "KRAL OLMAK İSTEMEYEN ASLAN", "category": "Kostüm", "role": "Erkek Terzi", "person": "Muzaffer Ataman"}, {"play": "KRAL OLMAK İSTEMEYEN ASLAN", "category": "Peruk – Makyaj", "role": "Perukacı", "person": "Ayşe Demir"}, {"play": "MAJESTİK", "category": "Oyuncu", "role": "Nurten", "person": "Pelin Tozkoparan"}, {"play": "MAJESTİK", "category": "Oyuncu", "role": "Şebnem", "person": "Elif Özdemir Akçe"}, {"play": "MAJESTİK", "category": "Oyuncu", "role": "Gülistan", "person": "Şerife Ünsal Şenel"}, {"play": "MAJESTİK", "category": "Oyuncu", "role": "Betül", "person": "Fulya Atatoprak"}, {"play": "MAJESTİK", "category": "Oyuncu", "role": "Arzu", "person": "İrem Ölmez Yurdakul"}, {"play": "MAJESTİK", "category": "Oyuncu", "role": "Arzu", "person": "Yağmur Candemir"}, {"play": "MAJESTİK", "category": "Figüran", "role": "Kemal", "person": "Salih Köküz"}, {"play": "MAJESTİK", "category": "Figüran", "role": "Serap", "person": "Zeynep Aşkım Tuncer Özzeytin"}, {"play": "MAJESTİK", "category": "Tasarım", "role": "Kostüm Tasarımı", "person": "Esra Selah"}, {"play": "MAJESTİK", "category": "Işık – Tasarım", "role": "Işık Tasarımı", "person": "Fuat Fırat"}, {"play": "MAJESTİK", "category": "Müzisyen", "role": "Müzik", "person": "Meltem Taşkıran"}, {"play": "MAJESTİK", "category": "Teknik", "role": "Koreografi", "person": "Şebnem Şenel"}, {"play": "MAJESTİK", "category": "Yönetim", "role": "Yönetmen Yardımcısı", "person": "Deniz Burak Mersinli"}, {"play": "MAJESTİK", "category": "Yönetim", "role": "Asistan", "person": "Zeynep Aşkım Tuncer Özzeytin"}, {"play": "MAJESTİK", "category": "Sahne Amiri", "role": "Sahne Amiri", "person": "Müjde Bilir"}, {"play": "MAJESTİK", "category": "Ses – Kondüvit", "role": "Kondüvit", "person": "Arif Alpa"}, {"play": "MAJESTİK", "category": "Ses – Kondüvit", "role": "Kondüvit", "person": "Özlem Doğruöz"}, {"play": "MAJESTİK", "category": "Işık Kontrol", "role": "Işık Kumanda", "person": "Mustafa Derler"}, {"play": "MAJESTİK", "category": "Işık Kontrol", "role": "Işık Kumanda", "person": "Erkan Uyar"}, {"play": "MAJESTİK", "category": "Sahne", "role": "Suflöz", "person": "Didem Özfuruncu"}, {"play": "MAJESTİK", "category": "Sahne Dekor (Sorumlu)", "role": "Dekor Sorumlusu", "person": "Bekir Koç"}, {"play": "MAJESTİK", "category": "Sahne Dekor (Sorumlu)", "role": "Dekor Sorumlusu", "person": "Cüneyt Özçavlin"}, {"play": "MAJESTİK", "category": "Dekor/Aksesuar", "role": "Aksesuar Sorumlusu", "person": "Serhat Örgül"}, {"play": "MAJESTİK", "category": "Kostüm", "role": "Kadın Terzi", "person": "Ümmü Kılıç"}, {"play": "MAJESTİK", "category": "Peruk – Makyaj", "role": "Perukacı", "person": "Ayşe Demir"}, {"play": "MAJESTİK", "category": "Tasarım", "role": "Dekor Tasarımı", "person": "Seyhan Kırca"}, {"play": "MEDEA", "category": "Oyuncu", "role": "Sütnine", "person": "Fulya Atatoprak"}, {"play": "MEDEA", "category": "Oyuncu", "role": "Lala", "person": "Sibel Ağalday"}, {"play": "MEDEA", "category": "Oyuncu", "role": "Medea", "person": "Melike Aslı Kılan"}, {"play": "MEDEA", "category": "Oyuncu", "role": "Kreon", "person": "Yusuf Köksal"}, {"play": "MEDEA", "category": "Oyuncu", "role": "Iason", "person": "Özkan Gezgin"}, {"play": "MEDEA", "category": "Oyuncu", "role": "Aegeus", "person": "Uğur Kaya"}, {"play": "MEDEA", "category": "Oyuncu", "role": "Haberci", "person": "Deniz Genç"}, {"play": "MEDEA", "category": "Oyuncu", "role": "Koro", "person": "Telin Sümer"}, {"play": "MEDEA", "category": "Oyuncu", "role": "Koro", "person": "Bengi Ebru Atakan"}, {"play": "MEDEA", "category": "Oyuncu", "role": "Koro", "person": "Mina Yorulmaz"}, {"play": "MEDEA", "category": "Oyuncu", "role": "Koro", "person": "Meral Ceren Türk Yel"}, {"play": "MEDEA", "category": "Oyuncu", "role": "Koro", "person": "Yıldız Akbıyık Tektekin"}, {"play": "MEDEA", "category": "Oyuncu", "role": "Koro", "person": "Selda Mikkola"}, {"play": "MEDEA", "category": "Figüran", "role": "Koro", "person": "Fulya Gezici"}, {"play": "MEDEA", "category": "Figüran", "role": "Koro", "person": "Müge Uyan Yeşilpınar"}, {"play": "MEDEA", "category": "Tasarım", "role": "Kostüm Tasarımı", "person": "Z. Yıldız Köse"}, {"play": "MEDEA", "category": "Işık – Tasarım", "role": "Işık Tasarımı", "person": "Fuat Fırat"}, {"play": "MEDEA", "category": "Müzisyen", "role": "Müzik", "person": "Adonis Filipi"}, {"play": "MEDEA", "category": "Teknik", "role": "Koreografi", "person": "Meltem Yorulmaz"}, {"play": "MEDEA", "category": "Dramaturgi", "role": "Dramaturg", "person": "Pınar Merterkek Tarcan"}, {"play": "MEDEA", "category": "Yönetim", "role": "Yönetmen Yardımcısı", "person": "Özkan Gezgin"}, {"play": "MEDEA", "category": "Yönetim", "role": "Asistan", "person": "Mina Yorulmaz"}, {"play": "MEDEA", "category": "Yönetim", "role": "Asistan", "person": "Deniz Genç"}, {"play": "MEDEA", "category": "Sahne Amiri", "role": "Sahne Amiri", "person": "Müjde Bilir"}, {"play": "MEDEA", "category": "Ses – Kondüvit", "role": "Kondüvit", "person": "Harun Düzenli"}, {"play": "MEDEA", "category": "Işık Kontrol", "role": "Işık Kumanda", "person": "Önder Yağlıdere"}, {"play": "MEDEA", "category": "Sahne", "role": "Suflöz", "person": "Ayşe Şenoğlu"}, {"play": "MEDEA", "category": "Sahne Dekor (Sorumlu)", "role": "Dekor Sorumlusu", "person": "Mustafa Akpınar"}, {"play": "MEDEA", "category": "Dekor/Aksesuar", "role": "Aksesuar Sorumlusu", "person": "Serhat Örgül"}, {"play": "MEDEA", "category": "Kostüm", "role": "Kadın Terzi", "person": "Ümmü Kılıç"}, {"play": "MEDEA", "category": "Kostüm", "role": "Erkek Terzi", "person": "Vacit Örgül"}, {"play": "MEDEA", "category": "Peruk – Makyaj", "role": "Perukacı", "person": "Sami Öztürk"}, {"play": "MEDEA", "category": "Tasarım", "role": "Dekor Tasarımı", "person": "Hakan Dündar"}, {"play": "MÜNASEBETSİZ", "category": "Oyuncu", "role": "Pignon", "person": "Özkan Gezgin"}, {"play": "MÜNASEBETSİZ", "category": "Oyuncu", "role": "Ralph", "person": "M. Asım Tuncay Aynur"}, {"play": "MÜNASEBETSİZ", "category": "Oyuncu", "role": "Wolf", "person": "M. Doğukan Özman"}, {"play": "MÜNASEBETSİZ", "category": "Oyuncu", "role": "Louise", "person": "Nagehan Yazıcı"}, {"play": "MÜNASEBETSİZ", "category": "Oyuncu", "role": "Garson", "person": "Ender Şeviker"}, {"play": "MÜNASEBETSİZ", "category": "Oyuncu", "role": "Polis", "person": "Deniz Yağcı"}, {"play": "MÜNASEBETSİZ", "category": "Tasarım", "role": "Kostüm Tasarımı", "person": "F. Duygu Ergüven Saykan"}, {"play": "MÜNASEBETSİZ", "category": "Işık – Tasarım", "role": "Işık Tasarımı", "person": "Bora Andaç"}, {"play": "MÜNASEBETSİZ", "category": "Müzisyen", "role": "Müzik", "person": "Sedat Utku Gücoğlu"}, {"play": "MÜNASEBETSİZ", "category": "Hareket / Koreografi", "role": "Hareket Düzeni", "person": "Mert Aksu"}, {"play": "MÜNASEBETSİZ", "category": "Yönetim", "role": "Yönetmen Yardımcısı", "person": "Fatih Yurdakul"}, {"play": "MÜNASEBETSİZ", "category": "Yönetim", "role": "Asistan", "person": "İpek Sonal"}, {"play": "MÜNASEBETSİZ", "category": "Yönetim", "role": "Asistan", "person": "Nebahat Damla Ardal Alpuğan"}, {"play": "MÜNASEBETSİZ", "category": "Sahne Amiri", "role": "Sahne Amiri", "person": "Hakan Eroğlu"}, {"play": "MÜNASEBETSİZ", "category": "Ses – Kondüvit", "role": "Kondüvit", "person": "Canan Mızrak Deniz"}, {"play": "MÜNASEBETSİZ", "category": "Ses – Kondüvit", "role": "Kondüvit", "person": "Özlem Doğruöz"}, {"play": "MÜNASEBETSİZ", "category": "Işık Kontrol", "role": "Işık Kumanda", "person": "Önder Yağlıdere"}, {"play": "MÜNASEBETSİZ", "category": "Işık Kontrol", "role": "Işık Kumanda", "person": "Bora Andaç"}, {"play": "MÜNASEBETSİZ", "category": "Sahne", "role": "Suflöz", "person": "Selen Çiçekdağ"}, {"play": "MÜNASEBETSİZ", "category": "Sahne Dekor (Sorumlu)", "role": "Dekor Sorumlusu", "person": "Mustafa Akpınar"}, {"play": "MÜNASEBETSİZ", "category": "Dekor/Aksesuar", "role": "Aksesuar Sorumlusu", "person": "Alper Erdoğan"}, {"play": "MÜNASEBETSİZ", "category": "Kostüm", "role": "Kadın Terzi", "person": "Filiz Muratoğlu Karamırnak"}, {"play": "MÜNASEBETSİZ", "category": "Kostüm", "role": "Erkek Terzi", "person": "Vacit Örgül"}, {"play": "MÜNASEBETSİZ", "category": "Peruk – Makyaj", "role": "Perukacı", "person": "Sami Öztürk"}, {"play": "MÜNASEBETSİZ", "category": "Figüran", "role": "Kast", "person": "Umut Can Koçmen"}, {"play": "MÜNASEBETSİZ", "category": "Tasarım", "role": "Dekor Tasarımı", "person": "Seyhan Kırca"}, {"play": "ORFİNİN MÜZİK KUTUSU", "category": "Tasarım", "role": "Dekor & Kostüm Tasarımı", "person": "Göksu Kolburan"}, {"play": "ORFİNİN MÜZİK KUTUSU", "category": "Oyuncu", "role": "Orfin", "person": "Efe Akercan"}, {"play": "ORFİNİN MÜZİK KUTUSU", "category": "Oyuncu", "role": "Banjo", "person": "Muhammed Taşdemir"}, {"play": "ORFİNİN MÜZİK KUTUSU", "category": "Oyuncu", "role": "Pudi", "person": "Berfin Türköz Kurt"}, {"play": "ORFİNİN MÜZİK KUTUSU", "category": "Oyuncu", "role": "Bondi", "person": "Fatma Konu"}, {"play": "ORFİNİN MÜZİK KUTUSU", "category": "Oyuncu", "role": "Zodyak", "person": "Gizem Cessur"}, {"play": "ORFİNİN MÜZİK KUTUSU", "category": "Figüran", "role": "Dedak", "person": "Salih Köküz"}, {"play": "ORFİNİN MÜZİK KUTUSU", "category": "Oyuncu", "role": "Şipşak", "person": "F. Ayçin Güvercin"}, {"play": "ORFİNİN MÜZİK KUTUSU", "category": "Oyuncu", "role": "Bayan Sıska", "person": "Selda Mikkola"}, {"play": "ORFİNİN MÜZİK KUTUSU", "category": "Oyuncu", "role": "Bayan Ciddi", "person": "Telin Sümer"}, {"play": "ORFİNİN MÜZİK KUTUSU", "category": "Oyuncu", "role": "Bayan Suratsız", "person": "Güneş Emir Cengiz"}, {"play": "ORFİNİN MÜZİK KUTUSU", "category": "Figüran", "role": "Bayan Suskun", "person": "Handan Tok Kaya"}, {"play": "ORFİNİN MÜZİK KUTUSU", "category": "Oyuncu", "role": "Tamirciler & Şemsiyeliler", "person": "Selda Mikkola"}, {"play": "ORFİNİN MÜZİK KUTUSU", "category": "Oyuncu", "role": "Tamirciler & Şemsiyeliler", "person": "Telin Sümer"}, {"play": "ORFİNİN MÜZİK KUTUSU", "category": "Oyuncu", "role": "Tamirciler & Şemsiyeliler", "person": "Güneş Emir Cengiz"}, {"play": "ORFİNİN MÜZİK KUTUSU", "category": "Figüran", "role": "Tamirciler & Şemsiyeliler", "person": "Handan Tok Kaya"}, {"play": "ORFİNİN MÜZİK KUTUSU", "category": "Işık – Tasarım", "role": "Işık Tasarımı", "person": "Fuat Fırat"}, {"play": "ORFİNİN MÜZİK KUTUSU", "category": "Müzisyen", "role": "Müzik", "person": "Fırat Akarcalı"}, {"play": "ORFİNİN MÜZİK KUTUSU", "category": "Teknik", "role": "Koreografi", "person": "Şebnem Şenel"}, {"play": "ORFİNİN MÜZİK KUTUSU", "category": "Yönetim", "role": "Yönetmen Yardımcısı", "person": "Aylin Önal"}, {"play": "ORFİNİN MÜZİK KUTUSU", "category": "Yönetim", "role": "Asistan", "person": "Gizem Cessur"}, {"play": "ORFİNİN MÜZİK KUTUSU", "category": "Sahne Amiri", "role": "Sahne Amiri", "person": "Göksu Kolburan"}, {"play": "ORFİNİN MÜZİK KUTUSU", "category": "Ses – Kondüvit", "role": "Kondüvit", "person": "Ulaş Yakup Alan"}, {"play": "ORFİNİN MÜZİK KUTUSU", "category": "Ses – Kondüvit", "role": "Kondüvit", "person": "Özlem Doğruöz"}, {"play": "ORFİNİN MÜZİK KUTUSU", "category": "Işık Kontrol", "role": "Işık Kumanda", "person": "Uğur Öztürk"}, {"play": "ORFİNİN MÜZİK KUTUSU", "category": "Işık Kontrol", "role": "Işık Kumanda", "person": "Çağlar Aytaç"}, {"play": "ORFİNİN MÜZİK KUTUSU", "category": "Sahne", "role": "Suflöz", "person": "Didem Özfuruncu"}, {"play": "ORFİNİN MÜZİK KUTUSU", "category": "Sahne Dekor (Sorumlu)", "role": "Dekor Sorumlusu", "person": "Bekir Koç"}, {"play": "ORFİNİN MÜZİK KUTUSU", "category": "Dekor/Aksesuar", "role": "Aksesuar Sorumlusu", "person": "Serhat Örgül"}, {"play": "ORFİNİN MÜZİK KUTUSU", "category": "Kostüm", "role": "Kadın Terzi", "person": "Nahile Ülger"}, {"play": "ORFİNİN MÜZİK KUTUSU", "category": "Kostüm", "role": "Erkek Terzi", "person": "Kadri Özel"}, {"play": "ORFİNİN MÜZİK KUTUSU", "category": "Peruk – Makyaj", "role": "Perukacı", "person": "Ayşe Demir"}, {"play": "ORFİNİN MÜZİK KUTUSU", "category": "Video / Görüntü", "role": "Sinevizyon Sorumlusu", "person": "Umut Kızılyaprak"}, {"play": "OTOBÜS DURAĞINDA ÜÇ BENCİL", "category": "Oyuncu", "role": "Bay 1", "person": "Ozan Yıldırım"}, {"play": "OTOBÜS DURAĞINDA ÜÇ BENCİL", "category": "Oyuncu", "role": "Bay 2", "person": "Sezer Akçe"}, {"play": "OTOBÜS DURAĞINDA ÜÇ BENCİL", "category": "Oyuncu", "role": "Bay 3", "person": "Tufan Pehlivan"}, {"play": "OTOBÜS DURAĞINDA ÜÇ BENCİL", "category": "Tasarım", "role": "Dekor Tasarımı", "person": "Hasan Yavuz"}, {"play": "OTOBÜS DURAĞINDA ÜÇ BENCİL", "category": "Tasarım", "role": "Kostüm Tasarımı", "person": "F. Duygu Ergüven Saykan"}, {"play": "OTOBÜS DURAĞINDA ÜÇ BENCİL", "category": "Işık – Tasarım", "role": "Işık Tasarımı", "person": "Mehmet Alacı"}, {"play": "OTOBÜS DURAĞINDA ÜÇ BENCİL", "category": "Müzisyen", "role": "Müzik", "person": "Erşah Gülerbaşlı"}, {"play": "OTOBÜS DURAĞINDA ÜÇ BENCİL", "category": "Hareket / Koreografi", "role": "Hareket Düzeni", "person": "Ozan Yıldırım"}, {"play": "OTOBÜS DURAĞINDA ÜÇ BENCİL", "category": "Yönetim", "role": "Yönetmen Yardımcısı", "person": "Fuat Şarbalkan"}, {"play": "OTOBÜS DURAĞINDA ÜÇ BENCİL", "category": "Yönetim", "role": "Asistan", "person": "Meltem Başınhan"}, {"play": "OTOBÜS DURAĞINDA ÜÇ BENCİL", "category": "Sahne Amiri", "role": "Sahne Amiri", "person": "Mesut Dalaz"}, {"play": "OTOBÜS DURAĞINDA ÜÇ BENCİL", "category": "Ses – Kondüvit", "role": "Kondüvit", "person": "Özlem Doğruöz"}, {"play": "OTOBÜS DURAĞINDA ÜÇ BENCİL", "category": "Işık Kontrol", "role": "Işık Kumanda", "person": "Osman Burak Sakallıoğlu"}, {"play": "OTOBÜS DURAĞINDA ÜÇ BENCİL", "category": "Işık Kontrol", "role": "Işık Kumanda", "person": "Alper Mutlu"}, {"play": "OTOBÜS DURAĞINDA ÜÇ BENCİL", "category": "Sahne Dekor (Sorumlu)", "role": "Dekor Sorumlusu", "person": "Cüneyt Özçavlin"}, {"play": "OTOBÜS DURAĞINDA ÜÇ BENCİL", "category": "Dekor/Aksesuar", "role": "Aksesuar Sorumlusu", "person": "Gönenç Oktay"}, {"play": "OTOBÜS DURAĞINDA ÜÇ BENCİL", "category": "Kostüm", "role": "Erkek Terzi", "person": "Naim Dönmez"}, {"play": "OTOBÜS DURAĞINDA ÜÇ BENCİL", "category": "Peruk – Makyaj", "role": "Perukacı", "person": "Sami Öztürk"}, {"play": "OYUN OYUN İÇİNDE", "category": "Oyuncu", "role": "Patron", "person": "Umut Kolburan"}, {"play": "OYUN OYUN İÇİNDE", "category": "Oyuncu", "role": "Temizlikçi", "person": "Muhammed Taşdemir"}, {"play": "OYUN OYUN İÇİNDE", "category": "Oyuncu", "role": "Aksesuarcı", "person": "S. Akın Kurt"}, {"play": "OYUN OYUN İÇİNDE", "category": "Oyuncu", "role": "Dekorcu", "person": "Tufan Pehlivan"}, {"play": "OYUN OYUN İÇİNDE", "category": "Oyuncu", "role": "Giydirici", "person": "Mesure Syuleyman Durmazer"}, {"play": "OYUN OYUN İÇİNDE", "category": "Oyuncu", "role": "Sahne Amiri", "person": "Deniz Taylan Tombul"}, {"play": "OYUN OYUN İÇİNDE", "category": "Figüran", "role": "Piyano", "person": "İlhan Denizhan Kuruoğlu"}, {"play": "OYUN OYUN İÇİNDE", "category": "Figüran", "role": "Klarnet", "person": "Yiğit Tunaboğlu"}, {"play": "OYUN OYUN İÇİNDE", "category": "Figüran", "role": "Keman", "person": "Nisa İrem Coşkuner"}, {"play": "OYUN OYUN İÇİNDE", "category": "Figüran", "role": "Darbuka&Ritim", "person": "Can Kaya"}, {"play": "OYUN OYUN İÇİNDE", "category": "Tasarım", "role": "Dekor Tasarımı", "person": "Hasan Yavuz"}, {"play": "OYUN OYUN İÇİNDE", "category": "Tasarım", "role": "Kostüm Tasarımı", "person": "Fatma Duygu Ergüven Saykan"}, {"play": "OYUN OYUN İÇİNDE", "category": "Işık – Tasarım", "role": "Işık Tasarımı", "person": "Rahmi Özan"}, {"play": "OYUN OYUN İÇİNDE", "category": "Müzisyen", "role": "Müzik", "person": "Oktay Köseoğlu"}, {"play": "OYUN OYUN İÇİNDE", "category": "Teknik", "role": "Koreografi", "person": "Meltem Yorulmaz"}, {"play": "OYUN OYUN İÇİNDE", "category": "Teknik", "role": "Repetitör", "person": "Didem Baysun"}, {"play": "OYUN OYUN İÇİNDE", "category": "Figüran", "role": "Korrepetitör", "person": "Emre Deniz"}, {"play": "OYUN OYUN İÇİNDE", "category": "Yönetim", "role": "Yönetmen Yardımcısı", "person": "Bahar Mürüvvet Başar"}, {"play": "OYUN OYUN İÇİNDE", "category": "Yönetim", "role": "Yönetmen Yardımcısı", "person": "Çetin Serdar Kamalıoğlu"}, {"play": "OYUN OYUN İÇİNDE", "category": "Sahne Amiri", "role": "Sahne Amiri", "person": "Önder Ünver"}, {"play": "OYUN OYUN İÇİNDE", "category": "Ses – Kondüvit", "role": "Kondüvit", "person": "Mehmet Şişeci"}, {"play": "OYUN OYUN İÇİNDE", "category": "Ses – Kondüvit", "role": "Kondüvit", "person": "Ali Avcı"}, {"play": "OYUN OYUN İÇİNDE", "category": "Işık Kontrol", "role": "Işık Kumanda", "person": "Osman Burak Sakallıoğlu"}, {"play": "OYUN OYUN İÇİNDE", "category": "Işık Kontrol", "role": "Işık Kumanda", "person": "Çağlar Aytaç"}, {"play": "OYUN OYUN İÇİNDE", "category": "Sahne", "role": "Suflöz", "person": "Yağmur Özgenç Şahin"}, {"play": "OYUN OYUN İÇİNDE", "category": "Sahne Dekor (Sorumlu)", "role": "Dekor Sorumlusu", "person": "Şafak Kocatuş"}, {"play": "OYUN OYUN İÇİNDE", "category": "Dekor/Aksesuar", "role": "Aksesuar Sorumlusu", "person": "Bekir Koç"}, {"play": "OYUN OYUN İÇİNDE", "category": "Kostüm", "role": "Kadın Terzi", "person": "Hacer Eraslan"}, {"play": "OYUN OYUN İÇİNDE", "category": "Kostüm", "role": "Erkek Terzi", "person": "Kadri Özel"}, {"play": "OYUN OYUN İÇİNDE", "category": "Peruk – Makyaj", "role": "Perukacı", "person": "Talat Apaydın"}, {"play": "OYUNCU BEN FEUERBACH", "category": "Oyuncu", "role": "Oyuncu", "person": "İ. Hakan Özgömeç"}, {"play": "OYUNCU BEN FEUERBACH", "category": "Oyuncu", "role": "Asistan", "person": "Deniz Taylan Tombul"}, {"play": "OYUNCU BEN FEUERBACH", "category": "Figüran", "role": "Kadın", "person": "Fulya Gezici"}, {"play": "OYUNCU BEN FEUERBACH", "category": "Tasarım", "role": "Dekor Tasarımı", "person": "Tayfun Çebi"}, {"play": "OYUNCU BEN FEUERBACH", "category": "Tasarım", "role": "Kostüm Tasarımı", "person": "Funda Çebi"}, {"play": "OYUNCU BEN FEUERBACH", "category": "Işık – Tasarım", "role": "Işık Tasarımı", "person": "Zeki Kayar"}, {"play": "OYUNCU BEN FEUERBACH", "category": "Müzisyen", "role": "Müzik", "person": "Cem İdiz"}, {"play": "OYUNCU BEN FEUERBACH", "category": "Hareket / Koreografi", "role": "Hareket Düzeni", "person": "Şafak Ersözlü"}, {"play": "OYUNCU BEN FEUERBACH", "category": "Teknik", "role": "Kukla Tasarımı", "person": "Suat Ünverdi"}, {"play": "OYUNCU BEN FEUERBACH", "category": "Teknik", "role": "Kukla Tasarımı", "person": "Soner Akçay"}, {"play": "OYUNCU BEN FEUERBACH", "category": "Yönetim", "role": "Yönetmen Yardımcısı", "person": "Nevzat Hakan Dönmez"}, {"play": "OYUNCU BEN FEUERBACH", "category": "Yönetim", "role": "Yönetmen Yardımcısı", "person": "Gözde Bakşık"}, {"play": "OYUNCU BEN FEUERBACH", "category": "Yönetim", "role": "Asistan", "person": "Fulya Gezici"}, {"play": "OYUNCU BEN FEUERBACH", "category": "Yönetim", "role": "Psikiyatri  Danışmanı", "person": "Prof. Dr. Ahmet Levent Mete"}, {"play": "OYUNCU BEN FEUERBACH", "category": "Yönetim", "role": "İllüzyon Danışmanı", "person": "Ahmet Küçükdoğan"}, {"play": "OYUNCU BEN FEUERBACH", "category": "Sahne Amiri", "role": "Sahne Amiri", "person": "Nurhan Güncan"}, {"play": "OYUNCU BEN FEUERBACH", "category": "Ses – Kondüvit", "role": "Kondüvit", "person": "Ulaş Yakup Alan"}, {"play": "OYUNCU BEN FEUERBACH", "category": "Işık Kontrol", "role": "Işık Kumanda", "person": "Mustafa Derler"}, {"play": "OYUNCU BEN FEUERBACH", "category": "Işık Kontrol", "role": "Işık Kumanda", "person": "Çağlar Aytaç"}, {"play": "OYUNCU BEN FEUERBACH", "category": "Sahne", "role": "Suflöz", "person": "Yağmur Özgenç Şahin"}, {"play": "OYUNCU BEN FEUERBACH", "category": "Sahne Dekor (Sorumlu)", "role": "Dekor Sorumlusu", "person": "Mustafa Akpınar"}, {"play": "OYUNCU BEN FEUERBACH", "category": "Dekor/Aksesuar", "role": "Aksesuar Sorumlusu", "person": "Sıtkı Miman"}, {"play": "OYUNCU BEN FEUERBACH", "category": "Kostüm", "role": "Kadın Terzi", "person": "İpek Uzyön"}, {"play": "OYUNCU BEN FEUERBACH", "category": "Kostüm", "role": "Erkek Terzi", "person": "Akın Tiryaki"}, {"play": "OYUNCU BEN FEUERBACH", "category": "Peruk – Makyaj", "role": "Perukacı", "person": "Talat Apaydın"}, {"play": "RADYOYU HÜMAYUN", "category": "Oyuncu", "role": "Hayrünnisa", "person": "Fatma Kum Ertekin"}, {"play": "RADYOYU HÜMAYUN", "category": "Oyuncu", "role": "Hayri", "person": "Fuat Şarbalkan"}, {"play": "RADYOYU HÜMAYUN", "category": "Figüran", "role": "Efser", "person": "Betül Işık"}, {"play": "RADYOYU HÜMAYUN", "category": "Oyuncu", "role": "Mehmet", "person": "Sezer Akçe"}, {"play": "RADYOYU HÜMAYUN", "category": "Oyuncu", "role": "Kenan", "person": "Egecan İntepeler"}, {"play": "RADYOYU HÜMAYUN", "category": "Oyuncu", "role": "Ali Müfit Paşa", "person": "Levent Ulukut"}, {"play": "RADYOYU HÜMAYUN", "category": "Oyuncu", "role": "Moşe Efendi", "person": "Yusuf Köksal"}, {"play": "RADYOYU HÜMAYUN", "category": "Oyuncu", "role": "Fikri", "person": "Efe Akercan"}, {"play": "RADYOYU HÜMAYUN", "category": "Figüran", "role": "Hüsnü", "person": "Mustafa Koçbay"}, {"play": "RADYOYU HÜMAYUN", "category": "Figüran", "role": "Anlatıcı Kızlar", "person": "İlayda Algın, Müge Uyan Yeşilpınar, Ece Can, İpek Sonal"}, {"play": "RADYOYU HÜMAYUN", "category": "Figüran", "role": "Piyano", "person": "Emre Deniz"}, {"play": "RADYOYU HÜMAYUN", "category": "Figüran", "role": "Solist", "person": "Şükran Keçeci"}, {"play": "RADYOYU HÜMAYUN", "category": "Figüran", "role": "Keman", "person": "Merve Onkar (Figüran), \nNisa İrem Coşkuner (Figüran)"}, {"play": "RADYOYU HÜMAYUN", "category": "Figüran", "role": "Klarnet", "person": "Yiğit Tunaboğlu"}, {"play": "RADYOYU HÜMAYUN", "category": "Figüran", "role": "Lavta", "person": "Rumeysa Şen"}, {"play": "RADYOYU HÜMAYUN", "category": "Figüran", "role": "Zil", "person": "Bahar Gönül Selvi Çerezcioğlu"}, {"play": "RADYOYU HÜMAYUN", "category": "Figüran", "role": "Ritim", "person": "Can Kaya"}, {"play": "RADYOYU HÜMAYUN", "category": "Tasarım", "role": "Kostüm Tasarımı", "person": "Z. Yıldız Köse"}, {"play": "RADYOYU HÜMAYUN", "category": "Işık – Tasarım", "role": "Işık Tasarımı", "person": "Süleyman Tavan"}, {"play": "RADYOYU HÜMAYUN", "category": "Müzisyen", "role": "Müzik", "person": "Kemal Alpan"}, {"play": "RADYOYU HÜMAYUN", "category": "Teknik", "role": "Koreografi", "person": "Meltem Yorulmaz"}, {"play": "RADYOYU HÜMAYUN", "category": "Yönetim", "role": "Asistan", "person": "Ecem Çataloğlu"}, {"play": "RADYOYU HÜMAYUN", "category": "Sahne Amiri", "role": "Sahne Amiri", "person": "Aynur Güçlü"}, {"play": "RADYOYU HÜMAYUN", "category": "Ses – Kondüvit", "role": "Kondüvit", "person": "Mehmet Şişeci, Serhat Çetin"}, {"play": "RADYOYU HÜMAYUN", "category": "Işık Kontrol", "role": "Işık Kumanda", "person": "Erkan Uyar, Bora Andaç"}, {"play": "RADYOYU HÜMAYUN", "category": "Sahne", "role": "Suflöz", "person": "Selen Çiçekdağ"}, {"play": "RADYOYU HÜMAYUN", "category": "Sahne Dekor (Sorumlu)", "role": "Dekor Sorumluları", "person": "Cüneyt Özçavlin, Selaattin Göktaş"}, {"play": "RADYOYU HÜMAYUN", "category": "Dekor/Aksesuar", "role": "Aksesuar Sorumlusu", "person": "Hüseyin Yaran"}, {"play": "RADYOYU HÜMAYUN", "category": "Kostüm", "role": "Kadın Terzi", "person": "Zarife Çağlar"}, {"play": "RADYOYU HÜMAYUN", "category": "Kostüm", "role": "Erkek Terzi", "person": "İlker Korkmaz"}, {"play": "RADYOYU HÜMAYUN", "category": "Peruk – Makyaj", "role": "Perukacı", "person": "Ayşe Demir"}, {"play": "RADYOYU HÜMAYUN", "category": "Tasarım", "role": "Dekor Tasarımı", "person": "Hasan Yavuz"}, {"play": "REMBETİKO EFSANESİ", "category": "Oyuncu", "role": "Yordanis", "person": "Yusuf Köksal"}, {"play": "REMBETİKO EFSANESİ", "category": "Oyuncu", "role": "Marika", "person": "Şerife Ünsal Şenel"}, {"play": "REMBETİKO EFSANESİ", "category": "Oyuncu", "role": "Adriana", "person": "Meral Ceren Türk Yel"}, {"play": "REMBETİKO EFSANESİ", "category": "Oyuncu", "role": "Matina", "person": "Yağmur Candemir"}, {"play": "REMBETİKO EFSANESİ", "category": "Oyuncu", "role": "Roza", "person": "Selda Özler"}, {"play": "REMBETİKO EFSANESİ", "category": "Oyuncu", "role": "Panayis", "person": "Türker Alpuğan"}, {"play": "REMBETİKO EFSANESİ", "category": "Oyuncu", "role": "Tomas", "person": "Emrah Şenışık"}, {"play": "REMBETİKO EFSANESİ", "category": "Oyuncu", "role": "Babis", "person": "Cengiz Toraman"}, {"play": "REMBETİKO EFSANESİ", "category": "Oyuncu", "role": "Fondas", "person": "Çağatay Özçelik"}, {"play": "REMBETİKO EFSANESİ", "category": "Oyuncu", "role": "Yorgakis", "person": "Deniz Burak Mersinli"}, {"play": "REMBETİKO EFSANESİ", "category": "Oyuncu", "role": "Yannis-Juan", "person": "Fuat Şarbalkan"}, {"play": "REMBETİKO EFSANESİ", "category": "Oyuncu", "role": "Şeytan Politikacı", "person": "E. Aytaç Özgür"}, {"play": "REMBETİKO EFSANESİ", "category": "Oyuncu", "role": "Ebe / Yorgaki'nin Annesi", "person": "Ayşın Kıran"}, {"play": "REMBETİKO EFSANESİ", "category": "Oyuncu/Figüran", "role": "Şarkıcı Kadınlar", "person": "Şükran Keçeci (Figüran), Ufuk Bostancı, Gizem Türker, Gizem Cessur, Gülben Başer (Figüran)"}, {"play": "REMBETİKO EFSANESİ", "category": "Figüran", "role": "Genç Adriana", "person": "İlayda Algın"}, {"play": "REMBETİKO EFSANESİ", "category": "Figüran", "role": "Küçük Marika / Küçük Adriana", "person": "Mercan Kıran(Figüran) , \nMerve Kamar (Figüran)"}, {"play": "REMBETİKO EFSANESİ", "category": "Figüran", "role": "Garsonlar", "person": "Mustafa Koçbay(Figüran), \nEmirhan Yeşilyuva (Figüran)"}, {"play": "REMBETİKO EFSANESİ", "category": "Koro/Dans", "role": "Ağlayan Kadın / Zengin Müşteri 1", "person": "Gizem Türker"}, {"play": "REMBETİKO EFSANESİ", "category": "Koro/Dans", "role": "Şarkıcı Kadın / Zengin Müşteri 2", "person": "Ufuk Bostancı"}, {"play": "REMBETİKO EFSANESİ", "category": "Figüran", "role": "Gestapo / Pireli Kalantor", "person": "Seyit Berkan Köse"}, {"play": "REMBETİKO EFSANESİ", "category": "Figüran", "role": "Pireli Kalantor'un Kızı", "person": "Merve Kamar"}, {"play": "REMBETİKO EFSANESİ", "category": "Koro/Dans", "role": "Bandocu 1", "person": "Gizem Cessur"}, {"play": "REMBETİKO EFSANESİ", "category": "Figüran", "role": "Bandocu 2 / Direnişçi", "person": "Tayfur Çamlıbel"}, {"play": "REMBETİKO EFSANESİ", "category": "Figüran", "role": "Bandocu 3", "person": "Umut Can Koçmen"}, {"play": "REMBETİKO EFSANESİ", "category": "Figüran", "role": "Pandomimci 1", "person": "İlayda Algın"}, {"play": "REMBETİKO EFSANESİ", "category": "Figüran", "role": "Pandomimci 2", "person": "Ece Can"}, {"play": "REMBETİKO EFSANESİ", "category": "Figüran", "role": "Pandomimci 3", "person": "Özlem Sağlam"}, {"play": "REMBETİKO EFSANESİ", "category": "Figüran", "role": "Koro/Dans Ekibi", "person": "Betül Işık, Nebahat Damla Ardal Alpuğan, Handan Kaya, Gülben Başer , Koray Doğan , Emirhan Yeşilyuva , Mahir Taylan Kalfaoğlu  , Gizem Güneri Bayrak , Müge Uyan Yeşilpınar, İpek Sonal , Tolga Erk"}, {"play": "REMBETİKO EFSANESİ", "category": "Ses", "role": "Spiker (Ses)", "person": "Murat Çidamlı"}, {"play": "REMBETİKO EFSANESİ", "category": "Figüran", "role": "Klarnet", "person": "Yiğit Tunaboğlu"}, {"play": "REMBETİKO EFSANESİ", "category": "Figüran", "role": "Keman", "person": "Merve Onkar"}, {"play": "REMBETİKO EFSANESİ", "category": "Orkestra", "role": "Çello", "person": "Mizgin Algur"}, {"play": "REMBETİKO EFSANESİ", "category": "Orkestra", "role": "Akordeon", "person": "Kerim Tezcan"}, {"play": "REMBETİKO EFSANESİ", "category": "Figüran", "role": "Perküsyon", "person": "Bahar Gönül Selvi Çerezcioğlu"}, {"play": "REMBETİKO EFSANESİ", "category": "Figüran", "role": "Keman", "person": "Nisa İrem Coşkuner"}, {"play": "REMBETİKO EFSANESİ", "category": "Figüran", "role": "Cura", "person": "Rümeysa Şen"}, {"play": "REMBETİKO EFSANESİ", "category": "Figüran", "role": "Buzuki", "person": "Emir Çiğner"}, {"play": "REMBETİKO EFSANESİ", "category": "Figüran", "role": "Kontrbas", "person": "Mete Çalışkan"}, {"play": "REMBETİKO EFSANESİ", "category": "Figüran", "role": "Şarkıcı", "person": "Şükran Keçeci"}, {"play": "REMBETİKO EFSANESİ", "category": "Figüran", "role": "Darbuka/Ritim", "person": "Can Kaya"}, {"play": "REMBETİKO EFSANESİ", "category": "Tasarım", "role": "Kostüm Tasarımı", "person": "Funda Çebi"}, {"play": "REMBETİKO EFSANESİ", "category": "Işık – Tasarım", "role": "Işık Tasarımı", "person": "Fuat Fırat"}, {"play": "REMBETİKO EFSANESİ", "category": "Müzisyen", "role": "Müzik Direktörü", "person": "Tarkan Erkan"}, {"play": "REMBETİKO EFSANESİ", "category": "Teknik", "role": "Koreografi", "person": "İhsan Bengier"}, {"play": "REMBETİKO EFSANESİ", "category": "Yönetim", "role": "Koro Çalıştırıcısı", "person": "Erşah Gülerbaşlı"}, {"play": "REMBETİKO EFSANESİ", "category": "Figüran", "role": "Dans Çalıştırıcısı", "person": "Tolga Erk"}, {"play": "REMBETİKO EFSANESİ", "category": "Dramaturgi", "role": "Dramaturg", "person": "Füsun Ataman"}, {"play": "REMBETİKO EFSANESİ", "category": "Yönetim", "role": "Yönetmen Yardımcıları", "person": "Aylin Kumbaracıoğlu, Aylin Önal, Fuat Şarbalkan, Melek Temel Çekmece"}, {"play": "REMBETİKO EFSANESİ", "category": "Yönetim", "role": "Asistanlar", "person": "Erşah Gülerbaşlı, İpek Sonal (Figüran), Burak Özbaykuş, Tolga Erk (Figüran)"}, {"play": "REMBETİKO EFSANESİ", "category": "Sahne Amiri", "role": "Sahne Amiri", "person": "Ramazan Özcan"}, {"play": "REMBETİKO EFSANESİ", "category": "Ses – Kondüvit", "role": "Kondüvit", "person": "Arif Alpa, Serhat Çetin"}, {"play": "REMBETİKO EFSANESİ", "category": "Işık Kontrol", "role": "Işık Kumanda", "person": "Önder Yağlıdere, Süleyman Tavan"}, {"play": "REMBETİKO EFSANESİ", "category": "Sahne", "role": "Suflöz", "person": "Selen Çiçekdağ"}, {"play": "REMBETİKO EFSANESİ", "category": "Sahne Dekor (Sorumlu)", "role": "Dekor Sorumluları", "person": "Cüneyt Özçavlin, Uğur Topuz"}, {"play": "REMBETİKO EFSANESİ", "category": "Dekor/Aksesuar", "role": "Aksesuar Sorumlusu", "person": "Gönenç Oktay"}, {"play": "REMBETİKO EFSANESİ", "category": "Kostüm", "role": "Kadın Terzi", "person": "İpek Uzyön, Seher Ay"}, {"play": "REMBETİKO EFSANESİ", "category": "Kostüm", "role": "Erkek Terzi", "person": "Naim Dönmez"}, {"play": "REMBETİKO EFSANESİ", "category": "Peruk – Makyaj", "role": "Perukacı", "person": "Sami Öztürk"}, {"play": "REMBETİKO EFSANESİ", "category": "Video / Görüntü", "role": "Sinevizyon Sorumluları", "person": "Engin Altun, Umut Kızılyaprak"}, {"play": "REMBETİKO EFSANESİ", "category": "Tasarım", "role": "Dekor Tasarımı", "person": "Murat Gülmez"}, {"play": "RÜSTEMOĞLU CEMALİN TUHAF HİKAYESİ", "category": "Oyuncu", "role": "Oyuncu", "person": "Cengiz Toraman"}, {"play": "RÜSTEMOĞLU CEMALİN TUHAF HİKAYESİ", "category": "Tasarım", "role": "Kostüm Tasarımı", "person": "Funda Dicle Çebi"}, {"play": "RÜSTEMOĞLU CEMALİN TUHAF HİKAYESİ", "category": "Işık – Tasarım", "role": "Işık Tasarımı", "person": "Eser Dursun"}, {"play": "RÜSTEMOĞLU CEMALİN TUHAF HİKAYESİ", "category": "Müzisyen", "role": "Müzik Direktörü", "person": "Tarkan Erkan"}, {"play": "RÜSTEMOĞLU CEMALİN TUHAF HİKAYESİ", "category": "Hareket / Koreografi", "role": "Dans & Hareket Düzeni", "person": "Tolga Erk"}, {"play": "RÜSTEMOĞLU CEMALİN TUHAF HİKAYESİ", "category": "Yönetim", "role": "Yönetmen Yardımcıları", "person": "Fatih Yurdakul, Deniz Burak Mersinli"}, {"play": "RÜSTEMOĞLU CEMALİN TUHAF HİKAYESİ", "category": "Yönetim", "role": "Asistan", "person": "İpek Sonal"}, {"play": "RÜSTEMOĞLU CEMALİN TUHAF HİKAYESİ", "category": "Sahne Amiri", "role": "Sahne Amiri", "person": "Ramazan Özcan"}, {"play": "RÜSTEMOĞLU CEMALİN TUHAF HİKAYESİ", "category": "Ses – Kondüvit", "role": "Kondüvit", "person": "Arif Alpa"}, {"play": "RÜSTEMOĞLU CEMALİN TUHAF HİKAYESİ", "category": "Işık Kontrol", "role": "Işık Kumanda", "person": "Süleyman Tavan"}, {"play": "RÜSTEMOĞLU CEMALİN TUHAF HİKAYESİ", "category": "Sahne", "role": "Suflöz", "person": "Selen Çiçekdağ"}, {"play": "RÜSTEMOĞLU CEMALİN TUHAF HİKAYESİ", "category": "Sahne Dekor (Sorumlu)", "role": "Dekor Sorumlusu", "person": "Uğur Topuz"}, {"play": "RÜSTEMOĞLU CEMALİN TUHAF HİKAYESİ", "category": "Dekor/Aksesuar", "role": "Aksesuar Sorumlusu", "person": "Yalçın Örgül"}, {"play": "RÜSTEMOĞLU CEMALİN TUHAF HİKAYESİ", "category": "Kostüm", "role": "Erkek Terzi", "person": "Naim Dönmez"}, {"play": "RÜSTEMOĞLU CEMALİN TUHAF HİKAYESİ", "category": "Peruk – Makyaj", "role": "Perukacı", "person": "İbrahim Aydın, Sami Öztürk"}, {"play": "RÜSTEMOĞLU CEMALİN TUHAF HİKAYESİ", "category": "Tasarım", "role": "Dekor Tasarımı", "person": "Seyhan Kırca"}, {"play": "SESSİZLİK", "category": "Tasarım", "role": "Dekor Tasarımı", "person": "Seyhan Kırca"}, {"play": "SESSİZLİK", "category": "Oyuncu", "role": "Ymma", "person": "Burcu Ongun Altay"}, {"play": "SESSİZLİK", "category": "Oyuncu", "role": "Agnes", "person": "Zeynep Nutku"}, {"play": "SESSİZLİK", "category": "Oyuncu", "role": "Eadric", "person": "Deniz Yağcı"}, {"play": "SESSİZLİK", "category": "Oyuncu", "role": "Silence", "person": "Yağmur Gören"}, {"play": "SESSİZLİK", "category": "Oyuncu", "role": "Roger", "person": "Ozan Yıldırım"}, {"play": "SESSİZLİK", "category": "Oyuncu", "role": "Ethelred", "person": "Mustafa Çolak"}, {"play": "SESSİZLİK", "category": "Tasarım", "role": "Kostüm Tasarımı", "person": "Medina Yavuz Almaç"}, {"play": "SESSİZLİK", "category": "Işık – Tasarım", "role": "Işık Tasarımı", "person": "Kerem Çetinel"}, {"play": "SESSİZLİK", "category": "Müzisyen", "role": "Müzik", "person": "Gürkan Çakıcı"}, {"play": "SESSİZLİK", "category": "Yönetim", "role": "Yönetmen", "person": "Barış Erdenk"}, {"play": "SESSİZLİK", "category": "Yönetim", "role": "Yönetmen Yardımcısı", "person": "Serkan Kunter"}, {"play": "SESSİZLİK", "category": "Yönetim", "role": "Asistan", "person": "Merve Kamar"}, {"play": "SESSİZLİK", "category": "Yönetim", "role": "Asistan", "person": "Mustafa Koçbay"}, {"play": "SESSİZLİK", "category": "Sahne Amiri", "role": "Sahne Amiri", "person": "Nurhan Güncan"}, {"play": "SESSİZLİK", "category": "Ses – Kondüvit", "role": "Kondüvit", "person": "Ulaş Yakup Alan"}, {"play": "SESSİZLİK", "category": "Işık Kontrol", "role": "Işık Kumanda", "person": "Bora Andaç"}, {"play": "SESSİZLİK", "category": "Işık Kontrol", "role": "Işık Kumanda", "person": "Mustafa Derler"}, {"play": "SESSİZLİK", "category": "Sahne", "role": "Suflöz", "person": "Yağmur Özgenç Şahin"}, {"play": "SESSİZLİK", "category": "Sahne Dekor (Sorumlu)", "role": "Dekor Sorumlusu", "person": "Cüneyt Özçavlin"}, {"play": "SESSİZLİK", "category": "Dekor/Aksesuar", "role": "Aksesuar Sorumlusu", "person": "Serhat Örgül"}, {"play": "SESSİZLİK", "category": "Sahne", "role": "Kadın Terzi", "person": "Seher Ay"}, {"play": "SESSİZLİK", "category": "Sahne", "role": "Erkek Terzi", "person": "Muzaffer Ataman"}, {"play": "SESSİZLİK", "category": "Peruk – Makyaj", "role": "Perukacı", "person": "Sami Öztürk"}, {"play": "VE KAZANAN", "category": "Oyuncu", "role": "Seamus", "person": "Murat Çidamlı"}, {"play": "VE KAZANAN", "category": "Oyuncu", "role": "Tyler Johnes", "person": "Mustafa Şen"}, {"play": "VE KAZANAN", "category": "Oyuncu", "role": "Teddy La Petite", "person": "Mustafa Çolak"}, {"play": "VE KAZANAN", "category": "Oyuncu", "role": "Sheri", "person": "Ece Güzel"}, {"play": "VE KAZANAN", "category": "Oyuncu", "role": "Kyle Morgan", "person": "Deniz Yağcı"}, {"play": "VE KAZANAN", "category": "Oyuncu", "role": "Serenity", "person": "Elif Özdemir Akçe"}, {"play": "VE KAZANAN", "category": "Ses", "role": "Dış Sesler", "person": "Olcay Kavuzlu, Yaprak Selin Onat, Gaye Alacacı, Berna Konur, Berrin Öney, Aysın Işımer"}, {"play": "VE KAZANAN", "category": "Tasarım", "role": "Kostüm Tasarımı", "person": "Funda Dicle Çebi"}, {"play": "VE KAZANAN", "category": "Işık – Tasarım", "role": "Işık Tasarımı", "person": "Bora Andaç"}, {"play": "VE KAZANAN", "category": "Müzisyen", "role": "Müzik", "person": "Özgür Duranoğlu"}, {"play": "VE KAZANAN", "category": "Teknik", "role": "Koreografi", "person": "Merve Bengier Genek"}, {"play": "VE KAZANAN", "category": "Yönetim", "role": "Yönetmen Yardımcıları", "person": "Ceyhan Gölçek Kuru, Gül Urgan Yıldız, \nBengi Ebru Atakan"}, {"play": "VE KAZANAN", "category": "Sahne Amiri", "role": "Sahne Amiri", "person": "Hakan Eroğlu"}, {"play": "VE KAZANAN", "category": "Ses – Kondüvit", "role": "Kondüvit", "person": "Özlem Doğruöz, Arif Alpa"}, {"play": "VE KAZANAN", "category": "Işık Kontrol", "role": "Işık Kumanda", "person": "Erkan Uyar, Mustafa Derler"}, {"play": "VE KAZANAN", "category": "Sahne", "role": "Suflöz", "person": "Ayşe Şenoğlu"}, {"play": "VE KAZANAN", "category": "Sahne Dekor (Sorumlu)", "role": "Dekor Sorumlusu", "person": "Cüneyt Özçavlin"}, {"play": "VE KAZANAN", "category": "Dekor/Aksesuar", "role": "Aksesuar Sorumlusu", "person": "Serhat Örgül"}, {"play": "VE KAZANAN", "category": "Kostüm", "role": "Kadın Terzi", "person": "Ümmü Kılıç"}, {"play": "VE KAZANAN", "category": "Kostüm", "role": "Erkek Terzi", "person": "Muzaffer Ataman"}, {"play": "VE KAZANAN", "category": "Peruk – Makyaj", "role": "Perukacı", "person": "Sami Öztürk"}, {"play": "VE KAZANAN", "category": "Tasarım", "role": "Dekor Tasarımı", "person": "Tayfun Çebi"}, {"play": "YALANCININ RESMİ", "category": "Oyuncu", "role": "Adam", "person": "Fatih Özyiğit"}, {"play": "YALANCININ RESMİ", "category": "Oyuncu", "role": "Kadın", "person": "Güldeniz Türküstün"}, {"play": "YALANCININ RESMİ", "category": "Figüran", "role": "Solist", "person": "Özlem Sağlam"}, {"play": "YALANCININ RESMİ", "category": "Orkestra", "role": "Keman", "person": "Merve Onkar"}, {"play": "YALANCININ RESMİ", "category": "Figüran", "role": "Kontrbas", "person": "Mete Çalışkan"}, {"play": "YALANCININ RESMİ", "category": "Figüran", "role": "Çello", "person": "Emre Deniz"}, {"play": "YALANCININ RESMİ", "category": "Figüran", "role": "Piyano", "person": "İlhan Denizhan Kuruoğlu"}, {"play": "YALANCININ RESMİ", "category": "Tasarım", "role": "Kostüm Tasarımı", "person": "Fatma Duygu Ergüven Saykan"}, {"play": "YALANCININ RESMİ", "category": "Işık – Tasarım", "role": "Işık Tasarımı", "person": "Rahmi Özan"}, {"play": "YALANCININ RESMİ", "category": "Müzisyen", "role": "Müzik", "person": "Efe Ünal"}, {"play": "YALANCININ RESMİ", "category": "Yönetim", "role": "Yönetmen Yardımcısı", "person": "Şenay Ünsal Dikmen"}, {"play": "YALANCININ RESMİ", "category": "Yönetim", "role": "Asistan", "person": "Umut Can Koçmen"}, {"play": "YALANCININ RESMİ", "category": "Yönetim", "role": "Asistan", "person": "S.Berkan Köse"}, {"play": "YALANCININ RESMİ", "category": "Sahne Amiri", "role": "Sahne Amiri", "person": "Müjde Bilir"}, {"play": "YALANCININ RESMİ", "category": "Ses – Kondüvit", "role": "Kondüvit", "person": "Özlem Doğruöz, Ali Avcı"}, {"play": "YALANCININ RESMİ", "category": "Işık Kontrol", "role": "Işık Kumanda", "person": "Alper Mutlu"}, {"play": "YALANCININ RESMİ", "category": "Sahne", "role": "Suflöz", "person": "Didem Özfuruncu"}, {"play": "YALANCININ RESMİ", "category": "Sahne Dekor (Sorumlu)", "role": "Dekor Sorumlusu", "person": "Mustafa Akpınar"}, {"play": "YALANCININ RESMİ", "category": "Dekor/Aksesuar", "role": "Aksesuar Sorumlusu", "person": "Yalçın Örgül"}, {"play": "YALANCININ RESMİ", "category": "Kostüm", "role": "Kadın Terzi", "person": "Zarife Çağlar"}, {"play": "YALANCININ RESMİ", "category": "Kostüm", "role": "Erkek Terzi", "person": "Kadri Özel, İlker Korkmaz"}, {"play": "YALANCININ RESMİ", "category": "Peruk – Makyaj", "role": "Perukacı", "person": "Sami Öztürk"}, {"play": "YALANCININ RESMİ", "category": "Tasarım", "role": "Dekor Tasarımı", "person": "Hasan Yavuz"}, {"play": "YUKO", "category": "Tasarım", "role": "Dekor Tasarımı", "person": "Murat Gülmez"}, {"play": "YUKO", "category": "Yazar", "role": "Yazar", "person": "Zeynep Özsarik"}, {"play": "YUKO", "category": "Yönetim", "role": "Yönetmen", "person": "Erkan Uyanıksoy"}, {"play": "YUKO", "category": "Oyuncu", "role": "Oyuncu", "person": "Meltem Başınhan Pehlivan"}, {"play": "YUKO", "category": "Oyuncu", "role": "Oyuncu", "person": "Deniz Burak Mersinli"}, {"play": "YUKO", "category": "Oyuncu", "role": "Oyuncu", "person": "S. Akın Kurt"}, {"play": "YUKO", "category": "Oyuncu", "role": "Oyuncu", "person": "İrem Ölmez Yurdakul"}, {"play": "YUKO", "category": "Tasarım", "role": "Kostüm Tasarımı", "person": "F. Duygu Ergüven Saykan"}, {"play": "YUKO", "category": "Işık – Tasarım", "role": "Işık Tasarımı", "person": "Çağlar Aytaç"}, {"play": "YUKO", "category": "Müzisyen", "role": "Müzik", "person": "Fırat Akarcalı"}, {"play": "YUKO", "category": "Hareket / Koreografi", "role": "Dans & Hareket Düzeni", "person": "Gizem Güneri Bayrak"}, {"play": "YUKO", "category": "Yönetim", "role": "Yönetmen Yardımcısı", "person": "Berfin Türköz Kurt"}, {"play": "YUKO", "category": "Yönetim", "role": "Yönetmen Yardımcısı", "person": "Efe Akercan"}, {"play": "YUKO", "category": "Yönetim", "role": "Asistan", "person": "Zeynep Özsarik"}, {"play": "YUKO", "category": "Yönetim", "role": "Asistan", "person": "Koray Doğan"}, {"play": "YUKO", "category": "Yönetim", "role": "Danışman (Çocuk Gelişim Uzmanı)", "person": "Öyküm Sütçü Ünver"}, {"play": "YUKO", "category": "Sahne Amiri", "role": "Sahne Amiri", "person": "Göksu Kolburan"}, {"play": "YUKO", "category": "Ses – Kondüvit", "role": "Kondüvit", "person": "Ali Avcı"}, {"play": "YUKO", "category": "Ses – Kondüvit", "role": "Kondüvit", "person": "Özlem Doğruöz"}, {"play": "YUKO", "category": "Işık Kontrol", "role": "Işık Kumanda", "person": "Çağlar Aytaç"}, {"play": "YUKO", "category": "Işık Kontrol", "role": "Işık Kumanda", "person": "Osman Burak Sakallıoğlu"}, {"play": "YUKO", "category": "Sahne Dekor (Sorumlu)", "role": "Dekor Sorumlusu", "person": "Şafak Kocatuş"}, {"play": "YUKO", "category": "Dekor/Aksesuar", "role": "Aksesuar Sorumlusu", "person": "Serhat Örgül"}, {"play": "YUKO", "category": "Sahne", "role": "Kadın Terzi", "person": "Zarife Çağlar"}, {"play": "YUKO", "category": "Sahne", "role": "Erkek Terzi", "person": "Vacit Örgül"}, {"play": "YUKO", "category": "Peruk – Makyaj", "role": "Perukacı", "person": "Talat Apaydın"}, {"play": "NİHAYET MAKAMI", "category": "Sanatsal Denetim", "role": "Süpervizör", "person": "Yunus Emre Bozdoğan"}, {"play": "NİHAYET MAKAMI", "category": "Yönetim", "role": "Yönetmen Yardımcısı", "person": "Ömer Polat"}, {"play": "NİHAYET MAKAMI", "category": "Yönetim", "role": "Asistan", "person": "Ata Mert Gülmez"}, {"play": "NİHAYET MAKAMI", "category": "Yönetim", "role": "Asistan", "person": "Emirhan Yeşilyuva"}, {"play": "NİHAYET MAKAMI", "category": "Tasarım", "role": "Dekor Tasarımı", "person": "Murat Gülmez"}, {"play": "NİHAYET MAKAMI", "category": "Tasarım", "role": "Kostüm Tasarımı", "person": "Esra Selah"}, {"play": "NİHAYET MAKAMI", "category": "Tasarım", "role": "Işık Tasarımı", "person": "Eser Dursun"}, {"play": "NİHAYET MAKAMI", "category": "Müzisyen", "role": "Müzik Direktörü", "person": "Yakup Selim Şenel"}, {"play": "NİHAYET MAKAMI", "category": "Müzisyen", "role": "Beste/Güfte", "person": "Burak ÇÖLLÜ"}, {"play": "NİHAYET MAKAMI", "category": "Hareket / Koreografi", "role": "Dans-Hareket Düzeni", "person": "Meltem Yorulmaz"}, {"play": "NİHAYET MAKAMI", "category": "Oyuncu", "role": "", "person": "Burcu Aksakal"}, {"play": "NİHAYET MAKAMI", "category": "Oyuncu", "role": "", "person": "Meltem Başınhan Pehlivan"}, {"play": "NİHAYET MAKAMI", "category": "Oyuncu", "role": "", "person": "Pınar Karadağ"}, {"play": "NİHAYET MAKAMI", "category": "Sahne Amiri", "role": "Sahne Amiri", "person": "Hakan Eroğlu"}, {"play": "NİHAYET MAKAMI", "category": "Ses-Kondüvit", "role": "Kondüvit", "person": "Canan Mızrak Deniz"}, {"play": "NİHAYET MAKAMI", "category": "Işık Kontrol", "role": "Işık Kumanda", "person": "Emrah Yıldız"}, {"play": "NİHAYET MAKAMI", "category": "Işık Kontrol", "role": "Işık Kumanda", "person": "Mustafa Derler"}, {"play": "NİHAYET MAKAMI", "category": "Sahne Arkası", "role": "Suflöz", "person": "Gülcan Çetin"}, {"play": "NİHAYET MAKAMI", "category": "Sahne Dekor (Sorumlu)", "role": "Dekor Sorumlusu", "person": "Melih Hallı"}, {"play": "NİHAYET MAKAMI", "category": "Dekor/Aksesuar", "role": "Aksesuar Sorumlusu", "person": "Mert Kokdaş"}, {"play": "NİHAYET MAKAMI", "category": "Kostüm", "role": "Kadın Terzi", "person": "Filiz Muratoğlu Karamırnak"}, {"play": "NİZAMÜLMÜLK", "category": "Yönetim", "role": "Yönetmen", "person": "Murat Çobangil"}, {"play": "NİZAMÜLMÜLK", "category": "Yönetim", "role": "Yönetmen Yardımcısı", "person": "Tamer Yılmaz"}, {"play": "NİZAMÜLMÜLK", "category": "Figüran", "role": "Asistan", "person": "Gülben Başer"}, {"play": "NİZAMÜLMÜLK", "category": "Figüran", "role": "Asistan", "person": "Ece Can"}, {"play": "NİZAMÜLMÜLK", "category": "Dramaturgi", "role": "Dramaturg", "person": "Füsun Ataman"}, {"play": "NİZAMÜLMÜLK", "category": "Tasarım", "role": "Dekor Tasarımı", "person": "Cenk Oral"}, {"play": "NİZAMÜLMÜLK", "category": "Kostüm", "role": "Kostüm Tasarımı", "person": "Günnur Orhon"}, {"play": "NİZAMÜLMÜLK", "category": "Tasarım", "role": "Işık Tasarımı", "person": "Fuat Fırat"}, {"play": "NİZAMÜLMÜLK", "category": "Müzisyen", "role": "Müzik", "person": "Erşah Gülerbaşlı"}, {"play": "NİZAMÜLMÜLK", "category": "Oyuncu", "role": "", "person": "Ali Hakan Beşen"}, {"play": "NİZAMÜLMÜLK", "category": "Oyuncu", "role": "", "person": "Bahar Işık"}, {"play": "NİZAMÜLMÜLK", "category": "Oyuncu", "role": "", "person": "Burak Şentürk"}, {"play": "NİZAMÜLMÜLK", "category": "Oyuncu", "role": "", "person": "Emrah Şenışık"}, {"play": "NİZAMÜLMÜLK", "category": "Oyuncu", "role": "", "person": "Ender Şeviker"}, {"play": "NİZAMÜLMÜLK", "category": "Oyuncu", "role": "", "person": "Erdinç Aytaç Özgür"}, {"play": "NİZAMÜLMÜLK", "category": "Oyuncu", "role": "", "person": "Gülsüm Kuzey"}, {"play": "NİZAMÜLMÜLK", "category": "Oyuncu", "role": "", "person": "Gürşen Eren Görgülü"}, {"play": "NİZAMÜLMÜLK", "category": "Oyuncu", "role": "", "person": "Kamil Samet Selçuk"}, {"play": "NİZAMÜLMÜLK", "category": "Oyuncu", "role": "", "person": "M. Asım Tuncay Aynur"}, {"play": "NİZAMÜLMÜLK", "category": "Oyuncu", "role": "", "person": "Melek Temel Çekmece"}, {"play": "NİZAMÜLMÜLK", "category": "Oyuncu", "role": "", "person": "Murat Çobangil"}, {"play": "NİZAMÜLMÜLK", "category": "Oyuncu", "role": "", "person": "Murat Özben"}, {"play": "NİZAMÜLMÜLK", "category": "Oyuncu", "role": "", "person": "Ufuk Bostancı"}, {"play": "NİZAMÜLMÜLK", "category": "Oyuncu", "role": "", "person": "Uğurcan Özfuruncu"}, {"play": "NİZAMÜLMÜLK", "category": "Figüran", "role": "", "person": "Gizem Güneri Bayrak"}, {"play": "NİZAMÜLMÜLK", "category": "Figüran", "role": "", "person": "Handan Kaya"}, {"play": "NİZAMÜLMÜLK", "category": "Figüran", "role": "", "person": "Merve Kamar"}, {"play": "NİZAMÜLMÜLK", "category": "Figüran", "role": "", "person": "Seyit Berkan Köse"}, {"play": "NİZAMÜLMÜLK", "category": "Figüran", "role": "", "person": "Tolga Erk"}, {"play": "NİZAMÜLMÜLK", "category": "Figüran", "role": "", "person": "Umut Can Koçmen"}, {"play": "NİZAMÜLMÜLK", "category": "Sahne Amiri", "role": "Sahne Amiri", "person": "Mesut Dalaz"}, {"play": "NİZAMÜLMÜLK", "category": "Ses – Kondüvit", "role": "Kondüvit", "person": "Arif Alpa"}, {"play": "NİZAMÜLMÜLK", "category": "Işık Kontrol", "role": "Işık Kumanda", "person": "Süleyman Tavan"}, {"play": "NİZAMÜLMÜLK", "category": "Işık Kontrol", "role": "Işık Kumanda", "person": "Önder Yağlıdere"}, {"play": "NİZAMÜLMÜLK", "category": "Sahne Arkası", "role": "Suflöz", "person": "Didem Özfuruncu"}, {"play": "NİZAMÜLMÜLK", "category": "Sahne Dekor (Sorumlu)", "role": "Dekor Sorumlusu", "person": "Mustafa Akpınar"}, {"play": "NİZAMÜLMÜLK", "category": "Dekor/Aksesuar", "role": "Aksesuar Sorumlusu", "person": "Yalçın Örgül"}, {"play": "NİZAMÜLMÜLK", "category": "Kostüm", "role": "Kadın Terzi", "person": "Nahile Ülger"}, {"play": "NİZAMÜLMÜLK", "category": "Kostüm", "role": "Erkek Terzi", "person": "Akın Tiryaki"}, {"play": "NİZAMÜLMÜLK", "category": "Peruk – Makyaj", "role": "Peruka", "person": "Talat Apaydın"}]};
+
+const LSKEY = 'idt_aylik_program_v3';
+
+/* === Kişi haritası (BÜTÜN OYUNLAR sekmesinden + kullanıcı eklemeleri) === */
+let PEOPLE_MAP = {};
+function rebuildPeopleMap(){
+  const map = {};
+  for(const c of (state.crew||[])){
+    const oyun = String(c.play||'').trim();
+    const kisi = String(c.person||'').trim();
+    if(!oyun || !kisi) continue;
+    const kat = String(c.category||'').trim();
+    const gorev = String(c.role||'').trim();
+    if(!map[oyun]) map[oyun] = {};
+    if(!map[oyun][kisi]) map[oyun][kisi] = {roles:[], critical:false};
+    const rt = [kat,gorev].filter(Boolean).join(' / ');
+    if(rt && !map[oyun][kisi].roles.includes(rt)) map[oyun][kisi].roles.push(rt);
+    const lk = kat.toLocaleLowerCase('tr');
+    if(lk.includes('oyuncu') || lk.includes('figüran') || lk.includes('figuran')){
+      map[oyun][kisi].critical = true;
+    }
+  }
+  PEOPLE_MAP = map;
+}
+
+/* === State === */
+function loadState(){
+  try{
+    const raw = localStorage.getItem(LSKEY);
+    if(raw){
+      const st = JSON.parse(raw);
+      if(!st.plays) st.plays = [];
+      if(!st.crew) st.crew = [];
+      /* Dosyaya gomulu oyun/kadro bilgisi her bilgisayarda gorunsun:
+         yerel kayitta eksik olanlar dosyadaki veriden tamamlanir. */
+      const pset = new Set(st.plays);
+      (DEFAULT_DATA.plays||[]).forEach(pl => { if(!pset.has(pl)){ pset.add(pl); st.plays.push(pl); } });
+      const ck = new Set(st.crew.map(c => [c.play,c.category,c.role,c.person].join('|')));
+      (DEFAULT_DATA.crew||[]).forEach(c => {
+        const k = [c.play,c.category,c.role,c.person].join('|');
+        if(!ck.has(k)){ ck.add(k); st.crew.push({...c}); }
+      });
+      return st;
+    }
+  }catch(e){}
+  const st = JSON.parse(JSON.stringify(DEFAULT_DATA));
+  st.months = st.months.map(m => normalizeMonth(m));
+  st.activeIdx = 0;
+  st.plays = JSON.parse(JSON.stringify(DEFAULT_DATA.plays||[]));
+  st.crew = JSON.parse(JSON.stringify(DEFAULT_DATA.crew||[]));
+  return st;
+}
+function normalizeMonth(m){
+  const cells = {};
+  if(Array.isArray(m.cells)){
+    for(const [r,c,v] of m.cells){ cells[r+'_'+c] = {v:String(v)}; }
+  } else if(m.cells && typeof m.cells==='object'){
+    for(const k in m.cells){ cells[k]={...m.cells[k]}; }
+  }
+  return {name:m.name, rows:m.rows, cols:m.cols, cells, merges:(m.merges||[]).map(x=>x.slice())};
+}
+function saveState(){ localStorage.setItem(LSKEY, JSON.stringify(state)); }
+
+let state = loadState();
+rebuildPeopleMap();
+
+/* === Undo/Redo === */
+const undoStack = [], redoStack = [];
+function snapshot(){ undoStack.push(JSON.stringify(state)); if(undoStack.length>50) undoStack.shift(); redoStack.length=0; }
+function undo(){ if(!undoStack.length) return; redoStack.push(JSON.stringify(state)); state=JSON.parse(undoStack.pop()); saveState(); renderAll(); }
+function redo(){ if(!redoStack.length) return; undoStack.push(JSON.stringify(state)); state=JSON.parse(redoStack.pop()); saveState(); renderAll(); }
+
+/* === Selection === */
+let sel = {r1:0,c1:0,r2:0,c2:0};
+function setSel(r1,c1,r2,c2){
+  sel = {r1:Math.min(r1,r2),c1:Math.min(c1,c2),r2:Math.max(r1,r2),c2:Math.max(c1,c2)};
+  paintSel();
+}
+function inSel(r,c){ return r>=sel.r1&&r<=sel.r2&&c>=sel.c1&&c<=sel.c2; }
+function paintSel(){
+  document.querySelectorAll('#sheet td.cell').forEach(td=>{
+    td.classList.remove('selected','anchor');
+    const r=+td.dataset.r,c=+td.dataset.c;
+    if(inSel(r,c)) td.classList.add('selected');
+    if(r===sel.r1&&c===sel.c1) td.classList.add('anchor');
+  });
+}
+function curMonth(){ return state.months[state.activeIdx]; }
+function mergeOf(m,r,c){
+  for(const [r1,c1,r2,c2] of m.merges){ if(r===r1&&c===c1) return [r1,c1,r2,c2]; }
+  return null;
+}
+function isCovered(m,r,c){
+  for(const [r1,c1,r2,c2] of m.merges){
+    if(r>=r1&&r<=r2&&c>=c1&&c<=c2 && !(r===r1&&c===c1)) return true;
+  }
+  return false;
+}
+
+/* === Yardımcılar: tarih/gün/saat === */
+const DAY_NAMES = ['Pazar','Pazartesi','Salı','Çarşamba','Perşembe','Cuma','Cumartesi'];
+function dateTextOfRow(m,r){
+  // Tarih A sütununda; merge nedeniyle üstteki satırda olabilir
+  for(let rr=r; rr>=0; rr--){
+    const v = (m.cells[rr+'_0']||{}).v || '';
+    if(v && /\d/.test(v)) return v;
+    // merge kontrol
+    const mm = mergeOf(m,rr,0);
+    if(mm && r>=mm[0] && r<=mm[2]){
+      const v2 = (m.cells[mm[0]+'_0']||{}).v || '';
+      if(v2) return v2;
+    }
+  }
+  return '';
+}
+function timeTextOfRow(m,r){ return (m.cells[r+'_1']||{}).v || ''; }
+function isWeekendRow(m,r){
+  const t = dateTextOfRow(m,r).toLocaleLowerCase('tr');
+  return t.includes('cumartesi') || t.includes('pazar');
+}
+function isSaturdayRow(m,r){
+  return dateTextOfRow(m,r).toLocaleLowerCase('tr').includes('cumartesi');
+}
+function isMondayRow(m,r){
+  return dateTextOfRow(m,r).toLocaleLowerCase('tr').includes('pazartesi');
+}
+function cellStyleString(cell){
+  const parts=[];
+  if(cell.bg) parts.push('background:'+cell.bg);
+  if(cell.color) parts.push('color:'+cell.color);
+  if(cell.bold) parts.push('font-weight:700');
+  return parts.join(';');
+}
+function stageHeaderText(m,c){
+  const v = (m.cells['1_'+c]||{}).v || '';
+  return v.toLocaleUpperCase('tr');
+}
+function programCols(m){
+  // 3. sütundan (index 2) sondan bir önceki sütuna kadar (son sütun tarih tekrarı)
+  const cols=[];
+  for(let c=2;c<m.cols-1;c++) cols.push(c);
+  return cols;
+}
+
+/* === Oyun parse === */
+function parseGame(txt){
+  const t = String(txt||'').trim();
+  if(!t) return {key:'', isPremiere:false};
+  const isPrem = t.startsWith('*');
+  const key = (isPrem ? t.slice(1) : t).trim();
+  return {key, isPremiere:isPrem};
+}
+function isPremiereLabel(t){
+  const s = String(t||'').trim().toLocaleUpperCase('tr');
+  return s==='PRÖMİYER' || s==='* PRÖMİYER' || s==='*PRÖMİYER';
+}
+
+/* === Çakışma hesap === */
+function rowGames(m,r){
+  const out=[];
+  for(const c of programCols(m)){
+    const raw = (m.cells[r+'_'+c]||{}).v || '';
+    if(!raw) continue;
+    if(isPremiereLabel(raw)) continue;
+    const {key, isPremiere} = parseGame(raw);
+    if(!key) continue;
+    out.push({raw, key, isPremiere, col:c});
+  }
+  return out;
+}
+function buildConflict(games){
+  // games: [{key,...}]
+  const totalCount = {};
+  for(const g of games){
+    const people = PEOPLE_MAP[g.key] ? Object.keys(PEOPLE_MAP[g.key]) : [];
+    for(const p of people) totalCount[p] = (totalCount[p]||0)+1;
+  }
+  const conflict = {};
+  let hasCritical = false;
+  for(const [p,n] of Object.entries(totalCount)){
+    if(n<2) continue;
+    let crit=0;
+    for(const g of games){
+      const rec = PEOPLE_MAP[g.key] && PEOPLE_MAP[g.key][p];
+      if(rec && rec.critical) crit++;
+    }
+    const isCrit = crit>=2;
+    conflict[p] = {critical:isCrit, criticalGameCount:crit, totalGameCount:n};
+    if(isCrit) hasCritical = true;
+  }
+  return {people:conflict, hasCritical};
+}
+
+/* === Render === */
+function renderSheet(){
+  const m = curMonth();
+  document.getElementById('monthTitle').textContent = m.name;
+  const t = document.getElementById('sheet');
+  t.innerHTML = '';
+  // header row: corner + col letters
+  const thead = document.createElement('tr');
+  const corner = document.createElement('td'); corner.className='hdr corner'; thead.appendChild(corner);
+  for(let c=0;c<m.cols;c++){
+    const td=document.createElement('td'); td.className='hdr'; td.textContent=colName(c);
+    td.dataset.c=c; td.title='Sağ tık: sütun işlemleri';
+    td.addEventListener('click',()=>{ setSel(0,c,m.rows-1,c); });
+    td.addEventListener('contextmenu',e=>{e.preventDefault(); setSel(0,c,m.rows-1,c); showCtx(e.clientX,e.clientY,'col');});
+    thead.appendChild(td);
+  }
+  t.appendChild(thead);
+
+  for(let r=0;r<m.rows;r++){
+    const tr=document.createElement('tr');
+    // Satır sınıfları
+    if(r===0) tr.classList.add('titleRow');
+    else if(r===1) tr.classList.add('stageHead');
+    else if(isMondayRow(m,r)) tr.classList.add('monday');
+
+    // Konflikt hesabı (sadece veri satırlarında)
+    let conflict = {people:{}, hasCritical:false};
+    if(r>=2){
+      const games = rowGames(m,r);
+      if(games.length>=2) conflict = buildConflict(games);
+    }
+
+    const rh=document.createElement('td'); rh.className='rowh'; rh.textContent=(r+1);
+    rh.dataset.r=r;
+    rh.addEventListener('click',()=>{ setSel(r,0,r,m.cols-1); });
+    rh.addEventListener('contextmenu',e=>{e.preventDefault(); setSel(r,0,r,m.cols-1); showCtx(e.clientX,e.clientY,'row');});
+    tr.appendChild(rh);
+
+    for(let c=0;c<m.cols;c++){
+      if(isCovered(m,r,c)) continue;
+      const mm = mergeOf(m,r,c);
+      const td=document.createElement('td');
+      td.className='cell';
+      td.dataset.r=r; td.dataset.c=c;
+      if(c===0 || c===m.cols-1) td.classList.add('dateCol');
+      const cell = m.cells[r+'_'+c] || {};
+      td.textContent = cell.v || '';
+      if(cell.premiere) td.classList.add('premiere');
+      // Otomatik prömiyer (* ile başlayan)
+      if((cell.v||'').trim().startsWith('*') && !isPremiereLabel(cell.v)) td.classList.add('premiere');
+      // Turne sütunu: başlık TURNE ise metni kırmızı
+      if(r>=2 && stageHeaderText(m,c).includes('TURNE') && cell.v) td.classList.add('turne');
+      // Kritik çakışma: bu hücredeki oyun kritik çakışan biri içeriyor mu?
+      if(r>=2 && conflict.hasCritical && cell.v){
+        const {key} = parseGame(cell.v);
+        if(key && PEOPLE_MAP[key]){
+          const anyCrit = Object.entries(conflict.people).some(([p,info])=>
+            info.critical && PEOPLE_MAP[key][p] && PEOPLE_MAP[key][p].critical
+          );
+          if(anyCrit) td.classList.add('conflict');
+        }
+      }
+      if(cell.note){ td.classList.add('note-mark'); }
+      const cs = cellStyleString(cell);
+      if(cs) td.style.cssText += cs;
+      if(mm){ td.rowSpan = mm[2]-mm[0]+1; td.colSpan = mm[3]-mm[1]+1; }
+      wireCell(td);
+      tr.appendChild(td);
+    }
+    t.appendChild(tr);
+  }
+  paintSel();
+}
+function colName(c){ let s=''; c++; while(c){ s=String.fromCharCode(65+(c-1)%26)+s; c=Math.floor((c-1)/26);} return s; }
+
+function wireCell(td){
+  td.addEventListener('mousedown', e=>{
+    if(td.isContentEditable) return;
+    const r=+td.dataset.r, c=+td.dataset.c;
+    if(e.shiftKey){ setSel(sel.r1,sel.c1,r,c); }
+    else { setSel(r,c,r,c); }
+  });
+  td.addEventListener('dblclick', ()=> startEdit(td));
+  td.addEventListener('contextmenu', e=>{
+    e.preventDefault();
+    const r=+td.dataset.r, c=+td.dataset.c;
+    if(!inSel(r,c)) setSel(r,c,r,c);
+    showCtx(e.clientX,e.clientY,'cell');
+  });
+  td.addEventListener('mouseenter', e=>{
+    const r=+td.dataset.r, c=+td.dataset.c;
+    showTooltipFor(r,c,e);
+  });
+  td.addEventListener('mousemove', e=>{
+    placeTooltip(e);
+  });
+  td.addEventListener('mouseleave',()=>{document.getElementById('tooltip').style.display='none';});
+}
+
+function placeTooltip(ev){
+  const tt=document.getElementById('tooltip');
+  if(tt.style.display!=='block') return;
+  tt.style.left='-9999px'; tt.style.top='0px';
+  const r=tt.getBoundingClientRect();
+  const vw=window.innerWidth, vh=window.innerHeight, pad=10;
+  let x=ev.clientX+16, y=ev.clientY+16;
+  if(x+r.width>vw-pad) x=Math.max(pad, ev.clientX-r.width-16);
+  if(x<pad) x=pad;
+  if(y+r.height>vh-pad) y=Math.max(pad, ev.clientY-r.height-16);
+  if(y<pad) y=Math.min(pad, vh-r.height-pad<pad?pad:pad);
+  if(y+r.height>vh-pad) y=Math.max(pad, vh-r.height-pad);
+  tt.style.left=x+'px'; tt.style.top=y+'px';
+}
+function showTooltipFor(r,c,ev){
+  const m = curMonth();
+  const cell = m.cells[r+'_'+c] || {};
+  const raw = (cell.v||'').trim();
+  const tt = document.getElementById('tooltip');
+  if(r<2 || !raw){
+    if(cell.note){
+      tt.innerHTML = '<div class="ttHead">Not</div>'+escapeHtml(cell.note);
+      tt.style.display='block';
+      placeTooltip(ev);
+    }
+    return;
+  }
+  if(isPremiereLabel(raw)) return;
+
+  const {key} = parseGame(raw);
+  const games = rowGames(m,r);
+  const conflict = games.length>=2 ? buildConflict(games) : {people:{}, hasCritical:false};
+
+  const dateText = dateTextOfRow(m,r);
+  const timeText = timeTextOfRow(m,r);
+  const stage = stageHeaderText(m,c);
+
+  let html = '';
+  html += '<div class="ttHead">'+escapeHtml(raw)+'</div>';
+  html += '<div>Tarih: <b>'+escapeHtml(dateText||'-')+'</b>'+(timeText?' · saat <b>'+escapeHtml(timeText)+'</b>':'')+'</div>';
+  if(stage) html += '<div>Sahne: '+escapeHtml(stage)+'</div>';
+  html += '<hr>';
+  if(games.length<=1){
+    html += '<div class="ttOk">Uygun ✅ (bu tarih/saatte tek oyun)</div>';
+  } else {
+    html += '<div>Bu tarih/saatteki oyunlar:</div>';
+    for(const g of games) html += '<div class="ttGame">• '+escapeHtml(g.raw)+'</div>';
+    html += '<hr>';
+    if(!conflict.hasCritical && Object.keys(conflict.people).length===0){
+      html += '<div class="ttOk">Uygun ✅ Çakışan kişi yok.</div>';
+    } else if(!conflict.hasCritical){
+      html += '<div class="ttOk">🟢 Ortak kişi(ler) var ama Oyuncu/Figüran çakışması yok:</div>';
+      for(const [p,info] of Object.entries(conflict.people).sort((a,b)=>a[0].localeCompare(b[0],'tr'))){
+        html += '<div>🟢 '+escapeHtml(p)+'</div>';
+      }
+    } else {
+      html += '<div class="ttWarn">⚠️ Çakışma var</div>';
+      for(const [p,info] of Object.entries(conflict.people).sort((a,b)=>a[0].localeCompare(b[0],'tr'))){
+        const dot = info.critical ? '🔴' : '🟢';
+        html += '<div>'+dot+' <b>'+escapeHtml(p)+'</b></div>';
+        for(const g of games){
+          const rec = PEOPLE_MAP[g.key] && PEOPLE_MAP[g.key][p];
+          if(!rec) continue;
+          const roles = (rec.roles||[]).join(', ') || '-';
+          html += '<div style="padding-left:14px;color:#ddd">↳ '+escapeHtml(g.raw)+' → '+escapeHtml(roles)+'</div>';
+        }
+      }
+    }
+  }
+  if(cell.note){ html += '<hr><div><b>Not:</b> '+escapeHtml(cell.note)+'</div>'; }
+
+  tt.innerHTML = html;
+  tt.style.display='block';
+  placeTooltip(ev);
+}
+
+function buildOyunDatalist(){
+  let dl = document.getElementById('oyunList');
+  if(!dl){ dl=document.createElement('datalist'); dl.id='oyunList'; document.body.appendChild(dl); }
+  const names = Array.from(new Set((state.plays||[]).map(p=>String(p).trim()).filter(Boolean))).sort((a,b)=>a.localeCompare(b,'tr'));
+  dl.innerHTML = names.map(n=>`<option value="${escapeHtml(n)}">`).join('');
+}
+function registerPlayName(nv){
+  if(!nv || isPremiereLabel(nv)) return;
+  const {key} = parseGame(nv);
+  if(key && !(state.plays||[]).includes(key)){
+    state.plays = state.plays||[];
+    state.plays.push(key);
+    buildOyunDatalist();
+  }
+}
+function startEdit(td){
+  const r=+td.dataset.r, c=+td.dataset.c;
+  const m = curMonth();
+  const orig = (m.cells[r+'_'+c]||{}).v || '';
+  const isProgramCell = r>=2 && programCols(m).includes(c);
+
+  if(isProgramCell){
+    // Excel/Sheets tarzı: dropdown ile oyun seç veya elle yaz
+    td.textContent = '';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.setAttribute('list','oyunList');
+    input.value = orig;
+    input.style.cssText = 'width:100%;height:100%;box-sizing:border-box;font:inherit;border:none;outline:2px solid var(--primary);background:#fffbe8;text-align:left;padding:0 4px';
+    td.appendChild(input);
+    input.focus(); input.select();
+    let done = false;
+    function commit(save){
+      if(done) return;
+      done = true;
+      if(input.parentNode) input.remove();
+      td.contentEditable='false';
+      if(save){
+        const nv = input.value.trim();
+        snapshot();
+        const mm = curMonth();
+        mm.cells[r+'_'+c] = {...(mm.cells[r+'_'+c]||{}), v: nv};
+        if(!nv) delete mm.cells[r+'_'+c];
+        registerPlayName(nv);
+        saveState();
+      }
+      renderSheet();
+    }
+    input.addEventListener('blur', ()=>commit(true));
+    input.addEventListener('keydown', e=>{
+      e.stopPropagation();
+      if(e.key==='Enter'){ e.preventDefault(); commit(true); }
+      else if(e.key==='Escape'){ e.preventDefault(); commit(false); }
+    });
+    return;
+  }
+
+  td.contentEditable='true';
+  td.focus();
+  const range=document.createRange(); range.selectNodeContents(td);
+  const s=window.getSelection(); s.removeAllRanges(); s.addRange(range);
+  function commit(save){
+    td.contentEditable='false';
+    if(save){
+      const nv = td.textContent.trim();
+      snapshot();
+      const mm = curMonth();
+      mm.cells[r+'_'+c] = {...(mm.cells[r+'_'+c]||{}), v: nv};
+      if(!nv) delete mm.cells[r+'_'+c];
+      saveState();
+    }
+    renderSheet();
+  }
+  td.onblur = ()=>commit(true);
+  td.onkeydown = (e)=>{
+    if(e.key==='Enter'){ e.preventDefault(); commit(true); }
+    else if(e.key==='Escape'){ e.preventDefault(); td.textContent=orig; commit(false); }
+  };
+}
+
+/* === Operations === */
+function opMerge(){
+  const m = curMonth();
+  for(const [r1,c1,r2,c2] of m.merges){
+    const overlaps = !(r2<sel.r1 || r1>sel.r2 || c2<sel.c1 || c1>sel.c2);
+    const fullyInside = r1>=sel.r1&&r2<=sel.r2&&c1>=sel.c1&&c2<=sel.c2;
+    if(overlaps && !fullyInside){ alert('Seçim mevcut bir birleşmeyi kısmen kesiyor.'); return; }
+  }
+  snapshot();
+  m.merges = m.merges.filter(([r1,c1,r2,c2])=> !(r1>=sel.r1&&r2<=sel.r2&&c1>=sel.c1&&c2<=sel.c2));
+  m.merges.push([sel.r1,sel.c1,sel.r2,sel.c2]);
+  for(let r=sel.r1;r<=sel.r2;r++) for(let c=sel.c1;c<=sel.c2;c++){
+    if(r===sel.r1 && c===sel.c1) continue;
+    delete m.cells[r+'_'+c];
+  }
+  saveState(); renderSheet();
+}
+function opUnmerge(){
+  const m = curMonth();
+  snapshot();
+  m.merges = m.merges.filter(([r1,c1,r2,c2])=> r2<sel.r1||r1>sel.r2||c2<sel.c1||c1>sel.c2);
+  saveState(); renderSheet();
+}
+function opClear(){
+  const m = curMonth(); snapshot();
+  for(let r=sel.r1;r<=sel.r2;r++) for(let c=sel.c1;c<=sel.c2;c++){
+    delete m.cells[r+'_'+c];
+  }
+  saveState(); renderSheet();
+}
+function opPremiere(){
+  const m = curMonth(); snapshot();
+  let anyOff=false;
+  for(let r=sel.r1;r<=sel.r2;r++) for(let c=sel.c1;c<=sel.c2;c++){
+    if(!(m.cells[r+'_'+c]||{}).premiere) anyOff=true;
+  }
+  for(let r=sel.r1;r<=sel.r2;r++) for(let c=sel.c1;c<=sel.c2;c++){
+    m.cells[r+'_'+c] = {...(m.cells[r+'_'+c]||{v:''}), premiere: anyOff};
+  }
+  saveState(); renderSheet();
+}
+function shiftCells(m, kind, at, delta){
+  const newCells = {};
+  for(const k in m.cells){
+    const [r,c] = k.split('_').map(Number);
+    let nr=r, nc=c;
+    if(kind==='row'){
+      if(delta>0){ if(r>=at) nr=r+1; }
+      else { if(r===at) continue; if(r>at) nr=r-1; }
+    } else {
+      if(delta>0){ if(c>=at) nc=c+1; }
+      else { if(c===at) continue; if(c>at) nc=c-1; }
+    }
+    newCells[nr+'_'+nc] = m.cells[k];
+  }
+  m.cells = newCells;
+  m.merges = m.merges.map(([r1,c1,r2,c2])=>{
+    if(kind==='row'){
+      if(delta>0){ if(r1>=at) r1++; if(r2>=at) r2++; }
+      else { if(r1>at) r1--; if(r2>=at) r2--; if(r2<r1) return null; }
+    } else {
+      if(delta>0){ if(c1>=at) c1++; if(c2>=at) c2++; }
+      else { if(c1>at) c1--; if(c2>=at) c2--; if(c2<c1) return null; }
+    }
+    return [r1,c1,r2,c2];
+  }).filter(Boolean);
+}
+function opInsertRow(pos){
+  const m = curMonth(); snapshot();
+  const at = pos==='above' ? sel.r1 : sel.r2+1;
+  shiftCells(m,'row',at,+1); m.rows++;
+  saveState(); renderSheet();
+}
+function opDelRow(){
+  const m = curMonth(); if(m.rows<=1) return; snapshot();
+  const from=sel.r1, to=sel.r2;
+  for(let i=to;i>=from;i--){ shiftCells(m,'row',i,-1); m.rows--; }
+  if(m.rows<1) m.rows=1;
+  saveState(); renderSheet();
+}
+function opInsertCol(pos){
+  const m = curMonth(); snapshot();
+  const at = pos==='left' ? sel.c1 : sel.c2+1;
+  shiftCells(m,'col',at,+1); m.cols++;
+  saveState(); renderSheet();
+}
+function opDelCol(){
+  const m = curMonth(); if(m.cols<=1) return; snapshot();
+  const from=sel.c1, to=sel.c2;
+  for(let i=to;i>=from;i--){ shiftCells(m,'col',i,-1); m.cols--; }
+  if(m.cols<1) m.cols=1;
+  saveState(); renderSheet();
+}
+
+/* Clipboard */
+let clip = null;
+function opCopy(){
+  const m = curMonth();
+  const vals = [];
+  for(let r=sel.r1;r<=sel.r2;r++){
+    const row=[];
+    for(let c=sel.c1;c<=sel.c2;c++) row.push({...(m.cells[r+'_'+c]||{v:''})});
+    vals.push(row);
+  }
+  clip = vals;
+  navigator.clipboard && navigator.clipboard.writeText(vals.map(r=>r.map(x=>x.v||'').join('\t')).join('\n')).catch(()=>{});
+  setStatus('Kopyalandı');
+}
+function opPaste(){
+  if(!clip) return;
+  const m = curMonth(); snapshot();
+  for(let dr=0; dr<clip.length; dr++){
+    for(let dc=0; dc<clip[dr].length; dc++){
+      const r=sel.r1+dr, c=sel.c1+dc;
+      if(r>=m.rows || c>=m.cols) continue;
+      const src = clip[dr][dc];
+      if(src.v || src.premiere || src.note) m.cells[r+'_'+c] = {...src};
+      else delete m.cells[r+'_'+c];
+    }
+  }
+  saveState(); renderSheet();
+}
+
+/* === Renklendirme (sağ tık paleti + toolbar) === */
+const BG_PALETTE = [['Sarı','#ffe600'],['Kırmızı','#e53935'],['Yeşil','#43a047'],['Mavi','#1e88e5'],['Turuncu','#fb8c00'],['Gri','#9e9e9e'],['Pembe','#ec407a']];
+const FG_PALETTE = [['Siyah','#000000'],['Kırmızı','#d00000'],['Yeşil','#1b5e20'],['Mavi','#0d47a1'],['Turuncu','#e65100'],['Beyaz','#ffffff']];
+function applyCellsProp(prop, value){
+  const m=curMonth(); snapshot();
+  for(let r=sel.r1;r<=sel.r2;r++) for(let c=sel.c1;c<=sel.c2;c++){
+    m.cells[r+'_'+c] = {...(m.cells[r+'_'+c]||{v:''}), [prop]: value};
+  }
+  saveState(); renderSheet(); renderPrint();
+}
+function applyBg(color){ applyCellsProp('bg', color); }
+function applyFg(color){ applyCellsProp('color', color); }
+function opBold(){
+  const m=curMonth();
+  let anyOff=false;
+  for(let r=sel.r1;r<=sel.r2;r++) for(let c=sel.c1;c<=sel.c2;c++){ if(!(m.cells[r+'_'+c]||{}).bold) anyOff=true; }
+  snapshot();
+  for(let r=sel.r1;r<=sel.r2;r++) for(let c=sel.c1;c<=sel.c2;c++){
+    m.cells[r+'_'+c] = {...(m.cells[r+'_'+c]||{v:''}), bold: anyOff};
+  }
+  saveState(); renderSheet(); renderPrint();
+}
+function opClearFormat(){
+  const m=curMonth(); snapshot();
+  for(let r=sel.r1;r<=sel.r2;r++) for(let c=sel.c1;c<=sel.c2;c++){
+    const cur = m.cells[r+'_'+c];
+    if(!cur) continue;
+    const {bg,color,bold, ...rest} = cur;
+    m.cells[r+'_'+c] = rest;
+  }
+  saveState(); renderSheet(); renderPrint();
+}
+function buildColorRow(label, palette, applyFn, pickerId){
+  const row=document.createElement('div');
+  row.style.cssText='padding:6px 12px 8px';
+  const lbl=document.createElement('div');
+  lbl.textContent=label;
+  lbl.style.cssText='font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;font-weight:600';
+  row.appendChild(lbl);
+  const sw=document.createElement('div');
+  sw.style.cssText='display:flex;gap:6px;flex-wrap:wrap;align-items:center';
+  for(const [name,color] of palette){
+    const b=document.createElement('button');
+    b.title=name; b.type='button';
+    b.style.cssText='width:20px;height:20px;border-radius:4px;border:1px solid rgba(0,0,0,.25);cursor:pointer;background:'+color+';padding:0';
+    b.onclick=(e)=>{ e.stopPropagation(); hideCtx(); applyFn(color); };
+    sw.appendChild(b);
+  }
+  const custom=document.createElement('button');
+  custom.type='button'; custom.title='Özel Renk';
+  custom.style.cssText='width:20px;height:20px;border-radius:4px;border:1px dashed var(--muted);cursor:pointer;background:conic-gradient(red,#ff0,lime,cyan,blue,magenta,red);padding:0';
+  custom.onclick=(e)=>{
+    e.stopPropagation(); hideCtx();
+    const picker=document.getElementById(pickerId);
+    picker.onchange=()=>applyFn(picker.value);
+    picker.click();
+  };
+  sw.appendChild(custom);
+  row.appendChild(sw);
+  return row;
+}
+
+/* Context menu */
+function showCtx(x,y,kind){
+  const el=document.getElementById('ctxmenu');
+  el.innerHTML='';
+  if(kind==='cell'){
+    el.appendChild(buildColorRow('Zemin Rengi', BG_PALETTE, applyBg, 'bgColorPicker'));
+    el.appendChild(buildColorRow('Yazı Rengi', FG_PALETTE, applyFg, 'fgColorPicker'));
+    const s=document.createElement('div'); s.className='sep'; el.appendChild(s);
+  }
+  const items = [];
+  if(kind==='cell'){
+    items.push(['Birleştir', opMerge],['Ayır', opUnmerge],['---'],
+      ['Prömiyer ★ (aç/kapat)', opPremiere],
+      ['Kalın (aç/kapat)', opBold],
+      ['Rengi Temizle', opClearFormat],
+      ['Not ekle/düzenle…', ()=>{
+        const m=curMonth(); const k=sel.r1+'_'+sel.c1;
+        const cur=(m.cells[k]||{}).note||'';
+        const n=prompt('Not:', cur);
+        if(n===null) return;
+        snapshot();
+        m.cells[k] = {...(m.cells[k]||{v:''}), note:n||undefined};
+        if(!n) delete m.cells[k].note;
+        saveState(); renderSheet();
+      }],
+      ['---'],['Temizle (Del)', opClear],['Kopyala (Ctrl+C)', opCopy],['Yapıştır (Ctrl+V)', opPaste],
+      ['---'],['Üste satır ekle', ()=>opInsertRow('above')],['Alta satır ekle', ()=>opInsertRow('below')],['Satırı sil', opDelRow],
+      ['Sola sütun ekle', ()=>opInsertCol('left')],['Sağa sütun ekle', ()=>opInsertCol('right')],['Sütunu sil', opDelCol]);
+  } else if(kind==='row'){
+    items.push(['Üste satır ekle', ()=>opInsertRow('above')],['Alta satır ekle', ()=>opInsertRow('below')],['Satırı sil', opDelRow],['---'],['Temizle', opClear]);
+  } else {
+    items.push(['Sola sütun ekle', ()=>opInsertCol('left')],['Sağa sütun ekle', ()=>opInsertCol('right')],['Sütunu sil', opDelCol],['---'],['Temizle', opClear]);
+  }
+  for(const it of items){
+    if(it[0]==='---'){ const s=document.createElement('div'); s.className='sep'; el.appendChild(s); continue; }
+    const b=document.createElement('button'); b.textContent=it[0];
+    b.onclick=()=>{ hideCtx(); it[1](); };
+    el.appendChild(b);
+  }
+  el.style.left=Math.min(x, window.innerWidth-220)+'px';
+  el.style.top=Math.min(y, window.innerHeight-el.scrollHeight-8)+'px';
+  el.classList.add('active');
+}
+function hideCtx(){ document.getElementById('ctxmenu').classList.remove('active'); }
+document.addEventListener('click', e=>{ if(!e.target.closest('.ctxmenu')) hideCtx(); });
+
+/* === Month management === */
+function refreshMonthSel(){
+  const sel = document.getElementById('monthSel');
+  sel.innerHTML = state.months.map((m,i)=>`<option value="${i}" ${i===state.activeIdx?'selected':''}>${escapeHtml(m.name)}</option>`).join('');
+}
+const AY_ADLARI = ['OCAK','ŞUBAT','MART','NİSAN','MAYIS','HAZİRAN','TEMMUZ','AĞUSTOS','EYLÜL','EKİM','KASIM','ARALIK'];
+function buildMonthTemplate(monthNum /*1-12*/, year, prev){
+  // Sütun sayısını ve sahne başlıklarını önceki aydan al
+  const cols = prev ? prev.cols : 9;
+  const stageHeaders = [];
+  for(let c=0;c<cols;c++){
+    stageHeaders.push(prev ? ((prev.cells['1_'+c]||{}).v || '') : '');
+  }
+  const monthName = AY_ADLARI[monthNum-1]+' '+year;
+  const cells = {};
+  const merges = [];
+
+  // Satır 0: kurum başlığı (sarı şerit)
+  cells['0_0'] = {v: monthName};
+  cells['0_1'] = {v: 'İZMİR DEVLET TİYATROSU MÜDÜRLÜĞÜ'};
+  cells['0_'+(cols-1)] = {v: monthName};
+  if(cols>3) merges.push([0,1,0,cols-2]);
+  // 0. sütun ve son sütun 0-1 arası birleşik
+  merges.push([0,0,1,0]);
+  merges.push([0,cols-1,1,cols-1]);
+
+  // Satır 1: sahne başlıkları
+  for(let c=2;c<cols-1;c++){
+    if(stageHeaders[c]) cells['1_'+c] = {v: stageHeaders[c]};
+  }
+
+  // Satır 2+ : günler
+  const daysInMonth = new Date(year, monthNum, 0).getDate();
+  let r = 2;
+  for(let d=1; d<=daysInMonth; d++){
+    const dt = new Date(year, monthNum-1, d);
+    const dayName = DAY_NAMES[dt.getDay()];
+    const dateStr = d+' '+AY_ADLARI[monthNum-1]+' '+year+' '+dayName;
+    cells[r+'_0'] = {v: dateStr};
+    cells[r+'_'+(cols-1)] = {v: dateStr};
+    if(dayName==='Cumartesi'){
+      // 2 satır: matine 15.00, suare 20.00
+      cells[r+'_1'] = {v: '15.00'};
+      cells[(r+1)+'_1'] = {v: '20.00'};
+      merges.push([r, 0, r+1, 0]);
+      merges.push([r, cols-1, r+1, cols-1]);
+      r += 2;
+    } else {
+      // Tek satır — Pazar 14.00, diğerleri 20.00 varsayılan
+      cells[r+'_1'] = {v: dayName==='Pazar' ? '14.00' : (dayName==='Pazartesi' ? '' : '20.00')};
+      r += 1;
+    }
+  }
+  const rows = r;
+  return {name: monthName, rows, cols, cells, merges};
+}
+function addBlankMonth(){
+  const suggest = (function(){
+    // Sonraki ayı öner
+    const now = new Date();
+    const nm = now.getMonth()+2; // 1-based +1
+    const y = now.getFullYear() + (nm>12?1:0);
+    const idx = ((nm-1)%12);
+    return AY_ADLARI[idx]+' '+y;
+  })();
+  const nm = prompt('Yeni ay adı (ör. TEMMUZ 2026):', suggest);
+  if(!nm) return;
+  const parts = nm.trim().split(/\s+/);
+  const ayIdx = AY_ADLARI.indexOf((parts[0]||'').toLocaleUpperCase('tr'));
+  const yil = parseInt(parts[1]||'',10);
+  if(ayIdx<0 || !yil){
+    alert('Ay adı çözümlenemedi. Örnek: TEMMUZ 2026');
+    return;
+  }
+  snapshot();
+  const m = buildMonthTemplate(ayIdx+1, yil, curMonth());
+  state.months.push(m); state.activeIdx = state.months.length-1;
+  saveState(); renderAll();
+}
+function delCurMonth(){
+  if(state.months.length<=1){ alert('Son ay silinemez.'); return; }
+  if(!confirm(`"${curMonth().name}" silinsin mi?`)) return;
+  snapshot();
+  state.months.splice(state.activeIdx,1);
+  state.activeIdx = Math.max(0, state.activeIdx-1);
+  saveState(); renderAll();
+}
+function renameCurMonth(){
+  const nm = prompt('Yeni ay adı:', curMonth().name);
+  if(!nm) return;
+  snapshot(); curMonth().name = nm; saveState(); renderAll();
+}
+
+/* Print view */
+function renderPrint(){
+  const wrap = document.getElementById('printView');
+  const prev = document.getElementById('printPreview');
+  const buildBlock = (m)=>{
+    let h = `<div class="print-month"><h2>${escapeHtml(m.name)}</h2><table class="sheet">`;
+    for(let r=0;r<m.rows;r++){
+      const cls = r===0 ? 'titleRow' : (r===1 ? 'stageHead' : (isMondayRow(m,r) ? 'monday' : ''));
+      h += `<tr${cls?` class="${cls}"`:''}>`;
+      // Konflikt
+      let conflict = {people:{}, hasCritical:false};
+      if(r>=2){
+        const games = rowGames(m,r);
+        if(games.length>=2) conflict = buildConflict(games);
+      }
+      for(let c=0;c<m.cols;c++){
+        if(isCovered(m,r,c)) continue;
+        const mm=mergeOf(m,r,c);
+        const cell = m.cells[r+'_'+c] || {};
+        const clist = ['cell'];
+        if(c===0||c===m.cols-1) clist.push('dateCol');
+        if(cell.premiere) clist.push('premiere');
+        if((cell.v||'').trim().startsWith('*') && !isPremiereLabel(cell.v)) clist.push('premiere');
+        if(r>=2 && stageHeaderText(m,c).includes('TURNE') && cell.v) clist.push('turne');
+        if(r>=2 && conflict.hasCritical && cell.v){
+          const {key} = parseGame(cell.v);
+          if(key && PEOPLE_MAP[key]){
+            const anyCrit = Object.entries(conflict.people).some(([p,info])=>
+              info.critical && PEOPLE_MAP[key][p] && PEOPLE_MAP[key][p].critical
+            );
+            if(anyCrit) clist.push('conflict');
+          }
+        }
+        const rs = mm?` rowspan="${mm[2]-mm[0]+1}"`:''; const cs = mm?` colspan="${mm[3]-mm[1]+1}"`:'';
+        const styleAttr = cellStyleString(cell); const st = styleAttr?` style="${styleAttr}"`:'';
+        h+=`<td class="${clist.join(' ')}"${rs}${cs}${st}>${escapeHtml(cell.v||'')}</td>`;
+      }
+      h+='</tr>';
+    }
+    h+='</table>';
+    h+=`<div class="pageNum">${pageNum}</div>`;
+    h+='</div>';
+    return h;
+  };
+  let pageNum = 0;
+  const blocks = state.months.map(m=>{ pageNum++; return buildBlock(m); });
+  wrap.innerHTML = blocks.join('');
+  prev.innerHTML = blocks.join('<hr style="margin:14px 0;border:none;border-top:2px dashed var(--border)">');
+}
+
+/* === Excel (.xls / SpreadsheetML) dışa aktarım — gerçek Excel dosyası, renkler+birleşmelerle === */
+const XLS_HEAD = 'FFFF00';      // sarı (başlık / Pazartesi / tarih sütunu) — orijinal Excel'deki gibi saf sarı
+const XLS_CONFLICT = 'FF4D4D';  // çakışma kırmızısı
+const XLS_PREMIERE = 'CC0000';  // prömiyer/turne kırmızı yazı
+const XLS_WHITE = 'FFFFFF';
+function xmlEscape(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function safeHex(v, fallback){
+  const s = String(v||'').replace('#','').toUpperCase();
+  return /^[0-9A-F]{6}$/.test(s) ? s : fallback;
+}
+function safeSheetName(name, used){
+  let n = String(name||'Sayfa').replace(/[:\\\/\?\*\[\]]/g,' ').trim().slice(0,31) || 'Sayfa';
+  let base = n, i = 2;
+  while(used.has(n)){ n = (base.slice(0,28)+' '+i).slice(0,31); i++; }
+  used.add(n);
+  return n;
+}
+function exportExcel(){
+  const styleCache = new Map(); // key -> styleId
+  let styleSeq = 0;
+  const styleDefs = [];
+  function styleIdFor(bg,color,bold){
+    const key = bg+'|'+color+'|'+(bold?1:0);
+    if(styleCache.has(key)) return styleCache.get(key);
+    const id = 's'+(styleSeq++);
+    styleCache.set(key,id);
+    styleDefs.push(
+      `<Style ss:ID="${id}">`+
+      `<Alignment ss:Horizontal="Center" ss:Vertical="Center" ss:WrapText="1"/>`+
+      `<Borders><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/></Borders>`+
+      `<Font ss:FontName="Calibri" ss:Size="10" ss:Color="#${color}" ${bold?'ss:Bold="1"':''}/>`+
+      `<Interior ss:Color="#${bg}" ss:Pattern="Solid"/>`+
+      `</Style>`
+    );
+    return id;
+  }
+  function cellFormat(m,r,c,cell,conflict){
+    const headerish = r===0 || r===1 || isMondayRow(m,r) || c===0 || c===m.cols-1;
+    const isTurne = r>=2 && stageHeaderText(m,c).includes('TURNE') && cell.v;
+    const isPrem = !!cell.premiere || ((cell.v||'').trim().startsWith('*') && !isPremiereLabel(cell.v));
+    let isConflict = false;
+    if(r>=2 && conflict.hasCritical && cell.v){
+      const {key} = parseGame(cell.v);
+      if(key && PEOPLE_MAP[key]){
+        isConflict = Object.entries(conflict.people).some(([p,info])=>
+          info.critical && PEOPLE_MAP[key][p] && PEOPLE_MAP[key][p].critical);
+      }
+    }
+    let bg = headerish ? XLS_HEAD : XLS_WHITE;
+    let color = (isPrem || isTurne) ? XLS_PREMIERE : '000000';
+    let bold = headerish || isPrem || isTurne;
+    if(cell.bg) bg = safeHex(cell.bg, bg);
+    if(cell.color) color = safeHex(cell.color, color);
+    if(cell.bold) bold = true;
+    if(isConflict){ bg = XLS_CONFLICT; color = 'FFFFFF'; bold = true; }
+    let text = cell.v || '';
+    if(isPrem && !text.trim().startsWith('★') && !text.trim().startsWith('*')) text = '★ '+text;
+    return {bg,color,bold,text};
+  }
+  const usedNames = new Set();
+  let sheetsXml = '';
+  for(const m of state.months){
+    const sheetName = safeSheetName(m.name, usedNames);
+    let rowsXml = '';
+    for(let r=0;r<m.rows;r++){
+      let conflict = {people:{}, hasCritical:false};
+      if(r>=2){
+        const games = rowGames(m,r);
+        if(games.length>=2) conflict = buildConflict(games);
+      }
+      let cellsXml = '';
+      for(let c=0;c<m.cols;c++){
+        if(isCovered(m,r,c)) continue;
+        const mm = mergeOf(m,r,c);
+        const cell = m.cells[r+'_'+c] || {};
+        const {bg,color,bold,text} = cellFormat(m,r,c,cell,conflict);
+        const sid = styleIdFor(bg,color,bold);
+        const merge = mm ? ` ss:MergeAcross="${mm[3]-mm[1]}" ss:MergeDown="${mm[2]-mm[0]}"` : '';
+        cellsXml += `<Cell ss:Index="${c+1}" ss:StyleID="${sid}"${merge}><Data ss:Type="String">${xmlEscape(text)}</Data></Cell>`;
+      }
+      rowsXml += `<Row>${cellsXml}</Row>`;
+    }
+    const colWidths = [];
+    for(let c=0;c<m.cols;c++) colWidths.push(`<Column ss:Width="${c===0||c===m.cols-1?150:(c===1?55:170)}"/>`);
+    sheetsXml += `<Worksheet ss:Name="${xmlEscape(sheetName)}"><Table ss:DefaultColumnWidth="80">${colWidths.join('')}${rowsXml}</Table>`+
+      `<WorksheetOptions xmlns="urn:schemas-microsoft-com:office:excel"><PageSetup><Layout x:Orientation="Landscape"/><PageMargins x:Bottom="0.3" x:Left="0.3" x:Right="0.3" x:Top="0.3"/></PageSetup><FitToPage/></WorksheetOptions></Worksheet>`;
+  }
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<?mso-application progid="Excel.Sheet"?>\n<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet" xmlns:html="http://www.w3.org/TR/REC-html40">`+
+    `<Styles>${styleDefs.join('')}</Styles>${sheetsXml}</Workbook>`;
+  const blob = new Blob([xml], {type:'application/vnd.ms-excel'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'izmir-dt-aylik-program.xls';
+  a.click();
+  setStatus('Excel indirildi.');
+}
+
+/* Plays tab */
+function renderPlays(filter=''){
+  const list = document.getElementById('playsList');
+  const q = filter.toLocaleLowerCase('tr');
+  const byPlay = {};
+  (state.crew||[]).forEach((c,idx)=>{ (byPlay[c.play]=byPlay[c.play]||[]).push({...c, _idx:idx}); });
+  const plays = (state.plays||[]).filter(p=>{
+    if(!q) return true;
+    if(p.toLocaleLowerCase('tr').includes(q)) return true;
+    return (byPlay[p]||[]).some(c=>(c.person||'').toLocaleLowerCase('tr').includes(q));
+  });
+  list.innerHTML = plays.map(p=>{
+    const crew = byPlay[p]||[];
+    const byCat = {};
+    for(const c of crew){ (byCat[c.category]=byCat[c.category]||[]).push(c); }
+    return `<details><summary>${escapeHtml(p)} <span style="color:var(--muted);font-weight:400;font-size:12px">— ${crew.length} kişi</span>
+        <button class="btn ghost small delPlay" data-play="${escapeHtml(p)}" style="float:right;padding:1px 8px">Oyunu Sil</button></summary>
+      ${Object.keys(byCat).map(cat=>`<div style="margin-top:8px"><div class="cat">${escapeHtml(cat)}</div>
+        <ul class="crew-list">${byCat[cat].map(c=>`<li><b>${escapeHtml(c.role||'')}</b> — ${escapeHtml(c.person||'')} <button class="delCrew" data-idx="${c._idx}" title="Kişiyi sil" style="border:none;background:none;color:var(--muted);cursor:pointer">✕</button></li>`).join('')}</ul></div>`).join('')}
+    </details>`;
+  }).join('') || '<p style="color:var(--muted)">Sonuç yok.</p>';
+  list.querySelectorAll('.delCrew').forEach(b=>{
+    b.onclick = (e)=>{
+      e.preventDefault(); e.stopPropagation();
+      const idx=+b.dataset.idx;
+      state.crew.splice(idx,1);
+      rebuildPeopleMap(); saveState(); renderPlays(document.getElementById('playSearch').value); renderSheet();
+    };
+  });
+  list.querySelectorAll('.delPlay').forEach(b=>{
+    b.onclick = (e)=>{
+      e.preventDefault(); e.stopPropagation();
+      const p = b.dataset.play;
+      if(!confirm(`"${p}" oyunu ve ekip listesi silinsin mi?`)) return;
+      state.plays = (state.plays||[]).filter(x=>x!==p);
+      state.crew = (state.crew||[]).filter(c=>c.play!==p);
+      rebuildPeopleMap(); buildOyunDatalist(); saveState(); renderPlays(document.getElementById('playSearch').value); renderSheet();
+    };
+  });
+}
+
+/* JSON in/out */
+function exportJson(){
+  const blob = new Blob([JSON.stringify(state,null,2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'aylik-program-yedek.json';
+  a.click();
+}
+function importJson(file){
+  const rd = new FileReader();
+  rd.onload = ()=>{
+    try{
+      const d = JSON.parse(rd.result);
+      if(!d.months) throw new Error('geçersiz');
+      snapshot();
+      state = d;
+      if(state.activeIdx==null) state.activeIdx=0;
+      saveState(); renderAll();
+    }catch(e){ alert('Yedek okunamadı: '+e.message); }
+  };
+  rd.readAsText(file);
+}
+function resetState(){
+  if(!confirm('Yerel değişiklikler silinip başlangıç verisine dönülecek. Devam edilsin mi?')) return;
+  localStorage.removeItem(LSKEY);
+  state = loadState();
+  renderAll();
+}
+
+/* Misc */
+function escapeHtml(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function setStatus(t){ const el=document.getElementById('status'); el.textContent=t; setTimeout(()=>el.textContent='Kaydedildi (yerel).', 1500); }
+
+function renderAll(){
+  refreshMonthSel();
+  buildOyunDatalist();
+  renderSheet();
+  renderPrint();
+  setStatus('Kaydedildi (yerel).');
+}
+
+/* Wire */
+document.getElementById('monthSel').onchange = e=>{ state.activeIdx=+e.target.value; saveState(); renderSheet(); renderPrint(); };
+document.getElementById('addMonth').onclick = addBlankMonth;
+document.getElementById('delMonth').onclick = delCurMonth;
+document.getElementById('renameMonth').onclick = renameCurMonth;
+document.getElementById('mergeBtn').onclick = opMerge;
+document.getElementById('unmergeBtn').onclick = opUnmerge;
+document.getElementById('premBtn').onclick = opPremiere;
+document.getElementById('clearBtn').onclick = opClear;
+document.getElementById('bgColorBtn').onclick = ()=>{
+  const p=document.getElementById('bgColorPicker');
+  p.onchange=()=>applyBg(p.value);
+  p.click();
+};
+document.getElementById('fgColorBtn').onclick = ()=>{
+  const p=document.getElementById('fgColorPicker');
+  p.onchange=()=>applyFg(p.value);
+  p.click();
+};
+document.getElementById('boldBtn').onclick = opBold;
+document.getElementById('fmtClearBtn').onclick = opClearFormat;
+document.getElementById('rowAbove').onclick = ()=>opInsertRow('above');
+document.getElementById('rowBelow').onclick = ()=>opInsertRow('below');
+document.getElementById('rowDel').onclick = opDelRow;
+document.getElementById('colLeft').onclick = ()=>opInsertCol('left');
+document.getElementById('colRight').onclick = ()=>opInsertCol('right');
+document.getElementById('colDel').onclick = opDelCol;
+document.getElementById('undoBtn').onclick = undo;
+document.getElementById('redoBtn').onclick = redo;
+document.getElementById('expExcel').onclick = exportExcel;
+document.getElementById('expJson').onclick = exportJson;
+document.getElementById('impJson').onclick = ()=>document.getElementById('impFile').click();
+document.getElementById('impFile').onchange = e=>{ if(e.target.files[0]) importJson(e.target.files[0]); };
+document.getElementById('resetBtn').onclick = resetState;
+document.getElementById('playSearch').oninput = e=>renderPlays(e.target.value);
+document.getElementById('addPlayBtn').onclick = ()=>{
+  const inp = document.getElementById('newPlayName');
+  const name = inp.value.trim();
+  if(!name) return;
+  state.plays = state.plays||[];
+  if(!state.plays.includes(name)) state.plays.push(name);
+  inp.value='';
+  saveState(); buildOyunDatalist(); renderPlays(document.getElementById('playSearch').value);
+  setStatus('Oyun eklendi.');
+};
+document.getElementById('addCrewBtn').onclick = ()=>{
+  const play = document.getElementById('crewPlay').value.trim();
+  const category = document.getElementById('crewCategory').value.trim();
+  const role = document.getElementById('crewRole').value.trim();
+  const person = document.getElementById('crewPerson').value.trim();
+  if(!play || !person){ alert('Oyun ve Ad Soyad zorunlu.'); return; }
+  state.plays = state.plays||[];
+  if(!state.plays.includes(play)) state.plays.push(play);
+  state.crew = state.crew||[];
+  state.crew.push({play, category: category||'Oyuncu', role, person});
+  rebuildPeopleMap();
+  document.getElementById('crewCategory').value='';
+  document.getElementById('crewRole').value='';
+  document.getElementById('crewPerson').value='';
+  saveState(); buildOyunDatalist(); renderPlays(document.getElementById('playSearch').value); renderSheet();
+  setStatus('Kişi eklendi.');
+};
+
+document.querySelectorAll('#tabbar button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('#tabbar button').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('main section').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active');
+  document.getElementById(b.dataset.tab).classList.add('active');
+  if(b.dataset.tab==='print') renderPrint();
+});
+
+document.addEventListener('keydown', e=>{
+  if(e.target.isContentEditable) return;
+  const tag = (e.target.tagName||'').toLowerCase();
+  if(tag==='input'||tag==='select'||tag==='textarea') return;
+  if(e.ctrlKey||e.metaKey){
+    if(e.key==='z'){ e.preventDefault(); undo(); }
+    else if(e.key==='y'){ e.preventDefault(); redo(); }
+    else if(e.key==='c'){ e.preventDefault(); opCopy(); }
+    else if(e.key==='v'){ e.preventDefault(); opPaste(); }
+  } else if(e.key==='Delete' || e.key==='Backspace'){ if(sel.r1>=0){ e.preventDefault(); opClear(); } }
+  else if(e.key==='Enter'){ const td=document.querySelector('#sheet td.cell.anchor'); if(td){ e.preventDefault(); startEdit(td); } }
+});
+
+renderAll();
+renderPlays();
+setSel(2,2,2,2);
+setStatus('Hazır.');
+</script>
+<!-- ═══════ İDT REPERTUVAR KÖPRÜSÜ (v2) ═══════ -->
+<style>
+#idtBridgeBar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:6px 18px;background:#fff;border-bottom:1px solid var(--border);font-size:12px;color:var(--muted)}
+#idtBridgeBar b{color:var(--primary)}
+</style>
+<script>
+(function(){
+  const BRIDGE = 'idt_repertuvar_bridge';
+  const SITE   = 'idt-repertuvar-final-v7.html';
+
+  function readBridge(){
+    try{ return JSON.parse(localStorage.getItem(BRIDGE)||'null'); }catch(e){ return null; }
+  }
+
+  /* Repertuvar sitesinden gelen oyun + kadro verisini state'e uygula */
+  function pullFromSite(silent){
+    const b = readBridge();
+    if(!b || !Array.isArray(b.crew)){
+      if(!silent) alert('İDT Repertuvar verisi bulunamadı.\n\nÖnce İDT Repertuvar sitesini (aynı adreste) açıp "Aylık Program" sekmesine girin; veri otomatik aktarılır.');
+      return false;
+    }
+    state.plays = state.plays || [];
+    state.crew  = state.crew  || [];
+    /* önceki repertuvar kayıtlarını temizle, elle eklenenler kalsın */
+    state.crew = state.crew.filter(c => c.src !== 'idt');
+    b.crew.forEach(c => state.crew.push({play:c.play, category:c.category, role:c.role, person:c.person, src:'idt'}));
+    (b.plays||[]).forEach(p => { if(!state.plays.includes(p)) state.plays.push(p); });
+    rebuildPeopleMap(); saveState(); buildOyunDatalist();
+    renderPlays(document.getElementById('playSearch').value||'');
+    renderSheet();
+    stamp(b);
+    if(!silent) setStatus('İDT Repertuvar verisi çekildi (' + (b.plays||[]).length + ' oyun).');
+    return true;
+  }
+  window.pullFromSite = pullFromSite;
+
+  function stamp(b){
+    const el = document.getElementById('idtBridgeInfo');
+    if(!el) return;
+    el.innerHTML = b
+      ? 'Veri kaynağı: <b>İDT Repertuvar</b> · ' + (b.plays||[]).length + ' oyun · ' + (b.crew||[]).length +
+        ' kadro kaydı · son güncelleme ' + new Date(b.ts||Date.now()).toLocaleString('tr-TR')
+      : 'İDT Repertuvar verisi henüz alınmadı.';
+  }
+
+  /* Üst bilgi çubuğu */
+  const bar = document.createElement('div');
+  bar.id = 'idtBridgeBar';
+  bar.innerHTML = '<span id="idtBridgeInfo"></span>' +
+    '<button class="btn ghost small" id="idtPullBtn" style="margin-left:auto">İDT Repertuvardan veri çek</button>' +
+    '<a class="btn ghost small" id="idtBackBtn" href="' + SITE + '" style="text-decoration:none">← Repertuvar sitesi</a>';
+  document.querySelector('header').insertAdjacentElement('afterend', bar);
+  document.getElementById('idtPullBtn').onclick = () => pullFromSite(false);
+
+  /* İlk açılışta verinin diske yazılmasını garanti et (repertuvar sitesi buradan okur) */
+  try{ if(!localStorage.getItem('idt_aylik_program_v3')) saveState(); }catch(e){}
+
+  /* Açılışta otomatik çek */
+  pullFromSite(true);
+  stamp(readBridge());
+
+  /* Repertuvar sitesi başka sekmede veri güncellerse anında yansı */
+  window.addEventListener('storage', e => { if(e.key === BRIDGE) pullFromSite(true); });
+
+  /* #ay=IDX ile doğrudan o aya git */
+  function gotoHashMonth(){
+    const m = /(?:^|#|&)ay=(\d+)/.exec(location.hash||'');
+    if(!m) return;
+    const i = +m[1];
+    if(!state.months[i]) return;
+    state.activeIdx = i; saveState();
+    refreshMonthSel(); renderSheet(); renderPrint();
+  }
+  gotoHashMonth();
+  window.addEventListener('hashchange', gotoHashMonth);
+})();
+</script>
+
+</body>
+</html>
