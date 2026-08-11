@@ -256,7 +256,10 @@ table.sheet td.cell.note-mark::after{content:"";position:absolute;top:0;right:0;
       </select>
       <button class="btn ghost small" id="printBtn">Yazdır / PDF</button>
       <button class="btn small" id="publishBtn" title="Programı ortak sunucuya kaydet ve index sayfasında göster">Kesinleştir</button>
-      <button class="btn ghost small" id="expExcel" title="Excel (.xls) olarak indir — tüm aylar, renkler ve birleştirmelerle">Excel İndir</button>
+      <select id="expExcelMonth" title="Excel'e hangi ay(lar) aktarılsın">
+        <option value="all">Tüm Aylar</option>
+      </select>
+      <button class="btn ghost small" id="expExcel" title="Excel (.xls) olarak indir — seçili ay veya tüm aylar, renkler ve birleştirmelerle">Excel İndir</button>
       <button class="btn ghost small" id="expJson">JSON indir</button>
       <button class="btn ghost small" id="impJson">JSON yükle</button>
       <button class="btn ghost small" id="resetBtn" title="Kayıtlı yerel veriyi silip başlangıç verisine dön">Sıfırla</button>
@@ -482,6 +485,49 @@ function normalizeMonth(m){
 }
 function saveState(){ localStorage.setItem(LSKEY, JSON.stringify(state)); }
 
+/* === Kırmızı hücre kontrolü ===
+   Kesinleştirme ve A4 yazdırma, herhangi bir ayda kırmızı zemin renkli
+   (boyalı) hücre varsa engellenir. Kırmızı, ton (hue) kırmızıya yakın ve
+   yeterince canlı/doygun renkler için true döner (örn. palet kırmızısı
+   #e53935 dahil, ama pembe/turuncu gibi komşu tonlar hariç). */
+function isRedFill(hex){
+  if(!hex) return false;
+  let h = String(hex).trim().replace('#','');
+  if(h.length===3) h = h.split('').map(c=>c+c).join('');
+  if(!/^[0-9a-fA-F]{6}$/.test(h)) return false;
+  const r = parseInt(h.slice(0,2),16), g = parseInt(h.slice(2,4),16), b = parseInt(h.slice(4,6),16);
+  const max = Math.max(r,g,b), min = Math.min(r,g,b), diff = max-min;
+  if(diff < 40) return false; /* gri/nötr tonları hariç tut */
+  let hue;
+  if(max===r) hue = 60*(((g-b)/diff)%6);
+  else if(max===g) hue = 60*(((b-r)/diff)+2);
+  else hue = 60*(((r-g)/diff)+4);
+  if(hue<0) hue += 360;
+  const isRedHue = (hue<=18 || hue>=345);
+  const lightness = (max+min)/2/255;
+  return isRedHue && lightness>0.15 && lightness<0.85;
+}
+function findRedCell(months){
+  const list = months || state.months || [];
+  for(const m of list){
+    if(!m || !m.cells) continue;
+    for(const key in m.cells){
+      const cell = m.cells[key];
+      if(cell && isRedFill(cell.bg)) return {month:m.name, key};
+    }
+  }
+  return null;
+}
+function blockIfRedCell(actionLabel){
+  const hit = findRedCell();
+  if(hit){
+    alert('"'+actionLabel+'" işlemi yapılamıyor: "'+(hit.month||'')+'" ayında kırmızı boyalı hücre var. '+
+      'Devam etmeden önce kırmızı hücreleri temizleyin veya farklı bir renkle işaretleyin.');
+    return true;
+  }
+  return false;
+}
+
 /* === Ortak yayın: Kesinleştir düğmesi ===
    Tarayıcı yerel kaydı düzenleme için tutulur; kesinleştirilen sürüm ise
    doğrudan ortak aylık program sekmesine parçalara bölünerek yazılır. */
@@ -498,6 +544,7 @@ function utf8ToB64(text){
   return btoa(bin);
 }
 async function publishProgram(){
+  if(blockIfRedCell('Kesinleştir')) return;
   const btn = document.getElementById('publishBtn');
   if(btn) { btn.disabled=true; btn.textContent='Yayınlanıyor…'; }
   try{
@@ -1260,6 +1307,14 @@ function initFullscreen(){
 function refreshMonthSel(){
   const sel = document.getElementById('monthSel');
   sel.innerHTML = state.months.map((m,i)=>`<option value="${i}" ${i===state.activeIdx?'selected':''}>${escapeHtml(m.name)}</option>`).join('');
+  const exSel = document.getElementById('expExcelMonth');
+  if(exSel){
+    const prevVal = exSel.value || 'all';
+    exSel.innerHTML = '<option value="all">Tüm Aylar</option>' +
+      state.months.map((m,i)=>`<option value="${i}">${escapeHtml(m.name)}</option>`).join('');
+    const stillValid = prevVal==='all' || state.months[+prevVal];
+    exSel.value = stillValid ? prevVal : 'all';
+  }
 }
 const AY_ADLARI = ['OCAK','ŞUBAT','MART','NİSAN','MAYIS','HAZİRAN','TEMMUZ','AĞUSTOS','EYLÜL','EKİM','KASIM','ARALIK'];
 function buildMonthTemplate(monthNum /*1-12*/, year, prev){
@@ -1421,7 +1476,9 @@ function setPrintSize(size){
   fitPrintPages();
 }
 function printProgram(size){
-  setPrintSize(size || document.getElementById('printSize')?.value || 'A4');
+  const chosen = size || document.getElementById('printSize')?.value || 'A4';
+  if(chosen === 'A4' && blockIfRedCell('A4 Yazdır')) return;
+  setPrintSize(chosen);
   window.print();
 }
 function fitPrintPages(){
@@ -1477,9 +1534,9 @@ function safeSheetName(name, used){
   return n;
 }
 /* Kırmızı (kritik) çakışmaları tara — varsa Excel'e dönüştürme engellenir */
-function findConflicts(){
+function findConflicts(months){
   const out=[];
-  for(const m of (state.months||[])){
+  for(const m of (months || state.months || [])){
     for(let r=2;r<m.rows;r++){
       const games = rowGames(m,r);
       if(games.length<2) continue;
@@ -1500,7 +1557,11 @@ function findConflicts(){
   return out;
 }
 function exportExcel(){
-  const cfs = findConflicts();
+  const exSel = document.getElementById('expExcelMonth');
+  const selVal = exSel ? exSel.value : 'all';
+  const months = (selVal === 'all') ? (state.months||[]) : [state.months[+selVal]].filter(Boolean);
+  if(!months.length){ alert('Aktarılacak ay bulunamadı.'); return; }
+  const cfs = findConflicts(months);
   if(cfs.length){
     const seen = new Set(); const lines=[];
     for(const c of cfs){
@@ -1558,7 +1619,7 @@ function exportExcel(){
   }
   const usedNames = new Set();
   let sheetsXml = '';
-  for(const m of state.months){
+  for(const m of months){
     const sheetName = safeSheetName(m.name, usedNames);
     let rowsXml = '';
     for(let r=0;r<m.rows;r++){
@@ -1594,7 +1655,10 @@ function exportExcel(){
   const blob = new Blob([xml], {type:'application/vnd.ms-excel'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = 'izmir-dt-aylik-program.xls';
+  const fname = (selVal === 'all')
+    ? 'izmir-dt-aylik-program.xls'
+    : 'izmir-dt-aylik-program-'+(months[0].name||'ay').toLowerCase().replace(/[^a-z0-9ığüşöç]+/gi,'-')+'.xls';
+  a.download = fname;
   a.click();
   setStatus('Excel indirildi.');
 }
