@@ -889,6 +889,7 @@ p, li { max-width: 78ch; }
   function aylikDagilim(turneler, sezonId) {
     var aylar = {};
     turneler.forEach(function(t){
+      if (t.anaGrupId || (t.statu || '') === 'iptal') return;
       if (tarihSezon(t.baslangicTarih || t.tarih) !== sezonId) return;
       var ayKey = (t.baslangicTarih || t.tarih || '').slice(0,7);
       if (!ayKey) return;
@@ -956,7 +957,13 @@ p, li { max-width: 78ch; }
     /* Yoksa sıfırdan hesapla */
     var map = {};
     function bosSezon() {
-      return { turne:0, temsil:0, il:{}, araliklar:[], oyunMap:{}, ilMap:{} };
+      return { turne:0, temsil:0, il:{}, ulke:{}, araliklar:[], oyunMap:{}, ilMap:{} };
+    }
+    var _ULKELER = {'KKTC':1,'KOSOVA':1,'KUZEY MAKEDONYA':1,'ARNAVUTLUK':1,'BOSNA-HERSEK':1,'KARADAĞ':1,'SIRBİSTAN':1,'BULGARİSTAN':1,'YUNANİSTAN':1,'ROMANYA':1,'MOLDOVA':1,'UKRAYNA':1,'MACARİSTAN':1,'HIRVATİSTAN':1,'ALMANYA':1,'HOLLANDA':1,'BELÇİKA':1,'AVUSTURYA':1,'İSVİÇRE':1,'FRANSA':1,'İNGİLTERE':1,'İSVEÇ':1,'İTALYA':1,'İSPANYA':1,'AZERBAYCAN':1,'GÜRCİSTAN':1,'ÖZBEKİSTAN':1,'KAZAKİSTAN':1,'KIRGIZİSTAN':1,'KATAR':1,'ABD':1,'JAPONYA':1};
+    function yerEkle(S, ad) {
+      var k = (ad||'').replace(/\/MERKEZ/gi,'').split('/')[0].toLocaleUpperCase('tr').replace(/\s+/g,' ').trim();
+      if (!k) return;
+      if (_ULKELER[k]) S.ulke[k] = 1; else S.il[k] = 1;
     }
     function artir(m, key, val) {
       if (!key) return;
@@ -965,6 +972,7 @@ p, li { max-width: 78ch; }
     }
     turneler.forEach(function(t){
       if (t.anaGrupId) return;
+      if ((t.statu || '') === 'iptal') return; // İPTAL turne sayılmaz
       var s = tarihSezon(t.baslangicTarih || t.tarih);
       if (!s) return;
       if (!map[s]) map[s] = bosSezon();
@@ -984,7 +992,7 @@ p, li { max-width: 78ch; }
           var oyun = (x.oyun || t.oyun || '').trim();
           var il = (x.sehir || '').split('/')[0].trim().toLocaleUpperCase('tr');
           if (oyun) { artir(S.oyunMap, oyun, a); oyunlarBT[oyun]=1; }
-          if (il)   { artir(S.ilMap,   il,   a); illerBT[il]=1; }
+          if (il)   { artir(S.ilMap,   il,   a); illerBT[il]=1; yerEkle(S, il); }
         });
       } else if (t.duraklar && t.duraklar.length) {
         t.duraklar.forEach(function(d){
@@ -993,12 +1001,7 @@ p, li { max-width: 78ch; }
           var oyun = (d.oyun || t.oyun || '').trim();
           var il = (d.il||'').replace(/\/MERKEZ/gi,'').split('/')[0].trim().toLocaleUpperCase('tr');
           if (oyun) { artir(S.oyunMap, oyun, a); oyunlarBT[oyun]=1; }
-          if (il)   { artir(S.ilMap,   il,   a); illerBT[il]=1; }
-        });
-        (t.duraklar||[]).forEach(function(d){
-          if (!d.il) return;
-          var k = d.il.toLocaleUpperCase('tr').replace(/\s+/g,'').replace(/\/MERKEZ/g,'').split('/')[0];
-          if (k) S.il[k] = 1;
+          if (il)   { artir(S.ilMap,   il,   a); illerBT[il]=1; yerEkle(S, il); }
         });
       } else if (t.oyun) {
         S.temsil++;
@@ -1034,7 +1037,8 @@ p, li { max-width: 78ch; }
         id: s,
         turne:  S.turne,
         temsil: S.temsil,
-        il:     Object.keys(S.il).length || Object.keys(S.ilMap).length,
+        il:     Object.keys(S.il).length,
+        ulke:   Object.keys(S.ulke).length,
         gun:    gun,
         aktifAy:    aktifAySayisi(turneler, s),
         haftaOrt:   haftalikOrt(S.temsil, gun),
@@ -1284,7 +1288,8 @@ p, li { max-width: 78ch; }
         '<div class="stats-primary" role="group" aria-label="Temel istatistikler">' +
           statBoxHTML('Turne', st.turne, 'briefcase', 'Toplam turne sayısı') +
           statBoxHTML('Temsil', st.temsil, 'masks', 'Toplam temsil sayısı') +
-          statBoxHTML('Şehir / İl / Ülke', st.il, 'mappin', 'Ziyaret edilen şehir, il ve ülke sayısı') +
+          statBoxHTML(st.ulke ? 'Şehir' : 'Şehir / İl', st.il, 'mappin', 'Ziyaret edilen şehir/il sayısı') +
+          (st.ulke ? statBoxHTML('Ülke', st.ulke, 'mappin', 'Ziyaret edilen yurt dışı ülke sayısı') : '') +
           statBoxHTML('Sahne Günü', st.gun, 'calendar', 'Toplam aktif sahne günü') +
         '</div>' +
 
