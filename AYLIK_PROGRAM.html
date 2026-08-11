@@ -683,7 +683,10 @@ async function publishProgram(){
       months: state.months,
       activeIdx: state.activeIdx,
       plays: state.plays || [],
-      playsExtra: state.playsExtra || []
+      playsExtra: state.playsExtra || [],
+      generalNotes: state.generalNotes || '',
+      playNotes: state.playNotes || {},
+      playFreeNotes: state.playFreeNotes || {}
     });
     const encoded = utf8ToB64(payload);
     const version = 'apub_' + Date.now();
@@ -718,6 +721,60 @@ async function publishProgram(){
   }finally{
     if(btn) { btn.disabled=false; btn.textContent='Kesinleştir'; }
   }
+}
+
+/* === Sunucudan otomatik geri yükleme ===
+   Kesinleştirilen sürüm Google E-Tablolar'a yazılır ama şimdiye kadar
+   sayfa açılışında hiç geri okunmuyordu; tarayıcı yerel kaydı (localStorage)
+   silinirse (farklı cihaz, gizli sekme, önbellek temizliği vb.) kesinleştirilmiş
+   aylar da kaybolmuş gibi görünüyordu. Açılışta sunucudaki en son kesinleştirilmiş
+   sürüm, yerelde bilinenden daha yeniyse otomatik olarak yüklenir. */
+function b64ToUtf8(b64){
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) bytes[i] = bin.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
+}
+async function fetchPublishedState(){
+  try{
+    const r = await fetch(PUBLISH_API + '/' + encodeURIComponent(PUBLISH_SHEET), {cache:'no-store'});
+    if(!r.ok) return null;
+    const rows = (await r.json()).rows || [];
+    const groups = new Map();
+    rows.forEach(row=>{
+      const id = String(row[0]||'');
+      if(!id.startsWith('apub_')) return;
+      const ts = +row[1]||0;
+      if(!groups.has(id)) groups.set(id, {ts, parts:[]});
+      groups.get(id).parts.push(row);
+    });
+    const latest = [...groups.values()].sort((a,b)=>b.ts-a.ts)[0];
+    if(!latest) return null;
+    const parts = latest.parts.slice().sort((a,b)=>(+a[2]||0)-(+b[2]||0));
+    const total = +parts[0][3] || parts.length;
+    if(parts.length < total) return null; /* parça eksik, güvenilmez */
+    const encoded = parts.slice(0,total).map(r=>String(r[4]||'')).join('');
+    return {data: JSON.parse(b64ToUtf8(encoded)), ts: latest.ts};
+  }catch(e){ return null; }
+}
+async function syncFromServer(){
+  const pub = await fetchPublishedState();
+  if(!pub || !pub.data || !Array.isArray(pub.data.months) || !pub.data.months.length) return;
+  const localTs = state.publishedAt || 0;
+  if(pub.ts <= localTs) return; /* yerel zaten bu sürümde veya daha yeni (yayınlanmamış) değişiklikler var */
+  state.months = pub.data.months.map(m=>normalizeMonth(m));
+  state.activeIdx = Math.min(pub.data.activeIdx||0, state.months.length-1);
+  if(Array.isArray(pub.data.plays)) state.plays = pub.data.plays;
+  if(Array.isArray(pub.data.playsExtra)) state.playsExtra = pub.data.playsExtra;
+  if(typeof pub.data.generalNotes === 'string') state.generalNotes = pub.data.generalNotes;
+  if(pub.data.playNotes && typeof pub.data.playNotes === 'object') state.playNotes = pub.data.playNotes;
+  if(pub.data.playFreeNotes && typeof pub.data.playFreeNotes === 'object') state.playFreeNotes = pub.data.playFreeNotes;
+  state.publishedAt = pub.ts;
+  saveState();
+  renderAll();
+  renderPubState();
+  setStatus('Sunucudan güncel program yüklendi.');
+  siteMessage('Bu tarayıcıda güncel kayıt bulunamadı; sunucudaki en son kesinleştirilmiş program otomatik olarak yüklendi.','ok','Sunucudan senkronize edildi');
 }
 
 /* === Kategoriler === */
@@ -2784,6 +2841,7 @@ initFullscreen();
 setSel(2,2,2,2);
 renderPubState();
 setStatus('Hazır.');
+syncFromServer();
 </script>
 <!-- ═══════ İDT REPERTUVAR KÖPRÜSÜ (v2) ═══════ -->
 <style>
