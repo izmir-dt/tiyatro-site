@@ -16647,6 +16647,7 @@ function sezonBaslangicAyYil(sezon) {
 function sezonTurneleri(sezon) {
   return turneler.filter(function(t) {
     if (t.anaGrupId) return false;
+    if ((t.statu || '') === 'iptal') return false; // İPTAL turneler sayımlara girmez
     return tarihSezon(t.baslangicTarih || t.tarih) === sezon;
   });
 }
@@ -16660,8 +16661,10 @@ function sezonIstatistik(sezon) {
     if (typeof durakIllerListesi === 'function') {
       durakIllerListesi(t).forEach(function(il){
         var ad = il.replace(/\/MERKEZ/gi,'').split('/')[0].trim();
-        if (typeof ulkeMi === 'function' && ulkeMi(ad)) ulkeSet[ad.toLocaleUpperCase('tr')] = 1;
-        else ilSet[ad] = 1;
+        if (!ad) return;
+        var adU = ad.toLocaleUpperCase('tr').replace(/\s+/g, ' ').trim();
+        if (typeof ulkeMi === 'function' && ulkeMi(adU)) ulkeSet[adU] = 1;
+        else ilSet[adU] = 1;
       });
     }
   });
@@ -16814,7 +16817,7 @@ function sezonOverlayGoster() {
     var sezonlar = Object.keys(sezonSet).map(function(s){
       var ist = (typeof sezonIstatistik === 'function') ? sezonIstatistik(s) : { turne:0, temsil:0, il:0, gun:0 };
       var detay = (typeof sezonDetayIstatistik === 'function') ? sezonDetayIstatistik(s) : { oyunlar:[], iller:[] };
-      return { id:s, turne:ist.turne, temsil:ist.temsil, il:ist.il, gun:ist.gun, detay:detay };
+      return { id:s, turne:ist.turne, temsil:ist.temsil, il:ist.il, ulke:ist.ulke||0, gun:ist.gun, detay:detay };
     });
     localStorage.setItem('_sezonOzet', JSON.stringify({
       sezonlar: sezonlar, guncel: guncel, sonraki: sonraki, ts: Date.now()
@@ -34654,6 +34657,8 @@ function turneTumKatilimcilar(t) {
 }
 
 function durakToplamTemsil(t) {
+  // İPTAL edilen turnede gerçekleşmiş temsil yoktur
+  if (t && (t.statu || '') === 'iptal') return 0;
   // ── Yarıda Kesildi: gerçekten yapılan temsil sayısı (kesilen şehre/sonrasına gidilmedi) ──
   if (t && (t.statu||'') === 'yarida-kesildi') {
     try {
