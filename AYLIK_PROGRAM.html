@@ -74,6 +74,19 @@ body.fs-on #program .controls{position:sticky;top:0;z-index:4;background:var(--b
 body.fs-on{overflow:hidden}
 .fs-exit{position:fixed;top:10px;right:14px;z-index:99999;display:none;background:var(--primary);color:#fff;border:none;border-radius:6px;padding:7px 12px;cursor:pointer;font:inherit;font-size:13px;box-shadow:0 6px 18px rgba(0,0,0,.3)}
 body.fs-on .fs-exit{display:block}
+/* Odak modu: araç çubuğu gizlendiğinde ay grubu öne çıkar ve tabloya
+   daha fazla dikey alan açılır — aylık program görünümün merkezi olur. */
+#alwaysGroup{background:var(--primary);border-color:var(--primary)}
+#alwaysGroup b{color:#f4e6c8}
+#alwaysGroup .pub-state{background:#fff}
+#alwaysGroup select{background:#fff}
+#alwaysGroup button.btn.ghost{color:#fff;border-color:rgba(255,255,255,.45);background:rgba(255,255,255,.08)}
+#alwaysGroup button.btn.ghost:hover{background:rgba(255,255,255,.2)}
+#toolbarToggleBtn{background:#fff;color:var(--primary);font-weight:700;border-color:#fff}
+#toolbarToggleBtn:hover{background:#f4e6c8}
+body.toolbar-collapsed .tbl-wrap{max-height:82vh}
+body.toolbar-collapsed h2#monthTitle{margin-top:10px}
+
 table.sheet td.cell.noconf{outline:2px dashed #1f7a5c;outline-offset:-2px}
 table.sheet{border-collapse:collapse;font-family:'Barlow Semi Condensed','Manrope',system-ui,sans-serif;font-size:13.5px;letter-spacing:.1px;table-layout:fixed;print-color-adjust:exact;-webkit-print-color-adjust:exact}
 table.sheet th,table.sheet td{border:1px solid #000;padding:3px 5px;vertical-align:middle;text-align:center;overflow:hidden;position:relative;font-weight:500}
@@ -151,14 +164,14 @@ table.sheet td.cell.freetext[data-cat="DUYURU"]::before{content:"📣 "}
 table.sheet td.cell.note-mark::after{content:"";position:absolute;top:0;right:0;border-top:6px solid var(--accent);border-left:6px solid transparent}
 
 /* Context menu */
-.ctxmenu{position:fixed;z-index:9999;background:#fff;border:1px solid var(--border);border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.18);min-width:200px;display:none;font-size:13px;padding:4px 0}
+.ctxmenu{position:fixed;z-index:100002;background:#fff;border:1px solid var(--border);border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.18);min-width:200px;display:none;font-size:13px;padding:4px 0}
 .ctxmenu.active{display:block}
 .ctxmenu button{display:block;width:100%;text-align:left;padding:6px 12px;background:none;border:none;cursor:pointer;font-size:13px;font-family:inherit;color:var(--ink)}
 .ctxmenu button:hover{background:#f5ecd6}
 .ctxmenu .sep{height:1px;background:var(--border);margin:4px 0}
 
 /* Modal */
-.modal-back{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:2000;padding:16px}
+.modal-back{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:100002;padding:16px}
 .modal-back.active{display:flex}
 .modal{background:#fff;border-radius:10px;padding:20px;max-width:460px;width:100%;max-height:90vh;overflow:auto}
 .modal label{display:block;font-weight:600;font-size:13px;margin:8px 0 4px;color:var(--primary)}
@@ -294,9 +307,17 @@ table.sheet td.cell.note-mark::after{content:"";position:absolute;top:0;right:0;
 <main>
 <section id="program" class="active">
   <div class="controls">
-    <div class="group">
+    <div class="group" id="alwaysGroup">
       <b>Ay</b>
       <select id="monthSel"></select>
+      <button class="btn ghost small" id="prevMonthBtn" title="Önceki ay">◀</button>
+      <button class="btn ghost small" id="nextMonthBtn" title="Sonraki ay">▶</button>
+      <button class="btn small" id="toolbarToggleBtn" title="Düzenleme araç çubuğunu gizle/göster — aylık program odakta kalsın">🧰 Araçları gizle</button>
+      <button class="btn ghost small" id="fsBtn" title="Aylık programı tam sayfa görüntüle (Esc ile çık)">⛶ Tam Ekran</button>
+      <span class="pub-state" id="pubState">Yayın durumu: —</span>
+    </div>
+    <div id="toolbarExtra" style="display:contents">
+    <div class="group">
       <button class="btn ghost small" id="renameMonth">Yeniden adlandır</button>
       <button class="btn ghost small" id="addMonth" title="Yeni ay oluştur (Cumartesi 2 satır otomatik)">+ Ay</button>
       <button class="btn ghost small" id="delMonth">Ay sil</button>
@@ -337,7 +358,6 @@ table.sheet td.cell.note-mark::after{content:"";position:absolute;top:0;right:0;
       <button class="btn ghost small" id="redoBtn" title="Ctrl+Y">↷ Yinele</button>
     </div>
     <div class="group">
-      <button class="btn ghost small" id="fsBtn" title="Aylık programı tam sayfa görüntüle (Esc ile çık)">⛶ Tam Ekran</button>
       <select id="printSize" title="Yazdırma kâğıdı">
         <option value="A5|landscape">A5 yatay</option>
         <option value="A5|portrait">A5 dikey</option>
@@ -352,7 +372,6 @@ table.sheet td.cell.note-mark::after{content:"";position:absolute;top:0;right:0;
       <button class="btn ghost small" id="printBtn">Yazdır / PDF</button>
       <button class="btn small" id="publishBtn" title="Sadece açık olan ayı ortak sunucuya kaydet ve index sayfasında göster — diğer aylar etkilenmez">Kesinleştir (bu ay)</button>
       <button class="btn ghost small" id="unpublishBtn" title="Sadece açık olan ayın kesinleşmesini geri al — diğer kesinleştirilmiş aylar etkilenmez, yerel veriniz silinmez">↩ Geri al (bu ay)</button>
-      <span class="pub-state" id="pubState">Yayın durumu: —</span>
       <select id="expExcelMonth" title="Excel'e hangi ay(lar) aktarılsın">
         <option value="all">Tüm Aylar</option>
       </select>
@@ -370,9 +389,11 @@ table.sheet td.cell.note-mark::after{content:"";position:absolute;top:0;right:0;
       <button class="btn ghost small" id="resetBtn" title="Kayıtlı yerel veriyi silip başlangıç verisine dön">Sıfırla</button>
       <input type="file" id="impFile" accept=".json" style="display:none">
     </div>
+    </div>
     <span class="status" id="status">Yükleniyor…</span>
   </div>
   <h2 id="monthTitle"></h2>
+
   <div class="tbl-wrap"><table class="sheet" id="sheet"></table></div>
   <p style="font-size:12px;color:var(--muted);margin-top:8px">
     <b>Kısayollar:</b> Tıkla → seç · Shift+Tıkla → aralık · Çift tıkla → yaz · Enter/Esc · Delete → temizle · Ctrl+C/V · Ctrl+Z/Y · Sağ tık → menü · Oyunun üzerine gel → çakışma bilgisi · <b>Serbest metin ✎</b> → hücreyi oyun sayma (il adı, açıklama, not) · <b>Not ekle</b> → oyunun yanına not · <b>🏷 Kategori</b> → notu sınıflandır (İl, Sahne, Turne, Prova, Tatil, Duyuru)
@@ -1903,6 +1924,32 @@ function initFullscreen(){
   });
 }
 
+/* === Odak modu: düzenleme araç çubuğunu gizle/göster ===
+   Aylık program tablosu sitenin/uygulamanın merkezinde kalsın diye,
+   ay seçici ve temel eylemler dışındaki tüm düzenleme araçları
+   tek düğmeyle gizlenebilir. Tercih tarayıcıda hatırlanır. */
+const TOOLBAR_PREF_KEY = 'idt_aylik_program_toolbar_visible';
+function setToolbarVisible(visible){
+  const extra = document.getElementById('toolbarExtra');
+  const btn = document.getElementById('toolbarToggleBtn');
+  if(extra) extra.style.display = visible ? 'contents' : 'none';
+  if(btn) btn.textContent = visible ? '🧰 Araçları gizle' : '🧰 Araçları göster';
+  document.body.classList.toggle('toolbar-collapsed', !visible);
+  try{ localStorage.setItem(TOOLBAR_PREF_KEY, visible ? '1' : '0'); }catch(e){}
+}
+function initToolbarToggle(){
+  const btn = document.getElementById('toolbarToggleBtn');
+  if(!btn) return;
+  let pref = true;
+  try{ const v = localStorage.getItem(TOOLBAR_PREF_KEY); if(v!==null) pref = v==='1'; }catch(e){}
+  setToolbarVisible(pref);
+  btn.addEventListener('click', ()=>{
+    const extra = document.getElementById('toolbarExtra');
+    const isVisible = !extra || extra.style.display !== 'none';
+    setToolbarVisible(!isVisible);
+  });
+}
+
 /* === Month management === */
 function refreshMonthSel(){
   const sel = document.getElementById('monthSel');
@@ -2786,6 +2833,8 @@ function renderAll(){
 
 /* Wire */
 document.getElementById('monthSel').onchange = e=>{ state.activeIdx=+e.target.value; saveState(); renderSheet(); renderPrint(); renderPubState(); };
+document.getElementById('prevMonthBtn').onclick = ()=>{ if(state.activeIdx>0){ state.activeIdx--; saveState(); renderSheet(); renderPrint(); refreshMonthSel(); renderPubState(); } };
+document.getElementById('nextMonthBtn').onclick = ()=>{ if(state.activeIdx<state.months.length-1){ state.activeIdx++; saveState(); renderSheet(); renderPrint(); refreshMonthSel(); renderPubState(); } };
 document.getElementById('addMonth').onclick = addBlankMonth;
 document.getElementById('delMonth').onclick = delCurMonth;
 document.getElementById('renameMonth').onclick = renameCurMonth;
@@ -2895,6 +2944,7 @@ loadCrewSheet();
 loadPersonel();
 initTooltipInteraction();
 initFullscreen();
+initToolbarToggle();
 setSel(2,2,2,2);
 renderPubState();
 setStatus('Hazır.');
@@ -2922,9 +2972,12 @@ syncFromServer();
       return false;
     }
     /* Kadro/çakışma verisi YALNIZCA "AYLIK PROGRAM PERSONELİ" sekmesinden gelir;
-       repertuvar köprüsünden sadece oyun adları alınır. */
+       repertuvar köprüsünden sadece oyun adları alınır. Kullanıcının "Oyunu Sil"
+       ile bilerek kaldırdığı (playsIgnored) oyun adları buradan otomatik geri
+       eklenmez — aksi halde silinen oyun sayfa yenilenince geri geliyordu. */
     state.playsExtra = state.playsExtra || [];
-    (b.plays||[]).forEach(p => { if(!state.playsExtra.includes(p)) state.playsExtra.push(p); });
+    state.playsIgnored = state.playsIgnored || [];
+    (b.plays||[]).forEach(p => { if(!state.playsExtra.includes(p) && !state.playsIgnored.includes(p)) state.playsExtra.push(p); });
     applyCrew(); saveState(); buildOyunDatalist();
     renderPlays();
     renderSheet();
