@@ -1015,10 +1015,59 @@
      • İPTAL turne = 0 temsil
      • programSatirlar tek kaynak; "Oyun" satırı = 1, çift temsil (saat2) = 2
      • programSatirlar yoksa durak "sayi" toplamı, o da yoksa sayfadaki sayı */
+  /* Yarıda kesilen turnenin kesim analizi — turne.html ile birebir
+     Not alanında: [Yarıda Kesildi: Şehir:X|Temsil:N] */
+  function ykInfo(t) {
+    const m = String((t && (t.notRaw || t.not)) || "").match(/\[Yarıda Kesildi:\s*([^\]]*)\]/);
+    if (!m) return null;
+    const o = {};
+    m[1].split("|").forEach(pr => { const i = pr.indexOf(":"); if (i > -1) o[pr.slice(0,i).trim()] = pr.slice(i+1).trim(); });
+    return o;
+  }
+  function ykNorm(v) { return String(v || "").replace(/\/MERKEZ/gi,"").trim().toLocaleLowerCase("tr"); }
+  function ykKesim(t) {
+    const info = ykInfo(t);
+    if (!info || !info["Şehir"]) return null;
+    let sehirler = [];
+    if (t.duraklar && t.duraklar.length) sehirler = t.duraklar.map(d => ((d.il||"").split("/")[0]||"").trim()).filter(Boolean);
+    else if (t.il) sehirler = String(t.il).split(",").map(x => ((x||"").split("/")[0]||"").trim()).filter(Boolean);
+    if (!sehirler.length) return null;
+    const normSehirler = sehirler.map(ykNorm);
+    const kes = ykNorm(info["Şehir"]);
+    let idx = normSehirler.indexOf(kes);
+    if (idx < 0) {
+      const ilk = kes.split(" ")[0] || "";
+      idx = normSehirler.findIndex(n => n === kes || (ilk && n.indexOf(ilk) === 0) || kes.indexOf((n.split(" ")[0]||"")) === 0);
+    }
+    return { info, sehirler, normSehirler, kesilenIndex: idx };
+  }
+  // Bir program satırı kesimden ÖNCE mi? (yarıda kesildi turneler için)
+  function ykSatirGecerli(kes, sehir) {
+    if (!kes || kes.kesilenIndex < 0) return true;
+    const sNorm = ykNorm(String(sehir || "").split("/")[0]);
+    const sIdx = kes.normSehirler.findIndex(n => {
+      const nIlk = (n || "").split(" ")[0] || "";
+      const sIlk = (sNorm || "").split(" ")[0] || "";
+      return n === sNorm || (nIlk && sNorm.indexOf(nIlk) === 0) || (sIlk && n.indexOf(sIlk) === 0);
+    });
+    return sIdx >= 0 && sIdx < kes.kesilenIndex;
+  }
+
   function temsilSayCanonical(t) {
     if (!t) return 0;
     if ((t.statu || "") === "iptal") return 0;
     const ps = t.programSatirlar || [];
+    // Yarıda kesildi → sadece kesim öncesi gerçekleşen temsiller
+    if ((t.statu || "") === "yarida-kesildi") {
+      const kes = ykKesim(t);
+      if (ps.length && kes && kes.kesilenIndex >= 0) {
+        let n = 0;
+        for (const s of ps) { if (s && s.program === "Oyun" && ykSatirGecerli(kes, s.sehir)) n += (s.saat2 ? 2 : 1); }
+        return n;
+      }
+      const inf = ykInfo(t);
+      if (inf && inf["Temsil"] != null) { const v = parseInt(inf["Temsil"], 10); if (!isNaN(v) && v >= 0) return v; }
+    }
     if (ps.length) {
       let n = 0;
       for (const s of ps) { if (s && s.program === "Oyun") n += (s.saat2 ? 2 : 1); }
@@ -1071,7 +1120,8 @@
       const il    = (r[iIl]  || "").trim();
       const mekan = (r[iMekan] || "").trim();
       const sayiRaw = parseInt(r[iSay]) || 0;
-      const not   = (r[iNot]  || "").trim().replace(/\[LastEdit:[^\]]*\]/gi,"").replace(/\[Festival:[^\]]*\]/gi,"").replace(/\[[A-Za-z]+:[^\]]*\]/g,"").trim();
+      const notRaw = (r[iNot] || "").trim();
+      const not   = notRaw.replace(/\[LastEdit:[^\]]*\]/gi,"").replace(/\[Festival:[^\]]*\]/gi,"").replace(/\[Yarıda Kesildi:[^\]]*\]/gi,"").replace(/\[[A-Za-z]+:[^\]]*\]/g,"").trim();
       const statu = (r[iStat] || "taslak").trim().toLowerCase().replace(/\s+/g, "-");
       const otelAdi   = (r[iOtel]      || "").trim();
       const otelAdres = (r[iOtelAdres] || "").trim();
@@ -1087,7 +1137,7 @@
       // Program satırları — temsil sayımının TEK doğru kaynağı
       let programSatirlar = [];
       try { const pj = (r[iPS] || "").trim(); if (pj) programSatirlar = JSON.parse(pj) || []; } catch(e) {}
-      const sayi = temsilSayCanonical({ statu, programSatirlar, duraklar, sayiRaw });
+      const sayi = temsilSayCanonical({ statu, programSatirlar, duraklar, sayiRaw, notRaw, il });
 
       let katilimcilar = [];
       if (iKat >= 0) {
@@ -1114,7 +1164,7 @@
         else if (raw43.startsWith("[")) { const op = JSON.parse(raw43); if (Array.isArray(op)) odaPlanlari = op; }
       } catch(e) {}
 
-      return { oyun, il, mekan, baslangic: bas, bitis: bit, sayi, programSatirlar, not, statu, otelAdi, otelAdres, otelTel, gidisUlasim, gidisSaat, donusUlasim, donusSaat, duraklar, katilimcilar, anaGrupId, odaPlanlari, _rawIdx: rows.indexOf(r) };
+      return { oyun, il, mekan, baslangic: bas, bitis: bit, sayi, programSatirlar, not, notRaw, statu, otelAdi, otelAdres, otelTel, gidisUlasim, gidisSaat, donusUlasim, donusSaat, duraklar, katilimcilar, anaGrupId, odaPlanlari, _rawIdx: rows.indexOf(r) };
     }).filter(t => t && !t.anaGrupId);
   }
 
@@ -1223,12 +1273,20 @@
     const raw = new Set();
     if ((t?.statu || "") === "iptal") return raw; // iptal → hiçbir yer sayılmaz
     const ps = t?.programSatirlar || [];
+    const _kes = (t?.statu || "") === "yarida-kesildi" ? ykKesim(t) : null;
     if (ps.length) {
-      // Gerçekleşen program: sadece "Oyun" satırlarındaki şehirler
-      for (const s of ps) { if (s && s.program === "Oyun" && s.sehir) addCityToSet(raw, s.sehir); }
+      // Gerçekleşen program: sadece "Oyun" satırlarındaki şehirler (kesim sonrası hariç)
+      for (const s of ps) {
+        if (!s || s.program !== "Oyun" || !s.sehir) continue;
+        if (_kes && _kes.kesilenIndex >= 0 && !ykSatirGecerli(_kes, s.sehir)) continue;
+        addCityToSet(raw, s.sehir);
+      }
       if (raw.size) return raw;
     }
-    if ((t?.statu || "") === "yarida-kesildi") { addCityToSet(raw, t?.il); return raw; }
+    if ((t?.statu || "") === "yarida-kesildi") {
+      if (_kes && _kes.kesilenIndex >= 0) { _kes.sehirler.slice(0, _kes.kesilenIndex).forEach(c => addCityToSet(raw, c)); return raw; }
+      addCityToSet(raw, t?.il); return raw;
+    }
     addCityToSet(raw, t?.il);
     for (const d of t?.duraklar || []) addCityToSet(raw, d?.il);
     return raw;
