@@ -1018,6 +1018,12 @@
   function temsilSayCanonical(t) {
     if (!t) return 0;
     if ((t.statu || "") === "iptal") return 0;
+    /* TEK DOĞRU KAYNAK = kayıttaki "Temsil Sayısı" alanı.
+       Program satırlarından türetilen sayı (çift seans, prova/yol satırları)
+       bu alandan sapıyor ve sezon toplamlarını şişiriyordu; sezon-sec.html ve
+       sistemin Excel dışa aktarımı da bu alanı kullanır. */
+    const kayit = parseInt(t.sayiRaw != null ? t.sayiRaw : t.sayi, 10);
+    if (kayit > 0) return kayit;
     const ps = t.programSatirlar || [];
     if (ps.length) {
       let n = 0;
@@ -1026,7 +1032,7 @@
     }
     const dur = t.duraklar || [];
     if (dur.length) return dur.reduce((a, d) => a + (parseInt(d.sayi) || 1), 0);
-    return t.sayiRaw || t.sayi || 0;
+    return 0;
   }
 
   /* Yurt dışı ülkeler — şehir sayımından ayrı tutulur */

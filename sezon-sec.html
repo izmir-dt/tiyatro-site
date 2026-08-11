@@ -885,7 +885,63 @@ p, li { max-width: 78ch; }
     return Math.round((now - ar.bas) / total * 100);
   }
 
+  /* ── Yarıda kesilen turne: kesim analizi (turne.html ile birebir) ── */
+  function _ykNorm(v){ return String(v||'').replace(/\/MERKEZ/gi,'').trim().toLocaleLowerCase('tr'); }
+  function _ykInfo(t){
+    var m = String((t && t.not) || '').match(/\[Yarıda Kesildi:\s*([^\]]*)\]/);
+    if (!m) return null;
+    var o = {};
+    m[1].split('|').forEach(function(pr){ var i = pr.indexOf(':'); if (i>-1) o[pr.slice(0,i).trim()] = pr.slice(i+1).trim(); });
+    return o;
+  }
+  function _ykKesim(t){
+    var info = _ykInfo(t);
+    if (!info || !info['Şehir']) return null;
+    var sehirler = [];
+    if (t.duraklar && t.duraklar.length) sehirler = t.duraklar.map(function(d){ return ((d.il||'').split('/')[0]||'').trim(); }).filter(Boolean);
+    else if (t.il) sehirler = String(t.il).split(',').map(function(x){ return ((x||'').split('/')[0]||'').trim(); }).filter(Boolean);
+    if (!sehirler.length) return null;
+    var norm = sehirler.map(_ykNorm), kes = _ykNorm(info['Şehir']);
+    var idx = norm.indexOf(kes);
+    if (idx < 0) {
+      var ilk = kes.split(' ')[0] || '';
+      idx = norm.findIndex(function(n){ return n===kes || (ilk && n.indexOf(ilk)===0) || kes.indexOf((n.split(' ')[0]||''))===0; });
+    }
+    return { info:info, sehirler:sehirler, normSehirler:norm, kesilenIndex:idx };
+  }
+  function _ykSatirGecerli(kes, sehir){
+    if (!kes || kes.kesilenIndex < 0) return true;
+    var sNorm = _ykNorm(String(sehir||'').split('/')[0]);
+    var sIdx = kes.normSehirler.findIndex(function(n){
+      var nIlk = (n||'').split(' ')[0]||'', sIlk = (sNorm||'').split(' ')[0]||'';
+      return n===sNorm || (nIlk && sNorm.indexOf(nIlk)===0) || (sIlk && n.indexOf(sIlk)===0);
+    });
+    return sIdx >= 0 && sIdx < kes.kesilenIndex;
+  }
+  /* Yer adı tek biçim: /MERKEZ at, ilk parça, boşluk sadeleştir, TR büyük harf */
+  function _yerKey(ad){
+    return String(ad||'').replace(/\/MERKEZ/gi,'').split('/')[0].replace(/\s+/g,' ').trim().toLocaleUpperCase('tr');
+  }
+
+  /* Bir turnenin toplam temsilini satırlara tam sayı olarak dağıtır */
+  function _dagitAy(toplam, agirliklar) {
+    var tw = agirliklar.reduce(function(s,x){ return s+x; }, 0);
+    var n = agirliklar.length, pay = [], kalan = [], kul = 0, i;
+    if (!n) return pay;
+    if (!tw) tw = n;
+    for (i=0;i<n;i++){
+      var ham = toplam * ((agirliklar[i] || 1) / tw);
+      var alt = Math.floor(ham);
+      pay.push(alt); kalan.push([ham - alt, i]); kul += alt;
+    }
+    kalan.sort(function(a,b){ return b[0]-a[0]; });
+    var artan = toplam - kul;
+    for (i=0;i<artan;i++) pay[kalan[i % n][1]]++;
+    return pay;
+  }
+
   /* ── Aylık dağılım hesapla ── */
+
   function aylikDagilim(turneler, sezonId) {
     var aylar = {};
     turneler.forEach(function(t){
@@ -894,11 +950,34 @@ p, li { max-width: 78ch; }
       var ayKey = (t.baslangicTarih || t.tarih || '').slice(0,7);
       if (!ayKey) return;
       if (!aylar[ayKey]) aylar[ayKey] = 0;
+      var kes = (t.statu||'') === 'yarida-kesildi' ? _ykKesim(t) : null;
+      /* Toplam, kayıttaki "Temsil Sayısı" alanıdır; aylara orantılı dağıtılır */
+      var kayitT = parseInt(t.sayi != null ? t.sayi : t.temsilSayisi, 10);
+      if (!(kayitT > 0)) kayitT = 0;
       if (t.programSatirlar && t.programSatirlar.length) {
-        t.programSatirlar.forEach(function(x){ if (x.program === 'Oyun') aylar[ayKey] += x.saat2 ? 2 : 1; });
+        var sat = [];
+        t.programSatirlar.forEach(function(x){
+          if (x.program !== 'Oyun') return;
+          if (kes && kes.kesilenIndex >= 0 && !_ykSatirGecerli(kes, x.sehir)) return;
+          sat.push(x);
+        });
+        if (sat.length) {
+          var ag = sat.map(function(x){ return x.saat2 ? 2 : 1; });
+          var hm = ag.reduce(function(a,c){ return a+c; }, 0);
+          var tp = kayitT || hm;
+          var py = _dagitAy(tp, ag);
+          sat.forEach(function(x, i){
+            // Turne aylara yayılabilir → temsil kendi tarihinin ayına yazılır
+            var k = (x.tarih || '').slice(0,7) || ayKey;
+            if (!aylar[k]) aylar[k] = 0;
+            aylar[k] += py[i] || 0;
+          });
+        }
       } else if (t.duraklar && t.duraklar.length) {
-        t.duraklar.forEach(function(d){ aylar[ayKey] += +d.sayi || 1; });
-      } else { aylar[ayKey]++; }
+        var hm2 = t.duraklar.reduce(function(a,d){ return a + (+d.sayi || 1); }, 0);
+        aylar[ayKey] += kayitT || hm2;
+      } else { aylar[ayKey] += kayitT || 1; }
+
     });
     return aylar;
   }
@@ -907,6 +986,7 @@ p, li { max-width: 78ch; }
   function enUzunTurne(turneler, sezonId) {
     var max = 0, maxAd = '';
     turneler.forEach(function(t){
+      if (t.anaGrupId || (t.statu || '') === 'iptal') return;
       if (tarihSezon(t.baslangicTarih || t.tarih) !== sezonId) return;
       if (t.baslangicTarih && t.bitisTarih) {
         var d = Math.round((new Date(t.bitisTarih) - new Date(t.baslangicTarih)) / 86400000) + 1;
@@ -920,6 +1000,7 @@ p, li { max-width: 78ch; }
   function aktifAySayisi(turneler, sezonId) {
     var aySet = {};
     turneler.forEach(function(t){
+      if (t.anaGrupId || (t.statu || '') === 'iptal') return;
       if (tarihSezon(t.baslangicTarih || t.tarih) !== sezonId) return;
       var ay = (t.baslangicTarih || t.tarih || '').slice(0,7);
       if (ay) aySet[ay] = 1;
@@ -934,34 +1015,28 @@ p, li { max-width: 78ch; }
   }
 
   /* ── İstatistikleri yükle & hesapla ── */
-  function loadStats() {
-    var turneler = [];
-    try { turneler = JSON.parse(localStorage.getItem('turne_cache_data') || '[]'); } catch(e) {}
-
-    var pre = null;
-    try { pre = JSON.parse(localStorage.getItem('_sezonOzet') || 'null'); } catch(e) {}
-    if (pre && pre.sezonlar && pre.sezonlar.length) {
-      // Mevcut önhesaplı veriye ek istatistikler ekle
-      pre.sezonlar.forEach(function(st){
-        var ayDag = aylikDagilim(turneler, st.id);
-        var uzun  = enUzunTurne(turneler, st.id);
-        st.aylikDagilim = ayDag;
-        st.enUzunTurneGun = uzun.gun;
-        st.enUzunTurneAd  = uzun.oyun;
-        st.aktifAy  = aktifAySayisi(turneler, st.id);
-        st.haftaOrt = haftalikOrt(st.temsil, st.gun);
-      });
-      return pre;
+  function loadStats(srcTurneler) {
+    var turneler = Array.isArray(srcTurneler) ? srcTurneler : [];
+    if (!turneler.length) {
+      try { turneler = JSON.parse(localStorage.getItem('turne_cache_data') || '[]'); } catch(e) {}
     }
 
-    /* Yoksa sıfırdan hesapla */
+    /* ÖNEMLİ DÜZELTME:
+       Eskiden localStorage'daki '_sezonOzet' önhesaplı özeti doğrudan
+       kullanılıyordu. Bu özet bayatlayabildiği (ve turne.html'de
+       localStorage kotası dolduğunda güncellenemediği) için sezon
+       temsil sayıları eksik çıkıyor, yeni sezonlar (ör. yurt dışı Kosova
+       turnesi) hiç görünmüyordu. Artık tüm istatistikler HAM turne
+       kayıtlarından yeniden hesaplanır. */
+
+    /* Sıfırdan hesapla */
     var map = {};
     function bosSezon() {
       return { turne:0, temsil:0, il:{}, ulke:{}, araliklar:[], oyunMap:{}, ilMap:{} };
     }
     var _ULKELER = {'KKTC':1,'KOSOVA':1,'KUZEY MAKEDONYA':1,'ARNAVUTLUK':1,'BOSNA-HERSEK':1,'KARADAĞ':1,'SIRBİSTAN':1,'BULGARİSTAN':1,'YUNANİSTAN':1,'ROMANYA':1,'MOLDOVA':1,'UKRAYNA':1,'MACARİSTAN':1,'HIRVATİSTAN':1,'ALMANYA':1,'HOLLANDA':1,'BELÇİKA':1,'AVUSTURYA':1,'İSVİÇRE':1,'FRANSA':1,'İNGİLTERE':1,'İSVEÇ':1,'İTALYA':1,'İSPANYA':1,'AZERBAYCAN':1,'GÜRCİSTAN':1,'ÖZBEKİSTAN':1,'KAZAKİSTAN':1,'KIRGIZİSTAN':1,'KATAR':1,'ABD':1,'JAPONYA':1};
     function yerEkle(S, ad) {
-      var k = (ad||'').replace(/\/MERKEZ/gi,'').split('/')[0].toLocaleUpperCase('tr').replace(/\s+/g,' ').trim();
+      var k = _yerKey(ad);
       if (!k) return;
       if (_ULKELER[k]) S.ulke[k] = 1; else S.il[k] = 1;
     }
@@ -970,46 +1045,120 @@ p, li { max-width: 78ch; }
       if (!m[key]) m[key] = { turne:0, temsil:0 };
       m[key].temsil += val;
     }
+    /* Toplamı (kayıttaki "Temsil Sayısı") satırlara tam sayı olarak dağıtır */
+    function _dagit(toplam, agirliklar) {
+      var tw = agirliklar.reduce(function(s,x){ return s+x; }, 0);
+      var n = agirliklar.length, pay = [], kalanlar = [], kullanilan = 0, i;
+      if (!n) return pay;
+      if (!tw) tw = n;
+      for (i=0;i<n;i++){
+        var ham = toplam * ((agirliklar[i] || 1) / tw);
+        var alt = Math.floor(ham);
+        pay.push(alt); kalanlar.push([ham - alt, i]); kullanilan += alt;
+      }
+      kalanlar.sort(function(a,b){ return b[0]-a[0]; });
+      var artan = toplam - kullanilan;
+      for (i=0;i<artan;i++) pay[kalanlar[i % n][1]]++;
+      return pay;
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       SAYIM KURALLARI — sistem dışa aktarımı (Excel) ile birebir:
+         • Turne  : ek grup (anaGrupId) satırları hariç, İPTAL statüsü hariç
+                    → 2025-26 = 67
+         • Temsil : ek grup + iptal hariç, kayıttaki "Temsil Sayısı" alanı
+                    toplamı (program satırlarındaki çift seans şişmesi yok)
+                    → 2025-26 = 237
+         • Şehir  : ek grup + iptal hariç; gerçekleşen "Oyun" satırlarının
+                    şehirleri (yoksa duraklar, o da yoksa İl alanı)
+                    → 2025-26 = 30
+         • Ülke   : yurt dışı adları şehir sayısından ayrı tutulur ama
+                    "Şehir / Ülke" listesinde ve öne çıkanlarda GÖRÜNÜR
+                    (ör. 2026-27 → KOSOVA)
+       ══════════════════════════════════════════════════════════════ */
     turneler.forEach(function(t){
-      if (t.anaGrupId) return;
-      if ((t.statu || '') === 'iptal') return; // İPTAL turne sayılmaz
+      if (t.anaGrupId) return;                       // ek grup = alt kayıt, ayrı turne değil
+      if ((t.statu || '') === 'iptal') return;        // İPTAL turne hiçbir sayıma girmez
+      var iptalMi = false;
       var s = tarihSezon(t.baslangicTarih || t.tarih);
       if (!s) return;
       if (!map[s]) map[s] = bosSezon();
       var S = map[s];
-      S.turne++;
-      try {
-        var b = t.baslangicTarih ? new Date(t.baslangicTarih) : null;
-        var e = t.bitisTarih ? new Date(t.bitisTarih) : b;
-        if (b) { if (!e || e < b) e = b; S.araliklar.push([b.getTime(), e.getTime()]); }
-      } catch(er) {}
-      var oyunlarBT = {}, illerBT = {};
+      S.turne++;                                     // iptal dahil
+      if (!iptalMi) {
+        try {
+          var b = t.baslangicTarih ? new Date(t.baslangicTarih) : null;
+          var e = t.bitisTarih ? new Date(t.bitisTarih) : b;
+          if (b) { if (!e || e < b) e = b; S.araliklar.push([b.getTime(), e.getTime()]); }
+        } catch(er) {}
+      }
+      var oyunlarBT = {}, illerBT = {}, yerVar = false;
+      var _kes = (t.statu||'') === 'yarida-kesildi' ? _ykKesim(t) : null;
+
+      function yerSay(ad, pay) {
+        var k = _yerKey(ad);
+        if (!k) return;
+        yerVar = true;
+        yerEkle(S, k);                               // şehir mi ülke mi → ayrı sayaç
+        artir(S.ilMap, k, pay || 0);                 // listede ülkeler de görünür
+        illerBT[k] = 1;
+      }
+
+      /* Turnenin temsil sayısı = kayıttaki "Temsil Sayısı" alanı */
+      var kayitTemsil = parseInt(t.sayi != null ? t.sayi : t.temsilSayisi, 10);
+      if (!(kayitTemsil > 0)) kayitTemsil = 0;
+
       if (t.programSatirlar && t.programSatirlar.length) {
+        var satirlar = [];
         t.programSatirlar.forEach(function(x){
           if (x.program !== 'Oyun') return;
-          var a = x.saat2 ? 2 : 1;
-          S.temsil += a;
-          var oyun = (x.oyun || t.oyun || '').trim();
-          var il = (x.sehir || '').split('/')[0].trim().toLocaleUpperCase('tr');
-          if (oyun) { artir(S.oyunMap, oyun, a); oyunlarBT[oyun]=1; }
-          if (il)   { artir(S.ilMap,   il,   a); illerBT[il]=1; yerEkle(S, il); }
+          if (_kes && _kes.kesilenIndex >= 0 && !_ykSatirGecerli(_kes, x.sehir)) return;
+          satirlar.push(x);
         });
+        if (satirlar.length) {
+          var agir = satirlar.map(function(x){ return x.saat2 ? 2 : 1; });
+          var ham  = agir.reduce(function(a,c){ return a+c; }, 0);
+          var toplam = iptalMi ? 0 : (kayitTemsil || ham);
+          var paylar = _dagit(toplam, agir);
+          S.temsil += toplam;
+          satirlar.forEach(function(x, i){
+            var a = paylar[i] || 0;
+            var oyun = (x.oyun || t.oyun || '').trim();
+            if (oyun) { artir(S.oyunMap, oyun, a); oyunlarBT[oyun]=1; }
+            yerSay(x.sehir, a);
+          });
+        }
       } else if (t.duraklar && t.duraklar.length) {
-        t.duraklar.forEach(function(d){
-          var a = +d.sayi || 1;
-          S.temsil += a;
+        var agir2 = t.duraklar.map(function(d){ return +d.sayi || 1; });
+        var ham2 = agir2.reduce(function(a,c){ return a+c; }, 0);
+        var toplam2 = iptalMi ? 0 : (kayitTemsil || ham2);
+        var paylar2 = _dagit(toplam2, agir2);
+        S.temsil += toplam2;
+        t.duraklar.forEach(function(d, i){
+          var a = paylar2[i] || 0;
           var oyun = (d.oyun || t.oyun || '').trim();
-          var il = (d.il||'').replace(/\/MERKEZ/gi,'').split('/')[0].trim().toLocaleUpperCase('tr');
           if (oyun) { artir(S.oyunMap, oyun, a); oyunlarBT[oyun]=1; }
-          if (il)   { artir(S.ilMap,   il,   a); illerBT[il]=1; yerEkle(S, il); }
+          yerSay(d.il, a);
         });
       } else if (t.oyun) {
-        S.temsil++;
-        t.oyun.split('/').forEach(function(o){ var ot=o.trim(); if(ot){ artir(S.oyunMap, ot, 1); oyunlarBT[ot]=1; } });
+        var tk = iptalMi ? 0 : (kayitTemsil || 1);
+        S.temsil += tk;
+        var parca = t.oyun.split('/').map(function(o){ return o.trim(); }).filter(Boolean);
+        var paylar3 = _dagit(tk, parca.map(function(){ return 1; }));
+        parca.forEach(function(ot, i){ artir(S.oyunMap, ot, paylar3[i] || 0); oyunlarBT[ot]=1; });
       }
+
+      /* Program/durak yoksa şehir–ülke kaybolmasın: İl alanından oku */
+      if (!yerVar) {
+        var ilAlani = String(t.il || '').split(/[,;+]/);
+        var paylarY = _dagit(iptalMi ? 0 : kayitTemsil, ilAlani.map(function(){ return 1; }));
+        ilAlani.forEach(function(ad, i){ yerSay(ad, paylarY[i] || 0); });
+      }
+
       Object.keys(oyunlarBT).forEach(function(k){ S.oyunMap[k].turne++; });
       Object.keys(illerBT).forEach(function(k){ S.ilMap[k].turne++; });
     });
+
 
     function benzersizGun(ar) {
       if (!ar.length) return 0;
@@ -1290,7 +1439,7 @@ p, li { max-width: 78ch; }
           statBoxHTML('Temsil', st.temsil, 'masks', 'Toplam temsil sayısı') +
           statBoxHTML(st.ulke ? 'Şehir' : 'Şehir / İl', st.il, 'mappin', 'Ziyaret edilen şehir/il sayısı') +
           (st.ulke ? statBoxHTML('Ülke', st.ulke, 'mappin', 'Ziyaret edilen yurt dışı ülke sayısı') : '') +
-          statBoxHTML('Sahne Günü', st.gun, 'calendar', 'Toplam aktif sahne günü') +
+          statBoxHTML('Turnede Geçen Gün', st.gun, 'calendar', 'Turnede geçirilen toplam gün — çakışan tarihler tek sayılır (iptaller hariç)') +
         '</div>' +
 
         /* öne çıkanlar */
@@ -1329,7 +1478,7 @@ p, li { max-width: 78ch; }
             '<div class="stats-detail-grid" role="group" aria-label="Ek istatistikler">' +
               detailCellHTML('Toplam Turne',   st.turne,  '') +
               detailCellHTML('Toplam Temsil',  st.temsil, '') +
-              detailCellHTML('Sahne Günü',     st.gun,    '') +
+              detailCellHTML('Turnede Geçen Gün', st.gun, 'gün') +
               detailCellHTML('Şehir / İl / Ülke', st.il, '') +
               detailCellHTML('Aktif Ay',        st.aktifAy || 0, 'ay') +
               detailCellHTML('En Uzun Turne',  st.enUzunTurneGun || 0, 'gün') +
@@ -1397,8 +1546,8 @@ p, li { max-width: 78ch; }
   }
 
   /* ── Ana render ── */
-  function render() {
-    var data   = loadStats();
+  function render(srcTurneler) {
+    var data   = loadStats(srcTurneler);
     var guncel  = data.guncel  || guncelSezon();
     var sonraki = data.sonraki || birSonrakiSezon(guncel);
     var idx = {};
@@ -1409,7 +1558,7 @@ p, li { max-width: 78ch; }
     grid.innerHTML = '';
     other.innerHTML = '';
 
-    if (!data.sezonlar.length && !localStorage.getItem('turne_cache_data')) {
+    if (!data.sezonlar.length && !(srcTurneler && srcTurneler.length) && !localStorage.getItem('turne_cache_data')) {
       var emEl = document.createElement('div');
       emEl.className = 'empty-global';
       emEl.innerHTML = '<div style="display:inline-flex;align-items:center;justify-content:center;width:52px;height:52px;background:var(--muted);border:1px solid var(--border);border-radius:50%;margin-bottom:12px;color:var(--primary)">' + svgIcon('theater', 22) + '</div><br>Henüz turne verisi bulunamadı.<br><a href="turne.html">Turne Takip\'i aç</a> ve ilk turneni ekle — sonra buraya döndüğünde sezon istatistiklerin burada listelenecek.';
@@ -1463,7 +1612,93 @@ p, li { max-width: 78ch; }
     location.href = 'turne.html' + (yeniTurneMi ? '?yeniTurne=1' : '');
   }
 
+  /* ────────────────────────────────────────────────────────────────
+     CANLI VERİ: İstatistikler artık yalnızca localStorage önbelleğine
+     bağlı değil. Sayfa açılır açılmaz önbellekten çizilir, hemen ardından
+     TURNE_KAYITLARI sayfasından güncel kayıtlar çekilip yeniden hesaplanır.
+     Böylece "eksik temsil sayısı" ve "görünmeyen sezon/turne" sorunu biter.
+     ──────────────────────────────────────────────────────────────── */
+  var API_URL = 'https://turne-backend.vercel.app/api/sheets/TURNE_KAYITLARI';
+
+  function _json(raw, bos) {
+    raw = (raw == null ? '' : String(raw)).trim();
+    if (!raw) return bos;
+    try { var v = JSON.parse(raw); return v == null ? bos : v; } catch(e) { return bos; }
+  }
+
+  /* Program satırlarındaki ay/yıl kayması düzeltmesi (turne.html ile birebir) */
+  function _programDuzelt(p, basISO) {
+    if (!Array.isArray(p) || !p.length) return [];
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(basISO || '')) return p;
+    var ilk = (p[0] && p[0].tarih) || '';
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(ilk)) return p;
+    var eY = +basISO.slice(0,4), eM = +basISO.slice(5,7);
+    var pY = +ilk.slice(0,4),    pM = +ilk.slice(5,7);
+    if (Math.abs((pY*12+pM) - (eY*12+eM)) <= 2) return p;
+    var GUNLER = ['Pazar','Pazartesi','Salı','Çarşamba','Perşembe','Cuma','Cumartesi'];
+    var firstMs = new Date(pY, pM-1, +ilk.slice(8,10)).getTime();
+    var basMs   = new Date(eY, eM-1, +basISO.slice(8,10)).getTime();
+    return p.map(function(x){
+      if (!x || !/^\d{4}-\d{2}-\d{2}$/.test(x.tarih || '')) return x;
+      var origMs = new Date(+x.tarih.slice(0,4), +x.tarih.slice(5,7)-1, +x.tarih.slice(8,10)).getTime();
+      var d = new Date(basMs + (origMs - firstMs));
+      var iso = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+      var y = {}; for (var k in x) y[k] = x[k];
+      y.tarih = iso; y.gun = GUNLER[d.getDay()];
+      return y;
+    });
+  }
+
+  function _satirlariCevir(rows) {
+    return (rows || []).map(function(r){
+      if (!r || !r.length) return null;
+      var g = function(i){ return (r[i] == null ? '' : String(r[i])).trim(); };
+      if (!g(0) && !g(1) && !g(2)) return null;
+      if (g(0) === 'Oyun Adı' || g(0) === 'ID') return null;
+      var bas = g(2);
+      return {
+        oyun: g(0), il: g(1),
+        baslangicTarih: bas, bitisTarih: g(3), tarih: bas,
+        mekan: g(4), sayi: parseInt(g(5), 10) || 1,
+        not: g(6),
+        statu: g(7) || 'tamamlandi',
+        duraklar: _json(g(19), []),
+        programSatirlar: _programDuzelt(_json(g(40), []), bas),
+        anaGrupId: g(42)
+      };
+    }).filter(Boolean);
+  }
+
+  function veriTazele() {
+    if (!window.fetch) return;
+    fetch(API_URL, { cache: 'no-store' })
+      .then(function(res){ if (!res.ok) throw new Error('http ' + res.status); return res.json(); })
+      .then(function(data){
+        var liste = _satirlariCevir(data && data.rows);
+        if (!liste.length) return;
+        /* NOT: 'turne_cache_data' bilerek yeniden yazılmıyor — o önbelleği
+           turne.html üretir ve daha fazla alan içerir; üzerine yazmak diğer
+           ekranları bozabilir. Bu sayfa her açılışta canlı veriyi kullanır. */
+        /* Bayat özet artık kullanılmıyor; kalıntıyı da temizle */
+        try { localStorage.removeItem('_sezonOzet'); } catch(e) {}
+        render(liste);
+        _kartScrollBagla();
+      })
+      .catch(function(e){ console.warn('Sezon istatistikleri güncellenemedi:', e); });
+  }
+
+  function _kartScrollBagla() {
+    document.querySelectorAll('.card-body').forEach(function(body) {
+      if (body._scrollBagli) return;
+      body._scrollBagli = true;
+      body.addEventListener('scroll', function() {
+        this.classList.toggle('is-scrolled', this.scrollTop > 4);
+      }, { passive: true });
+    });
+  }
+
   render();
+  veriTazele();
 
   /* Kart gövdesi kaydırıldığında üst gölgeyi aç/kapat */
   document.querySelectorAll('.card-body').forEach(function(body) {
