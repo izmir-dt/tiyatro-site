@@ -350,8 +350,8 @@ table.sheet td.cell.note-mark::after{content:"";position:absolute;top:0;right:0;
         <option value="all">Tüm Aylar</option>
       </select>
       <button class="btn ghost small" id="printBtn">Yazdır / PDF</button>
-      <button class="btn small" id="publishBtn" title="Programı ortak sunucuya kaydet ve index sayfasında göster">Kesinleştir</button>
-      <button class="btn ghost small" id="unpublishBtn" title="Kesinleştirmeyi geri al — ortak yayını kaldırır, yerel veriniz silinmez">↩ Kesinleştirmeyi geri al</button>
+      <button class="btn small" id="publishBtn" title="Sadece açık olan ayı ortak sunucuya kaydet ve index sayfasında göster — diğer aylar etkilenmez">Kesinleştir (bu ay)</button>
+      <button class="btn ghost small" id="unpublishBtn" title="Sadece açık olan ayın kesinleşmesini geri al — diğer kesinleştirilmiş aylar etkilenmez, yerel veriniz silinmez">↩ Geri al (bu ay)</button>
       <span class="pub-state" id="pubState">Yayın durumu: —</span>
       <select id="expExcelMonth" title="Excel'e hangi ay(lar) aktarılsın">
         <option value="all">Tüm Aylar</option>
@@ -588,6 +588,7 @@ function loadState(){
       if(!Array.isArray(st.playsIgnored)) st.playsIgnored = [];
       if(!st.playNotes || typeof st.playNotes!=='object') st.playNotes = {};
       if(!st.playFreeNotes || typeof st.playFreeNotes!=='object') st.playFreeNotes = {};
+      if(!st.monthPub || typeof st.monthPub!=='object') st.monthPub = {};
       return st;
     }
   }catch(e){}
@@ -604,6 +605,7 @@ function loadState(){
   st.playsIgnored = [];
   st.playNotes = {};
   st.playFreeNotes = {};
+  st.monthPub = {};
   return st;
 }
 function normalizeMonth(m){
@@ -662,9 +664,11 @@ function blockIfRedCell(actionLabel){
   return false;
 }
 
-/* === Ortak yayın: Kesinleştir düğmesi ===
-   Tarayıcı yerel kaydı düzenleme için tutulur; kesinleştirilen sürüm ise
-   doğrudan ortak aylık program sekmesine parçalara bölünerek yazılır. */
+/* === Ortak yayın: Kesinleştir düğmesi (AY BAZINDA) ===
+   Tarayıcı yerel kaydı düzenleme için tutulur; kesinleştirme YALNIZCA o an
+   ekranda açık olan ayı ortak sunucuya yazar. Her ay kendi grup kimliğiyle
+   ("apub_<ay-kodu>_<zaman>") ayrı satırlarda tutulur; böylece bir ayı
+   kesinleştirmek ya da geri almak diğer ayları etkilemez. */
 const PUBLISH_API = 'https://tiyatro-backend.vercel.app/api/sheets';
 /* Mevcut ortak sekme kullanılır; yeni bir sunucu sekmesi kurulmasını
    gerektirmeden tüm bilgisayarlarda çalışır. PDF kayıtlarıyla çakışmaması
@@ -677,14 +681,29 @@ function utf8ToB64(text){
   for(let i=0;i<bytes.length;i+=0x8000) bin += String.fromCharCode(...bytes.subarray(i,i+0x8000));
   return btoa(bin);
 }
+/* Ay adını sunucu tarafında grup kimliği olarak kullanılabilecek, Türkçe
+   karakterlerden arındırılmış, kararlı bir koda çevirir. */
+function monthSlug(name){
+  return String(name||'')
+    .replace(/İ/g,'I').replace(/I/g,'i').replace(/ı/g,'i')
+    .replace(/Ğ/g,'g').replace(/ğ/g,'g')
+    .replace(/Ş/g,'s').replace(/ş/g,'s')
+    .replace(/Ç/g,'c').replace(/ç/g,'c')
+    .replace(/Ö/g,'o').replace(/ö/g,'o')
+    .replace(/Ü/g,'u').replace(/ü/g,'u')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g,'_')
+    .replace(/^_+|_+$/g,'') || 'ay';
+}
 async function publishProgram(){
   if(blockIfRedCell('Kesinleştir')) return;
+  const m = curMonth();
+  const slug = monthSlug(m.name);
   const btn = document.getElementById('publishBtn');
   if(btn) { btn.disabled=true; btn.textContent='Yayınlanıyor…'; }
   try{
     const payload = JSON.stringify({
-      months: state.months,
-      activeIdx: state.activeIdx,
+      month: m,
       plays: state.plays || [],
       playsExtra: state.playsExtra || [],
       generalNotes: state.generalNotes || '',
@@ -692,12 +711,14 @@ async function publishProgram(){
       playFreeNotes: state.playFreeNotes || {}
     });
     const encoded = utf8ToB64(payload);
-    const version = 'apub_' + Date.now();
+    const ts = Date.now();
+    const version = 'apub_' + slug + '_' + ts;
     const old = await fetch(PUBLISH_API + '/' + encodeURIComponent(PUBLISH_SHEET), {cache:'no-store'});
     const oldData = old.ok ? await old.json() : {rows:[]};
+    const prefix = 'apub_' + slug + '_';
     const oldRows = (oldData.rows || [])
       .map((r,i)=>({r,i}))
-      .filter(x=>String(x.r[0]||'').startsWith('apub_'))
+      .filter(x=>String(x.r[0]||'').startsWith(prefix))
       .sort((a,b)=>b.i-a.i);
     for(const item of oldRows){
       const del = await fetch(PUBLISH_API + '/' + encodeURIComponent(PUBLISH_SHEET) + '/row/' + item.i, {method:'DELETE'});
@@ -709,39 +730,41 @@ async function publishProgram(){
       const res = await fetch(PUBLISH_API + '/' + encodeURIComponent(PUBLISH_SHEET) + '/row', {
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({values:[version,Date.now(),i,parts.length,parts[i]]})
+        body:JSON.stringify({values:[version,ts,i,parts.length,parts[i]]})
       });
       if(!res.ok) throw new Error('Yayın yazılamadı (HTTP '+res.status+')');
     }
-    state.publishedAt = Date.now();
-    state.unpublishedAt = null;
+    state.monthPub = state.monthPub || {};
+    state.monthPub[m.name] = {publishedAt: ts, unpublishedAt: null};
     saveState(); renderPubState();
-    setStatus('Kesinleştirildi — index sayfasında ortak olarak görünecek.');
-    siteMessage('Program kesinleştirildi. Artık index sayfasını açan tüm bilgisayarlarda güncel sürüm görülecek.','ok','Program kesinleştirildi');
+    setStatus('"'+m.name+'" kesinleştirildi — index sayfasında ortak olarak görünecek.');
+    siteMessage('"'+m.name+'" kesinleştirildi. Artık index sayfasını açan tüm bilgisayarlarda bu ay güncel sürümüyle görülecek. Diğer aylar etkilenmedi.','ok','Ay kesinleştirildi');
   }catch(e){
     setStatus('Kesinleştirme başarısız.');
-    siteMessage('Program kesinleştirilemedi: '+(e.message||'Bağlantı hatası'),'error','Yayın hatası');
+    siteMessage('Kesinleştirilemedi: '+(e.message||'Bağlantı hatası'),'error','Yayın hatası');
   }finally{
     if(btn) { btn.disabled=false; btn.textContent='Kesinleştir'; }
   }
 }
 
 /* === Sunucudan otomatik geri yükleme ===
-   Kesinleştirilen sürüm Google E-Tablolar'a yazılır ama şimdiye kadar
-   sayfa açılışında hiç geri okunmuyordu; tarayıcı yerel kaydı (localStorage)
-   silinirse (farklı cihaz, gizli sekme, önbellek temizliği vb.) kesinleştirilmiş
-   aylar da kaybolmuş gibi görünüyordu. Açılışta sunucudaki en son kesinleştirilmiş
-   sürüm, yerelde bilinenden daha yeniyse otomatik olarak yüklenir. */
+   Kesinleştirilen aylar Google E-Tablolar'a ay ay yazılır. Tarayıcı yerel
+   kaydı (localStorage) silinirse (farklı cihaz, gizli sekme, önbellek
+   temizliği vb.) sunucudaki kesinleştirilmiş aylar açılışta otomatik
+   olarak geri yüklenir — yalnızca yerelde daha yeni bir sürümü olmayan
+   aylar için, böylece başka bir ayın kesinleştirmesi diğerini ezmez. */
 function b64ToUtf8(b64){
   const bin = atob(b64);
   const bytes = new Uint8Array(bin.length);
   for(let i=0;i<bin.length;i++) bytes[i] = bin.charCodeAt(i);
   return new TextDecoder().decode(bytes);
 }
-async function fetchPublishedState(){
+/* Sunucudaki TÜM kesinleştirilmiş ayları, her ay için en güncel sürümü
+   seçerek döndürür. Grup kimliği biçimi: apub_<ay-kodu>_<zaman damgası>. */
+async function fetchAllPublishedMonths(){
   try{
     const r = await fetch(PUBLISH_API + '/' + encodeURIComponent(PUBLISH_SHEET), {cache:'no-store'});
-    if(!r.ok) return null;
+    if(!r.ok) return [];
     const rows = (await r.json()).rows || [];
     const groups = new Map();
     rows.forEach(row=>{
@@ -751,33 +774,53 @@ async function fetchPublishedState(){
       if(!groups.has(id)) groups.set(id, {ts, parts:[]});
       groups.get(id).parts.push(row);
     });
-    const latest = [...groups.values()].sort((a,b)=>b.ts-a.ts)[0];
-    if(!latest) return null;
-    const parts = latest.parts.slice().sort((a,b)=>(+a[2]||0)-(+b[2]||0));
-    const total = +parts[0][3] || parts.length;
-    if(parts.length < total) return null; /* parça eksik, güvenilmez */
-    const encoded = parts.slice(0,total).map(r=>String(r[4]||'')).join('');
-    return {data: JSON.parse(b64ToUtf8(encoded)), ts: latest.ts};
-  }catch(e){ return null; }
+    const bySlug = new Map();
+    for(const [id, g] of groups){
+      const mm = id.match(/^apub_(.+)_(\d+)$/);
+      if(!mm) continue;
+      const slug = mm[1];
+      const existing = bySlug.get(slug);
+      if(!existing || g.ts > existing.ts) bySlug.set(slug, {id, ts:g.ts, parts:g.parts});
+    }
+    const out = [];
+    for(const [slug, g] of bySlug){
+      const parts = g.parts.slice().sort((a,b)=>(+a[2]||0)-(+b[2]||0));
+      const total = +parts[0][3] || parts.length;
+      if(parts.length < total) continue; /* parça eksik, güvenilmez */
+      const encoded = parts.slice(0,total).map(r=>String(r[4]||'')).join('');
+      try{ out.push({slug, ts:g.ts, data: JSON.parse(b64ToUtf8(encoded))}); }catch(e){}
+    }
+    return out;
+  }catch(e){ return []; }
 }
 async function syncFromServer(){
-  const pub = await fetchPublishedState();
-  if(!pub || !pub.data || !Array.isArray(pub.data.months) || !pub.data.months.length) return;
-  const localTs = state.publishedAt || 0;
-  if(pub.ts <= localTs) return; /* yerel zaten bu sürümde veya daha yeni (yayınlanmamış) değişiklikler var */
-  state.months = pub.data.months.map(m=>normalizeMonth(m));
-  state.activeIdx = Math.min(pub.data.activeIdx||0, state.months.length-1);
-  if(Array.isArray(pub.data.plays)) state.plays = pub.data.plays;
-  if(Array.isArray(pub.data.playsExtra)) state.playsExtra = pub.data.playsExtra;
-  if(typeof pub.data.generalNotes === 'string') state.generalNotes = pub.data.generalNotes;
-  if(pub.data.playNotes && typeof pub.data.playNotes === 'object') state.playNotes = pub.data.playNotes;
-  if(pub.data.playFreeNotes && typeof pub.data.playFreeNotes === 'object') state.playFreeNotes = pub.data.playFreeNotes;
-  state.publishedAt = pub.ts;
+  const results = await fetchAllPublishedMonths();
+  if(!results.length) return;
+  state.monthPub = state.monthPub || {};
+  let changed = false;
+  for(const {ts, data} of results){
+    if(!data || !data.month || !data.month.name) continue;
+    const name = data.month.name;
+    const localTs = (state.monthPub[name]||{}).publishedAt || 0;
+    if(ts <= localTs) continue; /* yerelde bu sürüm veya daha yenisi zaten var */
+    const normalized = normalizeMonth(data.month);
+    const idx = state.months.findIndex(mo=>mo.name===name);
+    if(idx>=0) state.months[idx] = normalized; else state.months.push(normalized);
+    state.monthPub[name] = {publishedAt: ts, unpublishedAt: null};
+    if(Array.isArray(data.plays)) state.plays = data.plays;
+    if(Array.isArray(data.playsExtra)) state.playsExtra = data.playsExtra;
+    if(typeof data.generalNotes === 'string') state.generalNotes = data.generalNotes;
+    if(data.playNotes && typeof data.playNotes === 'object') state.playNotes = {...state.playNotes, ...data.playNotes};
+    if(data.playFreeNotes && typeof data.playFreeNotes === 'object') state.playFreeNotes = {...state.playFreeNotes, ...data.playFreeNotes};
+    changed = true;
+  }
+  if(!changed) return;
+  if(state.activeIdx==null || state.activeIdx>=state.months.length) state.activeIdx = 0;
   saveState();
   renderAll();
   renderPubState();
   setStatus('Sunucudan güncel program yüklendi.');
-  siteMessage('Bu tarayıcıda güncel kayıt bulunamadı; sunucudaki en son kesinleştirilmiş program otomatik olarak yüklendi.','ok','Sunucudan senkronize edildi');
+  siteMessage('Bu tarayıcıda güncel kayıt bulunamadı; sunucudaki kesinleştirilmiş aylar otomatik olarak yüklendi.','ok','Sunucudan senkronize edildi');
 }
 
 /* === Kategoriler === */
@@ -828,32 +871,38 @@ function askCategory(current){
   return n===0 ? '' : CATEGORIES[n-1];
 }
 
-/* === Kesinleştirmeyi geri alma === */
+/* === Kesinleştirmeyi geri alma (AY BAZINDA) ===
+   Yalnızca o an ekranda açık olan ayın ortak yayını kaldırılır; diğer
+   kesinleştirilmiş aylar sunucuda ve index sayfasında görünmeye devam eder. */
 async function unpublishProgram(){
-  if(!confirm('Kesinleştirme geri alınsın mı?\n\nOrtak sunucudaki yayın kaldırılacak; index sayfasında program görünmeyecek. Yerel (bu tarayıcıdaki) verileriniz SİLİNMEZ.')) return;
+  const m = curMonth();
+  const slug = monthSlug(m.name);
+  if(!confirm('"'+m.name+'" için kesinleştirme geri alınsın mı?\n\nSadece bu ayın ortak sunucudaki yayını kaldırılacak; index sayfasında bu ay görünmeyecek. Diğer kesinleştirilmiş aylar ETKİLENMEZ. Yerel (bu tarayıcıdaki) verileriniz SİLİNMEZ.')) return;
   const btn = document.getElementById('unpublishBtn');
   if(btn){ btn.disabled=true; btn.textContent='Geri alınıyor…'; }
   try{
     const old = await fetch(PUBLISH_API + '/' + encodeURIComponent(PUBLISH_SHEET), {cache:'no-store'});
     const oldData = old.ok ? await old.json() : {rows:[]};
+    const prefix = 'apub_' + slug + '_';
     const rows = (oldData.rows || [])
       .map((r,i)=>({r,i}))
-      .filter(x=>String(x.r[0]||'').startsWith('apub_'))
+      .filter(x=>String(x.r[0]||'').startsWith(prefix))
       .sort((a,b)=>b.i-a.i);
+    state.monthPub = state.monthPub || {};
     if(!rows.length){
-      state.publishedAt = null; saveState(); renderPubState();
-      siteMessage('Ortak sunucuda yayınlanmış bir program bulunamadı.','warn','Yayın bulunamadı');
+      state.monthPub[m.name] = {publishedAt:null, unpublishedAt: state.monthPub[m.name]?.unpublishedAt || null};
+      saveState(); renderPubState();
+      siteMessage('"'+m.name+'" için ortak sunucuda yayınlanmış bir sürüm bulunamadı.','warn','Yayın bulunamadı');
       return;
     }
     for(const item of rows){
       const del = await fetch(PUBLISH_API + '/' + encodeURIComponent(PUBLISH_SHEET) + '/row/' + item.i, {method:'DELETE'});
       if(!del.ok) throw new Error('Yayın kaldırılamadı (HTTP '+del.status+')');
     }
-    state.unpublishedAt = Date.now();
-    state.publishedAt = null;
+    state.monthPub[m.name] = {publishedAt:null, unpublishedAt: Date.now()};
     saveState(); renderPubState();
-    setStatus('Kesinleştirme geri alındı.');
-    siteMessage('Kesinleştirme geri alındı. Program artık index sayfasında görünmeyecek; düzenleyip yeniden kesinleştirebilirsiniz.','ok','Yayın kaldırıldı');
+    setStatus('"'+m.name+'" için kesinleştirme geri alındı.');
+    siteMessage('"'+m.name+'" için kesinleştirme geri alındı. Bu ay artık index sayfasında görünmeyecek; düzenleyip yeniden kesinleştirebilirsiniz. Diğer aylar etkilenmedi.','ok','Yayın kaldırıldı');
   }catch(e){
     setStatus('Geri alma başarısız.');
     siteMessage('Kesinleştirme geri alınamadı: '+(e.message||'Bağlantı hatası'),'error','Geri alma hatası');
@@ -863,11 +912,13 @@ async function unpublishProgram(){
 }
 function renderPubState(){
   const el = document.getElementById('pubState'); if(!el) return;
-  if(state.publishedAt){
-    el.textContent = 'Kesinleştirildi · ' + new Date(state.publishedAt).toLocaleString('tr-TR');
+  const m = curMonth();
+  const rec = (state.monthPub || {})[m ? m.name : ''];
+  if(rec && rec.publishedAt){
+    el.textContent = '"'+m.name+'": Kesinleştirildi · ' + new Date(rec.publishedAt).toLocaleString('tr-TR');
     el.classList.add('ok');
   } else {
-    el.textContent = state.unpublishedAt ? 'Yayın kaldırıldı · ' + new Date(state.unpublishedAt).toLocaleString('tr-TR') : 'Yayınlanmadı';
+    el.textContent = '"'+(m?m.name:'')+'": ' + (rec && rec.unpublishedAt ? 'Yayın kaldırıldı · ' + new Date(rec.unpublishedAt).toLocaleString('tr-TR') : 'Yayınlanmadı');
     el.classList.remove('ok');
   }
 }
@@ -2729,11 +2780,12 @@ function renderAll(){
   renderPrint();
   renderNotes();
   renderDataViews();
+  renderPubState();
   setStatus('Kaydedildi (yerel).');
 }
 
 /* Wire */
-document.getElementById('monthSel').onchange = e=>{ state.activeIdx=+e.target.value; saveState(); renderSheet(); renderPrint(); };
+document.getElementById('monthSel').onchange = e=>{ state.activeIdx=+e.target.value; saveState(); renderSheet(); renderPrint(); renderPubState(); };
 document.getElementById('addMonth').onclick = addBlankMonth;
 document.getElementById('delMonth').onclick = delCurMonth;
 document.getElementById('renameMonth').onclick = renameCurMonth;
