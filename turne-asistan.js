@@ -4612,8 +4612,8 @@
       }
     }
     const arr = [...m.values()].sort((a,b)=>b.turne-a.turne);
-    const rows = [["Şehir","Turne Sayısı","Toplam Gün","Sahnelenen Oyunlar","Görev Alan Personel"]];
-    for (const o of arr) rows.push([o.sehir, o.turne, o.gun, o.oyunlar.size, o.personel.size]);
+    const rows = [["Şehir","Turne Sayısı","Toplam Gün","Sahnelenen Oyun Sayısı","Sahnelenen Oyunlar","Görev Alan Personel"]];
+    for (const o of arr) rows.push([o.sehir, o.turne, o.gun, o.oyunlar.size, [...o.oyunlar].sort((a,b)=>a.localeCompare(b,"tr")).join(", "), o.personel.size]);
     return rows;
   }
 
