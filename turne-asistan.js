@@ -4629,8 +4629,8 @@
       for (const k of t.katilimcilar||[]) if (k.kisi) o.personel.add(norm(k.kisi));
     }
     const arr = [...m.values()].sort((a,b)=>b.turne-a.turne);
-    const rows = [["Oyun","Turne Sayısı","Gidilen Şehirler","Toplam Gün","Görev Alan Personel"]];
-    for (const o of arr) rows.push([o.ad, o.turne, o.sehirler.size, o.gun, o.personel.size]);
+    const rows = [["Oyun","Turne Sayısı","Gidilen Şehir Sayısı","Gidilen Şehirler","Toplam Gün","Görev Alan Personel"]];
+    for (const o of arr) rows.push([o.ad, o.turne, o.sehirler.size, [...o.sehirler].sort((a,b)=>a.localeCompare(b,"tr")).join(", "), o.gun, o.personel.size]);
     return rows;
   }
 
