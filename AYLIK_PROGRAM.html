@@ -90,6 +90,21 @@ table.sheet td.cell.conflict{background:var(--conflict) !important;color:#fff;fo
 table.sheet td.cell.selected{background:var(--sel);outline:2px solid var(--selBorder);outline-offset:-2px;z-index:2}
 table.sheet td.cell.anchor{outline:3px solid var(--primary);outline-offset:-3px;z-index:3}
 table.sheet td.cell[contenteditable=true]{background:#fffbe8;outline:2px solid var(--primary);text-align:left}
+table.sheet td.cell.freetext{font-style:italic;color:#5f5346;font-weight:500}
+table.sheet td.cell.freetext::before{content:"✎ ";color:var(--accent);font-style:normal}
+#printView .print-month table.sheet td.cell.freetext,.print-month table.sheet td.cell.freetext{font-style:italic}
+.pl-free{margin-bottom:12px}
+.pl-free:empty{display:none}
+.pl-free-h{font-size:12px;font-weight:700;color:#2c5c46;background:#e8f6ef;border:1px solid #a9d6c2;border-radius:6px 6px 0 0;padding:6px 10px}
+.pl-free-list{border:1px solid #a9d6c2;border-top:none;border-radius:0 0 6px 6px;background:#f6fdf9;max-height:220px;overflow:auto}
+.pl-free-row{display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid #dceee5;flex-wrap:wrap}
+.pl-free-row:last-child{border-bottom:none}
+.pl-free-row .nm{flex:1;min-width:140px;font-size:13px;font-weight:600}
+.pl-free-row .wh{font-size:11px;color:var(--muted)}
+.pl-occ{display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;padding:6px 12px;border-bottom:1px solid #f5efe1;font-size:12.5px}
+.pl-occ:last-child{border-bottom:none}
+.pl-occ .nt{font-size:11.5px;color:#7a5a10}
+.pl-note-box{width:100%;min-height:56px;border:1px solid var(--border);border-radius:6px;padding:6px 8px;font:inherit;font-size:13px;background:#fffdf6}
 table.sheet td.cell.note-mark::after{content:"";position:absolute;top:0;right:0;border-top:6px solid var(--accent);border-left:6px solid transparent}
 
 /* Context menu */
@@ -171,7 +186,7 @@ table.sheet td.cell.note-mark::after{content:"";position:absolute;top:0;right:0;
 
 /* Print — YATAY (görseldeki renkler ekranla aynı) */
 @media print{
-  @page{size:A4 landscape;margin:5mm}
+  @page{size:A4 landscape;margin:5mm}  /* çalışma anında #printPageStyle ile güncellenir */
   header,nav,.controls,#tooltip,.ctxmenu,.modal-back,.tbl-wrap,#idtBridgeBar,.fs-exit{display:none !important}
   section{display:none !important}
   body{background:#fff}
@@ -229,6 +244,8 @@ table.sheet td.cell.note-mark::after{content:"";position:absolute;top:0;right:0;
       <button class="btn ghost small" id="mergeBtn" title="Seçili hücreleri birleştir">Birleştir</button>
       <button class="btn ghost small" id="unmergeBtn" title="Birleşmeyi ayır">Ayır</button>
       <button class="btn ghost small" id="premBtn" title="Prömiyer işareti">Prömiyer ★</button>
+      <button class="btn ghost small" id="freeTextBtn" title="Seçili hücreleri serbest metin/not olarak işaretle — oyun listesine eklenmez">Serbest metin ✎</button>
+      <button class="btn ghost small" id="cellNoteBtn" title="Seçili hücreye not ekle/düzenle">Not ekle</button>
       <button class="btn ghost small" id="clearBtn" title="İçeriği sil (Delete)">Temizle</button>
     </div>
     <div class="group">
@@ -259,9 +276,12 @@ table.sheet td.cell.note-mark::after{content:"";position:absolute;top:0;right:0;
     <div class="group">
       <button class="btn ghost small" id="fsBtn" title="Aylık programı tam sayfa görüntüle (Esc ile çık)">⛶ Tam Ekran</button>
       <select id="printSize" title="Yazdırma kâğıdı">
-        <option value="A5">A5 yatay</option>
-        <option value="A4" selected>A4 yatay</option>
-        <option value="A3">A3 yatay</option>
+        <option value="A5|landscape">A5 yatay</option>
+        <option value="A5|portrait">A5 dikey</option>
+        <option value="A4|landscape" selected>A4 yatay</option>
+        <option value="A4|portrait">A4 dikey</option>
+        <option value="A3|landscape">A3 yatay</option>
+        <option value="A3|portrait">A3 dikey</option>
       </select>
       <button class="btn ghost small" id="printBtn">Yazdır / PDF</button>
       <button class="btn small" id="publishBtn" title="Programı ortak sunucuya kaydet ve index sayfasında göster">Kesinleştir</button>
@@ -269,9 +289,12 @@ table.sheet td.cell.note-mark::after{content:"";position:absolute;top:0;right:0;
         <option value="all">Tüm Aylar</option>
       </select>
       <select id="expExcelSize" title="Excel sayfa boyutu (yazdırma ayarı)">
-        <option value="A5">A5 yatay</option>
-        <option value="A4" selected>A4 yatay</option>
-        <option value="A3">A3 yatay</option>
+        <option value="A5|landscape">A5 yatay</option>
+        <option value="A5|portrait">A5 dikey</option>
+        <option value="A4|landscape" selected>A4 yatay</option>
+        <option value="A4|portrait">A4 dikey</option>
+        <option value="A3|landscape">A3 yatay</option>
+        <option value="A3|portrait">A3 dikey</option>
       </select>
       <button class="btn ghost small" id="expExcel" title="Excel (.xls) olarak indir — seçili ay veya tüm aylar, renkler ve birleştirmelerle">Excel İndir</button>
       <button class="btn ghost small" id="expJson">JSON indir</button>
@@ -284,13 +307,14 @@ table.sheet td.cell.note-mark::after{content:"";position:absolute;top:0;right:0;
   <h2 id="monthTitle"></h2>
   <div class="tbl-wrap"><table class="sheet" id="sheet"></table></div>
   <p style="font-size:12px;color:var(--muted);margin-top:8px">
-    <b>Kısayollar:</b> Tıkla → seç · Shift+Tıkla → aralık · Çift tıkla → yaz · Enter/Esc · Delete → temizle · Ctrl+C/V · Ctrl+Z/Y · Sağ tık → menü · Oyunun üzerine gel → çakışma bilgisi
+    <b>Kısayollar:</b> Tıkla → seç · Shift+Tıkla → aralık · Çift tıkla → yaz · Enter/Esc · Delete → temizle · Ctrl+C/V · Ctrl+Z/Y · Sağ tık → menü · Oyunun üzerine gel → çakışma bilgisi · <b>Serbest metin ✎</b> → hücreyi oyun sayma (il adı, açıklama, not) · <b>Not ekle</b> → oyunun yanına not
   </p>
 </section>
 
 <section id="plays">
   <div class="pl-stats" id="plStats"></div>
   <div class="pl-pending" id="plPending"></div>
+  <div class="pl-free" id="plFree"></div>
   <div class="pl-wrap">
     <aside class="pl-side">
       <div class="pl-side-h">
@@ -312,9 +336,12 @@ table.sheet td.cell.note-mark::after{content:"";position:absolute;top:0;right:0;
 <section id="print">
   <div class="controls">
     <select id="printSizePreview" title="Yazdırma kâğıdı">
-      <option value="A5">A5 yatay</option>
-      <option value="A4" selected>A4 yatay</option>
-      <option value="A3">A3 yatay</option>
+        <option value="A5|landscape">A5 yatay</option>
+        <option value="A5|portrait">A5 dikey</option>
+        <option value="A4|landscape" selected>A4 yatay</option>
+        <option value="A4|portrait">A4 dikey</option>
+        <option value="A3|landscape">A3 yatay</option>
+        <option value="A3|portrait">A3 dikey</option>
     </select>
     <button class="btn" id="printPreviewBtn">Yazdır / PDF olarak kaydet</button>
     <span style="color:var(--muted);font-size:13px">Her ay seçilen kâğıda tek sayfa sığacak şekilde ölçeklenir.</span>
@@ -480,6 +507,7 @@ function loadState(){
       if(!Array.isArray(st.playsExtra)) st.playsExtra = [];
       if(!Array.isArray(st.playsPending)) st.playsPending = [];
       if(!Array.isArray(st.playsIgnored)) st.playsIgnored = [];
+      if(!st.playNotes || typeof st.playNotes!=='object') st.playNotes = {};
       return st;
     }
   }catch(e){}
@@ -494,6 +522,7 @@ function loadState(){
   st.playsExtra = JSON.parse(JSON.stringify(DEFAULT_DATA.plays||[]));
   st.playsPending = [];
   st.playsIgnored = [];
+  st.playNotes = {};
   return st;
 }
 function normalizeMonth(m){
@@ -701,6 +730,28 @@ function parseGame(txt){
   const key = (isPrem ? t.slice(1) : t).trim();
   return {key, isPremiere:isPrem};
 }
+function isFreeTextValue(v){
+  const t = String(v||'').trim();
+  if(!t) return false;
+  if(/^(\/\/|#|!|>|\+)/.test(t)) return true;
+  if(/^\(.*\)$/.test(t)) return true;
+  if(/^\[.*\]$/.test(t)) return true;
+  return false;
+}
+function isFreeTextCell(cell){ return !!(cell && (cell.freeText || isFreeTextValue(cell.v))); }
+function collectFreeTexts(){
+  const out = {};
+  (state.months||[]).forEach((m,mi)=>{
+    for(const k in (m.cells||{})){
+      const c = m.cells[k];
+      if(!c || !c.v || !isFreeTextCell(c)) continue;
+      const [r,cc] = k.split('_').map(Number);
+      const t = String(c.v).trim();
+      (out[t] = out[t]||[]).push({mi, month:m.name, r, c:cc, key:k, date:dateTextOfRow(m,r), auto:!c.freeText});
+    }
+  });
+  return out;
+}
 function isPremiereLabel(t){
   const s = String(t||'').trim().toLocaleUpperCase('tr');
   return s==='PRÖMİYER' || s==='* PRÖMİYER' || s==='*PRÖMİYER';
@@ -710,9 +761,11 @@ function isPremiereLabel(t){
 function rowGames(m,r){
   const out=[];
   for(const c of programCols(m)){
-    const raw = (m.cells[r+'_'+c]||{}).v || '';
+    const cellObj = m.cells[r+'_'+c] || {};
+    const raw = cellObj.v || '';
     if(!raw) continue;
     if(isPremiereLabel(raw)) continue;
+    if(isFreeTextCell(cellObj)) continue;   /* serbest metin/not: oyun sayılmaz */
     const {key, isPremiere} = parseGame(raw);
     if(!key) continue;
     out.push({raw, key, isPremiere, col:c});
@@ -804,6 +857,7 @@ function renderSheet(){
           if(anyCrit) td.classList.add('conflict');
         }
       }
+      if(isFreeTextCell(cell) && cell.v){ td.classList.add('freetext'); td.classList.remove('conflict'); }
       if(cell.ignoreConflict) td.classList.add('noconf');
       if(cell.note){ td.classList.add('note-mark'); }
       const cs = cellStyleString(cell);
@@ -902,6 +956,12 @@ function showTooltipFor(r,c,ev){
     return;
   }
   if(isPremiereLabel(raw)) return;
+  if(isFreeTextCell(cell)){
+    tt.innerHTML = '<div class="ttHead">✎ Serbest metin</div>'+escapeHtml(raw)+
+      (cell.note ? '<hr><div><b>Not:</b> '+escapeHtml(cell.note)+'</div>' : '')+
+      '<hr><div class="ttOk">Bu hücre oyun sayılmaz (çakışma ve oyun listesine girmez).</div>';
+    tt.style.display='block'; placeTooltip(ev); return;
+  }
 
   const {key} = parseGame(raw);
   const games = rowGames(m,r);
@@ -959,8 +1019,9 @@ function buildOyunDatalist(){
   const names = Array.from(new Set((state.plays||[]).map(p=>String(p).trim()).filter(Boolean))).sort((a,b)=>a.localeCompare(b,'tr'));
   dl.innerHTML = names.map(n=>`<option value="${escapeHtml(n)}">`).join('');
 }
-function registerPlayName(nv){
+function registerPlayName(nv, cellObj){
   if(!nv || isPremiereLabel(nv)) return;
+  if(isFreeTextCell(cellObj || {v:nv})) return; /* serbest metin oyun listesine düşmez */
   const {key} = parseGame(nv);
   if(!key) return;
   if((state.plays||[]).includes(key)) return; // zaten bilinen/onaylı oyun
@@ -983,6 +1044,22 @@ function confirmPendingPlay(key){
   renderPlays();
   renderSheet();
   setStatus('"'+key+'" oyun olarak eklendi.');
+}
+function markAllAsFreeText(name){
+  const key = (parseGame(name).key||'').trim();
+  if(!key) return;
+  snapshot();
+  (state.months||[]).forEach(m=>{
+    for(const k in (m.cells||{})){
+      const c = m.cells[k];
+      if(c && c.v && parseGame(c.v).key === key) m.cells[k] = {...c, freeText:true};
+    }
+  });
+  state.playsPending = (state.playsPending||[]).filter(x=>x!==key);
+  state.playsIgnored = state.playsIgnored||[];
+  if(!state.playsIgnored.includes(key)) state.playsIgnored.push(key);
+  saveState(); renderSheet(); renderPrint(); renderPlays();
+  setStatus('"'+key+'" serbest metin olarak işaretlendi — oyun sayılmayacak.');
 }
 function dismissPendingPlay(key){
   state.playsIgnored = state.playsIgnored||[];
@@ -1020,7 +1097,7 @@ function startEdit(td){
         const mm = curMonth();
         mm.cells[r+'_'+c] = {...(mm.cells[r+'_'+c]||{}), v: nv};
         if(!nv) delete mm.cells[r+'_'+c];
-        registerPlayName(nv);
+        registerPlayName(nv, mm.cells[r+'_'+c]);
         saveState();
       }
       renderSheet();
@@ -1097,6 +1174,74 @@ function opPremiere(){
     m.cells[r+'_'+c] = {...(m.cells[r+'_'+c]||{v:''}), premiere: anyOff};
   }
   saveState(); renderSheet();
+}
+function opFreeText(){
+  const m = curMonth(); snapshot();
+  let anyOff=false;
+  for(let r=sel.r1;r<=sel.r2;r++) for(let c=sel.c1;c<=sel.c2;c++){
+    const cur = m.cells[r+'_'+c];
+    if(cur && cur.v && !cur.freeText) anyOff=true;
+  }
+  state.playsIgnored = state.playsIgnored||[];
+  for(let r=sel.r1;r<=sel.r2;r++) for(let c=sel.c1;c<=sel.c2;c++){
+    const cur = m.cells[r+'_'+c];
+    if(!cur || !cur.v) continue;
+    const n = {...cur};
+    if(anyOff){
+      n.freeText = true;
+      const key = (parseGame(n.v).key||'').trim();
+      if(key){
+        state.playsPending = (state.playsPending||[]).filter(x=>x!==key);
+        if(!(state.plays||[]).includes(key) && !state.playsIgnored.includes(key)) state.playsIgnored.push(key);
+      }
+    } else delete n.freeText;
+    m.cells[r+'_'+c] = n;
+  }
+  saveState(); renderSheet(); renderPrint(); renderPlays();
+  setStatus(anyOff ? 'Seçili hücreler serbest metin olarak işaretlendi.' : 'Serbest metin işareti kaldırıldı.');
+}
+function opCellNote(){
+  const m=curMonth(); const k=sel.r1+'_'+sel.c1;
+  const cur=(m.cells[k]||{}).note||'';
+  const n=prompt('Not (oyunun yanında ✎ olarak görünür):', cur);
+  if(n===null) return;
+  snapshot();
+  m.cells[k] = {...(m.cells[k]||{v:''}), note:n||undefined};
+  if(!n) delete m.cells[k].note;
+  saveState(); renderSheet(); renderPrint(); renderPlays();
+}
+function setCellNote(mi,key,txt){
+  const m = state.months[mi]; if(!m) return;
+  snapshot();
+  m.cells[key] = {...(m.cells[key]||{v:''}), note:txt||undefined};
+  if(!txt) delete m.cells[key].note;
+  saveState(); renderSheet(); renderPrint(); renderPlays();
+}
+function markCellFreeText(mi,key,on){
+  const m = state.months[mi]; if(!m || !m.cells[key]) return;
+  snapshot();
+  const n = {...m.cells[key]};
+  if(on) n.freeText = true; else delete n.freeText;
+  m.cells[key] = n;
+  const k2 = (parseGame(n.v).key||'').trim();
+  if(on && k2){
+    state.playsPending = (state.playsPending||[]).filter(x=>x!==k2);
+    state.playsIgnored = state.playsIgnored||[];
+    if(!(state.plays||[]).includes(k2) && !state.playsIgnored.includes(k2)) state.playsIgnored.push(k2);
+  }
+  saveState(); renderSheet(); renderPrint(); renderPlays();
+}
+function gotoCell(mi,r,c){
+  state.activeIdx = mi; saveState();
+  document.querySelectorAll('#tabbar button').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('main section').forEach(x=>x.classList.remove('active'));
+  const tb = document.querySelector('#tabbar button[data-tab="program"]');
+  if(tb) tb.classList.add('active');
+  document.getElementById('program').classList.add('active');
+  refreshMonthSel(); renderSheet();
+  setSel(r,c,r,c);
+  const td = document.querySelector('#sheet td.cell[data-r="'+r+'"][data-c="'+c+'"]');
+  if(td) td.scrollIntoView({block:'center', inline:'center'});
 }
 function opIgnoreConflict(){
   const m = curMonth(); snapshot();
@@ -1199,7 +1344,7 @@ function opPaste(){
       const r=sel.r1+dr, c=sel.c1+dc;
       if(r>=m.rows || c>=m.cols) continue;
       const src = clip[dr][dc];
-      if(src.v || src.premiere || src.note) m.cells[r+'_'+c] = {...src};
+      if(src.v || src.premiere || src.note || src.freeText) m.cells[r+'_'+c] = {...src};
       else delete m.cells[r+'_'+c];
     }
   }
@@ -1284,6 +1429,7 @@ function showCtx(x,y,kind){
       ['Kalın (aç/kapat)', opBold],
       ['Rengi Temizle', opClearFormat],
       ['⚠️ Çakışmayı yok say (aç/kapat)', opIgnoreConflict],
+      ['✎ Serbest metin / not hücresi (aç/kapat)', opFreeText],
       ['Not ekle/düzenle…', ()=>{
         const m=curMonth(); const k=sel.r1+'_'+sel.c1;
         const cur=(m.cells[k]||{}).note||'';
@@ -1502,29 +1648,46 @@ function renderPrint(){
 
 /* === Yazdırma/PDF: her ay tam olarak bir YATAY A4 sayfasını kaplar === */
 let printSize = 'A4';
+let printOrient = 'landscape';
+/* Dikey (portrait) temel ölçüler — yatayda çevrilir */
+const PAPER_MM = {A5:[148,210], A4:[210,297], A3:[297,420]};
 const PRINT_MM = {A5:[210,148], A4:[297,210], A3:[420,297]};
-function printMetrics(){
-  const [mmW,mmH] = PRINT_MM[printSize] || PRINT_MM.A4;
+function parsePaper(val){
+  const s = String(val||'A4|landscape');
+  const [sz, or] = s.split('|');
   return {
-    w:(mmW-10)/25.4*96,
-    h:((mmH-10)/25.4*96)*0.93
+    size: PAPER_MM[sz] ? sz : 'A4',
+    orient: (or === 'portrait') ? 'portrait' : 'landscape'
   };
 }
-function setPrintSize(size){
-  printSize = PRINT_MM[size] ? size : 'A4';
-  const [mmW,mmH] = PRINT_MM[printSize];
+function paperMM(size, orient){
+  const [pw,ph] = PAPER_MM[size] || PAPER_MM.A4;
+  return (orient === 'portrait') ? [pw,ph] : [ph,pw];
+}
+function printMetrics(){
+  const [mmW,mmH] = paperMM(printSize, printOrient);
+  return {
+    w:(mmW-10)/25.4*96,
+    h:((mmH-10)/25.4*96)*(printOrient==='portrait' ? 0.97 : 0.93)
+  };
+}
+function setPrintSize(val){
+  const p = parsePaper(val);
+  printSize = p.size; printOrient = p.orient;
   const style = document.getElementById('printPageStyle');
-  if(style) style.textContent = `@media print{@page{size:${printSize} landscape;margin:5mm}}`;
+  if(style) style.textContent = `@media print{@page{size:${printSize} ${printOrient};margin:5mm}}`;
+  const v = printSize+'|'+printOrient;
   ['printSize','printSizePreview'].forEach(id=>{
-    const el=document.getElementById(id); if(el) el.value=printSize;
+    const el=document.getElementById(id); if(el) el.value=v;
   });
   fitPrintPages();
 }
-function printProgram(size){
-  const chosen = size || document.getElementById('printSize')?.value || 'A4';
-  if((chosen === 'A4' || chosen === 'A5') && blockIfRedCell(chosen + ' Yazdır')) return;
+function printProgram(val){
+  const chosen = val || document.getElementById('printSize')?.value || 'A4|landscape';
+  const p = parsePaper(chosen);
+  if((p.size === 'A4' || p.size === 'A5') && blockIfRedCell(p.size+' '+(p.orient==='portrait'?'dikey':'yatay')+' Yazdır')) return;
   setPrintSize(chosen);
-  window.print();
+  setTimeout(()=>window.print(), 60);
 }
 function fitPrintPages(){
   const wrap = document.getElementById('printView');
@@ -1605,7 +1768,9 @@ function exportExcel(){
   const exSel = document.getElementById('expExcelMonth');
   const selVal = exSel ? exSel.value : 'all';
   const sizeSel = document.getElementById('expExcelSize');
-  const xlsSize = (sizeSel && PRINT_MM[sizeSel.value]) ? sizeSel.value : 'A4';
+  const xlsPaper = parsePaper(sizeSel ? sizeSel.value : 'A4|landscape');
+  const xlsSize = xlsPaper.size;
+  const xlsOrient = (xlsPaper.orient === 'portrait') ? 'Portrait' : 'Landscape';
   const XLS_PAPER_INDEX = {A3:8, A4:9, A5:11}[xlsSize] || 9;
   const months = (selVal === 'all') ? (state.months||[]) : [state.months[+selVal]].filter(Boolean);
   if(!months.length){ alert('Aktarılacak ay bulunamadı.'); return; }
@@ -1692,7 +1857,7 @@ function exportExcel(){
     for(let c=0;c<m.cols;c++) colWidths.push(`<Column ss:Width="${c===0||c===m.cols-1?150:(c===1?55:170)}"/>`);
     sheetsXml += `<Worksheet ss:Name="${xmlEscape(sheetName)}"><Table ss:DefaultColumnWidth="80">${colWidths.join('')}${rowsXml}</Table>`+
       `<WorksheetOptions xmlns="urn:schemas-microsoft-com:office:excel">`+
-      `<PageSetup><Layout x:Orientation="Landscape" x:CenterHorizontal="1" x:CenterVertical="1"/>`+
+      `<PageSetup><Layout x:Orientation="${xlsOrient}" x:CenterHorizontal="1" x:CenterVertical="1"/>`+
       `<PageMargins x:Bottom="${xlsSize==='A5'?'0.12':'0.2'}" x:Left="${xlsSize==='A5'?'0.12':'0.2'}" x:Right="${xlsSize==='A5'?'0.12':'0.2'}" x:Top="${xlsSize==='A5'?'0.12':'0.2'}"/></PageSetup>`+
       `<FitToPage/>`+
       `<Print><ValidPrinterInfo/><PaperSizeIndex>${XLS_PAPER_INDEX}</PaperSizeIndex><Scale>100</Scale><FitWidth>1</FitWidth><FitHeight>1</FitHeight><HorizontalResolution>600</HorizontalResolution><VerticalResolution>600</VerticalResolution></Print>`+
@@ -1740,18 +1905,22 @@ function crewByPlay(){
   (state.crew||[]).forEach((c,idx)=>{ (by[c.play]=by[c.play]||[]).push({...c, _idx:idx}); });
   return by;
 }
-function playOccurrences(play){
+function playOccurrenceList(play){
   const key = (parseGame(play).key || '').trim();
-  if(!key) return 0;
-  let n = 0;
-  for(const m of (state.months||[])){
-    for(const k in m.cells){
-      const v = (m.cells[k]||{}).v;
-      if(v && parseGame(v).key === key) n++;
+  const out = [];
+  if(!key) return out;
+  (state.months||[]).forEach((m,mi)=>{
+    for(const k in (m.cells||{})){
+      const c = m.cells[k];
+      if(!c || !c.v || isFreeTextCell(c)) continue;
+      if(parseGame(c.v).key !== key) continue;
+      const [r,cc] = k.split('_').map(Number);
+      out.push({mi, month:m.name, r, c:cc, key:k, date:dateTextOfRow(m,r), time:timeTextOfRow(m,r), stage:stageHeaderText(m,cc), note:c.note||''});
     }
-  }
-  return n;
+  });
+  return out.sort((a,b)=> a.mi-b.mi || a.r-b.r || a.c-b.c);
 }
+function playOccurrences(play){ return playOccurrenceList(play).length; }
 function buildPlayDatalists(){
   const dl = (id, vals) => {
     const el = document.getElementById(id);
@@ -1788,6 +1957,7 @@ function renderPlays(filter){
      <div class="pl-stat"><div class="n">${people.size}</div><div class="l">Kişi</div></div>
      <div class="pl-stat"><div class="n">${(state.crew||[]).length}</div><div class="l">Görev Kaydı</div></div>
      <div class="pl-stat"><div class="n">${cats.size}</div><div class="l">Kategori</div></div>
+     <div class="pl-stat"><div class="n">${Object.keys(collectFreeTexts()).length}</div><div class="l">Serbest Metin / Not</div></div>
      <div class="pl-stat" style="display:flex;flex-direction:column;justify-content:center;min-width:230px">
        <div class="n">${crewLabel}</div>
        <div class="l">${escapeHtml(CREW_SHEET)}</div>
@@ -1815,12 +1985,44 @@ function renderPlays(filter){
           <div class="pl-pending-row">
             <span class="nm">${escapeHtml(n)}</span>
             <button class="btn small" data-confirm="${escapeHtml(n)}">✓ Oyun olarak ekle</button>
+            <button class="btn ghost small" data-free="${escapeHtml(n)}">✎ Serbest metin yap</button>
             <button class="btn ghost small" data-dismiss="${escapeHtml(n)}">✕ Oyun değil (gizle)</button>
           </div>`).join('')}
       </div>` : '';
     pendBox.querySelectorAll('[data-confirm]').forEach(b=>{ b.onclick = ()=>confirmPendingPlay(b.dataset.confirm); });
     pendBox.querySelectorAll('[data-dismiss]').forEach(b=>{ b.onclick = ()=>dismissPendingPlay(b.dataset.dismiss); });
+    pendBox.querySelectorAll('[data-free]').forEach(b=>{ b.onclick = ()=>markAllAsFreeText(b.dataset.free); });
   }
+  /* Serbest metinler: oyun sayılmayan hücre metinleri (il adı, açıklama, not vb.) */
+  const freeBox = document.getElementById('plFree');
+  if(freeBox){
+    const fts = collectFreeTexts();
+    const keys = Object.keys(fts).sort((a,b)=>a.localeCompare(b,'tr'));
+    const total = keys.reduce((s,k)=>s+fts[k].length,0);
+    freeBox.innerHTML = keys.length ? `
+      <div class="pl-free-h">✎ ${keys.length} serbest metin · ${total} hücre — bunlar oyun olarak sayılmaz</div>
+      <div class="pl-free-list">
+        ${keys.map(t=>`
+          <div class="pl-free-row">
+            <span class="nm">${escapeHtml(t)}</span>
+            <span class="wh">${fts[t].length} hücre · ${escapeHtml(fts[t].map(o=>(o.month||'')+(o.date?' / '+o.date:'')).slice(0,3).join(' · '))}${fts[t].length>3?' …':''}</span>
+            <button class="btn ghost small" data-fgo="${escapeHtml(t)}">Hücreye git</button>
+            <button class="btn ghost small" data-fnote="${escapeHtml(t)}">✎ Not</button>
+            <button class="btn small" data-fplay="${escapeHtml(t)}">Oyun yap</button>
+          </div>`).join('')}
+      </div>` : '';
+    freeBox.querySelectorAll('[data-fgo]').forEach(b=>{ b.onclick=()=>{ const o=fts[b.dataset.fgo][0]; gotoCell(o.mi,o.r,o.c); }; });
+    freeBox.querySelectorAll('[data-fnote]').forEach(b=>{ b.onclick=()=>{ const o=fts[b.dataset.fnote][0]; const m=state.months[o.mi]; const cur=(m.cells[o.key]||{}).note||''; const n=prompt('Not:',cur); if(n===null) return; setCellNote(o.mi,o.key,n); }; });
+    freeBox.querySelectorAll('[data-fplay]').forEach(b=>{ b.onclick=()=>{
+      const t=b.dataset.fplay;
+      (fts[t]||[]).forEach(o=>{ const m=state.months[o.mi]; if(m.cells[o.key]){ const n={...m.cells[o.key]}; delete n.freeText; m.cells[o.key]=n; } });
+      const key=(parseGame(t).key||'').trim();
+      state.playsIgnored=(state.playsIgnored||[]).filter(x=>x!==key);
+      saveState();
+      confirmPendingPlay(key);
+    }; });
+  }
+
   const badge = document.getElementById('playsPendingBadge');
   if(badge){
     if(pendingNames.length){ badge.textContent = pendingNames.length; badge.style.display = 'inline-block'; }
@@ -1853,7 +2055,9 @@ function renderPlayDetail(byPlay){
   const byCat = {};
   for(const c of crew){ (byCat[c.category||'Diğer']=byCat[c.category||'Diğer']||[]).push(c); }
   const cats = Object.keys(byCat).sort((a,b)=>a.localeCompare(b,'tr'));
-  const occ = playOccurrences(p);
+  const occList = playOccurrenceList(p);
+  const occ = occList.length;
+  state.playNotes = state.playNotes || {};
   const prsMatch = crew.filter(c=>PERSONEL.some(x=>x.name.toLocaleLowerCase('tr')===(c.person||'').toLocaleLowerCase('tr'))).length;
 
   box.innerHTML = `
@@ -1866,11 +2070,24 @@ function renderPlayDetail(byPlay){
         <span class="chip">Programda ${occ} gösterim</span>
         ${prsMatch ? `<span class="chip">${prsMatch} kişi personel listesinde</span>` : ''}
       </div>
+      <label style="display:block;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin:10px 0 4px">Oyun notu</label>
+      <textarea class="pl-note-box" id="plNote" placeholder="Bu oyunla ilgili serbest not…">${escapeHtml(state.playNotes[p]||'')}</textarea>
       <div class="tools">
+        <button class="btn ghost small" id="plNoteSave">Notu Kaydet</button>
         <button class="btn ghost small" id="plRename">Adı Kaydet</button>
         <button class="btn ghost small" id="plCopy">Kadroyu Kopyala</button>
         <button class="btn ghost small" id="plDelete">Oyunu Sil</button>
       </div>
+    </div>
+    <div class="pl-cat">
+      <div class="pl-cat-h"><span class="cat">Programdaki Gösterimler</span><span class="chip">${occ}</span></div>
+      ${occ ? occList.map((o,i)=>`
+        <div class="pl-occ">
+          <span><b>${escapeHtml(o.month||'')}</b> · ${escapeHtml(o.date||'-')}${o.time?' · '+escapeHtml(o.time):''}${o.stage?' · '+escapeHtml(o.stage):''}
+            ${o.note?`<div class="nt">✎ ${escapeHtml(o.note)}</div>`:''}</span>
+          <button class="btn ghost small" data-occnote="${i}">${o.note?'Notu düzenle':'✎ Not ekle'}</button>
+          <button class="btn ghost small" data-occgo="${i}">Hücreye git</button>
+        </div>`).join('') : '<div class="pl-empty">Programda gösterim yok.</div>'}
     </div>
     ${cats.map(cat=>`
       <div class="pl-cat">
@@ -1926,6 +2143,15 @@ function renderPlayDetail(byPlay){
   nameEl.onblur = saveName;
   nameEl.onkeydown = e=>{ if(e.key==='Enter'){ e.preventDefault(); nameEl.blur(); } if(e.key==='Escape'){ nameEl.textContent=p; nameEl.blur(); } };
   document.getElementById('plRename').onclick = saveName;
+  const noteEl = document.getElementById('plNote');
+  const saveNote = ()=>{ state.playNotes = state.playNotes||{}; const v=(noteEl.value||'').trim(); if(v) state.playNotes[p]=v; else delete state.playNotes[p]; saveState(); setStatus('Oyun notu kaydedildi.'); };
+  if(noteEl){ document.getElementById('plNoteSave').onclick = saveNote; noteEl.onblur = saveNote; }
+  box.querySelectorAll('[data-occgo]').forEach(b=>{ b.onclick=()=>{ const o=occList[+b.dataset.occgo]; gotoCell(o.mi,o.r,o.c); }; });
+  box.querySelectorAll('[data-occnote]').forEach(b=>{ b.onclick=()=>{
+    const o=occList[+b.dataset.occnote];
+    const n=prompt('Not — '+(o.month||'')+' '+(o.date||'')+(o.time?' '+o.time:'')+':', o.note||'');
+    if(n===null) return; setCellNote(o.mi,o.key,n);
+  }; });
   document.getElementById('plCopy').onclick = ()=>{
     const txt = p + '\n' + cats.map(cat=>cat+'\n'+byCat[cat].map(c=>'  '+(c.role?c.role+' — ':'')+c.person).join('\n')).join('\n');
     navigator.clipboard && navigator.clipboard.writeText(txt).catch(()=>{});
@@ -1999,6 +2225,8 @@ document.getElementById('mergeBtn').onclick = opMerge;
 document.getElementById('unmergeBtn').onclick = opUnmerge;
 document.getElementById('premBtn').onclick = opPremiere;
 document.getElementById('clearBtn').onclick = opClear;
+document.getElementById('freeTextBtn').onclick = opFreeText;
+document.getElementById('cellNoteBtn').onclick = opCellNote;
 document.getElementById('bgColorBtn').onclick = ()=>{
   const p=document.getElementById('bgColorPicker');
   p.onchange=()=>applyBg(p.value);
