@@ -982,27 +982,21 @@ p, li { max-width: 78ch; }
   }
 
   /* ── İstatistikleri yükle & hesapla ── */
-  function loadStats() {
-    var turneler = [];
-    try { turneler = JSON.parse(localStorage.getItem('turne_cache_data') || '[]'); } catch(e) {}
-
-    var pre = null;
-    try { pre = JSON.parse(localStorage.getItem('_sezonOzet') || 'null'); } catch(e) {}
-    if (pre && pre.sezonlar && pre.sezonlar.length) {
-      // Mevcut önhesaplı veriye ek istatistikler ekle
-      pre.sezonlar.forEach(function(st){
-        var ayDag = aylikDagilim(turneler, st.id);
-        var uzun  = enUzunTurne(turneler, st.id);
-        st.aylikDagilim = ayDag;
-        st.enUzunTurneGun = uzun.gun;
-        st.enUzunTurneAd  = uzun.oyun;
-        st.aktifAy  = aktifAySayisi(turneler, st.id);
-        st.haftaOrt = haftalikOrt(st.temsil, st.gun);
-      });
-      return pre;
+  function loadStats(srcTurneler) {
+    var turneler = Array.isArray(srcTurneler) ? srcTurneler : [];
+    if (!turneler.length) {
+      try { turneler = JSON.parse(localStorage.getItem('turne_cache_data') || '[]'); } catch(e) {}
     }
 
-    /* Yoksa sıfırdan hesapla */
+    /* ÖNEMLİ DÜZELTME:
+       Eskiden localStorage'daki '_sezonOzet' önhesaplı özeti doğrudan
+       kullanılıyordu. Bu özet bayatlayabildiği (ve turne.html'de
+       localStorage kotası dolduğunda güncellenemediği) için sezon
+       temsil sayıları eksik çıkıyor, yeni sezonlar (ör. yurt dışı Kosova
+       turnesi) hiç görünmüyordu. Artık tüm istatistikler HAM turne
+       kayıtlarından yeniden hesaplanır. */
+
+    /* Sıfırdan hesapla */
     var map = {};
     function bosSezon() {
       return { turne:0, temsil:0, il:{}, ulke:{}, araliklar:[], oyunMap:{}, ilMap:{} };
@@ -1447,8 +1441,8 @@ p, li { max-width: 78ch; }
   }
 
   /* ── Ana render ── */
-  function render() {
-    var data   = loadStats();
+  function render(srcTurneler) {
+    var data   = loadStats(srcTurneler);
     var guncel  = data.guncel  || guncelSezon();
     var sonraki = data.sonraki || birSonrakiSezon(guncel);
     var idx = {};
@@ -1459,7 +1453,7 @@ p, li { max-width: 78ch; }
     grid.innerHTML = '';
     other.innerHTML = '';
 
-    if (!data.sezonlar.length && !localStorage.getItem('turne_cache_data')) {
+    if (!data.sezonlar.length && !(srcTurneler && srcTurneler.length) && !localStorage.getItem('turne_cache_data')) {
       var emEl = document.createElement('div');
       emEl.className = 'empty-global';
       emEl.innerHTML = '<div style="display:inline-flex;align-items:center;justify-content:center;width:52px;height:52px;background:var(--muted);border:1px solid var(--border);border-radius:50%;margin-bottom:12px;color:var(--primary)">' + svgIcon('theater', 22) + '</div><br>Henüz turne verisi bulunamadı.<br><a href="turne.html">Turne Takip\'i aç</a> ve ilk turneni ekle — sonra buraya döndüğünde sezon istatistiklerin burada listelenecek.';
@@ -1513,7 +1507,93 @@ p, li { max-width: 78ch; }
     location.href = 'turne.html' + (yeniTurneMi ? '?yeniTurne=1' : '');
   }
 
+  /* ────────────────────────────────────────────────────────────────
+     CANLI VERİ: İstatistikler artık yalnızca localStorage önbelleğine
+     bağlı değil. Sayfa açılır açılmaz önbellekten çizilir, hemen ardından
+     TURNE_KAYITLARI sayfasından güncel kayıtlar çekilip yeniden hesaplanır.
+     Böylece "eksik temsil sayısı" ve "görünmeyen sezon/turne" sorunu biter.
+     ──────────────────────────────────────────────────────────────── */
+  var API_URL = 'https://turne-backend.vercel.app/api/sheets/TURNE_KAYITLARI';
+
+  function _json(raw, bos) {
+    raw = (raw == null ? '' : String(raw)).trim();
+    if (!raw) return bos;
+    try { var v = JSON.parse(raw); return v == null ? bos : v; } catch(e) { return bos; }
+  }
+
+  /* Program satırlarındaki ay/yıl kayması düzeltmesi (turne.html ile birebir) */
+  function _programDuzelt(p, basISO) {
+    if (!Array.isArray(p) || !p.length) return [];
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(basISO || '')) return p;
+    var ilk = (p[0] && p[0].tarih) || '';
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(ilk)) return p;
+    var eY = +basISO.slice(0,4), eM = +basISO.slice(5,7);
+    var pY = +ilk.slice(0,4),    pM = +ilk.slice(5,7);
+    if (Math.abs((pY*12+pM) - (eY*12+eM)) <= 2) return p;
+    var GUNLER = ['Pazar','Pazartesi','Salı','Çarşamba','Perşembe','Cuma','Cumartesi'];
+    var firstMs = new Date(pY, pM-1, +ilk.slice(8,10)).getTime();
+    var basMs   = new Date(eY, eM-1, +basISO.slice(8,10)).getTime();
+    return p.map(function(x){
+      if (!x || !/^\d{4}-\d{2}-\d{2}$/.test(x.tarih || '')) return x;
+      var origMs = new Date(+x.tarih.slice(0,4), +x.tarih.slice(5,7)-1, +x.tarih.slice(8,10)).getTime();
+      var d = new Date(basMs + (origMs - firstMs));
+      var iso = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+      var y = {}; for (var k in x) y[k] = x[k];
+      y.tarih = iso; y.gun = GUNLER[d.getDay()];
+      return y;
+    });
+  }
+
+  function _satirlariCevir(rows) {
+    return (rows || []).map(function(r){
+      if (!r || !r.length) return null;
+      var g = function(i){ return (r[i] == null ? '' : String(r[i])).trim(); };
+      if (!g(0) && !g(1) && !g(2)) return null;
+      if (g(0) === 'Oyun Adı' || g(0) === 'ID') return null;
+      var bas = g(2);
+      return {
+        oyun: g(0), il: g(1),
+        baslangicTarih: bas, bitisTarih: g(3), tarih: bas,
+        mekan: g(4), sayi: parseInt(g(5), 10) || 1,
+        not: g(6),
+        statu: g(7) || 'tamamlandi',
+        duraklar: _json(g(19), []),
+        programSatirlar: _programDuzelt(_json(g(40), []), bas),
+        anaGrupId: g(42)
+      };
+    }).filter(Boolean);
+  }
+
+  function veriTazele() {
+    if (!window.fetch) return;
+    fetch(API_URL, { cache: 'no-store' })
+      .then(function(res){ if (!res.ok) throw new Error('http ' + res.status); return res.json(); })
+      .then(function(data){
+        var liste = _satirlariCevir(data && data.rows);
+        if (!liste.length) return;
+        /* NOT: 'turne_cache_data' bilerek yeniden yazılmıyor — o önbelleği
+           turne.html üretir ve daha fazla alan içerir; üzerine yazmak diğer
+           ekranları bozabilir. Bu sayfa her açılışta canlı veriyi kullanır. */
+        /* Bayat özet artık kullanılmıyor; kalıntıyı da temizle */
+        try { localStorage.removeItem('_sezonOzet'); } catch(e) {}
+        render(liste);
+        _kartScrollBagla();
+      })
+      .catch(function(e){ console.warn('Sezon istatistikleri güncellenemedi:', e); });
+  }
+
+  function _kartScrollBagla() {
+    document.querySelectorAll('.card-body').forEach(function(body) {
+      if (body._scrollBagli) return;
+      body._scrollBagli = true;
+      body.addEventListener('scroll', function() {
+        this.classList.toggle('is-scrolled', this.scrollTop > 4);
+      }, { passive: true });
+    });
+  }
+
   render();
+  veriTazele();
 
   /* Kart gövdesi kaydırıldığında üst gölgeyi aç/kapat */
   document.querySelectorAll('.card-body').forEach(function(body) {
