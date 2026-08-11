@@ -3371,7 +3371,7 @@ window.exportPDF = function(title, headers, data){
   async function publishedState(){
     try{
       const res = await fetch(PUBLISHED_API + "/" + encodeURIComponent(PUBLISHED_SHEET), {cache:"no-store"});
-      if(!res.ok) return null;
+      if(!res.ok) return null; /* sunucuya erişilemedi -> yerel yedeğe düş */
       const rows = (await res.json()).rows || [];
       const groups = new Map();
       rows.filter(r => String(r[0]||"").startsWith("apub_")).forEach(r => {
@@ -3380,12 +3380,14 @@ window.exportPDF = function(title, headers, data){
         groups.get(id).rows.push(r);
       });
       const latest = [...groups.values()].sort((a,b)=>b.ts-a.ts)[0];
-      if(!latest) return null;
+      /* Sunucuya bağlanıldı ama kesinleştirilmiş program yok (örn. "Kesinleştirmeyi
+         geri al" ile kaldırılmış) -> yerel taslağa DÜŞME, boş listeyi göster. */
+      if(!latest) return {months:[]};
       const parts = latest.rows.sort((a,b) => (+a[2]||0) - (+b[2]||0));
       const total = +parts[0][3] || parts.length;
-      if(parts.length < total) return null;
+      if(parts.length < total) return {months:[]}; /* parçalı/eksik veri, güvenilmez say */
       return JSON.parse(b64Utf8Decode(parts.slice(0,total).map(r=>String(r[4]||"")).join("")));
-    }catch(e){ return null; }
+    }catch(e){ return null; } /* ağ/erişim hatası -> yerel yedeğe düş */
   }
   function cellsOf(m){
     const out = {};
