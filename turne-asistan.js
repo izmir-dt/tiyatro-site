@@ -1011,6 +1011,32 @@
     return digits.startsWith("0") ? digits : (digits.length === 10 ? "0" + digits : digits);
   }
 
+  /* ══════ CANONICAL SAYIM (turne.html ile birebir) ══════
+     • İPTAL turne = 0 temsil
+     • programSatirlar tek kaynak; "Oyun" satırı = 1, çift temsil (saat2) = 2
+     • programSatirlar yoksa durak "sayi" toplamı, o da yoksa sayfadaki sayı */
+  function temsilSayCanonical(t) {
+    if (!t) return 0;
+    if ((t.statu || "") === "iptal") return 0;
+    const ps = t.programSatirlar || [];
+    if (ps.length) {
+      let n = 0;
+      for (const s of ps) { if (s && s.program === "Oyun") n += (s.saat2 ? 2 : 1); }
+      return n;
+    }
+    const dur = t.duraklar || [];
+    if (dur.length) return dur.reduce((a, d) => a + (parseInt(d.sayi) || 1), 0);
+    return t.sayiRaw || t.sayi || 0;
+  }
+
+  /* Yurt dışı ülkeler — şehir sayımından ayrı tutulur */
+  const ULKELER = new Set(['KKTC','KOSOVA','KUZEY MAKEDONYA','ARNAVUTLUK','BOSNA-HERSEK','KARADAĞ','SIRBİSTAN','BULGARİSTAN','YUNANİSTAN','ROMANYA','MOLDOVA','UKRAYNA','MACARİSTAN','HIRVATİSTAN','ALMANYA','HOLLANDA','BELÇİKA','AVUSTURYA','İSVİÇRE','FRANSA','İNGİLTERE','İSVEÇ','İTALYA','İSPANYA','AZERBAYCAN','GÜRCİSTAN','ÖZBEKİSTAN','KAZAKİSTAN','KIRGIZİSTAN','KATAR','ABD','JAPONYA']);
+  function yerNormalize(raw) {
+    return String(raw || "").replace(/\/MERKEZ/gi, "").split("/")[0]
+      .replace(/\s+/g, " ").trim().toLocaleUpperCase("tr");
+  }
+  function ulkeMiAd(x) { return ULKELER.has(yerNormalize(x)); }
+
   function parseTurneler(data) {
     const rows = data.rows || [];
     const h = (data.headers || []).map(x => (x || "").trim().toLowerCase());
@@ -1031,6 +1057,7 @@
     const iDonus = fi(x => x.startsWith("dönüş") || x.startsWith("donus"), 13);
     const iDonusSaat = fi(x => (x.startsWith("dönüş") || x.startsWith("donus")) && x.includes("saat"), 14);
     const iDur  = fi(x => (x.startsWith("durak") && x.includes("json")) || x === "duraklar", 19);
+    const iPS   = fi(x => x.startsWith("program"), 40);
     const iKat  = fi(x => x.startsWith("katıl") || x.startsWith("katil"), -1);
     let iAna = h.findIndex(x => x.startsWith("anagrup") || x === "ana_grup_id");
     if (iAna < 0) iAna = 42;
@@ -1043,7 +1070,7 @@
       const bit   = (r[iBit] || "").trim() || bas;
       const il    = (r[iIl]  || "").trim();
       const mekan = (r[iMekan] || "").trim();
-      const sayi  = parseInt(r[iSay]) || 1;
+      const sayiRaw = parseInt(r[iSay]) || 0;
       const not   = (r[iNot]  || "").trim().replace(/\[LastEdit:[^\]]*\]/gi,"").replace(/\[Festival:[^\]]*\]/gi,"").replace(/\[[A-Za-z]+:[^\]]*\]/g,"").trim();
       const statu = (r[iStat] || "taslak").trim().toLowerCase().replace(/\s+/g, "-");
       const otelAdi   = (r[iOtel]      || "").trim();
@@ -1056,6 +1083,11 @@
 
       let duraklar = [];
       try { const dj = (r[iDur] || "").trim(); if (dj) duraklar = JSON.parse(dj); } catch(e) {}
+
+      // Program satırları — temsil sayımının TEK doğru kaynağı
+      let programSatirlar = [];
+      try { const pj = (r[iPS] || "").trim(); if (pj) programSatirlar = JSON.parse(pj) || []; } catch(e) {}
+      const sayi = temsilSayCanonical({ statu, programSatirlar, duraklar, sayiRaw });
 
       let katilimcilar = [];
       if (iKat >= 0) {
@@ -1082,7 +1114,7 @@
         else if (raw43.startsWith("[")) { const op = JSON.parse(raw43); if (Array.isArray(op)) odaPlanlari = op; }
       } catch(e) {}
 
-      return { oyun, il, mekan, baslangic: bas, bitis: bit, sayi, not, statu, otelAdi, otelAdres, otelTel, gidisUlasim, gidisSaat, donusUlasim, donusSaat, duraklar, katilimcilar, anaGrupId, odaPlanlari, _rawIdx: rows.indexOf(r) };
+      return { oyun, il, mekan, baslangic: bas, bitis: bit, sayi, programSatirlar, not, statu, otelAdi, otelAdres, otelTel, gidisUlasim, gidisSaat, donusUlasim, donusSaat, duraklar, katilimcilar, anaGrupId, odaPlanlari, _rawIdx: rows.indexOf(r) };
     }).filter(t => t && !t.anaGrupId);
   }
 
@@ -1187,16 +1219,37 @@
   function addCityToSet(set, raw) {
     for (const city of splitCityNames(raw)) set.add(city);
   }
-  function collectUniqueCitiesFromTour(t) {
-    const cities = new Set();
-    // Yarıda kesilen turnelerde sadece ana ili say (duraklar gidilmemiş olabilir)
-    if ((t?.statu || "") === "yarida-kesildi") {
-      addCityToSet(cities, t?.il);
-      return cities;
+  function collectYerlerFromTour(t) {
+    const raw = new Set();
+    if ((t?.statu || "") === "iptal") return raw; // iptal → hiçbir yer sayılmaz
+    const ps = t?.programSatirlar || [];
+    if (ps.length) {
+      // Gerçekleşen program: sadece "Oyun" satırlarındaki şehirler
+      for (const s of ps) { if (s && s.program === "Oyun" && s.sehir) addCityToSet(raw, s.sehir); }
+      if (raw.size) return raw;
     }
-    addCityToSet(cities, t?.il);
-    for (const d of t?.duraklar || []) addCityToSet(cities, d?.il);
-    return cities;
+    if ((t?.statu || "") === "yarida-kesildi") { addCityToSet(raw, t?.il); return raw; }
+    addCityToSet(raw, t?.il);
+    for (const d of t?.duraklar || []) addCityToSet(raw, d?.il);
+    return raw;
+  }
+  // Sadece ŞEHİR/İL (ülkeler hariç), Türkçe normalize + mükerrer kayıt engellenmiş
+  function collectUniqueCitiesFromTour(t) {
+    const out = new Set();
+    for (const y of collectYerlerFromTour(t)) {
+      const n = yerNormalize(y);
+      if (n && !ULKELER.has(n)) out.add(n);
+    }
+    return out;
+  }
+  // Sadece ÜLKE (yurt dışı)
+  function collectUniqueCountriesFromTour(t) {
+    const out = new Set();
+    for (const y of collectYerlerFromTour(t)) {
+      const n = yerNormalize(y);
+      if (n && ULKELER.has(n)) out.add(n);
+    }
+    return out;
   }
   function cityTurneCount(T, targetCity) {
     const hedef = norm(targetCity || "");
@@ -1525,11 +1578,12 @@
         if (ai>=0) ay=ai;
         yil=+ayMatch[2];
       }
-      const list=T.filter(t=>{const d=parseDate(t.baslangic); return d&&d.getFullYear()===yil&&d.getMonth()===ay;});
+      const list=T.filter(t=>{const d=parseDate(t.baslangic); return d&&d.getFullYear()===yil&&d.getMonth()===ay&&!(t.statu||"").includes("iptal");});
       if (!list.length) return `📊 ${AYLAR[ay]} ${yil} ayında turne bulunamadı.`;
       const temsil=list.reduce((s,t)=>s+(t.sayi||0),0);
       const gun=list.reduce((s,t)=>s+turneGun(t),0);
-      const sehirler=[...new Set(list.map(t=>t.il).filter(Boolean))];
+      const sehirler=[...new Set(list.flatMap(t=>[...collectUniqueCitiesFromTour(t)]))];
+      const ulkeler=[...new Set(list.flatMap(t=>[...collectUniqueCountriesFromTour(t)]))];
       const kisiler=new Set();
       list.forEach(t=>t.katilimcilar.forEach(p=>kisiler.add(p.kisi)));
       const oran=(()=>{ try{return +(localStorage.getItem("ta_harcirah_oran")||500);}catch{return 500;} })();
@@ -1539,6 +1593,7 @@
       o+=`🎫 Temsil sayısı: **${temsil}**\n`;
       o+=`📅 Toplam gün: **${gun}**\n`;
       o+=`📍 Şehir sayısı: **${sehirler.length}** (${sehirler.slice(0,8).join(", ")}${sehirler.length>8?"…":""})\n`;
+      if (ulkeler.length) o+=`🌍 Ülke sayısı: **${ulkeler.length}** (${ulkeler.join(", ")})\n`;
       o+=`👥 Görev alan kişi: **${kisiler.size}**\n`;
       o+=`💰 Tahmini harcırah: **${tahminiHarcirah.toLocaleString("tr")} ₺**\n\n`;
       o+=`**Turneler:**\n`;
