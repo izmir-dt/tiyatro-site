@@ -885,6 +885,44 @@ p, li { max-width: 78ch; }
     return Math.round((now - ar.bas) / total * 100);
   }
 
+  /* ── Yarıda kesilen turne: kesim analizi (turne.html ile birebir) ── */
+  function _ykNorm(v){ return String(v||'').replace(/\/MERKEZ/gi,'').trim().toLocaleLowerCase('tr'); }
+  function _ykInfo(t){
+    var m = String((t && t.not) || '').match(/\[Yarıda Kesildi:\s*([^\]]*)\]/);
+    if (!m) return null;
+    var o = {};
+    m[1].split('|').forEach(function(pr){ var i = pr.indexOf(':'); if (i>-1) o[pr.slice(0,i).trim()] = pr.slice(i+1).trim(); });
+    return o;
+  }
+  function _ykKesim(t){
+    var info = _ykInfo(t);
+    if (!info || !info['Şehir']) return null;
+    var sehirler = [];
+    if (t.duraklar && t.duraklar.length) sehirler = t.duraklar.map(function(d){ return ((d.il||'').split('/')[0]||'').trim(); }).filter(Boolean);
+    else if (t.il) sehirler = String(t.il).split(',').map(function(x){ return ((x||'').split('/')[0]||'').trim(); }).filter(Boolean);
+    if (!sehirler.length) return null;
+    var norm = sehirler.map(_ykNorm), kes = _ykNorm(info['Şehir']);
+    var idx = norm.indexOf(kes);
+    if (idx < 0) {
+      var ilk = kes.split(' ')[0] || '';
+      idx = norm.findIndex(function(n){ return n===kes || (ilk && n.indexOf(ilk)===0) || kes.indexOf((n.split(' ')[0]||''))===0; });
+    }
+    return { info:info, sehirler:sehirler, normSehirler:norm, kesilenIndex:idx };
+  }
+  function _ykSatirGecerli(kes, sehir){
+    if (!kes || kes.kesilenIndex < 0) return true;
+    var sNorm = _ykNorm(String(sehir||'').split('/')[0]);
+    var sIdx = kes.normSehirler.findIndex(function(n){
+      var nIlk = (n||'').split(' ')[0]||'', sIlk = (sNorm||'').split(' ')[0]||'';
+      return n===sNorm || (nIlk && sNorm.indexOf(nIlk)===0) || (sIlk && n.indexOf(sIlk)===0);
+    });
+    return sIdx >= 0 && sIdx < kes.kesilenIndex;
+  }
+  /* Yer adı tek biçim: /MERKEZ at, ilk parça, boşluk sadeleştir, TR büyük harf */
+  function _yerKey(ad){
+    return String(ad||'').replace(/\/MERKEZ/gi,'').split('/')[0].replace(/\s+/g,' ').trim().toLocaleUpperCase('tr');
+  }
+
   /* ── Aylık dağılım hesapla ── */
   function aylikDagilim(turneler, sezonId) {
     var aylar = {};
@@ -894,8 +932,16 @@ p, li { max-width: 78ch; }
       var ayKey = (t.baslangicTarih || t.tarih || '').slice(0,7);
       if (!ayKey) return;
       if (!aylar[ayKey]) aylar[ayKey] = 0;
+      var kes = (t.statu||'') === 'yarida-kesildi' ? _ykKesim(t) : null;
       if (t.programSatirlar && t.programSatirlar.length) {
-        t.programSatirlar.forEach(function(x){ if (x.program === 'Oyun') aylar[ayKey] += x.saat2 ? 2 : 1; });
+        t.programSatirlar.forEach(function(x){
+          if (x.program !== 'Oyun') return;
+          if (kes && kes.kesilenIndex >= 0 && !_ykSatirGecerli(kes, x.sehir)) return;
+          // Turne aylara yayılabilir → temsil kendi tarihinin ayına yazılır
+          var k = (x.tarih || '').slice(0,7) || ayKey;
+          if (!aylar[k]) aylar[k] = 0;
+          aylar[k] += x.saat2 ? 2 : 1;
+        });
       } else if (t.duraklar && t.duraklar.length) {
         t.duraklar.forEach(function(d){ aylar[ayKey] += +d.sayi || 1; });
       } else { aylar[ayKey]++; }
@@ -907,6 +953,7 @@ p, li { max-width: 78ch; }
   function enUzunTurne(turneler, sezonId) {
     var max = 0, maxAd = '';
     turneler.forEach(function(t){
+      if (t.anaGrupId || (t.statu || '') === 'iptal') return;
       if (tarihSezon(t.baslangicTarih || t.tarih) !== sezonId) return;
       if (t.baslangicTarih && t.bitisTarih) {
         var d = Math.round((new Date(t.bitisTarih) - new Date(t.baslangicTarih)) / 86400000) + 1;
@@ -920,6 +967,7 @@ p, li { max-width: 78ch; }
   function aktifAySayisi(turneler, sezonId) {
     var aySet = {};
     turneler.forEach(function(t){
+      if (t.anaGrupId || (t.statu || '') === 'iptal') return;
       if (tarihSezon(t.baslangicTarih || t.tarih) !== sezonId) return;
       var ay = (t.baslangicTarih || t.tarih || '').slice(0,7);
       if (ay) aySet[ay] = 1;
@@ -961,7 +1009,7 @@ p, li { max-width: 78ch; }
     }
     var _ULKELER = {'KKTC':1,'KOSOVA':1,'KUZEY MAKEDONYA':1,'ARNAVUTLUK':1,'BOSNA-HERSEK':1,'KARADAĞ':1,'SIRBİSTAN':1,'BULGARİSTAN':1,'YUNANİSTAN':1,'ROMANYA':1,'MOLDOVA':1,'UKRAYNA':1,'MACARİSTAN':1,'HIRVATİSTAN':1,'ALMANYA':1,'HOLLANDA':1,'BELÇİKA':1,'AVUSTURYA':1,'İSVİÇRE':1,'FRANSA':1,'İNGİLTERE':1,'İSVEÇ':1,'İTALYA':1,'İSPANYA':1,'AZERBAYCAN':1,'GÜRCİSTAN':1,'ÖZBEKİSTAN':1,'KAZAKİSTAN':1,'KIRGIZİSTAN':1,'KATAR':1,'ABD':1,'JAPONYA':1};
     function yerEkle(S, ad) {
-      var k = (ad||'').replace(/\/MERKEZ/gi,'').split('/')[0].toLocaleUpperCase('tr').replace(/\s+/g,' ').trim();
+      var k = _yerKey(ad);
       if (!k) return;
       if (_ULKELER[k]) S.ulke[k] = 1; else S.il[k] = 1;
     }
@@ -984,24 +1032,26 @@ p, li { max-width: 78ch; }
         if (b) { if (!e || e < b) e = b; S.araliklar.push([b.getTime(), e.getTime()]); }
       } catch(er) {}
       var oyunlarBT = {}, illerBT = {};
+      var _kes = (t.statu||'') === 'yarida-kesildi' ? _ykKesim(t) : null;
       if (t.programSatirlar && t.programSatirlar.length) {
         t.programSatirlar.forEach(function(x){
           if (x.program !== 'Oyun') return;
+          if (_kes && _kes.kesilenIndex >= 0 && !_ykSatirGecerli(_kes, x.sehir)) return;
           var a = x.saat2 ? 2 : 1;
           S.temsil += a;
           var oyun = (x.oyun || t.oyun || '').trim();
-          var il = (x.sehir || '').split('/')[0].trim().toLocaleUpperCase('tr');
+          var il = _yerKey(x.sehir);
           if (oyun) { artir(S.oyunMap, oyun, a); oyunlarBT[oyun]=1; }
-          if (il)   { artir(S.ilMap,   il,   a); illerBT[il]=1; yerEkle(S, il); }
+          if (il)   { yerEkle(S, il); if (!_ULKELER[il]) { artir(S.ilMap, il, a); illerBT[il]=1; } }
         });
       } else if (t.duraklar && t.duraklar.length) {
         t.duraklar.forEach(function(d){
           var a = +d.sayi || 1;
           S.temsil += a;
           var oyun = (d.oyun || t.oyun || '').trim();
-          var il = (d.il||'').replace(/\/MERKEZ/gi,'').split('/')[0].trim().toLocaleUpperCase('tr');
+          var il = _yerKey(d.il);
           if (oyun) { artir(S.oyunMap, oyun, a); oyunlarBT[oyun]=1; }
-          if (il)   { artir(S.ilMap,   il,   a); illerBT[il]=1; yerEkle(S, il); }
+          if (il)   { yerEkle(S, il); if (!_ULKELER[il]) { artir(S.ilMap, il, a); illerBT[il]=1; } }
         });
       } else if (t.oyun) {
         S.temsil++;
