@@ -26,6 +26,7 @@ header h1{margin:0;font-family:'Fraunces',Georgia,serif;font-size:20px;font-weig
 nav{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto}
 nav button{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.35);padding:6px 12px;border-radius:6px;cursor:pointer;font-size:13px;font-family:inherit}
 nav button.active{background:var(--accent);border-color:var(--accent)}
+.tabBadge{display:inline-block;margin-left:6px;background:#ffd645;color:#3a2900;font-size:11px;font-weight:700;border-radius:10px;padding:1px 7px;vertical-align:middle}
 main{padding:12px 18px 40px}
 section{display:none}
 section.active{display:block}
@@ -120,6 +121,13 @@ table.sheet td.cell.note-mark::after{content:"";position:absolute;top:0;right:0;
 .pl-stat{background:#fff;border:1px solid var(--border);border-radius:8px;padding:8px 14px;min-width:120px}
 .pl-stat .n{font-family:'Fraunces',Georgia,serif;font-size:22px;font-weight:700;color:var(--primary);line-height:1.1}
 .pl-stat .l{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted)}
+.pl-pending{margin-bottom:12px}
+.pl-pending:empty{display:none}
+.pl-pending-h{font-size:12px;font-weight:700;color:#8a5a00;background:#fff3cd;border:1px solid #e8c874;border-radius:6px 6px 0 0;padding:6px 10px}
+.pl-pending-list{border:1px solid #e8c874;border-top:none;border-radius:0 0 6px 6px;background:#fffdf5;max-height:180px;overflow:auto}
+.pl-pending-row{display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid #f0e2ac}
+.pl-pending-row:last-child{border-bottom:none}
+.pl-pending-row .nm{flex:1;font-size:13px;font-weight:600}
 .pl-wrap{display:grid;grid-template-columns:300px 1fr;gap:14px;align-items:start}
 @media(max-width:900px){.pl-wrap{grid-template-columns:1fr}}
 .pl-side{background:#fff;border:1px solid var(--border);border-radius:8px;overflow:hidden;position:sticky;top:10px}
@@ -201,7 +209,7 @@ table.sheet td.cell.note-mark::after{content:"";position:absolute;top:0;right:0;
   <h1>İzmir Devlet Tiyatrosu — Aylık Program</h1>
   <nav id="tabbar">
     <button data-tab="program" class="active">Aylık Program</button>
-    <button data-tab="plays">Oyunlar &amp; Oyuncular</button>
+    <button data-tab="plays">Oyunlar &amp; Oyuncular<span id="playsPendingBadge" class="tabBadge" style="display:none"></span></button>
     <button data-tab="print">Yatay Yazdır</button>
   </nav>
 </header>
@@ -251,13 +259,19 @@ table.sheet td.cell.note-mark::after{content:"";position:absolute;top:0;right:0;
     <div class="group">
       <button class="btn ghost small" id="fsBtn" title="Aylık programı tam sayfa görüntüle (Esc ile çık)">⛶ Tam Ekran</button>
       <select id="printSize" title="Yazdırma kâğıdı">
-        <option value="A4">A4 yatay</option>
+        <option value="A5">A5 yatay</option>
+        <option value="A4" selected>A4 yatay</option>
         <option value="A3">A3 yatay</option>
       </select>
       <button class="btn ghost small" id="printBtn">Yazdır / PDF</button>
       <button class="btn small" id="publishBtn" title="Programı ortak sunucuya kaydet ve index sayfasında göster">Kesinleştir</button>
       <select id="expExcelMonth" title="Excel'e hangi ay(lar) aktarılsın">
         <option value="all">Tüm Aylar</option>
+      </select>
+      <select id="expExcelSize" title="Excel sayfa boyutu (yazdırma ayarı)">
+        <option value="A5">A5 yatay</option>
+        <option value="A4" selected>A4 yatay</option>
+        <option value="A3">A3 yatay</option>
       </select>
       <button class="btn ghost small" id="expExcel" title="Excel (.xls) olarak indir — seçili ay veya tüm aylar, renkler ve birleştirmelerle">Excel İndir</button>
       <button class="btn ghost small" id="expJson">JSON indir</button>
@@ -276,6 +290,7 @@ table.sheet td.cell.note-mark::after{content:"";position:absolute;top:0;right:0;
 
 <section id="plays">
   <div class="pl-stats" id="plStats"></div>
+  <div class="pl-pending" id="plPending"></div>
   <div class="pl-wrap">
     <aside class="pl-side">
       <div class="pl-side-h">
@@ -297,7 +312,8 @@ table.sheet td.cell.note-mark::after{content:"";position:absolute;top:0;right:0;
 <section id="print">
   <div class="controls">
     <select id="printSizePreview" title="Yazdırma kâğıdı">
-      <option value="A4">A4 yatay</option>
+      <option value="A5">A5 yatay</option>
+      <option value="A4" selected>A4 yatay</option>
       <option value="A3">A3 yatay</option>
     </select>
     <button class="btn" id="printPreviewBtn">Yazdır / PDF olarak kaydet</button>
@@ -399,6 +415,8 @@ function crewDeletePlay(name){
   (state.crew||[]).slice().forEach(e=>{ if(e.play===name && e.src==='sheet') state.crewHidden.push(crewKey(e)); });
   state.crewLocal = (state.crewLocal||[]).filter(c=>c.play!==name);
   state.playsExtra = (state.playsExtra||[]).filter(x=>x!==name);
+  state.playsIgnored = state.playsIgnored||[];
+  if(!state.playsIgnored.includes(name)) state.playsIgnored.push(name);
   applyCrew(); saveState();
 }
 
@@ -460,6 +478,8 @@ function loadState(){
       if(!Array.isArray(st.crewLocal)) st.crewLocal = [];
       if(!Array.isArray(st.crewHidden)) st.crewHidden = [];
       if(!Array.isArray(st.playsExtra)) st.playsExtra = [];
+      if(!Array.isArray(st.playsPending)) st.playsPending = [];
+      if(!Array.isArray(st.playsIgnored)) st.playsIgnored = [];
       return st;
     }
   }catch(e){}
@@ -472,6 +492,8 @@ function loadState(){
   st.crewLocal = [];
   st.crewHidden = [];
   st.playsExtra = JSON.parse(JSON.stringify(DEFAULT_DATA.plays||[]));
+  st.playsPending = [];
+  st.playsIgnored = [];
   return st;
 }
 function normalizeMonth(m){
@@ -940,12 +962,35 @@ function buildOyunDatalist(){
 function registerPlayName(nv){
   if(!nv || isPremiereLabel(nv)) return;
   const {key} = parseGame(nv);
-  if(key && !(state.plays||[]).includes(key)){
-    state.playsExtra = state.playsExtra||[];
-    state.playsExtra.push(key);
-    applyCrew();
-    buildOyunDatalist();
+  if(!key) return;
+  if((state.plays||[]).includes(key)) return; // zaten bilinen/onaylı oyun
+  if((state.playsIgnored||[]).includes(key)) return; // daha önce "oyun değil" denildi (sahne adı/not vb.)
+  state.playsPending = state.playsPending||[];
+  if(!state.playsPending.includes(key)){
+    state.playsPending.push(key);
+    saveState();
   }
+  renderPlays();
+}
+function confirmPendingPlay(key){
+  state.playsExtra = state.playsExtra||[];
+  if(!state.playsExtra.includes(key)) state.playsExtra.push(key);
+  state.playsPending = (state.playsPending||[]).filter(x=>x!==key);
+  state.playsIgnored = (state.playsIgnored||[]).filter(x=>x!==key);
+  applyCrew();
+  saveState();
+  buildOyunDatalist();
+  renderPlays();
+  renderSheet();
+  setStatus('"'+key+'" oyun olarak eklendi.');
+}
+function dismissPendingPlay(key){
+  state.playsIgnored = state.playsIgnored||[];
+  if(!state.playsIgnored.includes(key)) state.playsIgnored.push(key);
+  state.playsPending = (state.playsPending||[]).filter(x=>x!==key);
+  saveState();
+  renderPlays();
+  setStatus('"'+key+'" bir dahaki sefere oyun listesine düşmeyecek (sahne adı/not olarak işaretlendi).');
 }
 function startEdit(td){
   const r=+td.dataset.r, c=+td.dataset.c;
@@ -1457,7 +1502,7 @@ function renderPrint(){
 
 /* === Yazdırma/PDF: her ay tam olarak bir YATAY A4 sayfasını kaplar === */
 let printSize = 'A4';
-const PRINT_MM = {A4:[297,210], A3:[420,297]};
+const PRINT_MM = {A5:[210,148], A4:[297,210], A3:[420,297]};
 function printMetrics(){
   const [mmW,mmH] = PRINT_MM[printSize] || PRINT_MM.A4;
   return {
@@ -1466,7 +1511,7 @@ function printMetrics(){
   };
 }
 function setPrintSize(size){
-  printSize = size === 'A3' ? 'A3' : 'A4';
+  printSize = PRINT_MM[size] ? size : 'A4';
   const [mmW,mmH] = PRINT_MM[printSize];
   const style = document.getElementById('printPageStyle');
   if(style) style.textContent = `@media print{@page{size:${printSize} landscape;margin:5mm}}`;
@@ -1477,7 +1522,7 @@ function setPrintSize(size){
 }
 function printProgram(size){
   const chosen = size || document.getElementById('printSize')?.value || 'A4';
-  if(chosen === 'A4' && blockIfRedCell('A4 Yazdır')) return;
+  if((chosen === 'A4' || chosen === 'A5') && blockIfRedCell(chosen + ' Yazdır')) return;
   setPrintSize(chosen);
   window.print();
 }
@@ -1559,6 +1604,9 @@ function findConflicts(months){
 function exportExcel(){
   const exSel = document.getElementById('expExcelMonth');
   const selVal = exSel ? exSel.value : 'all';
+  const sizeSel = document.getElementById('expExcelSize');
+  const xlsSize = (sizeSel && PRINT_MM[sizeSel.value]) ? sizeSel.value : 'A4';
+  const XLS_PAPER_INDEX = {A3:8, A4:9, A5:11}[xlsSize] || 9;
   const months = (selVal === 'all') ? (state.months||[]) : [state.months[+selVal]].filter(Boolean);
   if(!months.length){ alert('Aktarılacak ay bulunamadı.'); return; }
   const cfs = findConflicts(months);
@@ -1645,9 +1693,9 @@ function exportExcel(){
     sheetsXml += `<Worksheet ss:Name="${xmlEscape(sheetName)}"><Table ss:DefaultColumnWidth="80">${colWidths.join('')}${rowsXml}</Table>`+
       `<WorksheetOptions xmlns="urn:schemas-microsoft-com:office:excel">`+
       `<PageSetup><Layout x:Orientation="Landscape" x:CenterHorizontal="1" x:CenterVertical="1"/>`+
-      `<PageMargins x:Bottom="0.2" x:Left="0.2" x:Right="0.2" x:Top="0.2"/></PageSetup>`+
+      `<PageMargins x:Bottom="${xlsSize==='A5'?'0.12':'0.2'}" x:Left="${xlsSize==='A5'?'0.12':'0.2'}" x:Right="${xlsSize==='A5'?'0.12':'0.2'}" x:Top="${xlsSize==='A5'?'0.12':'0.2'}"/></PageSetup>`+
       `<FitToPage/>`+
-      `<Print><ValidPrinterInfo/><PaperSizeIndex>9</PaperSizeIndex><Scale>100</Scale><FitWidth>1</FitWidth><FitHeight>1</FitHeight><HorizontalResolution>600</HorizontalResolution><VerticalResolution>600</VerticalResolution></Print>`+
+      `<Print><ValidPrinterInfo/><PaperSizeIndex>${XLS_PAPER_INDEX}</PaperSizeIndex><Scale>100</Scale><FitWidth>1</FitWidth><FitHeight>1</FitHeight><HorizontalResolution>600</HorizontalResolution><VerticalResolution>600</VerticalResolution></Print>`+
       `</WorksheetOptions></Worksheet>`;
   }
   const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<?mso-application progid="Excel.Sheet"?>\n<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet" xmlns:html="http://www.w3.org/TR/REC-html40">`+
@@ -1753,6 +1801,31 @@ function renderPlays(filter){
   if(rb) rb.onclick = ()=>loadCrewSheet(true);
   const sb = document.getElementById('crewSave');
   if(sb) sb.onclick = saveCrewToSheet;
+
+  /* Onay bekleyen oyun adları: aylık programdaki hücrelere yazılan ama henüz
+     oyun olarak onaylanmamış metinler (sahne adı/not olabilir) — kullanıcı
+     "Oyun olarak ekle" ya da "Oyun değil" ile karar verene kadar listeyi doldurmaz. */
+  const pendBox = document.getElementById('plPending');
+  const pendingNames = (state.playsPending||[]).filter(k=>!allPlays.includes(k)).sort((a,b)=>a.localeCompare(b,'tr'));
+  if(pendBox){
+    pendBox.innerHTML = pendingNames.length ? `
+      <div class="pl-pending-h">⏳ Onay bekleyen ${pendingNames.length} kayıt — hücreye yazılan bu metinler henüz oyun listesine eklenmedi</div>
+      <div class="pl-pending-list">
+        ${pendingNames.map(n=>`
+          <div class="pl-pending-row">
+            <span class="nm">${escapeHtml(n)}</span>
+            <button class="btn small" data-confirm="${escapeHtml(n)}">✓ Oyun olarak ekle</button>
+            <button class="btn ghost small" data-dismiss="${escapeHtml(n)}">✕ Oyun değil (gizle)</button>
+          </div>`).join('')}
+      </div>` : '';
+    pendBox.querySelectorAll('[data-confirm]').forEach(b=>{ b.onclick = ()=>confirmPendingPlay(b.dataset.confirm); });
+    pendBox.querySelectorAll('[data-dismiss]').forEach(b=>{ b.onclick = ()=>dismissPendingPlay(b.dataset.dismiss); });
+  }
+  const badge = document.getElementById('playsPendingBadge');
+  if(badge){
+    if(pendingNames.length){ badge.textContent = pendingNames.length; badge.style.display = 'inline-block'; }
+    else badge.style.display = 'none';
+  }
 
   /* sol liste */
   const list = document.getElementById('playsList');
@@ -1969,6 +2042,8 @@ document.getElementById('addPlayBtn').onclick = ()=>{
   if(!name) return;
   state.playsExtra = state.playsExtra||[];
   if(!state.playsExtra.includes(name)) state.playsExtra.push(name);
+  state.playsIgnored = (state.playsIgnored||[]).filter(x=>x!==name);
+  state.playsPending = (state.playsPending||[]).filter(x=>x!==name);
   inp.value='';
   selectedPlay = name;
   applyCrew(); saveState(); buildOyunDatalist(); renderPlays();
@@ -2015,7 +2090,7 @@ setStatus('Hazır.');
 <script>
 (function(){
   const BRIDGE = 'idt_repertuvar_bridge';
-  const SITE   = 'index_GUNCELLENMIS.html';
+  const SITE   = 'https://izmir-dt.github.io/tiyatro-site/#program';
 
   function readBridge(){
     try{ return JSON.parse(localStorage.getItem(BRIDGE)||'null'); }catch(e){ return null; }
