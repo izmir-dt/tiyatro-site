@@ -225,6 +225,7 @@ table.sheet td.cell.note-mark::after{content:"";position:absolute;top:0;right:0;
   <nav id="tabbar">
     <button data-tab="program" class="active">Aylık Program</button>
     <button data-tab="plays">Oyunlar &amp; Oyuncular<span id="playsPendingBadge" class="tabBadge" style="display:none"></span></button>
+    <button data-tab="notes">Serbest Notlar<span id="notesBadge" class="tabBadge" style="display:none"></span></button>
     <button data-tab="print">Yatay Yazdır</button>
   </nav>
 </header>
@@ -283,6 +284,9 @@ table.sheet td.cell.note-mark::after{content:"";position:absolute;top:0;right:0;
         <option value="A3|landscape">A3 yatay</option>
         <option value="A3|portrait">A3 dikey</option>
       </select>
+      <select id="printMonthSel" title="Yazdırılacak ay(lar)">
+        <option value="all">Tüm Aylar</option>
+      </select>
       <button class="btn ghost small" id="printBtn">Yazdır / PDF</button>
       <button class="btn small" id="publishBtn" title="Programı ortak sunucuya kaydet ve index sayfasında göster">Kesinleştir</button>
       <select id="expExcelMonth" title="Excel'e hangi ay(lar) aktarılsın">
@@ -333,6 +337,17 @@ table.sheet td.cell.note-mark::after{content:"";position:absolute;top:0;right:0;
   <datalist id="kisiList"></datalist>
 </section>
 
+<section id="notes">
+  <div class="controls">
+    <b style="font-size:13px;color:var(--muted)">Hücrelere yazılan tüm notlar ve serbest metinler otomatik olarak burada toplanır. Notlar oyun sayımını etkilemez.</b>
+  </div>
+  <div id="notesList"></div>
+  <div style="margin-top:14px;background:#fff;border:1px solid var(--border);border-radius:8px;padding:10px">
+    <div style="font-weight:700;margin-bottom:6px">Genel Notlar</div>
+    <textarea id="generalNotes" class="pl-note-box" style="min-height:120px" placeholder="Programla ilgili serbest notlarınız… (otomatik kaydedilir)"></textarea>
+  </div>
+</section>
+
 <section id="print">
   <div class="controls">
     <select id="printSizePreview" title="Yazdırma kâğıdı">
@@ -342,6 +357,9 @@ table.sheet td.cell.note-mark::after{content:"";position:absolute;top:0;right:0;
         <option value="A4|portrait">A4 dikey</option>
         <option value="A3|landscape">A3 yatay</option>
         <option value="A3|portrait">A3 dikey</option>
+    </select>
+    <select id="printMonthSelPreview" title="Yazdırılacak ay(lar)">
+      <option value="all">Tüm Aylar</option>
     </select>
     <button class="btn" id="printPreviewBtn">Yazdır / PDF olarak kaydet</button>
     <span style="color:var(--muted);font-size:13px">Her ay seçilen kâğıda tek sayfa sığacak şekilde ölçeklenir.</span>
@@ -725,10 +743,17 @@ function programCols(m){
 /* === Oyun parse === */
 function parseGame(txt){
   const t = String(txt||'').trim();
-  if(!t) return {key:'', isPremiere:false};
+  if(!t) return {key:'', isPremiere:false, inlineNote:''};
   const isPrem = t.startsWith('*');
-  const key = (isPrem ? t.slice(1) : t).trim();
-  return {key, isPremiere:isPrem};
+  let body = (isPrem ? t.slice(1) : t).trim();
+  const notes = [];
+  /* Parantez / köşeli parantez içindeki açıklamalar not sayılır, oyun adının parçası değildir */
+  body = body.replace(/[(\[][^)\]]*[)\]]/g, mm=>{ notes.push(mm.replace(/^[(\[]|[)\]]$/g,'').trim()); return ' '; });
+  /* " - açıklama" biçimindeki ekler de not sayılır */
+  const dash = body.match(/\s[-–—]\s*(\S.*)$/);
+  if(dash){ notes.push(dash[1].trim()); body = body.slice(0, dash.index); }
+  const key = body.replace(/\s+/g,' ').trim();
+  return {key, isPremiere:isPrem, inlineNote: notes.filter(Boolean).join(' · ')};
 }
 function isFreeTextValue(v){
   const t = String(v||'').trim();
@@ -1506,6 +1531,14 @@ function refreshMonthSel(){
     const stillValid = prevVal==='all' || state.months[+prevVal];
     exSel.value = stillValid ? prevVal : 'all';
   }
+  ['printMonthSel','printMonthSelPreview'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(!el) return;
+    const pv = el.value || 'all';
+    el.innerHTML = '<option value="all">Tüm Aylar</option>' +
+      state.months.map((m,i)=>`<option value="${i}">${escapeHtml(m.name)}</option>`).join('');
+    el.value = (pv==='all' || state.months[+pv]) ? pv : 'all';
+  });
 }
 const AY_ADLARI = ['OCAK','ŞUBAT','MART','NİSAN','MAYIS','HAZİRAN','TEMMUZ','AĞUSTOS','EYLÜL','EKİM','KASIM','ARALIK'];
 function buildMonthTemplate(monthNum /*1-12*/, year, prev){
@@ -1640,7 +1673,10 @@ function renderPrint(){
     return h;
   };
   let pageNum = 0;
-  const blocks = state.months.map(m=>{ pageNum++; return buildBlock(m); });
+  const pmSel = document.getElementById('printMonthSel');
+  const pmVal = pmSel ? pmSel.value : 'all';
+  const printMonths = (pmVal==='all' || !state.months[+pmVal]) ? state.months : [state.months[+pmVal]];
+  const blocks = printMonths.map(m=>{ pageNum++; return buildBlock(m); });
   wrap.innerHTML = blocks.join('');
   prev.innerHTML = blocks.join('<hr style="margin:14px 0;border:none;border-top:2px dashed var(--border)">');
   fitPrintPages();
@@ -1687,7 +1723,8 @@ function printProgram(val){
   const p = parsePaper(chosen);
   if((p.size === 'A4' || p.size === 'A5') && blockIfRedCell(p.size+' '+(p.orient==='portrait'?'dikey':'yatay')+' Yazdır')) return;
   setPrintSize(chosen);
-  setTimeout(()=>window.print(), 60);
+  renderPrint();
+  setTimeout(()=>window.print(), 120);
 }
 function fitPrintPages(){
   const wrap = document.getElementById('printView');
@@ -1808,7 +1845,8 @@ function exportExcel(){
     return id;
   }
   function cellFormat(m,r,c,cell,conflict){
-    const headerish = r===0 || r===1 || isMondayRow(m,r) || c===0 || c===m.cols-1;
+    const isDateCol = (c===0 || c===m.cols-1);
+    const headerish = r===0 || r===1 || isMondayRow(m,r); /* sadece başlık satırları ve PAZARTESİ boyanır */
     const isTurne = r>=2 && stageHeaderText(m,c).includes('TURNE') && cell.v;
     const isPrem = !!cell.premiere || ((cell.v||'').trim().startsWith('*') && !isPremiereLabel(cell.v));
     let isConflict = false;
@@ -1821,7 +1859,7 @@ function exportExcel(){
     }
     let bg = headerish ? XLS_HEAD : XLS_WHITE;
     let color = (isPrem || isTurne) ? XLS_PREMIERE : '000000';
-    let bold = headerish || isPrem || isTurne;
+    let bold = headerish || isDateCol || isPrem || isTurne;
     if(cell.bg) bg = safeHex(cell.bg, bg);
     if(cell.color) color = safeHex(cell.color, color);
     if(cell.bold) bold = true;
@@ -1933,6 +1971,7 @@ function buildPlayDatalists(){
 }
 
 function renderPlays(filter){
+  try{ renderNotes(); }catch(e){}
   if(filter !== undefined) playFilter = filter;
   const q = (playFilter||'').toLocaleLowerCase('tr');
   const byPlay = crewByPlay();
@@ -2208,11 +2247,55 @@ function resetState(){
 function escapeHtml(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function setStatus(t){ const el=document.getElementById('status'); el.textContent=t; setTimeout(()=>el.textContent='Kaydedildi (yerel).', 1500); }
 
+/* === Serbest Notlar sekmesi === */
+function collectNotes(){
+  const out=[];
+  (state.months||[]).forEach((m,mi)=>{
+    Object.keys(m.cells||{}).forEach(key=>{
+      const cell=m.cells[key]||{};
+      const inline = parseGame(cell.v||'').inlineNote || '';
+      if(!cell.note && !cell.freeText && !inline) return;
+      const [r,c]=key.split('_').map(Number);
+      if(r<2) return;
+      out.push({mi,key,r,c,month:m.name,date:dateTextOfRow(m,r),time:timeTextOfRow(m,r),
+        stage:(m.cells['1_'+c]||{}).v||'', text:cell.v||'', note:cell.note||'', inline:inline, free:!!cell.freeText});
+    });
+  });
+  return out;
+}
+function renderNotes(){
+  const box=document.getElementById('notesList');
+  if(!box) return;
+  const items=collectNotes();
+  const badge=document.getElementById('notesBadge');
+  if(badge){ if(items.length){ badge.textContent=items.length; badge.style.display='inline-block'; } else badge.style.display='none'; }
+  if(!items.length){
+    box.innerHTML='<div style="padding:14px;color:var(--muted)">Henüz not yok. Bir hücre seçip <b>Not ekle</b> ya da <b>Serbest metin ✎</b> kullanın; buraya otomatik düşer.</div>';
+  } else {
+    box.innerHTML = items.map((o,i)=>`
+      <div style="display:flex;gap:10px;align-items:flex-start;background:#fff;border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:6px">
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:700">${escapeHtml(o.text||'(boş hücre)')} ${o.free?'<span style="font-size:11px;color:var(--accent)">✎ serbest metin</span>':''}</div>
+          <div style="font-size:12px;color:var(--muted)">${escapeHtml(o.month)} · ${escapeHtml(o.date||'')}${o.time?' / '+escapeHtml(o.time):''}${o.stage?' · '+escapeHtml(o.stage):''}</div>
+          ${o.inline?`<div style="margin-top:4px;font-size:13px"><b>Hücre içi not:</b> ${escapeHtml(o.inline)}</div>`:''}
+          ${o.note?`<div style="margin-top:4px;font-size:13px"><b>Not:</b> ${escapeHtml(o.note)}</div>`:''}
+        </div>
+        <button class="btn ghost small" data-ngo="${i}">Hücreye git</button>
+        <button class="btn ghost small" data-nedit="${i}">✎ Notu düzenle</button>
+      </div>`).join('');
+    box.querySelectorAll('[data-ngo]').forEach(b=>{ b.onclick=()=>{ const o=items[+b.dataset.ngo]; gotoCell(o.mi,o.r,o.c); }; });
+    box.querySelectorAll('[data-nedit]').forEach(b=>{ b.onclick=()=>{ const o=items[+b.dataset.nedit]; const n=prompt('Not:',o.note); if(n===null) return; setCellNote(o.mi,o.key,n); renderNotes(); }; });
+  }
+  const ta=document.getElementById('generalNotes');
+  if(ta && document.activeElement!==ta) ta.value = state.generalNotes || '';
+}
+
 function renderAll(){
   refreshMonthSel();
   buildOyunDatalist();
   renderSheet();
   renderPrint();
+  renderNotes();
   setStatus('Kaydedildi (yerel).');
 }
 
@@ -2258,6 +2341,21 @@ document.getElementById('printSizePreview').onchange = e=>{
   setPrintSize(e.target.value);
   const other=document.getElementById('printSize'); if(other) other.value=e.target.value;
 };
+['printMonthSel','printMonthSelPreview'].forEach(id=>{
+  const el=document.getElementById(id);
+  if(!el) return;
+  el.onchange = e=>{
+    const other = document.getElementById(id==='printMonthSel'?'printMonthSelPreview':'printMonthSel');
+    if(other) other.value = e.target.value;
+    renderPrint();
+  };
+});
+(function(){
+  const ta=document.getElementById('generalNotes');
+  if(!ta) return;
+  ta.value = state.generalNotes || '';
+  ta.oninput = ()=>{ state.generalNotes = ta.value; saveState(); };
+})();
 document.getElementById('expExcel').onclick = exportExcel;
 document.getElementById('expJson').onclick = exportJson;
 document.getElementById('impJson').onclick = ()=>document.getElementById('impFile').click();
@@ -2286,6 +2384,7 @@ document.querySelectorAll('#tabbar button').forEach(b=>b.onclick=()=>{
   b.classList.add('active');
   document.getElementById(b.dataset.tab).classList.add('active');
   if(b.dataset.tab==='print') renderPrint();
+  if(b.dataset.tab==='notes') renderNotes();
 });
 
 document.addEventListener('keydown', e=>{
