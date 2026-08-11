@@ -1062,28 +1062,48 @@ p, li { max-width: 78ch; }
       return pay;
     }
 
+    /* ══════════════════════════════════════════════════════════════
+       SAYIM KURALLARI — sistem dışa aktarımı (Excel) ile birebir:
+         • Turne  : ek grup (anaGrupId) satırları hariç, TÜM statüler dahil
+                    (iptal edilen turne de bir turne kaydıdır → 2025-26 = 67)
+         • Temsil : ek grup + iptal hariç, kayıttaki "Temsil Sayısı" alanı
+                    toplamı (program satırlarındaki çift seans şişmesi yok)
+                    → 2025-26 = 237
+         • Şehir  : ek grup hariç, iptal DAHİL; gerçekleşen "Oyun" satırlarının
+                    şehirleri (yoksa duraklar, o da yoksa İl alanı)
+                    → 2025-26 = 30
+         • Ülke   : yurt dışı adları şehir sayısından ayrı tutulur ama
+                    "Şehir / Ülke" listesinde ve öne çıkanlarda GÖRÜNÜR
+                    (ör. 2026-27 → KOSOVA)
+       ══════════════════════════════════════════════════════════════ */
     turneler.forEach(function(t){
-      if (t.anaGrupId) return;
-      if ((t.statu || '') === 'iptal') return; // İPTAL turne sayılmaz
+      if (t.anaGrupId) return;                       // ek grup = alt kayıt, ayrı turne değil
+      var iptalMi = (t.statu || '') === 'iptal';
       var s = tarihSezon(t.baslangicTarih || t.tarih);
       if (!s) return;
       if (!map[s]) map[s] = bosSezon();
       var S = map[s];
-      S.turne++;
-      try {
-        var b = t.baslangicTarih ? new Date(t.baslangicTarih) : null;
-        var e = t.bitisTarih ? new Date(t.bitisTarih) : b;
-        if (b) { if (!e || e < b) e = b; S.araliklar.push([b.getTime(), e.getTime()]); }
-      } catch(er) {}
-      var oyunlarBT = {}, illerBT = {};
+      S.turne++;                                     // iptal dahil
+      if (!iptalMi) {
+        try {
+          var b = t.baslangicTarih ? new Date(t.baslangicTarih) : null;
+          var e = t.bitisTarih ? new Date(t.bitisTarih) : b;
+          if (b) { if (!e || e < b) e = b; S.araliklar.push([b.getTime(), e.getTime()]); }
+        } catch(er) {}
+      }
+      var oyunlarBT = {}, illerBT = {}, yerVar = false;
       var _kes = (t.statu||'') === 'yarida-kesildi' ? _ykKesim(t) : null;
 
-      /* ÖNEMLİ: Turnenin temsil sayısı, kayıttaki "Temsil Sayısı" alanıdır.
-         Program satırlarından türetilen sayı (çift seans vb.) bu alandan
-         farklı olabiliyor ve toplamı şişiriyordu. Artık kayıttaki değer
-         esas alınır; oyun/il kırılımına orantılı olarak dağıtılır.
-         Yarıda kesilen turnelerde kayıt değeri kesim öncesini yansıtmadığı
-         için orada program satırları esas alınır. */
+      function yerSay(ad, pay) {
+        var k = _yerKey(ad);
+        if (!k) return;
+        yerVar = true;
+        yerEkle(S, k);                               // şehir mi ülke mi → ayrı sayaç
+        artir(S.ilMap, k, pay || 0);                 // listede ülkeler de görünür
+        illerBT[k] = 1;
+      }
+
+      /* Turnenin temsil sayısı = kayıttaki "Temsil Sayısı" alanı */
       var kayitTemsil = parseInt(t.sayi != null ? t.sayi : t.temsilSayisi, 10);
       if (!(kayitTemsil > 0)) kayitTemsil = 0;
 
@@ -1097,39 +1117,43 @@ p, li { max-width: 78ch; }
         if (satirlar.length) {
           var agir = satirlar.map(function(x){ return x.saat2 ? 2 : 1; });
           var ham  = agir.reduce(function(a,c){ return a+c; }, 0);
-          /* Kayıttaki temsil sayısı esas (yarıda kesilenlerde de kullanıcı
-             gerçekleşen sayıyı bu alana giriyor) */
-          var toplam = kayitTemsil || ham;
+          var toplam = iptalMi ? 0 : (kayitTemsil || ham);
           var paylar = _dagit(toplam, agir);
           S.temsil += toplam;
           satirlar.forEach(function(x, i){
             var a = paylar[i] || 0;
             var oyun = (x.oyun || t.oyun || '').trim();
-            var il = _yerKey(x.sehir);
             if (oyun) { artir(S.oyunMap, oyun, a); oyunlarBT[oyun]=1; }
-            if (il)   { yerEkle(S, il); if (!_ULKELER[il]) { artir(S.ilMap, il, a); illerBT[il]=1; } }
+            yerSay(x.sehir, a);
           });
         }
       } else if (t.duraklar && t.duraklar.length) {
         var agir2 = t.duraklar.map(function(d){ return +d.sayi || 1; });
         var ham2 = agir2.reduce(function(a,c){ return a+c; }, 0);
-        var toplam2 = kayitTemsil || ham2;
+        var toplam2 = iptalMi ? 0 : (kayitTemsil || ham2);
         var paylar2 = _dagit(toplam2, agir2);
         S.temsil += toplam2;
         t.duraklar.forEach(function(d, i){
           var a = paylar2[i] || 0;
           var oyun = (d.oyun || t.oyun || '').trim();
-          var il = _yerKey(d.il);
           if (oyun) { artir(S.oyunMap, oyun, a); oyunlarBT[oyun]=1; }
-          if (il)   { yerEkle(S, il); if (!_ULKELER[il]) { artir(S.ilMap, il, a); illerBT[il]=1; } }
+          yerSay(d.il, a);
         });
       } else if (t.oyun) {
-        var tk = kayitTemsil || 1;
+        var tk = iptalMi ? 0 : (kayitTemsil || 1);
         S.temsil += tk;
         var parca = t.oyun.split('/').map(function(o){ return o.trim(); }).filter(Boolean);
         var paylar3 = _dagit(tk, parca.map(function(){ return 1; }));
         parca.forEach(function(ot, i){ artir(S.oyunMap, ot, paylar3[i] || 0); oyunlarBT[ot]=1; });
       }
+
+      /* Program/durak yoksa şehir–ülke kaybolmasın: İl alanından oku */
+      if (!yerVar) {
+        var ilAlani = String(t.il || '').split(/[,;+]/);
+        var paylarY = _dagit(iptalMi ? 0 : kayitTemsil, ilAlani.map(function(){ return 1; }));
+        ilAlani.forEach(function(ad, i){ yerSay(ad, paylarY[i] || 0); });
+      }
+
       Object.keys(oyunlarBT).forEach(function(k){ S.oyunMap[k].turne++; });
       Object.keys(illerBT).forEach(function(k){ S.ilMap[k].turne++; });
     });
