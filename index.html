@@ -3368,6 +3368,10 @@ window.exportPDF = function(title, headers, data){
     for(let i=0;i<bin.length;i++) bytes[i] = bin.charCodeAt(i);
     return new TextDecoder().decode(bytes);
   }
+  /* v8: Aylar artık AY BAZINDA kesinleştirilir/geri alınır. Sunucuda her ay
+     kendi grup kimliğiyle ("apub_<ay-kodu>_<zaman>") ayrı satırlarda durur.
+     Burada her ay-kodu için en güncel sürüm seçilip months[] birleştirilir;
+     böylece bir ayın geri alınması diğer kesinleştirilmiş ayları etkilemez. */
   async function publishedState(){
     try{
       const res = await fetch(PUBLISHED_API + "/" + encodeURIComponent(PUBLISHED_SHEET), {cache:"no-store"});
@@ -3379,14 +3383,30 @@ window.exportPDF = function(title, headers, data){
         if(!groups.has(id)) groups.set(id,{ts,rows:[]});
         groups.get(id).rows.push(r);
       });
-      const latest = [...groups.values()].sort((a,b)=>b.ts-a.ts)[0];
-      /* Sunucuya bağlanıldı ama kesinleştirilmiş program yok (örn. "Kesinleştirmeyi
-         geri al" ile kaldırılmış) -> yerel taslağa DÜŞME, boş listeyi göster. */
-      if(!latest) return {months:[]};
-      const parts = latest.rows.sort((a,b) => (+a[2]||0) - (+b[2]||0));
-      const total = +parts[0][3] || parts.length;
-      if(parts.length < total) return {months:[]}; /* parçalı/eksik veri, güvenilmez say */
-      return JSON.parse(b64Utf8Decode(parts.slice(0,total).map(r=>String(r[4]||"")).join("")));
+      /* Sunucuya bağlanıldı ama kesinleştirilmiş program yok (örn. tüm aylar
+         "Kesinleştirmeyi geri al" ile kaldırılmış) -> yerel taslağa DÜŞME, boş listeyi göster. */
+      if(!groups.size) return {months:[]};
+      const bySlug = new Map();
+      for(const [id, g] of groups){
+        const mm = id.match(/^apub_(.+)_(\d+)$/);
+        const slug = mm ? mm[1] : id;
+        const existing = bySlug.get(slug);
+        if(!existing || g.ts > existing.ts) bySlug.set(slug, {ts:g.ts, rows:g.rows});
+      }
+      const months = [];
+      for(const [slug, g] of bySlug){
+        const parts = g.rows.slice().sort((a,b) => (+a[2]||0) - (+b[2]||0));
+        const total = +parts[0][3] || parts.length;
+        if(parts.length < total) continue; /* parçalı/eksik veri, güvenilmez say */
+        try{
+          const data = JSON.parse(b64Utf8Decode(parts.slice(0,total).map(r=>String(r[4]||"")).join("")));
+          /* Yeni (ay bazlı) biçim: {month, plays, ...}. Eski (tüm program tek
+             seferde) biçim geriye dönük uyum için hâlâ okunur: {months:[...]}. */
+          if(data && data.month) months.push(data.month);
+          else if(data && Array.isArray(data.months)) months.push(...data.months);
+        }catch(e){}
+      }
+      return {months};
     }catch(e){ return null; } /* ağ/erişim hatası -> yerel yedeğe düş */
   }
   function cellsOf(m){
