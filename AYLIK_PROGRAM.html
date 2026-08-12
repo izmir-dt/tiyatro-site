@@ -325,6 +325,7 @@ table.sheet td.cell.note-mark::after{content:"";position:absolute;top:0;right:0;
       <button class="btn ghost small" id="renameMonth">Yeniden adlandır</button>
       <button class="btn ghost small" id="addMonth" title="Yeni ay oluştur (Cumartesi 2 satır otomatik)">+ Ay</button>
       <button class="btn ghost small" id="delMonth">Ay sil</button>
+      <button class="btn ghost small" id="backupBtn" title="Otomatik yedeklerden geri yükle">Yedekler</button>
     </div>
     <div class="group">
       <b>Hücre</b>
@@ -619,7 +620,31 @@ function loadState(){
       if(!st.playNotes || typeof st.playNotes!=='object') st.playNotes = {};
       if(!st.playFreeNotes || typeof st.playFreeNotes!=='object') st.playFreeNotes = {};
       if(!st.monthPub || typeof st.monthPub!=='object') st.monthPub = {};
+      restoreMissingMonths(st);
       return st;
+    }
+  }catch(e){}
+  /* Yerel kayıt yoksa/bozuksa önce yedeklere bak — kullanıcı verisi kaybolmasın */
+  try{
+    const bl = readBackups();
+    for(let i=bl.length-1;i>=0;i--){
+      try{
+        const bs = JSON.parse(bl[i].data);
+        if(bs && Array.isArray(bs.months) && bs.months.length){
+          bs.plays = bs.plays||[]; bs.crew=[];
+          if(!Array.isArray(bs.sheetCrew)) bs.sheetCrew=[];
+          if(!Array.isArray(bs.crewLocal)) bs.crewLocal=[];
+          if(!Array.isArray(bs.crewHidden)) bs.crewHidden=[];
+          if(!Array.isArray(bs.playsExtra)) bs.playsExtra=[];
+          if(!Array.isArray(bs.playsPending)) bs.playsPending=[];
+          if(!Array.isArray(bs.playsIgnored)) bs.playsIgnored=[];
+          if(!bs.playNotes||typeof bs.playNotes!=='object') bs.playNotes={};
+          if(!bs.playFreeNotes||typeof bs.playFreeNotes!=='object') bs.playFreeNotes={};
+          if(!bs.monthPub||typeof bs.monthPub!=='object') bs.monthPub={};
+          restoreMissingMonths(bs);
+          return bs;
+        }
+      }catch(e){}
     }
   }catch(e){}
   const st = JSON.parse(JSON.stringify(DEFAULT_DATA));
@@ -647,9 +672,82 @@ function normalizeMonth(m){
   }
   return {name:m.name, rows:m.rows, cols:m.cols, cells, merges:(m.merges||[]).map(x=>x.slice())};
 }
+const BKKEY = LSKEY + '_backups';
+let _lastBackupTs = 0;
+function readBackups(){
+  try{ const a = JSON.parse(localStorage.getItem(BKKEY)||'[]'); return Array.isArray(a)?a:[]; }catch(e){ return []; }
+}
+function writeBackups(list){
+  try{ localStorage.setItem(BKKEY, JSON.stringify(list)); }
+  catch(e){ // kota dolduysa en eskileri at
+    while(list.length>3){ list.shift(); try{ localStorage.setItem(BKKEY, JSON.stringify(list)); return; }catch(e2){} }
+  }
+}
+function pushBackup(force){
+  try{
+    const now = Date.now();
+    const list = readBackups();
+    const last = list[list.length-1];
+    const snap = JSON.stringify(state);
+    if(!force){
+      if(last && last.data === snap) return;                 // değişiklik yok
+      const sameMonths = last && last.months === state.months.length;
+      if(last && sameMonths && (now - _lastBackupTs) < 120000) return; // 2 dk'da bir
+    }
+    list.push({t: now, months: state.months.length,
+               names: state.months.map(m=>m.name), data: snap});
+    while(list.length>20) list.shift();
+    writeBackups(list);
+    _lastBackupTs = now;
+  }catch(e){}
+}
 function saveState(){
-  localStorage.setItem(LSKEY, JSON.stringify(state));
+  try{
+    localStorage.setItem(LSKEY, JSON.stringify(state));
+  }catch(e){
+    siteMessage('Tarayıcı depolama alanı dolu olduğu için kayıt yapılamadı. Lütfen "JSON indir" ile yedek alın.','error','Kaydedilemedi');
+  }
+  pushBackup(false);
   if(typeof renderDataViews==='function') renderDataViews();
+}
+/* Yedekten geri yükleme (ay bazlı veya tam) */
+function openBackupDialog(){
+  const list = readBackups();
+  if(!list.length){ siteMessage('Henüz yedek oluşmamış.','warn','Yedek yok'); return; }
+  const lines = list.map((b,i)=> (i+1)+') '+new Date(b.t).toLocaleString('tr-TR')+' — '+b.months+' ay: '+(b.names||[]).join(', ')).reverse().join('\n');
+  const ans = prompt('Geri yüklemek istediğiniz yedeğin numarasını yazın:\n\n'+lines+'\n\nNumara:');
+  if(!ans) return;
+  const idx = parseInt(ans,10)-1;
+  if(!(idx>=0 && idx<list.length)){ siteMessage('Geçersiz numara.','warn','Geri yükleme'); return; }
+  if(!confirm('Bu yedek yüklenecek. Mevcut veri geri alınabilir (Geri al).')) return;
+  snapshot();
+  try{
+    const st = JSON.parse(list[idx].data);
+    state = st;
+    if(state.activeIdx>=state.months.length) state.activeIdx = 0;
+    saveState(); renderAll(); renderPlays();
+    siteMessage('Yedek geri yüklendi.','ok','Geri yükleme');
+  }catch(e){ siteMessage('Yedek okunamadı.','error','Geri yükleme'); }
+}
+/* Kayıtlı veride eksilen ayları yedeklerden geri getirir (ay kaybını önler) */
+function restoreMissingMonths(st){
+  try{
+    if(!st || !Array.isArray(st.months)) return st;
+    const have = new Set(st.months.map(m=>String(m.name||'').trim().toLocaleUpperCase('tr')));
+    const list = readBackups();
+    for(let i=list.length-1;i>=0;i--){
+      let bs; try{ bs = JSON.parse(list[i].data); }catch(e){ continue; }
+      if(!bs || !Array.isArray(bs.months)) continue;
+      for(const m of bs.months){
+        const key = String(m.name||'').trim().toLocaleUpperCase('tr');
+        if(!key || have.has(key)) continue;
+        const cnt = m.cells ? Object.keys(m.cells).length : 0;
+        if(cnt < 5) continue;               // boş şablonları geri getirme
+        st.months.push(m); have.add(key);
+      }
+    }
+  }catch(e){}
+  return st;
 }
 
 /* === Kırmızı hücre kontrolü ===
@@ -1763,6 +1861,60 @@ function opDelCol(){
 
 /* Clipboard */
 let clip = null;
+function clipToText(vals){ return vals.map(r=>r.map(x=>x&&x.v?x.v:'').join('\t')).join('\n'); }
+function textToClip(txt){
+  const rows = String(txt).replace(/\r/g,'').split('\n');
+  while(rows.length>1 && rows[rows.length-1]==='') rows.pop();
+  return rows.map(line => line.split('\t').map(v=>({v: v.trim()})));
+}
+function pasteClipInto(vals){
+  if(!vals || !vals.length) return;
+  const m = curMonth(); snapshot();
+  /* Excel mantığı: seçim, kopyalanan bloktan büyükse blok tekrarlanarak doldurulur.
+     Tek hücre kopyalandıysa seçimdeki tüm hücrelere (alt alta dahil) yapıştırılır. */
+  const h = vals.length, w = Math.max(...vals.map(r=>r.length));
+  const rowsSel = sel.r2 - sel.r1 + 1, colsSel = sel.c2 - sel.c1 + 1;
+  const outR = Math.max(rowsSel, h), outC = Math.max(colsSel, w);
+  for(let dr=0; dr<outR; dr++){
+    for(let dc=0; dc<outC; dc++){
+      const r = sel.r1+dr, c = sel.c1+dc;
+      if(r>=m.rows || c>=m.cols) continue;
+      if(isCovered(m,r,c)) continue;
+      const srcRow = vals[dr % h] || [];
+      const src = srcRow[dc % (srcRow.length||1)] || {v:''};
+      if(src.v || src.premiere || src.note || src.freeText){
+        m.cells[r+'_'+c] = {...src};
+        if(typeof registerPlayName==='function' && r>=2 && programCols(m).includes(c)) registerPlayName(src.v, m.cells[r+'_'+c]);
+      } else {
+        delete m.cells[r+'_'+c];
+      }
+    }
+  }
+  saveState(); renderSheet();
+  setStatus('Yapıştırıldı');
+}
+/* Ctrl+D: seçimin ilk satırını aşağıya doğru çoğaltır (aynı oyunu art arda eklemek için) */
+function fillDown(){
+  const m = curMonth();
+  if(sel.r2<=sel.r1) { setStatus('Önce çoğaltmak istediğiniz alanı (ilk satır + alt satırlar) seçin'); return; }
+  snapshot();
+  for(let c=sel.c1;c<=sel.c2;c++){
+    const src = m.cells[sel.r1+'_'+c];
+    for(let r=sel.r1+1;r<=sel.r2;r++){
+      if(isCovered(m,r,c)) continue;
+      if(src && (src.v||src.premiere||src.note||src.freeText)) m.cells[r+'_'+c] = {...src};
+      else delete m.cells[r+'_'+c];
+    }
+  }
+  saveState(); renderSheet();
+  setStatus('Aşağı dolduruldu');
+}
+function sheetHasFocus(){
+  const ae = document.activeElement;
+  if(ae && (ae.isContentEditable || ['input','select','textarea'].includes((ae.tagName||'').toLowerCase()))) return false;
+  const sheetTab = document.getElementById('sheet');
+  return !!sheetTab && sel && sel.r1>=0;
+}
 function opCopy(){
   const m = curMonth();
   const vals = [];
@@ -1772,23 +1924,43 @@ function opCopy(){
     vals.push(row);
   }
   clip = vals;
-  navigator.clipboard && navigator.clipboard.writeText(vals.map(r=>r.map(x=>x.v||'').join('\t')).join('\n')).catch(()=>{});
-  setStatus('Kopyalandı');
+  const txt = clipToText(vals);
+  try{ if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).catch(()=>{}); }catch(e){}
+  setStatus('Kopyalandı ('+vals.length+'x'+(vals[0]?vals[0].length:0)+')');
 }
 function opPaste(){
-  if(!clip) return;
-  const m = curMonth(); snapshot();
-  for(let dr=0; dr<clip.length; dr++){
-    for(let dc=0; dc<clip[dr].length; dc++){
-      const r=sel.r1+dr, c=sel.c1+dc;
-      if(r>=m.rows || c>=m.cols) continue;
-      const src = clip[dr][dc];
-      if(src.v || src.premiere || src.note || src.freeText) m.cells[r+'_'+c] = {...src};
-      else delete m.cells[r+'_'+c];
+  if(clip && clip.length){ pasteClipInto(clip); return; }
+  /* Uygulama içi pano boşsa sistem panosundan okumayı dene */
+  try{
+    if(navigator.clipboard && navigator.clipboard.readText){
+      navigator.clipboard.readText().then(t=>{ if(t && t.trim()) pasteClipInto(textToClip(t)); }).catch(()=>{});
+      return;
     }
-  }
-  saveState(); renderSheet();
+  }catch(e){}
+  setStatus('Pano boş');
 }
+
+/* Sistem panosu olayları: hücreye çift tıklamadan Ctrl+C / Ctrl+V */
+document.addEventListener('copy', e=>{
+  if(!sheetHasFocus()) return;
+  opCopy();
+  if(e.clipboardData){ e.clipboardData.setData('text/plain', clipToText(clip||[])); e.preventDefault(); }
+});
+document.addEventListener('cut', e=>{
+  if(!sheetHasFocus()) return;
+  opCopy();
+  if(e.clipboardData){ e.clipboardData.setData('text/plain', clipToText(clip||[])); e.preventDefault(); }
+  opClear();
+});
+let _lastPasteAt = 0;
+document.addEventListener('paste', e=>{
+  if(!sheetHasFocus()) return;
+  _lastPasteAt = Date.now();
+  const txt = e.clipboardData ? e.clipboardData.getData('text/plain') : '';
+  e.preventDefault();
+  if(txt && txt.trim()) pasteClipInto(textToClip(txt));
+  else if(clip) pasteClipInto(clip);
+});
 
 /* === Renklendirme (sağ tık paleti + toolbar) === */
 const BG_PALETTE = [['Sarı','#ffe600'],['Kırmızı','#e53935'],['Yeşil','#43a047'],['Mavi','#1e88e5'],['Turuncu','#fb8c00'],['Gri','#9e9e9e'],['Pembe','#ec407a']];
@@ -2070,6 +2242,7 @@ function addBlankMonth(){
 function delCurMonth(){
   if(state.months.length<=1){ siteMessage('Son ay silinemez.','warn','Ay silinemedi'); return; }
   if(!confirm(`"${curMonth().name}" silinsin mi?`)) return;
+  pushBackup(true);
   snapshot();
   state.months.splice(state.activeIdx,1);
   state.activeIdx = Math.max(0, state.activeIdx-1);
@@ -2954,14 +3127,32 @@ document.addEventListener('keydown', e=>{
   if(e.ctrlKey||e.metaKey){
     if(e.key==='z'){ e.preventDefault(); undo(); }
     else if(e.key==='y'){ e.preventDefault(); redo(); }
-    else if(e.key==='c'){ e.preventDefault(); opCopy(); }
-    else if(e.key==='v'){ e.preventDefault(); opPaste(); }
+    else if(e.key==='c' || e.key==='C'){ opCopy(); }   /* preventDefault YOK: 'copy' olayı da çalışsın */
+    else if(e.key==='x' || e.key==='X'){ opCopy(); }
+    else if(e.key==='v' || e.key==='V'){ /* 'paste' olayı işleyecek; olmazsa yedek: */
+      const before = Date.now();
+      setTimeout(()=>{ if(!_lastPasteAt || _lastPasteAt < before) opPaste(); }, 120);
+    }
+    else if(e.key==='d' || e.key==='D'){ e.preventDefault(); fillDown(); }
   } else if(e.key==='Delete' || e.key==='Backspace'){ if(sel.r1>=0){ e.preventDefault(); opClear(); } }
   else if(e.key==='Enter'){ const td=document.querySelector('#sheet td.cell.anchor'); if(td){ e.preventDefault(); startEdit(td); } }
 });
 
+(function(){ const b=document.getElementById('backupBtn'); if(b) b.onclick=openBackupDialog; })();
+/* Ekim 2026 sayfası yoksa boş şablon olarak eklensin */
+(function(){
+  try{
+    const has = state.months.some(m=>String(m.name||'').toLocaleUpperCase('tr').startsWith('EKİM 2026'));
+    if(!has){
+      const prev = state.months[state.months.length-1];
+      state.months.push(buildMonthTemplate(10, 2026, prev));
+      saveState();
+    }
+  }catch(e){}
+})();
 renderAll();
 renderPlays();
+pushBackup(true);
 loadCrewSheet();
 loadPersonel();
 initTooltipInteraction();
