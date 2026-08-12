@@ -3417,12 +3417,49 @@ window.exportPDF = function(title, headers, data){
     else Object.keys(m.cells||{}).forEach(k => out[k] = m.cells[k]);
     return out;
   }
-  const SKIP = /^(prömiyer|anahtar|turne|izmir devlet|tatil|prova|boş|serbest)/i;
   const normPlay = s => String(s||"")
     .replace(/[(\[][^)\]]*[)\]]/g, " ")            /* (FUAYE-11.00) gibi ekler */
     .replace(/\s+/g, " ").trim().toLocaleUpperCase("tr");
-  /* Oyun adları repertuvar köprüsünden gelir; böylece tarih, saat, sahne adı,
-     il adı, "TURNE" gibi hücreler oyun sayılmaz. */
+  /* Aylık Program'daki tanım BİREBİR aynı kurallar: bir hücre "oyun" sayılır,
+     ancak ve ancak Aylık Program'da "Serbest metin" olarak işaretlenmemişse
+     (elle ✎ ile veya //, #, !, >, + ile başlayan / tamamen parantez içindeki
+     metinler otomatik serbest metin sayılır) ve salt "PRÖMİYER" işareti
+     değilse. Tarih/saat/başlık sütunları zaten yapısal olarak (satır/sütun
+     aralığı) devre dışı — ayrıca içerik bazlı bir anahtar kelime listesine
+     ihtiyaç yok; bu da Aylık Program'da yeni bir tur/tatil/duyuru adı
+     eklendiğinde index'in listeyi güncellemek için değiştirilmesini gerektirmez. */
+  function isPremiereLabel(t){
+    const s = String(t||"").trim().toLocaleUpperCase("tr");
+    return s==="PRÖMİYER" || s==="* PRÖMİYER" || s==="*PRÖMİYER";
+  }
+  function isFreeTextValue(v){
+    const t = String(v||"").trim();
+    if(!t) return false;
+    if(/^(\/\/|#|!|>|\+)/.test(t)) return true;
+    if(/^\(.*\)$/.test(t)) return true;
+    if(/^\[.*\]$/.test(t)) return true;
+    return false;
+  }
+  function isFreeTextCell(cell){ return !!(cell && (cell.freeText || isFreeTextValue(cell.v))); }
+  function playKeyOf(raw){
+    const t = String(raw||"").trim();
+    if(!t) return "";
+    const body0 = t.startsWith("*") ? t.slice(1).trim() : t;
+    let body = body0.replace(/[(\[][^)\]]*[)\]]/g, " ");   /* (11.00-14.00) gibi ekler */
+    const dash = body.match(/\s[-–—]\s*(\S.*)$/);           /* " - açıklama" eki */
+    if(dash) body = body.slice(0, dash.index);
+    return body.replace(/\s+/g, " ").trim();
+  }
+  /* Aylık Program'daki programCols() ile aynı: ilk iki sütun (tarih/saat) ve
+     son sütun (tarih tekrarı) oyun sütunu değildir. */
+  function playColsOf(m){
+    const out = new Set();
+    for(let c=2; c<(m.cols||0)-1; c++) out.add(c);
+    return out;
+  }
+  /* Oyun adları repertuvar köprüsünden gelir; yalnızca AYNI oyunun farklı
+     yazımlarını (Repertuvar'daki resmî adına) tek isim altında toplamak için
+     kullanılır — bir hücrenin oyun SAYILIP sayılmayacağına karar vermez. */
   function knownPlaySet(){
     const out = new Map();
     try{
@@ -3438,6 +3475,7 @@ window.exportPDF = function(title, headers, data){
   function monthInfo(m){
     const cells = cellsOf(m);
     const known = knownPlaySet();
+    const playCols = playColsOf(m);
     let dolu = 0; const oyunlar = new Set();
     Object.keys(cells).forEach(k => {
       const cell = cells[k]||{};
@@ -3445,22 +3483,21 @@ window.exportPDF = function(title, headers, data){
       dolu++;
       const r = +k.split("_")[0], c = +k.split("_")[1];
       if(r < 2) return;                                  /* kurum başlığı ve sahne satırı */
-      if(c < 2) return;                                  /* tarih ve saat sütunları */
-      if(cell.freeText || cell.cat) return;              /* serbest metin / kategorili not */
-      if(/^\d{1,2}[.:]\d{2}/.test(v)) return;            /* saat */
-      if(/^\d{1,2}\s+\S+\s+\d{4}/.test(v)) return;      /* tarih (1 MART 2026 …) */
-      if(SKIP.test(v)) return;
-      const key = normPlay(v);
+      if(!playCols.has(c)) return;                       /* tarih/saat sütunları ve son (tarih tekrarı) sütunu */
+      if(isPremiereLabel(v)) return;                      /* salt "PRÖMİYER" işareti, oyun adı değil */
+      if(isFreeTextCell(cell)) return;                    /* Aylık Program'da "Serbest metin" işaretli hücre */
+      const key = playKeyOf(v);
       if(!key) return;
-      if(known.has(key)){ oyunlar.add(known.get(key)); return; }
+      const nk = normPlay(key);
+      if(known.has(nk)){ oyunlar.add(known.get(nk)); return; }
       /* "OYUN ADI (SAAT)" gibi ekli yazımlar için baş harf eşleşmesi */
       if(known.size){
-        for(const [nk, orig] of known){
-          if(nk.length > 3 && (key.startsWith(nk) || nk.startsWith(key))){ oyunlar.add(orig); return; }
+        for(const [kk, orig] of known){
+          if(kk.length > 3 && (nk.startsWith(kk) || kk.startsWith(nk))){ oyunlar.add(orig); return; }
         }
       }
       /* Repertuvar'da henüz kayıtlı olmayan oyun da sayıma dahil edilsin */
-      oyunlar.add(v.replace(/\s*\(.*\)\s*$/,"").trim());
+      oyunlar.add(key);
     });
     return {cells, dolu, oyunSayisi:oyunlar.size, oyunlar:[...oyunlar], note:String(m.siteNote||m.note||"").trim()};
   }
