@@ -379,6 +379,8 @@ body.fs-on #program .controls{position:sticky;top:0;z-index:40;background:var(--
         <span class="status" id="status">Yükleniyor…</span>
       </div>
       <div class="cmd-right">
+        <button class="btn small" id="addMonthTop" title="Yeni ay oluştur (Cumartesi 2 satır otomatik)">+ Yeni ay</button>
+        <button class="btn ghost small" id="delMonthTop" title="Görüntülenen ayı sil">&#128465; Ayı sil</button>
         <button class="btn ghost small" id="fsBtn" title="Aylık programı tam sayfa görüntüle (Esc ile çık)">Tam Ekran</button>
         <button class="btn small" id="toolbarToggleBtn" title="Düzenleme araç çubuğunu gizle/göster — aylık program odakta kalsın">Araçları gizle</button>
       </div>
@@ -1344,6 +1346,7 @@ function redo(){ if(!redoStack.length) return; undoStack.push(JSON.stringify(sta
 /* === Selection === */
 let sel = {r1:0,c1:0,r2:0,c2:0};
 let dragSelecting = false;
+let dragMoved = false;
 let dragAnchor = {r:0,c:0};
 function setSel(r1,c1,r2,c2){
   sel = {r1:Math.min(r1,r2),c1:Math.min(c1,c2),r2:Math.max(r1,r2),c2:Math.max(c1,c2)};
@@ -1698,13 +1701,22 @@ function wireCell(td){
     if(e.shiftKey){ dragAnchor={r:sel.r1,c:sel.c1}; setSel(dragAnchor.r,dragAnchor.c,r,c); }
     else { dragAnchor={r,c}; setSel(r,c,r,c); }
     dragSelecting = true;
+    dragMoved = false;
     e.preventDefault();
   });
   td.addEventListener('mouseenter', e=>{
     if(!dragSelecting || td.isContentEditable) return;
+    dragMoved = true;
     setSel(dragAnchor.r,dragAnchor.c,+td.dataset.r,+td.dataset.c);
   });
   td.addEventListener('dblclick', ()=> startEdit(td));
+  td.addEventListener('click', e=>{
+    if(td.isContentEditable) return;
+    if(e.shiftKey || e.ctrlKey || e.metaKey) return;
+    if(dragMoved) return;
+    if(sel.r1!==sel.r2 || sel.c1!==sel.c2) return;
+    startEdit(td);
+  });
   td.addEventListener('contextmenu', e=>{
     e.preventDefault();
     const r=+td.dataset.r, c=+td.dataset.c;
@@ -1902,7 +1914,8 @@ function startEdit(td){
     input.value = orig;
     input.style.cssText = 'width:100%;height:100%;box-sizing:border-box;font:inherit;border:none;outline:2px solid var(--primary);background:#fffbe8;text-align:left;padding:0 4px';
     td.appendChild(input);
-    input.focus(); input.select();
+    input.focus();
+    try{ const L=input.value.length; input.setSelectionRange(L,L); }catch(_){ }
     let done = false;
     function commit(save){
       if(done) return;
@@ -1931,7 +1944,7 @@ function startEdit(td){
 
   td.contentEditable='true';
   td.focus();
-  const range=document.createRange(); range.selectNodeContents(td);
+  const range=document.createRange(); range.selectNodeContents(td); range.collapse(false);
   const s=window.getSelection(); s.removeAllRanges(); s.addRange(range);
   function commit(save){
     td.contentEditable='false';
@@ -3337,6 +3350,8 @@ document.getElementById('prevMonthBtn').onclick = ()=>{ if(state.activeIdx>0){ s
 document.getElementById('nextMonthBtn').onclick = ()=>{ if(state.activeIdx<state.months.length-1){ state.activeIdx++; saveState(); renderSheet(); renderPrint(); refreshMonthSel(); renderPubState(); renderDraftState(); } };
 document.getElementById('addMonth').onclick = addBlankMonth;
 document.getElementById('delMonth').onclick = delCurMonth;
+document.getElementById('addMonthTop').onclick = addBlankMonth;
+document.getElementById('delMonthTop').onclick = delCurMonth;
 document.getElementById('renameMonth').onclick = renameCurMonth;
 document.getElementById('mergeBtn').onclick = opMerge;
 document.getElementById('unmergeBtn').onclick = opUnmerge;
