@@ -898,10 +898,41 @@ function findRedCell(months){
   }
   return null;
 }
+/* Otomatik tespit edilen KRİTİK kadro çakışmaları (aynı kişi aynı tarih/saatte
+   birden fazla oyunda kritik roldeyse) da elle boyanmış kırmızı hücreler gibi
+   kesinleştirme/yazdırmayı engellemeli. "ignoreConflict" ile susturulmuş
+   hücreler kullanıcı bilerek kabul ettiği için sayılmaz. */
+function findCriticalConflictCell(months){
+  const list = months || state.months || [];
+  for(const m of list){
+    if(!m || !m.rows) continue;
+    for(let r=2; r<m.rows; r++){
+      const games = rowGames(m,r);
+      if(games.length<2) continue;
+      const conflict = buildConflict(games);
+      if(!conflict.hasCritical) continue;
+      for(const g of games){
+        const cell = m.cells[r+'_'+g.col] || {};
+        if(cell.ignoreConflict) continue;
+        const anyCrit = Object.entries(conflict.people).some(([p,info])=>
+          info.critical && PEOPLE_MAP[g.key] && PEOPLE_MAP[g.key][p] && PEOPLE_MAP[g.key][p].critical
+        );
+        if(anyCrit) return {month:m.name, key:r+'_'+g.col};
+      }
+    }
+  }
+  return null;
+}
 function blockIfRedCell(actionLabel, months){
-  const hit = findRedCell(months || [curMonth()]);
+  const monthList = months || [curMonth()];
+  const hit = findRedCell(monthList);
   if(hit){
     siteMessage('"'+actionLabel+'" işlemi yapılamıyor: "'+(hit.month||'')+'" ayında kırmızı boyalı hücre var. Devam etmeden önce kırmızı hücreleri temizleyin veya farklı bir renkle işaretleyin.','warn','İşlem engellendi');
+    return true;
+  }
+  const chit = findCriticalConflictCell(monthList);
+  if(chit){
+    siteMessage('"'+actionLabel+'" işlemi yapılamıyor: "'+(chit.month||'')+'" ayında kritik kadro çakışması var (aynı kişi aynı tarih/saatte birden fazla oyunda). Devam etmeden önce çakışmayı çözün ya da ilgili hücrede "Bu çakışmayı yoksay" seçeneğini kullanın.','warn','İşlem engellendi');
     return true;
   }
   return false;
