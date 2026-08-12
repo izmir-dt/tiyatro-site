@@ -3415,17 +3415,51 @@ window.exportPDF = function(title, headers, data){
     else Object.keys(m.cells||{}).forEach(k => out[k] = m.cells[k]);
     return out;
   }
-  const SKIP = /^(\d|prömiyer|anahtar|turne$|izmir devlet)/i;
+  const SKIP = /^(prömiyer|anahtar|turne|izmir devlet|tatil|prova|boş|serbest)/i;
+  const normPlay = s => String(s||"")
+    .replace(/[(\[][^)\]]*[)\]]/g, " ")            /* (FUAYE-11.00) gibi ekler */
+    .replace(/\s+/g, " ").trim().toLocaleUpperCase("tr");
+  /* Oyun adları repertuvar köprüsünden gelir; böylece tarih, saat, sahne adı,
+     il adı, "TURNE" gibi hücreler oyun sayılmaz. */
+  function knownPlaySet(){
+    const out = new Map();
+    try{
+      const b = JSON.parse(localStorage.getItem(BRIDGE)||"null");
+      (b && b.plays || []).forEach(p => out.set(normPlay(p), String(p).trim()));
+    }catch(e){}
+    try{
+      if(typeof DATA !== "undefined" && Array.isArray(DATA))
+        DATA.forEach(r => { const o=String(r.oyun||"").trim(); if(o) out.set(normPlay(o), o); });
+    }catch(e){}
+    return out;
+  }
   function monthInfo(m){
     const cells = cellsOf(m);
+    const known = knownPlaySet();
     let dolu = 0; const oyunlar = new Set();
     Object.keys(cells).forEach(k => {
-      const v = String((cells[k]||{}).v||"").trim(); if(!v) return;
+      const cell = cells[k]||{};
+      const v = String(cell.v||"").trim(); if(!v) return;
       dolu++;
-      const c = +k.split("_")[1];
-      if(c >= 2 && !/^\d{1,2}[.:]\d{2}/.test(v) && !SKIP.test(v)) oyunlar.add(v.replace(/\s*\(.*\)\s*$/,"").trim());
+      const r = +k.split("_")[0], c = +k.split("_")[1];
+      if(r < 2) return;                                  /* kurum başlığı ve sahne satırı */
+      if(c < 2) return;                                  /* tarih ve saat sütunları */
+      if(cell.freeText || cell.cat) return;              /* serbest metin / kategorili not */
+      if(/^\d{1,2}[.:]\d{2}/.test(v)) return;            /* saat */
+      if(/^\d{1,2}\s+\S+\s+\d{4}/.test(v)) return;      /* tarih (1 MART 2026 …) */
+      if(SKIP.test(v)) return;
+      const key = normPlay(v);
+      if(!key) return;
+      if(known.size){
+        if(known.has(key)){ oyunlar.add(known.get(key)); return; }
+        /* "OYUN ADI (SAAT)" gibi ekli yazımlar için baş harf eşleşmesi */
+        for(const [nk, orig] of known){
+          if(nk.length > 3 && (key.startsWith(nk) || nk.startsWith(key))){ oyunlar.add(orig); return; }
+        }
+      }
+      else oyunlar.add(v.replace(/\s*\(.*\)\s*$/,"").trim());
     });
-    return {cells, dolu, oyunSayisi:oyunlar.size, oyunlar:[...oyunlar]};
+    return {cells, dolu, oyunSayisi:oyunlar.size, oyunlar:[...oyunlar], note:String(m.siteNote||m.note||"").trim()};
   }
 
   /* ---------- 3) Önizleme tablosu (salt okunur) ---------- */
@@ -3495,7 +3529,8 @@ window.exportPDF = function(title, headers, data){
           <div class="aph-months">${infos.map((inf,i) => `
             <div class="aph-card">
               <div class="ttl">${esc(months[i].name||("Ay "+(i+1)))}</div>
-              <div class="meta">${inf.oyunSayisi} oyun · ${inf.dolu} dolu hücre · ${months[i].rows}×${months[i].cols}</div>
+              <div class="meta">${inf.oyunSayisi} oyun</div>
+              ${inf.note ? `<div class="meta" style="margin-top:6px;white-space:pre-wrap;color:var(--text-dim)">${esc(inf.note)}</div>` : ""}
               <div class="acts">
                 <button class="btn sm pri" onclick="openProgramSite(${i})">Aç ve düzenle</button>
                 <button class="btn sm" onclick="toggleProgramPreview(${i})">${PREVIEW===i?"Önizlemeyi kapat":"Önizle"}</button>
