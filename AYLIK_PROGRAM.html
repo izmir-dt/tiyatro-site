@@ -164,6 +164,10 @@ table.sheet td.cell.freetext[data-cat="DUYURU"]::before{content:"📣 "}
 .pl-free-tools{display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:6px 10px;border:1px solid #a9d6c2;border-top:none;background:#fff}
 .pub-state{font-size:12px;font-weight:700;padding:3px 9px;border-radius:99px;border:1px solid var(--border);background:#fff;color:var(--muted)}
 .pub-state.ok{color:#1f7a5c;border-color:#a9d6c2;background:#eefaf4}
+.draft-state{font-size:12px;font-weight:700;padding:3px 9px;border-radius:99px;border:1px solid var(--border);background:#fff;color:var(--muted)}
+.draft-state.ok{color:#1a56b8;border-color:#a9c6e8;background:#eef4fc}
+.draft-state.syncing{color:#8a6d1a;border-color:#e8d6a9;background:#fdf7e8}
+#alwaysGroup .draft-state{background:#fff}
 table.sheet td.cell.note-mark::after{content:"";position:absolute;top:0;right:0;border-top:6px solid var(--accent);border-left:6px solid transparent}
 
 /* Context menu */
@@ -318,6 +322,7 @@ table.sheet td.cell.note-mark::after{content:"";position:absolute;top:0;right:0;
       <button class="btn small" id="toolbarToggleBtn" title="Düzenleme araç çubuğunu gizle/göster — aylık program odakta kalsın">🧰 Araçları gizle</button>
       <button class="btn ghost small" id="fsBtn" title="Aylık programı tam sayfa görüntüle (Esc ile çık)">⛶ Tam Ekran</button>
       <span class="pub-state" id="pubState">Yayın durumu: —</span>
+      <span class="draft-state" id="draftState" title="Kesinleştirilmemiş değişiklikler birkaç saniyede bir otomatik olarak ortak sunucuya kaydedilir; sayfa açıldığında diğer bilgisayarlardaki en güncel taslak otomatik yüklenir.">Taslak: —</span>
     </div>
     <div id="toolbarExtra" style="display:contents">
     <div class="group">
@@ -620,6 +625,7 @@ function loadState(){
       if(!st.playNotes || typeof st.playNotes!=='object') st.playNotes = {};
       if(!st.playFreeNotes || typeof st.playFreeNotes!=='object') st.playFreeNotes = {};
       if(!st.monthPub || typeof st.monthPub!=='object') st.monthPub = {};
+      if(!st.monthDraft || typeof st.monthDraft!=='object') st.monthDraft = {};
       restoreMissingMonths(st);
       return st;
     }
@@ -641,6 +647,7 @@ function loadState(){
           if(!bs.playNotes||typeof bs.playNotes!=='object') bs.playNotes={};
           if(!bs.playFreeNotes||typeof bs.playFreeNotes!=='object') bs.playFreeNotes={};
           if(!bs.monthPub||typeof bs.monthPub!=='object') bs.monthPub={};
+          if(!bs.monthDraft||typeof bs.monthDraft!=='object') bs.monthDraft={};
           restoreMissingMonths(bs);
           return bs;
         }
@@ -661,6 +668,7 @@ function loadState(){
   st.playNotes = {};
   st.playFreeNotes = {};
   st.monthPub = {};
+  st.monthDraft = {};
   return st;
 }
 function normalizeMonth(m){
@@ -709,6 +717,7 @@ function saveState(){
   }
   pushBackup(false);
   if(typeof renderDataViews==='function') renderDataViews();
+  scheduleDraftSync();
 }
 /* Yedekten geri yükleme (ay bazlı veya tam) */
 function openBackupDialog(){
@@ -843,10 +852,13 @@ async function publishProgram(){
     const version = 'apub_' + slug + '_' + ts;
     const old = await fetch(PUBLISH_API + '/' + encodeURIComponent(PUBLISH_SHEET), {cache:'no-store'});
     const oldData = old.ok ? await old.json() : {rows:[]};
-    const prefix = 'apub_' + slug + '_';
+    /* Aynı ayın hem eski "kesinleştirilmiş" hem de bekleyen "taslak" satırları
+       tek seferde, indeksler kaymasın diye BÜYÜKTEN KÜÇÜĞE sırayla silinir. */
+    const prefixPub = 'apub_' + slug + '_';
+    const prefixDraft = DRAFT_PREFIX + slug + '_';
     const oldRows = (oldData.rows || [])
       .map((r,i)=>({r,i}))
-      .filter(x=>String(x.r[0]||'').startsWith(prefix))
+      .filter(x=>String(x.r[0]||'').startsWith(prefixPub) || String(x.r[0]||'').startsWith(prefixDraft))
       .sort((a,b)=>b.i-a.i);
     for(const item of oldRows){
       const del = await fetch(PUBLISH_API + '/' + encodeURIComponent(PUBLISH_SHEET) + '/row/' + item.i, {method:'DELETE'});
@@ -864,7 +876,11 @@ async function publishProgram(){
     }
     state.monthPub = state.monthPub || {};
     state.monthPub[m.name] = {publishedAt: ts, unpublishedAt: null};
-    saveState(); renderPubState();
+    /* Kesinleştirilen sürüm artık esastır; aynı zaman damgasını taslak
+       katmanına da yazarak eski bir taslağın bunun üstüne yazmasını önle. */
+    state.monthDraft = state.monthDraft || {};
+    state.monthDraft[m.name] = {draftAt: ts};
+    saveState(); renderPubState(); renderDraftState();
     setStatus('"'+m.name+'" kesinleştirildi — index sayfasında ortak olarak görünecek.');
     siteMessage('"'+m.name+'" kesinleştirildi. Artık index sayfasını açan tüm bilgisayarlarda bu ay güncel sürümüyle görülecek. Diğer aylar etkilenmedi.','ok','Ay kesinleştirildi');
   }catch(e){
@@ -872,6 +888,93 @@ async function publishProgram(){
     siteMessage('Kesinleştirilemedi: '+(e.message||'Bağlantı hatası'),'error','Yayın hatası');
   }finally{
     if(btn) { btn.disabled=false; btn.textContent='Kesinleştir'; }
+  }
+}
+
+/* === Ortak taslak: KESİNLEŞTİRMEDEN ÖNCE bile tüm bilgisayarlarda görünsün ===
+   "Kesinleştir" yalnızca kullanıcı onayladığında ve yalnızca o an açık ayı
+   yazar. Bu taslak katmanı ise her değişiklikten birkaç saniye sonra, hâlâ
+   üzerinde çalışılan (kesinleşmemiş) hâliyle açık olan ayı otomatik olarak
+   aynı ortak Google E-Tablo sekmesine ("AYLIK PROGRAM") "adraft_" önekiyle
+   yazar. Böylece bir bilgisayarda yapılan değişiklik, henüz "Kesinleştir"e
+   basılmadan da birkaç saniye içinde diğer bilgisayarlara yansır. Sayfa her
+   açıldığında/yenilendiğinde sunucudaki en güncel taslak otomatik çekilir. */
+const DRAFT_PREFIX = 'adraft_';
+const DRAFT_DEBOUNCE_MS = 3500;
+let _draftTimer = null;
+let _draftPushing = false;
+let _draftDirtyAgain = false;
+let _suppressDraftSync = false;
+
+function scheduleDraftSync(){
+  if(_suppressDraftSync) return;
+  clearTimeout(_draftTimer);
+  _draftTimer = setTimeout(()=>{ pushDraft(); }, DRAFT_DEBOUNCE_MS);
+}
+
+async function pushDraft(){
+  if(_draftPushing){ _draftDirtyAgain = true; return; }
+  _draftPushing = true;
+  const m = curMonth();
+  const el = document.getElementById('draftState');
+  if(!m){ _draftPushing = false; return; }
+  const slug = monthSlug(m.name);
+  if(el){ el.textContent = 'Taslak: kaydediliyor…'; el.classList.remove('ok'); el.classList.add('syncing'); }
+  try{
+    const payload = JSON.stringify({
+      month: m,
+      plays: state.plays || [],
+      playsExtra: state.playsExtra || [],
+      generalNotes: state.generalNotes || '',
+      playNotes: state.playNotes || {},
+      playFreeNotes: state.playFreeNotes || {}
+    });
+    const encoded = utf8ToB64(payload);
+    const ts = Date.now();
+    const version = DRAFT_PREFIX + slug + '_' + ts;
+    const old = await fetch(PUBLISH_API + '/' + encodeURIComponent(PUBLISH_SHEET), {cache:'no-store'});
+    const oldData = old.ok ? await old.json() : {rows:[]};
+    const prefix = DRAFT_PREFIX + slug + '_';
+    const oldRows = (oldData.rows || [])
+      .map((r,i)=>({r,i}))
+      .filter(x=>String(x.r[0]||'').startsWith(prefix))
+      .sort((a,b)=>b.i-a.i);
+    for(const item of oldRows){
+      await fetch(PUBLISH_API + '/' + encodeURIComponent(PUBLISH_SHEET) + '/row/' + item.i, {method:'DELETE'});
+    }
+    const parts = [];
+    for(let i=0;i<encoded.length;i+=PUBLISH_CHUNK) parts.push(encoded.slice(i,i+PUBLISH_CHUNK));
+    for(let i=0;i<parts.length;i++){
+      const res = await fetch(PUBLISH_API + '/' + encodeURIComponent(PUBLISH_SHEET) + '/row', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({values:[version,ts,i,parts.length,parts[i]]})
+      });
+      if(!res.ok) throw new Error('Taslak yazılamadı (HTTP '+res.status+')');
+    }
+    state.monthDraft = state.monthDraft || {};
+    state.monthDraft[m.name] = {draftAt: ts};
+    /* localStorage'a doğrudan yaz — saveState() burada çağrılırsa yeni bir
+       taslak döngüsü tetiklenir; bu son yazım zaten sunucuyla eşleşiyor. */
+    try{ localStorage.setItem(LSKEY, JSON.stringify(state)); }catch(e){}
+    if(el){ el.textContent = 'Taslak: paylaşıldı · ' + new Date(ts).toLocaleTimeString('tr-TR'); el.classList.remove('syncing'); el.classList.add('ok'); }
+  }catch(e){
+    if(el){ el.textContent = 'Taslak: kaydedilemedi (bağlantı hatası)'; el.classList.remove('syncing','ok'); }
+  }finally{
+    _draftPushing = false;
+    if(_draftDirtyAgain){ _draftDirtyAgain = false; scheduleDraftSync(); }
+  }
+}
+function renderDraftState(){
+  const el = document.getElementById('draftState'); if(!el) return;
+  const m = curMonth();
+  const rec = (state.monthDraft || {})[m ? m.name : ''];
+  if(rec && rec.draftAt){
+    el.textContent = 'Taslak: son paylaşım · ' + new Date(rec.draftAt).toLocaleTimeString('tr-TR');
+    el.classList.add('ok'); el.classList.remove('syncing');
+  } else {
+    el.textContent = 'Taslak: henüz paylaşılmadı';
+    el.classList.remove('ok','syncing');
   }
 }
 
@@ -947,8 +1050,84 @@ async function syncFromServer(){
   saveState();
   renderAll();
   renderPubState();
+  renderDraftState();
   setStatus('Sunucudan güncel program yüklendi.');
   siteMessage('Bu tarayıcıda güncel kayıt bulunamadı; sunucudaki kesinleştirilmiş aylar otomatik olarak yüklendi.','ok','Sunucudan senkronize edildi');
+}
+
+/* Sunucudaki TÜM bekleyen (henüz kesinleşmemiş) taslakları, her ay için en
+   güncel sürümü seçerek döndürür. Grup kimliği: adraft_<ay-kodu>_<zaman>. */
+async function fetchAllDraftMonths(){
+  try{
+    const r = await fetch(PUBLISH_API + '/' + encodeURIComponent(PUBLISH_SHEET), {cache:'no-store'});
+    if(!r.ok) return [];
+    const rows = (await r.json()).rows || [];
+    const groups = new Map();
+    rows.forEach(row=>{
+      const id = String(row[0]||'');
+      if(!id.startsWith(DRAFT_PREFIX)) return;
+      const ts = +row[1]||0;
+      if(!groups.has(id)) groups.set(id, {ts, parts:[]});
+      groups.get(id).parts.push(row);
+    });
+    const bySlug = new Map();
+    const idRe = new RegExp('^'+DRAFT_PREFIX+'(.+)_(\\d+)$');
+    for(const [id, g] of groups){
+      const mm = id.match(idRe);
+      if(!mm) continue;
+      const slug = mm[1];
+      const existing = bySlug.get(slug);
+      if(!existing || g.ts > existing.ts) bySlug.set(slug, {id, ts:g.ts, parts:g.parts});
+    }
+    const out = [];
+    for(const [slug, g] of bySlug){
+      const parts = g.parts.slice().sort((a,b)=>(+a[2]||0)-(+b[2]||0));
+      const total = +parts[0][3] || parts.length;
+      if(parts.length < total) continue; /* parça eksik, güvenilmez */
+      const encoded = parts.slice(0,total).map(r=>String(r[4]||'')).join('');
+      try{ out.push({slug, ts:g.ts, data: JSON.parse(b64ToUtf8(encoded))}); }catch(e){}
+    }
+    return out;
+  }catch(e){ return []; }
+}
+/* Sayfa açıldığında/yenilendiğinde: sunucuda, bu tarayıcıdaki taslaktan
+   (ve kesinleşmiş sürümden) daha yeni bir taslak varsa otomatik uygulanır.
+   Kullanıcı tercihi: bu, yereldeki henüz sunucuya yazılmamış (birkaç
+   saniyelik) değişikliklerin üzerine yazabilir — amaç her bilgisayarda
+   aynı en güncel çalışma hâlini göstermek. */
+async function syncDraftFromServer(){
+  const results = await fetchAllDraftMonths();
+  if(!results.length) return;
+  state.monthDraft = state.monthDraft || {};
+  state.monthPub = state.monthPub || {};
+  let changed = false;
+  for(const {ts, data} of results){
+    if(!data || !data.month || !data.month.name) continue;
+    const name = data.month.name;
+    const localDraftTs = (state.monthDraft[name]||{}).draftAt || 0;
+    const localPubTs = (state.monthPub[name]||{}).publishedAt || 0;
+    if(ts <= localDraftTs || ts <= localPubTs) continue; /* zaten aynı veya daha yeni */
+    const normalized = normalizeMonth(data.month);
+    const idx = state.months.findIndex(mo=>mo.name===name);
+    if(idx>=0) state.months[idx] = normalized; else state.months.push(normalized);
+    state.monthDraft[name] = {draftAt: ts};
+    if(Array.isArray(data.plays)) state.plays = data.plays;
+    if(Array.isArray(data.playsExtra)) state.playsExtra = data.playsExtra;
+    if(typeof data.generalNotes === 'string') state.generalNotes = data.generalNotes;
+    if(data.playNotes && typeof data.playNotes === 'object') state.playNotes = {...state.playNotes, ...data.playNotes};
+    if(data.playFreeNotes && typeof data.playFreeNotes === 'object') state.playFreeNotes = {...state.playFreeNotes, ...data.playFreeNotes};
+    changed = true;
+  }
+  if(!changed) return;
+  if(state.activeIdx==null || state.activeIdx>=state.months.length) state.activeIdx = 0;
+  _suppressDraftSync = true;
+  try{ localStorage.setItem(LSKEY, JSON.stringify(state)); }catch(e){}
+  _suppressDraftSync = false;
+  renderAll();
+  renderPubState();
+  renderDraftState();
+  setStatus('Sunucudaki güncel taslak yüklendi.');
+  siteMessage('Başka bir bilgisayarda yapılan, henüz kesinleştirilmemiş değişiklikler bu sayfaya otomatik olarak yüklendi.','ok','Taslak senkronize edildi');
 }
 
 /* === Kategoriler === */
@@ -1019,7 +1198,7 @@ async function unpublishProgram(){
     state.monthPub = state.monthPub || {};
     if(!rows.length){
       state.monthPub[m.name] = {publishedAt:null, unpublishedAt: state.monthPub[m.name]?.unpublishedAt || null};
-      saveState(); renderPubState();
+      saveState(); renderPubState(); renderDraftState();
       siteMessage('"'+m.name+'" için ortak sunucuda yayınlanmış bir sürüm bulunamadı.','warn','Yayın bulunamadı');
       return;
     }
@@ -1028,7 +1207,7 @@ async function unpublishProgram(){
       if(!del.ok) throw new Error('Yayın kaldırılamadı (HTTP '+del.status+')');
     }
     state.monthPub[m.name] = {publishedAt:null, unpublishedAt: Date.now()};
-    saveState(); renderPubState();
+    saveState(); renderPubState(); renderDraftState();
     setStatus('"'+m.name+'" için kesinleştirme geri alındı.');
     siteMessage('"'+m.name+'" için kesinleştirme geri alındı. Bu ay artık index sayfasında görünmeyecek; düzenleyip yeniden kesinleştirebilirsiniz. Diğer aylar etkilenmedi.','ok','Yayın kaldırıldı');
   }catch(e){
@@ -3027,9 +3206,9 @@ function renderAll(){
 }
 
 /* Wire */
-document.getElementById('monthSel').onchange = e=>{ state.activeIdx=+e.target.value; saveState(); renderSheet(); renderPrint(); renderPubState(); };
-document.getElementById('prevMonthBtn').onclick = ()=>{ if(state.activeIdx>0){ state.activeIdx--; saveState(); renderSheet(); renderPrint(); refreshMonthSel(); renderPubState(); } };
-document.getElementById('nextMonthBtn').onclick = ()=>{ if(state.activeIdx<state.months.length-1){ state.activeIdx++; saveState(); renderSheet(); renderPrint(); refreshMonthSel(); renderPubState(); } };
+document.getElementById('monthSel').onchange = e=>{ state.activeIdx=+e.target.value; saveState(); renderSheet(); renderPrint(); renderPubState(); renderDraftState(); };
+document.getElementById('prevMonthBtn').onclick = ()=>{ if(state.activeIdx>0){ state.activeIdx--; saveState(); renderSheet(); renderPrint(); refreshMonthSel(); renderPubState(); renderDraftState(); } };
+document.getElementById('nextMonthBtn').onclick = ()=>{ if(state.activeIdx<state.months.length-1){ state.activeIdx++; saveState(); renderSheet(); renderPrint(); refreshMonthSel(); renderPubState(); renderDraftState(); } };
 document.getElementById('addMonth').onclick = addBlankMonth;
 document.getElementById('delMonth').onclick = delCurMonth;
 document.getElementById('renameMonth').onclick = renameCurMonth;
@@ -3160,8 +3339,9 @@ initFullscreen();
 initToolbarToggle();
 setSel(2,2,2,2);
 renderPubState();
+renderDraftState();
 setStatus('Hazır.');
-syncFromServer();
+syncFromServer().then(()=>syncDraftFromServer());
 </script>
 <!-- ═══════ İDT REPERTUVAR KÖPRÜSÜ (v2) ═══════ -->
 <style>
