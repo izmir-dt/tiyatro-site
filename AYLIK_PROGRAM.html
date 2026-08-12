@@ -826,15 +826,15 @@ function saveState(){
   scheduleDraftSync();
 }
 /* Yedekten geri yükleme (ay bazlı veya tam) */
-function openBackupDialog(){
+async function openBackupDialog(){
   const list = readBackups();
   if(!list.length){ siteMessage('Henüz yedek oluşmamış.','warn','Yedek yok'); return; }
   const lines = list.map((b,i)=> (i+1)+') '+new Date(b.t).toLocaleString('tr-TR')+' — '+b.months+' ay: '+(b.names||[]).join(', ')).reverse().join('\n');
-  const ans = prompt('Geri yüklemek istediğiniz yedeğin numarasını yazın:\n\n'+lines+'\n\nNumara:');
+  const ans = await sitePrompt('Geri yüklemek istediğiniz yedeğin numarasını yazın:\n\n'+lines+'\n\nNumara:', '', 'Yedekten geri yükle');
   if(!ans) return;
   const idx = parseInt(ans,10)-1;
   if(!(idx>=0 && idx<list.length)){ siteMessage('Geçersiz numara.','warn','Geri yükleme'); return; }
-  if(!confirm('Bu yedek yüklenecek. Mevcut veri geri alınabilir (Geri al).')) return;
+  if(!await siteConfirm('Bu yedek yüklenecek. Mevcut veri geri alınabilir (Geri al).', 'Yedek yüklensin mi?')) return;
   snapshot();
   try{
     const st = JSON.parse(list[idx].data);
@@ -941,7 +941,7 @@ function monthSlug(name){
 async function publishProgram(){
   if(blockIfRedCell('Kesinleştir')) return;
   const m = curMonth();
-  const nv = prompt('Bu ay için bir not eklemek ister misiniz? (index sitesinde bu ayın kartında görünür)\nBoş bırakıp Tamam\'a basarsanız not silinir, İptal\'e basarsanız mevcut not korunur ve bu adım atlanır.', m.siteNote || '');
+  const nv = await sitePrompt('Bu ay için bir not eklemek ister misiniz? (index sitesinde bu ayın kartında görünür)\nBoş bırakıp Tamam\'a basarsanız not silinir, Vazgeç\'e basarsanız mevcut not korunur ve bu adım atlanır.', m.siteNote || '', 'Ay notu');
   if(nv !== null){
     const t = nv.trim();
     if(t) m.siteNote = t; else delete m.siteNote;
@@ -1244,11 +1244,11 @@ async function syncDraftFromServer(){
 
 /* === Kategoriler === */
 const CATEGORIES = ['İL','SAHNE','TURNE','PROVA','TATİL','DUYURU','DİĞER'];
-function opSetCategory(){
+async function opSetCategory(){
   const m = curMonth();
   const cur = (m.cells[sel.r1+'_'+sel.c1]||{}).cat || '';
   const msg = 'Kategori seçin (numara yazın):\n' + CATEGORIES.map((c,i)=>(i+1)+') '+c).join('\n') + '\n0) Kategoriyi kaldır';
-  const ans = prompt(msg, cur ? String(CATEGORIES.indexOf(cur)+1) : '1');
+  const ans = await sitePrompt(msg, cur ? String(CATEGORIES.indexOf(cur)+1) : '1', 'Kategori seç');
   if(ans===null) return;
   const n = parseInt(String(ans).trim(),10);
   if(isNaN(n) || n<0 || n>CATEGORIES.length){ siteMessage('Geçersiz kategori seçimi.','warn','Kategori'); return; }
@@ -1281,9 +1281,9 @@ function setCellCategory(mi,key,cat){
   m.cells[key] = nc;
   saveState(); renderSheet(); renderPrint(); renderPlays();
 }
-function askCategory(current){
+async function askCategory(current){
   const msg = 'Kategori seçin (numara yazın):\n' + CATEGORIES.map((c,i)=>(i+1)+') '+c).join('\n') + '\n0) Kategoriyi kaldır';
-  const ans = prompt(msg, current ? String(CATEGORIES.indexOf(current)+1) : '1');
+  const ans = await sitePrompt(msg, current ? String(CATEGORIES.indexOf(current)+1) : '1', 'Kategori seç');
   if(ans===null) return null;
   const n = parseInt(String(ans).trim(),10);
   if(isNaN(n) || n<0 || n>CATEGORIES.length) return null;
@@ -1296,7 +1296,7 @@ function askCategory(current){
 async function unpublishProgram(){
   const m = curMonth();
   const slug = monthSlug(m.name);
-  if(!confirm('"'+m.name+'" için kesinleştirme geri alınsın mı?\n\nSadece bu ayın ortak sunucudaki yayını kaldırılacak; index sayfasında bu ay görünmeyecek. Diğer kesinleştirilmiş aylar ETKİLENMEZ. Yerel (bu tarayıcıdaki) verileriniz SİLİNMEZ.')) return;
+  if(!await siteConfirm('"'+m.name+'" için kesinleştirme geri alınsın mı?\n\nSadece bu ayın ortak sunucudaki yayını kaldırılacak; index sayfasında bu ay görünmeyecek. Diğer kesinleştirilmiş aylar ETKİLENMEZ. Yerel (bu tarayıcıdaki) verileriniz SİLİNMEZ.', 'Kesinleştirmeyi geri al')) return;
   const btn = document.getElementById('unpublishBtn');
   if(btn){ btn.disabled=true; btn.textContent='Geri alınıyor…'; }
   try{
@@ -1538,9 +1538,9 @@ function renderShowings(){
   list.querySelectorAll('[data-showing-go]').forEach(b=>b.onclick=()=>{
     const o=all[+b.dataset.showingGo]; if(o) gotoCell(o.mi,o.r,o.c);
   });
-  list.querySelectorAll('[data-showing-note]').forEach(b=>b.onclick=()=>{
+  list.querySelectorAll('[data-showing-note]').forEach(b=>b.onclick=async()=>{
     const o=all[+b.dataset.showingNote]; if(!o) return;
-    const n=prompt('Not:',o.note||''); if(n===null) return;
+    const n=await sitePrompt('Not:',o.note||'','Not ekle/düzenle'); if(n===null) return;
     setCellNote(o.mi,o.key,n); renderShowings();
   });
   const badge=document.getElementById('showingsBadge');
@@ -1571,9 +1571,9 @@ function renderCategories(){
   list.querySelectorAll('[data-category-go]').forEach(b=>b.onclick=()=>{
     const o=all[+b.dataset.categoryGo]; if(o) gotoCell(o.mi,o.r,o.c);
   });
-  list.querySelectorAll('[data-category-edit]').forEach(b=>b.onclick=()=>{
+  list.querySelectorAll('[data-category-edit]').forEach(b=>b.onclick=async()=>{
     const o=all[+b.dataset.categoryEdit]; if(!o) return;
-    const cat=askCategory(o.category); if(cat===null) return;
+    const cat=await askCategory(o.category); if(cat===null) return;
     setCellCategory(o.mi,o.key,cat); renderCategories();
   });
   const badge=document.getElementById('categoriesBadge');
@@ -2041,10 +2041,10 @@ function opFreeText(){
   saveState(); renderSheet(); renderPrint(); renderPlays();
   setStatus(anyOff ? 'Seçili hücreler serbest metin olarak işaretlendi.' : 'Serbest metin işareti kaldırıldı.');
 }
-function opCellNote(){
+async function opCellNote(){
   const m=curMonth(); const k=sel.r1+'_'+sel.c1;
   const cur=(m.cells[k]||{}).note||'';
-  const n=prompt('Not (oyunun yanında ✎ olarak görünür):', cur);
+  const n=await sitePrompt('Not (oyunun yanında ✎ olarak görünür):', cur, 'Not ekle/düzenle');
   if(n===null) return;
   snapshot();
   m.cells[k] = {...(m.cells[k]||{v:''}), note:n||undefined};
@@ -2345,10 +2345,10 @@ function showCtx(x,y,kind){
       ['Rengi Temizle', opClearFormat],
       ['⚠️ Çakışmayı yok say (aç/kapat)', opIgnoreConflict],
       ['✎ Serbest metin / not hücresi (aç/kapat)', opFreeText],
-      ['Not ekle/düzenle…', ()=>{
+      ['Not ekle/düzenle…', async()=>{
         const m=curMonth(); const k=sel.r1+'_'+sel.c1;
         const cur=(m.cells[k]||{}).note||'';
-        const n=prompt('Not:', cur);
+        const n=await sitePrompt('Not:', cur, 'Not ekle/düzenle');
         if(n===null) return;
         snapshot();
         m.cells[k] = {...(m.cells[k]||{v:''}), note:n||undefined};
@@ -2555,7 +2555,7 @@ function buildMonthTemplate(monthNum /*1-12*/, year, prev){
   const rows = r;
   return {name: monthName, rows, cols, cells, merges};
 }
-function addBlankMonth(){
+async function addBlankMonth(){
   const suggest = (function(){
     // Sonraki ayı öner
     const now = new Date();
@@ -2564,7 +2564,7 @@ function addBlankMonth(){
     const idx = ((nm-1)%12);
     return AY_ADLARI[idx]+' '+y;
   })();
-  const nm = prompt('Yeni ay adı (ör. TEMMUZ 2026):', suggest);
+  const nm = await sitePrompt('Yeni ay adı (ör. TEMMUZ 2026):', suggest, 'Yeni ay ekle');
   if(!nm) return;
   const parts = nm.trim().split(/\s+/);
   const ayIdx = AY_ADLARI.indexOf((parts[0]||'').toLocaleUpperCase('tr'));
@@ -2578,9 +2578,9 @@ function addBlankMonth(){
   state.months.push(m); state.activeIdx = state.months.length-1;
   saveState(); renderAll();
 }
-function delCurMonth(){
+async function delCurMonth(){
   if(state.months.length<=1){ siteMessage('Son ay silinemez.','warn','Ay silinemedi'); return; }
-  if(!confirm(`"${curMonth().name}" silinsin mi?`)) return;
+  if(!await siteConfirm(`"${curMonth().name}" silinsin mi?`, 'Ay silinsin mi?')) return;
   pushBackup(true);
   snapshot();
   state.months.splice(state.activeIdx,1);
@@ -2588,9 +2588,9 @@ function delCurMonth(){
   saveState(); renderAll();
 }
 /* Bu ayın index sitesinde kartın altında görünecek serbest notu */
-function editMonthSiteNote(){
+async function editMonthSiteNote(){
   const m = curMonth();
-  const nv = prompt('Bu ay için not (index sitesinde ayın kartında görünür):', m.siteNote || '');
+  const nv = await sitePrompt('Bu ay için not (index sitesinde ayın kartında görünür):', m.siteNote || '', 'Ay notu');
   if(nv === null) return;
   snapshot();
   const t = nv.trim();
@@ -2599,8 +2599,8 @@ function editMonthSiteNote(){
   setStatus(t ? 'Ay notu kaydedildi — kesinleştirdikten sonra index sitesinde görünür.' : 'Ay notu silindi.');
 }
 
-function renameCurMonth(){
-  const nm = prompt('Yeni ay adı:', curMonth().name);
+async function renameCurMonth(){
+  const nm = await sitePrompt('Yeni ay adı:', curMonth().name, 'Ay adını değiştir');
   if(!nm) return;
   snapshot(); curMonth().name = nm; saveState(); renderAll();
 }
@@ -3045,15 +3045,15 @@ function renderPlays(filter){
       </div>` : '';
     freeBox.querySelectorAll('[data-fcat]').forEach(b=>{ b.onclick=()=>{ freeCatFilter = b.dataset.fcat; renderPlays(filter); }; });
     freeBox.querySelectorAll('[data-fgo]').forEach(b=>{ b.onclick=()=>{ const o=fts[b.dataset.fgo][0]; gotoCell(o.mi,o.r,o.c); }; });
-    freeBox.querySelectorAll('[data-fcatset]').forEach(b=>{ b.onclick=()=>{
+    freeBox.querySelectorAll('[data-fcatset]').forEach(b=>{ b.onclick=async()=>{
       const t=b.dataset.fcatset;
-      const cat = askCategory(catOf(t));
+      const cat = await askCategory(catOf(t));
       if(cat===null) return;
       (fts[t]||[]).forEach(o=>{ const m=state.months[o.mi]; if(m.cells[o.key]){ const n={...m.cells[o.key]}; if(cat){ n.cat=cat; n.freeText=true; } else delete n.cat; m.cells[o.key]=n; } });
       saveState(); renderSheet(); renderPrint(); renderPlays(filter);
       setStatus(cat ? ('"'+t+'" → '+cat) : 'Kategori kaldırıldı.');
     }; });
-    freeBox.querySelectorAll('[data-fnote]').forEach(b=>{ b.onclick=()=>{ const o=fts[b.dataset.fnote][0]; const m=state.months[o.mi]; const cur=(m.cells[o.key]||{}).note||''; const n=prompt('Not:',cur); if(n===null) return; setCellNote(o.mi,o.key,n); }; });
+    freeBox.querySelectorAll('[data-fnote]').forEach(b=>{ b.onclick=async()=>{ const o=fts[b.dataset.fnote][0]; const m=state.months[o.mi]; const cur=(m.cells[o.key]||{}).note||''; const n=await sitePrompt('Not:',cur,'Not ekle/düzenle'); if(n===null) return; setCellNote(o.mi,o.key,n); }; });
     freeBox.querySelectorAll('[data-fplay]').forEach(b=>{ b.onclick=()=>{
       const t=b.dataset.fplay;
       (fts[t]||[]).forEach(o=>{ const m=state.months[o.mi]; if(m.cells[o.key]){ const n={...m.cells[o.key]}; delete n.freeText; delete n.cat; m.cells[o.key]=n; } });
@@ -3250,9 +3250,9 @@ function renderPlayDetail(byPlay){
   box.querySelectorAll('[data-occgo]').forEach(b=>b.onclick=()=>{
     const o=occList[+b.dataset.occgo]; if(o) gotoCell(o.mi,o.r,o.c);
   });
-  box.querySelectorAll('[data-occnote]').forEach(b=>b.onclick=()=>{
+  box.querySelectorAll('[data-occnote]').forEach(b=>b.onclick=async()=>{
     const o=occList[+b.dataset.occnote]; if(!o) return;
-    const n=prompt('Not — '+(o.month||'')+' '+(o.date||'')+(o.time?' '+o.time:'')+':',o.note||'');
+    const n=await sitePrompt('Not — '+(o.month||'')+' '+(o.date||'')+(o.time?' '+o.time:'')+':',o.note||'','Not ekle/düzenle');
     if(n===null) return;
     setCellNote(o.mi,o.key,n);
     playDetailTab='showings';
@@ -3263,8 +3263,8 @@ function renderPlayDetail(byPlay){
     navigator.clipboard && navigator.clipboard.writeText(txt).catch(()=>{});
     setStatus('Kadro kopyalandı.');
   };
-  document.getElementById('plDelete').onclick=()=>{
-    if(!confirm(`"${p}" oyunu ve ekip listesi silinsin mi?`)) return;
+  document.getElementById('plDelete').onclick=async()=>{
+    if(!await siteConfirm(`"${p}" oyunu ve ekip listesi silinsin mi?`, 'Oyun silinsin mi?')) return;
     crewDeletePlay(p); selectedPlay=null;
     buildOyunDatalist(); renderSheet(); renderPrint(); renderPlays();
     setStatus('Oyun silindi.');
@@ -3303,8 +3303,8 @@ function importJson(file){
   };
   rd.readAsText(file);
 }
-function resetState(){
-  if(!confirm('Yerel değişiklikler silinip başlangıç verisine dönülecek. Devam edilsin mi?')) return;
+async function resetState(){
+  if(!await siteConfirm('Yerel değişiklikler silinip başlangıç verisine dönülecek. Devam edilsin mi?', 'Sıfırlansın mı?')) return;
   localStorage.removeItem(LSKEY);
   state = loadState();
   renderAll();
@@ -3321,6 +3321,45 @@ function siteMessage(message, type='ok', title='Bilgi'){
   el.innerHTML='<div class="toast-title">'+escapeHtml(title)+'</div><div>'+escapeHtml(message)+'</div>';
   clearTimeout(siteToastTimer);
   siteToastTimer=setTimeout(()=>{ el.classList.remove('show'); }, 4800);
+}
+
+/* === Site içi onay / girdi kutuları (tarayıcının confirm/prompt penceresi yerine) === */
+function siteDialog(opts){
+  const {title='Onay', message='', input=false, defaultValue='', multiline=false, okText='Tamam', cancelText='Vazgeç'} = opts;
+  return new Promise(resolve=>{
+    const back = document.createElement('div');
+    back.className = 'modal-back active';
+    back.innerHTML =
+      '<div class="modal">' +
+        '<h3 style="margin:0 0 8px">'+escapeHtml(title)+'</h3>' +
+        '<div style="white-space:pre-wrap;font-size:13px;line-height:1.5">'+escapeHtml(message)+'</div>' +
+        (input ? ('<div style="margin-top:10px">' + (multiline
+          ? '<textarea id="siteDlgInput" rows="4" style="width:100%;padding:5px 9px;border:1px solid var(--border);border-radius:5px;font-family:inherit;font-size:13px"></textarea>'
+          : '<input id="siteDlgInput" type="text" style="width:100%">') + '</div>') : '') +
+        '<div class="row">' +
+          '<button class="btn ghost" id="siteDlgCancel">'+escapeHtml(cancelText)+'</button>' +
+          '<button class="btn" id="siteDlgOk">'+escapeHtml(okText)+'</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(back);
+    const inputEl = input ? back.querySelector('#siteDlgInput') : null;
+    if(inputEl){ inputEl.value = defaultValue; setTimeout(()=>{ inputEl.focus(); inputEl.select && inputEl.select(); }, 0); }
+    function done(v){ back.remove(); document.removeEventListener('keydown', onKey); resolve(v); }
+    function onKey(e){
+      if(e.key==='Escape'){ done(input ? null : false); }
+      else if(e.key==='Enter' && (!input || !multiline)){ done(input ? inputEl.value : true); }
+    }
+    document.addEventListener('keydown', onKey);
+    back.querySelector('#siteDlgOk').onclick = ()=> done(input ? inputEl.value : true);
+    back.querySelector('#siteDlgCancel').onclick = ()=> done(input ? null : false);
+    back.onclick = e=>{ if(e.target===back) done(input ? null : false); };
+  });
+}
+function siteConfirm(message, title='Onay'){
+  return siteDialog({title, message, input:false});
+}
+function sitePrompt(message, defaultValue='', title='Bilgi girin', multiline=false){
+  return siteDialog({title, message, input:true, defaultValue, multiline});
 }
 
 /* === Serbest Notlar sekmesi === */
@@ -3360,7 +3399,7 @@ function renderNotes(){
         <button class="btn ghost small" data-nedit="${i}">✎ Notu düzenle</button>
       </div>`).join('');
     box.querySelectorAll('[data-ngo]').forEach(b=>{ b.onclick=()=>{ const o=items[+b.dataset.ngo]; gotoCell(o.mi,o.r,o.c); }; });
-    box.querySelectorAll('[data-nedit]').forEach(b=>{ b.onclick=()=>{ const o=items[+b.dataset.nedit]; const n=prompt('Not:',o.note); if(n===null) return; setCellNote(o.mi,o.key,n); renderNotes(); }; });
+    box.querySelectorAll('[data-nedit]').forEach(b=>{ b.onclick=async()=>{ const o=items[+b.dataset.nedit]; const n=await sitePrompt('Not:',o.note,'Not ekle/düzenle'); if(n===null) return; setCellNote(o.mi,o.key,n); renderNotes(); }; });
   }
   const ta=document.getElementById('generalNotes');
   if(ta && document.activeElement!==ta) ta.value = state.generalNotes || '';
@@ -3537,7 +3576,7 @@ syncFromServer().then(()=>syncDraftFromServer());
   function pullFromSite(silent){
     const b = readBridge();
     if(!b || !Array.isArray(b.crew)){
-      if(!silent) siteMessage('İDT Repertuvar verisi bulunamadı. Önce İDT Repertuvar sitesini açıp "Aylık Program" sekmesine girin; veri otomatik aktarılır.','warn','Veri bulunamadı');
+      if(!silent) siteMessage('Oyun ve kadro bilgileri bulunamadı. Önce Repertuvar sitesini açıp "Aylık Program" sekmesine girin; bilgiler otomatik gelir.','warn','Bilgi bulunamadı');
       return false;
     }
     /* Kadro/çakışma verisi YALNIZCA "AYLIK PROGRAM PERSONELİ" sekmesinden gelir;
@@ -3551,7 +3590,7 @@ syncFromServer().then(()=>syncDraftFromServer());
     renderPlays();
     renderSheet();
     stamp(b);
-    if(!silent) setStatus('İDT Repertuvardan oyun adları alındı (' + (b.plays||[]).length + ' oyun). Kadro: ' + CREW_SHEET + '.');
+    if(!silent) setStatus('Oyun ve kadro bilgileri güncellendi (' + (b.plays||[]).length + ' oyun).');
     return true;
   }
   window.pullFromSite = pullFromSite;
@@ -3560,16 +3599,15 @@ syncFromServer().then(()=>syncDraftFromServer());
     const el = document.getElementById('idtBridgeInfo');
     if(!el) return;
     el.innerHTML = b
-      ? 'Kadro kaynağı: <b>' + CREW_SHEET + '</b> · ' + (state.crew||[]).length + ' kadro kaydı · oyun adları: İDT Repertuvar (' +
-        (b.plays||[]).length + ') · son güncelleme ' + new Date(b.ts||Date.now()).toLocaleString('tr-TR')
-      : 'İDT Repertuvar verisi henüz alınmadı.';
+      ? 'Oyun ve kadro bilgileri Repertuvar sisteminden geliyor · ' + (state.crew||[]).length + ' kadro, ' + (b.plays||[]).length + ' oyun · son güncelleme ' + new Date(b.ts||Date.now()).toLocaleString('tr-TR')
+      : 'Oyun ve kadro bilgileri henüz gelmedi.';
   }
 
   /* Üst bilgi çubuğu */
   const bar = document.createElement('div');
   bar.id = 'idtBridgeBar';
   bar.innerHTML = '<span id="idtBridgeInfo"></span>' +
-    '<button class="btn ghost small" id="idtPullBtn" style="margin-left:auto">İDT Repertuvardan veri çek</button>' +
+    '<button class="btn ghost small" id="idtPullBtn" style="margin-left:auto">Verileri yenile</button>' +
     '<a class="btn ghost small" id="idtBackBtn" href="' + SITE + '" style="text-decoration:none">← Repertuvar sitesi</a>';
   document.querySelector('header').insertAdjacentElement('afterend', bar);
   document.getElementById('idtPullBtn').onclick = () => pullFromSite(false);
