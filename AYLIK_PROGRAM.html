@@ -2455,12 +2455,23 @@ function initMenus(){
       closeAll(menu);
       menu.classList.toggle('open', willOpen);
     });
+    // Panel içindeki tıklamalar dışarıya sızmasın (aksi halde document click
+    // dinleyicisi menüyü anında kapatıyordu: select/input kullanılamıyordu).
+    ['mousedown','click','change','input'].forEach(evt=>{
+      panel.addEventListener(evt, e=>{ e.stopPropagation(); });
+    });
     panel.addEventListener('click', e=>{
       const t = e.target;
-      if(t && t.tagName === 'BUTTON') setTimeout(()=>menu.classList.remove('open'), 0);
+      if(!t || !t.closest) return;
+      // Sadece komut butonları menüyü kapatsın; select/label/alan tıklaması kapatmasın.
+      const btn = t.closest('button');
+      if(btn && panel.contains(btn)) setTimeout(()=>menu.classList.remove('open'), 0);
     });
   });
-  document.addEventListener('click', ()=>closeAll(null));
+  document.addEventListener('click', e=>{
+    if(e.target && e.target.closest && e.target.closest('.menubar .menu')) return;
+    closeAll(null);
+  });
   document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeAll(null); });
 }
 
