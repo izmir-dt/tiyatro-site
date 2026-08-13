@@ -800,6 +800,15 @@ p, li { max-width: 78ch; }
   .skip-link, .sr-only { display: none !important; }
 }
 </style>
+<script>
+/* Ortak sayım kuralı: İPTAL turne hiçbir sayıma girmez (yazım/boşluk/büyük-küçük harf farkı olsa da). */
+window._iptalTurne = function(t){
+  if (!t) return false;
+  var s = String(t.statu == null ? '' : t.statu).trim().toLocaleLowerCase('tr')
+            .replace(/i̇/g,'i').replace(/\s+/g,'-');
+  return s === 'iptal' || s === 'iptal-edildi' || s.indexOf('iptal') === 0;
+};
+</script>
 </head>
 <body>
   <main class="page" id="main" role="main">
@@ -945,7 +954,7 @@ p, li { max-width: 78ch; }
   function aylikDagilim(turneler, sezonId) {
     var aylar = {};
     turneler.forEach(function(t){
-      if (t.anaGrupId || (t.statu || '') === 'iptal') return;
+      if (t.anaGrupId || window._iptalTurne(t)) return;
       if (tarihSezon(t.baslangicTarih || t.tarih) !== sezonId) return;
       var ayKey = (t.baslangicTarih || t.tarih || '').slice(0,7);
       if (!ayKey) return;
@@ -986,7 +995,7 @@ p, li { max-width: 78ch; }
   function enUzunTurne(turneler, sezonId) {
     var max = 0, maxAd = '';
     turneler.forEach(function(t){
-      if (t.anaGrupId || (t.statu || '') === 'iptal') return;
+      if (t.anaGrupId || window._iptalTurne(t)) return;
       if (tarihSezon(t.baslangicTarih || t.tarih) !== sezonId) return;
       if (t.baslangicTarih && t.bitisTarih) {
         var d = Math.round((new Date(t.bitisTarih) - new Date(t.baslangicTarih)) / 86400000) + 1;
@@ -1000,7 +1009,7 @@ p, li { max-width: 78ch; }
   function aktifAySayisi(turneler, sezonId) {
     var aySet = {};
     turneler.forEach(function(t){
-      if (t.anaGrupId || (t.statu || '') === 'iptal') return;
+      if (t.anaGrupId || window._iptalTurne(t)) return;
       if (tarihSezon(t.baslangicTarih || t.tarih) !== sezonId) return;
       var ay = (t.baslangicTarih || t.tarih || '').slice(0,7);
       if (ay) aySet[ay] = 1;
@@ -1078,7 +1087,7 @@ p, li { max-width: 78ch; }
        ══════════════════════════════════════════════════════════════ */
     turneler.forEach(function(t){
       if (t.anaGrupId) return;                       // ek grup = alt kayıt, ayrı turne değil
-      if ((t.statu || '') === 'iptal') return;        // İPTAL turne hiçbir sayıma girmez
+      if (window._iptalTurne(t)) return;        // İPTAL turne hiçbir sayıma girmez
       var iptalMi = false;
       var s = tarihSezon(t.baslangicTarih || t.tarih);
       if (!s) return;
@@ -1150,7 +1159,9 @@ p, li { max-width: 78ch; }
 
       /* Program/durak yoksa şehir–ülke kaybolmasın: İl alanından oku */
       if (!yerVar) {
-        var ilAlani = String(t.il || '').split(/[,;+]/);
+        var ilAlani = (t.duraklar && t.duraklar.length)
+          ? t.duraklar.map(function(d){ return (d && d.il) || ''; }).filter(Boolean)
+          : String(t.il || '').split(/[,;+]/);
         var paylarY = _dagit(iptalMi ? 0 : kayitTemsil, ilAlani.map(function(){ return 1; }));
         ilAlani.forEach(function(ad, i){ yerSay(ad, paylarY[i] || 0); });
       }
@@ -1182,11 +1193,9 @@ p, li { max-width: 78ch; }
       var gun = benzersizGun(S.araliklar);
       var ayDag = aylikDagilim(turneler, s);
       var uzun  = enUzunTurne(turneler, s);
-      var resmiToplam = s === '2025-26' ? { turne:67, temsil:237, il:30 } : null;
+      var resmiToplam = null; // Sabit toplam yok: tüm sayımlar ham kayıtlardan hesaplanır (iptaller hariç)
       return {
         id: s,
-        /* 2025-26 kapanış toplamları kurumun kesinleşmiş sezon cetvelidir.
-           Canlı tabloda eksik/alt kayıtlar olsa da kart bu resmi toplamı gösterir. */
         turne:  resmiToplam ? resmiToplam.turne : S.turne,
         temsil: resmiToplam ? resmiToplam.temsil : S.temsil,
         il:     resmiToplam ? resmiToplam.il : Object.keys(S.il).length,
