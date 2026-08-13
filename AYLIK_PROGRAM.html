@@ -986,6 +986,7 @@ async function publishProgram(){
       month: m,
       plays: state.plays || [],
       playsExtra: state.playsExtra || [],
+      playsIgnored: state.playsIgnored || [],
       generalNotes: state.generalNotes || '',
       playNotes: state.playNotes || {},
       playFreeNotes: state.playFreeNotes || {}
@@ -1068,6 +1069,7 @@ async function pushDraft(){
       month: m,
       plays: state.plays || [],
       playsExtra: state.playsExtra || [],
+      playsIgnored: state.playsIgnored || [],
       generalNotes: state.generalNotes || '',
       playNotes: state.playNotes || {},
       playFreeNotes: state.playFreeNotes || {}
@@ -1171,9 +1173,14 @@ async function syncFromServer(){
   const results = await fetchAllPublishedMonths();
   if(!results.length) return;
   state.monthPub = state.monthPub || {};
+  state.playsIgnored = state.playsIgnored || [];
   let changed = false;
+  let ignoredGrew = false;
   for(const {ts, data} of results){
     if(!data || !data.month || !data.month.name) continue;
+    if(Array.isArray(data.playsIgnored)){
+      data.playsIgnored.forEach(p=>{ if(!state.playsIgnored.includes(p)){ state.playsIgnored.push(p); ignoredGrew = true; } });
+    }
     const name = data.month.name;
     const localTs = (state.monthPub[name]||{}).publishedAt || 0;
     if(ts <= localTs) continue; /* yerelde bu sürüm veya daha yenisi zaten var */
@@ -1189,14 +1196,22 @@ async function syncFromServer(){
     if(data.playFreeNotes && typeof data.playFreeNotes === 'object') state.playFreeNotes = {...state.playFreeNotes, ...data.playFreeNotes};
     changed = true;
   }
-  if(!changed) return;
+  if(!changed && !ignoredGrew) return;
+  /* Başka bir bilgisayarda silinmiş ("Oyunu Sil") oyunlar varsa, bu
+     bilgisayarda daha önce (ör. repertuvar köprüsünden) eklenmiş olsa
+     bile burada da kaldırılır. */
+  { const ign = new Set(state.playsIgnored||[]);
+    state.plays = (state.plays||[]).filter(p=>!ign.has(p));
+    state.playsExtra = (state.playsExtra||[]).filter(p=>!ign.has(p)); }
   if(state.activeIdx==null || state.activeIdx>=state.months.length) state.activeIdx = 0;
   saveState();
   renderAll();
   renderPubState();
   renderDraftState();
-  setStatus('Sunucudan güncel program yüklendi.');
-  siteMessage('Bu tarayıcıda güncel kayıt bulunamadı; sunucudaki kesinleştirilmiş aylar otomatik olarak yüklendi.','ok','Sunucudan senkronize edildi');
+  if(changed){
+    setStatus('Sunucudan güncel program yüklendi.');
+    siteMessage('Bu tarayıcıda güncel kayıt bulunamadı; sunucudaki kesinleştirilmiş aylar otomatik olarak yüklendi.','ok','Sunucudan senkronize edildi');
+  }
 }
 
 /* Sunucudaki TÜM bekleyen (henüz kesinleşmemiş) taslakları, her ay için en
@@ -1244,9 +1259,14 @@ async function syncDraftFromServer(){
   if(!results.length) return;
   state.monthDraft = state.monthDraft || {};
   state.monthPub = state.monthPub || {};
+  state.playsIgnored = state.playsIgnored || [];
   let changed = false;
+  let ignoredGrew = false;
   for(const {ts, data} of results){
     if(!data || !data.month || !data.month.name) continue;
+    if(Array.isArray(data.playsIgnored)){
+      data.playsIgnored.forEach(p=>{ if(!state.playsIgnored.includes(p)){ state.playsIgnored.push(p); ignoredGrew = true; } });
+    }
     const name = data.month.name;
     const localDraftTs = (state.monthDraft[name]||{}).draftAt || 0;
     const localPubTs = (state.monthPub[name]||{}).publishedAt || 0;
@@ -1263,7 +1283,13 @@ async function syncDraftFromServer(){
     if(data.playFreeNotes && typeof data.playFreeNotes === 'object') state.playFreeNotes = {...state.playFreeNotes, ...data.playFreeNotes};
     changed = true;
   }
-  if(!changed) return;
+  if(!changed && !ignoredGrew) return;
+  /* Başka bir bilgisayarda silinmiş ("Oyunu Sil") oyunlar varsa, bu
+     bilgisayarda daha önce (ör. repertuvar köprüsünden) eklenmiş olsa
+     bile burada da kaldırılır. */
+  { const ign = new Set(state.playsIgnored||[]);
+    state.plays = (state.plays||[]).filter(p=>!ign.has(p));
+    state.playsExtra = (state.playsExtra||[]).filter(p=>!ign.has(p)); }
   if(state.activeIdx==null || state.activeIdx>=state.months.length) state.activeIdx = 0;
   _suppressDraftSync = true;
   try{ localStorage.setItem(LSKEY, JSON.stringify(state)); }catch(e){}
@@ -1271,8 +1297,10 @@ async function syncDraftFromServer(){
   renderAll();
   renderPubState();
   renderDraftState();
-  setStatus('Sunucudaki güncel taslak yüklendi.');
-  siteMessage('Başka bir bilgisayarda yapılan, henüz kesinleştirilmemiş değişiklikler bu sayfaya otomatik olarak yüklendi.','ok','Taslak senkronize edildi');
+  if(changed){
+    setStatus('Sunucudaki güncel taslak yüklendi.');
+    siteMessage('Başka bir bilgisayarda yapılan, henüz kesinleştirilmemiş değişiklikler bu sayfaya otomatik olarak yüklendi.','ok','Taslak senkronize edildi');
+  }
 }
 
 /* === Kategoriler === */
