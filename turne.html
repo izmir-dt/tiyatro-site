@@ -12831,6 +12831,15 @@ function _leafletYukle(callback) {
 .kdr-hl{background:color-mix(in srgb, hsl(45,95%,55%) 45%, transparent);border-radius:2px;padding:0 1px;color:inherit}
 @media(max-width:820px){.kdr-kpi{grid-template-columns:repeat(2,minmax(0,1fr))}.kdr-tbl .c-kat{width:130px}}
 </style>
+<script>
+/* Ortak sayım kuralı: İPTAL turne hiçbir sayıma girmez (yazım/boşluk/büyük-küçük harf farkı olsa da). */
+window._iptalTurne = function(t){
+  if (!t) return false;
+  var s = String(t.statu == null ? '' : t.statu).trim().toLocaleLowerCase('tr')
+            .replace(/i̇/g,'i').replace(/\s+/g,'-');
+  return s === 'iptal' || s === 'iptal-edildi' || s.indexOf('iptal') === 0;
+};
+</script>
 </head>
 <body>
 <a href="#main-content" style="position:absolute;left:-999px;top:auto;width:1px;height:1px;overflow:hidden;z-index:9999;background:#fff;padding:8px 16px;font-size:14px;font-weight:600;color:#2C2C2C;text-decoration:none;border-radius:4px" onfocus="this.style.left='6px';this.style.width='auto';this.style.height='auto'" onblur="this.style.left='-999px';this.style.width='1px';this.style.height='1px'">Ana içeriğe geç</a>
@@ -16647,7 +16656,7 @@ function sezonBaslangicAyYil(sezon) {
 function sezonTurneleri(sezon) {
   return turneler.filter(function(t) {
     if (t.anaGrupId) return false;
-    if ((t.statu || '') === 'iptal') return false; // İPTAL turneler sayımlara girmez
+    if (window._iptalTurne(t)) return false; // İPTAL turneler sayımlara girmez
     return tarihSezon(t.baslangicTarih || t.tarih) === sezon;
   });
 }
@@ -16682,6 +16691,9 @@ function sezonIstatistik(sezon) {
       });
     }
     if (!yerler.length && typeof durakIllerListesi === 'function') yerler = durakIllerListesi(t);
+    if (!yerler.length && t.duraklar && t.duraklar.length) yerler = t.duraklar.map(function(d){ return d && d.il; }).filter(Boolean);
+    // Program/durak yoksa şehir kaybolmasın: kayıttaki "İl" alanından oku
+    if (!yerler.length && t.il) yerler = String(t.il).split(/[,;+]/).map(function(x){ return (x||'').trim(); }).filter(Boolean);
     yerler.forEach(function(il){
       var adU = _yerKeyIst(il);
       if (!adU) return;
@@ -16718,10 +16730,11 @@ function sezonDetayIstatistik(sezon) {
       });
       return sIdx >= 0 && sIdx < _kesDet.kesilenIndex;
     }
-    if (t.programSatirlar && t.programSatirlar.length) {
-      t.programSatirlar.forEach(function(s) {
-        if (s.program !== 'Oyun') return;
-        if (!_kesimOncesiMi(s.sehir)) return; // yarıda kesildi → kesim sonrası sayılmaz
+    var _oyunSatirlari = (t.programSatirlar || []).filter(function(s){
+      return s && s.program === 'Oyun' && _kesimOncesiMi(s.sehir);
+    });
+    if (_oyunSatirlari.length) {
+      _oyunSatirlari.forEach(function(s) {
         var artis = s.saat2 ? 2 : 1;
         var oyunAdi = (s.oyun || t.oyun || '').trim();
         var ilAdi = _yerKeyDet(s.sehir);
@@ -16848,7 +16861,7 @@ function sezonOverlayGoster() {
     var sezonSet = {};
     (turneler || []).forEach(function(t){
       if (t.anaGrupId) return;
-      if ((t.statu || '') === 'iptal') return; // iptal turne sezon üretmez
+      if (window._iptalTurne(t)) return; // iptal turne sezon üretmez
       var s = tarihSezon(t.baslangicTarih || t.tarih);
       if (s) sezonSet[s] = true;
     });
@@ -22206,7 +22219,7 @@ function _veriKontrolHesapla() {
 
   // İptal edilmiş turneları dışarıda bırak
   var gecerliTurneler = turneler.filter(function(t) {
-    return t.statu !== 'iptal';
+    return !window._iptalTurne(t);
   });
 
   // ── 1. Turne katılımcısı var ama ana kadroda yok ──────────────
@@ -23201,7 +23214,7 @@ async function saveKisiModal() {
       var _cakGosterildi = {};
       turneler.forEach(function(tt){
         if (!tt || _atlanacakIdx[String(tt._rowIdx)]) return;
-        if (tt.statu === 'iptal') return;
+        if (twindow._iptalTurne(t)) return;
         var btStr = (tt.baslangicTarih || tt.tarih || '').trim();
         if (!btStr) return;
         var ttBasMs;
@@ -27375,7 +27388,7 @@ function renderHarita() {
   var _haritaOyun = window._haritaAktifOyun || '';
   var _haritaTurneler = (_haritaOyun
     ? turneler.filter(function(t){ return (t.oyun||'').toLowerCase().trim() === _haritaOyun.toLowerCase().trim(); })
-    : turneler).filter(function(t){ return !t.anaGrupId && t.statu !== 'iptal'; });
+    : turneler).filter(function(t){ return !t.anaGrupId && !window._iptalTurne(t); });
   // Sezon filtresi (giriş ekranından / sezon-bar'dan seçilen aktif sezon)
   if (window._aktifSezon && window._aktifSezon !== '__tumü__') {
     _haritaTurneler = _haritaTurneler.filter(function(t){ return tarihSezon(t.baslangicTarih || t.tarih) === window._aktifSezon; });
@@ -28015,7 +28028,7 @@ function haritaRotaCiz(turnelerFiltreli) {
       ];
       var turneRenkIdx = turnelerFiltreli.indexOf(t);
       var segRenk = _ROTA_PALETTE[turneRenkIdx % _ROTA_PALETTE.length];
-      var segOpacity = t.statu === 'iptal' ? 0.15 : t.statu === 'taslak' ? 0.35 : 0.7;
+      var segOpacity = window._iptalTurne(t) ? 0.15 : t.statu === 'taslak' ? 0.35 : 0.7;
 
       // Quadratic bezier arc: kontrol noktası orta noktanın kuzeyine
       var midLat = (p1[0] + p2[0]) / 2;
@@ -28678,7 +28691,7 @@ function haritaIstatistikGoster() {
   var _haritaOyun = window._haritaAktifOyun || '';
   var liste = (_haritaOyun
     ? turneler.filter(function(t){ return (t.oyun||'').toLowerCase().trim() === _haritaOyun.toLowerCase().trim(); })
-    : turneler).filter(function(t){ return !t.anaGrupId && t.statu !== 'iptal'; });
+    : turneler).filter(function(t){ return !t.anaGrupId && !window._iptalTurne(t); });
 
   // İl sayıları
   var ilSay = {};
@@ -28855,7 +28868,7 @@ function _calEvStyle(progSatir, turne) {
     subtitl = '';
   }
   // ── İPTAL: kart soluk + kırmızı çerçeve + üstü çizili ──
-  var iptal = (t.statu || '') === 'iptal';
+  var iptal = window._iptalTurne(t);
   if (iptal) {
     bg = 'repeating-linear-gradient(135deg, hsl(0,70%,97%) 0 6px, hsl(0,60%,94%) 6px 12px)';
     fg = 'hsl(0,55%,42%)';
@@ -28868,7 +28881,7 @@ function _calEvStyle(progSatir, turne) {
 function _calGunEvents(key) {
   return turneler.filter(function(t) {
     if (window._aktifSezon && window._aktifSezon !== '__tumü__' && tarihSezon(key) !== window._aktifSezon) return false;
-    if (calStatuFiltre === 'noiptal' && t.statu === 'iptal') return false;
+    if (calStatuFiltre === 'noiptal' && window._iptalTurne(t)) return false;
     if (calStatuFiltre && calStatuFiltre !== 'noiptal' && t.statu !== calStatuFiltre) return false;
     var bas = t.baslangicTarih || t.tarih || '';
     var bit = t.bitisTarih || t.tarih || '';
@@ -30120,7 +30133,7 @@ function kisiModalTopluSec(tip) {
 // ══════════════════════════════════════════════════   ═════════
 function iCalIndir() {
   // Özet istatistik hesapla
-  var aktif = esasTurneler().filter(function(t){ return t.statu && t.statu !== 'iptal' && t.statu !== 'yarida-kesildi'; });
+  var aktif = esasTurneler().filter(function(t){ return t.statu && !window._iptalTurne(t) && t.statu !== 'yarida-kesildi'; });
   var etkinlikSayisi = aktif.filter(function(t){ return t.baslangicTarih || t.tarih; }).length;
 
   // Takvim uygulamaları bilgisi
@@ -34698,7 +34711,7 @@ function turneTumKatilimcilar(t) {
 
 function durakToplamTemsil(t) {
   // İPTAL edilen turnede gerçekleşmiş temsil yoktur
-  if (t && (t.statu || '') === 'iptal') return 0;
+  if (t && window._iptalTurne(t)) return 0;
   // ── Yarıda Kesildi: gerçekten yapılan temsil sayısı (kesilen şehre/sonrasına gidilmedi) ──
   if (t && (t.statu||'') === 'yarida-kesildi') {
     try {
@@ -40269,7 +40282,7 @@ setTimeout(_turBoot, 4000);
 
   function $(id){ return document.getElementById(id); }
 
-  function getTurneler(){ return (window.turneler || []).filter(function(t){ return t && !t.anaGrupId && (t.statu || '') !== 'iptal'; }); }
+  function getTurneler(){ return (window.turneler || []).filter(function(t){ return t && !t.anaGrupId && !window._iptalTurne(t); }); }
 
   function tarihAraligi(t){
     var bas = t.baslangicTarih || t.tarih || '';
@@ -41240,7 +41253,7 @@ window.renderHarita = function(){
   var _haritaOyun = window._haritaAktifOyun || '';
   var srcTurneler = (_haritaOyun
     ? turneler.filter(function(t){ return (t.oyun||'').toLowerCase().trim() === _haritaOyun.toLowerCase().trim(); })
-    : turneler).filter(function(t){ return !t.anaGrupId && t.statu !== 'iptal'; });
+    : turneler).filter(function(t){ return !t.anaGrupId && !window._iptalTurne(t); });
   if (window._aktifSezon && window._aktifSezon !== '__tumü__' && typeof tarihSezon === 'function'){
     srcTurneler = srcTurneler.filter(function(t){ return tarihSezon(t.baslangicTarih || t.tarih) === window._aktifSezon; });
   }
@@ -41474,7 +41487,7 @@ function _istBaseListe(){
   var oyun = window._haritaAktifOyun || '';
   return (oyun
     ? turneler.filter(function(t){ return (t.oyun||'').toLowerCase().trim() === oyun.toLowerCase().trim(); })
-    : turneler).filter(function(t){ return !t.anaGrupId && t.statu !== 'iptal'; });
+    : turneler).filter(function(t){ return !t.anaGrupId && !window._iptalTurne(t); });
 }
 
 function _istSezonlar(){
