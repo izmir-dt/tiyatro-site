@@ -3316,21 +3316,21 @@ window.exportPDF = function(title, headers, data){
 .aph-ov .win{flex:1;height:100%;display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 24px 70px rgba(0,0,0,.45)}
 .aph-ov .top{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line);background:var(--surface-2)}
 .aph-ov .top .t{font-family:var(--font-d);font-weight:800;font-size:16px}
-.aph-prev{flex:1;overflow:auto;background:var(--surface);padding:10px}
-.aph-prev table{border-collapse:collapse;width:100%;font-size:14px}
-.aph-prev td{border:1px solid var(--line-strong);padding:5px 9px;white-space:nowrap;vertical-align:middle}
+.aph-prev{flex:1;overflow:auto;background:var(--surface);padding:10px;--aph-r0h:26px}
+.aph-prev table{border-collapse:collapse;width:100%;font-size:12px;table-layout:fixed}
+.aph-prev td{border:1px solid var(--line-strong);padding:4px 6px;white-space:normal;overflow-wrap:anywhere;word-break:break-word;vertical-align:middle;line-height:1.2}
+.aph-prev td.aph-hdr-cell-0{position:sticky;top:0;z-index:3}
+.aph-prev td.aph-hdr-cell-1{position:sticky;top:var(--aph-r0h);z-index:2}
 .aph-note{font-size:12px;color:var(--muted);margin-top:8px;line-height:1.6}
-details.aph-pdf{margin-top:18px;border:1px solid var(--line);border-radius:13px;background:var(--surface);overflow:hidden}
-details.aph-pdf>summary{cursor:pointer;padding:12px 14px;font-family:var(--font-d);font-weight:800;font-size:13.5px;background:var(--surface-2);list-style:none}
-details.aph-pdf>summary::-webkit-details-marker{display:none}
-details.aph-pdf .in{padding:12px}
 </style>
 <script>
 /* ═══════ v7: Aylık Program = AYLIK PROGRAM HTML · iki yönlü veri köprüsü ═══════ */
 (function(){
-  const PRG_URL   = "AYLIK_PROGRAM.html";           /* aynı klasörde olmalı */
+  const PRG_URL   = "AYLIK_PROGRAM.html"; /* aynı klasörde olmalı */
   const PRG_LSKEY = "idt_aylik_program_v3";         /* AYLIK PROGRAM HTML'in kendi kaydı */
   const BRIDGE    = "idt_repertuvar_bridge";        /* repertuvar -> aylık program veri köprüsü */
+  const PUBLISHED_SHEET = "AYLIK PROGRAM";
+  const PUBLISHED_API = "https://tiyatro-backend.vercel.app/api/sheets";
 
   /* ---------- 1) Repertuvar verisini köprüye yaz (AYLIK PROGRAM HTML buradan çeker) ---------- */
   function publishBridge(){
@@ -3365,23 +3365,141 @@ details.aph-pdf .in{padding:12px}
   function prgState(){
     try{ const raw = localStorage.getItem(PRG_LSKEY); return raw ? JSON.parse(raw) : null; }catch(e){ return null; }
   }
+  function b64Utf8Decode(s){
+    const bin = atob(s), bytes = new Uint8Array(bin.length);
+    for(let i=0;i<bin.length;i++) bytes[i] = bin.charCodeAt(i);
+    return new TextDecoder().decode(bytes);
+  }
+  /* v8: Aylar artık AY BAZINDA kesinleştirilir/geri alınır. Sunucuda her ay
+     kendi grup kimliğiyle ("apub_<ay-kodu>_<zaman>") ayrı satırlarda durur.
+     Burada her ay-kodu için en güncel sürüm seçilip months[] birleştirilir;
+     böylece bir ayın geri alınması diğer kesinleştirilmiş ayları etkilemez. */
+  async function publishedState(){
+    try{
+      const res = await fetch(PUBLISHED_API + "/" + encodeURIComponent(PUBLISHED_SHEET), {cache:"no-store"});
+      if(!res.ok) return null; /* sunucuya erişilemedi -> yerel yedeğe düş */
+      const rows = (await res.json()).rows || [];
+      const groups = new Map();
+      rows.filter(r => String(r[0]||"").startsWith("apub_")).forEach(r => {
+        const id=String(r[0]), ts=+r[1]||0;
+        if(!groups.has(id)) groups.set(id,{ts,rows:[]});
+        groups.get(id).rows.push(r);
+      });
+      /* Sunucuya bağlanıldı ama kesinleştirilmiş program yok (örn. tüm aylar
+         "Kesinleştirmeyi geri al" ile kaldırılmış) -> yerel taslağa DÜŞME, boş listeyi göster. */
+      if(!groups.size) return {months:[]};
+      const bySlug = new Map();
+      for(const [id, g] of groups){
+        const mm = id.match(/^apub_(.+)_(\d+)$/);
+        const slug = mm ? mm[1] : id;
+        const existing = bySlug.get(slug);
+        if(!existing || g.ts > existing.ts) bySlug.set(slug, {ts:g.ts, rows:g.rows});
+      }
+      const months = [];
+      for(const [slug, g] of bySlug){
+        const parts = g.rows.slice().sort((a,b) => (+a[2]||0) - (+b[2]||0));
+        const total = +parts[0][3] || parts.length;
+        if(parts.length < total) continue; /* parçalı/eksik veri, güvenilmez say */
+        try{
+          const data = JSON.parse(b64Utf8Decode(parts.slice(0,total).map(r=>String(r[4]||"")).join("")));
+          /* Yeni (ay bazlı) biçim: {month, plays, ...}. Eski (tüm program tek
+             seferde) biçim geriye dönük uyum için hâlâ okunur: {months:[...]}. */
+          if(data && data.month) months.push(data.month);
+          else if(data && Array.isArray(data.months)) months.push(...data.months);
+        }catch(e){}
+      }
+      return {months};
+    }catch(e){ return null; } /* ağ/erişim hatası -> yerel yedeğe düş */
+  }
   function cellsOf(m){
     const out = {};
     if(Array.isArray(m.cells)) m.cells.forEach(([r,c,v]) => out[r+"_"+c] = {v:String(v)});
     else Object.keys(m.cells||{}).forEach(k => out[k] = m.cells[k]);
     return out;
   }
-  const SKIP = /^(\d|prömiyer|anahtar|turne$|izmir devlet)/i;
+  const normPlay = s => String(s||"")
+    .replace(/[(\[][^)\]]*[)\]]/g, " ")            /* (FUAYE-11.00) gibi ekler */
+    .replace(/\s+/g, " ").trim().toLocaleUpperCase("tr");
+  /* Aylık Program'daki tanım BİREBİR aynı kurallar: bir hücre "oyun" sayılır,
+     ancak ve ancak Aylık Program'da "Serbest metin" olarak işaretlenmemişse
+     (elle ✎ ile veya //, #, !, >, + ile başlayan / tamamen parantez içindeki
+     metinler otomatik serbest metin sayılır) ve salt "PRÖMİYER" işareti
+     değilse. Tarih/saat/başlık sütunları zaten yapısal olarak (satır/sütun
+     aralığı) devre dışı — ayrıca içerik bazlı bir anahtar kelime listesine
+     ihtiyaç yok; bu da Aylık Program'da yeni bir tur/tatil/duyuru adı
+     eklendiğinde index'in listeyi güncellemek için değiştirilmesini gerektirmez. */
+  function isPremiereLabel(t){
+    const s = String(t||"").trim().toLocaleUpperCase("tr");
+    return s==="PRÖMİYER" || s==="* PRÖMİYER" || s==="*PRÖMİYER";
+  }
+  function isFreeTextValue(v){
+    const t = String(v||"").trim();
+    if(!t) return false;
+    if(/^(\/\/|#|!|>|\+)/.test(t)) return true;
+    if(/^\(.*\)$/.test(t)) return true;
+    if(/^\[.*\]$/.test(t)) return true;
+    return false;
+  }
+  function isFreeTextCell(cell){ return !!(cell && (cell.freeText || isFreeTextValue(cell.v))); }
+  function playKeyOf(raw){
+    const t = String(raw||"").trim();
+    if(!t) return "";
+    const body0 = t.startsWith("*") ? t.slice(1).trim() : t;
+    let body = body0.replace(/[(\[][^)\]]*[)\]]/g, " ");   /* (11.00-14.00) gibi ekler */
+    const dash = body.match(/\s[-–—]\s*(\S.*)$/);           /* " - açıklama" eki */
+    if(dash) body = body.slice(0, dash.index);
+    return body.replace(/\s+/g, " ").trim();
+  }
+  /* Aylık Program'daki programCols() ile aynı: ilk iki sütun (tarih/saat) ve
+     son sütun (tarih tekrarı) oyun sütunu değildir. */
+  function playColsOf(m){
+    const out = new Set();
+    for(let c=2; c<(m.cols||0)-1; c++) out.add(c);
+    return out;
+  }
+  /* Oyun adları repertuvar köprüsünden gelir; yalnızca AYNI oyunun farklı
+     yazımlarını (Repertuvar'daki resmî adına) tek isim altında toplamak için
+     kullanılır — bir hücrenin oyun SAYILIP sayılmayacağına karar vermez. */
+  function knownPlaySet(){
+    const out = new Map();
+    try{
+      const b = JSON.parse(localStorage.getItem(BRIDGE)||"null");
+      (b && b.plays || []).forEach(p => out.set(normPlay(p), String(p).trim()));
+    }catch(e){}
+    try{
+      if(typeof DATA !== "undefined" && Array.isArray(DATA))
+        DATA.forEach(r => { const o=String(r.oyun||"").trim(); if(o) out.set(normPlay(o), o); });
+    }catch(e){}
+    return out;
+  }
   function monthInfo(m){
     const cells = cellsOf(m);
+    const known = knownPlaySet();
+    const playCols = playColsOf(m);
     let dolu = 0; const oyunlar = new Set();
     Object.keys(cells).forEach(k => {
-      const v = String((cells[k]||{}).v||"").trim(); if(!v) return;
+      const cell = cells[k]||{};
+      const v = String(cell.v||"").trim(); if(!v) return;
       dolu++;
-      const c = +k.split("_")[1];
-      if(c >= 2 && !/^\d{1,2}[.:]\d{2}/.test(v) && !SKIP.test(v)) oyunlar.add(v.replace(/\s*\(.*\)\s*$/,"").trim());
+      const r = +k.split("_")[0], c = +k.split("_")[1];
+      if(r < 2) return;                                  /* kurum başlığı ve sahne satırı */
+      if(!playCols.has(c)) return;                       /* tarih/saat sütunları ve son (tarih tekrarı) sütunu */
+      if(isPremiereLabel(v)) return;                      /* salt "PRÖMİYER" işareti, oyun adı değil */
+      if(isFreeTextCell(cell)) return;                    /* Aylık Program'da "Serbest metin" işaretli hücre */
+      const key = playKeyOf(v);
+      if(!key) return;
+      const nk = normPlay(key);
+      if(known.has(nk)){ oyunlar.add(known.get(nk)); return; }
+      /* "OYUN ADI (SAAT)" gibi ekli yazımlar için baş harf eşleşmesi */
+      if(known.size){
+        for(const [kk, orig] of known){
+          if(kk.length > 3 && (nk.startsWith(kk) || kk.startsWith(nk))){ oyunlar.add(orig); return; }
+        }
+      }
+      /* Repertuvar'da henüz kayıtlı olmayan oyun da sayıma dahil edilsin */
+      oyunlar.add(key);
     });
-    return {cells, dolu, oyunSayisi:oyunlar.size, oyunlar:[...oyunlar]};
+    return {cells, dolu, oyunSayisi:oyunlar.size, oyunlar:[...oyunlar], note:String(m.siteNote||m.note||"").trim()};
   }
 
   /* ---------- 3) Önizleme tablosu (salt okunur) ---------- */
@@ -3392,6 +3510,7 @@ details.aph-pdf .in{padding:12px}
     renderProgram();
   };
   document.addEventListener("keydown", e => { if(e.key === "Escape" && PREVIEW > -1) window.toggleProgramPreview(PREVIEW); });
+  const PRG_TITLE_RE = /İZMİR\s+DEVLET\s+TİYATROSU\s+MÜDÜRLÜĞÜ/i;
   function previewHtml(m){
     const cells = cellsOf(m);
     const covered = new Set(), span = {};
@@ -3399,31 +3518,47 @@ details.aph-pdf .in{padding:12px}
       span[r1+"_"+c1] = {rs:r2-r1+1, cs:c2-c1+1};
       for(let r=r1;r<=r2;r++) for(let c=c1;c<=c2;c++) if(r!==r1||c!==c1) covered.add(r+"_"+c);
     });
-    let h = "<table>";
+    let h = "<table id=\"aphPrevTable\">";
     for(let r=0;r<m.rows;r++){
-      h += "<tr>";
+      h += "<tr"+(r<2?' class="aph-hdr-row aph-hdr-row-'+r+'"':"")+">";
       for(let c=0;c<m.cols;c++){
         const k = r+"_"+c; if(covered.has(k)) continue;
         const cell = cells[k]||{}, sp = span[k]||{rs:1,cs:1};
+        const v = String(cell.v||"");
         const st = [];
         if(cell.bg) st.push("background:"+cell.bg);
+        else if(r<2) st.push("background:var(--surface)");
         if(cell.color) st.push("color:"+cell.color);
         if(cell.bold) st.push("font-weight:700");
-        h += "<td"+(sp.rs>1?' rowspan="'+sp.rs+'"':"")+(sp.cs>1?' colspan="'+sp.cs+'"':"")+
-             (st.length?' style="'+st.join(";")+'"':"")+">"+esc(String(cell.v||""))+"</td>";
+        if(r===0 && PRG_TITLE_RE.test(v)) st.push("text-align:center");
+        h += "<td"+(r<2?' class="aph-hdr-cell aph-hdr-cell-'+r+'"':"")+
+             (sp.rs>1?' rowspan="'+sp.rs+'"':"")+(sp.cs>1?' colspan="'+sp.cs+'"':"")+
+             (st.length?' style="'+st.join(";")+'"':"")+">"+esc(v)+"</td>";
       }
       h += "</tr>";
     }
     return h + "</table>";
   }
+  /* Başlık satırları (kurum adı + sahne adları) kaydırma sırasında görünür
+     kalsın diye sabitlenir. İkinci satırın üst konumu ilk satırın gerçek
+     yüksekliğine göre hesaplanır (rowspan'lı hücreler yüzünden sabit bir
+     değer güvenilir olmaz). */
+  function stickProgramHeader(container){
+    if(!container) return;
+    const table = container.querySelector("#aphPrevTable");
+    if(!table) return;
+    const row0 = table.querySelector(".aph-hdr-row-0");
+    if(!row0) return;
+    const h0 = row0.getBoundingClientRect().height;
+    container.style.setProperty("--aph-r0h", h0 + "px");
+  }
 
   /* ---------- 4) Yeni Aylık Program ekranı ---------- */
-  const _pdfRender = window.renderProgram;
   window.renderProgram = async function(){
     const box = document.getElementById("program");
     if(!box) return;
     publishBridge();
-    const st = prgState();
+    const st = (await publishedState()) || prgState();
     const months = (st && Array.isArray(st.months)) ? st.months : [];
     const infos = months.map(monthInfo);
     const bridge = (() => { try{ return JSON.parse(localStorage.getItem(BRIDGE)||"null"); }catch(e){ return null; } })();
@@ -3431,9 +3566,9 @@ details.aph-pdf .in{padding:12px}
     box.innerHTML = `
       <div class="card">
         <div class="card-h aph-head">
-          <div><h3>AYLIK PROGRAM HTML</h3>
+          <div><h3>Aylık Program</h3>
             <div class="mt" style="font-size:12px;color:var(--muted)">
-              AYLIK PROGRAM HTML'de tamamlanan aylık programlar burada ay ay listelenir. Düzenlemek için sayfayı açın.</div></div>
+              Aylık Program'da tamamlanan aylık programlar burada ay ay listelenir. Düzenlemek için sayfayı açın.</div></div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
             <span class="chip gold">${months.length} ay</span>
             <button class="btn sm pri" onclick="openProgramSite()">Siteyi aç · Düzenle</button>
@@ -3442,17 +3577,17 @@ details.aph-pdf .in{padding:12px}
         </div>
         <div class="card-b" style="padding:16px">
           <div class="aph-note">
-            Veri akışı: <b>İDT Repertuvar → AYLIK PROGRAM HTML</b>. Oyun ve kadro bilgisi (${bridge? bridge.plays.length : 0} oyun,
-            ${bridge? bridge.crew.length : 0} kadro kaydı) otomatik olarak AYLIK PROGRAM HTML'e aktarılır; orada oyun adı yazınca
-            kadro ve çakışma bilgisi bu sitedeki verilerden gelir.
+            Oyun ve kadro bilgileri Repertuvar sisteminden otomatik olarak Aylık Program'a aktarılır (${bridge? bridge.plays.length : 0} oyun,
+            ${bridge? bridge.crew.length : 0} kadro); oyun adı yazıldığında kadro ve çakışma bilgisi buradan gelir.
           </div>
-          ${months.length ? "" : `<div class="aph-note" style="color:var(--danger)">
-            Henüz kayıtlı aylık program görünmüyor. <b>Siteyi aç</b> deyip AYLIK PROGRAM HTML üzerinde ay oluşturun/kaydedin,
-            sonra bu ekranda <b>Yenile</b>'ye basın. (Her iki dosya aynı klasörde/alan adında olmalıdır.)</div>`}
+          ${months.length ? "" : `<div class="aph-note" style="background:var(--danger-wash);border-color:var(--danger);border-left-color:var(--danger);color:var(--danger)">
+            Henüz kayıtlı aylık program görünmüyor. <b style="color:var(--danger)">Siteyi aç</b> deyip Aylık Program üzerinde ay oluşturun/kaydedin,
+            sonra bu ekranda <b style="color:var(--danger)">Yenile</b>'ye basın.</div>`}
           <div class="aph-months">${infos.map((inf,i) => `
             <div class="aph-card">
               <div class="ttl">${esc(months[i].name||("Ay "+(i+1)))}</div>
-              <div class="meta">${inf.oyunSayisi} oyun · ${inf.dolu} dolu hücre · ${months[i].rows}×${months[i].cols}</div>
+              <div class="meta">${inf.oyunSayisi} oyun</div>
+              ${inf.note ? `<div style="margin-top:6px;display:inline-block;font-weight:700;font-size:12px;color:var(--accent);background:var(--accent-wash);border:1px solid var(--accent-soft);border-radius:6px;padding:4px 9px;white-space:pre-wrap">${esc(inf.note)}</div>` : ""}
               <div class="acts">
                 <button class="btn sm pri" onclick="openProgramSite(${i})">Aç ve düzenle</button>
                 <button class="btn sm" onclick="toggleProgramPreview(${i})">${PREVIEW===i?"Önizlemeyi kapat":"Önizle"}</button>
@@ -3472,24 +3607,18 @@ details.aph-pdf .in{padding:12px}
               </div>
             </div>` : ""}
         </div>
-      </div>
-      <details class="aph-pdf"><summary>PDF / bağlantı arşivi (ortak sunucu)</summary><div class="in"><div id="program-pdf"></div></div></details>`;
+      </div>`;
 
     /* Önizleme katmanını body'ye taşı (fixed konumlanma bozulmasın) */
     document.querySelectorAll("body > .aph-ov").forEach(n => n.remove());
     const ov = box.querySelector(".aph-ov");
-    if(ov) document.body.appendChild(ov);
-
-    /* Eski PDF ekranını iç kutuya çiz (id geçici olarak devredilir) */
-    try{
-      const inner = document.getElementById("program-pdf");
-      box.id = "program-outer"; inner.id = "program";
-      await _pdfRender();
-      inner.id = "program-pdf"; box.id = "program";
-    }catch(e){
-      const inner = document.getElementById("program");
-      if(inner && inner !== box) inner.id = "program-pdf";
-      box.id = "program";
+    if(ov){
+      document.body.appendChild(ov);
+      const prevEl = ov.querySelector(".aph-prev");
+      if(prevEl){
+        stickProgramHeader(prevEl);
+        window.addEventListener("resize", () => stickProgramHeader(prevEl));
+      }
     }
   };
 

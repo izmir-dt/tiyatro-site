@@ -2122,7 +2122,7 @@
     }
     /* ŞEHİR */
     if (/(şehir|sehir|il)/.test(Q)&&/(en\s*cok|en\s*çok|en\s*fazla|kac|kaç)/.test(Q)) {
-      const c=new Map();for(const t of scope){const ill=new Set();if(t.il)ill.add(t.il);for(const d of t.duraklar||[])if(d.il)ill.add(d.il);for(const il of ill)c.set(il,(c.get(il)||0)+1);}
+      const c=new Map();for(const t of scope){if(t.statu.includes("iptal"))continue;const ill=new Set();if(t.il)ill.add(t.il);for(const d of t.duraklar||[])if(d.il)ill.add(d.il);for(const il of ill)c.set(il,(c.get(il)||0)+1);}
       if (/kac|kaç/.test(Q)) return `Toplam **${c.size}** farklı şehre gidildi.`;
       return "En çok gidilen şehirler:\n\n"+ [...c.entries()].sort((a,b)=>b[1]-a[1]).slice(0,10).map(([s,n],i)=>`${i+1}. **${s}** — ${n} turne`).join("\n");
     }
@@ -2136,7 +2136,7 @@
       const devamS=aktifScope.filter(t=>{const bas=parseDate(t.baslangic),bit=parseDate(t.bitis)||bas;return bas&&bit&&bas<=now2&&bit>=now2;}).length;
       const gelecekS=aktifScope.filter(t=>{const d=parseDate(t.baslangic);return d&&d>now2;}).length;
       const iptalS=scope.filter(t=>t.statu==="iptal").length;
-      return `📊 Toplam **${scope.length}** turne kaydı:\n\n✅ Tamamlandı: **${tamam}**\n🟢 Devam ediyor: **${devamS}**\n📅 Planlandı: **${gelecekS}**\n❌ İptal: **${iptalS}**\n\n⏱ Toplam **${g}** gün · 🎫 **${tm}** temsil`;
+      return `📊 Toplam **${aktifScope.length}** turne (iptaller hariç):\n\n✅ Tamamlandı: **${tamam}**\n🟢 Devam ediyor: **${devamS}**\n📅 Planlandı: **${gelecekS}**\n❌ İptal (sayıma dahil değil): **${iptalS}**\n\n⏱ Toplam **${g}** gün · 🎫 **${tm}** temsil`;
     }
     /* YAKLAŞAN */
     if (/(yaklaşan|yaklasan|gelecek|planlı|planli|taslak|önümüzdeki|onumuzdeki)/.test(Q)) {
