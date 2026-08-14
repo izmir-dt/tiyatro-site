@@ -3711,7 +3711,7 @@ window.exportPDF = function(title, headers, data){
 .aph-card .stat > div{display:flex;align-items:center;justify-content:center;gap:3px;min-height:66px}
 .aph-card .stat .aph-stat-icon{width:17px;height:17px;margin-bottom:2px;fill:none;stroke:var(--accent);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .aph-card .stat b{font-family:var(--font-d);font-size:15px;display:block;color:var(--text);margin:0}
-.aph-card .stat span{display:block;font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.aph-card .stat span{display:block;flex:0 0 auto;white-space:nowrap;font-size:9px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
 .aph-card .sum{margin-top:4px;display:block;font-family:var(--font-d);font-weight:800;font-size:13px;color:var(--accent);background:var(--accent-wash);border:1px solid var(--accent-soft);border-radius:10px;padding:9px 11px;text-align:center;letter-spacing:.3px}
 .aph-note{font-size:12px;color:var(--muted);margin-top:8px;line-height:1.6}
 /* ---------- Soft motion & accessibility polish ---------- */
@@ -3736,6 +3736,98 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 .aph-ov .top .t::before{content:"Önizleme";font-family:var(--font-b);font-size:10px;font-weight:800;
   letter-spacing:.12em;text-transform:uppercase;color:var(--muted);background:var(--surface);
   border:1px solid var(--line);border-radius:999px;padding:3px 8px}
+/* Yeni sekmede kaydırmasız, ekrana sığan tam ekran önizleme */
+ .aph-fullscreen-html,
+ .aph-fullscreen-body{
+  width:100%;
+  height:100%;
+  overflow:hidden!important;
+}
+.aph-fullscreen-body{
+  margin:0!important;
+  padding:0!important;
+  background:
+    radial-gradient(circle at 50% 0%,color-mix(in srgb,var(--accent) 14%,transparent),transparent 44%),
+    var(--surface-2)!important;
+}
+.aph-fullscreen-shell{
+  width:100vw;
+  height:100dvh;
+  min-height:0;
+  display:grid;
+  grid-template-rows:auto minmax(0,1fr);
+  overflow:hidden;
+}
+.aph-fullscreen-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:18px;
+  min-height:58px;
+  padding:10px 18px;
+  color:var(--text);
+  background:color-mix(in srgb,var(--surface) 96%,var(--surface-2));
+  border-bottom:1px solid var(--line);
+  box-shadow:0 4px 16px rgba(28,15,15,.09);
+}
+.aph-fullscreen-head h1{
+  margin:2px 0 0;
+  font-family:var(--font-d);
+  font-size:18px;
+  line-height:1.15;
+}
+.aph-fullscreen-kicker{
+  display:block;
+  color:var(--muted);
+  font-size:9px;
+  font-weight:800;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+}
+.aph-fullscreen-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+.aph-fullscreen-actions .chip{white-space:nowrap}
+.aph-fullscreen-stage{
+  min-width:0;
+  min-height:0;
+  display:grid;
+  place-items:center;
+  overflow:hidden!important;
+  padding:14px;
+}
+.aph-fullscreen-fit{
+  display:block;
+  width:max-content;
+  height:max-content;
+  max-width:none;
+  max-height:none;
+  transform-origin:center center;
+  will-change:transform;
+}
+.aph-fullscreen-fit .aph-prev{
+  overflow:visible!important;
+  padding:0!important;
+  background:transparent!important;
+}
+.aph-fullscreen-fit .aph-prev table{
+  width:max-content!important;
+  min-width:0!important;
+  table-layout:auto!important;
+}
+.aph-fullscreen-fit .aph-prev td.aph-hdr-cell-0,
+.aph-fullscreen-fit .aph-prev td.aph-hdr-cell-1,
+.aph-fullscreen-fit .aph-prev td.aph-col-0,
+.aph-fullscreen-fit .aph-prev td.aph-col-1{
+  position:static!important;
+  box-shadow:none!important;
+}
+.aph-fullscreen-fit .aph-prev table{box-shadow:0 10px 26px rgba(28,15,15,.12)}
+@media(max-width:760px){
+  .aph-fullscreen-head{padding:9px 11px;gap:10px}
+  .aph-fullscreen-head h1{font-size:15px}
+  .aph-fullscreen-actions{gap:5px}
+  .aph-fullscreen-actions .chip{display:none}
+  .aph-fullscreen-stage{padding:8px}
+}
 @keyframes soft-fade{from{opacity:0}to{opacity:1}}
 @keyframes soft-panel-in{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
 @keyframes soft-rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
@@ -4162,6 +4254,72 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
     stickProgramHeader(prevEl);
   };
 
+  /* Önizlemeyi yeni sekmede, tarayıcı alanına otomatik sığan ve hiç
+     kaydırma gerektirmeyen bir görünüm olarak aç. Tarayıcı tam ekranı
+     ayrıca kullanıcı etkileşimiyle istenirse açılabilir. */
+  window.openProgramFullscreen = function(i){
+    const months = Array.isArray(window.IDT_MONTHLY_PROGRAM) ? window.IDT_MONTHLY_PROGRAM : [];
+    const m = months[i];
+    if(!m) return;
+    const info = monthInfo(m);
+    const tableHtml = previewHtml(m);
+    const popup = window.open("", "_blank");
+    if(!popup){
+      uiAlert("Tam ekran önizleme açılamadı. Tarayıcı yeni sekme açılmasına izin vermiyor olabilir.", "Yeni sekme açılamadı");
+      return;
+    }
+    const title = String(m.name || "Aylık Program");
+    const styleText = [...document.querySelectorAll("style")]
+      .map(s => s.textContent || "")
+      .join("\n")
+      .replace(/<\/style/gi, "<\\/style");
+    const docHtml = '<!doctype html><html lang="tr" class="aph-fullscreen-html"><head><meta charset="utf-8">' +
+      '<meta name="viewport" content="width=device-width,initial-scale=1">' +
+      '<title>' + esc(title) + ' — Tam ekran önizleme</title><style>' + styleText +
+      '</style><style>' +
+      '.aph-fullscreen-body .aph-prev td{font-size:calc(12.5px * var(--aph-zoom));}' +
+      '</style></head><body class="aph-fullscreen-body">' +
+      '<main class="aph-fullscreen-shell">' +
+        '<header class="aph-fullscreen-head">' +
+          '<div><span class="aph-fullscreen-kicker">Aylık program · tam ekran önizleme</span>' +
+          '<h1>' + esc(title) + '</h1></div>' +
+          '<div class="aph-fullscreen-actions">' +
+            '<span class="chip gold">' + info.temsil + ' temsil · ' + info.oyunSayisi + ' oyun</span>' +
+            '<button class="btn sm" type="button" onclick="enterBrowserFullscreen()">Tarayıcı tam ekranı</button>' +
+            '<button class="btn sm" type="button" onclick="window.close()">Sekmeyi kapat</button>' +
+          '</div>' +
+        '</header>' +
+        '<section class="aph-fullscreen-stage" aria-label="' + esc(title) + ' program tablosu">' +
+          '<div class="aph-fullscreen-fit" id="aphFullscreenFit"><div class="aph-prev">' + tableHtml + '</div></div>' +
+        '</section>' +
+      '</main>' +
+      '<script>' +
+        '(function(){' +
+          'var stage=document.querySelector(".aph-fullscreen-stage"),fit=document.getElementById("aphFullscreenFit");' +
+          'function fitToScreen(){' +
+            'if(!stage||!fit)return;' +
+            'fit.style.transform="none";' +
+            'var r=fit.getBoundingClientRect(),w=Math.max(1,stage.clientWidth-16),h=Math.max(1,stage.clientHeight-16);' +
+            'var scale=Math.min(1,w/r.width,h/r.height);' +
+            'if(!isFinite(scale)||scale<=0)scale=1;' +
+            'fit.style.transform="scale("+scale.toFixed(4)+")";' +
+          '}' +
+          'window.enterBrowserFullscreen=function(){' +
+            'var el=document.documentElement;' +
+            'if(el.requestFullscreen)el.requestFullscreen().catch(function(){});' +
+          '};' +
+          'window.addEventListener("resize",fitToScreen);' +
+          'window.addEventListener("load",fitToScreen);' +
+          'if(document.fonts&&document.fonts.ready)document.fonts.ready.then(fitToScreen);' +
+          'requestAnimationFrame(function(){requestAnimationFrame(fitToScreen);});' +
+        '})();' +
+      '<\/script></body></html>';
+    popup.document.open();
+    popup.document.write(docHtml);
+    popup.document.close();
+    try{ popup.opener = null; }catch(e){}
+  };
+
   /* Başlık satırları (kurum adı + sahne adları) kaydırma sırasında görünür
      kalsın diye sabitlenir. İkinci satırın üst konumu ilk satırın gerçek
      yüksekliğine göre hesaplanır (rowspan'lı hücreler yüzünden sabit bir
@@ -4272,6 +4430,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
                   <button class="btn sm" id="aphClearBtn" onclick="aphClearHighlight()" title="Vurgu ve seçimi kaldır (Esc)">Vurguyu kaldır <span style="opacity:.6">Esc</span></button>
                   <button class="btn sm" onclick="aphZoom(-0.1)">A−</button>
                   <button class="btn sm" onclick="aphZoom(0.1)">A+</button>
+                  <button class="btn sm" onclick="openProgramFullscreen(${PREVIEW})" title="Önizlemeyi yeni sekmede kaydırmasız aç">Tam ekran ↗</button>
                   <div class="aph-legend">
                     <span><i style="background:color-mix(in srgb,var(--accent) 22%,var(--surface))"></i>Hafta sonu · temsil var</span>
                     <span><i style="background:color-mix(in srgb,var(--text) 12%,var(--surface));box-shadow:inset 3px 0 0 color-mix(in srgb,var(--accent) 50%,transparent)"></i>Hafta sonu · temsil yok</span>
