@@ -117,6 +117,7 @@ table.sheet tr.stageHead td{background:var(--head);color:var(--headInk);font-wei
 
 /* Prömiyer */
 table.sheet td.cell.premiere{color:var(--premiere);font-weight:700}
+table.sheet td.cell.uline{text-decoration:underline}
 table.sheet td.cell.premiere::before{content:"★ ";color:var(--premiere)}
 
 /* Turne hücreleri: sahne hücreleriyle birebir aynı yazı tipi/rengi/kalınlığı */
@@ -409,6 +410,7 @@ body.fs-on #program .controls{position:sticky;top:0;z-index:40;background:var(--
           <button class="btn ghost small" id="unmergeBtn" title="Birleşmeyi ayır">Birleşmeyi ayır</button>
           <div class="mp-sep"></div>
           <button class="btn ghost small" id="premBtn" title="Prömiyer işareti">Prömiyer &#9733;</button>
+          <button class="btn ghost small" id="premLabelBtn" title="Seçili hücreye açıklama metnini yaz: ★ PRÖMİYER (oyun olarak sayılmaz)">&#9733; PRÖMİYER açıklaması</button>
           <button class="btn ghost small" id="freeTextBtn" title="Seçili hücreleri serbest metin/not olarak işaretle — oyun listesine eklenmez">Serbest metin &#9998;</button>
           <button class="btn ghost small" id="cellNoteBtn" title="Seçili hücreye not ekle/düzenle">Not ekle / düzenle</button>
           <button class="btn ghost small" id="catBtn" title="Seçili not/serbest metin hücrelerini kategorile (İl, Sahne, Turne, Prova, Tatil, Duyuru)">Kategori ata</button>
@@ -424,6 +426,7 @@ body.fs-on #program .controls{position:sticky;top:0;z-index:40;background:var(--
           <button class="btn ghost small" id="bgColorBtn" title="Seçili hücrelere zemin rengi uygula">Zemin rengi…</button>
           <button class="btn ghost small" id="fgColorBtn" title="Seçili hücrelere yazı rengi uygula">Yazı rengi…</button>
           <button class="btn ghost small" id="boldBtn" title="Kalın yazı (aç/kapat)">Kalın yazı</button>
+          <button class="btn ghost small" id="underlineBtn" title="Altı çizili yazı (aç/kapat) — Ctrl+U">Altı çizili</button>
           <div class="mp-sep"></div>
           <button class="btn ghost small" id="fmtClearBtn" title="Sadece renk/kalın biçimini temizle (metni silmez)">Biçimi temizle</button>
           <input type="color" id="bgColorPicker" value="#ffe600" style="display:none">
@@ -1521,6 +1524,7 @@ function cellStyleString(cell){
   if(cell.bg) parts.push('background:'+cell.bg);
   if(cell.color) parts.push('color:'+cell.color);
   if(cell.bold) parts.push('font-weight:700');
+  if(cell.underline) parts.push('text-decoration:underline');
   return parts.join(';');
 }
 function stageHeaderText(m,c){
@@ -1688,6 +1692,13 @@ function renderCategories(){
   if(badge){ badge.textContent=all.length; badge.style.display=all.length?'inline-block':'none'; }
 }
 function renderDataViews(){ renderShowings(); renderCategories(); }
+/* "* PRÖMİYER" açıklama metni: prömiyer işaretlendiğinde baştaki * kaldırılır,
+   yıldız ikonu oyun hücrelerindekiyle aynı (★) şekilde gösterilir. */
+function cellDisplayText(cell){
+  const v = String((cell && cell.v) || '');
+  if(cell && cell.premiere && isPremiereLabel(v)) return v.replace(/^\s*[\*★]\s*/,'');
+  return v;
+}
 function isPremiereLabel(t){
   const s = String(t||'').trim().toLocaleUpperCase('tr');
   return s==='PRÖMİYER' || s==='* PRÖMİYER' || s==='*PRÖMİYER';
@@ -1803,8 +1814,9 @@ function renderSheet(){
       td.dataset.r=r; td.dataset.c=c;
       if(c===0 || c===m.cols-1) td.classList.add('dateCol');
       const cell = m.cells[r+'_'+c] || {};
-      td.textContent = cell.v || '';
+      td.textContent = cellDisplayText(cell);
       if(cell.premiere) td.classList.add('premiere');
+      if(cell.underline) td.classList.add('uline');
       // Otomatik prömiyer (* ile başlayan)
       if((cell.v||'').trim().startsWith('*') && !isPremiereLabel(cell.v)) td.classList.add('premiere');
       // Turne sütunu: başlık TURNE ise metni kırmızı
@@ -2417,12 +2429,30 @@ function opBold(){
   }
   saveState(); renderSheet(); renderPrint();
 }
+function opUnderline(){
+  const m=curMonth();
+  let anyOff=false;
+  for(let r=sel.r1;r<=sel.r2;r++) for(let c=sel.c1;c<=sel.c2;c++){ if(!(m.cells[r+'_'+c]||{}).underline) anyOff=true; }
+  snapshot();
+  for(let r=sel.r1;r<=sel.r2;r++) for(let c=sel.c1;c<=sel.c2;c++){
+    m.cells[r+'_'+c] = {...(m.cells[r+'_'+c]||{v:''}), underline: anyOff};
+  }
+  saveState(); renderSheet(); renderPrint();
+}
+/* Sayfa altındaki "★ PRÖMİYER" açıklama hücresi (oyun sayılmaz) */
+function opPremiereLabel(){
+  const m=curMonth(); snapshot();
+  const k = sel.r1+'_'+sel.c1;
+  m.cells[k] = {...(m.cells[k]||{}), v:'PRÖMİYER', premiere:true};
+  saveState(); renderSheet(); renderPrint(); renderPlays();
+  setStatus('★ PRÖMİYER açıklaması eklendi.');
+}
 function opClearFormat(){
   const m=curMonth(); snapshot();
   for(let r=sel.r1;r<=sel.r2;r++) for(let c=sel.c1;c<=sel.c2;c++){
     const cur = m.cells[r+'_'+c];
     if(!cur) continue;
-    const {bg,color,bold, ...rest} = cur;
+    const {bg,color,bold,underline, ...rest} = cur;
     m.cells[r+'_'+c] = rest;
   }
   saveState(); renderSheet(); renderPrint();
@@ -2470,7 +2500,9 @@ function showCtx(x,y,kind){
   if(kind==='cell'){
     items.push(['Birleştir', opMerge],['Ayır', opUnmerge],['---'],
       ['Prömiyer ★ (aç/kapat)', opPremiere],
+      ['★ PRÖMİYER açıklaması yaz', opPremiereLabel],
       ['Kalın (aç/kapat)', opBold],
+      ['Altı çizili (aç/kapat)', opUnderline],
       ['Rengi Temizle', opClearFormat],
       ['⚠️ Çakışmayı yok say (aç/kapat)', opIgnoreConflict],
       ['✎ Serbest metin / not hücresi (aç/kapat)', opFreeText],
@@ -2756,6 +2788,7 @@ function renderPrint(){
         const clist = ['cell'];
         if(c===0||c===m.cols-1) clist.push('dateCol');
         if(cell.premiere) clist.push('premiere');
+        if(cell.underline) clist.push('uline');
         if((cell.v||'').trim().startsWith('*') && !isPremiereLabel(cell.v)) clist.push('premiere');
         if(r>=2 && stageHeaderText(m,c).includes('TURNE') && cell.v) clist.push('turne');
         if(r>=2 && conflict.hasCritical && cell.v && !cell.ignoreConflict &&
@@ -2764,7 +2797,7 @@ function renderPrint(){
         }
         const rs = mm?` rowspan="${mm[2]-mm[0]+1}"`:''; const cs = mm?` colspan="${mm[3]-mm[1]+1}"`:'';
         const styleAttr = cellStyleString(cell); const st = styleAttr?` style="${styleAttr}"`:'';
-        h+=`<td class="${clist.join(' ')}"${rs}${cs}${st}>${escapeHtml(cell.v||'')}</td>`;
+        h+=`<td class="${clist.join(' ')}"${rs}${cs}${st}>${escapeHtml(cellDisplayText(cell))}</td>`;
       }
       h+='</tr>';
     }
@@ -2930,8 +2963,8 @@ function exportExcel(){
   const styleCache = new Map(); // key -> styleId
   let styleSeq = 0;
   const styleDefs = [];
-  function styleIdFor(bg,color,bold){
-    const key = bg+'|'+color+'|'+(bold?1:0);
+  function styleIdFor(bg,color,bold,underline){
+    const key = bg+'|'+color+'|'+(bold?1:0)+'|'+(underline?1:0);
     if(styleCache.has(key)) return styleCache.get(key);
     const id = 's'+(styleSeq++);
     styleCache.set(key,id);
@@ -2939,7 +2972,7 @@ function exportExcel(){
       `<Style ss:ID="${id}">`+
       `<Alignment ss:Horizontal="Center" ss:Vertical="Center" ss:WrapText="1"/>`+
       `<Borders><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/></Borders>`+
-      `<Font ss:FontName="Calibri" ss:Size="10" ss:Color="#${color}" ${bold?'ss:Bold="1"':''}/>`+
+      `<Font ss:FontName="Calibri" ss:Size="10" ss:Color="#${color}" ${bold?'ss:Bold="1"':''} ${underline?'ss:Underline="Single"':''}/>`+
       `<Interior ss:Color="#${bg}" ss:Pattern="Solid"/>`+
       `</Style>`
     );
@@ -2948,7 +2981,6 @@ function exportExcel(){
   function cellFormat(m,r,c,cell,conflict){
     const isDateCol = (c===0 || c===m.cols-1);
     const headerish = r===0 || r===1 || isMondayRow(m,r); /* sadece başlık satırları ve PAZARTESİ boyanır */
-    const isTurne = r>=2 && stageHeaderText(m,c).includes('TURNE') && cell.v;
     const isPrem = !!cell.premiere || ((cell.v||'').trim().startsWith('*') && !isPremiereLabel(cell.v));
     let isConflict = false;
     if(r>=2 && conflict.hasCritical && cell.v && !cell.ignoreConflict &&
@@ -2956,15 +2988,16 @@ function exportExcel(){
       isConflict = true;
     }
     let bg = headerish ? XLS_HEAD : XLS_WHITE;
-    let color = (isPrem || isTurne) ? XLS_PREMIERE : '000000';
-    let bold = headerish || isDateCol || isPrem || isTurne;
+    let color = isPrem ? XLS_PREMIERE : '000000';
+    let bold = headerish || isDateCol || isPrem;
+    let underline = !!cell.underline;
     if(cell.bg) bg = safeHex(cell.bg, bg);
-    if(cell.color) color = safeHex(cell.color, color);
+    if(cell.color) color = safeHex(cell.color, color);   /* renk sadece kullanıcı verdiyse değişir */
     if(cell.bold) bold = true;
     if(isConflict){ bg = XLS_CONFLICT; color = 'FFFFFF'; bold = true; }
-    let text = cell.v || '';
+    let text = cellDisplayText(cell);
     if(isPrem && !text.trim().startsWith('★') && !text.trim().startsWith('*')) text = '★ '+text;
-    return {bg,color,bold,text};
+    return {bg,color,bold,underline,text};
   }
   const usedNames = new Set();
   let sheetsXml = '';
@@ -2982,8 +3015,8 @@ function exportExcel(){
         if(isCovered(m,r,c)) continue;
         const mm = mergeOf(m,r,c);
         const cell = m.cells[r+'_'+c] || {};
-        const {bg,color,bold,text} = cellFormat(m,r,c,cell,conflict);
-        const sid = styleIdFor(bg,color,bold);
+        const {bg,color,bold,underline,text} = cellFormat(m,r,c,cell,conflict);
+        const sid = styleIdFor(bg,color,bold,underline);
         const merge = mm ? ` ss:MergeAcross="${mm[3]-mm[1]}" ss:MergeDown="${mm[2]-mm[0]}"` : '';
         cellsXml += `<Cell ss:Index="${c+1}" ss:StyleID="${sid}"${merge}><Data ss:Type="String">${xmlEscape(text)}</Data></Cell>`;
       }
@@ -3571,6 +3604,8 @@ document.getElementById('fgColorBtn').onclick = ()=>{
   p.click();
 };
 document.getElementById('boldBtn').onclick = opBold;
+document.getElementById('underlineBtn').onclick = opUnderline;
+document.getElementById('premLabelBtn').onclick = opPremiereLabel;
 document.getElementById('fmtClearBtn').onclick = opClearFormat;
 document.getElementById('rowAbove').onclick = ()=>opInsertRow('above');
 document.getElementById('rowBelow').onclick = ()=>opInsertRow('below');
@@ -3655,6 +3690,7 @@ document.addEventListener('keydown', e=>{
       setTimeout(()=>{ if(!_lastPasteAt || _lastPasteAt < before) opPaste(); }, 120);
     }
     else if(e.key==='d' || e.key==='D'){ e.preventDefault(); fillDown(); }
+    else if(e.key==='u' || e.key==='U'){ if(sel.r1>=0){ e.preventDefault(); opUnderline(); } }
   } else if(e.key==='Delete' || e.key==='Backspace'){ if(sel.r1>=0){ e.preventDefault(); opClear(); } }
   else if(e.key==='Enter'){ const td=document.querySelector('#sheet td.cell.anchor'); if(td){ e.preventDefault(); startEdit(td); } }
 });
