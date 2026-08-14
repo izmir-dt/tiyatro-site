@@ -381,7 +381,7 @@ body.fs-on #program .controls{position:sticky;top:0;z-index:40;background:var(--
       </div>
       <div class="cmd-right">
         <button class="btn small" id="addMonthTop" title="Yeni ay oluştur (Cumartesi 2 satır otomatik)">+ Yeni ay</button>
-        <button class="btn ghost small" id="delMonthTop" title="Görüntülenen ayı sil">&#128465; Ayı sil</button>
+        <button class="btn ghost small" id="delMonthTop" title="Görüntülenen ayı kalıcı olarak sil (sunucudan da kaldırılır)">&#128465; Ayı sil</button>
         <button class="btn ghost small" id="fsBtn" title="Aylık programı tam sayfa görüntüle (Esc ile çık)">Tam Ekran</button>
         <button class="btn small" id="toolbarToggleBtn" title="Düzenleme araç çubuğunu gizle/göster — aylık program odakta kalsın">Araçları gizle</button>
       </div>
@@ -394,9 +394,10 @@ body.fs-on #program .controls{position:sticky;top:0;z-index:40;background:var(--
           <div class="mp-title">Ay işlemleri</div>
           <button class="btn ghost small" id="renameMonth">Yeniden adlandır</button>
           <button class="btn ghost small" id="addMonth" title="Yeni ay oluştur (Cumartesi 2 satır otomatik)">Yeni ay ekle</button>
-          <button class="btn ghost small" id="delMonth">Ayı sil</button>
+          <button class="btn ghost small" id="delMonth" title="Görüntülenen ayı kalıcı olarak sil (sunucudan da kaldırılır)">Ayı sil (kalıcı)</button>
           <div class="mp-sep"></div>
           <button class="btn ghost small" id="siteNoteBtn" title="Bu ay için index sitesinde görünecek notu yaz">Site notu (index'te görünür)</button>
+          <button class="btn ghost small" id="siteNoteDelBtn" title="Bu ayın site notunu sil">Site notunu sil</button>
           <div class="mp-sep"></div>
           <button class="btn ghost small" id="backupBtn" title="Otomatik yedeklerden geri yükle">Yedeklerden geri yükle</button>
         </div>
@@ -754,6 +755,7 @@ function loadState(){
       if(!st.playFreeNotes || typeof st.playFreeNotes!=='object') st.playFreeNotes = {};
       if(!st.monthPub || typeof st.monthPub!=='object') st.monthPub = {};
       if(!st.monthDraft || typeof st.monthDraft!=='object') st.monthDraft = {};
+      if(!st.deletedMonths || typeof st.deletedMonths!=='object') st.deletedMonths = {};
       restoreMissingMonths(st);
       return st;
     }
@@ -776,6 +778,7 @@ function loadState(){
           if(!bs.playFreeNotes||typeof bs.playFreeNotes!=='object') bs.playFreeNotes={};
           if(!bs.monthPub||typeof bs.monthPub!=='object') bs.monthPub={};
           if(!bs.monthDraft||typeof bs.monthDraft!=='object') bs.monthDraft={};
+          if(!bs.deletedMonths||typeof bs.deletedMonths!=='object') bs.deletedMonths={};
           restoreMissingMonths(bs);
           return bs;
         }
@@ -870,6 +873,8 @@ async function openBackupDialog(){
 function restoreMissingMonths(st){
   try{
     if(!st || !Array.isArray(st.months)) return st;
+    /* Kullanıcının bilerek sildiği aylar yedeklerden geri getirilmez. */
+    const tombs = (st.deletedMonths && typeof st.deletedMonths==='object') ? st.deletedMonths : {};
     const have = new Set(st.months.map(m=>String(m.name||'').trim().toLocaleUpperCase('tr')));
     const list = readBackups();
     for(let i=list.length-1;i>=0;i--){
@@ -878,6 +883,7 @@ function restoreMissingMonths(st){
       for(const m of bs.months){
         const key = String(m.name||'').trim().toLocaleUpperCase('tr');
         if(!key || have.has(key)) continue;
+        if(tombs[monthSlug(m.name)]) continue;   // silinmiş ay: geri getirme
         const cnt = m.cells ? Object.keys(m.cells).length : 0;
         if(cnt < 5) continue;               // boş şablonları geri getirme
         st.months.push(m); have.add(key);
@@ -1205,6 +1211,7 @@ async function syncFromServer(){
     }
     const name = data.month.name;
     noteServerMonthTs(name, ts);
+    if(isMonthDeleted(name)) continue;  /* kullanıcı bu ayı sildi */
     const localTs = (state.monthPub[name]||{}).publishedAt || 0;
     if(ts <= localTs) continue; /* yerelde bu sürüm veya daha yenisi zaten var */
     const normalized = normalizeMonth(data.month);
@@ -1317,6 +1324,7 @@ async function syncDraftFromServer(){
       data.playsIgnored.forEach(p=>{ if(!state.playsIgnored.includes(p)){ state.playsIgnored.push(p); ignoredGrew = true; } });
     }
     const name = data.month.name;
+    if(isMonthDeleted(name)) continue;  /* kullanıcı bu ayı sildi */
     const localDraftTs = (state.monthDraft[name]||{}).draftAt || 0;
     const localPubTs = (state.monthPub[name]||{}).publishedAt || 0;
     if(ts <= localDraftTs || ts <= localPubTs) continue; /* zaten aynı veya daha yeni */
@@ -2752,24 +2760,95 @@ async function addBlankMonth(){
     siteMessage('Ay adı çözümlenemedi. Örnek: TEMMUZ 2026','warn','Ay adı geçersiz');
     return;
   }
+  const wanted = AY_ADLARI[ayIdx]+' '+yil;
+  const dup = state.months.findIndex(mo=>String(mo.name||'').trim().toLocaleUpperCase('tr')===wanted);
+  if(dup>=0){
+    siteMessage('"'+wanted+'" zaten var; o aya geçildi.','warn','Ay zaten mevcut');
+    state.activeIdx = dup; saveState(); renderAll();
+    return;
+  }
   snapshot();
   const m = buildMonthTemplate(ayIdx+1, yil, curMonth());
+  unmarkMonthDeleted(wanted);
   state.months.push(m); state.activeIdx = state.months.length-1;
   saveState(); renderAll();
+  setStatus('"'+wanted+'" eklendi. Adı yanlışsa "Yeniden adlandır" ya da "Ayı sil" ile düzeltebilirsiniz.');
+}
+/* === Kalıcı ay silme ===
+   Bir ayı silmek yalnızca yerelden kaldırmak yeterli değildi: ay hem
+   yedeklerden (restoreMissingMonths) hem de ortak sunucudaki yayın/taslak
+   satırlarından geri geliyordu. Artık silinen ay bir "mezar taşı" listesine
+   yazılır ve sunucudaki apub_/adraft_ satırları da temizlenir. */
+function isMonthDeleted(name){
+  const t = state.deletedMonths || {};
+  return !!t[monthSlug(name)];
+}
+function markMonthDeleted(name){
+  state.deletedMonths = state.deletedMonths || {};
+  state.deletedMonths[monthSlug(name)] = {name, at: Date.now()};
+}
+function unmarkMonthDeleted(name){
+  if(state.deletedMonths) delete state.deletedMonths[monthSlug(name)];
+}
+/* Belirtilen ayın ortak sunucudaki tüm yayın ve taslak satırlarını siler. */
+async function purgeMonthOnServer(name){
+  const slug = monthSlug(name);
+  const res = await fetch(PUBLISH_API + '/' + encodeURIComponent(PUBLISH_SHEET), {cache:'no-store'});
+  const data = res.ok ? await res.json() : {rows:[]};
+  const pPub = 'apub_' + slug + '_';
+  const pDraft = DRAFT_PREFIX + slug + '_';
+  const rows = (data.rows || [])
+    .map((r,i)=>({r,i}))
+    .filter(x=>String(x.r[0]||'').startsWith(pPub) || String(x.r[0]||'').startsWith(pDraft))
+    .sort((a,b)=>b.i-a.i);
+  for(const item of rows){
+    const del = await fetch(PUBLISH_API + '/' + encodeURIComponent(PUBLISH_SHEET) + '/row/' + item.i, {method:'DELETE'});
+    if(!del.ok) throw new Error('Sunucudaki kayıt silinemedi (HTTP '+del.status+')');
+  }
+  return rows.length;
 }
 async function delCurMonth(){
-  if(state.months.length<=1){ siteMessage('Son ay silinemez.','warn','Ay silinemedi'); return; }
-  if(!await siteConfirm(`"${curMonth().name}" silinsin mi?`, 'Ay silinsin mi?')) return;
+  const m = curMonth();
+  if(!m) return;
+  const name = m.name;
+  const only = state.months.length<=1;
+  const msg = '"'+name+'" ayı silinsin mi?\n\n' +
+    '• Bu bilgisayardan kaldırılır\n' +
+    '• Ortak sunucudaki yayın ve taslak kayıtları da silinir (index sitesinde görünmez)\n' +
+    '• Yedeklerden otomatik geri gelmez\n\n' +
+    (only ? 'Bu son ay: silindikten sonra yerine boş bir ay oluşturmanız gerekir.\n\n' : '') +
+    'Yanlışlıkla eklenen/adı hatalı yazılan aylar bu şekilde tamamen temizlenir.';
+  if(!await siteConfirm(msg, 'Ayı kalıcı olarak sil')) return;
   pushBackup(true);
+  _suppressDraftSync = true;
+  let removedRows = 0, serverErr = '';
+  try{ removedRows = await purgeMonthOnServer(name); }
+  catch(e){ serverErr = e.message || 'Bağlantı hatası'; }
   snapshot();
+  markMonthDeleted(name);
   state.months.splice(state.activeIdx,1);
-  state.activeIdx = Math.max(0, state.activeIdx-1);
+  if(state.monthPub) delete state.monthPub[name];
+  if(state.monthDraft) delete state.monthDraft[name];
+  if(!state.months.length){
+    const now = new Date();
+    state.months.push(buildMonthTemplate(now.getMonth()+1, now.getFullYear(), null));
+    state.activeIdx = 0;
+  } else {
+    state.activeIdx = Math.max(0, Math.min(state.activeIdx, state.months.length-1));
+  }
   saveState(); renderAll();
+  _suppressDraftSync = false;
+  if(serverErr){
+    siteMessage('"'+name+'" bu bilgisayardan silindi, ancak ortak sunucudaki kayıtları temizlenemedi: '+serverErr+'\nİnternet bağlantısı geldiğinde "Ayı sil" işlemini tekrarlayabilirsiniz.','warn','Ay silindi (sunucu hatası)');
+  } else {
+    siteMessage('"'+name+'" tamamen silindi'+(removedRows?' (sunucudan '+removedRows+' kayıt temizlendi)':'')+'. Diğer aylar etkilenmedi.','ok','Ay silindi');
+  }
+  setStatus('"'+name+'" silindi.');
 }
 /* Bu ayın index sitesinde kartın altında görünecek serbest notu */
 async function editMonthSiteNote(){
   const m = curMonth();
-  const nv = await sitePrompt('Bu ay için not (index sitesinde ayın kartında görünür):', m.siteNote || '', 'Ay notu');
+  const nv = await sitePrompt('Bu ay için not (index sitesinde ayın kartında görünür).\nAlanı boşaltıp Tamam derseniz not silinir; Vazgeç mevcut notu korur.', m.siteNote || '', 'Ay notu');
   if(nv === null) return;
   snapshot();
   const t = nv.trim();
@@ -2778,10 +2857,56 @@ async function editMonthSiteNote(){
   setStatus(t ? 'Ay notu kaydedildi — kesinleştirdikten sonra index sitesinde görünür.' : 'Ay notu silindi.');
 }
 
+/* Ay notunu tek tıkla silme (boş bırakmayı beklemeden) */
+async function deleteMonthSiteNote(){
+  const m = curMonth(); if(!m) return;
+  if(!m.siteNote){ siteMessage('Bu ayda silinecek bir site notu yok.','warn','Ay notu'); return; }
+  if(!await siteConfirm('"'+m.name+'" ayının site notu silinsin mi?\n\nNot: '+m.siteNote+'\n\nDeğişikliğin index sitesine yansıması için ayı yeniden kesinleştirin.', 'Ay notunu sil')) return;
+  snapshot();
+  delete m.siteNote;
+  saveState(); renderAll();
+  setStatus('Ay notu silindi — kesinleştirdikten sonra index sitesinden de kalkar.');
+  siteMessage('Ay notu silindi. Index sitesinde de kalkması için "Kesinleştir (bu ay)" düğmesine basın.','ok','Ay notu silindi');
+}
+
 async function renameCurMonth(){
-  const nm = await sitePrompt('Yeni ay adı:', curMonth().name, 'Ay adını değiştir');
-  if(!nm) return;
-  snapshot(); curMonth().name = nm; saveState(); renderAll();
+  const m = curMonth(); if(!m) return;
+  const oldName = m.name;
+  const nm = await sitePrompt('Yeni ay adı (ör. TEMMUZ 2026):', oldName, 'Ay adını değiştir');
+  if(nm===null) return;
+  const newName = String(nm).trim();
+  if(!newName || newName===oldName) return;
+  const parts = newName.split(/\s+/);
+  const ayIdx = AY_ADLARI.indexOf((parts[0]||'').toLocaleUpperCase('tr'));
+  const yil = parseInt(parts[1]||'',10);
+  if(ayIdx<0 || !yil){
+    siteMessage('Ay adı çözümlenemedi. Örnek: TEMMUZ 2026','warn','Ay adı geçersiz');
+    return;
+  }
+  const clean = AY_ADLARI[ayIdx]+' '+yil;
+  if(state.months.some((mo,i)=>i!==state.activeIdx && String(mo.name||'').trim().toLocaleUpperCase('tr')===clean)){
+    siteMessage('"'+clean+'" adında başka bir ay zaten var.','warn','Ad kullanımda');
+    return;
+  }
+  /* Eski ad sunucuda ayrı bir kayıt olarak durur; yanlış yazılan ad index
+     sitesinde asılı kalmasın diye eski kayıtlar temizlenir. */
+  let serverErr = '';
+  if(monthSlug(oldName) !== monthSlug(clean)){
+    _suppressDraftSync = true;
+    try{ await purgeMonthOnServer(oldName); }
+    catch(e){ serverErr = e.message || 'Bağlantı hatası'; }
+    _suppressDraftSync = false;
+  }
+  snapshot();
+  if(monthSlug(oldName) !== monthSlug(clean)) markMonthDeleted(oldName);
+  unmarkMonthDeleted(clean);
+  m.name = clean;
+  /* Başlık ve tarih hücrelerindeki ay adı da güncellensin */
+  if(state.monthPub){ delete state.monthPub[oldName]; }
+  if(state.monthDraft){ delete state.monthDraft[oldName]; }
+  saveState(); renderAll();
+  if(serverErr) siteMessage('Ad değişti, ancak eski adın sunucudaki kayıtları temizlenemedi: '+serverErr,'warn','Sunucu hatası');
+  else setStatus('Ay adı güncellendi: '+clean+' (eski ad "'+oldName+'" sunucudan da kaldırıldı).');
 }
 
 /* Print view */
@@ -3605,6 +3730,7 @@ document.getElementById('addMonthTop').onclick = addBlankMonth;
 document.getElementById('delMonthTop').onclick = delCurMonth;
 document.getElementById('renameMonth').onclick = renameCurMonth;
 { const sn = document.getElementById('siteNoteBtn'); if(sn) sn.onclick = editMonthSiteNote; }
+{ const sd = document.getElementById('siteNoteDelBtn'); if(sd) sd.onclick = deleteMonthSiteNote; }
 document.getElementById('mergeBtn').onclick = opMerge;
 document.getElementById('unmergeBtn').onclick = opUnmerge;
 document.getElementById('premBtn').onclick = opPremiere;
