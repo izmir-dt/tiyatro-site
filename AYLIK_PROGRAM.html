@@ -3106,11 +3106,16 @@ function renderPlays(filter){
        <span>${escapeHtml(CREW_SHEET)}: <b>${crewLabel}</b> kayıt · ${crewState==='err' ? 'sekme verisi çekilemedi' : (crewState==='cache' ? 'yerel kopya kullanılıyor' : (pend? pend+' bekleyen düzenleme' : 'sekme ile eşit'))}</span>
        <button class="btn ghost small" id="crewReload">${crewState==='ok'?'Yenile':'Listeyi çek'}</button>
        <button class="btn ghost small" id="crewSave" title="Site içi düzenlemeleri ${escapeHtml(CREW_SHEET)} sekmesine yapıştırmak için kopyala">Personeli sekmesine kaydet${pend?' ('+pend+')':''}</button>
+       <span class="pl-stats-sep">·</span>
+       <span>${escapeHtml(PRS_SHEET)}: <b>${personelState==='loading'?'…':(personelState==='err'?'!':PERSONEL.length)}</b> kişi ${personelState==='err' ? '· çekilemedi' : ''}</span>
+       <button class="btn ghost small" id="personelReload">${personelState==='ok'?'Yenile':'Listeyi çek'}</button>
      </div>`;
   const rb = document.getElementById('crewReload');
   if(rb) rb.onclick = ()=>loadCrewSheet(true);
   const sb = document.getElementById('crewSave');
   if(sb) sb.onclick = saveCrewToSheet;
+  const pb = document.getElementById('personelReload');
+  if(pb) pb.onclick = ()=>loadPersonel(true);
 
   /* Onay bekleyen oyun adları: aylık programdaki hücrelere yazılan ama henüz
      oyun olarak onaylanmamış metinler (sahne adı/not olabilir) — kullanıcı
@@ -3756,6 +3761,32 @@ syncFromServer().then(()=>syncDraftFromServer());
   }
   gotoHashMonth();
   window.addEventListener('hashchange', gotoHashMonth);
+})();
+</script>
+
+<!-- ═══════ OTOMATİK ARKA PLAN YENİLEME ═══════
+     Kadro/personel/oyun verilerini manuel "Yenile" butonuna basmadan
+     güncel tutar. Sunucuyu yormamak için periyodik sorgu YOK; sadece
+     kullanıcı sekmeye geri döndüğünde (tab tekrar görünür olduğunda)
+     ve en az 2 dakika arayla sessizce yeniden çeker. -->
+<script>
+(function(){
+  let lastAutoRefresh = 0;
+  const MIN_INTERVAL_MS = 2 * 60 * 1000; // 2 dakika — art arda sekme geçişlerinde sunucuyu yormasın
+  function silentRefresh(){
+    const now = Date.now();
+    if(now - lastAutoRefresh < MIN_INTERVAL_MS) return;
+    lastAutoRefresh = now;
+    try{ loadCrewSheet(true); }catch(e){}
+    try{ loadPersonel(true); }catch(e){}
+    try{ if(window.pullFromSite) window.pullFromSite(true); }catch(e){}
+  }
+  document.addEventListener('visibilitychange', function(){
+    if(document.visibilityState === 'visible') silentRefresh();
+  });
+  // Sayfa arka planda açılıp ön plana hiç gelmeden bırakılırsa diye
+  // pencere odak olayını da yakala (bazı tarayıcılarda visibilitychange tetiklenmeyebiliyor).
+  window.addEventListener('focus', silentRefresh);
 })();
 </script>
 
