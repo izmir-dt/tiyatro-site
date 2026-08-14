@@ -3502,6 +3502,18 @@ window.exportPDF = function(title, headers, data){
     return {cells, dolu, oyunSayisi:oyunlar.size, oyunlar:[...oyunlar], note:String(m.siteNote||m.note||"").trim()};
   }
 
+  /* ---------- 2b) Ay sırası (takvim sırası) ---------- */
+  const TR_MONTHS = ["OCAK","ŞUBAT","MART","NİSAN","MAYIS","HAZİRAN","TEMMUZ","AĞUSTOS","EYLÜL","EKİM","KASIM","ARALIK"];
+  function monthOrder(m){
+    const name = String((m && m.name) || "").toLocaleUpperCase("tr");
+    let mi = -1;
+    TR_MONTHS.forEach((nm, i) => { if(mi < 0 && name.includes(nm)) mi = i; });
+    const ym = name.match(/(20\d{2})/);
+    const yr = ym ? +ym[1] : 9999;
+    if(mi < 0) return yr * 100 + 99;
+    return yr * 100 + mi;
+  }
+
   /* ---------- 3) Önizleme tablosu (salt okunur) ---------- */
   let PREVIEW = -1;
   window.toggleProgramPreview = function(i){
@@ -3559,7 +3571,9 @@ window.exportPDF = function(title, headers, data){
     if(!box) return;
     publishBridge();
     const st = (await publishedState()) || prgState();
-    const months = (st && Array.isArray(st.months)) ? st.months : [];
+    const rawMonths = (st && Array.isArray(st.months)) ? st.months : [];
+    /* Aylık programlar takvim sırasına (yıl + ay) göre listelenir */
+    const months = rawMonths.slice().sort((a,b) => monthOrder(a) - monthOrder(b));
     const infos = months.map(monthInfo);
     const bridge = (() => { try{ return JSON.parse(localStorage.getItem(BRIDGE)||"null"); }catch(e){ return null; } })();
 
@@ -3571,7 +3585,6 @@ window.exportPDF = function(title, headers, data){
               Aylık Program'da tamamlanan aylık programlar burada ay ay listelenir. Düzenlemek için sayfayı açın.</div></div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
             <span class="chip gold">${months.length} ay</span>
-            <button class="btn sm pri" onclick="openProgramSite()">Siteyi aç · Düzenle</button>
             <button class="btn sm" onclick="renderProgram()">Yenile</button>
           </div>
         </div>
@@ -3581,7 +3594,7 @@ window.exportPDF = function(title, headers, data){
             ${bridge? bridge.crew.length : 0} kadro); oyun adı yazıldığında kadro ve çakışma bilgisi buradan gelir.
           </div>
           ${months.length ? "" : `<div class="aph-note" style="background:var(--danger-wash);border-color:var(--danger);border-left-color:var(--danger);color:var(--danger)">
-            Henüz kayıtlı aylık program görünmüyor. <b style="color:var(--danger)">Siteyi aç</b> deyip Aylık Program üzerinde ay oluşturun/kaydedin,
+            Henüz kayıtlı aylık program görünmüyor. Aylık Program üzerinde ay oluşturup kaydedin,
             sonra bu ekranda <b style="color:var(--danger)">Yenile</b>'ye basın.</div>`}
           <div class="aph-months">${infos.map((inf,i) => `
             <div class="aph-card">
@@ -3589,7 +3602,6 @@ window.exportPDF = function(title, headers, data){
               <div class="meta">${inf.oyunSayisi} oyun</div>
               ${inf.note ? `<div style="margin-top:6px;display:inline-block;font-weight:700;font-size:12px;color:var(--accent);background:var(--accent-wash);border:1px solid var(--accent-soft);border-radius:6px;padding:4px 9px;white-space:pre-wrap">${esc(inf.note)}</div>` : ""}
               <div class="acts">
-                <button class="btn sm pri" onclick="openProgramSite(${i})">Aç ve düzenle</button>
                 <button class="btn sm" onclick="toggleProgramPreview(${i})">${PREVIEW===i?"Önizlemeyi kapat":"Önizle"}</button>
               </div>
             </div>`).join("")}</div>
@@ -3599,7 +3611,6 @@ window.exportPDF = function(title, headers, data){
                 <div class="top">
                   <div class="t">${esc(months[PREVIEW].name||"Önizleme")}</div>
                   <div style="display:flex;gap:8px">
-                    <button class="btn sm pri" onclick="openProgramSite(${PREVIEW})">Aç ve düzenle</button>
                     <button class="btn sm" onclick="toggleProgramPreview(${PREVIEW})">Kapat ✕</button>
                   </div>
                 </div>
