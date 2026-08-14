@@ -270,6 +270,47 @@ table.sheet td.cell.note-mark::after{content:"";position:absolute;top:0;right:0;
 
 .status{font-size:11px;color:var(--muted);margin-left:6px}
 
+/* ===== ODAK & ÇAKIŞMA GÖRÜNÜRLÜĞÜ (yalnızca ekran; yazdırma etkilenmez) ===== */
+/* Ekranda saf sarı (#ffff00) tüm satırları doldurduğu için kırmızı çakışmalar
+   göze batmıyordu. Ekranda daha yumuşak sarı kullanılır, çıktı/PDF aynı kalır. */
+#sheet tr.titleRow td,#sheet tr.stageHead td,#sheet tr.monday td{background:#fdf0a8}
+#sheet tr.monday td{color:#4a3c00}
+
+/* Çakışan hücre: kırmızı zemin + belirgin çerçeve + uyarı işareti */
+#sheet td.cell.conflict{box-shadow:inset 0 0 0 2px #7a0000;letter-spacing:.2px}
+#sheet td.cell.conflict::after{content:" ⚠";font-size:11px;vertical-align:super}
+
+/* "Çakışma odağı": çakışmayan her şey soluklaşır, sadece kırmızılar öne çıkar */
+body.conflictFocus #sheet td.cell:not(.conflict){opacity:.35;filter:grayscale(.55)}
+body.conflictFocus #sheet tr.titleRow td,
+body.conflictFocus #sheet tr.stageHead td,
+body.conflictFocus #sheet td.rowh,
+body.conflictFocus #sheet td.hdr,
+body.conflictFocus #sheet td.dateCol{opacity:.85;filter:none}
+body.conflictFocus #sheet td.cell.conflict{opacity:1;filter:none}
+
+/* Çakışmaya atlarken kısa vurgu */
+@keyframes cflash{0%,100%{box-shadow:inset 0 0 0 2px #7a0000}50%{box-shadow:0 0 0 5px rgba(214,0,0,.55),inset 0 0 0 2px #7a0000}}
+#sheet td.cell.cflash{animation:cflash .9s ease-in-out 2}
+
+/* Çakışma şeridi */
+.conflict-bar{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  padding:8px 12px;margin:0 0 10px;border-radius:8px;border:1px solid #cfe6d8;background:#f2fbf6;color:#14523c;font-size:13px}
+.conflict-bar.has{border-color:#e7a3a3;background:#fff2f0;color:#7a1610}
+.conflict-bar .cb-count{font-weight:700;font-size:14px}
+.conflict-bar .cb-spacer{margin-left:auto}
+.conflict-bar button{font:inherit;cursor:pointer;border:1px solid currentColor;background:#fff;color:inherit;
+  border-radius:6px;padding:5px 10px;min-height:32px}
+.conflict-bar button[aria-pressed=true]{background:#7a1610;color:#fff;border-color:#7a1610}
+.conflict-bar button:disabled{opacity:.45;cursor:not-allowed}
+
+/* Kısayol yardımı: varsayılan kapalı, dikkat dağıtmasın */
+.shortcuts{font-size:12px;color:var(--muted);margin-top:10px;border-top:1px dashed var(--border);padding-top:6px}
+.shortcuts summary{cursor:pointer;font-weight:600;color:var(--primary)}
+.shortcuts .sc-body{margin-top:6px;line-height:1.6}
+@media print{.conflict-bar,.shortcuts{display:none !important}}
+
+
 /* Print — YATAY (görseldeki renkler ekranla aynı) */
 @media print{
   @page{size:A4 landscape;margin:5mm}  /* çalışma anında #printPageStyle ile güncellenir */
@@ -521,10 +562,22 @@ body.fs-on #program .controls{position:sticky;top:0;z-index:40;background:var(--
   </div>
   <h2 id="monthTitle"></h2>
 
+  <div class="conflict-bar" id="conflictBar" role="status" aria-live="polite">
+    <span class="cb-count" id="cbCount">Çakışma taranıyor…</span>
+    <span id="cbDetail"></span>
+    <span class="cb-spacer"></span>
+    <button type="button" id="cbPrev" title="Önceki çakışmaya git">&#9650; Önceki</button>
+    <button type="button" id="cbNext" title="Sonraki çakışmaya git (F8)">&#9660; Sonraki çakışma</button>
+    <button type="button" id="cbFocus" aria-pressed="false" title="Sadece çakışmaları öne çıkar (diğer hücreler soluklaşır)">Çakışma odağı</button>
+  </div>
+
   <div class="tbl-wrap"><table class="sheet" id="sheet" role="grid" aria-label="Aylık tiyatro programı"></table></div>
-  <p style="font-size:12px;color:var(--muted);margin-top:8px">
-    <b>Kısayollar:</b> Tıkla → seç · Shift+Tıkla → aralık · Çift tıkla → yaz · Enter/Esc · Delete → temizle · Ctrl+C/V · Ctrl+Z/Y · Sağ tık → menü · Oyunun üzerine gel → çakışma bilgisi · <b>Serbest metin ✎</b> → hücreyi oyun sayma (il adı, açıklama, not) · <b>Not ekle</b> → oyunun yanına not · <b>🏷 Kategori</b> → notu sınıflandır (İl, Sahne, Turne, Prova, Tatil, Duyuru)
-  </p>
+  <details class="shortcuts">
+    <summary>Kısayollar ve ipuçları</summary>
+    <div class="sc-body">
+      Tıkla → seç · Shift+Tıkla → aralık · Çift tıkla → yaz · Enter/Esc · Delete → temizle · Ctrl+C/V · Ctrl+Z/Y · Sağ tık → menü · F8 → sonraki çakışma · Oyunun üzerine gel → çakışma bilgisi · <b>Serbest metin ✎</b> → hücreyi oyun sayma (il adı, açıklama, not) · <b>Not ekle</b> → oyunun yanına not · <b>🏷 Kategori</b> → notu sınıflandır (İl, Sahne, Turne, Prova, Tatil, Duyuru)
+    </div>
+  </details>
 </section>
 
 <section id="plays" role="tabpanel">
@@ -1850,6 +1903,7 @@ function renderSheet(){
     t.appendChild(tr);
   }
   paintSel();
+  if(window.refreshConflictBar) window.refreshConflictBar();
 }
 function colName(c){ let s=''; c++; while(c){ s=String.fromCharCode(65+(c-1)%26)+s; c=Math.floor((c-1)/26);} return s; }
 
@@ -3980,6 +4034,75 @@ syncFromServer().then(()=>syncDraftFromServer());
   // Sayfa arka planda açılıp ön plana hiç gelmeden bırakılırsa diye
   // pencere odak olayını da yakala (bazı tarayıcılarda visibilitychange tetiklenmeyebiliyor).
   window.addEventListener('focus', silentRefresh);
+})();
+</script>
+
+<script>
+/* ===== Çakışma şeridi: sayım, hızlı gezinme ve odak modu =====
+   Yalnızca ekranda görünür; çakışma hesabı mevcut mantıktan (td.cell.conflict)
+   okunur, hesaplama kuralları değiştirilmez. */
+(function(){
+  var idx = -1;
+  function list(){ return Array.prototype.slice.call(document.querySelectorAll('#sheet td.cell.conflict')); }
+  function rowLabel(td){
+    var tr = td.parentElement; if(!tr) return '';
+    var first = tr.querySelector('td.cell.dateCol');
+    return first ? (first.textContent||'').trim() : '';
+  }
+  function refresh(){
+    var bar=document.getElementById('conflictBar');
+    if(!bar) return;
+    var cs=list(), cnt=document.getElementById('cbCount'), det=document.getElementById('cbDetail');
+    var prev=document.getElementById('cbPrev'), next=document.getElementById('cbNext');
+    var days={}; cs.forEach(function(td){ var l=rowLabel(td); if(l) days[l]=1; });
+    var dayList=Object.keys(days);
+    if(cs.length===0){
+      bar.classList.remove('has');
+      cnt.textContent='✅ Bu ayda çakışma yok';
+      det.textContent='';
+    }else{
+      bar.classList.add('has');
+      cnt.textContent='⚠️ '+cs.length+' çakışan hücre';
+      det.textContent = dayList.length ? '· '+dayList.length+' gün: '+dayList.slice(0,4).join(' · ')+(dayList.length>4?' …':'') : '';
+    }
+    prev.disabled = next.disabled = (cs.length===0);
+    if(idx >= cs.length) idx = -1;
+  }
+  window.refreshConflictBar = refresh;
+
+  function go(dir){
+    var cs=list(); if(!cs.length) return;
+    idx = (idx + dir + cs.length) % cs.length;
+    var td=cs[idx];
+    var r=+td.dataset.r, c=+td.dataset.c;
+    if(typeof setSel==='function') setSel(r,c,r,c);
+    try{ td.scrollIntoView({block:'center',inline:'center',behavior:'smooth'}); }catch(e){ td.scrollIntoView(); }
+    td.classList.remove('cflash'); void td.offsetWidth; td.classList.add('cflash');
+    setTimeout(function(){ td.classList.remove('cflash'); }, 2000);
+    try{ td.focus({preventScroll:true}); }catch(e){}
+    var det=document.getElementById('cbDetail');
+    if(det) det.textContent='· '+(idx+1)+'/'+cs.length+' — '+(rowLabel(td)||'')+' '+(td.textContent||'').replace('⚠','').trim();
+  }
+
+  function ready(){
+    var next=document.getElementById('cbNext'), prev=document.getElementById('cbPrev'), foc=document.getElementById('cbFocus');
+    if(!next) return;
+    next.addEventListener('click', function(){ go(1); });
+    prev.addEventListener('click', function(){ go(-1); });
+    foc.addEventListener('click', function(){
+      var on = document.body.classList.toggle('conflictFocus');
+      foc.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    document.addEventListener('keydown', function(e){
+      if(e.key!=='F8') return;
+      var a=document.activeElement;
+      if(a && (a.tagName==='INPUT'||a.tagName==='TEXTAREA'||a.isContentEditable)) return;
+      e.preventDefault(); go(e.shiftKey ? -1 : 1);
+    });
+    refresh();
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', ready);
+  else ready();
 })();
 </script>
 
