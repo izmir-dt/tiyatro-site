@@ -3341,18 +3341,25 @@ window.exportPDF = function(title, headers, data){
   font-variant-numeric:tabular-nums;font-weight:600;text-align:center;border-right:2px solid var(--aph-grid,#b9a09c)}
 .aph-prev td.aph-hdr-cell-0.aph-col-0,.aph-prev td.aph-hdr-cell-0.aph-col-1{z-index:8;background:var(--accent)}
 .aph-prev td.aph-hdr-cell-1.aph-col-0,.aph-prev td.aph-hdr-cell-1.aph-col-1{z-index:7;background:var(--surface-2)}
-/* Satır vurguları */
-/* Hafta sonu: belirgin şekilde sıcak/kırmızı tonlu */
-.aph-prev tr.aph-weekend td{background:color-mix(in srgb,var(--accent) 13%,var(--surface))}
-.aph-prev tr.aph-weekend td.aph-col-0,.aph-prev tr.aph-weekend td.aph-col-1{background:color-mix(in srgb,var(--accent) 24%,var(--surface-2));color:var(--accent)}
-/* Temsil yok: nötr gri + çapraz tarama deseni (renk körlüğünde de ayırt edilir) */
-.aph-prev tr.aph-empty td{background:color-mix(in srgb,var(--text) 9%,var(--surface));color:var(--muted)}
-.aph-prev tr.aph-empty td.aph-col-0,.aph-prev tr.aph-empty td.aph-col-1{background:color-mix(in srgb,var(--text) 15%,var(--surface));color:var(--muted)}
-.aph-prev tr.aph-empty td.aph-blank{background-image:repeating-linear-gradient(45deg,rgba(0,0,0,.055) 0 5px,transparent 5px 10px)}
+/* ===== Satır vurguları (v2) ===== */
+/* Kural: önce "o satırda temsil var mı", sonra "hafta sonu mu". Boş satır asla dolu satır gibi vurgulanmaz. */
+/* Temsil olan satır: temiz zemin, koyu metin */
+.aph-prev tr.aph-has td{background:var(--surface);color:var(--text)}
+.aph-prev tr.aph-has td.aph-col-0,.aph-prev tr.aph-has td.aph-col-1{background:var(--surface-2);color:var(--text)}
+/* Hafta sonu + temsil var: sıcak accent tonu (asıl vurgu burada) */
+.aph-prev tr.aph-has.aph-weekend td{background:color-mix(in srgb,var(--accent) 12%,var(--surface))}
+.aph-prev tr.aph-has.aph-weekend td.aph-col-0,.aph-prev tr.aph-has.aph-weekend td.aph-col-1{background:color-mix(in srgb,var(--accent) 22%,var(--surface-2));color:var(--accent);font-weight:800}
+.aph-prev tr.aph-has.aph-weekend td.aph-blank{background:color-mix(in srgb,var(--accent) 6%,var(--surface))}
+/* Temsil yok (hafta içi ya da hafta sonu): nötr gri, sönük metin */
+.aph-prev tr.aph-empty td,.aph-prev tr.aph-weekend:not(.aph-has) td{background:color-mix(in srgb,var(--text) 7%,var(--surface));color:var(--muted);font-weight:500}
+.aph-prev tr.aph-empty td.aph-col-0,.aph-prev tr.aph-empty td.aph-col-1,
+.aph-prev tr.aph-weekend:not(.aph-has) td.aph-col-0,.aph-prev tr.aph-weekend:not(.aph-has) td.aph-col-1{background:color-mix(in srgb,var(--text) 12%,var(--surface));color:var(--text-dim);font-weight:600}
+/* Boş hafta sonu satırı yalnızca tarih sütunundaki ince şeritle belli olur */
+.aph-prev tr.aph-weekend:not(.aph-has) td.aph-col-0{box-shadow:inset 3px 0 0 color-mix(in srgb,var(--accent) 50%,transparent),6px 0 12px -10px rgba(28,15,15,.55)}
+.aph-prev tr.aph-empty td.aph-blank,.aph-prev tr.aph-weekend:not(.aph-has) td.aph-blank{background-image:repeating-linear-gradient(45deg,rgba(0,0,0,.055) 0 5px,transparent 5px 10px)}
 /* Dolu günlerde bile boş kalan hücreler beyaz görünmesin */
-.aph-prev td.aph-blank{background:color-mix(in srgb,var(--text) 4.5%,var(--surface))}
-[data-theme="dark"] .aph-prev tr.aph-empty td.aph-blank{background-image:repeating-linear-gradient(45deg,rgba(255,255,255,.06) 0 5px,transparent 5px 10px)}
-.aph-prev tbody tr:hover td{background:color-mix(in srgb,var(--accent) 8%,var(--surface))}
+.aph-prev td.aph-blank{background:color-mix(in srgb,var(--text) 3.5%,var(--surface))}
+.aph-prev tbody tr:hover:not(.aph-hdr-row) td{background:color-mix(in srgb,var(--accent) 9%,var(--surface))}
 .aph-prev tbody tr:hover td.aph-hdr-cell-0{background:var(--accent)}
 .aph-prev td.aph-play{cursor:pointer}
 .aph-prev td.aph-play:hover{background:color-mix(in srgb,var(--accent) 16%,var(--surface));box-shadow:inset 0 0 0 1px var(--accent-soft)}
@@ -3628,16 +3635,39 @@ window.exportPDF = function(title, headers, data){
       while(cc >= 0 && !txt){ const cl = cells["1_"+cc]; if(cl && String(cl.v||"").trim() && !covered.has("1_"+cc)) txt = String(cl.v).trim(); cc--; }
       sceneOf[c] = txt;
     }
+    /* Birleştirilmiş (rowspan) tarih hücrelerinde alt satırların da tarihi bilinsin:
+       örn. "18 TEMMUZ Cumartesi" 15.00 + 20.00 satırlarının ikisi de hafta sonu sayılır. */
+    const dateAt = {};
+    let curDate = "";
+    for(let r=0;r<m.rows;r++){
+      const own = (!covered.has(r+"_0")) ? String((cells[r+"_0"]||{}).v||"") : null;
+      if(own !== null){ curDate = own; dateAt[r] = own; }
+      else dateAt[r] = curDate;
+    }
+    /* Bir satırda temsil var mı? Birleştirilmiş oyun hücreleri de sayılır. */
+    const filled = {};
+    for(let r=0;r<m.rows;r++) filled[r] = false;
+    for(let r=2;r<m.rows;r++){
+      playCols.forEach(c => {
+        const k = r+"_"+c;
+        if(covered.has(k)) return;
+        const cell = cells[k]||{};
+        const txt = String(cell.v||"").replace(/^\s*[\*★]\s*/, "").trim();
+        if(!txt || isPremiereLabel(txt)) return;
+        const sp = span[k] || {rs:1, cs:1};
+        for(let rr=r; rr<r+sp.rs && rr<m.rows; rr++) filled[rr] = true;
+      });
+    }
     let h = "<table id=\"aphPrevTable\"><tbody>";
     for(let r=0;r<m.rows;r++){
-      const dateTxt = String((cells[r+"_0"]||{}).v||"");
+      const dateTxt = String(dateAt[r]||"");
       const cls = [];
       if(r < 2) cls.push("aph-hdr-row","aph-hdr-row-"+r);
       else {
+        const dolu = filled[r];
+        if(dolu) cls.push("aph-has");
+        else if(dateTxt.trim()) cls.push("aph-empty");
         if(DAY_RE.test(dateTxt)) cls.push("aph-weekend");
-        let dolu = false;
-        playCols.forEach(c => { if(String((cells[r+"_"+c]||{}).v||"").trim()) dolu = true; });
-        if(!dolu && dateTxt.trim()) cls.push("aph-empty");
       }
       h += "<tr"+(cls.length?' class="'+cls.join(" ")+'"':"")+">";
       for(let c=0;c<m.cols;c++){
@@ -3814,7 +3844,8 @@ window.exportPDF = function(title, headers, data){
                   <button class="btn sm" onclick="aphZoom(-0.1)">A−</button>
                   <button class="btn sm" onclick="aphZoom(0.1)">A+</button>
                   <div class="aph-legend">
-                    <span><i style="background:color-mix(in srgb,var(--accent) 22%,var(--surface))"></i>Hafta sonu</span>
+                    <span><i style="background:color-mix(in srgb,var(--accent) 22%,var(--surface))"></i>Hafta sonu · temsil var</span>
+                    <span><i style="background:color-mix(in srgb,var(--text) 12%,var(--surface));box-shadow:inset 3px 0 0 color-mix(in srgb,var(--accent) 50%,transparent)"></i>Hafta sonu · temsil yok</span>
                     <span><i style="background:color-mix(in srgb,var(--text) 12%,var(--surface));background-image:repeating-linear-gradient(45deg,rgba(0,0,0,.10) 0 4px,transparent 4px 8px)"></i>Temsil yok</span>
                     <span><i style="background:color-mix(in srgb,var(--text) 5%,var(--surface))"></i>Boş hücre</span>
                     <span><i style="background:#ffe9a8"></i>Arama sonucu</span>
