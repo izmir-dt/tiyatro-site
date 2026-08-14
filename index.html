@@ -3307,11 +3307,15 @@ window.exportPDF = function(title, headers, data){
 <!-- ═══════════════ v7 GÜNCELLEME PAKETİ · AYLIK PROGRAM HTML ENTEGRASYONU ═══════════════ -->
 <style>
 .aph-head{display:flex;gap:12px;flex-wrap:wrap;align-items:center;justify-content:space-between}
-.aph-months{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;margin-top:14px}
-.aph-card{border:1px solid var(--line);border-radius:13px;background:var(--surface);padding:14px;display:flex;flex-direction:column;gap:8px}
-.aph-card .ttl{font-family:var(--font-d);font-weight:800;font-size:15px}
-.aph-card .meta{font-size:11.5px;color:var(--muted)}
-.aph-card .acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:auto}
+.aph-head h3{display:flex;align-items:center;gap:10px;margin:0}
+.aph-head h3 .ico{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:10px;font-size:16px;background:linear-gradient(135deg,var(--accent),var(--accent-soft));box-shadow:0 6px 14px rgba(155,35,53,.3)}
+.aph-months{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px;margin-top:16px}
+.aph-card{position:relative;border:1px solid var(--line);border-radius:14px;background:linear-gradient(165deg,var(--surface) 55%,var(--surface-2) 150%);padding:18px 16px 14px;display:flex;flex-direction:column;gap:9px;overflow:hidden;transition:transform .22s var(--ease-soft,ease),box-shadow .22s var(--ease-soft,ease),border-color .22s}
+.aph-card::before{content:"";position:absolute;left:0;top:0;right:0;height:4px;background:linear-gradient(90deg,var(--accent),var(--accent-soft))}
+.aph-card:hover{transform:translateY(-4px);box-shadow:0 16px 32px rgba(28,15,15,.16);border-color:var(--accent-soft)}
+.aph-card .ttl{font-family:var(--font-d);font-weight:800;font-size:16.5px;letter-spacing:.2px}
+.aph-card .meta{display:inline-flex;align-items:center;gap:5px;width:fit-content;font-size:11.5px;font-weight:800;color:var(--accent);background:var(--accent-wash);border:1px solid var(--accent-soft);border-radius:20px;padding:3px 11px}
+.aph-card .acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:auto;padding-top:6px}
 .aph-ov{position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.6);display:flex;padding:18px}
 .aph-ov .win{flex:1;height:100%;display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 24px 70px rgba(0,0,0,.45)}
 .aph-ov .top{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line);background:var(--surface-2)}
@@ -3536,16 +3540,22 @@ window.exportPDF = function(title, headers, data){
       for(let c=0;c<m.cols;c++){
         const k = r+"_"+c; if(covered.has(k)) continue;
         const cell = cells[k]||{}, sp = span[k]||{rs:1,cs:1};
-        const v = String(cell.v||"");
+        const rawV = String(cell.v||"");
+        /* Prömiyer: Aylık Program editöründeki ★ işaretiyle BİREBİR aynı
+           kural — cell.premiere bayrağı ya da "PRÖMİYER" etiketi olmayan,
+           başında * bulunan değerler yıldızlı ve vurgulu gösterilir. */
+        const isPrem = !!cell.premiere || (rawV.trim().startsWith("*") && !isPremiereLabel(rawV));
+        const v = isPrem ? rawV.replace(/^\s*[\*★]\s*/, "") : rawV;
         const st = [];
         if(cell.bg) st.push("background:"+cell.bg);
         else if(r<2) st.push("background:var(--surface)");
-        if(cell.color) st.push("color:"+cell.color);
-        if(cell.bold) st.push("font-weight:700");
+        if(isPrem) st.push("color:var(--danger)", "font-weight:800");
+        else if(cell.color) st.push("color:"+cell.color);
+        if(cell.bold && !isPrem) st.push("font-weight:700");
         if(r===0 && PRG_TITLE_RE.test(v)) st.push("text-align:center");
         h += "<td"+(r<2?' class="aph-hdr-cell aph-hdr-cell-'+r+'"':"")+
              (sp.rs>1?' rowspan="'+sp.rs+'"':"")+(sp.cs>1?' colspan="'+sp.cs+'"':"")+
-             (st.length?' style="'+st.join(";")+'"':"")+">"+esc(v)+"</td>";
+             (st.length?' style="'+st.join(";")+'"':"")+">"+(isPrem?"★ ":"")+esc(v)+"</td>";
       }
       h += "</tr>";
     }
@@ -3575,31 +3585,24 @@ window.exportPDF = function(title, headers, data){
     /* Aylık programlar takvim sırasına (yıl + ay) göre listelenir */
     const months = rawMonths.slice().sort((a,b) => monthOrder(a) - monthOrder(b));
     const infos = months.map(monthInfo);
-    const bridge = (() => { try{ return JSON.parse(localStorage.getItem(BRIDGE)||"null"); }catch(e){ return null; } })();
 
     box.innerHTML = `
       <div class="card">
         <div class="card-h aph-head">
-          <div><h3>Aylık Program</h3>
-            <div class="mt" style="font-size:12px;color:var(--muted)">
-              Aylık Program'da tamamlanan aylık programlar burada ay ay listelenir. Düzenlemek için sayfayı açın.</div></div>
+          <div><h3><span class="ico">📅</span> Aylık Program</h3></div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
             <span class="chip gold">${months.length} ay</span>
             <button class="btn sm" onclick="renderProgram()">Yenile</button>
           </div>
         </div>
         <div class="card-b" style="padding:16px">
-          <div class="aph-note">
-            Oyun ve kadro bilgileri Repertuvar sisteminden otomatik olarak Aylık Program'a aktarılır (${bridge? bridge.plays.length : 0} oyun,
-            ${bridge? bridge.crew.length : 0} kadro); oyun adı yazıldığında kadro ve çakışma bilgisi buradan gelir.
-          </div>
           ${months.length ? "" : `<div class="aph-note" style="background:var(--danger-wash);border-color:var(--danger);border-left-color:var(--danger);color:var(--danger)">
             Henüz kayıtlı aylık program görünmüyor. Aylık Program üzerinde ay oluşturup kaydedin,
             sonra bu ekranda <b style="color:var(--danger)">Yenile</b>'ye basın.</div>`}
           <div class="aph-months">${infos.map((inf,i) => `
             <div class="aph-card">
               <div class="ttl">${esc(months[i].name||("Ay "+(i+1)))}</div>
-              <div class="meta">${inf.oyunSayisi} oyun</div>
+              <div class="meta">🎭 ${inf.oyunSayisi} oyun</div>
               ${inf.note ? `<div style="margin-top:6px;display:inline-block;font-weight:700;font-size:12px;color:var(--accent);background:var(--accent-wash);border:1px solid var(--accent-soft);border-radius:6px;padding:4px 9px;white-space:pre-wrap">${esc(inf.note)}</div>` : ""}
               <div class="acts">
                 <button class="btn sm" onclick="toggleProgramPreview(${i})">${PREVIEW===i?"Önizlemeyi kapat":"Önizle"}</button>
