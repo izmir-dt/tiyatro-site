@@ -97,7 +97,7 @@ table.sheet th,table.sheet td{border:1px solid #000;padding:3px 5px;vertical-ali
 table.sheet td.hdr{background:var(--head);color:var(--headInk);font-weight:700;font-size:11px;user-select:none;cursor:pointer}
 table.sheet td.hdr.corner{background:#e2d6b8}
 table.sheet td.rowh{background:#efe6d5;font-weight:700;font-size:11px;width:34px;color:#000;user-select:none;cursor:pointer}
-table.sheet td.cell{min-width:80px;height:26px;cursor:text}
+table.sheet td.cell{min-width:80px;height:26px;cursor:default}
 table.sheet td.cell:focus-visible,table.sheet td.hdr:focus-visible,table.sheet td.rowh:focus-visible{outline:3px solid var(--accent);outline-offset:-3px;z-index:4}
 button:focus-visible,a:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible,[contenteditable=true]:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 @media (pointer:coarse){button,.btn,.navbtn,.menu-trigger{min-height:44px}table.sheet td.cell{height:38px}}
@@ -131,9 +131,9 @@ table.sheet td.cell.turne{color:inherit;font-weight:500;font-family:inherit;font
 table.sheet td.cell.conflict{background:var(--conflict) !important;color:#fff;font-weight:700}
 
 /* Seçim */
-table.sheet td.cell.selected{background:var(--sel);outline:2px solid var(--selBorder);outline-offset:-2px;z-index:2}
-table.sheet td.cell.anchor{outline:3px solid var(--primary);outline-offset:-3px;z-index:3}
-table.sheet td.cell[contenteditable=true]{background:#fffbe8;outline:2px solid var(--primary);text-align:left}
+table.sheet td.cell.selected{background:var(--sel);outline:3px solid var(--selBorder);outline-offset:-3px;z-index:2}
+table.sheet td.cell.anchor{outline:4px solid var(--primary);outline-offset:-4px;z-index:3;box-shadow:0 0 0 1px #fff inset}
+table.sheet td.cell[contenteditable=true]{background:#fffbe8;outline:2px solid var(--primary);text-align:left;cursor:text}
 table.sheet td.cell.freetext{font-style:italic;color:#5f5346;font-weight:500}
 table.sheet td.cell.freetext::before{content:"✎ ";color:var(--accent);font-style:normal}
 #printView .print-month table.sheet td.cell.freetext,.print-month table.sheet td.cell.freetext{font-style:italic}
@@ -1913,35 +1913,36 @@ function wireCell(td){
     if(e.target !== td) return; /* hücre içinde düzenleme kutusu (input/datalist) varsa seçim/preventDefault mantığını tetikleme */
     const r=+td.dataset.r, c=+td.dataset.c;
     if(e.button !== 0) return;
+    /* click handlerının "zaten seçiliydi mi" kararını verebilmesi için,
+       seçim mousedown'da değişmeden ÖNCEKİ durumu sakla */
+    td._wasSoleSelected = (sel.r1===r && sel.c1===c && sel.r2===r && sel.c2===c);
     if(e.shiftKey){ dragAnchor={r:sel.r1,c:sel.c1}; setSel(dragAnchor.r,dragAnchor.c,r,c); }
     else { dragAnchor={r,c}; setSel(r,c,r,c); }
     dragSelecting = true;
     dragMoved = false;
     e.preventDefault();
+    /* preventDefault() tarayıcının varsayılan odaklama davranışını engelliyor;
+       hücre seçiliyken (düzenleme kutusu açılmadan) klavyeden direkt yazabilmek için
+       odağı elle hücreye veriyoruz. */
+    td.focus({preventScroll:true});
   });
   td.addEventListener('mouseenter', e=>{
     if(!dragSelecting || td.isContentEditable) return;
     dragMoved = true;
     setSel(dragAnchor.r,dragAnchor.c,+td.dataset.r,+td.dataset.c);
   });
-  /* Hızlı veri girişi: normal tek tık hücreyi seçip düzenlemeyi açar.
-     Shift/Ctrl tıklama ve sürükleme yalnızca seçim yapar. */
+  /* Excel mantığı: tek tık sadece SEÇER (kutu açılmaz). Zaten seçili olan
+     hücreye tekrar tıklarsan düzenlemeyi açar. Hücre seçiliyken klavyeden
+     doğrudan yazmaya başlamak da (aşağıdaki keydown) düzenlemeyi açar —
+     yani hücrenin içine ayrıca girmeye gerek kalmadan yazabilirsin. */
   td.addEventListener('click', e=>{
     if(td.isContentEditable || e.target !== td) return;
     const r=+td.dataset.r, c=+td.dataset.c;
     if(e.shiftKey || e.ctrlKey || e.metaKey || dragMoved){ setSel(r,c,r,c); return; }
+    const wasSoleSelected = td._wasSoleSelected;
     setSel(r,c,r,c);
-    startEdit(td);
-  });
-  td.addEventListener('keydown', e=>{
-    if(td.isContentEditable) return;
-    if(e.key==='Enter' || e.key==='F2' || (e.key.length===1 && !e.ctrlKey && !e.metaKey && !e.altKey)){
-      e.preventDefault();
-      startEdit(td);
-      const input=td.querySelector('input');
-      if(input && e.key.length===1){ input.value=e.key; input.setSelectionRange(1,1); }
-      else if(td.isContentEditable && e.key.length===1){ td.textContent=e.key; }
-    }
+    td.focus({preventScroll:true});
+    if(wasSoleSelected) startEdit(td);
   });
   td.addEventListener('contextmenu', e=>{
     e.preventDefault();
@@ -1949,6 +1950,7 @@ function wireCell(td){
     if(!inSel(r,c)) setSel(r,c,r,c);
     document.getElementById('tooltip').style.display='none';
     showCtx(e.clientX,e.clientY,'cell');
+    td.focus({preventScroll:true});
   });
   td.addEventListener('mouseenter', e=>{
     const r=+td.dataset.r, c=+td.dataset.c;
@@ -3903,7 +3905,20 @@ document.addEventListener('keydown', e=>{
     else if(e.key==='d' || e.key==='D'){ e.preventDefault(); fillDown(); }
     else if(e.key==='u' || e.key==='U'){ if(sel.r1>=0){ e.preventDefault(); opUnderline(); } }
   } else if(e.key==='Delete' || e.key==='Backspace'){ if(sel.r1>=0){ e.preventDefault(); opClear(); } }
-  else if(e.key==='Enter'){ const td=document.querySelector('#sheet td.cell.anchor'); if(td){ e.preventDefault(); startEdit(td); } }
+  else if(e.key==='Enter' || e.key==='F2'){ const td=document.querySelector('#sheet td.cell.anchor'); if(td && !td.isContentEditable){ e.preventDefault(); startEdit(td); } }
+  else if(e.key.length===1 && !e.altKey){
+    /* Excel mantığı: hücre seçiliyken (odak DOM'da tam oturmamış olsa bile)
+       herhangi bir karakter tuşuna basmak düzenlemeyi açıp o karakteri yazar —
+       hücrenin içine ayrıca girmeye gerek kalmaz. */
+    const td=document.querySelector('#sheet td.cell.anchor');
+    if(td && !td.isContentEditable){
+      e.preventDefault();
+      startEdit(td);
+      const input=td.querySelector('input');
+      if(input){ input.value=e.key; input.setSelectionRange(1,1); }
+      else if(td.isContentEditable){ td.textContent=e.key; }
+    }
+  }
 });
 
 (function(){ const b=document.getElementById('backupBtn'); if(b) b.onclick=openBackupDialog; })();
@@ -4058,9 +4073,11 @@ syncFromServer().then(()=>syncDraftFromServer());
     var dayList=Object.keys(days);
     if(cs.length===0){
       bar.classList.remove('has');
+      bar.style.display='none';
       cnt.textContent='✅ Bu ayda çakışma yok';
       det.textContent='';
     }else{
+      bar.style.display='';
       bar.classList.add('has');
       cnt.textContent='⚠️ '+cs.length+' çakışan hücre';
       det.textContent = dayList.length ? '· '+dayList.length+' gün: '+dayList.slice(0,4).join(' · ')+(dayList.length>4?' …':'') : '';
