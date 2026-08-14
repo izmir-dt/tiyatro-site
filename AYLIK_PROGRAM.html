@@ -694,21 +694,40 @@ function saveCrewToSheet(){
 
 /* === Kişi haritası (yalnızca AYLIK PROGRAM PERSONELİ verisinden) === */
 let PEOPLE_MAP = {};
+function normNameKey(s){
+  return String(s||'')
+    .replace(/\u00A0/g,' ')
+    .replace(/[İIı]/g,'I').replace(/i/g,'I')
+    .replace(/[Şş]/g,'S').replace(/[Ğğ]/g,'G')
+    .replace(/[Üü]/g,'U').replace(/[Öö]/g,'O').replace(/[Çç]/g,'C')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g,' ')
+    .trim();
+}
+/* Oyun adı yazımı programda ve personel sekmesinde birebir aynı olmayabilir
+   (büyük/küçük İ-I farkı, fazladan boşluk, noktalama). Bu yüzden kadro
+   eşleşmesi normalize edilmiş anahtar üzerinden yapılır. */
+function crewOf(play){
+  const k = normNameKey(play);
+  return k ? (PEOPLE_MAP[k] || null) : null;
+}
 function rebuildPeopleMap(){
   const map = {};
   for(const c of (state.crew||[])){
     const oyun = String(c.play||'').trim();
     const kisi = String(c.person||'').trim();
     if(!oyun || !kisi) continue;
+    const ok = normNameKey(oyun), pk = normNameKey(kisi);
+    if(!ok || !pk) continue;
     const kat = String(c.category||'').trim();
     const gorev = String(c.role||'').trim();
-    if(!map[oyun]) map[oyun] = {};
-    if(!map[oyun][kisi]) map[oyun][kisi] = {roles:[], critical:false};
+    if(!map[ok]) map[ok] = {};
+    if(!map[ok][pk]) map[ok][pk] = {roles:[], critical:false, name:kisi};
     const rt = [kat,gorev].filter(Boolean).join(' / ');
-    if(rt && !map[oyun][kisi].roles.includes(rt)) map[oyun][kisi].roles.push(rt);
+    if(rt && !map[ok][pk].roles.includes(rt)) map[ok][pk].roles.push(rt);
     const lk = kat.toLocaleLowerCase('tr');
     if(lk.includes('oyuncu') || lk.includes('figüran') || lk.includes('figuran')){
-      map[oyun][kisi].critical = true;
+      map[ok][pk].critical = true;
     }
   }
   PEOPLE_MAP = map;
@@ -912,12 +931,11 @@ function findCriticalConflictCell(months){
       const conflict = buildConflict(games);
       if(!conflict.hasCritical) continue;
       for(const g of games){
-        const cell = m.cells[r+'_'+g.col] || {};
+        const ck = g.row+'_'+g.col;
+        if(!conflict.cells.has(ck)) continue;
+        const cell = m.cells[ck] || {};
         if(cell.ignoreConflict) continue;
-        const anyCrit = Object.entries(conflict.people).some(([p,info])=>
-          info.critical && PEOPLE_MAP[g.key] && PEOPLE_MAP[g.key][p] && PEOPLE_MAP[g.key][p].critical
-        );
-        if(anyCrit) return {month:m.name, key:r+'_'+g.col};
+        return {month:m.name, key:ck};
       }
     }
   }
@@ -1647,7 +1665,14 @@ function isPremiereLabel(t){
 }
 
 /* === Çakışma hesap === */
-function rowGames(m,r){
+function gameTimeOf(m,r,raw){
+  const mt = String(raw||'').match(/(\d{1,2})[.:](\d{2})/);
+  if(mt) return mt[1].padStart(2,'0')+'.'+mt[2];
+  const rt = String((m.cells[r+'_1']||{}).v||'');
+  const mr = rt.match(/(\d{1,2})[.:](\d{2})/);
+  return mr ? mr[1].padStart(2,'0')+'.'+mr[2] : '';
+}
+function gamesOfRow(m,r){
   const out=[];
   for(const c of programCols(m)){
     const cellObj = m.cells[r+'_'+c] || {};
@@ -1657,31 +1682,50 @@ function rowGames(m,r){
     if(isFreeTextCell(cellObj)) continue;   /* serbest metin/not: oyun sayılmaz */
     const {key, isPremiere} = parseGame(raw);
     if(!key) continue;
-    out.push({raw, key, isPremiere, col:c});
+    out.push({raw, key, isPremiere, col:c, row:r, time:gameTimeOf(m,r,raw)});
+  }
+  return out;
+}
+/* Aynı GÜNÜN tüm satırları birlikte değerlendirilir (matine/akşam ayrı satırda
+   olabiliyor). Çakışma yalnızca aynı saatteki oyunlar arasında aranır. */
+function rowGames(m,r){
+  const dt = normNameKey(dateTextOfRow(m,r));
+  if(!dt) return gamesOfRow(m,r);
+  const out=[];
+  for(let rr=2; rr<m.rows; rr++){
+    if(normNameKey(dateTextOfRow(m,rr))!==dt) continue;
+    out.push(...gamesOfRow(m,rr));
   }
   return out;
 }
 function buildConflict(games){
-  // games: [{key,...}]
-  const totalCount = {};
+  const byPerson = {};
   for(const g of games){
-    const people = PEOPLE_MAP[g.key] ? Object.keys(PEOPLE_MAP[g.key]) : [];
-    for(const p of people) totalCount[p] = (totalCount[p]||0)+1;
+    const crew = crewOf(g.key) || {};
+    for(const p in crew){ (byPerson[p] = byPerson[p] || []).push({g, rec:crew[p]}); }
   }
-  const conflict = {};
+  const people = {};
+  const cells = new Set();
   let hasCritical = false;
-  for(const [p,n] of Object.entries(totalCount)){
-    if(n<2) continue;
-    let crit=0;
-    for(const g of games){
-      const rec = PEOPLE_MAP[g.key] && PEOPLE_MAP[g.key][p];
-      if(rec && rec.critical) crit++;
+  for(const p in byPerson){
+    const list = byPerson[p];
+    const distinct = new Set(list.map(x=>x.g.key));
+    if(distinct.size < 2) continue;           /* aynı oyun tekrarı çakışma değil */
+    const slots = {};
+    for(const x of list){ const t = x.g.time || ''; (slots[t] = slots[t] || []).push(x); }
+    let crit = 0, isCrit = false; const critCells = [];
+    for(const t in slots){
+      const cl = slots[t].filter(x=>x.rec.critical);
+      const keys = new Set(cl.map(x=>x.g.key));
+      if(keys.size >= 2){
+        isCrit = true; crit = Math.max(crit, keys.size);
+        cl.forEach(x=>critCells.push(x.g.row+'_'+x.g.col));
+      }
     }
-    const isCrit = crit>=2;
-    conflict[p] = {critical:isCrit, criticalGameCount:crit, totalGameCount:n};
-    if(isCrit) hasCritical = true;
+    people[p] = {critical:isCrit, criticalGameCount:crit, totalGameCount:distinct.size, name:(list[0].rec.name||p)};
+    if(isCrit){ hasCritical = true; critCells.forEach(k=>cells.add(k)); }
   }
-  return {people:conflict, hasCritical};
+  return {people, hasCritical, cells};
 }
 
 /* === Render === */
@@ -1737,14 +1781,9 @@ function renderSheet(){
       // Turne sütunu: başlık TURNE ise metni kırmızı
       if(r>=2 && stageHeaderText(m,c).includes('TURNE') && cell.v) td.classList.add('turne');
       // Kritik çakışma: bu hücredeki oyun kritik çakışan biri içeriyor mu?
-      if(r>=2 && conflict.hasCritical && cell.v && !cell.ignoreConflict){
-        const {key} = parseGame(cell.v);
-        if(key && PEOPLE_MAP[key]){
-          const anyCrit = Object.entries(conflict.people).some(([p,info])=>
-            info.critical && PEOPLE_MAP[key][p] && PEOPLE_MAP[key][p].critical
-          );
-          if(anyCrit) td.classList.add('conflict');
-        }
+      if(r>=2 && conflict.hasCritical && cell.v && !cell.ignoreConflict &&
+         conflict.cells && conflict.cells.has(r+'_'+c)){
+        td.classList.add('conflict');
       }
       if(isFreeTextCell(cell) && cell.v){ td.classList.add('freetext'); td.classList.remove('conflict'); }
       if(cell.cat){ td.setAttribute('data-cat', cell.cat); td.title = (td.title?td.title+' · ':'') + 'Kategori: ' + cell.cat; }
@@ -1878,30 +1917,30 @@ function showTooltipFor(r,c,ev){
   if(stage) html += '<div>Sahne: '+escapeHtml(stage)+'</div>';
   html += '<hr>';
   if(games.length<=1){
-    html += '<div class="ttOk">Uygun ✅ (bu tarih/saatte tek oyun)</div>';
+    html += '<div class="ttOk">Uygun ✅ (bu tarihte tek oyun)</div>';
   } else {
-    html += '<div>Bu tarih/saatteki oyunlar:</div>';
-    for(const g of games) html += '<div class="ttGame">• '+escapeHtml(g.raw)+'</div>';
+    html += '<div>Bu tarihteki oyunlar:</div>';
+    for(const g of games) html += '<div class="ttGame">• '+escapeHtml(g.raw)+(g.time?' <span style="opacity:.75">('+escapeHtml(g.time)+')</span>':'')+'</div>';
     html += '<hr>';
     if(!conflict.hasCritical && Object.keys(conflict.people).length===0){
       html += '<div class="ttOk">Uygun ✅ Çakışan kişi yok.</div>';
     } else if(!conflict.hasCritical){
       html += '<div class="ttOk">🟢 Ortak kişi(ler) var ama Oyuncu/Figüran çakışması yok:</div>';
       for(const [p,info] of Object.entries(conflict.people).sort((a,b)=>a[0].localeCompare(b[0],'tr'))){
-        html += '<div>🟢 '+escapeHtml(p)+'</div>';
+        html += '<div>🟢 '+escapeHtml(info.name||p)+'</div>';
       }
     } else {
       html += cell.ignoreConflict
         ? '<div class="ttOk">🟢 Çakışma bu hücrede yok sayıldı (aşağıdaki kayıt bilgi amaçlı)</div>'
         : '<div class="ttWarn">⚠️ Çakışma var</div>';
-      for(const [p,info] of Object.entries(conflict.people).sort((a,b)=>a[0].localeCompare(b[0],'tr'))){
+      for(const [p,info] of Object.entries(conflict.people).sort((a,b)=>(a[1].name||a[0]).localeCompare(b[1].name||b[0],'tr'))){
         const dot = info.critical ? '🔴' : '🟢';
-        html += '<div>'+dot+' <b>'+escapeHtml(p)+'</b></div>';
+        html += '<div>'+dot+' <b>'+escapeHtml(info.name||p)+'</b></div>';
         for(const g of games){
-          const rec = PEOPLE_MAP[g.key] && PEOPLE_MAP[g.key][p];
+          const rec = crewOf(g.key) && crewOf(g.key)[p];
           if(!rec) continue;
           const roles = (rec.roles||[]).join(', ') || '-';
-          html += '<div style="padding-left:14px;color:#ddd">↳ '+escapeHtml(g.raw)+' → '+escapeHtml(roles)+'</div>';
+          html += '<div style="padding-left:14px;color:#ddd">↳ '+escapeHtml(g.raw)+(g.time?' ('+escapeHtml(g.time)+')':'')+' → '+escapeHtml(roles)+'</div>';
         }
       }
     }
@@ -2690,14 +2729,9 @@ function renderPrint(){
         if(cell.premiere) clist.push('premiere');
         if((cell.v||'').trim().startsWith('*') && !isPremiereLabel(cell.v)) clist.push('premiere');
         if(r>=2 && stageHeaderText(m,c).includes('TURNE') && cell.v) clist.push('turne');
-        if(r>=2 && conflict.hasCritical && cell.v && !cell.ignoreConflict){
-          const {key} = parseGame(cell.v);
-          if(key && PEOPLE_MAP[key]){
-            const anyCrit = Object.entries(conflict.people).some(([p,info])=>
-              info.critical && PEOPLE_MAP[key][p] && PEOPLE_MAP[key][p].critical
-            );
-            if(anyCrit) clist.push('conflict');
-          }
+        if(r>=2 && conflict.hasCritical && cell.v && !cell.ignoreConflict &&
+           conflict.cells && conflict.cells.has(r+'_'+c)){
+          clist.push('conflict');
         }
         const rs = mm?` rowspan="${mm[2]-mm[0]+1}"`:''; const cs = mm?` colspan="${mm[3]-mm[1]+1}"`:'';
         const styleAttr = cellStyleString(cell); const st = styleAttr?` style="${styleAttr}"`:'';
@@ -2826,14 +2860,16 @@ function findConflicts(months){
       const cf = buildConflict(games);
       if(!cf.hasCritical) continue;
       for(const g of games){
-        const cell = m.cells[r+'_'+g.col] || {};
+        const ck = g.row+'_'+g.col;
+        if(!cf.cells.has(ck)) continue;
+        if(g.row !== r) continue;
+        const cell = m.cells[ck] || {};
         if(cell.ignoreConflict) continue;
-        const key = g.key;
-        if(!key || !PEOPLE_MAP[key]) continue;
+        const crew = crewOf(g.key) || {};
         const people = Object.entries(cf.people)
-          .filter(([pp,info]) => info.critical && PEOPLE_MAP[key][pp] && PEOPLE_MAP[key][pp].critical)
-          .map(([pp])=>pp);
-        if(people.length) out.push({month:m.name, date:dateTextOfRow(m,r), time:timeTextOfRow(m,r), game:g.raw, people});
+          .filter(([pp,info]) => info.critical && crew[pp] && crew[pp].critical)
+          .map(([pp,info])=>info.name||pp);
+        if(people.length) out.push({month:m.name, date:dateTextOfRow(m,r), time:g.time||timeTextOfRow(m,r), game:g.raw, people});
       }
     }
   }
@@ -2886,12 +2922,9 @@ function exportExcel(){
     const isTurne = r>=2 && stageHeaderText(m,c).includes('TURNE') && cell.v;
     const isPrem = !!cell.premiere || ((cell.v||'').trim().startsWith('*') && !isPremiereLabel(cell.v));
     let isConflict = false;
-    if(r>=2 && conflict.hasCritical && cell.v && !cell.ignoreConflict){
-      const {key} = parseGame(cell.v);
-      if(key && PEOPLE_MAP[key]){
-        isConflict = Object.entries(conflict.people).some(([p,info])=>
-          info.critical && PEOPLE_MAP[key][p] && PEOPLE_MAP[key][p].critical);
-      }
+    if(r>=2 && conflict.hasCritical && cell.v && !cell.ignoreConflict &&
+       conflict.cells && conflict.cells.has(r+'_'+c)){
+      isConflict = true;
     }
     let bg = headerish ? XLS_HEAD : XLS_WHITE;
     let color = (isPrem || isTurne) ? XLS_PREMIERE : '000000';
