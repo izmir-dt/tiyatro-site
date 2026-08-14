@@ -2503,6 +2503,136 @@ function smartAnswer(text){
   return "Bunu tam anlayamadım, kusura bakmayın 🙂\nŞöyle deneyebilirsiniz:\n• Bir <b>oyun adı</b> yazın → kadro özetini çıkarayım\n• Bir <b>kişi adı</b> yazın → kaç oyunda görevli olduğunu söyleyeyim\n• Ya da aşağıdaki hazır konulardan birini seçin (“İstatistik sekmeleri”, “PDF’de görev filtreleme”, “Arşivleme nasıl yapılır?”)";
 }
 
+/* ---------- Aylık program verisini bot için okunabilir hale getir ---------- */
+function monthlyCellMap(month){
+  const out = {};
+  if(Array.isArray(month?.cells)){
+    month.cells.forEach(([r,c,v]) => { out[r+"_"+c] = {v:String(v ?? "")}; });
+  }else{
+    Object.keys(month?.cells || {}).forEach(k => {
+      const cell = month.cells[k];
+      out[k] = typeof cell === "object" ? Object.assign({},cell,{v:String(cell.v ?? "")}) : {v:String(cell ?? "")};
+    });
+  }
+  return out;
+}
+function monthlyFreeText(cell, value){
+  const t = String(value || "").trim();
+  return !!(cell?.freeText || /^(\/\/|#|!|>|\+|\[.*\]$|\(.*\)$)/.test(t));
+}
+function monthlyBotSnapshot(months){
+  return (Array.isArray(months) ? months : []).map(month => {
+    const cells = monthlyCellMap(month);
+    const cols = Number(month.cols || 0);
+    const playCols = new Set();
+    for(let c=2; c<Math.max(2,cols-1); c++) playCols.add(c);
+    const sceneOf = {};
+    for(let c=0;c<cols;c++){
+      let cc=c, scene="";
+      while(cc>=0 && !scene){
+        const v=String(cells["1_"+cc]?.v || "").trim();
+        if(v) scene=v;
+        cc--;
+      }
+      sceneOf[c]=scene;
+    }
+    const games = new Map(), notes = [];
+    const pushNote = value => {
+      const note=String(value || "").trim();
+      if(note && !notes.includes(note)) notes.push(note);
+    };
+    pushNote(month.siteNote || month.note);
+    for(const key of Object.keys(cells)){
+      const [r0,c0] = key.split("_").map(Number);
+      const cell = cells[key] || {};
+      const value = String(cell.v || "").trim();
+      if(!value || r0 < 2 || !playCols.has(c0)) continue;
+      const lowered = fold(value);
+      const noteLike = monthlyFreeText(cell,value) ||
+        !!cell.note ||
+        /not|uyari|ilerleyen|etkinlik|olasil|bilgi|duyuru/.test(lowered);
+      if(noteLike){
+        pushNote(cell.note || value);
+        continue;
+      }
+      if(/^(\*|★)?\s*promiyer$/.test(lowered)) continue;
+      const clean = value.replace(/^\s*[\*★]\s*/,"").replace(/[(\[][^)\]]*[)\]]/g," ").replace(/\s+/g," ").trim();
+      if(!clean) continue;
+      const gameKey = fold(clean);
+      if(!games.has(gameKey)) games.set(gameKey,{name:clean,occurrences:[]});
+      games.get(gameKey).occurrences.push({
+        date:String(cells[r0+"_0"]?.v || "").trim(),
+        time:String(cells[r0+"_1"]?.v || "").trim(),
+        scene:String(sceneOf[c0] || "").trim(),
+        note:String(cell.note || "").trim()
+      });
+    }
+    return {
+      name:String(month.name || "Adsız ay"),
+      games:[...games.values()],
+      notes,
+      total:[...games.values()].reduce((n,g)=>n+g.occurrences.length,0)
+    };
+  });
+}
+function monthlyProgramAnswer(text, months){
+  const data = monthlyBotSnapshot(months);
+  if(!data.length) return null;
+  const q = fold(text);
+  const monthWords = ["ocak","subat","mart","nisan","mayis","haziran","temmuz","agustos","eylul","ekim","kasim","aralik"];
+  const monthFiltered = data.filter(m => {
+    const name=fold(m.name), year=(name.match(/20\d{2}/)||[])[0];
+    return q.includes(name) ||
+      monthWords.some(word => name.includes(word) && q.includes(word) && (!year || q.includes(year)));
+  });
+  const selected = monthFiltered.length ? monthFiltered : data;
+  const allGames = selected.flatMap(m => m.games.map(g => ({...g,month:m.name})));
+  const game = allGames.find(g => q.includes(fold(g.name))) ||
+    allGames.find(g => fold(g.name).includes(q) && q.length >= 4);
+  const wantsNotes = /not|uyari|duyuru|bilgi|etkinlik|olasil/.test(q);
+  const wantsSchedule = /temsil|tarih|saat|sahne|ne zaman|hangi gun|program/.test(q);
+  const wantsList = /hangi oyun|oyunlar|neler var|aylik program|takvim/.test(q);
+
+  if(game){
+    const rows = game.occurrences.map(o =>
+      [o.date,o.time,o.scene].filter(Boolean).map(esc).join(" · ")
+    );
+    const notes = game.occurrences.map(o=>o.note).filter(Boolean);
+    return "<b>"+esc(game.name)+"</b> için aylık program bilgisi:\n\n" +
+      (rows.length ? rows.map((r,i)=>"• "+r).join("\n") : "• Temsil kaydı bulunamadı.") +
+      (notes.length ? "\n\n<b>Not:</b> "+esc([...new Set(notes)].join(" · ")) : "");
+  }
+  if(wantsNotes){
+    const noteRows = selected.flatMap(m => m.notes.map(n => "• <b>"+esc(m.name)+"</b>: "+esc(n)));
+    return noteRows.length ? "<b>Aylık program notları</b>\n\n"+noteRows.join("\n") :
+      "Seçilen aylarda kayıtlı bir not veya duyuru görünmüyor.";
+  }
+  if(wantsList || (monthFiltered.length && !game)){
+    return selected.map(m => {
+      const names = m.games.map(g => esc(g.name));
+      return "<b>"+esc(m.name)+"</b> · "+m.total+" temsil\n"+(names.length ? names.map(n=>"• "+n).join("\n") : "• Oyun kaydı bulunmuyor.");
+    }).join("\n\n");
+  }
+  if(wantsSchedule){
+    return selected.map(m => "<b>"+esc(m.name)+"</b> · "+m.total+" temsil").join("\n") +
+      "\n\nBir oyun adı yazarsanız tarih, saat ve sahne bilgilerini tek tek çıkarabilirim.";
+  }
+  return null;
+}
+async function monthlyProgramAnswerAsync(text){
+  const q=fold(text);
+  let months=window.IDT_MONTHLY_PROGRAM || [];
+  const monthlyIntent=/aylik program|aylik|takvim|temsil|sahne|saat|oyun|not|uyari|duyuru/.test(q);
+  if(!months.length && monthlyIntent && typeof window.loadMonthlyProgramForBot==="function"){
+    try{ months=await window.loadMonthlyProgramForBot(); }catch(e){}
+  }
+  return monthlyProgramAnswer(text,months);
+}
+async function smartAnswerAsync(text){
+  const monthly=await monthlyProgramAnswerAsync(text);
+  return monthly || smartAnswer(text);
+}
+
 /* ---------- Sohbet: kompakt hazır cevaplar + yeni motor ---------- */
 let sugsOpen = true;
 window.toggleSugs = function(){
@@ -2524,7 +2654,10 @@ window.sendChatText = function(text){
   const t = document.createElement("div");
   t.className = "chat-msg bot"; t.textContent = "yazıyor…"; t.style.opacity = ".6";
   msgs.appendChild(t); msgs.scrollTop = msgs.scrollHeight;
-  setTimeout(() => { t.remove(); botMsg(smartAnswer(text)); }, 320);
+  setTimeout(async () => {
+    t.remove();
+    botMsg(await smartAnswerAsync(text));
+  }, 320);
 };
 
 /* ---------- Panel içi bot: kompakt hazır cevaplar ---------- */
@@ -2566,7 +2699,7 @@ window.inlineBotPanel = function(){
 };
 window.inlineBotAsk = function(text){
   inlineBotMsg(esc(text), true);
-  setTimeout(() => inlineBotMsg(smartAnswer(text), false), 300);
+  setTimeout(async () => inlineBotMsg(await smartAnswerAsync(text), false), 300);
 };
 
 /* ---------- Bildirimler: sunucu tarafında silme + otomatik tazeleme ---------- */
@@ -2789,6 +2922,171 @@ window.exportPDF = function(title, headers, data){
 .prg-form .fld label{display:block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
 .prg-form select,.prg-form input[type=text]{background:var(--surface);border:1px solid var(--line-strong);border-radius:10px;
   padding:9px 12px;font-size:13px;outline:none;font-family:inherit;color:inherit}
+</style>
+<style>
+/* ── Aylık program: daha derin kartlar ve daha güçlü önizleme yüzeyi ── */
+.aph-months{
+  grid-template-columns:repeat(auto-fit,minmax(245px,1fr));
+  gap:16px;
+  perspective:1200px;
+}
+.aph-card{
+  min-height:242px;
+  padding:20px 18px 16px;
+  border-color:color-mix(in srgb,var(--accent) 18%,var(--line));
+  background:
+    radial-gradient(circle at 100% 0%,color-mix(in srgb,var(--accent) 10%,transparent),transparent 42%),
+    linear-gradient(155deg,var(--surface) 0%,var(--surface) 66%,color-mix(in srgb,var(--accent) 7%,var(--surface-2)) 100%);
+  box-shadow:0 8px 18px rgba(28,15,15,.06),0 1px 0 rgba(255,255,255,.65) inset;
+  transform-style:preserve-3d;
+}
+.aph-card::before{
+  height:5px;
+  background:linear-gradient(90deg,var(--accent) 0%,var(--accent-soft) 62%,#d9a35b 100%);
+}
+.aph-card::after{
+  content:"";
+  position:absolute;
+  inset:5px 0 auto;
+  height:72px;
+  pointer-events:none;
+  background:linear-gradient(180deg,rgba(255,255,255,.2),transparent);
+}
+.aph-card:hover{
+  transform:translateY(-6px) rotateX(1deg);
+  box-shadow:0 22px 42px rgba(28,15,15,.16),0 1px 0 rgba(255,255,255,.7) inset;
+}
+.aph-card .month-kicker{
+  position:relative;
+  z-index:1;
+  display:flex;
+  align-items:center;
+  gap:7px;
+  color:var(--muted);
+  font-size:10px;
+  font-weight:800;
+  letter-spacing:.16em;
+  text-transform:uppercase;
+}
+.aph-card .month-kicker::before{
+  content:"";
+  width:7px;
+  height:7px;
+  border-radius:50%;
+  background:var(--accent);
+  box-shadow:0 0 0 4px var(--accent-wash);
+}
+.aph-card .ttl{position:relative;z-index:1;font-size:18px;letter-spacing:-.02em}
+.aph-card .meta{
+  position:relative;
+  z-index:1;
+  font-size:11px;
+  padding:5px 10px;
+  box-shadow:0 3px 9px rgba(155,35,53,.08);
+}
+.aph-card .stat{
+  position:relative;
+  z-index:1;
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:7px;
+  margin:4px 0 2px;
+}
+.aph-card .stat > div{
+  min-width:0;
+  padding:9px 7px 8px;
+  text-align:center;
+  border:1px solid var(--line);
+  border-radius:10px;
+  background:color-mix(in srgb,var(--surface) 78%,var(--surface-2));
+  color:var(--muted);
+  font-size:10px;
+  line-height:1.25;
+}
+.aph-card .stat b{font-size:17px;line-height:1;color:var(--text);margin-bottom:3px}
+.aph-card .sum{
+  position:relative;
+  z-index:1;
+  box-shadow:0 4px 12px rgba(155,35,53,.08);
+}
+.aph-card .note{
+  position:relative;
+  z-index:1;
+  display:flex;
+  gap:7px;
+  align-items:flex-start;
+  margin-top:1px;
+  padding:8px 10px;
+  border:1px solid color-mix(in srgb,var(--accent) 32%,var(--line));
+  border-left:3px solid var(--accent);
+  border-radius:9px;
+  background:color-mix(in srgb,var(--accent) 7%,var(--surface));
+  color:var(--text-dim);
+  font-size:11px;
+  line-height:1.4;
+}
+.aph-card .note::before{content:"i";display:grid;place-items:center;flex:0 0 auto;width:16px;height:16px;border-radius:50%;background:var(--accent);color:var(--accent-ink);font-size:10px;font-weight:800}
+.aph-card .acts{position:relative;z-index:1;padding-top:10px}
+.aph-preview-btn{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  width:100%;
+  min-height:38px;
+  border-radius:10px;
+  background:var(--accent);
+  color:var(--accent-ink);
+  border-color:transparent;
+  box-shadow:0 7px 15px rgba(155,35,53,.2);
+}
+.aph-preview-btn:hover{color:var(--accent-ink);background:var(--accent-soft);box-shadow:0 10px 20px rgba(155,35,53,.28)}
+.aph-preview-btn svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.aph-ov{
+  align-items:center;
+  justify-content:center;
+  padding:18px;
+  background:
+    radial-gradient(circle at 50% 0%,rgba(155,35,53,.18),transparent 42%),
+    rgba(12,7,8,.72);
+  backdrop-filter:blur(9px) saturate(1.08);
+}
+.aph-ov .win{
+  width:min(1480px,100%);
+  max-height:calc(100vh - 36px);
+  border-radius:20px;
+  border-color:rgba(255,255,255,.24);
+  box-shadow:0 30px 90px rgba(0,0,0,.48),0 1px 0 rgba(255,255,255,.62) inset;
+}
+.aph-ov .top{
+  min-height:64px;
+  padding:14px 18px;
+  background:
+    linear-gradient(120deg,color-mix(in srgb,var(--accent) 10%,var(--surface-2)),var(--surface-2));
+}
+.aph-ov .top .t{font-size:18px}
+.aph-ov .top .t::before{padding:4px 9px}
+.aph-ov .top .chip{box-shadow:0 3px 10px rgba(155,35,53,.1)}
+.aph-tools{padding:12px 18px;background:color-mix(in srgb,var(--surface) 82%,var(--surface-2));box-shadow:0 4px 12px rgba(28,15,15,.05)}
+.aph-tools .btn{background:var(--surface)}
+.aph-prev{
+  padding:18px;
+  background:
+    linear-gradient(135deg,color-mix(in srgb,var(--surface-2) 72%,var(--surface)),var(--surface)),
+    var(--surface);
+}
+.aph-prev table{
+  border-radius:12px;
+  overflow:hidden;
+  box-shadow:0 10px 26px rgba(28,15,15,.1);
+}
+.aph-info{padding:11px 18px;box-shadow:0 -4px 12px rgba(28,15,15,.04)}
+@media(max-width:760px){
+  .aph-card{min-height:0}
+  .aph-ov{padding:0}
+  .aph-ov .win{max-height:100vh;border-radius:0}
+  .aph-prev{padding:10px}
+}
 </style>
 <script>
 /* ═══════════ v5: düzeltmeler ve yeni özellikler ═══════════ */
@@ -3843,6 +4141,21 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
     if(c0) container.style.setProperty("--aph-c0w", c0.getBoundingClientRect().width + "px");
   }
 
+  /* Aylık programı rehber botuna da aç: bot, kullanıcı program ekranını hiç
+     açmamış olsa bile güncel yayınlanmış veriyi gerektiğinde okuyabilir. */
+  window.IDT_MONTHLY_PROGRAM = [];
+  window.loadMonthlyProgramForBot = async function(){
+    try{
+      const st = (await publishedState()) || prgState();
+      const raw = (st && Array.isArray(st.months)) ? st.months : [];
+      const months = raw.slice().sort((a,b) => monthOrder(a) - monthOrder(b));
+      window.IDT_MONTHLY_PROGRAM = months;
+      return months;
+    }catch(e){
+      return window.IDT_MONTHLY_PROGRAM || [];
+    }
+  };
+
   /* ---------- 4) Yeni Aylık Program ekranı ---------- */
   window.renderProgram = async function(){
     const box = document.getElementById("program");
@@ -3852,6 +4165,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
     const rawMonths = (st && Array.isArray(st.months)) ? st.months : [];
     /* Aylık programlar takvim sırasına (yıl + ay) göre listelenir */
     const months = rawMonths.slice().sort((a,b) => monthOrder(a) - monthOrder(b));
+    window.IDT_MONTHLY_PROGRAM = months;
     if(PREVIEW >= months.length) PREVIEW = months.length - 1;
     const infos = months.map(monthInfo);
 
@@ -3870,16 +4184,21 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
             sonra bu ekranda <b style="color:var(--danger)">Yenile</b>'ye basın.</div>`}
           <div class="aph-months">${infos.map((inf,i) => `
             <div class="aph-card">
+              <div class="month-kicker">Aylık program özeti</div>
               <div class="ttl">${esc(months[i].name||("Ay "+(i+1)))}</div>
-              <div class="meta">🎭 ${inf.oyunSayisi} farklı oyun</div>
+              <div class="meta">${inf.oyunSayisi} farklı oyun</div>
               <div class="stat">
-                <div><b>${inf.temsil}</b>temsil</div>
-                <div><b>${inf.sahneSayisi}</b>sahne</div>
-                <div><b>${inf.doluGun}</b>dolu gün</div>
+                <div><b>${inf.temsil}</b><span>temsil</span></div>
+                <div><b>${inf.sahneSayisi}</b><span>sahne</span></div>
+                <div><b>${inf.doluGun}</b><span>dolu gün</span></div>
               </div>
-              ${inf.note ? `<div style="margin-top:6px;display:inline-block;font-weight:700;font-size:12px;color:var(--accent);background:var(--accent-wash);border:1px solid var(--accent-soft);border-radius:6px;padding:4px 9px;white-space:pre-wrap">${esc(inf.note)}</div>` : ""}
+              ${inf.oyunlar.length ? `<div class="sum">${esc(inf.oyunlar.slice(0,3).join(" · "))}${inf.oyunlar.length>3?" · +"+(inf.oyunlar.length-3):""}</div>` : ""}
+              ${inf.note ? `<div class="note">${esc(inf.note)}</div>` : ""}
               <div class="acts">
-                <button class="btn sm" onclick="toggleProgramPreview(${i})">${PREVIEW===i?"Önizlemeyi kapat":"Önizle"}</button>
+                <button class="btn sm aph-preview-btn" onclick="toggleProgramPreview(${i})">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="14" rx="2"></rect><path d="m8 21 2-3h4l2 3"></path><path d="m10 9 4 2-4 2z"></path></svg>
+                  ${PREVIEW===i?"Önizlemeyi kapat":"Programı önizle"}
+                </button>
               </div>
             </div>`).join("")}</div>
           ${PREVIEW>-1 && months[PREVIEW] ? `
