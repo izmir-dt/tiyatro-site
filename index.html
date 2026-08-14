@@ -3576,7 +3576,13 @@ window.exportPDF = function(title, headers, data){
     if(PREVIEW === -1) document.querySelectorAll(".aph-ov").forEach(n => n.remove());
     renderProgram();
   };
-  document.addEventListener("keydown", e => { if(e.key === "Escape" && PREVIEW > -1) window.toggleProgramPreview(PREVIEW); });
+  document.addEventListener("keydown", e => {
+    if(e.key !== "Escape" || PREVIEW < 0) return;
+    const prevEl = document.querySelector(".aph-prev");
+    const hasHl = prevEl && (prevEl.classList.contains("aph-searching") || prevEl.querySelector("td.aph-sel"));
+    if(hasHl){ e.preventDefault(); window.aphClearHighlight(); return; }
+    window.toggleProgramPreview(PREVIEW);
+  });
   const PRG_TITLE_RE = /İZMİR\s+DEVLET\s+TİYATROSU\s+MÜDÜRLÜĞÜ/i;
   const DAY_RE = /(cumartesi|pazar)(?!tesi)/i;
   function previewHtml(m){
@@ -3666,11 +3672,27 @@ window.exportPDF = function(title, headers, data){
       prevEl.querySelectorAll("td.aph-hit").forEach(n => n.classList.remove("aph-hit"));
       hits.forEach(n => n.classList.add("aph-hit"));
       const srch = document.getElementById("aphSearch"); if(srch) srch.value = playKeyOf(td.dataset.oyun||"");
+      const list = hits.map(n => {
+        const t = String(n.dataset.tarih||"").replace(/\s+/g," ").trim();
+        const sa = String(n.dataset.saat||"").trim();
+        return (t + (sa ? " · " + sa : "")).trim();
+      }).filter(Boolean);
       setInfo('<div><span class="k">Oyun</span><b>'+esc(playKeyOf(td.dataset.oyun||""))+'</b></div>'
         + '<div><span class="k">Bu ay</span><b>'+hits.length+' temsil</b></div>'
-        + '<div style="color:var(--muted)">Aramayı temizlemek için ✕ / arama kutusunu boşaltın</div>');
+        + (list.length ? '<div style="flex:1;min-width:220px"><span class="k">Tarihler</span>'+esc(list.join("  |  "))+'</div>' : "")
+        + '<div style="color:var(--muted)">Vurguyu kaldırmak için <b>Esc</b> veya “Vurguyu kaldır”</div>');
     });
   }
+
+  const APH_INFO_HINT = '<span style="color:var(--muted)">Bir oyun hücresine <b>tek tıklayın</b> → tarih, saat ve sahne bilgisi burada görünür · <b>çift tıklayın</b> → o oyunun ay içindeki tüm temsilleri vurgulanır · <b>Esc</b> → vurguyu kaldırır.</span>';
+  window.aphClearHighlight = function(){
+    const prevEl = document.querySelector(".aph-prev"); if(!prevEl) return;
+    prevEl.classList.remove("aph-searching");
+    prevEl.querySelectorAll("td.aph-hit").forEach(n => n.classList.remove("aph-hit"));
+    prevEl.querySelectorAll("td.aph-sel").forEach(n => n.classList.remove("aph-sel"));
+    const srch = document.getElementById("aphSearch"); if(srch) srch.value = "";
+    const info = document.getElementById("aphInfo"); if(info) info.innerHTML = APH_INFO_HINT;
+  };
 
   window.aphSearch = function(q){
     const prevEl = document.querySelector(".aph-prev"); if(!prevEl) return;
@@ -3738,7 +3760,6 @@ window.exportPDF = function(title, headers, data){
                 <div><b>${inf.sahneSayisi}</b>sahne</div>
                 <div><b>${inf.doluGun}</b>dolu gün</div>
               </div>
-              <div class="sum">${inf.temsil} temsil · ${inf.oyunSayisi} oyun</div>
               ${inf.note ? `<div style="margin-top:6px;display:inline-block;font-weight:700;font-size:12px;color:var(--accent);background:var(--accent-wash);border:1px solid var(--accent-soft);border-radius:6px;padding:4px 9px;white-space:pre-wrap">${esc(inf.note)}</div>` : ""}
               <div class="acts">
                 <button class="btn sm" onclick="toggleProgramPreview(${i})">${PREVIEW===i?"Önizlemeyi kapat":"Önizle"}</button>
@@ -3752,12 +3773,12 @@ window.exportPDF = function(title, headers, data){
                   <div style="display:flex;gap:8px;align-items:center">
                     <span class="chip gold">${infos[PREVIEW].temsil} temsil · ${infos[PREVIEW].oyunSayisi} oyun</span>
                     <button class="btn sm" onclick="toggleProgramPreview(${PREVIEW})">Kapat ✕</button>
-                    <button class="btn sm" onclick="toggleProgramPreview(${PREVIEW})">Kapat ✕</button>
                   </div>
                 </div>
                 <div class="aph-tools">
                   <input id="aphSearch" type="text" placeholder="Oyun ara — eşleşenler vurgulanır…" oninput="aphSearch(this.value)" />
                   <button class="btn sm" onclick="document.getElementById('aphSearch').value='';aphSearch('')">Temizle</button>
+                  <button class="btn sm" id="aphClearBtn" onclick="aphClearHighlight()" title="Vurgu ve seçimi kaldır (Esc)">Vurguyu kaldır <span style="opacity:.6">Esc</span></button>
                   <button class="btn sm" onclick="aphZoom(-0.1)">A−</button>
                   <button class="btn sm" onclick="aphZoom(0.1)">A+</button>
                   <div class="aph-legend">
@@ -3768,7 +3789,7 @@ window.exportPDF = function(title, headers, data){
                   </div>
                 </div>
                 <div class="aph-prev">${previewHtml(months[PREVIEW])}</div>
-                <div class="aph-info" id="aphInfo"><span style="color:var(--muted)">Bir oyun hücresine <b>tek tıklayın</b> → tarih, saat ve sahne bilgisi burada görünür · <b>çift tıklayın</b> → o oyunun ay içindeki tüm temsilleri vurgulanır.</span></div>
+                <div class="aph-info" id="aphInfo"><span style="color:var(--muted)">Bir oyun hücresine <b>tek tıklayın</b> → tarih, saat ve sahne bilgisi burada görünür · <b>çift tıklayın</b> → o oyunun ay içindeki tüm temsilleri vurgulanır · <b>Esc</b> → vurguyu kaldırır.</span></div>
               </div>
             </div>` : ""}
         </div>
