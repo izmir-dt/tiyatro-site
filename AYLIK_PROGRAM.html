@@ -1196,10 +1196,12 @@ async function syncFromServer(){
   let ignoredGrew = false;
   for(const {ts, data} of results){
     if(!data || !data.month || !data.month.name) continue;
+    noteServerMonthTs(data.month.name, ts);
     if(Array.isArray(data.playsIgnored)){
       data.playsIgnored.forEach(p=>{ if(!state.playsIgnored.includes(p)){ state.playsIgnored.push(p); ignoredGrew = true; } });
     }
     const name = data.month.name;
+    noteServerMonthTs(name, ts);
     const localTs = (state.monthPub[name]||{}).publishedAt || 0;
     if(ts <= localTs) continue; /* yerelde bu sürüm veya daha yenisi zaten var */
     const normalized = normalizeMonth(data.month);
@@ -1214,7 +1216,7 @@ async function syncFromServer(){
     if(data.playFreeNotes && typeof data.playFreeNotes === 'object') state.playFreeNotes = {...state.playFreeNotes, ...data.playFreeNotes};
     changed = true;
   }
-  if(!changed && !ignoredGrew) return;
+  if(!changed && !ignoredGrew){ applyLastWorkedMonth(); return; }
   /* Başka bir bilgisayarda silinmiş ("Oyunu Sil") oyunlar varsa, bu
      bilgisayarda daha önce (ör. repertuvar köprüsünden) eklenmiş olsa
      bile burada da kaldırılır. */
@@ -1272,9 +1274,35 @@ async function fetchAllDraftMonths(){
    Kullanıcı tercihi: bu, yereldeki henüz sunucuya yazılmamış (birkaç
    saniyelik) değişikliklerin üzerine yazabilir — amaç her bilgisayarda
    aynı en güncel çalışma hâlini göstermek. */
+/* Sunucudaki en son çalışılan ay: her bilgisayar açılışta bu aya gelsin.
+   Ay adı -> sunucudaki en güncel taslak/kesinleştirme zamanı. */
+const _serverMonthTs = {};
+let _lastWorkedApplied = false;
+function noteServerMonthTs(name, ts){
+  if(!name || !ts) return;
+  if(!_serverMonthTs[name] || ts > _serverMonthTs[name]) _serverMonthTs[name] = ts;
+}
+function applyLastWorkedMonth(){
+  if(_lastWorkedApplied) return;
+  const entries = Object.entries(_serverMonthTs);
+  if(!entries.length) return;
+  entries.sort((a,b)=>b[1]-a[1]);
+  const name = entries[0][0];
+  const idx = (state.months||[]).findIndex(mo=>mo.name===name);
+  if(idx<0) return;
+  _lastWorkedApplied = true;
+  if(idx === state.activeIdx){ refreshMonthSel(); return; }
+  state.activeIdx = idx;
+  _suppressDraftSync = true;
+  try{ localStorage.setItem(LSKEY, JSON.stringify(state)); }catch(e){}
+  _suppressDraftSync = false;
+  refreshMonthSel();
+  renderSheet(); renderPrint(); renderPubState(); renderDraftState();
+  setStatus('Son çalışılan ay açıldı: ' + name);
+}
 async function syncDraftFromServer(){
   const results = await fetchAllDraftMonths();
-  if(!results.length) return;
+  if(!results.length){ applyLastWorkedMonth(); return; }
   state.monthDraft = state.monthDraft || {};
   state.monthPub = state.monthPub || {};
   state.playsIgnored = state.playsIgnored || [];
@@ -1315,6 +1343,7 @@ async function syncDraftFromServer(){
   renderAll();
   renderPubState();
   renderDraftState();
+  applyLastWorkedMonth();
   if(changed){
     setStatus('Sunucudaki güncel taslak yüklendi.');
     siteMessage('Başka bir bilgisayarda yapılan, henüz kesinleştirilmemiş değişiklikler bu sayfaya otomatik olarak yüklendi.','ok','Taslak senkronize edildi');
@@ -3511,9 +3540,9 @@ function renderAll(){
 }
 
 /* Wire */
-document.getElementById('monthSel').onchange = e=>{ state.activeIdx=+e.target.value; saveState(); renderSheet(); renderPrint(); renderPubState(); renderDraftState(); };
-document.getElementById('prevMonthBtn').onclick = ()=>{ if(state.activeIdx>0){ state.activeIdx--; saveState(); renderSheet(); renderPrint(); refreshMonthSel(); renderPubState(); renderDraftState(); } };
-document.getElementById('nextMonthBtn').onclick = ()=>{ if(state.activeIdx<state.months.length-1){ state.activeIdx++; saveState(); renderSheet(); renderPrint(); refreshMonthSel(); renderPubState(); renderDraftState(); } };
+document.getElementById('monthSel').onchange = e=>{ _lastWorkedApplied = true; state.activeIdx=+e.target.value; saveState(); renderSheet(); renderPrint(); renderPubState(); renderDraftState(); };
+document.getElementById('prevMonthBtn').onclick = ()=>{ _lastWorkedApplied = true; if(state.activeIdx>0){ state.activeIdx--; saveState(); renderSheet(); renderPrint(); refreshMonthSel(); renderPubState(); renderDraftState(); } };
+document.getElementById('nextMonthBtn').onclick = ()=>{ _lastWorkedApplied = true; if(state.activeIdx<state.months.length-1){ state.activeIdx++; saveState(); renderSheet(); renderPrint(); refreshMonthSel(); renderPubState(); renderDraftState(); } };
 document.getElementById('addMonth').onclick = addBlankMonth;
 document.getElementById('delMonth').onclick = delCurMonth;
 document.getElementById('addMonthTop').onclick = addBlankMonth;
