@@ -3379,6 +3379,41 @@ window.exportPDF = function(title, headers, data){
 .aph-card .stat b{font-family:var(--font-d);font-size:15px;display:block;color:var(--text)}
 .aph-card .sum{margin-top:4px;display:block;font-family:var(--font-d);font-weight:800;font-size:13px;color:var(--accent);background:var(--accent-wash);border:1px solid var(--accent-soft);border-radius:10px;padding:9px 11px;text-align:center;letter-spacing:.3px}
 .aph-note{font-size:12px;color:var(--muted);margin-top:8px;line-height:1.6}
+/* ---------- Soft motion & accessibility polish ---------- */
+:root{--ease-soft:cubic-bezier(.22,.61,.36,1);--ease-spring:cubic-bezier(.2,.8,.2,1)}
+button,a,input,select,textarea{transition:color .2s var(--ease-soft),background-color .2s var(--ease-soft),
+  border-color .2s var(--ease-soft),box-shadow .2s var(--ease-soft),transform .2s var(--ease-soft),opacity .2s var(--ease-soft)}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{
+  outline:3px solid color-mix(in srgb,var(--accent) 35%,transparent);outline-offset:2px}
+.panel.on{animation:soft-panel-in .42s var(--ease-soft) both}
+.card,.row,.kpi .box,.play-card,.prg-card,.aph-card{animation:soft-rise .48s var(--ease-soft) both}
+.card:nth-child(2),.aph-card:nth-child(2){animation-delay:.04s}
+.card:nth-child(3),.aph-card:nth-child(3){animation-delay:.08s}
+.card:nth-child(4),.aph-card:nth-child(4){animation-delay:.12s}
+.aph-months .aph-card:hover{transform:translateY(-4px) scale(1.008)}
+.aph-ov{animation:soft-fade .24s var(--ease-soft) both;backdrop-filter:blur(5px)}
+.aph-ov .win{animation:soft-modal-in .38s var(--ease-spring) both}
+.aph-preview-nav{display:flex;align-items:center;gap:6px}
+.aph-preview-nav .btn{min-width:36px;min-height:32px;padding:6px 9px;display:inline-grid;place-items:center}
+.aph-preview-nav .aph-page{min-width:68px;text-align:center;font-size:11.5px;font-weight:800;color:var(--muted)}
+.aph-preview-nav .btn:disabled{opacity:.38}
+.aph-ov .top .t{display:flex;align-items:center;gap:8px}
+.aph-ov .top .t::before{content:"Önizleme";font-family:var(--font-b);font-size:10px;font-weight:800;
+  letter-spacing:.12em;text-transform:uppercase;color:var(--muted);background:var(--surface);
+  border:1px solid var(--line);border-radius:999px;padding:3px 8px}
+@keyframes soft-fade{from{opacity:0}to{opacity:1}}
+@keyframes soft-panel-in{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
+@keyframes soft-rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes soft-modal-in{from{opacity:0;transform:translateY(18px) scale(.985)}to{opacity:1;transform:none}}
+@media(max-width:760px){
+  .aph-preview-nav{order:3;width:100%;justify-content:center}
+  .aph-ov .top .t{flex:1;min-width:170px}
+  .aph-ov .top .t::before{display:none}
+}
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;
+    transition-duration:.01ms!important;scroll-behavior:auto!important}
+}
 /* ---------- Mobil uyarlama ---------- */
 @media(max-width:760px){
   .aph-months{grid-template-columns:1fr;gap:12px;margin-top:12px}
@@ -3611,12 +3646,31 @@ window.exportPDF = function(title, headers, data){
     if(PREVIEW === -1) document.querySelectorAll(".aph-ov").forEach(n => n.remove());
     renderProgram();
   };
+  /* Önizleme açıkken aylar arasında dolaş: son aydan sonra ilk aya,
+     ilk aydan önce son aya dönerek kesintisiz bir takvim hissi verir. */
+  window.changeProgramPreview = function(delta){
+    const ov = document.querySelector(".aph-ov");
+    if(!ov) return;
+    const current = Number(ov.dataset.previewIndex);
+    const count = Number(ov.dataset.previewCount);
+    if(!Number.isInteger(current) || !Number.isInteger(count) || count < 2) return;
+    const next = (current + delta + count) % count;
+    PREVIEW = next;
+    renderProgram();
+  };
   document.addEventListener("keydown", e => {
     if(e.key !== "Escape" || PREVIEW < 0) return;
     const prevEl = document.querySelector(".aph-prev");
     const hasHl = prevEl && (prevEl.classList.contains("aph-searching") || prevEl.querySelector("td.aph-sel"));
     if(hasHl){ e.preventDefault(); window.aphClearHighlight(); return; }
     window.toggleProgramPreview(PREVIEW);
+  });
+  document.addEventListener("keydown", e => {
+    if(PREVIEW < 0 || !document.querySelector(".aph-ov")) return;
+    const tag = (e.target && e.target.tagName || "").toLowerCase();
+    if(["input","textarea","select"].includes(tag) || e.target?.isContentEditable) return;
+    if(e.key === "ArrowLeft"){ e.preventDefault(); window.changeProgramPreview(-1); }
+    if(e.key === "ArrowRight"){ e.preventDefault(); window.changeProgramPreview(1); }
   });
   const PRG_TITLE_RE = /İZMİR\s+DEVLET\s+TİYATROSU\s+MÜDÜRLÜĞÜ/i;
   const DAY_RE = /(cumartesi|pazar)(?!tesi)/i;
@@ -3798,6 +3852,7 @@ window.exportPDF = function(title, headers, data){
     const rawMonths = (st && Array.isArray(st.months)) ? st.months : [];
     /* Aylık programlar takvim sırasına (yıl + ay) göre listelenir */
     const months = rawMonths.slice().sort((a,b) => monthOrder(a) - monthOrder(b));
+    if(PREVIEW >= months.length) PREVIEW = months.length - 1;
     const infos = months.map(monthInfo);
 
     box.innerHTML = `
@@ -3828,13 +3883,23 @@ window.exportPDF = function(title, headers, data){
               </div>
             </div>`).join("")}</div>
           ${PREVIEW>-1 && months[PREVIEW] ? `
-            <div class="aph-ov" onclick="if(event.target===this)toggleProgramPreview(${PREVIEW})">
+            <div class="aph-ov" data-preview-index="${PREVIEW}" data-preview-count="${months.length}"
+              role="dialog" aria-modal="true" aria-labelledby="aphPreviewTitle"
+              onclick="if(event.target===this)toggleProgramPreview(${PREVIEW})">
               <div class="win">
                 <div class="top">
-                  <div class="t">${esc(months[PREVIEW].name||"Önizleme")}</div>
+                  <div class="t" id="aphPreviewTitle" aria-live="polite">${esc(months[PREVIEW].name||"Önizleme")}</div>
                   <div style="display:flex;gap:8px;align-items:center">
                     <span class="chip gold">${infos[PREVIEW].temsil} temsil · ${infos[PREVIEW].oyunSayisi} oyun</span>
-                    <button class="btn sm" onclick="toggleProgramPreview(${PREVIEW})">Kapat ✕</button>
+                    <div class="aph-preview-nav" aria-label="Aylar arasında geçiş">
+                      <button class="btn sm" type="button" onclick="changeProgramPreview(-1)"
+                        aria-label="Önceki ay" title="Önceki ay (sol ok)">‹</button>
+                      <span class="aph-page" aria-live="polite">${PREVIEW+1} / ${months.length}</span>
+                      <button class="btn sm" type="button" onclick="changeProgramPreview(1)"
+                        aria-label="Sonraki ay" title="Sonraki ay (sağ ok)">›</button>
+                    </div>
+                    <button class="btn sm" type="button" data-aph-close
+                      onclick="toggleProgramPreview(${PREVIEW})" aria-label="Önizlemeyi kapat">Kapat ✕</button>
                   </div>
                 </div>
                 <div class="aph-tools">
@@ -3871,6 +3936,7 @@ window.exportPDF = function(title, headers, data){
         window.addEventListener("resize", () => stickProgramHeader(prevEl));
         setTimeout(() => stickProgramHeader(prevEl), 60);
       }
+        setTimeout(() => ov.querySelector("[data-aph-close]")?.focus(), 40);
     }
   };
 
