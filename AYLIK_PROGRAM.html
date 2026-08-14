@@ -2645,14 +2645,31 @@ function initMenus(){
 }
 
 /* === Month management === */
+const AY_ADLARI = ['OCAK','ŞUBAT','MART','NİSAN','MAYIS','HAZİRAN','TEMMUZ','AĞUSTOS','EYLÜL','EKİM','KASIM','ARALIK'];
+/* Ay adını takvim sırasına (yıl + ay) çevirir; dropdown'larda aylar hep
+   Ocak→Aralık ve yıl sırasına göre listelensin diye kullanılır. İndex
+   sitesindeki monthOrder() ile aynı mantık. */
+function monthOrderAP(name){
+  const s = String(name||'').toLocaleUpperCase('tr');
+  let mi = -1;
+  AY_ADLARI.forEach((nm,i)=>{ if(mi<0 && s.includes(nm)) mi = i; });
+  const ym = s.match(/(20\d{2})/);
+  const yr = ym ? +ym[1] : 9999;
+  if(mi<0) return yr*100+99;
+  return yr*100+mi;
+}
+function sortedMonthIdx(){
+  return state.months.map((m,i)=>i).sort((a,b)=> monthOrderAP(state.months[a].name)-monthOrderAP(state.months[b].name));
+}
 function refreshMonthSel(){
+  const order = sortedMonthIdx();
   const sel = document.getElementById('monthSel');
-  sel.innerHTML = state.months.map((m,i)=>`<option value="${i}" ${i===state.activeIdx?'selected':''}>${escapeHtml(m.name)}</option>`).join('');
+  sel.innerHTML = order.map(i=>`<option value="${i}" ${i===state.activeIdx?'selected':''}>${escapeHtml(state.months[i].name)}</option>`).join('');
   const exSel = document.getElementById('expExcelMonth');
   if(exSel){
     const prevVal = exSel.value || 'all';
     exSel.innerHTML = '<option value="all">Tüm Aylar</option>' +
-      state.months.map((m,i)=>`<option value="${i}">${escapeHtml(m.name)}</option>`).join('');
+      order.map(i=>`<option value="${i}">${escapeHtml(state.months[i].name)}</option>`).join('');
     const stillValid = prevVal==='all' || state.months[+prevVal];
     exSel.value = stillValid ? prevVal : 'all';
   }
@@ -2661,11 +2678,10 @@ function refreshMonthSel(){
     if(!el) return;
     const pv = el.value || 'all';
     el.innerHTML = '<option value="all">Tüm Aylar</option>' +
-      state.months.map((m,i)=>`<option value="${i}">${escapeHtml(m.name)}</option>`).join('');
+      order.map(i=>`<option value="${i}">${escapeHtml(state.months[i].name)}</option>`).join('');
     el.value = (pv==='all' || state.months[+pv]) ? pv : 'all';
   });
 }
-const AY_ADLARI = ['OCAK','ŞUBAT','MART','NİSAN','MAYIS','HAZİRAN','TEMMUZ','AĞUSTOS','EYLÜL','EKİM','KASIM','ARALIK'];
 function buildMonthTemplate(monthNum /*1-12*/, year, prev){
   // Sütun sayısını ve sahne başlıklarını önceki aydan al
   const cols = prev ? prev.cols : 9;
@@ -2809,7 +2825,7 @@ function renderPrint(){
   let pageNum = 0;
   const pmSel = document.getElementById('printMonthSel');
   const pmVal = pmSel ? pmSel.value : 'all';
-  const printMonths = (pmVal==='all' || !state.months[+pmVal]) ? state.months : [state.months[+pmVal]];
+  const printMonths = (pmVal==='all' || !state.months[+pmVal]) ? sortedMonthIdx().map(i=>state.months[i]) : [state.months[+pmVal]];
   const blocks = printMonths.map(m=>{ pageNum++; return buildBlock(m); });
   wrap.innerHTML = blocks.join('');
   prev.innerHTML = blocks.join('<hr style="margin:14px 0;border:none;border-top:2px dashed var(--border)">');
@@ -2945,7 +2961,7 @@ function exportExcel(){
   const xlsSize = xlsPaper.size;
   const xlsOrient = (xlsPaper.orient === 'portrait') ? 'Portrait' : 'Landscape';
   const XLS_PAPER_INDEX = {A3:8, A4:9, A5:11}[xlsSize] || 9;
-  const months = (selVal === 'all') ? (state.months||[]) : [state.months[+selVal]].filter(Boolean);
+  const months = (selVal === 'all') ? sortedMonthIdx().map(i=>state.months[i]) : [state.months[+selVal]].filter(Boolean);
   if(!months.length){ siteMessage('Aktarılacak ay bulunamadı.','warn','Excel aktarımı'); return; }
   const cfs = findConflicts(months);
   if(cfs.length){
