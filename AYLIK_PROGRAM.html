@@ -240,7 +240,7 @@ table.sheet td.cell.note-mark::after{content:"";position:absolute;top:0;right:0;
 .modal .row{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
 
 /* Tooltip */
-#tooltip{position:fixed;z-index:100000;max-width:min(420px,92vw);max-height:min(80vh,640px);overscroll-behavior:contain;overflow:auto;background:#1a0f0a;color:#fff;padding:10px 12px;border-radius:8px;font-size:12.5px;line-height:1.5;box-shadow:0 10px 34px rgba(0,0,0,.45);display:none;pointer-events:auto;white-space:pre-wrap;overscroll-behavior:contain;font-family:'Manrope',system-ui,sans-serif}
+#tooltip{position:fixed;z-index:100000;max-width:min(420px,92vw);max-height:min(80vh,640px);overscroll-behavior:contain;overflow:auto;background:#1a0f0a;color:#fff;padding:10px 12px;border-radius:8px;font-size:12.5px;line-height:1.5;box-shadow:0 10px 34px rgba(0,0,0,.45);display:none;pointer-events:none;white-space:pre-wrap;overscroll-behavior:contain;font-family:'Manrope',system-ui,sans-serif}
 #tooltip .ttHead{font-weight:700;font-size:13px;margin-bottom:4px}
 #tooltip .ttWarn{color:#ffb4b4;font-weight:700}
 #tooltip .ttOk{color:#b4ffb4;font-weight:700}
@@ -2310,10 +2310,11 @@ function wireCell(td){
 document.addEventListener('mouseup', ()=>{ dragSelecting=false; });
 
 let ttHideTimer=null;
+let __ttMouseX=0, __ttMouseY=0;
 function hideTooltipNow(){
   clearTimeout(ttHideTimer); ttHideTimer=null;
   const tt=document.getElementById('tooltip');
-  if(tt){ tt.style.display='none'; tt.style.pointerEvents='none'; }
+  if(tt){ tt.style.display='none'; }
   window.__ttKey=null;
 }
 function scheduleTooltipHide(){
@@ -2323,18 +2324,35 @@ function scheduleTooltipHide(){
 function cancelTooltipHide(){ clearTimeout(ttHideTimer); ttHideTimer=null; }
 function initTooltipInteraction(){
   const tt=document.getElementById('tooltip');
-  tt.addEventListener('mouseenter', cancelTooltipHide);
-  tt.addEventListener('mouseleave', hideTooltipNow);
-  tt.addEventListener('wheel', e=>{ e.stopPropagation(); }, {passive:true});
-  /* Güvenlik ağı: fare ne bir tablo hücresinde ne de tooltip üzerindeyse kapat. */
+  /* Tooltip artık pointer-events:none — fare olaylarını asla yutmaz, bu yüzden
+     komşu hücrenin üzerine binse bile hücre değişince donuk kalmaz. Uzun
+     içerikte fare tekerleğiyle kaydırma burada elle yönetilir. */
+  document.addEventListener('mousemove', e=>{ __ttMouseX=e.clientX; __ttMouseY=e.clientY; }, true);
+  document.addEventListener('wheel', e=>{
+    if(tt.style.display!=='block') return;
+    const rct = tt.getBoundingClientRect();
+    if(__ttMouseX>=rct.left && __ttMouseX<=rct.right && __ttMouseY>=rct.top && __ttMouseY<=rct.bottom){
+      if(tt.scrollHeight > tt.clientHeight+2){
+        tt.scrollTop += e.deltaY;
+        e.preventDefault();
+      }
+    }
+  }, {passive:false});
+  /* Güvenlik ağı: fare bir tablo hücresinde değilse ve tooltip alanının
+     üzerinde de değilse kapat. */
   document.addEventListener('mousemove', e=>{
     if(tt.style.display!=='block') return;
     const t=e.target;
-    if(t && t.closest && (t.closest('#tooltip') || t.closest('#sheet td.cell'))) return;
+    if(t && t.closest && t.closest('#sheet td.cell')) return;
+    const rct = tt.getBoundingClientRect();
+    if(e.clientX>=rct.left && e.clientX<=rct.right && e.clientY>=rct.top && e.clientY<=rct.bottom) return;
     hideTooltipNow();
   }, true);
   document.addEventListener('mousedown', hideTooltipNow, true);
-  window.addEventListener('scroll', hideTooltipNow, true);
+  /* Sayfa/tablo kaydırılınca tooltip kapansın — ama tooltip'in kendi içeriğini
+     tekerlekle kaydırırken (yukarıdaki scrollTop ataması) bu tetiklenip
+     tooltip'i anında kapatmasın. */
+  window.addEventListener('scroll', e=>{ if(e.target===tt) return; hideTooltipNow(); }, true);
   window.addEventListener('blur', hideTooltipNow);
   document.addEventListener('keydown', e=>{ if(e.key==='Escape') hideTooltipNow(); }, true);
 }
@@ -2364,8 +2382,9 @@ function placeTooltip(ev){
   if(left+r.width>vw-pad) left=mx-16-r.width;
   left=Math.max(pad, Math.min(left, vw-pad-r.width));
   tt.style.left=left+'px'; tt.style.top=top+'px';
-  /* Kaydırma gerekmiyorsa tooltip fareyi yutmasın (başka hücreye geçişte donma olmaz) */
-  tt.style.pointerEvents = (tt.scrollHeight > tt.clientHeight+2) ? 'auto' : 'none';
+  /* Tooltip HER ZAMAN pointer-events:none — komşu hücrelerin üzerine binip
+     fare olaylarını yutmasın, aksi halde hücre değişince tooltip donuk kalır.
+     Uzun içerikte kaydırma, aşağıdaki global wheel dinleyicisiyle elle yapılır. */
 }
 function showTooltipFor(r,c,ev){
   if(window.TOOLTIPS_OFF){ hideTooltipNow(); return; }
