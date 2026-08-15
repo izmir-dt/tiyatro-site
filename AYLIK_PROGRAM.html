@@ -155,6 +155,12 @@ table.sheet td.cell.selected{background:var(--sel);outline:3px solid var(--selBo
 table.sheet td.cell.anchor{outline:4px solid var(--primary);outline-offset:-4px;z-index:3;box-shadow:0 0 0 1px #fff inset}
 table.sheet td.cell[contenteditable=true]{background:#fffbe8;outline:2px solid var(--primary);text-align:left;cursor:text}
 table.sheet td.cell.freetext{font-style:italic;color:#5f5346;font-weight:500}
+table.sheet td.cell.archived{color:#6b6257;opacity:.9}
+table.sheet td.cell.archived::after{content:" \1F5C4";font-size:10px;opacity:.7}
+.pl-arc{margin:6px 2px 10px;border:1px dashed var(--border);border-radius:8px;background:#f7f4ec}
+.pl-arc-h{padding:7px 10px;font-size:12px;font-weight:700;color:var(--muted);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.pl-arc-row{display:flex;align-items:center;gap:8px;padding:5px 10px;border-top:1px solid #eae3d3;flex-wrap:wrap}
+.pl-arc-row .nm{flex:1;min-width:140px;font-size:13px;font-weight:600;color:#6b6257}
 table.sheet td.cell.freetext::before{content:"✎ ";color:var(--accent);font-style:normal}
 #printView .print-month table.sheet td.cell.freetext,.print-month table.sheet td.cell.freetext{font-style:italic}
 .pl-free{margin-bottom:12px}
@@ -275,7 +281,8 @@ table.sheet td.cell.note-mark::after{content:"";position:absolute;top:0;right:0;
 .pl-cat{background:#fff;border:1px solid var(--border);border-radius:8px;margin-bottom:10px;overflow:hidden}
 .pl-cat-h{display:flex;align-items:center;gap:8px;padding:7px 12px;background:#fdfbf6;border-bottom:1px solid var(--border)}
 .pl-crew{display:grid;grid-template-columns:1fr;gap:0}
-.pl-row{display:grid;grid-template-columns:170px 1fr 30px;gap:8px;align-items:center;padding:5px 12px;border-bottom:1px solid #f5efe1}
+.pl-row{display:grid;grid-template-columns:150px 170px 1fr 30px;gap:8px;align-items:center;padding:5px 12px;border-bottom:1px solid #f5efe1}
+.pl-row input.cat{font-weight:700;color:var(--primary);font-size:12px}
 .pl-row:last-child{border-bottom:none}
 .pl-row input{width:100%;border:1px solid transparent;background:transparent;padding:4px 6px;border-radius:5px;font:inherit;font-size:13px}
 .pl-row input:hover{border-color:var(--border);background:#fdfbf6}
@@ -526,6 +533,7 @@ body.fs-on #program .controls{position:sticky;top:0;z-index:40;background:var(--
           <button class="btn ghost small" id="premBtn" title="Prömiyer işareti">Prömiyer &#9733;</button>
           <button class="btn ghost small" id="premLabelBtn" title="Seçili hücreye açıklama metnini yaz: ★ PRÖMİYER (oyun olarak sayılmaz)">&#9733; PRÖMİYER açıklaması</button>
           <button class="btn ghost small" id="freeTextBtn" title="Seçili hücreleri serbest metin/not olarak işaretle — oyun listesine eklenmez">Serbest metin &#9998;</button>
+          <button class="btn ghost small" id="archiveCellBtn" title="Seçili hücreleri arşiv oyun (geçmiş sezon) olarak işaretle — tooltipte kadro gösterilmez, çakışma uyarısı vermez">Arşiv oyun &#128452;</button>
           <button class="btn ghost small" id="cellNoteBtn" title="Seçili hücreye not ekle/düzenle">Not ekle / düzenle</button>
           <button class="btn ghost small" id="catBtn" title="Seçili not/serbest metin hücrelerini kategorile (İl, Sahne, Turne, Prova, Tatil, Duyuru)">Kategori ata</button>
           <div class="mp-sep"></div>
@@ -879,6 +887,7 @@ function loadState(){
       if(!Array.isArray(st.playsExtra)) st.playsExtra = [];
       if(!Array.isArray(st.playsPending)) st.playsPending = [];
       if(!Array.isArray(st.playsIgnored)) st.playsIgnored = [];
+      if(!Array.isArray(st.playsArchived)) st.playsArchived = [];
       if(!st.playNotes || typeof st.playNotes!=='object') st.playNotes = {};
       if(!st.playFreeNotes || typeof st.playFreeNotes!=='object') st.playFreeNotes = {};
       if(!st.monthPub || typeof st.monthPub!=='object') st.monthPub = {};
@@ -902,6 +911,7 @@ function loadState(){
           if(!Array.isArray(bs.playsExtra)) bs.playsExtra=[];
           if(!Array.isArray(bs.playsPending)) bs.playsPending=[];
           if(!Array.isArray(bs.playsIgnored)) bs.playsIgnored=[];
+          if(!Array.isArray(bs.playsArchived)) bs.playsArchived=[];
           if(!bs.playNotes||typeof bs.playNotes!=='object') bs.playNotes={};
           if(!bs.playFreeNotes||typeof bs.playFreeNotes!=='object') bs.playFreeNotes={};
           if(!bs.monthPub||typeof bs.monthPub!=='object') bs.monthPub={};
@@ -924,6 +934,7 @@ function loadState(){
   st.playsExtra = JSON.parse(JSON.stringify(DEFAULT_DATA.plays||[]));
   st.playsPending = [];
   st.playsIgnored = [];
+  st.playsArchived = [];
   st.playNotes = {};
   st.playFreeNotes = {};
   st.monthPub = {};
@@ -1071,7 +1082,7 @@ function findCriticalConflictCell(months){
         const ck = g.row+'_'+g.col;
         if(!conflict.cells.has(ck)) continue;
         const cell = m.cells[ck] || {};
-        if(cell.ignoreConflict) continue;
+        if(cell.ignoreConflict || isArchiveCell(cell)) continue;
         return {month:m.name, key:ck};
       }
     }
@@ -1142,6 +1153,7 @@ async function publishProgram(){
       plays: state.plays || [],
       playsExtra: state.playsExtra || [],
       playsIgnored: state.playsIgnored || [],
+      playsArchived: state.playsArchived || [],
       generalNotes: state.generalNotes || '',
       playNotes: state.playNotes || {},
       playFreeNotes: state.playFreeNotes || {}
@@ -1225,6 +1237,7 @@ async function pushDraft(){
       plays: state.plays || [],
       playsExtra: state.playsExtra || [],
       playsIgnored: state.playsIgnored || [],
+      playsArchived: state.playsArchived || [],
       generalNotes: state.generalNotes || '',
       playNotes: state.playNotes || {},
       playFreeNotes: state.playFreeNotes || {}
@@ -1334,6 +1347,10 @@ async function syncFromServer(){
   for(const {ts, data} of results){
     if(!data || !data.month || !data.month.name) continue;
     noteServerMonthTs(data.month.name, ts);
+    if(Array.isArray(data.playsArchived)){
+      state.playsArchived = state.playsArchived || [];
+      data.playsArchived.forEach(p=>{ if(!state.playsArchived.includes(p)){ state.playsArchived.push(p); __ARC_SET=null; __ARC_SRC=null; } });
+    }
     if(Array.isArray(data.playsIgnored)){
       data.playsIgnored.forEach(p=>{ if(!state.playsIgnored.includes(p)){ state.playsIgnored.push(p); ignoredGrew = true; } });
     }
@@ -1448,6 +1465,10 @@ async function syncDraftFromServer(){
   let ignoredGrew = false;
   for(const {ts, data} of results){
     if(!data || !data.month || !data.month.name) continue;
+    if(Array.isArray(data.playsArchived)){
+      state.playsArchived = state.playsArchived || [];
+      data.playsArchived.forEach(p=>{ if(!state.playsArchived.includes(p)){ state.playsArchived.push(p); __ARC_SET=null; __ARC_SRC=null; } });
+    }
     if(Array.isArray(data.playsIgnored)){
       data.playsIgnored.forEach(p=>{ if(!state.playsIgnored.includes(p)){ state.playsIgnored.push(p); ignoredGrew = true; } });
     }
@@ -1698,6 +1719,79 @@ function isFreeTextValue(v){
   return false;
 }
 function isFreeTextCell(cell){ return !!(cell && (cell.freeText || isFreeTextValue(cell.v))); }
+
+/* === ARŞİV OYUNLAR (geçmiş sezon kayıtları) ===
+   Geçmiş sezonları girerken kullanılan arşiv oyunlar:
+   • oyun listesinde (Oyunlar sekmesi) normal oyunlarla karışmaz — ayrı arşiv
+     bölümünde toplanır,
+   • tooltipte kadro/oyun dökümü gösterilmez,
+   • çakışma (kırmızı) uyarısı üretmez ve kesinleştirmeyi engellemez.
+   İki şekilde işaretlenir: oyun adı bazında (state.playsArchived) veya tek tek
+   hücre bazında (cell.archive). */
+let __ARC_SET = null, __ARC_SRC = null;
+function archivedKeySet(){
+  const list = state.playsArchived || [];
+  if(__ARC_SET && __ARC_SRC === list.join('|')) return __ARC_SET;
+  __ARC_SRC = list.join('|');
+  __ARC_SET = new Set(list.map(x=>normNameKey(parseGame(x).key || x)).filter(Boolean));
+  return __ARC_SET;
+}
+function isArchivedPlayName(name){
+  const k = normNameKey(parseGame(name).key || name);
+  return !!k && archivedKeySet().has(k);
+}
+function isArchiveCell(cell){
+  if(!cell) return false;
+  if(cell.archive) return true;
+  return !!(cell.v && isArchivedPlayName(cell.v));
+}
+function setPlayArchived(name, on){
+  const key = (parseGame(name).key || String(name||'')).trim();
+  if(!key) return;
+  state.playsArchived = state.playsArchived || [];
+  const has = isArchivedPlayName(key);
+  if(on && !has) state.playsArchived.push(key);
+  if(!on) state.playsArchived = state.playsArchived.filter(x=>normNameKey(x)!==normNameKey(key));
+  __ARC_SET = null; __ARC_SRC = null;
+  saveState();
+  try{ renderSheet(); renderPrint(); renderPlays(); renderDataViews(); }catch(e){}
+  setStatus(on ? ('"'+key+'" arşiv oyun olarak işaretlendi — çakışma ve oyun listesine girmez.')
+               : ('"'+key+'" arşivden çıkarıldı.'));
+}
+function archivedPlayCellCount(name){
+  const key = normNameKey(parseGame(name).key || name);
+  let n = 0;
+  (state.months||[]).forEach(m=>{
+    for(const k in (m.cells||{})){
+      const c = m.cells[k];
+      if(c && c.v && normNameKey(parseGame(c.v).key)===key) n++;
+    }
+  });
+  return n;
+}
+/* Seçili hücreleri arşiv oyun yap / arşivden çıkar */
+function opArchiveCell(){
+  const m = curMonth(); snapshot();
+  let anyOff=false;
+  for(let r=sel.r1;r<=sel.r2;r++) for(let c=sel.c1;c<=sel.c2;c++){
+    const cur=m.cells[r+'_'+c];
+    if(cur && cur.v && !cur.archive) anyOff=true;
+  }
+  for(let r=sel.r1;r<=sel.r2;r++) for(let c=sel.c1;c<=sel.c2;c++){
+    const cur=m.cells[r+'_'+c];
+    if(!cur) continue;
+    const n={...cur};
+    if(anyOff){ if(!n.v) continue; n.archive=true; } else delete n.archive;
+    m.cells[r+'_'+c]=n;
+    if(anyOff){
+      const k2=(parseGame(n.v).key||'').trim();
+      if(k2) state.playsPending = (state.playsPending||[]).filter(x=>x!==k2);
+    }
+  }
+  saveState(); renderSheet(); renderPrint(); renderPlays();
+  setStatus(anyOff ? 'Seçili hücreler arşiv oyun olarak işaretlendi (çakışma/oyun listesi dışı).'
+                   : 'Arşiv işareti kaldırıldı.');
+}
 function collectFreeTexts(){
   const out = {};
   (state.months||[]).forEach((m,mi)=>{
@@ -1720,6 +1814,7 @@ function collectShowings(){
       for(const c of programCols(m)){
         const cell=m.cells[r+'_'+c]||{};
         if(!cell.v || isFreeTextCell(cell) || isPremiereLabel(cell.v)) continue;
+        if(isArchiveCell(cell)) continue;   /* arşiv oyun listelerde sayılmaz */
         if(cell.tourReturn) continue;   /* dönüş günü temsil olarak sayılmaz */
         const game=parseGame(cell.v);
         if(!game.key) continue;
@@ -1871,6 +1966,7 @@ function gamesOfRow(m,r){
     }
     if(isPremiereLabel(raw)) continue;
     if(isFreeTextCell(cellObj)) continue;   /* serbest metin/not: oyun sayılmaz */
+    if(isArchiveCell(cellObj)) continue;    /* arşiv oyun: çakışma denetimine girmez */
     const {key, isPremiere} = parseGame(raw);
     if(!key) continue;
     const isReturn = !!cellObj.tourReturn;
@@ -2084,11 +2180,12 @@ function renderSheet(){
       // Turne sütunu: başlık TURNE ise metni kırmızı
       if(r>=2 && stageHeaderText(m,c).includes('TURNE') && cell.v) td.classList.add('turne');
       // Kritik çakışma: bu hücredeki oyun kritik çakışan biri içeriyor mu?
-      if(r>=2 && conflict.hasCritical && (cell.v || cell.tourReturn) && !cell.ignoreConflict &&
+      if(r>=2 && conflict.hasCritical && (cell.v || cell.tourReturn) && !cell.ignoreConflict && !isArchiveCell(cell) &&
          conflict.cells && conflict.cells.has(r+'_'+c)){
         td.classList.add('conflict');
       }
       if(isFreeTextCell(cell) && cell.v){ td.classList.add('freetext'); td.classList.remove('conflict'); }
+      if(isArchiveCell(cell) && cell.v){ td.classList.add('archived'); td.classList.remove('conflict'); }
       const tinfo = r>=2 ? tours.map[r+'_'+c] : null;
       if(tinfo){
         td.dataset.tour = tinfo.g.id;
@@ -2261,6 +2358,14 @@ function showTooltipFor(r,c,ev){
     tt.style.display='block'; placeTooltip(ev); return;
   }
 
+  if(isArchiveCell(cell)){
+    tt.innerHTML = '<div class="ttHead">\uD83D\uDDC4 Arşiv oyun</div>'+escapeHtml(raw)+
+      (cell.note ? '<hr><div><b>Not:</b> '+escapeHtml(cell.note)+'</div>' : '')+
+      (tinfoTT ? tourTooltipHtml(m,tinfoTT) : '')+
+      '<hr><div class="ttOk">Geçmiş sezon kaydı: oyun listesinde ve kadro/çakışma denetiminde sayılmaz.</div>';
+    tt.style.display='block'; placeTooltip(ev); return;
+  }
+
   const {key} = parseGame(raw);
   const games = rowGames(m,r);
   const conflict = games.length>=2 ? buildConflict(games) : {people:{}, hasCritical:false};
@@ -2321,6 +2426,7 @@ function buildOyunDatalist(){
 function registerPlayName(nv, cellObj){
   if(!nv || isPremiereLabel(nv)) return;
   if(isFreeTextCell(cellObj || {v:nv})) return; /* serbest metin oyun listesine düşmez */
+  if(isArchiveCell(cellObj || {v:nv})) return;  /* arşiv oyun: onay listesine düşmez */
   const {key} = parseGame(nv);
   if(!key) return;
   if((state.plays||[]).includes(key)) return; // zaten bilinen/onaylı oyun
@@ -2898,6 +3004,7 @@ function showCtx(x,y,kind){
       ['Rengi Temizle', opClearFormat],
       ['⚠️ Çakışmayı yok say (aç/kapat)', opIgnoreConflict],
       ['✎ Serbest metin / not hücresi (aç/kapat)', opFreeText],
+      ['\uD83D\uDDC4 Arşiv oyun hücresi (aç/kapat)', opArchiveCell],
       ['---'],
       ['🚌 Turneye bağla', opLinkTour],
       ['🚌 Turne bağını kaldır', opUnlinkTour],
@@ -3323,7 +3430,7 @@ function renderPrint(){
         if(cell.underline) clist.push('uline');
         if((cell.v||'').trim().startsWith('*') && !isPremiereLabel(cell.v)) clist.push('premiere');
         if(r>=2 && stageHeaderText(m,c).includes('TURNE') && cell.v) clist.push('turne');
-        if(r>=2 && conflict.hasCritical && (cell.v || cell.tourReturn) && !cell.ignoreConflict &&
+        if(r>=2 && conflict.hasCritical && (cell.v || cell.tourReturn) && !cell.ignoreConflict && !isArchiveCell(cell) &&
            conflict.cells && conflict.cells.has(r+'_'+c)){
           clist.push('conflict');
         }
@@ -3480,7 +3587,7 @@ function findConflicts(months){
         if(!cf.cells.has(ck)) continue;
         if(g.row !== r) continue;
         const cell = m.cells[ck] || {};
-        if(cell.ignoreConflict) continue;
+        if(cell.ignoreConflict || isArchiveCell(cell)) continue;
         const crew = crewOf(g.key) || {};
         const people = Object.entries(cf.people)
           .filter(([pp,info]) => info.critical && crew[pp] && crew[pp].critical)
@@ -3537,7 +3644,7 @@ function exportExcel(){
     const headerish = r===0 || r===1 || isMondayRow(m,r); /* sadece başlık satırları ve PAZARTESİ boyanır */
     const isPrem = !!cell.premiere || ((cell.v||'').trim().startsWith('*') && !isPremiereLabel(cell.v));
     let isConflict = false;
-    if(r>=2 && conflict.hasCritical && cell.v && !cell.ignoreConflict &&
+    if(r>=2 && conflict.hasCritical && cell.v && !cell.ignoreConflict && !isArchiveCell(cell) &&
        conflict.cells && conflict.cells.has(r+'_'+c)){
       isConflict = true;
     }
@@ -3636,6 +3743,7 @@ function playOccurrenceList(play){
     for(const k in (m.cells||{})){
       const c = m.cells[k];
       if(!c || !c.v || isFreeTextCell(c)) continue;
+      if(c.archive) continue;   /* arşiv işaretli hücre gösterim sayılmaz */
       if(parseGame(c.v).key !== key) continue;
       const [r,cc] = k.split('_').map(Number);
       out.push({mi, month:m.name, r, c:cc, key:k, date:dateTextOfRow(m,r), time:timeTextOfRow(m,r), stage:stageHeaderText(m,cc), note:c.note||''});
@@ -3661,7 +3769,8 @@ function renderPlays(filter){
   if(filter !== undefined) playFilter = filter;
   const q = (playFilter||'').toLocaleLowerCase('tr');
   const byPlay = crewByPlay();
-  const allPlays = (state.plays||[]).slice().sort((a,b)=>a.localeCompare(b,'tr'));
+  const archivedPlays = (state.plays||[]).filter(p=>isArchivedPlayName(p)).sort((a,b)=>a.localeCompare(b,'tr'));
+  const allPlays = (state.plays||[]).filter(p=>!isArchivedPlayName(p)).sort((a,b)=>a.localeCompare(b,'tr'));
   const plays = allPlays.filter(p=>{
     if(!q) return true;
     if(p.toLocaleLowerCase('tr').includes(q)) return true;
@@ -3725,6 +3834,26 @@ function renderPlays(filter){
     pendBox.querySelectorAll('[data-dismiss]').forEach(b=>{ b.onclick = ()=>dismissPendingPlay(b.dataset.dismiss); });
     pendBox.querySelectorAll('[data-free]').forEach(b=>{ b.onclick = ()=>markAllAsFreeText(b.dataset.free); });
   }
+  /* Arşiv oyunlar: geçmiş sezon kayıtları — ana oyun listesinde görünmez */
+  let arcBox = document.getElementById('plArchive');
+  if(!arcBox && pendBox && pendBox.parentNode){
+    arcBox = document.createElement('div'); arcBox.id = 'plArchive';
+    pendBox.parentNode.insertBefore(arcBox, pendBox.nextSibling);
+  }
+  if(arcBox){
+    arcBox.innerHTML = archivedPlays.length ? `
+      <div class="pl-arc">
+        <div class="pl-arc-h">\uD83D\uDDC4 ${archivedPlays.length} arşiv oyun — tooltipte kadro gösterilmez, çakışma uyarısı vermez</div>
+        ${archivedPlays.map(n=>`
+          <div class="pl-arc-row">
+            <span class="nm">${escapeHtml(n)}</span>
+            <span class="wh" style="font-size:11px;color:var(--muted)">${archivedPlayCellCount(n)} hücre</span>
+            <button class="btn ghost small" data-arcoff="${escapeHtml(n)}">Arşivden çıkar</button>
+          </div>`).join('')}
+      </div>` : '';
+    arcBox.querySelectorAll('[data-arcoff]').forEach(b=>{ b.onclick = ()=>setPlayArchived(b.dataset.arcoff, false); });
+  }
+
   /* Serbest metinler: oyun sayılmayan hücre metinleri (il adı, açıklama, not vb.) */
   const freeBox = document.getElementById('plFree');
   if(freeBox){
@@ -3837,6 +3966,7 @@ function renderPlayDetail(byPlay){
       </div>
       <div class="tools">
         <button class="btn ghost small" id="plRename">Adı Kaydet</button>
+        <button class="btn ghost small" id="plArchiveBtn" title="Arşiv oyunlar oyun listesinde ayrı tutulur; tooltipte kadro gösterilmez ve çakışma uyarısı vermez">${isArchivedPlayName(p)?'\uD83D\uDDC4 Arşivden çıkar':'\uD83D\uDDC4 Arşive al'}</button>
         <button class="btn ghost small" id="plCopy">Kadroyu Kopyala</button>
         <button class="btn ghost small" id="plDelete">Oyunu Sil</button>
       </div>
@@ -3854,6 +3984,7 @@ function renderPlayDetail(byPlay){
           <div class="pl-crew">
             ${byCat[cat].map(c=>`
               <div class="pl-row">
+                <input class="cat" value="${escapeHtml(c.category||'')}" placeholder="Ünvan / kategori" list="kategoriList" data-idx="${c._idx}" data-f="category" title="Ünvan / kategori (Oyuncu, Figüran, Işık…) — değiştirebilirsiniz">
                 <input class="role" value="${escapeHtml(c.role||'')}" placeholder="Görev / rol" data-idx="${c._idx}" data-f="role">
                 <input value="${escapeHtml(c.person||'')}" placeholder="Ad Soyad" list="kisiList" data-idx="${c._idx}" data-f="person">
                 <button class="x" data-del="${c._idx}" title="Kaydı sil">✕</button>
@@ -3939,6 +4070,8 @@ function renderPlayDetail(byPlay){
   nameEl.onblur=saveName;
   nameEl.onkeydown=e=>{ if(e.key==='Enter'){e.preventDefault();nameEl.blur();} if(e.key==='Escape'){nameEl.textContent=p;nameEl.blur();} };
   document.getElementById('plRename').onclick=saveName;
+  { const ab=document.getElementById('plArchiveBtn');
+    if(ab) ab.onclick=()=>{ setPlayArchived(p, !isArchivedPlayName(p)); }; }
   const noteEl=document.getElementById('plNote');
   const saveNote=()=>{
     state.playNotes=state.playNotes||{};
@@ -4147,6 +4280,7 @@ document.getElementById('unmergeBtn').onclick = opUnmerge;
 document.getElementById('premBtn').onclick = opPremiere;
 document.getElementById('clearBtn').onclick = opClear;
 document.getElementById('freeTextBtn').onclick = opFreeText;
+{ const ab=document.getElementById('archiveCellBtn'); if(ab) ab.onclick = opArchiveCell; }
 document.getElementById('cellNoteBtn').onclick = opCellNote;
 document.getElementById('bgColorBtn').onclick = ()=>{
   const p=document.getElementById('bgColorPicker');
