@@ -258,6 +258,9 @@ table.sheet td.cell.note-mark::after{content:"";position:absolute;top:0;right:0;
 #tooltip .ttWarn{color:#ffb4b4;font-weight:700}
 #tooltip .ttOk{color:#b4ffb4;font-weight:700}
 #tooltip .ttGame{color:#ffd400}
+#tooltip .ttActions{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+#tooltip .ttBtn{cursor:pointer;border:1px solid rgba(255,255,255,.35);background:rgba(255,255,255,.08);color:#fff;border-radius:6px;padding:4px 8px;font-size:11.5px;font-family:inherit;line-height:1.3}
+#tooltip .ttBtn:hover{background:rgba(255,255,255,.2)}
 #tooltip hr{border:none;border-top:1px solid #444;margin:6px 0}
 
 /* ===== Oyunlar & Oyuncular (yeni tasarım) ===== */
@@ -696,7 +699,7 @@ body.fs-on #program .controls{position:sticky;top:0;z-index:40;background:var(--
   <details class="shortcuts">
     <summary>Kısayollar ve ipuçları</summary>
     <div class="sc-body">
-      Tıkla → seç · Shift+Tıkla → aralık · Çift tıkla → yaz · Enter/Esc · Delete → temizle · Ctrl+C/V · Ctrl+Z/Y · Sağ tık → menü · F8 → sonraki çakışma · Oyunun üzerine gel → çakışma bilgisi · <b>Serbest metin ✎</b> → hücreyi oyun sayma (il adı, açıklama, not) · <b>Not ekle</b> → oyunun yanına not · <b>🏷 Kategori</b> → notu sınıflandır (İl, Sahne, Turne, Prova, Tatil, Duyuru)
+      Tıkla → seç · Shift+Tıkla → aralık · Çift tıkla → yaz · Enter/Esc · Delete → temizle · Ctrl+C/V · Ctrl+Z/Y · Sağ tık → menü · F8 → sonraki çakışma · Oyunun üzerine gel → çakışma bilgisi · <b>Serbest metin ✎</b> → hücreyi oyun sayma (il adı, açıklama, not) · Onay bekleyen metnin üzerine gel → tooltipten doğrudan <b>Oyun olarak ekle / Serbest metin yap / Oyun değil</b> · <b>Not ekle</b> → oyunun yanına not · <b>🏷 Kategori</b> → notu sınıflandır (İl, Sahne, Turne, Prova, Tatil, Duyuru) · Satırı tam seçip (sıra no'ya tıkla) <b>Zemin rengi</b> uygula → soldaki sıra no hücresi de boyanır
     </div>
   </details>
 </section>
@@ -990,6 +993,7 @@ function normalizeMonth(m){
   }
   const out = {name:m.name, rows:m.rows, cols:m.cols, cells, merges:(m.merges||[]).map(x=>x.slice())};
   if(m.siteNote) out.siteNote = m.siteNote;
+  if(m.rowBg) out.rowBg = {...m.rowBg};
   return out;
 }
 const BKKEY = LSKEY + '_backups';
@@ -2213,6 +2217,7 @@ function renderSheet(){
 
     const rh=document.createElement('td'); rh.className='rowh'; rh.textContent=(r+1);
     rh.dataset.r=r; rh.tabIndex=0; rh.setAttribute('role','rowheader'); rh.setAttribute('aria-label',(r+1)+' satırını seç');
+    if(m.rowBg && m.rowBg[r]) rh.style.background = m.rowBg[r];
     rh.addEventListener('click',()=>{ setSel(r,0,r,m.cols-1); });
     rh.addEventListener('contextmenu',e=>{e.preventDefault(); setSel(r,0,r,m.cols-1); showCtx(e.clientX,e.clientY,'row');});
     tr.appendChild(rh);
@@ -2513,9 +2518,33 @@ function showTooltipFor(r,c,ev){
   if(cell.note){ html += '<hr><div><b>Not:</b> '+escapeHtml(cell.note)+'</div>'; }
   if(tinfoTT) html += tourTooltipHtml(m,tinfoTT);
 
+  /* Onay bekleyen (repertuvarda olmayan) metin: tooltip üzerinden doğrudan
+     "Serbest metin yap" / "Oyun olarak ekle" / "Oyun değil" seçilebilsin. */
+  const isPendingCell = key && (state.playsPending||[]).includes(key);
+  if(isPendingCell){
+    html += '<hr><div class="ttWarn">⏳ Bu metin henüz oyun olarak onaylanmadı.</div>'+
+      '<div class="ttActions">'+
+      '<button type="button" class="ttBtn" data-ttact="confirm" data-ttkey="'+escapeHtml(key)+'">✓ Oyun olarak ekle</button>'+
+      '<button type="button" class="ttBtn" data-ttact="free" data-ttkey="'+escapeHtml(key)+'">✎ Serbest metin yap</button>'+
+      '<button type="button" class="ttBtn" data-ttact="dismiss" data-ttkey="'+escapeHtml(key)+'">✕ Oyun değil</button>'+
+      '</div>';
+  }
+
   tt.innerHTML = html;
   tt.style.display='block';
   placeTooltip(ev);
+  if(isPendingCell){
+    tt.querySelectorAll('[data-ttact]').forEach(b=>{
+      b.onclick = (e)=>{
+        e.stopPropagation();
+        const k = b.dataset.ttkey;
+        if(b.dataset.ttact==='confirm') confirmPendingPlay(k);
+        else if(b.dataset.ttact==='free') markAllAsFreeText(k);
+        else if(b.dataset.ttact==='dismiss') dismissPendingPlay(k);
+        hideTooltipNow();
+      };
+    });
+  }
 }
 
 function buildOyunDatalist(){
@@ -2875,6 +2904,15 @@ function shiftCells(m, kind, at, delta){
     }
     return [r1,c1,r2,c2];
   }).filter(Boolean);
+  if(kind==='row' && m.rowBg){
+    const nrb = {};
+    for(const rk in m.rowBg){
+      const r = Number(rk);
+      if(delta>0){ nrb[r>=at ? r+1 : r] = m.rowBg[rk]; }
+      else { if(r===at) continue; nrb[r>at ? r-1 : r] = m.rowBg[rk]; }
+    }
+    m.rowBg = nrb;
+  }
 }
 function opInsertRow(pos){
   const m = curMonth(); snapshot();
@@ -3030,6 +3068,12 @@ function applyCellsProp(prop, value){
   for(const k of selKeys(m)){
     m.cells[k] = {...(m.cells[k]||{v:''}), [prop]: value};
   }
+  /* Seçim tüm satır genişliğini kapsıyorsa (satır no'ya tıklayıp seçmek gibi),
+     soldaki numaratik sıra hücresini de aynı zemin rengiyle boya. */
+  if(prop==='bg' && sel.c1===0 && sel.c2===m.cols-1){
+    m.rowBg = m.rowBg || {};
+    for(let r=sel.r1;r<=sel.r2;r++) m.rowBg[r] = value;
+  }
   saveState(); renderSheet(); renderPrint();
 }
 function applyBg(color){ applyCellsProp('bg', color); }
@@ -3068,6 +3112,9 @@ function opClearFormat(){
     if(!cur) continue;
     const {bg,color,bold,underline,align, ...rest} = cur;
     m.cells[k] = rest;
+  }
+  if(sel.c1===0 && sel.c2===m.cols-1 && m.rowBg){
+    for(let r=sel.r1;r<=sel.r2;r++) delete m.rowBg[r];
   }
   saveState(); renderSheet(); renderPrint();
 }
