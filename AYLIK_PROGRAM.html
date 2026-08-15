@@ -26,6 +26,9 @@ header h1{margin:0;font-family:'Fraunces',Georgia,serif;font-size:20px;font-weig
 nav{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto}
 nav button{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.35);padding:6px 12px;border-radius:6px;cursor:pointer;font-size:13px;font-family:inherit}
 nav button.active{background:var(--accent);border-color:var(--accent)}
+#cbTip{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.35);padding:6px 12px;border-radius:6px;cursor:pointer;font-size:13px;font-family:inherit}
+#cbTip[aria-pressed=false]{background:rgba(0,0,0,.25);opacity:.8}
+@media print{#ttToggleWrap{display:none !important}}
 .tabBadge{display:inline-block;margin-left:6px;background:#ffd645;color:#3a2900;font-size:11px;font-weight:700;border-radius:10px;padding:1px 7px;vertical-align:middle}
 main{padding:12px 18px 40px}
 section{display:none}
@@ -420,6 +423,9 @@ body.fs-on #program .controls{position:sticky;top:0;z-index:40;background:var(--
     <button type="button" role="tab" aria-selected="false" aria-controls="notes" data-tab="notes">Serbest Notlar<span id="notesBadge" class="tabBadge" style="display:none"></span></button>
     <button type="button" role="tab" aria-selected="false" aria-controls="print" data-tab="print">Yatay Yazdır</button>
   </nav>
+  <div id="ttToggleWrap" style="display:flex">
+    <button type="button" id="cbTip" aria-pressed="true" title="Hücre üzerine gelince çıkan çakışma balonunu aç/kapat (T)">💬 Tooltip: Açık</button>
+  </div>
 </header>
 
 <main>
@@ -1848,11 +1854,17 @@ function buildConflict(games){
     const slots = {};
     for(const x of list){ const t = x.g.time || ''; (slots[t] = slots[t] || []).push(x); }
     let crit = 0, isCrit = false; const critCells = [];
-    const hasRet = list.some(x=>x.g.isReturn);
-    if(hasRet && distinct.size>=2){
-      /* Turne dönüş günü: ortak kadro varsa saat/rol ayrımı gözetmeksizin çakışmadır */
-      isCrit = true; crit = Math.max(crit, distinct.size);
-      list.forEach(x=>critCells.push(x.g.row+'_'+x.g.col));
+    /* Turne dönüş günü: yalnızca KRİTİK kadro (Oyuncu/Figüran) için saat/rol
+       ayrımı gözetmeksizin çakışmadır. Kritik olmayan ortak kişiler (ışık, ses,
+       teknik vb.) yeşil kalır — kırmızıya döndürülmez. */
+    const critList = list.filter(x=>x.rec && x.rec.critical);
+    const hasRetCrit = critList.some(x=>x.g.isReturn);
+    if(hasRetCrit){
+      const critKeys = new Set(critList.map(x=>x.g.ckey||x.g.key));
+      if(critKeys.size>=2){
+        isCrit = true; crit = Math.max(crit, critKeys.size);
+        critList.forEach(x=>critCells.push(x.g.row+'_'+x.g.col));
+      }
     }
     for(const t in slots){
       const cl = slots[t].filter(x=>x.rec.critical);
@@ -2157,6 +2169,7 @@ function placeTooltip(ev){
   tt.style.left=left+'px'; tt.style.top=top+'px';
 }
 function showTooltipFor(r,c,ev){
+  if(window.TOOLTIPS_OFF){ const t0=document.getElementById('tooltip'); if(t0) t0.style.display='none'; return; }
   cancelTooltipHide();
   const m = curMonth();
   const cell = m.cells[r+'_'+c] || {};
@@ -4376,5 +4389,36 @@ syncFromServer().then(()=>syncDraftFromServer());
 })();
 </script>
 
+
+<script>
+/* ===== Çakışma/bilgi tooltip'i aç-kapat ===== */
+(function(){
+  try{ window.TOOLTIPS_OFF = localStorage.getItem('ttOff')==='1'; }catch(e){ window.TOOLTIPS_OFF=false; }
+  function paint(btn){
+    if(!btn) return;
+    btn.setAttribute('aria-pressed', window.TOOLTIPS_OFF ? 'false' : 'true');
+    btn.textContent = window.TOOLTIPS_OFF ? '💬 Tooltip: Kapalı' : '💬 Tooltip: Açık';
+  }
+  function toggle(){
+    window.TOOLTIPS_OFF = !window.TOOLTIPS_OFF;
+    try{ localStorage.setItem('ttOff', window.TOOLTIPS_OFF?'1':'0'); }catch(e){}
+    var tt=document.getElementById('tooltip'); if(tt && window.TOOLTIPS_OFF) tt.style.display='none';
+    paint(document.getElementById('cbTip'));
+  }
+  window.toggleTooltips = toggle;
+  function init(){
+    var btn=document.getElementById('cbTip');
+    if(btn){ paint(btn); btn.addEventListener('click', toggle); }
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', init); else init();
+  document.addEventListener('keydown', function(e){
+    if(e.key!=='t' && e.key!=='T') return;
+    if(e.ctrlKey||e.metaKey||e.altKey) return;
+    var a=document.activeElement;
+    if(a && (a.tagName==='INPUT'||a.tagName==='TEXTAREA'||a.isContentEditable)) return;
+    toggle();
+  });
+})();
+</script>
 </body>
 </html>
