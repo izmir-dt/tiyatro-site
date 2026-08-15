@@ -424,7 +424,7 @@ body.fs-on #program .controls{position:sticky;top:0;z-index:40;background:var(--
     <button type="button" role="tab" aria-selected="false" aria-controls="print" data-tab="print">Yatay Yazdır</button>
   </nav>
   <div id="ttToggleWrap" style="display:flex">
-    <button type="button" id="cbTip" aria-pressed="true" title="Hücre üzerine gelince çıkan çakışma balonunu aç/kapat (T)">💬 Tooltip: Açık</button>
+    <button type="button" id="cbTip" aria-pressed="true" title="Hücre üzerine gelince çıkan bilgi balonunu aç/kapat (T)">💬 Bilgi Balonu: Açık</button>
   </div>
 </header>
 
@@ -1896,6 +1896,7 @@ function buildConflict(games){
 function tourColsOf(m){ return programCols(m).filter(c=>stageHeaderText(m,c).includes('TURNE')); }
 function isTourHeadCell(cell){
   if(!cell || !cell.v) return false;
+  if(cell.noTour) return false;      /* bağı elle kaldırılmış başlık: yeniden gruplanmaz */
   if(cell.tourHead) return true;
   if(cell.tourId) return false;
   return isFreeTextCell(cell);
@@ -2463,12 +2464,12 @@ function opLinkTour(){
   snapshot();
   const id='t'+Date.now().toString(36)+Math.floor(Math.random()*1000);
   const head={...(m.cells[headR+'_'+c]||{v:''})};
-  head.tourId=id; head.tourHead=true; head.freeText=true;
+  head.tourId=id; head.tourHead=true; head.freeText=true; delete head.noTour;
   m.cells[headR+'_'+c]=head;
   let n=0;
   for(let r=Math.max(sel.r1,headR+1);r<=sel.r2;r++){
     const cell=m.cells[r+'_'+c]; if(!cell||!cell.v) continue;
-    const nn={...cell}; nn.tourId=id; delete nn.tourHead;
+    const nn={...cell}; nn.tourId=id; delete nn.tourHead; delete nn.noTour;
     m.cells[r+'_'+c]=nn; n++;
   }
   saveState(); renderSheet(); renderPrint();
@@ -2476,21 +2477,40 @@ function opLinkTour(){
 }
 function opUnlinkTour(){
   const m=curMonth();
-  const ids=new Set();
+  const ids=new Set();          /* kilitli (elle bağlanmış) turneler */
+  const headKeys=new Set();     /* otomatik gruplanan turnelerin başlık hücreleri */
+  const cellKeys=new Set();     /* temizlenecek tek tek hücreler */
+  const tinfo = (typeof computeTours==='function') ? computeTours(m) : {map:{}};
   for(let r=sel.r1;r<=sel.r2;r++) for(let c=sel.c1;c<=sel.c2;c++){
-    const cell=m.cells[r+'_'+c]; if(cell&&cell.tourId) ids.add(cell.tourId);
+    const k=r+'_'+c, cell=m.cells[k];
+    if(cell&&cell.tourId){ ids.add(cell.tourId); continue; }
+    const hit = tinfo.map && tinfo.map[k];
+    if(hit && hit.g){
+      if(hit.g.locked && hit.g.id){ ids.add(hit.g.id); }
+      else {
+        headKeys.add(hit.g.headKey);
+        cellKeys.add(hit.g.headKey);
+        (hit.g.members||[]).forEach(x=>cellKeys.add(x.key));
+      }
+    }
   }
-  if(!ids.size){ setStatus('Seçimde kilitli turne bağı yok.'); return; }
+  if(!ids.size && !cellKeys.size){ setStatus('Seçimde turne bağı bulunamadı.'); return; }
   snapshot();
   let n=0;
+  const strip=(k,isHead)=>{
+    const cell=m.cells[k]; if(!cell) return;
+    const nn={...cell};
+    delete nn.tourId; delete nn.tourHead; delete nn.tourReturn;
+    if(isHead) nn.noTour=true; else delete nn.noTour;
+    m.cells[k]=nn; n++;
+  };
   Object.keys(m.cells).forEach(k=>{
     const cell=m.cells[k];
-    if(cell&&cell.tourId&&ids.has(cell.tourId)){
-      const nn={...cell}; delete nn.tourId; delete nn.tourHead; delete nn.tourReturn;
-      m.cells[k]=nn; n++;
-    }
+    if(cell&&cell.tourId&&ids.has(cell.tourId)) strip(k, !!cell.tourHead);
   });
-  saveState(); renderSheet(); renderPrint();
+  cellKeys.forEach(k=>strip(k, headKeys.has(k)));
+  saveState(); renderSheet(); renderPrint(); renderPlays();
+  if(typeof refreshConflictBar==='function') refreshConflictBar();
   setStatus('Turne bağı kaldırıldı ('+n+' hücre).');
 }
 function opTourReturn(){
@@ -4397,7 +4417,7 @@ syncFromServer().then(()=>syncDraftFromServer());
   function paint(btn){
     if(!btn) return;
     btn.setAttribute('aria-pressed', window.TOOLTIPS_OFF ? 'false' : 'true');
-    btn.textContent = window.TOOLTIPS_OFF ? '💬 Tooltip: Kapalı' : '💬 Tooltip: Açık';
+    btn.textContent = window.TOOLTIPS_OFF ? '💬 Bilgi Balonu: Kapalı' : '💬 Bilgi Balonu: Açık';
   }
   function toggle(){
     window.TOOLTIPS_OFF = !window.TOOLTIPS_OFF;
