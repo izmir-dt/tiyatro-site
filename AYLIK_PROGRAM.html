@@ -133,7 +133,10 @@ table.sheet td.cell.tour-member{padding-left:18px}
 table.sheet td.cell.tour-first{box-shadow:inset 3px 0 0 rgba(208,0,0,.55),inset 0 3px 0 rgba(208,0,0,.32)}
 table.sheet td.cell.tour-last{box-shadow:inset 3px 0 0 rgba(208,0,0,.55),inset 0 -3px 0 rgba(208,0,0,.32)}
 table.sheet td.cell.tour-hl{background:#fff1ec !important}
-table.sheet td.cell.tour-return::after{content:" ↩ dönüş";font-size:10px;font-style:normal;font-weight:600;color:#b23018;opacity:.9}
+table.sheet td.cell.tour-return{background:#ffe9e2 !important;box-shadow:inset 3px 0 0 #b23018,inset 0 -3px 0 #b23018 !important}
+table.sheet td.cell.tour-return::after{content:" ↩ dönüş";font-size:10px;font-style:normal;font-weight:700;color:#b23018;opacity:1;white-space:nowrap}
+table.sheet td.cell.tour-return.tour-empty{min-height:18px}
+table.sheet td.cell.tour-return.tour-empty::after{content:"↩ dönüş günü"}
 .tourSum{display:block;font-size:10px;font-weight:600;font-style:normal;color:#8a6a1f;letter-spacing:.2px;line-height:1.25}
 #printView .print-month table.sheet td.cell.tour-member,.print-month table.sheet td.cell.tour-member{padding-left:12px;border-left:2px solid #d00000 !important}
 #printView .print-month table.sheet td.cell.tour-head,.print-month table.sheet td.cell.tour-head{border-left:2px solid #d00000 !important;font-weight:700 !important}
@@ -1659,6 +1662,7 @@ function collectShowings(){
       for(const c of programCols(m)){
         const cell=m.cells[r+'_'+c]||{};
         if(!cell.v || isFreeTextCell(cell) || isPremiereLabel(cell.v)) continue;
+        if(cell.tourReturn) continue;   /* dönüş günü temsil olarak sayılmaz */
         const game=parseGame(cell.v);
         if(!game.key) continue;
         out.push({
@@ -1797,7 +1801,8 @@ function gamesOfRow(m,r){
     if(isFreeTextCell(cellObj)) continue;   /* serbest metin/not: oyun sayılmaz */
     const {key, isPremiere} = parseGame(raw);
     if(!key) continue;
-    out.push({raw, key, isPremiere, col:c, row:r, time:gameTimeOf(m,r,raw)});
+    const isReturn = !!cellObj.tourReturn;
+    out.push({raw, key, isPremiere, col:c, row:r, time:gameTimeOf(m,r,raw), isReturn, ckey:(isReturn? key+' ↩dönüş' : key)});
   }
   return out;
 }
@@ -1824,14 +1829,14 @@ function buildConflict(games){
   let hasCritical = false;
   for(const p in byPerson){
     const list = byPerson[p];
-    const distinct = new Set(list.map(x=>x.g.key));
+    const distinct = new Set(list.map(x=>x.g.ckey||x.g.key));
     if(distinct.size < 2) continue;           /* aynı oyun tekrarı çakışma değil */
     const slots = {};
     for(const x of list){ const t = x.g.time || ''; (slots[t] = slots[t] || []).push(x); }
     let crit = 0, isCrit = false; const critCells = [];
     for(const t in slots){
       const cl = slots[t].filter(x=>x.rec.critical);
-      const keys = new Set(cl.map(x=>x.g.key));
+      const keys = new Set(cl.map(x=>x.g.ckey||x.g.key));
       if(keys.size >= 2){
         isCrit = true; crit = Math.max(crit, keys.size);
         cl.forEach(x=>critCells.push(x.g.row+'_'+x.g.col));
@@ -1865,7 +1870,14 @@ function computeTours(m){
         if(cell.tourReturn) g.returnKey=k;
         map[k]={g,role:'member'}; cur=g; continue;
       }
-      if(!v){ cur=null; continue; }
+      if(!v){
+        if(cur && cell && cell.tourReturn){
+          cur.members.push({r,c,key:k,cell});
+          cur.returnKey=k; map[k]={g:cur,role:'member'};
+          continue;
+        }
+        cur=null; continue;
+      }
       if(isTourHeadCell(cell)){
         cur={id:(cell.tourId||('auto_'+c+'_'+r)), col:c, headKey:k, headRow:r, headText:v, members:[], returnKey:null, locked:!!cell.tourId};
         groups.push(cur); byId[cur.id]=cur; map[k]={g:cur,role:'head'};
@@ -1899,7 +1911,7 @@ function tourSummary(m,g){
   if(a===b) dates=a;
   else if(a.split(' ')[1] && a.split(' ')[1]===b.split(' ')[1]) dates=a.split(' ')[0]+'–'+b;
   else dates=a+' – '+b;
-  const n=new Set(g.members.map(x=>parseGame(x.cell.v).key||x.cell.v)).size;
+  const n=new Set(g.members.filter(x=>!(x.cell&&x.cell.tourReturn)&&String((x.cell&&x.cell.v)||'').trim()).map(x=>parseGame(x.cell.v).key||x.cell.v)).size;
   return n+' oyun · '+dates;
 }
 function tourAt(m,r,c){
@@ -1995,6 +2007,10 @@ function renderSheet(){
           if(r===Math.max.apply(null,rws)) td.classList.add('tour-last');
           if(cell.tourReturn) td.classList.add('tour-return');
         }
+      }
+      if(r>=2 && cell.tourReturn){
+        td.classList.add('tour-return');
+        if(!String(cell.v||'').trim()) td.classList.add('tour-empty');
       }
       if(cell.cat){ td.setAttribute('data-cat', cell.cat); td.title = (td.title?td.title+' · ':'') + 'Kategori: ' + cell.cat; }
       if(cell.ignoreConflict) td.classList.add('noconf');
@@ -2419,10 +2435,9 @@ function opUnlinkTour(){
   setStatus('Turne bağı kaldırıldı ('+n+' hücre).');
 }
 function opTourReturn(){
-  const m=curMonth(), k=sel.r1+'_'+sel.c1, cell=m.cells[k];
-  if(!cell||!cell.v){ setStatus('Dönüş günü için dolu bir hücre seç.'); return; }
+  const m=curMonth(), k=sel.r1+'_'+sel.c1, cell=m.cells[k]||{v:''};
   snapshot();
-  const nn={...cell};
+  const nn={...cell}; if(nn.v===undefined) nn.v='';
   if(nn.tourReturn) delete nn.tourReturn; else nn.tourReturn=true;
   m.cells[k]=nn;
   saveState(); renderSheet(); renderPrint();
@@ -3193,6 +3208,10 @@ function renderPrint(){
             if(r===Math.max.apply(null,rws)) clist.push('tour-last');
             if(cell.tourReturn) clist.push('tour-return');
           }
+        }
+        if(r>=2 && cell.tourReturn){
+          if(clist.indexOf('tour-return')<0) clist.push('tour-return');
+          if(!String(cell.v||'').trim()) clist.push('tour-empty');
         }
         const rs = mm?` rowspan="${mm[2]-mm[0]+1}"`:''; const cs = mm?` colspan="${mm[3]-mm[1]+1}"`:'';
         const styleAttr = cellStyleString(cell); const st = styleAttr?` style="${styleAttr}"`:'';
