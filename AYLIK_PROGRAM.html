@@ -1144,6 +1144,32 @@ function utf8ToB64(text){
   for(let i=0;i<bytes.length;i+=0x8000) bin += String.fromCharCode(...bytes.subarray(i,i+0x8000));
   return btoa(bin);
 }
+/* Belirtilen öneklerle (ör. "apub_ay_", "adraft_ay_") başlayan satırları
+   sunucudan siler. Her denemede TAZE veri okunur ("fresh=1": sunucu
+   tarafındaki kısa süreli önbelleği atlar); bir DELETE başarısız olursa
+   (ör. başka bir bilgisayarın eş zamanlı yazması yüzünden satır index'i
+   kaymışsa) sheet yeniden taze okunup kalan eşleşen satırlar bulunarak
+   tekrar denenir. Böylece geçici uyumsuzluklarda kullanıcıya "eski yayın
+   temizlenemedi" hatası göstermek yerine işlem kendi kendine toparlanır. */
+async function deleteRowsByPrefixes(prefixes, actionLabel){
+  const MAX_ATTEMPTS = 3;
+  for(let attempt=1; attempt<=MAX_ATTEMPTS; attempt++){
+    const res = await fetch(PUBLISH_API + '/' + encodeURIComponent(PUBLISH_SHEET) + '?fresh=1', {cache:'no-store'});
+    const data = res.ok ? await res.json() : {rows:[]};
+    const rows = (data.rows || [])
+      .map((r,i)=>({r,i}))
+      .filter(x=>prefixes.some(p=>String(x.r[0]||'').startsWith(p)))
+      .sort((a,b)=>b.i-a.i);
+    if(!rows.length) return; /* silinecek bir şey kalmadı */
+    let failed = false;
+    for(const item of rows){
+      const del = await fetch(PUBLISH_API + '/' + encodeURIComponent(PUBLISH_SHEET) + '/row/' + item.i, {method:'DELETE'});
+      if(!del.ok){ failed = true; break; } /* index kaymış olabilir — baştan taze dene */
+    }
+    if(!failed) return;
+  }
+  throw new Error((actionLabel||'Eski yayın')+' temizlenemedi (birden fazla denemeden sonra)');
+}
 /* Ay adını sunucu tarafında grup kimliği olarak kullanılabilecek, Türkçe
    karakterlerden arındırılmış, kararlı bir koda çevirir. */
 function monthSlug(name){
@@ -1184,20 +1210,11 @@ async function publishProgram(){
     const encoded = utf8ToB64(payload);
     const ts = Date.now();
     const version = 'apub_' + slug + '_' + ts;
-    const old = await fetch(PUBLISH_API + '/' + encodeURIComponent(PUBLISH_SHEET), {cache:'no-store'});
-    const oldData = old.ok ? await old.json() : {rows:[]};
     /* Aynı ayın hem eski "kesinleştirilmiş" hem de bekleyen "taslak" satırları
-       tek seferde, indeksler kaymasın diye BÜYÜKTEN KÜÇÜĞE sırayla silinir. */
+       tek seferde, taze veri okunarak ve gerekirse tekrar denenerek silinir. */
     const prefixPub = 'apub_' + slug + '_';
     const prefixDraft = DRAFT_PREFIX + slug + '_';
-    const oldRows = (oldData.rows || [])
-      .map((r,i)=>({r,i}))
-      .filter(x=>String(x.r[0]||'').startsWith(prefixPub) || String(x.r[0]||'').startsWith(prefixDraft))
-      .sort((a,b)=>b.i-a.i);
-    for(const item of oldRows){
-      const del = await fetch(PUBLISH_API + '/' + encodeURIComponent(PUBLISH_SHEET) + '/row/' + item.i, {method:'DELETE'});
-      if(!del.ok) throw new Error('Eski yayın temizlenemedi (HTTP '+del.status+')');
-    }
+    await deleteRowsByPrefixes([prefixPub, prefixDraft], 'Eski yayın');
     const parts = [];
     for(let i=0;i<encoded.length;i+=PUBLISH_CHUNK) parts.push(encoded.slice(i,i+PUBLISH_CHUNK));
     for(let i=0;i<parts.length;i++){
@@ -1591,24 +1608,18 @@ async function unpublishProgram(){
   const btn = document.getElementById('unpublishBtn');
   if(btn){ btn.disabled=true; btn.textContent='Geri alınıyor…'; }
   try{
-    const old = await fetch(PUBLISH_API + '/' + encodeURIComponent(PUBLISH_SHEET), {cache:'no-store'});
-    const oldData = old.ok ? await old.json() : {rows:[]};
     const prefix = 'apub_' + slug + '_';
-    const rows = (oldData.rows || [])
-      .map((r,i)=>({r,i}))
-      .filter(x=>String(x.r[0]||'').startsWith(prefix))
-      .sort((a,b)=>b.i-a.i);
+    const freshCheck = await fetch(PUBLISH_API + '/' + encodeURIComponent(PUBLISH_SHEET) + '?fresh=1', {cache:'no-store'});
+    const freshData = freshCheck.ok ? await freshCheck.json() : {rows:[]};
+    const hasRows = (freshData.rows || []).some(r=>String(r[0]||'').startsWith(prefix));
     state.monthPub = state.monthPub || {};
-    if(!rows.length){
+    if(!hasRows){
       state.monthPub[m.name] = {publishedAt:null, unpublishedAt: state.monthPub[m.name]?.unpublishedAt || null};
       saveState(); renderPubState(); renderDraftState();
       siteMessage('"'+m.name+'" için ortak sunucuda yayınlanmış bir sürüm bulunamadı.','warn','Yayın bulunamadı');
       return;
     }
-    for(const item of rows){
-      const del = await fetch(PUBLISH_API + '/' + encodeURIComponent(PUBLISH_SHEET) + '/row/' + item.i, {method:'DELETE'});
-      if(!del.ok) throw new Error('Yayın kaldırılamadı (HTTP '+del.status+')');
-    }
+    await deleteRowsByPrefixes([prefix], 'Yayın');
     state.monthPub[m.name] = {publishedAt:null, unpublishedAt: Date.now()};
     saveState(); renderPubState(); renderDraftState();
     setStatus('"'+m.name+'" için kesinleştirme geri alındı.');
