@@ -126,6 +126,18 @@ table.sheet td.cell.premiere::before{content:"★ ";color:var(--premiere)}
 
 /* Turne hücreleri: sahne hücreleriyle birebir aynı yazı tipi/rengi/kalınlığı */
 table.sheet td.cell.turne{color:inherit;font-weight:500;font-family:inherit;font-style:inherit}
+/* === Turne grupları (şehir/kurum başlığına bağlı oyunlar) === */
+table.sheet td.cell.tour-head,table.sheet td.cell.tour-member{box-shadow:inset 3px 0 0 rgba(208,0,0,.55)}
+table.sheet td.cell.tour-head{font-weight:700}
+table.sheet td.cell.tour-member{padding-left:18px}
+table.sheet td.cell.tour-first{box-shadow:inset 3px 0 0 rgba(208,0,0,.55),inset 0 3px 0 rgba(208,0,0,.32)}
+table.sheet td.cell.tour-last{box-shadow:inset 3px 0 0 rgba(208,0,0,.55),inset 0 -3px 0 rgba(208,0,0,.32)}
+table.sheet td.cell.tour-hl{background:#fff1ec !important}
+table.sheet td.cell.tour-return::after{content:" ↩ dönüş";font-size:10px;font-style:normal;font-weight:600;color:#b23018;opacity:.9}
+.tourSum{display:block;font-size:10px;font-weight:600;font-style:normal;color:#8a6a1f;letter-spacing:.2px;line-height:1.25}
+#printView .print-month table.sheet td.cell.tour-member,.print-month table.sheet td.cell.tour-member{padding-left:12px;border-left:2px solid #d00000 !important}
+#printView .print-month table.sheet td.cell.tour-head,.print-month table.sheet td.cell.tour-head{border-left:2px solid #d00000 !important;font-weight:700 !important}
+#printView .print-month table.sheet td.cell.tour-return::after,.print-month table.sheet td.cell.tour-return::after{content:" ↩"}
 
 /* Çakışma: hücre kırmızı zemin */
 table.sheet td.cell.conflict{background:var(--conflict) !important;color:#fff;font-weight:700}
@@ -1832,8 +1844,86 @@ function buildConflict(games){
 }
 
 /* === Render === */
+/* === Turne grupları: şehir/kurum başlığı + altındaki oyunlar === */
+function tourColsOf(m){ return programCols(m).filter(c=>stageHeaderText(m,c).includes('TURNE')); }
+function isTourHeadCell(cell){
+  if(!cell || !cell.v) return false;
+  if(cell.tourHead) return true;
+  if(cell.tourId) return false;
+  return isFreeTextCell(cell);
+}
+function computeTours(m){
+  const map={}, byId={}, groups=[];
+  tourColsOf(m).forEach(c=>{
+    let cur=null;
+    for(let r=2;r<m.rows;r++){
+      const k=r+'_'+c, cell=m.cells[k];
+      const v=(cell&&cell.v)?String(cell.v).trim():'';
+      if(cell && cell.tourId && !cell.tourHead && byId[cell.tourId]){
+        const g=byId[cell.tourId];
+        g.members.push({r,c,key:k,cell});
+        if(cell.tourReturn) g.returnKey=k;
+        map[k]={g,role:'member'}; cur=g; continue;
+      }
+      if(!v){ cur=null; continue; }
+      if(isTourHeadCell(cell)){
+        cur={id:(cell.tourId||('auto_'+c+'_'+r)), col:c, headKey:k, headRow:r, headText:v, members:[], returnKey:null, locked:!!cell.tourId};
+        groups.push(cur); byId[cur.id]=cur; map[k]={g:cur,role:'head'};
+        continue;
+      }
+      if(cur){
+        cur.members.push({r,c,key:k,cell});
+        if(cell.tourReturn) cur.returnKey=k;
+        map[k]={g:cur,role:'member'};
+      }
+    }
+  });
+  const live=groups.filter(g=>g.members.length>0);
+  const liveIds=new Set(live.map(g=>g.id));
+  Object.keys(map).forEach(k=>{ if(!liveIds.has(map[k].g.id)) delete map[k]; });
+  return {map, groups:live};
+}
+function tourDayLabel(m,r){
+  const t=dateTextOfRow(m,r);
+  const mt=t.match(/^\s*(\d{1,2})\s+(\S+)/);
+  if(!mt) return t;
+  const mon=mt[2];
+  return mt[1]+' '+mon.charAt(0)+mon.slice(1).toLocaleLowerCase('tr');
+}
+function tourSummary(m,g){
+  const rows=g.members.map(x=>x.r);
+  const firstR=Math.min.apply(null,rows);
+  const lastR=g.returnKey ? +g.returnKey.split('_')[0] : Math.max.apply(null,rows);
+  const a=tourDayLabel(m,firstR), b=tourDayLabel(m,lastR);
+  let dates;
+  if(a===b) dates=a;
+  else if(a.split(' ')[1] && a.split(' ')[1]===b.split(' ')[1]) dates=a.split(' ')[0]+'–'+b;
+  else dates=a+' – '+b;
+  const n=new Set(g.members.map(x=>parseGame(x.cell.v).key||x.cell.v)).size;
+  return n+' oyun · '+dates;
+}
+function tourAt(m,r,c){
+  if(!window.__tourCache || window.__tourCache.m!==m) window.__tourCache={m, t:computeTours(m)};
+  const info=window.__tourCache.t.map[r+'_'+c];
+  return info||null;
+}
+function tourTooltipHtml(m,info){
+  const g=info.g;
+  let h='<hr><div class="ttHead">🚌 '+escapeHtml(g.headText)+' turnesi</div>';
+  h+='<div>'+escapeHtml(tourSummary(m,g))+(g.locked?' · <b>kilitli</b>':'')+'</div>';
+  g.members.forEach(x=>{
+    h+='<div class="ttGame">• '+escapeHtml(tourDayLabel(m,x.r))+' — '+escapeHtml(x.cell.v)+(x.key===g.returnKey?' <b>↩ dönüş</b>':'')+'</div>';
+  });
+  if(g.returnKey){
+    const rows=g.members.map(x=>x.r);
+    h+='<div>Gidiş–dönüş: <b>'+escapeHtml(tourDayLabel(m,Math.min.apply(null,rows)))+' → '+escapeHtml(tourDayLabel(m,+g.returnKey.split('_')[0]))+'</b></div>';
+  }
+  return h;
+}
 function renderSheet(){
   const m = curMonth();
+  const tours = computeTours(m);
+  window.__tourCache = {m, t:tours};
   document.getElementById('monthTitle').textContent = m.name;
   const t = document.getElementById('sheet');
   t.innerHTML = '';
@@ -1891,6 +1981,21 @@ function renderSheet(){
         td.classList.add('conflict');
       }
       if(isFreeTextCell(cell) && cell.v){ td.classList.add('freetext'); td.classList.remove('conflict'); }
+      const tinfo = r>=2 ? tours.map[r+'_'+c] : null;
+      if(tinfo){
+        td.dataset.tour = tinfo.g.id;
+        if(tinfo.role==='head'){
+          td.classList.add('tour-head','tour-first');
+          const sp=document.createElement('span'); sp.className='tourSum';
+          sp.textContent=tourSummary(m,tinfo.g);
+          td.appendChild(sp);
+        } else {
+          td.classList.add('tour-member');
+          const rws=tinfo.g.members.map(x=>x.r);
+          if(r===Math.max.apply(null,rws)) td.classList.add('tour-last');
+          if(cell.tourReturn) td.classList.add('tour-return');
+        }
+      }
       if(cell.cat){ td.setAttribute('data-cat', cell.cat); td.title = (td.title?td.title+' · ':'') + 'Kategori: ' + cell.cat; }
       if(cell.ignoreConflict) td.classList.add('noconf');
       if(cell.note){ td.classList.add('note-mark'); }
@@ -1954,9 +2059,14 @@ function wireCell(td){
   });
   td.addEventListener('mouseenter', e=>{
     const r=+td.dataset.r, c=+td.dataset.c;
+    const tid=td.dataset.tour;
+    if(tid) document.querySelectorAll('#sheet td[data-tour="'+tid+'"]').forEach(x=>x.classList.add('tour-hl'));
     showTooltipFor(r,c,e);
   });
-  td.addEventListener('mouseleave',()=>{ scheduleTooltipHide(); });
+  td.addEventListener('mouseleave',()=>{
+    document.querySelectorAll('#sheet td.tour-hl').forEach(x=>x.classList.remove('tour-hl'));
+    scheduleTooltipHide();
+  });
 }
 document.addEventListener('mouseup', ()=>{ dragSelecting=false; });
 
@@ -2014,9 +2124,11 @@ function showTooltipFor(r,c,ev){
     return;
   }
   if(isPremiereLabel(raw)) return;
+  const tinfoTT = tourAt(m,r,c);
   if(isFreeTextCell(cell)){
     tt.innerHTML = '<div class="ttHead">✎ Serbest metin</div>'+escapeHtml(raw)+
       (cell.note ? '<hr><div><b>Not:</b> '+escapeHtml(cell.note)+'</div>' : '')+
+      (tinfoTT ? tourTooltipHtml(m,tinfoTT) : '')+
       '<hr><div class="ttOk">Bu hücre oyun sayılmaz (çakışma ve oyun listesine girmez).</div>';
     tt.style.display='block'; placeTooltip(ev); return;
   }
@@ -2065,6 +2177,7 @@ function showTooltipFor(r,c,ev){
   }
   if(cell.ignoreConflict){ html += '<hr><div class="ttOk">Bu hücre için çakışma uyarısı kapalı.</div>'; }
   if(cell.note){ html += '<hr><div><b>Not:</b> '+escapeHtml(cell.note)+'</div>'; }
+  if(tinfoTT) html += tourTooltipHtml(m,tinfoTT);
 
   tt.innerHTML = html;
   tt.style.display='block';
@@ -2258,6 +2371,62 @@ function opFreeText(){
   }
   saveState(); renderSheet(); renderPrint(); renderPlays();
   setStatus(anyOff ? 'Seçili hücreler serbest metin olarak işaretlendi.' : 'Serbest metin işareti kaldırıldı.');
+}
+function opLinkTour(){
+  const m=curMonth(), c=sel.c1;
+  if(sel.c1!==sel.c2){ setStatus('Turneye bağlamak için tek sütunda seçim yap.'); return; }
+  if(!stageHeaderText(m,c).includes('TURNE')){ setStatus('Turne bağlama sadece TURNE sütunlarında geçerli.'); return; }
+  let headR=-1;
+  for(let r=sel.r1;r<=sel.r2;r++){ const cell=m.cells[r+'_'+c]; if(cell&&cell.v&&isFreeTextCell(cell)){ headR=r; break; } }
+  if(headR<0){
+    for(let r=sel.r1-1;r>=2;r--){
+      const cell=m.cells[r+'_'+c];
+      if(cell&&cell.v){ if(isFreeTextCell(cell)) headR=r; break; }
+    }
+  }
+  if(headR<0){ setStatus('Turne başlığı bulunamadı: şehir/kurum adını ✎ serbest metin yapıp seçime ekle.'); return; }
+  snapshot();
+  const id='t'+Date.now().toString(36)+Math.floor(Math.random()*1000);
+  const head={...(m.cells[headR+'_'+c]||{v:''})};
+  head.tourId=id; head.tourHead=true; head.freeText=true;
+  m.cells[headR+'_'+c]=head;
+  let n=0;
+  for(let r=Math.max(sel.r1,headR+1);r<=sel.r2;r++){
+    const cell=m.cells[r+'_'+c]; if(!cell||!cell.v) continue;
+    const nn={...cell}; nn.tourId=id; delete nn.tourHead;
+    m.cells[r+'_'+c]=nn; n++;
+  }
+  saveState(); renderSheet(); renderPrint();
+  setStatus(n ? ('“'+(head.v||'')+'” turnesine '+n+' oyun bağlandı (kilitli).') : 'Turne başlığı işaretlendi; altına oyun seçip yeniden bağla.');
+}
+function opUnlinkTour(){
+  const m=curMonth();
+  const ids=new Set();
+  for(let r=sel.r1;r<=sel.r2;r++) for(let c=sel.c1;c<=sel.c2;c++){
+    const cell=m.cells[r+'_'+c]; if(cell&&cell.tourId) ids.add(cell.tourId);
+  }
+  if(!ids.size){ setStatus('Seçimde kilitli turne bağı yok.'); return; }
+  snapshot();
+  let n=0;
+  Object.keys(m.cells).forEach(k=>{
+    const cell=m.cells[k];
+    if(cell&&cell.tourId&&ids.has(cell.tourId)){
+      const nn={...cell}; delete nn.tourId; delete nn.tourHead; delete nn.tourReturn;
+      m.cells[k]=nn; n++;
+    }
+  });
+  saveState(); renderSheet(); renderPrint();
+  setStatus('Turne bağı kaldırıldı ('+n+' hücre).');
+}
+function opTourReturn(){
+  const m=curMonth(), k=sel.r1+'_'+sel.c1, cell=m.cells[k];
+  if(!cell||!cell.v){ setStatus('Dönüş günü için dolu bir hücre seç.'); return; }
+  snapshot();
+  const nn={...cell};
+  if(nn.tourReturn) delete nn.tourReturn; else nn.tourReturn=true;
+  m.cells[k]=nn;
+  saveState(); renderSheet(); renderPrint();
+  setStatus(nn.tourReturn ? 'Dönüş günü olarak işaretlendi.' : 'Dönüş işareti kaldırıldı.');
 }
 async function opCellNote(){
   const m=curMonth(); const k=sel.r1+'_'+sel.c1;
@@ -2583,6 +2752,11 @@ function showCtx(x,y,kind){
       ['Rengi Temizle', opClearFormat],
       ['⚠️ Çakışmayı yok say (aç/kapat)', opIgnoreConflict],
       ['✎ Serbest metin / not hücresi (aç/kapat)', opFreeText],
+      ['---'],
+      ['🚌 Turneye bağla', opLinkTour],
+      ['🚌 Turne bağını kaldır', opUnlinkTour],
+      ['↩ Dönüş günü olarak işaretle (aç/kapat)', opTourReturn],
+      ['---'],
       ['Not ekle/düzenle…', async()=>{
         const m=curMonth(); const k=sel.r1+'_'+sel.c1;
         const cur=(m.cells[k]||{}).note||'';
@@ -2982,6 +3156,7 @@ function renderPrint(){
   const wrap = document.getElementById('printView');
   const prev = document.getElementById('printPreview');
   const buildBlock = (m)=>{
+    const tours = computeTours(m);
     let h = `<div class="print-month"><div class="psWrap"><h2>${escapeHtml(m.name)}</h2><table class="sheet">`;
     for(let r=0;r<m.rows;r++){
       const cls = r===0 ? 'titleRow' : (r===1 ? 'stageHead' : (isMondayRow(m,r) ? 'monday' : ''));
@@ -3006,9 +3181,22 @@ function renderPrint(){
            conflict.cells && conflict.cells.has(r+'_'+c)){
           clist.push('conflict');
         }
+        const tinfo = r>=2 ? tours.map[r+'_'+c] : null;
+        let extra='';
+        if(tinfo){
+          if(tinfo.role==='head'){
+            clist.push('tour-head','tour-first');
+            extra='<span class="tourSum">'+escapeHtml(tourSummary(m,tinfo.g))+'</span>';
+          } else {
+            clist.push('tour-member');
+            const rws=tinfo.g.members.map(x=>x.r);
+            if(r===Math.max.apply(null,rws)) clist.push('tour-last');
+            if(cell.tourReturn) clist.push('tour-return');
+          }
+        }
         const rs = mm?` rowspan="${mm[2]-mm[0]+1}"`:''; const cs = mm?` colspan="${mm[3]-mm[1]+1}"`:'';
         const styleAttr = cellStyleString(cell); const st = styleAttr?` style="${styleAttr}"`:'';
-        h+=`<td class="${clist.join(' ')}"${rs}${cs}${st}>${escapeHtml(cellDisplayText(cell))}</td>`;
+        h+=`<td class="${clist.join(' ')}"${rs}${cs}${st}>${escapeHtml(cellDisplayText(cell))}${extra}</td>`;
       }
       h+='</tr>';
     }
