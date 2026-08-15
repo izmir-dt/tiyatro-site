@@ -1796,7 +1796,21 @@ function gamesOfRow(m,r){
   for(const c of programCols(m)){
     const cellObj = m.cells[r+'_'+c] || {};
     const raw = cellObj.v || '';
-    if(!raw) continue;
+    if(!raw){
+      /* Boş dönüş günü hücresi: bağlı olduğu turnenin oyununu devralır,
+         böylece o gün aynı oyun/ortak kadro başka sahneye yazılırsa çakışır. */
+      if(cellObj.tourReturn){
+        const info = tourAt(m,r,c);
+        let src='';
+        if(info && info.g){
+          const prev = info.g.members.filter(x=>x.r<r && x.cell && String(x.cell.v||'').trim());
+          if(prev.length) src = prev[prev.length-1].cell.v;
+        }
+        const pk = parseGame(src).key;
+        if(pk) out.push({raw:src, key:pk, isPremiere:false, col:c, row:r, time:gameTimeOf(m,r,''), isReturn:true, virtual:true, ckey:pk+' ↩dönüş'});
+      }
+      continue;
+    }
     if(isPremiereLabel(raw)) continue;
     if(isFreeTextCell(cellObj)) continue;   /* serbest metin/not: oyun sayılmaz */
     const {key, isPremiere} = parseGame(raw);
@@ -1834,6 +1848,12 @@ function buildConflict(games){
     const slots = {};
     for(const x of list){ const t = x.g.time || ''; (slots[t] = slots[t] || []).push(x); }
     let crit = 0, isCrit = false; const critCells = [];
+    const hasRet = list.some(x=>x.g.isReturn);
+    if(hasRet && distinct.size>=2){
+      /* Turne dönüş günü: ortak kadro varsa saat/rol ayrımı gözetmeksizin çakışmadır */
+      isCrit = true; crit = Math.max(crit, distinct.size);
+      list.forEach(x=>critCells.push(x.g.row+'_'+x.g.col));
+    }
     for(const t in slots){
       const cl = slots[t].filter(x=>x.rec.critical);
       const keys = new Set(cl.map(x=>x.g.ckey||x.g.key));
@@ -1844,6 +1864,17 @@ function buildConflict(games){
     }
     people[p] = {critical:isCrit, criticalGameCount:crit, totalGameCount:distinct.size, name:(list[0].rec.name||p)};
     if(isCrit){ hasCritical = true; critCells.forEach(k=>cells.add(k)); }
+  }
+  /* Turne dönüş günü + aynı oyun aynı gün başka sahnede: kadro verisi olmasa da uyar */
+  for(const g of games){
+    if(!g.isReturn) continue;
+    for(const o of games){
+      if(o===g || o.key!==g.key) continue;
+      hasCritical = true;
+      cells.add(g.row+'_'+g.col); cells.add(o.row+'_'+o.col);
+      people['__ret_'+g.key] = {critical:true, criticalGameCount:2, totalGameCount:2,
+        name:'Turne dönüşü: “'+g.key+'” aynı gün başka sahnede'};
+    }
   }
   return {people, hasCritical, cells};
 }
@@ -1988,7 +2019,7 @@ function renderSheet(){
       // Turne sütunu: başlık TURNE ise metni kırmızı
       if(r>=2 && stageHeaderText(m,c).includes('TURNE') && cell.v) td.classList.add('turne');
       // Kritik çakışma: bu hücredeki oyun kritik çakışan biri içeriyor mu?
-      if(r>=2 && conflict.hasCritical && cell.v && !cell.ignoreConflict &&
+      if(r>=2 && conflict.hasCritical && (cell.v || cell.tourReturn) && !cell.ignoreConflict &&
          conflict.cells && conflict.cells.has(r+'_'+c)){
         td.classList.add('conflict');
       }
@@ -2132,6 +2163,21 @@ function showTooltipFor(r,c,ev){
   const raw = (cell.v||'').trim();
   const tt = document.getElementById('tooltip');
   if(r<2 || !raw){
+    if(cell.tourReturn){
+      const gamesR = rowGames(m,r);
+      const confR = gamesR.length>=2 ? buildConflict(gamesR) : {people:{}, hasCritical:false};
+      const mine = gamesR.find(g=>g.row===r && g.col===c);
+      let hR = '<div class="ttHead">↩ Turne dönüş günü</div>';
+      hR += '<div>Tarih: <b>'+escapeHtml(dateTextOfRow(m,r)||'-')+'</b></div>';
+      if(mine) hR += '<div>Dönen kadro: <b>'+escapeHtml(mine.key)+'</b></div>';
+      hR += '<div>Bu gün temsil olarak sayılmaz.</div><hr>';
+      hR += confR.hasCritical
+        ? '<div class="ttWarn">⚠️ Çakışma var</div>' + Object.values(confR.people).map(i=>'<div>🔴 '+escapeHtml(i.name)+'</div>').join('')
+        : '<div class="ttOk">Uygun ✅ Çakışma yok.</div>';
+      const tiR = tourAt(m,r,c); if(tiR) hR += tourTooltipHtml(m,tiR);
+      if(cell.note) hR += '<hr><div><b>Not:</b> '+escapeHtml(cell.note)+'</div>';
+      tt.innerHTML = hR; tt.style.display='block'; placeTooltip(ev); return;
+    }
     if(cell.note){
       tt.innerHTML = '<div class="ttHead">Not</div>'+escapeHtml(cell.note);
       tt.style.display='block';
@@ -2166,7 +2212,7 @@ function showTooltipFor(r,c,ev){
     html += '<div class="ttOk">Uygun ✅ (bu tarihte tek oyun)</div>';
   } else {
     html += '<div>Bu tarihteki oyunlar:</div>';
-    for(const g of games) html += '<div class="ttGame">• '+escapeHtml(g.raw)+(g.time?' <span style="opacity:.75">('+escapeHtml(g.time)+')</span>':'')+'</div>';
+    for(const g of games) html += '<div class="ttGame">• '+escapeHtml(g.raw)+(g.time?' <span style="opacity:.75">('+escapeHtml(g.time)+')</span>':'')+(g.isReturn?' <b style="color:#ffb4a2">↩ dönüş</b>':'')+'</div>';
     html += '<hr>';
     if(!conflict.hasCritical && Object.keys(conflict.people).length===0){
       html += '<div class="ttOk">Uygun ✅ Çakışan kişi yok.</div>';
@@ -3192,7 +3238,7 @@ function renderPrint(){
         if(cell.underline) clist.push('uline');
         if((cell.v||'').trim().startsWith('*') && !isPremiereLabel(cell.v)) clist.push('premiere');
         if(r>=2 && stageHeaderText(m,c).includes('TURNE') && cell.v) clist.push('turne');
-        if(r>=2 && conflict.hasCritical && cell.v && !cell.ignoreConflict &&
+        if(r>=2 && conflict.hasCritical && (cell.v || cell.tourReturn) && !cell.ignoreConflict &&
            conflict.cells && conflict.cells.has(r+'_'+c)){
           clist.push('conflict');
         }
