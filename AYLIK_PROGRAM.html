@@ -230,6 +230,16 @@ table.sheet td.cell.note-mark::after{content:"";position:absolute;top:0;right:0;
 .ctxmenu button{display:block;width:100%;text-align:left;padding:6px 12px;background:none;border:none;cursor:pointer;font-size:13px;font-family:inherit;color:var(--ink)}
 .ctxmenu button:hover{background:#f5ecd6}
 .ctxmenu .sep{height:1px;background:var(--border);margin:4px 0}
+.ctxmenu{min-width:212px;max-width:262px}
+.ctxmenu button{display:flex;align-items:center;gap:8px;padding:7px 12px;border-radius:5px}
+.ctxmenu button .ic{width:16px;text-align:center;opacity:.75;font-size:12px}
+.ctxmenu button .arr{margin-left:auto;opacity:.55;font-size:11px}
+.ctxmenu .grp{display:none;padding:2px 0 4px 10px;margin:2px 6px 2px 12px;border-left:2px solid var(--border)}
+.ctxmenu .grp.open{display:block}
+.ctxmenu .grp button{padding:6px 10px;font-size:12.5px}
+.ctxmenu .ttl{font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);font-weight:700;padding:6px 12px 2px}
+.ctxmenu .inline-row{display:flex;gap:6px;padding:4px 10px 6px}
+.ctxmenu .inline-row button{flex:1;justify-content:center;padding:6px 0;border:1px solid var(--border);font-size:12.5px}
 
 /* Modal */
 .modal-back{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:100002;padding:16px}
@@ -572,6 +582,10 @@ body.fs-on #program .controls{position:sticky;top:0;z-index:40;background:var(--
           <button class="btn ghost small" id="fgColorBtn" title="Seçili hücrelere yazı rengi uygula">Yazı rengi…</button>
           <button class="btn ghost small" id="boldBtn" title="Kalın yazı (aç/kapat)">Kalın yazı</button>
           <button class="btn ghost small" id="underlineBtn" title="Altı çizili yazı (aç/kapat) — Ctrl+U">Altı çizili</button>
+          <div class="mp-sep"></div>
+          <button class="btn ghost small" id="alignLeftBtn" title="Metni sola yasla">&#8676; Sola yasla</button>
+          <button class="btn ghost small" id="alignCenterBtn" title="Metni ortala">&#8596; Ortala</button>
+          <button class="btn ghost small" id="alignRightBtn" title="Metni sağa yasla">&#8677; Sağa yasla</button>
           <div class="mp-sep"></div>
           <button class="btn ghost small" id="fmtClearBtn" title="Sadece renk/kalın biçimini temizle (metni silmez)">Biçimi temizle</button>
           <input type="color" id="bgColorPicker" value="#ffe600" style="display:none">
@@ -1687,15 +1701,16 @@ function isCovered(m,r,c){
 /* === Yardımcılar: tarih/gün/saat === */
 const DAY_NAMES = ['Pazar','Pazartesi','Salı','Çarşamba','Perşembe','Cuma','Cumartesi'];
 function dateTextOfRow(m,r){
-  // Tarih A sütununda; merge nedeniyle üstteki satırda olabilir
-  for(let rr=r; rr>=0; rr--){
-    const v = (m.cells[rr+'_0']||{}).v || '';
-    if(v && /\d/.test(v)) return v;
-    // merge kontrol
-    const mm = mergeOf(m,rr,0);
-    if(mm && r>=mm[0] && r<=mm[2]){
-      const v2 = (m.cells[mm[0]+'_0']||{}).v || '';
-      if(v2) return v2;
+  // Tarih A sütununda; kendi hücresi doluysa direkt onu kullan
+  const v0 = (m.cells[r+'_0']||{}).v || '';
+  if(v0 && /\d/.test(v0)) return v0;
+  // Kendi hücresi boşsa, SADECE üstteki satırla birleşik (merge) ise
+  // o birleşimin başlangıç satırındaki tarihi kullan. Birleşim yoksa
+  // (ör. tablonun sonundaki boş satırlar) tarih miras alınmamalı —
+  // aksi halde boş satırlar yanlışlıkla "Pazartesi" sanılıp sarı boyanıyor.
+  for(const [r1,c1,r2,c2] of m.merges){
+    if(c1===0 && r>=r1 && r<=r2){
+      return (m.cells[r1+'_0']||{}).v || '';
     }
   }
   return '';
@@ -1717,6 +1732,7 @@ function cellStyleString(cell){
   if(cell.color) parts.push('color:'+cell.color);
   if(cell.bold) parts.push('font-weight:700');
   if(cell.underline) parts.push('text-decoration:underline');
+  if(cell.align) parts.push('text-align:'+cell.align);
   return parts.join(';');
 }
 function stageHeaderText(m,c){
@@ -2990,33 +3006,48 @@ document.addEventListener('paste', e=>{
 /* === Renklendirme (sağ tık paleti + toolbar) === */
 const BG_PALETTE = [['Sarı','#ffe600'],['Kırmızı','#e53935'],['Yeşil','#43a047'],['Mavi','#1e88e5'],['Turuncu','#fb8c00'],['Gri','#9e9e9e'],['Beyaz','#ffffff']];
 const FG_PALETTE = [['Siyah','#000000'],['Kırmızı','#d00000'],['Yeşil','#1b5e20'],['Mavi','#0d47a1'],['Turuncu','#e65100'],['Beyaz','#ffffff']];
+/* Seçimdeki GÖRÜNEN hücre anahtarları.
+   Birleştirilmiş bir alanın gizli (covered) hücreleri, birleşimin sol-üst
+   hücresine yönlendirilir; böylece 38–39 gibi birleşik satırlar da boyanır. */
+function selKeys(m){
+  const out=[];
+  const seen=new Set();
+  for(let r=sel.r1;r<=sel.r2;r++) for(let c=sel.c1;c<=sel.c2;c++){
+    let rr=r, cc=c;
+    for(const [r1,c1,r2,c2] of m.merges){
+      if(r>=r1&&r<=r2&&c>=c1&&c<=c2){ rr=r1; cc=c1; break; }
+    }
+    const k=rr+'_'+cc;
+    if(!seen.has(k)){ seen.add(k); out.push(k); }
+  }
+  return out;
+}
 function applyCellsProp(prop, value){
   const m=curMonth(); snapshot();
-  for(let r=sel.r1;r<=sel.r2;r++) for(let c=sel.c1;c<=sel.c2;c++){
-    m.cells[r+'_'+c] = {...(m.cells[r+'_'+c]||{v:''}), [prop]: value};
+  for(const k of selKeys(m)){
+    m.cells[k] = {...(m.cells[k]||{v:''}), [prop]: value};
   }
   saveState(); renderSheet(); renderPrint();
 }
 function applyBg(color){ applyCellsProp('bg', color); }
 function applyFg(color){ applyCellsProp('color', color); }
+function opAlignLeft(){ applyCellsProp('align', 'left'); }
+function opAlignCenter(){ applyCellsProp('align', 'center'); }
+function opAlignRight(){ applyCellsProp('align', 'right'); }
 function opBold(){
   const m=curMonth();
-  let anyOff=false;
-  for(let r=sel.r1;r<=sel.r2;r++) for(let c=sel.c1;c<=sel.c2;c++){ if(!(m.cells[r+'_'+c]||{}).bold) anyOff=true; }
+  const keys=selKeys(m);
+  const anyOff=keys.some(k=>!(m.cells[k]||{}).bold);
   snapshot();
-  for(let r=sel.r1;r<=sel.r2;r++) for(let c=sel.c1;c<=sel.c2;c++){
-    m.cells[r+'_'+c] = {...(m.cells[r+'_'+c]||{v:''}), bold: anyOff};
-  }
+  for(const k of keys) m.cells[k]={...(m.cells[k]||{v:''}), bold: anyOff};
   saveState(); renderSheet(); renderPrint();
 }
 function opUnderline(){
   const m=curMonth();
-  let anyOff=false;
-  for(let r=sel.r1;r<=sel.r2;r++) for(let c=sel.c1;c<=sel.c2;c++){ if(!(m.cells[r+'_'+c]||{}).underline) anyOff=true; }
+  const keys=selKeys(m);
+  const anyOff=keys.some(k=>!(m.cells[k]||{}).underline);
   snapshot();
-  for(let r=sel.r1;r<=sel.r2;r++) for(let c=sel.c1;c<=sel.c2;c++){
-    m.cells[r+'_'+c] = {...(m.cells[r+'_'+c]||{v:''}), underline: anyOff};
-  }
+  for(const k of keys) m.cells[k]={...(m.cells[k]||{v:''}), underline: anyOff};
   saveState(); renderSheet(); renderPrint();
 }
 /* Sayfa altındaki "★ PRÖMİYER" açıklama hücresi (oyun sayılmaz) */
@@ -3029,11 +3060,11 @@ function opPremiereLabel(){
 }
 function opClearFormat(){
   const m=curMonth(); snapshot();
-  for(let r=sel.r1;r<=sel.r2;r++) for(let c=sel.c1;c<=sel.c2;c++){
-    const cur = m.cells[r+'_'+c];
+  for(const k of selKeys(m)){
+    const cur = m.cells[k];
     if(!cur) continue;
-    const {bg,color,bold,underline, ...rest} = cur;
-    m.cells[r+'_'+c] = rest;
+    const {bg,color,bold,underline,align, ...rest} = cur;
+    m.cells[k] = rest;
   }
   saveState(); renderSheet(); renderPrint();
 }
@@ -3068,59 +3099,123 @@ function buildColorRow(label, palette, applyFn, pickerId){
 }
 
 /* Context menu */
+function ctxNote(){
+  return async()=>{
+    const m=curMonth(); const k=sel.r1+'_'+sel.c1;
+    const cur=(m.cells[k]||{}).note||'';
+    const n=await sitePrompt('Not:', cur, 'Not ekle/düzenle');
+    if(n===null) return;
+    snapshot();
+    m.cells[k] = {...(m.cells[k]||{v:''}), note:n||undefined};
+    if(!n) delete m.cells[k].note;
+    saveState(); renderSheet();
+  };
+}
+function ctxItem(el, icon, label, fn){
+  const b=document.createElement('button'); b.type='button';
+  b.innerHTML='<span class="ic">'+icon+'</span><span>'+label+'</span>';
+  b.onclick=()=>{ hideCtx(); fn(); };
+  el.appendChild(b);
+  return b;
+}
+function ctxSep(el){ const s=document.createElement('div'); s.className='sep'; el.appendChild(s); }
+/* Katlanır alt menü: ana liste kısa kalır, ayrıntılar istenince açılır */
+function ctxGroup(el, icon, label, items){
+  const b=document.createElement('button'); b.type='button';
+  b.innerHTML='<span class="ic">'+icon+'</span><span>'+label+'</span><span class="arr">▸</span>';
+  const g=document.createElement('div'); g.className='grp';
+  items.forEach(it=>{ if(it==='---'){ ctxSep(g); return; } ctxItem(g, it[0], it[1], it[2]); });
+  b.onclick=(e)=>{
+    e.stopPropagation();
+    const open=g.classList.toggle('open');
+    b.querySelector('.arr').textContent = open ? '▾' : '▸';
+    ctxFit();
+  };
+  el.appendChild(b); el.appendChild(g);
+}
+function ctxAlignRow(el){
+  const row=document.createElement('div'); row.className='inline-row';
+  [['⯇','Sol',opAlignLeft],['⯃','Orta',opAlignCenter],['⯈','Sağ',opAlignRight]].forEach(([ic,t,fn])=>{
+    const b=document.createElement('button'); b.type='button'; b.title=t+'a yasla'; b.textContent=ic;
+    b.onclick=(e)=>{ e.stopPropagation(); hideCtx(); fn(); };
+    row.appendChild(b);
+  });
+  el.appendChild(row);
+}
 function showCtx(x,y,kind){
   const el=document.getElementById('ctxmenu');
   el.innerHTML='';
+  el.dataset.x=x; el.dataset.y=y;
+
+  el.appendChild(buildColorRow('Zemin Rengi', BG_PALETTE, applyBg, 'bgColorPicker'));
+  el.appendChild(buildColorRow('Yazı Rengi', FG_PALETTE, applyFg, 'fgColorPicker'));
+  const ttl=document.createElement('div'); ttl.className='ttl'; ttl.textContent='Hizalama'; el.appendChild(ttl);
+  ctxAlignRow(el);
+  ctxSep(el);
+
   if(kind==='cell'){
-    el.appendChild(buildColorRow('Zemin Rengi', BG_PALETTE, applyBg, 'bgColorPicker'));
-    el.appendChild(buildColorRow('Yazı Rengi', FG_PALETTE, applyFg, 'fgColorPicker'));
-    const s=document.createElement('div'); s.className='sep'; el.appendChild(s);
-  }
-  const items = [];
-  if(kind==='cell'){
-    items.push(['Birleştir', opMerge],['Ayır', opUnmerge],['---'],
-      ['Prömiyer ★ (aç/kapat)', opPremiere],
-      ['★ PRÖMİYER açıklaması yaz', opPremiereLabel],
-      ['Kalın (aç/kapat)', opBold],
-      ['Altı çizili (aç/kapat)', opUnderline],
-      ['Rengi Temizle', opClearFormat],
-      ['⚠️ Çakışmayı yok say (aç/kapat)', opIgnoreConflict],
-      ['✎ Serbest metin / not hücresi (aç/kapat)', opFreeText],
-      ['\uD83D\uDDC4 Arşiv oyun hücresi (aç/kapat)', opArchiveCell],
-      ['---'],
-      ['🚌 Turneye bağla', opLinkTour],
-      ['🚌 Turne bağını kaldır', opUnlinkTour],
-      ['↩ Dönüş günü olarak işaretle (aç/kapat)', opTourReturn],
-      ['---'],
-      ['Not ekle/düzenle…', async()=>{
-        const m=curMonth(); const k=sel.r1+'_'+sel.c1;
-        const cur=(m.cells[k]||{}).note||'';
-        const n=await sitePrompt('Not:', cur, 'Not ekle/düzenle');
-        if(n===null) return;
-        snapshot();
-        m.cells[k] = {...(m.cells[k]||{v:''}), note:n||undefined};
-        if(!n) delete m.cells[k].note;
-        saveState(); renderSheet();
-      }],
-      ['---'],['Temizle (Del)', opClear],['Kopyala (Ctrl+C)', opCopy],['Yapıştır (Ctrl+V)', opPaste],
-      ['---'],['Üste satır ekle', ()=>opInsertRow('above')],['Alta satır ekle', ()=>opInsertRow('below')],['Satırı sil', opDelRow],
-      ['Sola sütun ekle', ()=>opInsertCol('left')],['Sağa sütun ekle', ()=>opInsertCol('right')],['Sütunu sil', opDelCol]);
+    ctxItem(el,'B','Kalın', opBold);
+    ctxItem(el,'U','Altı çizili', opUnderline);
+    ctxItem(el,'⌫','Biçimi temizle', opClearFormat);
+    ctxSep(el);
+    ctxItem(el,'⧉','Kopyala', opCopy);
+    ctxItem(el,'⎘','Yapıştır', opPaste);
+    ctxItem(el,'␡','İçeriği temizle', opClear);
+    ctxSep(el);
+    ctxItem(el,'⬓','Birleştir', opMerge);
+    ctxItem(el,'⬒','Ayır', opUnmerge);
+    ctxItem(el,'✎','Not ekle/düzenle…', ctxNote());
+    ctxSep(el);
+    ctxGroup(el,'＋','Satır / Sütun', [
+      ['↑','Üste satır ekle', ()=>opInsertRow('above')],
+      ['↓','Alta satır ekle', ()=>opInsertRow('below')],
+      ['␥','Satırı sil', opDelRow],
+      '---',
+      ['←','Sola sütun ekle', ()=>opInsertCol('left')],
+      ['→','Sağa sütun ekle', ()=>opInsertCol('right')],
+      ['␥','Sütunu sil', opDelCol]
+    ]);
+    ctxGroup(el,'🎭','Oyun / Tiyatro', [
+      ['★','Prömiyer (aç/kapat)', opPremiere],
+      ['★','PRÖMİYER açıklaması yaz', opPremiereLabel],
+      ['⚠️','Çakışmayı yok say (aç/kapat)', opIgnoreConflict],
+      ['✎','Serbest metin / not hücresi', opFreeText],
+      ['🗄','Arşiv oyun hücresi', opArchiveCell]
+    ]);
+    ctxGroup(el,'🚌','Turne', [
+      ['🚌','Turneye bağla', opLinkTour],
+      ['✂','Turne bağını kaldır', opUnlinkTour],
+      ['↩','Dönüş günü olarak işaretle', opTourReturn]
+    ]);
   } else if(kind==='row'){
-    items.push(['Üste satır ekle', ()=>opInsertRow('above')],['Alta satır ekle', ()=>opInsertRow('below')],['Satırı sil', opDelRow],['---'],['⚠️ Satırda çakışmayı yok say (aç/kapat)', opIgnoreConflictRow],['---'],['Temizle', opClear]);
+    ctxItem(el,'B','Kalın', opBold);
+    ctxItem(el,'⌫','Biçimi temizle', opClearFormat);
+    ctxItem(el,'␡','İçeriği temizle', opClear);
+    ctxSep(el);
+    ctxItem(el,'↑','Üste satır ekle', ()=>opInsertRow('above'));
+    ctxItem(el,'↓','Alta satır ekle', ()=>opInsertRow('below'));
+    ctxItem(el,'␥','Satırı sil', opDelRow);
+    ctxSep(el);
+    ctxItem(el,'⚠️','Satırda çakışmayı yok say', opIgnoreConflictRow);
   } else {
-    items.push(['Sola sütun ekle', ()=>opInsertCol('left')],['Sağa sütun ekle', ()=>opInsertCol('right')],['Sütunu sil', opDelCol],['---'],['Temizle', opClear]);
+    ctxItem(el,'B','Kalın', opBold);
+    ctxItem(el,'⌫','Biçimi temizle', opClearFormat);
+    ctxItem(el,'␡','İçeriği temizle', opClear);
+    ctxSep(el);
+    ctxItem(el,'←','Sola sütun ekle', ()=>opInsertCol('left'));
+    ctxItem(el,'→','Sağa sütun ekle', ()=>opInsertCol('right'));
+    ctxItem(el,'␥','Sütunu sil', opDelCol);
   }
-  for(const it of items){
-    if(it[0]==='---'){ const s=document.createElement('div'); s.className='sep'; el.appendChild(s); continue; }
-    const b=document.createElement('button'); b.textContent=it[0];
-    b.onclick=()=>{ hideCtx(); it[1](); };
-    el.appendChild(b);
-  }
-  /* Menüyü ekran içinde tut: taşarsa yukarı çevir, gerekirse kaydır */
+  ctxFit(true);
+}
+/* Menüyü ekran içinde tut */
+function ctxFit(keepPos){
+  const el=document.getElementById('ctxmenu');
+  const x=+el.dataset.x||0, y=+el.dataset.y||0;
   const pad=8;
   el.style.maxHeight='none'; el.style.overflowY='visible';
-  el.style.left='-9999px'; el.style.top='0px';
-  el.classList.add('active');
+  if(!keepPos){ /* açılıp kapanan gruplarda konum korunur, sadece taşma yeniden ölçülür */ }
+  else { el.style.left='-9999px'; el.style.top='0px'; el.classList.add('active'); }
   const rr=el.getBoundingClientRect();
   const vw=window.innerWidth, vh=window.innerHeight;
   let h=rr.height;
@@ -4378,6 +4473,9 @@ document.getElementById('boldBtn').onclick = opBold;
 document.getElementById('underlineBtn').onclick = opUnderline;
 document.getElementById('premLabelBtn').onclick = opPremiereLabel;
 document.getElementById('fmtClearBtn').onclick = opClearFormat;
+document.getElementById('alignLeftBtn').onclick = opAlignLeft;
+document.getElementById('alignCenterBtn').onclick = opAlignCenter;
+document.getElementById('alignRightBtn').onclick = opAlignRight;
 document.getElementById('rowAbove').onclick = ()=>opInsertRow('above');
 document.getElementById('rowBelow').onclick = ()=>opInsertRow('below');
 document.getElementById('rowDel').onclick = opDelRow;
