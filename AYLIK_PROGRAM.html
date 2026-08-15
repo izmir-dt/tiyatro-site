@@ -131,14 +131,37 @@ table.sheet td.cell.premiere::before{content:"★ ";color:var(--premiere)}
 
 /* Turne hücreleri: sahne hücreleriyle birebir aynı yazı tipi/rengi/kalınlığı */
 table.sheet td.cell.turne{color:inherit;font-weight:500;font-family:inherit;font-style:inherit}
-/* === Turne grupları (şehir/kurum başlığına bağlı oyunlar) === */
-table.sheet td.cell.tour-head,table.sheet td.cell.tour-member{box-shadow:inset 3px 0 0 rgba(208,0,0,.55)}
-table.sheet td.cell.tour-head{font-weight:700}
-table.sheet td.cell.tour-member{padding-left:18px}
-table.sheet td.cell.tour-first{box-shadow:inset 3px 0 0 rgba(208,0,0,.55),inset 0 3px 0 rgba(208,0,0,.32)}
-table.sheet td.cell.tour-last{box-shadow:inset 3px 0 0 rgba(208,0,0,.55),inset 0 -3px 0 rgba(208,0,0,.32)}
-table.sheet td.cell.tour-hl{background:#fff1ec !important}
-table.sheet td.cell.tour-return{background:#ffe9e2 !important;box-shadow:inset 3px 0 0 #b23018,inset 0 -3px 0 #b23018 !important}
+/* === Turne grupları (şehir/kurum başlığına bağlı oyunlar) ===
+   Grup, tek parça bir çerçeve gibi görünür: soldaki kalın renk şeridi + iki
+   yanda ince çizgi, ilk satırda üst, son satırda alt kenar. */
+table.sheet td.cell.tour-head,
+table.sheet td.cell.tour-member,
+table.sheet td.cell.tour-return{
+  --tourLine:rgba(178,48,24,.85);
+  --tourEdge:rgba(178,48,24,.30);
+  background:linear-gradient(90deg,rgba(208,0,0,.045),rgba(208,0,0,0) 42%);
+  box-shadow:inset 4px 0 0 var(--tourLine), inset -1px 0 0 var(--tourEdge);
+  transition:box-shadow .12s ease, background-color .12s ease;
+}
+table.sheet td.cell.tour-head{font-weight:700;letter-spacing:.2px}
+table.sheet td.cell.tour-member{padding-left:20px}
+table.sheet td.cell.tour-first{
+  box-shadow:inset 4px 0 0 var(--tourLine), inset -1px 0 0 var(--tourEdge), inset 0 2px 0 var(--tourLine);
+}
+table.sheet td.cell.tour-last{
+  box-shadow:inset 4px 0 0 var(--tourLine), inset -1px 0 0 var(--tourEdge), inset 0 -2px 0 var(--tourLine);
+}
+table.sheet td.cell.tour-first.tour-last{
+  box-shadow:inset 4px 0 0 var(--tourLine), inset -1px 0 0 var(--tourEdge),
+             inset 0 2px 0 var(--tourLine), inset 0 -2px 0 var(--tourLine);
+}
+/* Grubun üzerine gelince tüm blok birlikte vurgulanır */
+table.sheet td.cell.tour-hl{background:#fff4f0 !important;--tourLine:#b23018;--tourEdge:rgba(178,48,24,.5)}
+table.sheet td.cell.tour-return{background:#ffe9e2 !important}
+table.sheet td.cell.tour-return.tour-last,
+table.sheet td.cell.tour-return:not(.tour-first):not(.tour-last){
+  box-shadow:inset 4px 0 0 #b23018, inset -1px 0 0 rgba(178,48,24,.5), inset 0 -2px 0 #b23018 !important;
+}
 table.sheet td.cell.tour-return::after{content:" ↩ dönüş";font-size:10px;font-style:normal;font-weight:700;color:#b23018;opacity:1;white-space:nowrap}
 table.sheet td.cell.tour-return.tour-empty{min-height:18px}
 table.sheet td.cell.tour-return.tour-empty::after{content:"↩ dönüş günü"}
@@ -377,7 +400,7 @@ body.conflictFocus #sheet td.cell.conflict{opacity:1;filter:none}
   .print-month table.sheet td.cell.tour-return::after,
   .print-month table.sheet td.cell.tour-return.tour-empty::after{content:"" !important}
   .print-month table.sheet td.cell[data-cat]{border-left:1px solid #000 !important}
-  .print-month table.sheet .tourSum{color:#000 !important}
+  .print-month table.sheet .tourSum{display:none !important}
   /* 2) Sarı hücreler (başlık / sahne başlığı / Pazartesi) yazdırmada da sarı kalsın.
         Arka plan kapalı yazdırılsa bile inset gölge ile sarı görünür. */
   .print-month table.sheet tr.titleRow td,
@@ -2269,8 +2292,15 @@ function wireCell(td){
   td.addEventListener('mouseenter', e=>{
     const r=+td.dataset.r, c=+td.dataset.c;
     const tid=td.dataset.tour;
+    document.querySelectorAll('#sheet td.tour-hl').forEach(x=>x.classList.remove('tour-hl'));
     if(tid) document.querySelectorAll('#sheet td[data-tour="'+tid+'"]').forEach(x=>x.classList.add('tour-hl'));
     showTooltipFor(r,c,e);
+  });
+  /* Fare aynı hücrede gezerken bir şey yapma; başka hücreye geçildiğinde
+     (mouseenter kaçırılmış olsa bile) tooltip'i tazele — donmayı engeller. */
+  td.addEventListener('mousemove', e=>{
+    const key=td.dataset.r+'_'+td.dataset.c;
+    if(window.__ttKey!==key) showTooltipFor(+td.dataset.r,+td.dataset.c,e);
   });
   td.addEventListener('mouseleave',()=>{
     document.querySelectorAll('#sheet td.tour-hl').forEach(x=>x.classList.remove('tour-hl'));
@@ -2280,16 +2310,33 @@ function wireCell(td){
 document.addEventListener('mouseup', ()=>{ dragSelecting=false; });
 
 let ttHideTimer=null;
+function hideTooltipNow(){
+  clearTimeout(ttHideTimer); ttHideTimer=null;
+  const tt=document.getElementById('tooltip');
+  if(tt){ tt.style.display='none'; tt.style.pointerEvents='none'; }
+  window.__ttKey=null;
+}
 function scheduleTooltipHide(){
   clearTimeout(ttHideTimer);
-  ttHideTimer=setTimeout(()=>{ document.getElementById('tooltip').style.display='none'; }, 320);
+  ttHideTimer=setTimeout(hideTooltipNow, 260);
 }
 function cancelTooltipHide(){ clearTimeout(ttHideTimer); ttHideTimer=null; }
 function initTooltipInteraction(){
   const tt=document.getElementById('tooltip');
   tt.addEventListener('mouseenter', cancelTooltipHide);
-  tt.addEventListener('mouseleave', ()=>{ tt.style.display='none'; });
+  tt.addEventListener('mouseleave', hideTooltipNow);
   tt.addEventListener('wheel', e=>{ e.stopPropagation(); }, {passive:true});
+  /* Güvenlik ağı: fare ne bir tablo hücresinde ne de tooltip üzerindeyse kapat. */
+  document.addEventListener('mousemove', e=>{
+    if(tt.style.display!=='block') return;
+    const t=e.target;
+    if(t && t.closest && (t.closest('#tooltip') || t.closest('#sheet td.cell'))) return;
+    hideTooltipNow();
+  }, true);
+  document.addEventListener('mousedown', hideTooltipNow, true);
+  window.addEventListener('scroll', hideTooltipNow, true);
+  window.addEventListener('blur', hideTooltipNow);
+  document.addEventListener('keydown', e=>{ if(e.key==='Escape') hideTooltipNow(); }, true);
 }
 function placeTooltip(ev){
   const tt=document.getElementById('tooltip');
@@ -2317,10 +2364,13 @@ function placeTooltip(ev){
   if(left+r.width>vw-pad) left=mx-16-r.width;
   left=Math.max(pad, Math.min(left, vw-pad-r.width));
   tt.style.left=left+'px'; tt.style.top=top+'px';
+  /* Kaydırma gerekmiyorsa tooltip fareyi yutmasın (başka hücreye geçişte donma olmaz) */
+  tt.style.pointerEvents = (tt.scrollHeight > tt.clientHeight+2) ? 'auto' : 'none';
 }
 function showTooltipFor(r,c,ev){
-  if(window.TOOLTIPS_OFF){ const t0=document.getElementById('tooltip'); if(t0) t0.style.display='none'; return; }
+  if(window.TOOLTIPS_OFF){ hideTooltipNow(); return; }
   cancelTooltipHide();
+  window.__ttKey = r+'_'+c;
   const m = curMonth();
   const cell = m.cells[r+'_'+c] || {};
   const raw = (cell.v||'').trim();
