@@ -507,6 +507,34 @@ body.conflictFocus #sheet td.cell.conflict{opacity:1;filter:none}
 body.toolbar-collapsed .cmdbar{border-radius:10px}
 body.fs-on #program .controls{position:sticky;top:0;z-index:40;background:var(--bg);padding:4px 0 8px}
 @media(max-width:820px){.cmdbar .cmd-right{margin-left:0}.menubar{gap:4px}}
+
+/* === Turne bloğu düzeltmeleri (yol günü, boş gün, kenar çizgileri) === */
+table.sheet tr.monday td.cell.tour-head,
+table.sheet tr.monday td.cell.tour-member,
+table.sheet tr.monday td.cell.tour-return{
+  background-color:#fff6f2;
+  background-image:linear-gradient(90deg,rgba(208,0,0,.06),rgba(208,0,0,0) 42%);
+  color:var(--ink);
+}
+/* Turne içindeki boş (yol / oyunsuz) günler: blok kesilmesin */
+table.sheet td.cell.tour-gap{min-height:20px}
+table.sheet td.cell.tour-gap::after{content:"· yol / oyunsuz gün";font-size:10px;font-weight:600;color:#b23018;opacity:.85;white-space:nowrap}
+/* Turne başlığı = yola çıkış günü */
+table.sheet td.cell.tour-head .tourDepart{display:block;font-size:10px;font-weight:700;font-style:normal;color:#b23018;letter-spacing:.2px;line-height:1.25}
+/* Blok kenarları: sol şerit + sağ ince çizgi her hücrede, üst/alt yalnız uçlarda */
+table.sheet td.cell.tour-mid{
+  box-shadow:inset 4px 0 0 var(--tourLine), inset -1px 0 0 var(--tourEdge);
+}
+#printView .print-month table.sheet td.cell.tour-gap::after,.print-month table.sheet td.cell.tour-gap::after{content:"·"}
+#printView .print-month table.sheet .tourDepart{display:none !important}
+#printView .print-month table.sheet td.cell.tour-gap::after{content:"" !important}
+@media print{
+  .print-month table.sheet .tourDepart{display:none !important}
+  .print-month table.sheet td.cell.tour-gap::after{content:"" !important}
+  /* Pazartesi satırındaki turne hücrelerinde de sol çizgi kaybolmasın */
+  .print-month table.sheet tr.monday td.cell.tour-head,
+  .print-month table.sheet tr.monday td.cell.tour-member{border-left:1px solid #000 !important}
+}
 </style>
 <style id="printPageStyle"></style>
 </head>
@@ -2110,13 +2138,14 @@ function isTourHeadCell(cell){
 function computeTours(m){
   const map={}, byId={}, groups=[];
   tourColsOf(m).forEach(c=>{
-    let cur=null;
+    let cur=null, gap=[];
     for(let r=2;r<m.rows;r++){
       const k=r+'_'+c, cell=m.cells[k];
       const v=(cell&&cell.v)?String(cell.v).trim():'';
       if(cell && cell.tourId && !cell.tourHead && byId[cell.tourId]){
         const g=byId[cell.tourId];
-        g.members.push({r,c,key:k,cell});
+        gap=[];
+        g.members.push({r,c,key:k,cell,gap:!v});
         if(cell.tourReturn) g.returnKey=k;
         map[k]={g,role:'member'}; cur=g; continue;
       }
@@ -2124,16 +2153,27 @@ function computeTours(m){
         if(cur && cell && cell.tourReturn){
           cur.members.push({r,c,key:k,cell});
           cur.returnKey=k; map[k]={g:cur,role:'member'};
+          gap=[];
           continue;
         }
-        cur=null; continue;
+        /* Boş gün (ör. PAZARTESİ yol günü) turneyi kesmez: en fazla 3 boş günü
+           tampona al; altında gruba ait bir hücre gelirse blok devam eder. */
+        if(cur){
+          if(gap.length<3){ gap.push({r,c,key:k,cell:cell||{v:''}}); continue; }
+          cur=null; gap=[];
+        }
+        continue;
       }
       if(isTourHeadCell(cell)){
+        gap=[];
         cur={id:(cell.tourId||('auto_'+c+'_'+r)), col:c, headKey:k, headRow:r, headText:v, members:[], returnKey:null, locked:!!cell.tourId};
         groups.push(cur); byId[cur.id]=cur; map[k]={g:cur,role:'head'};
         continue;
       }
       if(cur){
+        /* tampondaki boş günleri de bloğa dahil et (çizgiler kesilmesin) */
+        gap.forEach(gp=>{ cur.members.push({...gp, gap:true}); map[gp.key]={g:cur,role:'member',gap:true}; });
+        gap=[];
         cur.members.push({r,c,key:k,cell});
         if(cell.tourReturn) cur.returnKey=k;
         map[k]={g:cur,role:'member'};
@@ -2154,7 +2194,7 @@ function tourDayLabel(m,r){
 }
 function tourSummary(m,g){
   const rows=g.members.map(x=>x.r);
-  const firstR=Math.min.apply(null,rows);
+  const firstR=(g.headRow!=null)?g.headRow:Math.min.apply(null,rows);
   const lastR=g.returnKey ? +g.returnKey.split('_')[0] : Math.max.apply(null,rows);
   const a=tourDayLabel(m,firstR), b=tourDayLabel(m,lastR);
   let dates;
@@ -2178,7 +2218,7 @@ function tourTooltipHtml(m,info){
   });
   if(g.returnKey){
     const rows=g.members.map(x=>x.r);
-    h+='<div>Gidiş–dönüş: <b>'+escapeHtml(tourDayLabel(m,Math.min.apply(null,rows)))+' → '+escapeHtml(tourDayLabel(m,+g.returnKey.split('_')[0]))+'</b></div>';
+    h+='<div>Gidiş–dönüş: <b>'+escapeHtml(tourDayLabel(m,(g.headRow!=null?g.headRow:Math.min.apply(null,rows))))+' → '+escapeHtml(tourDayLabel(m,+g.returnKey.split('_')[0]))+'</b></div>';
   }
   return h;
 }
@@ -2248,15 +2288,21 @@ function renderSheet(){
       const tinfo = r>=2 ? tours.map[r+'_'+c] : null;
       if(tinfo){
         td.dataset.tour = tinfo.g.id;
+        const rws=(tinfo.g.members||[]).map(x=>x.r);
+        const lastR=rws.length?Math.max.apply(null,rws):tinfo.g.headRow;
         if(tinfo.role==='head'){
           td.classList.add('tour-head','tour-first');
+          const dp=document.createElement('span'); dp.className='tourDepart';
+          dp.textContent='↗ yola çıkış günü';
+          td.appendChild(dp);
           const sp=document.createElement('span'); sp.className='tourSum';
           sp.textContent=tourSummary(m,tinfo.g);
           td.appendChild(sp);
+          if(r===lastR) td.classList.add('tour-last');
         } else {
           td.classList.add('tour-member');
-          const rws=tinfo.g.members.map(x=>x.r);
-          if(r===Math.max.apply(null,rws)) td.classList.add('tour-last');
+          if(r===lastR) td.classList.add('tour-last'); else td.classList.add('tour-mid');
+          if(tinfo.gap || !String(cell.v||'').trim()){ if(!cell.tourReturn) td.classList.add('tour-gap'); }
           if(cell.tourReturn) td.classList.add('tour-return');
         }
       }
@@ -2639,7 +2685,13 @@ function startEdit(td){
         snapshot();
         const mm = curMonth();
         mm.cells[r+'_'+c] = {...(mm.cells[r+'_'+c]||{}), v: nv};
-        if(!nv) delete mm.cells[r+'_'+c];
+        if(!nv){
+        const kc = mm.cells[r+'_'+c] || {};
+        /* turne bağı / dönüş işareti / not gibi bilgileri olan hücreyi silme,
+           yoksa boş bırakılan yol günü turneden kopuyor */
+        if(kc.tourId || kc.tourHead || kc.tourReturn || kc.note || kc.bg || kc.cat) mm.cells[r+'_'+c] = {...kc, v:''};
+        else delete mm.cells[r+'_'+c];
+      }
         registerPlayName(nv, mm.cells[r+'_'+c]);
         saveState();
       }
@@ -2665,7 +2717,13 @@ function startEdit(td){
       snapshot();
       const mm = curMonth();
       mm.cells[r+'_'+c] = {...(mm.cells[r+'_'+c]||{}), v: nv};
-      if(!nv) delete mm.cells[r+'_'+c];
+      if(!nv){
+        const kc = mm.cells[r+'_'+c] || {};
+        /* turne bağı / dönüş işareti / not gibi bilgileri olan hücreyi silme,
+           yoksa boş bırakılan yol günü turneden kopuyor */
+        if(kc.tourId || kc.tourHead || kc.tourReturn || kc.note || kc.bg || kc.cat) mm.cells[r+'_'+c] = {...kc, v:''};
+        else delete mm.cells[r+'_'+c];
+      }
       saveState();
     }
     renderSheet();
@@ -2761,11 +2819,19 @@ function opLinkTour(){
   const head={...(m.cells[headR+'_'+c]||{v:''})};
   head.tourId=id; head.tourHead=true; head.freeText=true; delete head.noTour;
   m.cells[headR+'_'+c]=head;
-  let n=0;
+  let n=0, lastR=headR;
   for(let r=Math.max(sel.r1,headR+1);r<=sel.r2;r++){
-    const cell=m.cells[r+'_'+c]; if(!cell||!cell.v) continue;
-    const nn={...cell}; nn.tourId=id; delete nn.tourHead; delete nn.noTour;
-    m.cells[r+'_'+c]=nn; n++;
+    const cell=m.cells[r+'_'+c];
+    if(cell && (String(cell.v||'').trim() || cell.tourReturn)) lastR=r;
+  }
+  /* Başlık ile son dolu gün arasındaki BOŞ günler (ör. Pazartesi yol günü) da
+     bloğa dahil edilir; böylece bağlama kesilmez ve çerçeve bütün kalır. */
+  for(let r=Math.max(sel.r1,headR+1);r<=lastR;r++){
+    const cell=m.cells[r+'_'+c] || {v:''};
+    const nn={...cell}; if(nn.v===undefined) nn.v='';
+    nn.tourId=id; delete nn.tourHead; delete nn.noTour;
+    m.cells[r+'_'+c]=nn;
+    if(String(nn.v||'').trim()) n++;
   }
   saveState(); renderSheet(); renderPrint();
   setStatus(n ? ('“'+(head.v||'')+'” turnesine '+n+' oyun bağlandı (kilitli).') : 'Turne başlığı işaretlendi; altına oyun seçip yeniden bağla.');
@@ -3697,11 +3763,12 @@ function renderPrint(){
         if(tinfo){
           if(tinfo.role==='head'){
             clist.push('tour-head','tour-first');
-            extra='<span class="tourSum">'+escapeHtml(tourSummary(m,tinfo.g))+'</span>';
+            extra='<span class="tourDepart">↗ yola çıkış günü</span><span class="tourSum">'+escapeHtml(tourSummary(m,tinfo.g))+'</span>';
           } else {
             clist.push('tour-member');
             const rws=tinfo.g.members.map(x=>x.r);
-            if(r===Math.max.apply(null,rws)) clist.push('tour-last');
+            if(r===Math.max.apply(null,rws)) clist.push('tour-last'); else clist.push('tour-mid');
+            if((tinfo.gap || !String(cell.v||'').trim()) && !cell.tourReturn) clist.push('tour-gap');
             if(cell.tourReturn) clist.push('tour-return');
           }
         }
