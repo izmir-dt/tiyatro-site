@@ -4042,8 +4042,8 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
           const data = JSON.parse(b64Utf8Decode(parts.slice(0,total).map(r=>String(r[4]||"")).join("")));
           /* Yeni (ay bazlı) biçim: {month, plays, ...}. Eski (tüm program tek
              seferde) biçim geriye dönük uyum için hâlâ okunur: {months:[...]}. */
-          if(data && data.month) months.push(data.month);
-          else if(data && Array.isArray(data.months)) months.push(...data.months);
+          if(data && data.month) months.push(Object.assign({}, data.month, {_pubTs:g.ts}));
+          else if(data && Array.isArray(data.months)) months.push(...data.months.map(mo => Object.assign({}, mo, {_pubTs:g.ts})));
         }catch(e){}
       }
       return {months};
@@ -4151,7 +4151,12 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
     });
     return {cells, dolu, oyunSayisi:oyunlar.size, oyunlar:[...oyunlar],
       temsil, sahneSayisi:sahneler.size, doluGun:gunler.size,
+      pubTs:m._pubTs||0,
       note:String(m.siteNote||m.note||"").trim()};
+  }
+  function pubTsLabel(ts){
+    if(!ts) return "";
+    return new Date(ts).toLocaleString("tr-TR", { timeZone:"Europe/Istanbul", day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" });
   }
 
   /* ---------- 2b) Ay sırası (takvim sırası) ---------- */
@@ -4501,7 +4506,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
           <div><h3><span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="16" rx="2"></rect><path d="M8 2.5v4M16 2.5v4M3 9.5h18"></path><path d="m8 14 2 2 5-5"></path></svg></span> Aylık Program</h3></div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
             <span class="chip gold">${months.length} ay</span>
-            <span class="chip" title="Bu ekran en son bu saatte yenilendi">Son güncelleme: ${prgLastFetchLabel()}</span>
+            <span class="chip" title="Bu ekran en son bu saatte yenilendi (verinin ne zaman kesinleştirildiğini göstermez)">Ekran yenilendi: ${prgLastFetchLabel()}</span>
             <button class="btn sm" onclick="renderProgram()">Yenile</button>
           </div>
         </div>
@@ -4513,6 +4518,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
             <div class="aph-card">
               <div class="month-kicker"><svg class="aph-kicker-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4.5" width="18" height="16" rx="2"></rect><path d="M8 2.5v4M16 2.5v4M3 9.5h18"></path></svg>Aylık program özeti</div>
               <div class="ttl">${esc(months[i].name||("Ay "+(i+1)))}</div>
+              ${inf.pubTs ? `<div class="meta" title="Bu ay en son bu tarihte kesinleştirildi">Kesinleştirme: ${pubTsLabel(inf.pubTs)}</div>` : ""}
               <div class="stat">
                 <div title="Bu ay programda yer alan birbirinden farklı oyun sayısı">
                   <svg class="aph-stat-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7.5h16v11H4z"></path><path d="M7 7.5V5h10v2.5M8 12h8M8 15.5h5"></path></svg>
