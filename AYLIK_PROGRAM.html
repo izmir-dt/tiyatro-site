@@ -231,18 +231,19 @@ table.sheet td.cell.note-mark::after{content:"";position:absolute;top:0;right:0;
 .ctxmenu button:hover{background:#f5ecd6}
 .ctxmenu .sep{height:1px;background:var(--border);margin:4px 0}
 .ctxmenu{min-width:212px;max-width:262px}
-.ctxmenu button{display:flex;align-items:center;gap:8px;padding:7px 12px;border-radius:5px}
+.ctxmenu button{display:flex;align-items:center;gap:8px;padding:4px 12px;border-radius:5px;line-height:1.25}
 .ctxmenu button .ic{width:16px;text-align:center;opacity:.75;font-size:12px}
 .ctxmenu button .arr{margin-left:auto;opacity:.55;font-size:11px}
 .ctxmenu .sub{position:relative}
-.ctxmenu .grp{display:none;position:absolute;left:100%;top:-4px;margin-left:2px;min-width:200px;background:#fff;border:1px solid var(--border);border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.18);padding:4px 0;z-index:5}
+/* Alt menü artık JS ile viewport'a göre position:fixed konumlandırılıyor (sub-container'ın
+   overflow:auto olması taşan alt menüyü kırpmasın diye); left/top burada JS tarafından set edilir. */
+.ctxmenu .grp{display:none;position:fixed;min-width:200px;background:#fff;border:1px solid var(--border);border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.18);padding:4px 0;z-index:100003}
 .ctxmenu .grp.open{display:block}
-.ctxmenu .sub.flip-left .grp{left:auto;right:100%;margin-left:0;margin-right:2px}
-.ctxmenu .grp button{padding:7px 12px;font-size:12.5px}
+.ctxmenu .grp button{padding:4px 12px;font-size:12.5px}
 .ctxmenu .sub > button.open-parent{background:#f5ecd6}
-.ctxmenu .ttl{font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);font-weight:700;padding:6px 12px 2px}
-.ctxmenu .inline-row{display:flex;gap:6px;padding:4px 10px 6px}
-.ctxmenu .inline-row button{flex:1;justify-content:center;padding:6px 0;border:1px solid var(--border);font-size:12.5px}
+.ctxmenu .ttl{font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);font-weight:700;padding:4px 12px 2px}
+.ctxmenu .inline-row{display:flex;gap:6px;padding:3px 10px 5px}
+.ctxmenu .inline-row button{flex:1;justify-content:center;padding:4px 0;border:1px solid var(--border);font-size:12.5px}
 
 /* Modal */
 .modal-back{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:100002;padding:16px}
@@ -3256,17 +3257,22 @@ function ctxGroup(el, icon, label, items){
   const open=()=>{
     closeAll();
     g.classList.add('open'); b.classList.add('open-parent');
-    /* sağda yer yoksa sola aç */
-    wrap.classList.remove('flip-left');
-    const menu=document.getElementById('ctxmenu');
-    const gr=g.getBoundingClientRect();
-    if(gr.right > window.innerWidth-6) wrap.classList.add('flip-left');
-    /* alt taşmayı düzelt */
-    const gr2=g.getBoundingClientRect();
-    if(gr2.bottom > window.innerHeight-6){
-      g.style.top = Math.min(0, window.innerHeight-6-gr2.bottom) + 'px';
-    } else { g.style.top='-4px'; }
-    if(menu) menu.style.overflow='visible';
+    /* Konumu düğmenin (wrap) viewport'taki gerçek yerine göre hesapla ve
+       position:fixed ile ata — böylece ana menü kaydırma çubuğu (overflow-y:auto)
+       gösterse bile alt menü kırpılmaz/ekrandan taşmaz. */
+    const pad=6;
+    const wr=wrap.getBoundingClientRect();
+    g.style.left = (wr.right+2)+'px';
+    g.style.top = wr.top+'px';
+    const gw=g.offsetWidth, gh=g.offsetHeight;
+    let left = wr.right+2;
+    if(left+gw > window.innerWidth-pad) left = wr.left-gw-2;      /* sağda yer yoksa sola aç */
+    if(left < pad) left = Math.max(pad, Math.min(wr.right+2, window.innerWidth-pad-gw));
+    let top = wr.top;
+    if(top+gh > window.innerHeight-pad) top = window.innerHeight-pad-gh; /* alttan taşmayı düzelt */
+    if(top < pad) top = pad;
+    g.style.left = left+'px';
+    g.style.top = top+'px';
   };
   wrap.addEventListener('mouseenter', open);
   wrap.addEventListener('mouseleave', ()=>{ g.classList.remove('open'); b.classList.remove('open-parent'); });
