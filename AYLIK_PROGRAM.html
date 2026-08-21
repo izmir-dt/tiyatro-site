@@ -258,6 +258,8 @@ table.sheet td.cell.note-mark::after{content:"";position:absolute;top:0;right:0;
 /* Tooltip */
 #tooltip{position:fixed;z-index:100000;max-width:min(460px,94vw);max-height:min(80vh,640px);overscroll-behavior:contain;overflow:auto;background:linear-gradient(180deg,#2b1a12 0%,#170d08 100%);color:#fdf7ef;padding:12px 14px;border:1px solid rgba(255,255,255,.14);border-radius:12px;font-size:13px;line-height:1.55;box-shadow:0 18px 44px rgba(0,0,0,.5);display:none;pointer-events:auto;white-space:pre-wrap;font-family:'Manrope',system-ui,sans-serif;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.35) transparent}
 #tooltip:focus{outline:none}
+#tooltip.tt-pinned{outline:2px solid #ffd645;outline-offset:2px}
+#tooltip.tt-pinned::before{content:"📌 Sabitlendi — kapatmak için F4 veya Esc";display:block;font-size:11px;color:#ffd645;font-weight:700;margin-bottom:7px;letter-spacing:.2px}
 #tooltip::-webkit-scrollbar{width:9px}
 #tooltip::-webkit-scrollbar-thumb{background:rgba(255,255,255,.32);border-radius:6px}
 #tooltip .ttHead{font-family:'Fraunces',Georgia,serif;font-weight:700;font-size:15px;margin:0 0 7px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,.16);letter-spacing:.2px}
@@ -740,7 +742,7 @@ table.sheet td.cell.tour-mid{
   <details class="shortcuts">
     <summary>Kısayollar ve ipuçları</summary>
     <div class="sc-body">
-      Tıkla → seç · Shift+Tıkla → aralık · Çift tıkla → yaz · Enter/Esc · Delete → temizle · Ctrl+C/V · Ctrl+Z/Y · Sağ tık → menü · F8 → sonraki çakışma · Oyunun üzerine gel → çakışma bilgisi · <b>Serbest metin ✎</b> → hücreyi oyun sayma (il adı, açıklama, not) · Onay bekleyen metnin üzerine gel → tooltipten doğrudan <b>Oyun olarak ekle / Serbest metin yap / Oyun değil</b> · <b>Not ekle</b> → oyunun yanına not · <b>🏷 Kategori</b> → notu sınıflandır (İl, Sahne, Turne, Prova, Tatil, Duyuru) · Satırı tam seçip (sıra no'ya tıkla) <b>Zemin rengi</b> uygula → soldaki sıra no hücresi de boyanır
+      Tıkla → seç · Shift+Tıkla → aralık · Çift tıkla → yaz · Enter/Esc · Delete → temizle · Ctrl+C/V · Ctrl+Z/Y · Sağ tık → menü · <b>F4</b> → bilgi balonunu hücreye sabitle/kaldır · F8 → sonraki çakışma · Oyunun üzerine gel → çakışma bilgisi · <b>Serbest metin ✎</b> → hücreyi oyun sayma (il adı, açıklama, not) · Onay bekleyen metnin üzerine gel → tooltipten doğrudan <b>Oyun olarak ekle / Serbest metin yap / Oyun değil</b> · <b>Not ekle</b> → oyunun yanına not · <b>🏷 Kategori</b> → notu sınıflandır (İl, Sahne, Turne, Prova, Tatil, Duyuru) · Satırı tam seçip (sıra no'ya tıkla) <b>Zemin rengi</b> uygula → soldaki sıra no hücresi de boyanır
     </div>
   </details>
 </section>
@@ -2384,6 +2386,7 @@ function wireCell(td){
     e.preventDefault();
     const r=+td.dataset.r, c=+td.dataset.c;
     if(!inSel(r,c)) setSel(r,c,r,c);
+    window.__ttPin=null;
     document.getElementById('tooltip').style.display='none';
     showCtx(e.clientX,e.clientY,'cell');
     td.focus({preventScroll:true});
@@ -2409,10 +2412,14 @@ function wireCell(td){
 document.addEventListener('mouseup', ()=>{ dragSelecting=false; });
 
 let ttHideTimer=null;
-function hideTooltipNow(){
+function hideTooltipNow(force){
+  /* Balon bir hücreye sabitlenmişse (F4 ile pinlendiyse) sadece Esc veya
+     tekrar F4 (force=true ile çağrılır) kapatabilir — fare kaydırma,
+     dışarı tıklama, sekme kaybı gibi olaylar onu kapatmasın. */
+  if(window.__ttPin && !force) return;
   clearTimeout(ttHideTimer); ttHideTimer=null;
   const tt=document.getElementById('tooltip');
-  if(tt){ tt.style.display='none'; }
+  if(tt){ tt.style.display='none'; tt.classList.remove('tt-pinned'); }
   window.__ttKey=null;
 }
 function scheduleTooltipHide(){
@@ -2451,24 +2458,37 @@ function initTooltipInteraction(){
     else if(act==='dismiss') dismissPendingPlay(k);
     else if(act==='unfreeCell') unmarkFreeTextCell(rr,cc);
     else if(act==='unfreeAll') unmarkAllFreeText(k);
-    hideTooltipNow();
+    window.__ttPin=null;
+    hideTooltipNow(true);
   });
-  /* Klavye ile erişim: seçili hücrede Ctrl+I bilgi balonunu açar, Esc kapatır.
-     Not: tek başına "i" kullanılmıyor çünkü herhangi bir karakter tuşu hücre
-     düzenlemeyi başlatıp o karakteri yazıyor (bkz. alttaki genel keydown
-     dinleyicisi) — bu yüzden Ctrl+I gibi çakışmayan bir kısayol seçildi. */
+  /* Klavye ile erişim: seçili hücrede F4 bilgi balonunu bu hücreye SABİTLER
+     (pinler) — fare başka hücrelere gitse bile balon değişmez/kapanmaz.
+     Tekrar F4 ya da Esc sabitlemeyi kaldırıp balonu kapatır.
+     Not: tek başına harf tuşları kullanılmıyor çünkü herhangi bir karakter
+     tuşu hücre düzenlemeyi başlatıp o karakteri yazıyor (bkz. alttaki genel
+     keydown dinleyicisi). F1 yerine F4 seçildi çünkü F1 bazı tarayıcılarda
+     (ör. Firefox) sayfadan bağımsız kendi yardım sekmesini açabiliyor;
+     F4'ün tarayıcılarda ayrılmış bir işlevi yok. */
   document.addEventListener('keydown', e=>{
-    if(!(e.ctrlKey||e.metaKey) || e.altKey || e.shiftKey) return;
-    if(e.key!=='i' && e.key!=='I' && e.key!=='İ' && e.key!=='ı') return;
+    if(e.ctrlKey||e.metaKey||e.altKey||e.shiftKey) return;
+    if(e.key!=='F4') return;
     const t=e.target;
     if(t && (t.tagName==='INPUT'||t.tagName==='TEXTAREA'||t.isContentEditable)) return;
+    e.preventDefault();
+    if(window.__ttPin){
+      window.__ttPin=null;
+      hideTooltipNow(true);
+      setStatus('Bilgi balonu sabitlemesi kaldırıldı.');
+      return;
+    }
     if(typeof sel==='undefined' || sel.r1==null) return;
     const td=document.querySelector('#sheet td.cell[data-r="'+sel.r1+'"][data-c="'+sel.c1+'"]');
     if(!td) return;
-    e.preventDefault();
+    window.__ttPin = {r:sel.r1, c:sel.c1};
     const rc=td.getBoundingClientRect();
     showTooltipFor(sel.r1, sel.c1, {clientX:rc.left+Math.min(60,rc.width/2), clientY:rc.bottom-4});
     tt.focus({preventScroll:true});
+    setStatus('Bilgi balonu bu hücreye sabitlendi — kapatmak için F4 veya Esc.');
   });
   tt.addEventListener('mouseenter', cancelTooltipHide);
   tt.addEventListener('mouseleave', e=>{ resolveTooltipAt(e.clientX, e.clientY); });
@@ -2491,7 +2511,7 @@ function initTooltipInteraction(){
      tekerlekle kaydırırken bu tetiklenip tooltip'i anında kapatmasın. */
   window.addEventListener('scroll', e=>{ if(e.target===tt) return; hideTooltipNow(); }, true);
   window.addEventListener('blur', hideTooltipNow);
-  document.addEventListener('keydown', e=>{ if(e.key==='Escape') hideTooltipNow(); }, true);
+  document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ window.__ttPin=null; hideTooltipNow(true); } }, true);
 }
 function placeTooltip(ev){
   const tt=document.getElementById('tooltip');
@@ -2533,10 +2553,14 @@ function ttRoleLines(games, p){
 }
 function showTooltipFor(r,c,ev){
   if(window.TOOLTIPS_OFF){ hideTooltipNow(); return; }
+  /* Balon bir hücreye sabitlenmişse (F4), fare başka hücreye gitse bile
+     sadece sabitli hücrenin balonu gösterilir; diğerleri yok sayılır. */
+  if(window.__ttPin && (window.__ttPin.r!==r || window.__ttPin.c!==c)) return;
   cancelTooltipHide();
   window.__ttKey = r+'_'+c;
   const ttEl0 = document.getElementById('tooltip');
   ttEl0.dataset.r = r; ttEl0.dataset.c = c;
+  ttEl0.classList.toggle('tt-pinned', !!(window.__ttPin && window.__ttPin.r===r && window.__ttPin.c===c));
   const m = curMonth();
   const cell = m.cells[r+'_'+c] || {};
   const raw = (cell.v||'').trim();
@@ -2649,7 +2673,7 @@ function showTooltipFor(r,c,ev){
     }
   }
 
-  html += '<div class="ttHint">İpucu: hücre seçiliyken <b>Ctrl+I</b> bilgi balonunu açar, <b>Esc</b> kapatır.</div>';
+  html += '<div class="ttHint">İpucu: hücre seçiliyken <b>F4</b> balonu bu hücreye sabitler (fare başka hücreye gitse de değişmez) — kapatmak için tekrar <b>F4</b> veya <b>Esc</b>.</div>';
   tt.innerHTML = html;
   tt.style.display='block';
   placeTooltip(ev);
@@ -5093,7 +5117,7 @@ syncFromServer().then(()=>syncDraftFromServer());
   function toggle(){
     window.TOOLTIPS_OFF = !window.TOOLTIPS_OFF;
     try{ localStorage.setItem('ttOff', window.TOOLTIPS_OFF?'1':'0'); }catch(e){}
-    var tt=document.getElementById('tooltip'); if(tt && window.TOOLTIPS_OFF) tt.style.display='none';
+    var tt=document.getElementById('tooltip'); if(tt && window.TOOLTIPS_OFF){ window.__ttPin=null; tt.classList.remove('tt-pinned'); tt.style.display='none'; }
     paint(document.getElementById('cbTip'));
   }
   window.toggleTooltips = toggle;
