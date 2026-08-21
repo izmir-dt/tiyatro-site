@@ -847,6 +847,17 @@ const has = (h,n) => trLower(h).includes(trLower(n));
 const isFig = c => has(c||"","figüran") || has(c||"","figuran");
 const FIGTAG = /\(\s*fig[üu]ran\s*\)/i;
 const stripTag = s => s.replace(/\(\s*fig[üu]ran\s*\)/ig,"").replace(/^"+|"+$/g,"").trim();
+/* Bir satırdaki kişilerden hangilerinin FİGÜRAN sayılacağını belirler:
+   - Kişi hücresinde en az bir isme "(Figüran)" etiketi eklenmişse, SADECE etiketli isimler figürandır
+     (aynı satırdaki etiketsiz isimler figüran SAYILMAZ, kategori ne olursa olsun).
+   - Satırda hiç etiket yoksa ve kategori "Figüran" içeriyorsa, satırdaki tüm isimler figürandır. */
+const figNamesInRow = r => {
+  const toks = names(r.kisi);
+  const tagged = toks.filter(t => FIGTAG.test(t));
+  if(tagged.length) return new Set(tagged.map(stripTag).filter(Boolean));
+  if(isFig(r.kategori)) return new Set(toks.map(stripTag).filter(Boolean));
+  return new Set();
+};
 const isCocuk = n => n.includes("Ç.O") || n.includes("(Ç)");
 const sortTr = (a,b) => String(a).localeCompare(String(b),"tr");
 const jq = v => JSON.stringify(v).replace(/"/g,"&quot;");
@@ -956,8 +967,9 @@ function buildPlays(rows){
   rows.forEach(r => {
     if(!m.has(r.oyun)) m.set(r.oyun,{name:r.oyun,people:new Set(),figs:new Set(),rows:0,cats:new Set()});
     const o = m.get(r.oyun); o.rows++;
-    names(r.kisi).forEach(n => { const c = stripTag(n); if(c) o.people.add(c);
-      if(isFig(r.kategori) || FIGTAG.test(n)) o.figs.add(c); });
+    const figSet = figNamesInRow(r);
+    names(r.kisi).forEach(n => { const c = stripTag(n); if(c) o.people.add(c); });
+    figSet.forEach(c => o.figs.add(c));
     if(r.kategori) o.cats.add(r.kategori);
   });
   return [...m.values()].map(o => {
@@ -968,14 +980,17 @@ function buildPlays(rows){
 }
 function buildPeople(rows){
   const m = new Map();
-  rows.forEach(r => names(r.kisi).forEach(raw => {
-    const n = stripTag(raw); if(!n) return;
-    if(!m.has(n)) m.set(n,{name:n,oyunlar:new Set(),gorevler:new Set(),cats:new Set(),fig:false});
-    const p = m.get(n); p.oyunlar.add(r.oyun);
-    if(r.gorev) p.gorevler.add(r.gorev);
-    if(r.kategori) p.cats.add(r.kategori);
-    if(isFig(r.kategori) || FIGTAG.test(raw)) p.fig = true;
-  }));
+  rows.forEach(r => {
+    const figSet = figNamesInRow(r);
+    names(r.kisi).forEach(raw => {
+      const n = stripTag(raw); if(!n) return;
+      if(!m.has(n)) m.set(n,{name:n,oyunlar:new Set(),gorevler:new Set(),cats:new Set(),fig:false});
+      const p = m.get(n); p.oyunlar.add(r.oyun);
+      if(r.gorev) p.gorevler.add(r.gorev);
+      if(r.kategori) p.cats.add(r.kategori);
+      if(figSet.has(n)) p.fig = true;
+    });
+  });
   return [...m.values()].map(p => ({name:p.name, oyunlar:[...p.oyunlar].sort(sortTr),
     gorevler:[...p.gorevler].sort(sortTr), cats:[...p.cats], fig:p.fig, aktif: !PASIF.has(norm(p.name))}))
     .sort((a,b) => b.oyunlar.length - a.oyunlar.length || sortTr(a.name,b.name));
@@ -3183,8 +3198,9 @@ window.exportPDF = function(title, headers, data){
     rows.forEach(r => {
       if(!m.has(r.oyun)) m.set(r.oyun,{name:r.oyun,people:new Set(),figs:new Set(),rows:0,cats:new Set()});
       const o = m.get(r.oyun); o.rows++;
-      names(r.kisi).forEach(n => { const c = stripTag(n); if(c) o.people.add(c);
-        if(isFig(r.kategori) || FIGTAG.test(n)) o.figs.add(c); });
+      const figSet = figNamesInRow(r);
+      names(r.kisi).forEach(n => { const c = stripTag(n); if(c) o.people.add(c); });
+      figSet.forEach(c => o.figs.add(c));
       if(r.kategori) o.cats.add(r.kategori);
     });
     return [...m.values()].map(o => {
@@ -3197,16 +3213,19 @@ window.exportPDF = function(title, headers, data){
 
   window.buildPeople = function(rows){
     const m = new Map();
-    rows.forEach(r => names(r.kisi).forEach(raw => {
-      const n = stripTag(raw); if(!n) return;
-      if(!m.has(n)) m.set(n,{name:n,oyunlar:new Set(),pasifOyun:new Set(),gorevler:new Set(),cats:new Set(),fig:false});
-      const p = m.get(n);
-      if(PASIF_PLAY.has(norm(n) + "|||" + norm(r.oyun))) p.pasifOyun.add(r.oyun);
-      else p.oyunlar.add(r.oyun);
-      if(r.gorev) p.gorevler.add(r.gorev);
-      if(r.kategori) p.cats.add(r.kategori);
-      if(isFig(r.kategori) || FIGTAG.test(raw)) p.fig = true;
-    }));
+    rows.forEach(r => {
+      const figSet = figNamesInRow(r);
+      names(r.kisi).forEach(raw => {
+        const n = stripTag(raw); if(!n) return;
+        if(!m.has(n)) m.set(n,{name:n,oyunlar:new Set(),pasifOyun:new Set(),gorevler:new Set(),cats:new Set(),fig:false});
+        const p = m.get(n);
+        if(PASIF_PLAY.has(norm(n) + "|||" + norm(r.oyun))) p.pasifOyun.add(r.oyun);
+        else p.oyunlar.add(r.oyun);
+        if(r.gorev) p.gorevler.add(r.gorev);
+        if(r.kategori) p.cats.add(r.kategori);
+        if(figSet.has(n)) p.fig = true;
+      });
+    });
     return [...m.values()].map(p => ({name:p.name, oyunlar:[...p.oyunlar].sort(sortTr),
       pasifOyunlar:[...p.pasifOyun].sort(sortTr),
       gorevler:[...p.gorevler].sort(sortTr), cats:[...p.cats], fig:p.fig, aktif: !PASIF.has(norm(p.name))}))
