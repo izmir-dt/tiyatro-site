@@ -31,6 +31,14 @@ nav button.active{background:var(--accent);border-color:var(--accent)}
 #cbTip[aria-pressed=false]{background:#f1ece1;color:var(--muted);opacity:.85}
 #monthTitleRow{flex-wrap:wrap}
 @media print{#ttToggleWrap{display:none !important}}
+.newmonth-btn{background:var(--accent) !important;color:#2a1c00 !important;border:1px solid #8c6512 !important;font-weight:800 !important;font-size:14px !important;padding:8px 16px !important;letter-spacing:.3px;box-shadow:0 1px 0 rgba(0,0,0,.15)}
+.newmonth-btn:hover{filter:brightness(1.06)}
+.titlebar-btn{display:inline-flex;align-items:center;gap:6px;background:#fff;color:var(--primary);border:1px solid var(--border);
+  padding:6px 12px;border-radius:6px;cursor:pointer;font-size:13px;font-family:inherit;font-weight:600}
+.titlebar-btn:hover{background:#f6efe0}
+.titlebar-btn svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+@media print{#ttToggleWrap{display:none !important}}
+
 .tabBadge{display:inline-block;margin-left:6px;background:#ffd645;color:#3a2900;font-size:11px;font-weight:700;border-radius:10px;padding:1px 7px;vertical-align:middle}
 main{padding:12px 18px 40px}
 section{display:none}
@@ -582,7 +590,7 @@ table.sheet td.cell.tour-mid{
         <span class="status" id="status">Yükleniyor…</span>
       </div>
       <div class="cmd-right">
-        <button class="btn small" id="addMonthTop" title="Yeni ay oluştur (Cumartesi 2 satır otomatik)">+ Yeni ay</button>
+        <button class="btn small newmonth-btn" id="addMonthTop" title="Yeni ay oluştur (Cumartesi 2 satır otomatik)">+ YENİ AY</button>
         <button class="btn ghost small" id="delMonthTop" title="Görüntülenen ayı kalıcı olarak sil (sunucudan da kaldırılır)">&#128465; Ayı sil</button>
         <button class="btn ghost small" id="fsBtn" title="Aylık programı tam sayfa görüntüle (Esc ile çık)">Tam Ekran</button>
         <button class="btn small" id="toolbarToggleBtn" title="Düzenleme araç çubuğunu gizle/göster — aylık program odakta kalsın">Araçları gizle</button>
@@ -724,7 +732,16 @@ table.sheet td.cell.tour-mid{
   </div>
   <div id="monthTitleRow" style="display:flex;align-items:center;justify-content:space-between;gap:12px">
     <h2 id="monthTitle" style="margin:6px 0 8px"></h2>
-    <div id="ttToggleWrap" style="display:flex;flex-shrink:0">
+    <div id="ttToggleWrap" style="display:flex;flex-shrink:0;gap:8px;align-items:center;flex-wrap:wrap">
+      <button type="button" class="titlebar-btn" id="quickPrintBtn" title="Seçili kâğıt ayarıyla SADECE görüntülenen ayı yazdır / PDF">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9V3h12v6"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="7" rx="1"/></svg>
+        Yazdır</button>
+      <button type="button" class="titlebar-btn" id="quickExcelBtn" title="SADECE görüntülenen ayı Excel (.xls) olarak indir">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="m9 13 6 6"/><path d="m15 13-6 6"/></svg>
+        Excel</button>
+      <button type="button" class="titlebar-btn" id="previewTabBtn" title="Bu ayın programını, çakışma ve not özetiyle birlikte yeni sekmede önizle">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+        Program Önizleme</button>
       <button type="button" id="cbTip" aria-pressed="true" title="Hücre üzerine gelince çıkan bilgi balonunu aç/kapat (F9)">💬 Bilgi Balonu: Açık</button>
     </div>
   </div>
@@ -4839,6 +4856,157 @@ document.getElementById('publishBtn').onclick = publishProgram;
 document.getElementById('unpublishBtn').onclick = unpublishProgram;
 document.getElementById('catBtn').onclick = opSetCategory;
 document.getElementById('printBtn').onclick = ()=>printProgram();
+/* Üst çubuktaki tek tık kısayolları: Yazdır menüsündeki/Veri menüsündeki
+   "son kullanılan" kâğıt boyutu ve ay seçimiyle aynen çalışır — ayrı bir
+   ayar tutmaz, sadece o menüyü açmadan doğrudan tetikler. */
+
+/* ===== Yeni sekmede program önizleme: tablo + çakışma ve not özeti ===== */
+function _pvIcon(name){
+  const p = {
+    calendar:'<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
+    alert:'<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/>',
+    info:'<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>',
+    check:'<circle cx="12" cy="12" r="10"/><path d="m8 12 3 3 5-6"/>',
+    note:'<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/><path d="M9 13h6M9 17h4"/>',
+    users:'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/>',
+    theater:'<path d="M3 5h18v6a9 9 0 0 1-18 0Z"/><path d="M8 9h.01M16 9h.01M9 14a4 4 0 0 0 6 0"/>',
+    clock:'<circle cx="12" cy="12" r="10"/><path d="M12 7v5l3 2"/>',
+    print:'<path d="M6 9V3h12v6"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="7" rx="1"/>'
+  }[name] || '';
+  return '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true">'+p+'</svg>';
+}
+function monthPreviewData(m){
+  const critical=[], soft=[], notes=[];
+  for(let r=2;r<m.rows;r++){
+    const games = rowGames(m,r);
+    if(games.length>=2){
+      const cf = buildConflict(games);
+      const people = Object.entries(cf.people).map(([k,i])=>({key:k,name:i.name||k,critical:!!i.critical}));
+      if(people.length){
+        const ignored = games.every(g=>((m.cells[g.row+'_'+g.col]||{}).ignoreConflict));
+        const item = {
+          date: dateTextOfRow(m,r) || '-',
+          games: games.map(g=>({raw:g.raw, time:g.time||timeTextOfRow(m,r)||'', stage:stageHeaderText(m,g.col)||''})),
+          people, ignored
+        };
+        if(cf.hasCritical && people.some(p=>p.critical) && !ignored) critical.push(item); else soft.push(item);
+      }
+    }
+  }
+  Object.keys(m.cells||{}).forEach(key=>{
+    const cell=m.cells[key]||{};
+    const inline=parseGame(cell.v||'').inlineNote||'';
+    if(!cell.note && !cell.freeText && !inline) return;
+    const [r,c]=key.split('_').map(Number);
+    if(r<2) return;
+    notes.push({date:dateTextOfRow(m,r)||'-', time:timeTextOfRow(m,r)||'', stage:stageHeaderText(m,c)||'',
+      text:cell.v||'', note:cell.note||inline, free:!!cell.freeText});
+  });
+  return {critical, soft, notes};
+}
+function openMonthPreviewTab(){
+  const m = curMonth();
+  if(!m){ siteMessage('Önizlenecek ay bulunamadı.','warn','Program önizleme'); return; }
+  const w = window.open('', '_blank');
+  if(!w){ siteMessage('Tarayıcı yeni sekmeyi engelledi. Açılır pencere iznini verin.','warn','Program önizleme'); return; }
+  const d = monthPreviewData(m);
+  const esc = escapeHtml;
+  const styles = Array.prototype.map.call(document.querySelectorAll('style'), s=>s.textContent).join('\n');
+  const sheet = (document.getElementById('sheet')||{}).outerHTML || '';
+  const card = (item, crit)=>{
+    const badge = crit
+      ? '<span class="pill crit">'+_pvIcon('alert')+' Kritik çakışma</span>'
+      : '<span class="pill soft">'+_pvIcon('info')+' Bilgi — kritik değil</span>';
+    const lead = crit
+      ? 'Bu oyunlarda aynı kişi(ler) aynı tarihte kritik rolde: çözülmeden yazdırma/kesinleştirme yapılamaz.'
+      : (item.ignored ? 'Bu çakışma kullanıcı tarafından bilinçli olarak yok sayıldı; program akışını engellemez.'
+                      : 'Bu oyunlarda ortak kişi var ama kritik rol çakışması yok — program yürüyebilir.');
+    return '<article class="card '+(crit?'c-crit':'c-soft')+'">'+
+      '<header>'+_pvIcon('calendar')+'<b>'+esc(item.date)+'</b>'+badge+'</header>'+
+      '<p class="lead">'+lead+'</p>'+
+      '<div class="rowlist">'+item.games.map(g=>'<div class="g">'+_pvIcon('theater')+'<span>'+esc(g.raw)+'</span>'+
+        (g.time?'<span class="meta">'+_pvIcon('clock')+esc(g.time)+'</span>':'')+
+        (g.stage?'<span class="meta">'+esc(g.stage)+'</span>':'')+'</div>').join('')+'</div>'+
+      '<div class="people">'+_pvIcon('users')+item.people.map(p=>'<span class="who '+(p.critical?'crit':'ok')+'">'+esc(p.name)+(p.critical?' · kritik rol':' · yan görev')+'</span>').join('')+'</div>'+
+    '</article>';
+  };
+  const notesHtml = d.notes.length
+    ? d.notes.map(n=>'<article class="card c-note"><header>'+_pvIcon('note')+'<b>'+esc(n.date)+'</b>'+
+        (n.time?'<span class="pill neutral">'+_pvIcon('clock')+esc(n.time)+'</span>':'')+
+        (n.free?'<span class="pill neutral">Serbest metin</span>':'')+'</header>'+
+        (n.stage?'<p class="meta-line">'+esc(n.stage)+'</p>':'')+
+        (n.text?'<p class="lead"><b>'+esc(n.text)+'</b></p>':'')+
+        (n.note?'<p class="lead">'+esc(n.note)+'</p>':'')+'</article>').join('')
+    : '<div class="empty">'+_pvIcon('check')+' Bu ay için not girilmemiş.</div>';
+  const html = '<!doctype html><html lang="tr"><head><meta charset="utf-8">'+
+    '<title>'+esc(m.name)+' — Program Önizleme</title>'+
+    '<meta name="viewport" content="width=device-width,initial-scale=1">'+
+    '<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,700&family=Manrope:wght@400;600;700&display=swap" rel="stylesheet">'+
+    '<style>'+styles+'</style>'+
+    '<style>'+
+      'body{background:#faf7f2;font-family:Manrope,system-ui,sans-serif;color:#1a0f0a}'+
+      '.pv-head{background:#6b1220;color:#fff;padding:16px 22px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}'+
+      '.pv-head h1{font-family:Fraunces,Georgia,serif;margin:0;font-size:22px}'+
+      '.pv-head .sub{opacity:.85;font-size:13px}'+
+      '.pv-head button{margin-left:auto;display:inline-flex;align-items:center;gap:6px;background:#b8892b;border:none;color:#fff;padding:8px 14px;border-radius:6px;font:inherit;font-weight:700;cursor:pointer}'+
+      '.wrap{padding:18px 22px 60px;max-width:1400px;margin:0 auto}'+
+      '.stats{display:flex;gap:12px;flex-wrap:wrap;margin:0 0 18px}'+
+      '.stat{flex:1 1 180px;background:#fff;border:1px solid #e2d7bf;border-left:5px solid #b8892b;border-radius:10px;padding:12px 14px;display:flex;align-items:center;gap:10px}'+
+      '.stat.crit{border-left-color:#c1121f}.stat.soft{border-left-color:#1f7a5c}.stat.note{border-left-color:#8a6d1f}'+
+      '.stat b{font-size:22px;display:block;line-height:1.1}.stat span{font-size:12.5px;color:#7a6a58}'+
+      'h2.sec{font-family:Fraunces,Georgia,serif;font-size:18px;margin:26px 0 10px;display:flex;align-items:center;gap:8px}'+
+      '.card{background:#fff;border:1px solid #e2d7bf;border-radius:10px;padding:12px 14px;margin-bottom:10px}'+
+      '.card.c-crit{border-left:5px solid #c1121f}.card.c-soft{border-left:5px solid #1f7a5c}.card.c-note{border-left:5px solid #8a6d1f}'+
+      '.card>header{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:14px;background:transparent;color:#1a0f0a;padding:0;margin:0}'+
+      '.pill{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;border-radius:999px;padding:3px 10px}'+
+      '.pill.crit{background:#ffe6e6;color:#8c1010}.pill.soft{background:#e6f6ef;color:#14614a}.pill.neutral{background:#f3ede0;color:#6b5a3e}'+
+      '.lead{margin:8px 0 6px;font-size:13.5px;color:#4a3a2c;line-height:1.5}'+
+      '.meta-line{margin:2px 0;font-size:12.5px;color:#7a6a58}'+
+      '.rowlist .g{display:flex;align-items:center;gap:8px;font-size:13.5px;padding:3px 0;flex-wrap:wrap}'+
+      '.rowlist .meta{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:#7a6a58}'+
+      '.people{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:8px}'+
+      '.who{font-size:12.5px;border-radius:6px;padding:3px 8px;background:#f4efe4}'+
+      '.who.crit{background:#ffe1e1;color:#8c1010;font-weight:700}.who.ok{background:#e9f5ef;color:#215c48}'+
+      '.empty{display:flex;align-items:center;gap:8px;background:#fff;border:1px dashed #cdbf9d;border-radius:10px;padding:14px;color:#5c4f3d;font-size:13.5px}'+
+      '.ic{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;flex:none}'+
+      '.sheetbox{background:#fff;border:1px solid #e2d7bf;border-radius:10px;padding:10px;overflow:auto}'+
+      '.sheetbox td.cell{cursor:default}'+
+      '@media print{.pv-head button{display:none}}'+
+    '</style></head><body>'+
+    '<div class="pv-head"><div>'+_pvIcon('calendar')+'</div><div><h1>'+esc(m.name)+' — Program Önizleme</h1>'+
+      '<div class="sub">İzmir Devlet Tiyatrosu Müdürlüğü · yalnızca görüntüleme</div></div>'+
+      '<button type="button" onclick="window.print()">'+_pvIcon('print')+' Yazdır / PDF</button></div>'+
+    '<div class="wrap">'+
+      '<div class="stats">'+
+        '<div class="stat crit">'+_pvIcon('alert')+'<div><b>'+d.critical.length+'</b><span>Kritik çakışma</span></div></div>'+
+        '<div class="stat soft">'+_pvIcon('info')+'<div><b>'+d.soft.length+'</b><span>Kritik olmayan çakışma</span></div></div>'+
+        '<div class="stat note">'+_pvIcon('note')+'<div><b>'+d.notes.length+'</b><span>Not / serbest metin</span></div></div>'+
+      '</div>'+
+      '<h2 class="sec">'+_pvIcon('alert')+' Çakışmalar</h2>'+
+      (d.critical.length || d.soft.length
+        ? d.critical.map(i=>card(i,true)).join('')+d.soft.map(i=>card(i,false)).join('')
+        : '<div class="empty">'+_pvIcon('check')+' Bu ayda çakışma bulunmuyor — program temiz.</div>')+
+      '<h2 class="sec">'+_pvIcon('note')+' Notlar</h2>'+notesHtml+
+      '<h2 class="sec">'+_pvIcon('calendar')+' Aylık Program Tablosu</h2>'+
+      '<div class="sheetbox">'+sheet+'</div>'+
+    '</div></body></html>';
+  w.document.open(); w.document.write(html); w.document.close();
+}
+
+/* Hızlı butonlar HER ZAMAN sadece görüntülenen ayı işler; kâğıt/boyut
+   ayarları menülerdeki seçimden aynen alınır. */
+function withCurrentMonthOnly(selId, fn){
+  const sel = document.getElementById(selId);
+  const prev = sel ? sel.value : null;
+  if(sel){
+    const want = String(state.activeIdx);
+    if(Array.prototype.some.call(sel.options, o=>o.value===want)) sel.value = want;
+  }
+  try{ fn(); } finally { setTimeout(()=>{ if(sel && prev!==null) sel.value = prev; }, 400); }
+}
+document.getElementById('quickPrintBtn').onclick = ()=>withCurrentMonthOnly('printMonthSel', ()=>printProgram());
+document.getElementById('quickExcelBtn').onclick = ()=>withCurrentMonthOnly('expExcelMonth', ()=>exportExcel());
+document.getElementById('previewTabBtn').onclick = ()=>openMonthPreviewTab();
 document.getElementById('printPreviewBtn').onclick = ()=>printProgram(document.getElementById('printSizePreview')?.value);
 document.getElementById('printSize').onchange = e=>{
   setPrintSize(e.target.value);
