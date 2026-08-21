@@ -2447,15 +2447,18 @@ function initTooltipInteraction(){
     const act=b.dataset.ttact, k=b.dataset.ttkey||'';
     const rr=+tt.dataset.r, cc=+tt.dataset.c;
     if(act==='confirm') confirmPendingPlay(k);
-    else if(act==='free') markAllAsFreeText(k);
+    else if(act==='free') markCellAsFreeText(rr,cc);
     else if(act==='dismiss') dismissPendingPlay(k);
     else if(act==='unfreeCell') unmarkFreeTextCell(rr,cc);
     else if(act==='unfreeAll') unmarkAllFreeText(k);
     hideTooltipNow();
   });
-  /* Klavye ile erişim: seçili hücrede "i" bilgi balonunu açar, Esc kapatır */
+  /* Klavye ile erişim: seçili hücrede Ctrl+I bilgi balonunu açar, Esc kapatır.
+     Not: tek başına "i" kullanılmıyor çünkü herhangi bir karakter tuşu hücre
+     düzenlemeyi başlatıp o karakteri yazıyor (bkz. alttaki genel keydown
+     dinleyicisi) — bu yüzden Ctrl+I gibi çakışmayan bir kısayol seçildi. */
   document.addEventListener('keydown', e=>{
-    if(e.ctrlKey||e.metaKey||e.altKey) return;
+    if(!(e.ctrlKey||e.metaKey) || e.altKey || e.shiftKey) return;
     if(e.key!=='i' && e.key!=='I' && e.key!=='İ' && e.key!=='ı') return;
     const t=e.target;
     if(t && (t.tagName==='INPUT'||t.tagName==='TEXTAREA'||t.isContentEditable)) return;
@@ -2636,17 +2639,17 @@ function showTooltipFor(r,c,ev){
       html += '<hr><div class="ttWarn">⏳ Bu metin henüz oyun olarak onaylanmadı.</div>'+
         '<div class="ttActions">'+
         '<button type="button" class="ttBtn" data-ttact="confirm" data-ttkey="'+escapeHtml(key)+'">✓ Oyun olarak ekle</button>'+
-        '<button type="button" class="ttBtn" data-ttact="free" data-ttkey="'+escapeHtml(key)+'">✎ Serbest metin yap</button>'+
+        '<button type="button" class="ttBtn" data-ttact="free" data-ttkey="'+escapeHtml(key)+'">✎ Bu hücreyi serbest metin yap</button>'+
         '<button type="button" class="ttBtn" data-ttact="dismiss" data-ttkey="'+escapeHtml(key)+'">✕ Oyun değil</button>'+
         '</div>';
     } else {
       html += '<hr><div class="ttActions">'+
-        '<button type="button" class="ttBtn" data-ttact="free" data-ttkey="'+escapeHtml(key)+'">✎ Serbest metin yap</button>'+
+        '<button type="button" class="ttBtn" data-ttact="free" data-ttkey="'+escapeHtml(key)+'">✎ Bu hücreyi serbest metin yap</button>'+
         '</div>';
     }
   }
 
-  html += '<div class="ttHint">İpucu: hücre seçiliyken <b>i</b> tuşu bilgi balonunu açar, <b>Esc</b> kapatır.</div>';
+  html += '<div class="ttHint">İpucu: hücre seçiliyken <b>Ctrl+I</b> bilgi balonunu açar, <b>Esc</b> kapatır.</div>';
   tt.innerHTML = html;
   tt.style.display='block';
   placeTooltip(ev);
@@ -2713,6 +2716,34 @@ function confirmPendingPlay(key){
   renderPlays();
   renderSheet();
   setStatus('"'+key+'" oyun olarak eklendi.');
+}
+/* Bilgi balonundaki "Serbest metin yap" — SADECE bu hücreyi işaretler,
+   aynı metni taşıyan diğer hücrelere (başka satır/ay) dokunmaz. Aynı ismi
+   her yerde serbest metin yapmak için "Serbest Notlar" panelindeki toplu
+   işlem ya da tooltipteki "Tüm hücrelerde geri al" benzeri araçlar kullanılır. */
+function markCellAsFreeText(r,c){
+  const m=curMonth(); const cur=m.cells[r+'_'+c];
+  if(!cur || !cur.v) return;
+  snapshot();
+  const n={...cur, freeText:true}; delete n.notFree;
+  m.cells[r+'_'+c]=n;
+  const key=(parseGame(n.v).key||'').trim();
+  if(key){
+    /* Aynı isimde, hâlâ onay bekleyen (serbest metin olmayan) başka hücre
+       kalmadıysa "onay bekleyen" listesinden çıkar; kalmışsa dokunma —
+       o hücreler ayrı ayrı değerlendirilmeye devam etsin. */
+    let stillPending=false;
+    (state.months||[]).forEach(mm=>{
+      for(const k2 in (mm.cells||{})){
+        if(mm===m && k2===(r+'_'+c)) continue;
+        const cc2=mm.cells[k2];
+        if(cc2 && cc2.v && (parseGame(cc2.v).key||'')===key && !isFreeTextCell(cc2)) stillPending=true;
+      }
+    });
+    if(!stillPending) state.playsPending=(state.playsPending||[]).filter(x=>x!==key);
+  }
+  saveState(); renderSheet(); renderPrint(); renderPlays();
+  setStatus('Bu hücre serbest metin olarak işaretlendi (yalnızca bu hücre).');
 }
 function markAllAsFreeText(name){
   const key = (parseGame(name).key||'').trim();
@@ -3148,6 +3179,18 @@ function fillDown(){
 function sheetHasFocus(){
   const ae = document.activeElement;
   if(ae && (ae.isContentEditable || ['input','select','textarea'].includes((ae.tagName||'').toLowerCase()))) return false;
+  /* Bilgi balonu (tooltip) odaktaysa ya da içindeki bir metin seçiliyse
+     (ör. kişi adını fare ile seçip Ctrl+C ile kopyalamak) bunu hücre
+     kopyalama/yapıştırma olarak değerlendirme — tarayıcının kendi
+     kopyalama davranışı çalışsın. */
+  if(ae && ae.closest && ae.closest('#tooltip')) return false;
+  try{
+    const s = window.getSelection && window.getSelection();
+    if(s && !s.isCollapsed && s.anchorNode){
+      const el = s.anchorNode.nodeType===1 ? s.anchorNode : s.anchorNode.parentElement;
+      if(el && el.closest && el.closest('#tooltip')) return false;
+    }
+  }catch(e){}
   const sheetTab = document.getElementById('sheet');
   return !!sheetTab && sel && sel.r1>=0;
 }
