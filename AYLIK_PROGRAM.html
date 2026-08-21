@@ -5126,8 +5126,20 @@ syncFromServer().then(()=>syncDraftFromServer());
 </script>
 <!-- ═══════ İDT REPERTUVAR KÖPRÜSÜ (v2) ═══════ -->
 <style>
-#idtBridgeBar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:6px 18px;background:#fff;border-bottom:1px solid var(--border);font-size:12px;color:var(--muted)}
+#idtBridgeBar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:7px 18px;background:#fff;border-bottom:1px solid var(--border);font-size:12px;color:var(--muted)}
 #idtBridgeBar b{color:var(--primary)}
+#idtBridgeBar .idt-chip{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border:1px solid var(--border);border-radius:999px;background:#fafafa;font-size:11.5px;line-height:1.5;white-space:nowrap}
+#idtBridgeBar .idt-chip svg{width:13px;height:13px;flex:none;opacity:.75}
+#idtBridgeBar .idt-chip.live{border-color:#bfe3c4;background:#f2fbf3;color:#256b33}
+#idtBridgeBar .idt-chip.off{border-color:#f0cfcf;background:#fdf4f4;color:#9b3232}
+#idtBridgeBar .idt-chip b{font-weight:700}
+#idtBridgeBar .idt-dot{width:7px;height:7px;border-radius:50%;background:#2e9e46;box-shadow:0 0 0 3px rgba(46,158,70,.15)}
+#idtBridgeBar .idt-chip.off .idt-dot{background:#c04b4b;box-shadow:0 0 0 3px rgba(192,75,75,.15)}
+#idtBridgeBar .idt-ico{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;padding:0;border:1px solid var(--border);border-radius:8px;background:#fff;color:var(--primary);cursor:pointer;text-decoration:none;transition:.15s}
+#idtBridgeBar .idt-ico:hover{background:var(--primary);color:#fff;border-color:var(--primary)}
+#idtBridgeBar .idt-ico svg{width:15px;height:15px}
+#idtBridgeBar .idt-ico.spin svg{animation:idtspin .8s linear infinite}
+@keyframes idtspin{to{transform:rotate(360deg)}}
 </style>
 <script>
 (function(){
@@ -5161,22 +5173,44 @@ syncFromServer().then(()=>syncDraftFromServer());
   }
   window.pullFromSite = pullFromSite;
 
+  const IC = {
+    users:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+    mask:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4h20v7a10 10 0 0 1-20 0z"/><path d="M8 11c.7.8 1.5 1.2 2.5 1.2"/><path d="M16 11c-.7.8-1.5 1.2-2.5 1.2"/></svg>',
+    clock:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+    refresh:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/></svg>',
+    back:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>'
+  };
+
   function stamp(b){
     const el = document.getElementById('idtBridgeInfo');
     if(!el) return;
-    el.innerHTML = b
-      ? 'Oyun ve kadro bilgileri Repertuvar sisteminden geliyor · ' + (state.crew||[]).length + ' kadro, ' + (b.plays||[]).length + ' oyun · son güncelleme ' + new Date(b.ts||Date.now()).toLocaleString('tr-TR')
-      : 'Oyun ve kadro bilgileri henüz gelmedi.';
+    if(!b){
+      el.innerHTML = '<span class="idt-chip off"><span class="idt-dot"></span>Repertuvar verisi bekleniyor</span>';
+      return;
+    }
+    const t = new Date(b.ts||Date.now());
+    const saat = t.toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'});
+    const gun  = t.toLocaleDateString('tr-TR',{day:'2-digit',month:'2-digit'});
+    el.innerHTML =
+      '<span class="idt-chip live"><span class="idt-dot"></span>Repertuvar bağlı</span>' +
+      '<span class="idt-chip">' + IC.users + '<b>' + (state.crew||[]).length + '</b> kadro</span>' +
+      '<span class="idt-chip">' + IC.mask + '<b>' + (b.plays||[]).length + '</b> oyun</span>' +
+      '<span class="idt-chip">' + IC.clock + gun + ' ' + saat + '</span>';
   }
 
   /* Üst bilgi çubuğu */
   const bar = document.createElement('div');
   bar.id = 'idtBridgeBar';
-  bar.innerHTML = '<span id="idtBridgeInfo"></span>' +
-    '<button class="btn ghost small" id="idtPullBtn" style="margin-left:auto">Verileri yenile</button>' +
-    '<a class="btn ghost small" id="idtBackBtn" href="' + SITE + '" style="text-decoration:none">← Repertuvar sitesi</a>';
+  bar.innerHTML = '<span id="idtBridgeInfo" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"></span>' +
+    '<button class="idt-ico" id="idtPullBtn" title="Verileri yenile" aria-label="Verileri yenile" style="margin-left:auto">' + IC.refresh + '</button>' +
+    '<a class="idt-ico" id="idtBackBtn" href="' + SITE + '" title="Repertuvar sitesi" aria-label="Repertuvar sitesi">' + IC.back + '</a>';
   document.querySelector('header').insertAdjacentElement('afterend', bar);
-  document.getElementById('idtPullBtn').onclick = () => pullFromSite(false);
+  document.getElementById('idtPullBtn').onclick = (e) => {
+    const b = e.currentTarget; b.classList.add('spin');
+    setTimeout(()=>b.classList.remove('spin'), 900);
+    pullFromSite(false);
+  };
+
 
   /* İlk açılışta verinin diske yazılmasını garanti et (repertuvar sitesi buradan okur) */
   try{ if(!localStorage.getItem('idt_aylik_program_v3')) saveState(); }catch(e){}
