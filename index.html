@@ -2844,12 +2844,18 @@ function pickFilterCol(headers){
 window.pdfSelectAll = function(v){
   document.querySelectorAll("[data-pdfval]").forEach(e => e.checked = v);
 };
+const PDF_EMPTY_LABEL = "(Belirtilmemiş)";
 window.exportPDFFiltered = async function(title, headers, allRows, filterCol){
   const dataRows = (allRows && allRows.length && Array.isArray(allRows[0]) && allRows[0].join("|") === headers.join("|")) ? allRows.slice(1) : (allRows || []);
   if(!dataRows.length) return rawPDF(title, headers, dataRows);
   let col = (filterCol === undefined || filterCol === null || filterCol < 0) ? pickFilterCol(headers) : filterCol;
   if(col < 0) return rawPDF(title, headers, dataRows);
-  const uniqueVals = [...new Set(dataRows.map(r => String(r[col] || "").trim()).filter(Boolean))].sort(sortTr);
+  const valOf = r => { const v = String(r[col] || "").trim(); return v || PDF_EMPTY_LABEL; };
+  const uniqueVals = [...new Set(dataRows.map(valOf))].sort((a,b) => {
+    if(a === PDF_EMPTY_LABEL) return 1;
+    if(b === PDF_EMPTY_LABEL) return -1;
+    return sortTr(a,b);
+  });
   if(uniqueVals.length <= 1) return rawPDF(title, headers, dataRows);
   const label = headers[col] || "Değer";
   const html =
@@ -2861,7 +2867,7 @@ window.exportPDFFiltered = async function(title, headers, allRows, filterCol){
     '</div>' +
     '<div style="display:flex;flex-direction:column;max-height:300px;overflow-y:auto;gap:2px">' +
     uniqueVals.map(v => {
-      const n = dataRows.filter(r => String(r[col] || "").trim() === v).length;
+      const n = dataRows.filter(r => valOf(r) === v).length;
       return '<label style="display:flex;align-items:center;gap:8px;padding:6px 5px;cursor:pointer;border-radius:7px">' +
         '<input type="checkbox" checked style="width:15px;height:15px;accent-color:var(--accent)" data-pdfval="' + esc(v) + '">' +
         '<span style="font-size:13px;flex:1">' + esc(v) + '</span>' +
@@ -2871,7 +2877,7 @@ window.exportPDFFiltered = async function(title, headers, allRows, filterCol){
   if(!accepted) return;
   const checked = new Set([...document.querySelectorAll("[data-pdfval]")].filter(e => e.checked).map(e => e.getAttribute("data-pdfval")));
   if(!checked.size) return uiAlert("Hiçbir seçim yapılmadı, PDF oluşturulmadı.");
-  const filtered = dataRows.filter(r => checked.has(String(r[col] || "").trim()));
+  const filtered = dataRows.filter(r => checked.has(valOf(r)));
   rawPDF(title + (checked.size < uniqueVals.length ? " (Filtreli)" : ""), headers, filtered);
 };
 window.exportPDF = function(title, headers, data){
