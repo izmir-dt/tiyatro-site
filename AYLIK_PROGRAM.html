@@ -3274,9 +3274,19 @@ function ctxGroup(el, icon, label, items){
     g.style.left = left+'px';
     g.style.top = top+'px';
   };
-  wrap.addEventListener('mouseenter', open);
-  wrap.addEventListener('mouseleave', ()=>{ g.classList.remove('open'); b.classList.remove('open-parent'); });
-  b.onclick=(e)=>{ e.stopPropagation(); if(g.classList.contains('open')){ g.classList.remove('open'); b.classList.remove('open-parent'); } else open(); };
+  /* Kapanmayı geciktir + iptal edilebilir yap: fare wrap'tan alt panele geçerken
+     aradaki boşluktan dolayı anlık mouseleave tetiklenip menü kapanmasın. */
+  let subCloseTimer=null;
+  const scheduleClose=()=>{
+    clearTimeout(subCloseTimer);
+    subCloseTimer=setTimeout(()=>{ g.classList.remove('open'); b.classList.remove('open-parent'); }, 260);
+  };
+  const cancelClose=()=>{ clearTimeout(subCloseTimer); subCloseTimer=null; };
+  wrap.addEventListener('mouseenter', ()=>{ cancelClose(); open(); });
+  wrap.addEventListener('mouseleave', scheduleClose);
+  g.addEventListener('mouseenter', cancelClose);
+  g.addEventListener('mouseleave', scheduleClose);
+  b.onclick=(e)=>{ e.stopPropagation(); if(g.classList.contains('open')){ cancelClose(); g.classList.remove('open'); b.classList.remove('open-parent'); } else { cancelClose(); open(); } };
   wrap.appendChild(b); wrap.appendChild(g);
   el.appendChild(wrap);
 }
