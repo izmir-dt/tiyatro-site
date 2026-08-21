@@ -2509,9 +2509,36 @@ function initTooltipInteraction(){
   }, true);
   /* Sayfa/tablo kaydırılınca tooltip kapansın — ama tooltip'in kendi içeriğini
      tekerlekle kaydırırken bu tetiklenip tooltip'i anında kapatmasın. */
-  window.addEventListener('scroll', e=>{ if(e.target===tt) return; hideTooltipNow(); }, true);
+  /* Sayfa/tablo kaydırılınca: balon sabitlenmişse (F4) kapatma — ait olduğu
+     hücreyi takip edip konumunu güncelle. Hücre görünür alanın dışına
+     çıkarsa balonu geçici olarak gizle (sabitleme bozulmaz, hücre tekrar
+     görünür olunca balon otomatik geri gelir). Sabitlenmemişse eskisi
+     gibi kapat. */
+  window.addEventListener('scroll', e=>{
+    if(e.target===tt) return;
+    if(window.__ttPin){ repositionPinnedTooltip(); return; }
+    hideTooltipNow();
+  }, true);
+  window.addEventListener('resize', ()=>{ if(window.__ttPin) repositionPinnedTooltip(); });
   window.addEventListener('blur', hideTooltipNow);
   document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ window.__ttPin=null; hideTooltipNow(true); } }, true);
+}
+/* Sabitlenmiş (F4) balonu kendi hücresine göre yeniden konumlandırır —
+   sayfa/tablo kaydırılırken balon havada asılı kalıp yanlış hücreye ait
+   gibi görünmesin diye. Hücre şu an görünür alanın dışındaysa balon
+   geçici gizlenir; tekrar görünür olduğunda otomatik geri gelir. */
+function repositionPinnedTooltip(){
+  if(!window.__ttPin) return;
+  const tt=document.getElementById('tooltip');
+  if(!tt) return;
+  const td=document.querySelector('#sheet td.cell[data-r="'+window.__ttPin.r+'"][data-c="'+window.__ttPin.c+'"]');
+  if(!td){ tt.style.display='none'; return; }
+  const rc=td.getBoundingClientRect();
+  const vw=window.innerWidth, vh=window.innerHeight;
+  const visible = rc.bottom>0 && rc.top<vh && rc.right>0 && rc.left<vw;
+  if(!visible){ tt.style.display='none'; return; }
+  tt.style.display='block';
+  placeTooltip({clientX:rc.left+Math.min(60,rc.width/2), clientY:rc.bottom-4});
 }
 function placeTooltip(ev){
   const tt=document.getElementById('tooltip');
