@@ -306,6 +306,15 @@ table.sheet td.cell.note-mark::after{content:"";position:absolute;top:0;right:0;
 @media(max-width:900px){.pl-wrap{grid-template-columns:1fr}}
 .pl-side{background:#fff;border:1px solid var(--border);border-radius:8px;overflow:hidden;position:sticky;top:10px}
 .pl-side-h{padding:10px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:6px;background:#fdfbf6}
+.cmpGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}
+.cmpCol{border:1px solid var(--border);border-radius:8px;overflow:hidden;background:#fff}
+.cmpColH{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:#f7f1e2;border-bottom:1px solid var(--border);font-size:12.5px}
+.cmpColB{max-height:300px;overflow:auto}
+.cmpRow{padding:6px 10px;border-bottom:1px solid #f0e9d6;font-size:12.5px;display:flex;flex-direction:column;gap:1px}
+.cmpRow i{font-style:normal;color:var(--muted);font-size:11px}
+.cmpEmpty{padding:16px;text-align:center;color:var(--muted);font-size:12.5px}
+.chip.cmp-crim{background:#fde3e1;color:#8a1f1f;border-color:#f0b8b3}
+@media (max-width:640px){.cmpGrid{grid-template-columns:1fr}}
 .pl-side-h input{width:100%}
 .pl-add{display:flex;gap:6px}
 .pl-add input{flex:1;min-width:0}
@@ -719,6 +728,8 @@ table.sheet td.cell.tour-mid{
 
       <div class="menu-spacer"></div>
 
+      <button type="button" class="btn ghost small" id="cmpMenuBtn" title="İki oyunun kadrosunu karşılaştır">⇄ Karşılaştır</button>
+
       <div class="iconpair" role="group" aria-label="Geçmiş">
         <button class="navbtn" id="undoBtn" title="Geri al (Ctrl+Z)">&#8630; Geri al</button>
         <button class="navbtn" id="redoBtn" title="Yinele (Ctrl+Y)">&#8631; Yinele</button>
@@ -775,6 +786,7 @@ table.sheet td.cell.tour-mid{
           <input type="text" id="newPlayName" aria-label="Yeni oyun adı" placeholder="Yeni oyun adı">
           <button class="btn small" id="addPlayBtn">+ Oyun</button>
         </div>
+        <button type="button" class="btn small" id="playCompareBtn" title="İki oyunun kadrosunu karşılaştır" style="align-self:flex-start">⇄ Oyun Karşılaştır</button>
       </div>
       <div class="pl-list" id="playsList"></div>
     </aside>
@@ -4708,6 +4720,70 @@ async function resetState(){
 
 /* Misc */
 function escapeHtml(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+/* ===== Oyun Karşılaştırma (mevcut kadro verisinden — index.html'deki Sorgulama ile aynı mantık) ===== */
+function castMapAP(play){
+  const target = String(play||'').trim();
+  const m = new Map();
+  if(!target) return m;
+  (state.crew||[]).forEach(c=>{
+    if(String(c.play||'').trim() !== target) return;
+    const n = String(c.person||'').trim(); if(!n) return;
+    if(!m.has(n)) m.set(n, new Set());
+    const rl = String(c.role||'').trim() || String(c.category||'').trim();
+    if(rl) m.get(n).add(rl);
+  });
+  return m;
+}
+function renderCompareAP(){
+  const a = (document.getElementById('cmpA')||{}).value?.trim() || '';
+  const b = (document.getElementById('cmpB')||{}).value?.trim() || '';
+  const out = document.getElementById('cmpRes');
+  if(!out) return;
+  if(!a || !b){ out.innerHTML = '<div class="cmpEmpty">Karşılaştırma için iki oyun adı girin.</div>'; return; }
+  const A = castMapAP(a), B = castMapAP(b);
+  const srt = (x,y)=>x.localeCompare(y,'tr');
+  const inter = [...A.keys()].filter(n=>B.has(n)).sort(srt);
+  const onlyA = [...A.keys()].filter(n=>!B.has(n)).sort(srt);
+  const onlyB = [...B.keys()].filter(n=>!A.has(n)).sort(srt);
+  const col = (title, arr, src, cls) => '<div class="cmpCol"><div class="cmpColH"><b>'+escapeHtml(title)+'</b><span class="chip'+(cls?' '+cls:'')+'">'+arr.length+'</span></div>'+
+    '<div class="cmpColB">'+(arr.length ? arr.map(n=>{
+      const roles = [...(src.get(n)||[])].join(' · ');
+      return '<div class="cmpRow"><span>'+escapeHtml(n)+'</span>'+(roles?'<i>'+escapeHtml(roles)+'</i>':'')+'</div>';
+    }).join('') : '<div class="cmpEmpty">Kayıt yok.</div>')+'</div></div>';
+  out.innerHTML = '<div class="cmpGrid">'+
+    col('Ortak Kadro (Çakışma)', inter, A, 'cmp-crim')+
+    col('Yalnız '+escapeHtml(a), onlyA, A, '')+
+    col('Yalnız '+escapeHtml(b), onlyB, B, '')+
+    '</div>';
+}
+function openCompareModal(){
+  const back = document.createElement('div');
+  back.className = 'modal-back active';
+  back.innerHTML =
+    '<div class="modal" style="max-width:820px">'+
+      '<h3 style="margin:0 0 4px">Oyun Karşılaştırma</h3>'+
+      '<div style="font-size:12.5px;color:var(--muted);margin-bottom:12px">İki oyunun kadrosunu karşılaştırın — ortak kişiler ve farklar ayrı listelenir.</div>'+
+      '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">'+
+        '<input id="cmpA" type="text" list="oyunList" placeholder="1. oyun adı" style="flex:1;min-width:160px;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:inherit">'+
+        '<b style="color:var(--accent)">VS</b>'+
+        '<input id="cmpB" type="text" list="oyunList" placeholder="2. oyun adı" style="flex:1;min-width:160px;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:inherit">'+
+      '</div>'+
+      '<div id="cmpRes"><div class="cmpEmpty">Karşılaştırma için iki oyun adı girin.</div></div>'+
+      '<div class="row"><button class="btn ghost" id="cmpClose">Kapat</button></div>'+
+    '</div>';
+  document.body.appendChild(back);
+  const close = ()=>{ back.remove(); document.removeEventListener('keydown', onKey); };
+  function onKey(e){ if(e.key==='Escape') close(); }
+  document.addEventListener('keydown', onKey);
+  back.querySelector('#cmpClose').onclick = close;
+  back.querySelector('#cmpA').addEventListener('input', renderCompareAP);
+  back.querySelector('#cmpB').addEventListener('input', renderCompareAP);
+  setTimeout(()=>back.querySelector('#cmpA').focus(), 30);
+}
+document.getElementById('playCompareBtn')?.addEventListener('click', openCompareModal);
+document.getElementById('cmpMenuBtn')?.addEventListener('click', openCompareModal);
+
 function setStatus(t){ const el=document.getElementById('status'); el.textContent=t; setTimeout(()=>el.textContent='Kaydedildi (yerel).', 1500); }
 let siteToastTimer = null;
 function siteMessage(message, type='ok', title='Bilgi'){
