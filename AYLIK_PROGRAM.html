@@ -5268,6 +5268,11 @@ syncFromServer().then(()=>syncDraftFromServer());
 #idtBridgeBar .idt-ico svg{width:15px;height:15px}
 #idtBridgeBar .idt-ico.spin svg{animation:idtspin .8s linear infinite}
 @keyframes idtspin{to{transform:rotate(360deg)}}
+#idtLockBanner{display:none;align-items:center;gap:10px;flex-wrap:wrap;background:#fdf4f4;border:1px solid #f0cfcf;color:#9b3232;padding:10px 14px;margin:0 0 10px 0;border-radius:10px;font-size:13px}
+#idtLockBanner.show{display:flex}
+#idtLockBanner .idt-connect-btn{margin-left:auto;background:var(--primary);color:#fff;border:none;padding:8px 14px;border-radius:8px;font-weight:700;cursor:pointer;font-size:13px;white-space:nowrap}
+#idtLockBanner .idt-connect-btn:hover{opacity:.9}
+body.idt-locked main{pointer-events:none;user-select:none;opacity:.5;filter:grayscale(.5)}
 </style>
 <script>
 (function(){
@@ -5311,19 +5316,24 @@ syncFromServer().then(()=>syncDraftFromServer());
 
   function stamp(b){
     const el = document.getElementById('idtBridgeInfo');
-    if(!el) return;
+    const banner = document.getElementById('idtLockBanner');
     if(!b){
-      el.innerHTML = '<span class="idt-chip off"><span class="idt-dot"></span>Repertuvar verisi bekleniyor</span>';
+      if(el) el.innerHTML = '<span class="idt-chip off"><span class="idt-dot"></span>Repertuvar bağlı değil</span>';
+      if(banner) banner.classList.add('show');
+      document.body.classList.add('idt-locked');
       return;
     }
+    document.body.classList.remove('idt-locked');
+    if(banner) banner.classList.remove('show');
+    if(!el) return;
     const t = new Date(b.ts||Date.now());
-    const saat = t.toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'});
-    const gun  = t.toLocaleDateString('tr-TR',{day:'2-digit',month:'2-digit'});
+    const tarih = String(t.getDate()).padStart(2,'0') + '/' + String(t.getMonth()+1).padStart(2,'0') + '/' + t.getFullYear();
+    const saat  = String(t.getHours()).padStart(2,'0') + ':' + String(t.getMinutes()).padStart(2,'0');
     el.innerHTML =
       '<span class="idt-chip live"><span class="idt-dot"></span>Repertuvar bağlı</span>' +
       '<span class="idt-chip">' + IC.users + '<b>' + (state.crew||[]).length + '</b> kadro</span>' +
       '<span class="idt-chip">' + IC.mask + '<b>' + (b.plays||[]).length + '</b> oyun</span>' +
-      '<span class="idt-chip">' + IC.clock + gun + ' ' + saat + '</span>';
+      '<span class="idt-chip">' + IC.clock + 'Tarih: ' + tarih + ' Saat: ' + saat + '</span>';
   }
 
   /* Üst bilgi çubuğu */
@@ -5338,6 +5348,14 @@ syncFromServer().then(()=>syncDraftFromServer());
     setTimeout(()=>b.classList.remove('spin'), 900);
     pullFromSite(false);
   };
+
+  /* Repertuvar bağlı değilken işlem yapılmasını engelleyen uyarı çubuğu */
+  const lockBanner = document.createElement('div');
+  lockBanner.id = 'idtLockBanner';
+  lockBanner.innerHTML = '<span>&#9888;&#65039; Repertuvar sitesine bağlı değilsiniz — oyun ve kadro bilgileri gelmediği için işlem yapılamaz.</span>' +
+    '<button type="button" class="idt-connect-btn" id="idtConnectBtn">Repertuvarı Bağla &#8599;</button>';
+  bar.insertAdjacentElement('afterend', lockBanner);
+  document.getElementById('idtConnectBtn').onclick = () => window.open(SITE, '_blank', 'noopener');
 
 
   /* İlk açılışta verinin diske yazılmasını garanti et (repertuvar sitesi buradan okur) */
