@@ -1797,6 +1797,30 @@ function setSel(r1,c1,r2,c2){
   paintSel();
 }
 function inSel(r,c){ return r>=sel.r1&&r<=sel.r2&&c>=sel.c1&&c<=sel.c2; }
+/* Klavye ile hücreler arası gezinme (ok tuşları / Tab). Fare ile aynı mantık:
+   dragAnchor sabit köşe, hareket eden köşe her adımda güncellenir. */
+function focusCell(r,c){
+  const td = document.querySelector('#sheet td.cell[data-r="'+r+'"][data-c="'+c+'"]');
+  if(td){ td.focus({preventScroll:false}); td.scrollIntoView({block:'nearest', inline:'nearest'}); }
+}
+function moveSel(dr,dc){
+  const m = curMonth(); if(!m) return;
+  let nr = sel.r1+dr, nc = sel.c1+dc;
+  nr = Math.max(0, Math.min(m.rows-1, nr));
+  nc = Math.max(0, Math.min(m.cols-1, nc));
+  if(isCovered(m,nr,nc)){ const mm=mergeOf(m,nr,nc); if(mm){ nr=mm[0]; nc=mm[1]; } }
+  dragAnchor = {r:nr,c:nc};
+  setSel(nr,nc,nr,nc);
+  focusCell(nr,nc);
+}
+function extendSel(dr,dc){
+  const m = curMonth(); if(!m) return;
+  let nr2 = sel.r2+dr, nc2 = sel.c2+dc;
+  nr2 = Math.max(0, Math.min(m.rows-1, nr2));
+  nc2 = Math.max(0, Math.min(m.cols-1, nc2));
+  setSel(dragAnchor.r, dragAnchor.c, nr2, nc2);
+  focusCell(nr2,nc2);
+}
 function paintSel(){
   document.querySelectorAll('#sheet td.cell').forEach(td=>{
     td.classList.remove('selected','anchor');
@@ -2929,7 +2953,8 @@ function startEdit(td){
     input.addEventListener('blur', ()=>commit(true));
     input.addEventListener('keydown', e=>{
       e.stopPropagation();
-      if(e.key==='Enter'){ e.preventDefault(); commit(true); }
+      if(e.key==='Enter'){ e.preventDefault(); commit(true); moveSel(1,0); }
+      else if(e.key==='Tab'){ e.preventDefault(); commit(true); moveSel(0, e.shiftKey?-1:1); }
       else if(e.key==='Escape'){ e.preventDefault(); commit(false); }
     });
     return;
@@ -2959,7 +2984,8 @@ function startEdit(td){
   }
   td.onblur = ()=>commit(true);
   td.onkeydown = (e)=>{
-    if(e.key==='Enter'){ e.preventDefault(); commit(true); }
+    if(e.key==='Enter'){ e.preventDefault(); commit(true); moveSel(1,0); }
+    else if(e.key==='Tab'){ e.preventDefault(); commit(true); moveSel(0, e.shiftKey?-1:1); }
     else if(e.key==='Escape'){ e.preventDefault(); td.textContent=orig; commit(false); }
   };
 }
@@ -3286,6 +3312,56 @@ function pasteClipInto(vals){
   setStatus('Yapıştırıldı');
 }
 /* Ctrl+D: seçimin ilk satırını aşağıya doğru çoğaltır (aynı oyunu art arda eklemek için) */
+/* A ya da son sütundaki tarih metninden ("3 EYLÜL 2026 Perşembe") gün adını çıkarır */
+function rowDayName(m,r){
+  const v = String((m.cells[r+'_0']||{}).v || (m.cells[r+'_'+(m.cols-1)]||{}).v || '');
+  for(const dn of DAY_NAMES){ if(v.indexOf(dn)>=0) return dn; }
+  return null;
+}
+/* Seçili tek hücredeki gösterimi, aynı sütunda aynı haftanın gününe denk gelen
+   sonraki N satıra kopyalar (ör. "her Cuma 20:00" gibi tekrarlayan oyunları
+   tek tek elle girmek yerine). Dolu hücrelerin üzerine yazmaz. */
+async function opRepeatWeekly(){
+  const m = curMonth();
+  if(lockGuard(m)) return;
+  if(sel.r1!==sel.r2 || sel.c1!==sel.c2){
+    siteMessage('Tekrarlamak için tek bir hücre (kaynak gösterim) seçin.','warn','Tek hücre seçin');
+    return;
+  }
+  const r0=sel.r1, c0=sel.c1;
+  if(r0<2 || !programCols(m).includes(c0)){
+    siteMessage('Bu işlem sadece sahne/turne sütunlarındaki gösterim hücrelerinde kullanılabilir.','warn','Uygun hücre değil');
+    return;
+  }
+  const src = m.cells[r0+'_'+c0];
+  if(!src || !String(src.v||'').trim()){
+    siteMessage('Önce tekrarlanacak hücreye bir gösterim/oyun adı yazın.','warn','Hücre boş');
+    return;
+  }
+  const dayName = rowDayName(m,r0);
+  if(!dayName){
+    siteMessage('Bu satırın gün bilgisi (tarih sütunu) okunamadı.','warn','Gün belirlenemedi');
+    return;
+  }
+  const nStr = await sitePrompt('Aynı sütunda, sonraki "'+dayName+'" günlerine kaç hafta boyunca tekrarlansın?','4','Tekrarla: '+src.v);
+  if(nStr===null) return;
+  const n = parseInt(nStr,10);
+  if(!n || n<1){ siteMessage('Geçerli bir hafta sayısı girin.','warn','Geçersiz sayı'); return; }
+  snapshot();
+  let filled=0, skipped=0, remaining=n;
+  for(let r=r0+1; r<m.rows && remaining>0; r++){
+    if(isCovered(m,r,c0)) continue;
+    if(rowDayName(m,r)!==dayName) continue;
+    remaining--;
+    const existing = m.cells[r+'_'+c0];
+    if(existing && String(existing.v||'').trim()){ skipped++; continue; }
+    m.cells[r+'_'+c0] = {...src};
+    registerPlayName(src.v, m.cells[r+'_'+c0]);
+    filled++;
+  }
+  saveState(); renderSheet();
+  setStatus('Tekrarlandı: '+filled+' hücre dolduruldu'+(skipped?(', '+skipped+' hücre doluydu ve atlandı'):'')+'.');
+}
 function fillDown(){
   const m = curMonth();
   if(lockGuard(m)) return;
@@ -3573,6 +3649,7 @@ function showCtx(x,y,kind){
     ctxItem(el,'⧉','Kopyala', opCopy);
     ctxItem(el,'⎘','Yapıştır', opPaste);
     ctxItem(el,'␡','İçeriği temizle', opClear);
+    ctxItem(el,'🔁','Bu gösterimi tekrarla… (haftalık)', opRepeatWeekly);
     ctxSep(el);
     ctxItem(el,'⬓','Birleştir', opMerge);
     ctxItem(el,'⬒','Ayır', opUnmerge);
@@ -5209,6 +5286,22 @@ document.addEventListener('keydown', e=>{
     else if(e.key==='d' || e.key==='D'){ e.preventDefault(); fillDown(); }
     else if(e.key==='u' || e.key==='U'){ if(sel.r1>=0){ e.preventDefault(); opUnderline(); } }
   } else if(e.key==='Delete' || e.key==='Backspace'){ if(sel.r1>=0){ e.preventDefault(); opClear(); } }
+  else if(e.key==='ArrowUp' || e.key==='ArrowDown' || e.key==='ArrowLeft' || e.key==='ArrowRight'){
+    /* Sadece bir tablo hücresi odaktayken ok tuşlarını gezinme için kullan —
+       başka bir yerde (menü, buton) odak varsa tarayıcının kendi davranışına dokunma. */
+    if(sel.r1<0 || !(e.target.closest && e.target.closest('#sheet td.cell'))) return;
+    e.preventDefault();
+    const dr = e.key==='ArrowUp'?-1:e.key==='ArrowDown'?1:0;
+    const dc = e.key==='ArrowLeft'?-1:e.key==='ArrowRight'?1:0;
+    if(e.shiftKey) extendSel(dr,dc); else moveSel(dr,dc);
+  }
+  else if(e.key==='Tab'){
+    /* Aynı şekilde Tab'ı sadece bir hücre odaktayken hücreler arası gezinmeye
+       yönlendir; sayfanın geri kalanındaki normal Tab ile odak gezintisini bozma. */
+    if(sel.r1<0 || !(e.target.closest && e.target.closest('#sheet td.cell'))) return;
+    e.preventDefault();
+    moveSel(0, e.shiftKey?-1:1);
+  }
   else if(e.key==='Enter' || e.key==='F2'){ const td=document.querySelector('#sheet td.cell.anchor'); if(td && !td.isContentEditable){ e.preventDefault(); startEdit(td); } }
   else if(e.key.length===1 && !e.altKey){
     /* Excel mantığı: hücre seçiliyken (odak DOM'da tam oturmamış olsa bile)
