@@ -577,6 +577,7 @@ table.sheet td.cell.tour-mid{
   <nav id="tabbar" role="tablist" aria-label="Ana bölümler">
     <button type="button" role="tab" aria-selected="true" aria-controls="program" data-tab="program" class="active">Aylık Program</button>
     <button type="button" role="tab" aria-selected="false" aria-controls="plays" data-tab="plays">Oyunlar &amp; Oyuncular<span id="playsPendingBadge" class="tabBadge" style="display:none"></span></button>
+    <button type="button" role="tab" aria-selected="false" aria-controls="avail" data-tab="avail">Kadro Müsaitlik</button>
     <button type="button" role="tab" aria-selected="false" aria-controls="notes" data-tab="notes">Serbest Notlar<span id="notesBadge" class="tabBadge" style="display:none"></span></button>
     <button type="button" role="tab" aria-selected="false" aria-controls="print" data-tab="print">Yatay Yazdır</button>
   </nav>
@@ -797,6 +798,18 @@ table.sheet td.cell.tour-mid{
   <datalist id="personelList"></datalist>
   <datalist id="kategoriList"></datalist>
   <datalist id="kisiList"></datalist>
+</section>
+
+<section id="avail" role="tabpanel">
+  <div class="controls">
+    <span class="cmd-label">Kişi</span>
+    <input type="text" id="availPerson" list="kisiList" placeholder="Ad Soyad yazın…" style="min-width:220px">
+    <span class="cmd-label">Ay</span>
+    <select id="availMonthSel"></select>
+    <button class="btn small" id="availGoBtn">Göster</button>
+    <span style="color:var(--muted);font-size:12px;margin-left:auto">Bir kişi seçin; seçilen ayda hangi günler oynuyor / boş görün</span>
+  </div>
+  <div id="availBody"></div>
 </section>
 
 <section id="notes" role="tabpanel">
@@ -4386,6 +4399,91 @@ function playOccurrenceList(play){
   return out.sort((a,b)=> a.mi-b.mi || a.r-b.r || a.c-b.c);
 }
 function playOccurrences(play){ return playOccurrenceList(play).length; }
+
+/* === Kadro Müsaitlik (kişi bazlı, seçili ayda müsait/dolu günler) === */
+function monthDayNumbers(m){
+  const days = new Set();
+  for(let r=2;r<m.rows;r++){
+    const dt = dateTextOfRow(m,r);
+    const dm = /^(\d{1,2})/.exec(String(dt||'').trim());
+    if(dm) days.add(+dm[1]);
+  }
+  return Array.from(days).sort((a,b)=>a-b);
+}
+/* Kişinin seçili aydaki gösterimlerini (PEOPLE_MAP üzerinden, hücredeki oyun
+   adları normalize edilerek) satır satır çıkarır — arşiv/serbest metin hücreleri sayılmaz. */
+function personBusyEntries(personName, m){
+  const out = [];
+  const pk = normNameKey(personName);
+  if(!pk || !m) return out;
+  const cols = programCols(m);
+  for(let r=2;r<m.rows;r++){
+    for(const c of cols){
+      const cell = m.cells[r+'_'+c];
+      if(!cell || !cell.v || isFreeTextCell(cell) || isArchiveCell(cell)) continue;
+      const key = parseGame(cell.v).key;
+      const ok = normNameKey(key);
+      if(!ok) continue;
+      const info = PEOPLE_MAP[ok] && PEOPLE_MAP[ok][pk];
+      if(!info) continue;
+      const dm = /^(\d{1,2})/.exec(dateTextOfRow(m,r).trim());
+      out.push({day: dm?+dm[1]:null, date:dateTextOfRow(m,r), time:timeTextOfRow(m,r),
+                 stage:stageHeaderText(m,c), play:key, critical:info.critical, roles:info.roles, r, c});
+    }
+  }
+  return out.sort((a,b)=>(a.day||0)-(b.day||0) || a.c-b.c);
+}
+function availMonthOptions(){
+  const sel = document.getElementById('availMonthSel');
+  if(!sel) return;
+  const order = sortedMonthIdx();
+  const prev = sel.value;
+  sel.innerHTML = order.map(i=>`<option value="${i}">${escapeHtml(state.months[i].name)}</option>`).join('');
+  const stillValid = order.some(i=>String(i)===prev);
+  sel.value = stillValid ? prev : String(state.activeIdx);
+}
+function renderAvailability(){
+  availMonthOptions();
+  const body = document.getElementById('availBody');
+  if(!body) return;
+  const personName = (document.getElementById('availPerson')||{}).value?.trim() || availSelectedPerson;
+  const mi = +((document.getElementById('availMonthSel')||{}).value ?? state.activeIdx);
+  const m = state.months[mi];
+  if(!personName){
+    body.innerHTML = '<div class="empty-panel">Yukarıdan bir kişi adı yazın (personel listesinden otomatik tamamlanır).</div>';
+    return;
+  }
+  if(!m){ body.innerHTML = '<div class="empty-panel">Ay bulunamadı.</div>'; return; }
+  availSelectedPerson = personName;
+  const entries = personBusyEntries(personName, m);
+  const busyByDay = {};
+  entries.forEach(e=>{ if(e.day) (busyByDay[e.day]=busyByDay[e.day]||[]).push(e); });
+  const days = monthDayNumbers(m);
+  const calHtml = days.map(d=>{
+    const es = busyByDay[d]||[];
+    const busy = es.length>0;
+    const plays = [...new Set(es.map(e=>e.play))].join(', ');
+    return `<div class="avail-day${busy?' busy':''}" title="${busy?escapeHtml(plays):'Müsait'}">
+      <span class="dn">${d}</span>${busy?`<span class="pl">${escapeHtml(plays)}</span>`:''}
+    </div>`;
+  }).join('');
+  const busyDayCount = Object.keys(busyByDay).length;
+  body.innerHTML = `
+    <div class="avail-cal">${calHtml || '<div class="empty-panel">Bu ayda gün bulunamadı.</div>'}</div>
+    <div class="avail-legend">
+      <span><span class="sw free"></span>Müsait</span>
+      <span><span class="sw busy"></span>Dolu (${busyDayCount} gün)</span>
+    </div>
+    <div class="avail-list">
+      ${entries.length ? entries.map(e=>`
+        <div class="avail-row">
+          <span class="d">${escapeHtml(e.date||'')}</span>
+          <span class="meta">${e.time?escapeHtml(e.time)+' · ':''}${escapeHtml(e.stage||'')} · ${escapeHtml(e.play)}${e.roles&&e.roles.length?' · '+escapeHtml(e.roles.join(', ')):''}</span>
+        </div>`).join('') : '<div class="empty-panel">Bu ayda hiç gösterimi yok — tamamen müsait.</div>'}
+    </div>`;
+}
+let availSelectedPerson = '';
+
 function buildPlayDatalists(){
   const dl = (id, vals) => {
     const el = document.getElementById(id);
@@ -5206,6 +5304,11 @@ document.getElementById('addPlayBtn').onclick = ()=>{
 };
 document.getElementById('newPlayName').onkeydown = e=>{ if(e.key==='Enter') document.getElementById('addPlayBtn').click(); };
 
+/* Kadro Müsaitlik sekmesi wiring */
+document.getElementById('availGoBtn')?.addEventListener('click', renderAvailability);
+document.getElementById('availPerson')?.addEventListener('keydown', e=>{ if(e.key==='Enter') renderAvailability(); });
+document.getElementById('availMonthSel')?.addEventListener('change', renderAvailability);
+
 
 document.querySelectorAll('#tabbar button').forEach(b=>b.onclick=()=>{
   document.querySelectorAll('#tabbar button').forEach(x=>{ x.classList.remove('active'); x.setAttribute('aria-selected','false'); });
@@ -5217,6 +5320,7 @@ document.querySelectorAll('#tabbar button').forEach(b=>b.onclick=()=>{
   if(b.dataset.tab==='notes') renderNotes();
   if(b.dataset.tab==='showings') renderShowings();
   if(b.dataset.tab==='categories') renderCategories();
+  if(b.dataset.tab==='avail') renderAvailability();
 });
 
 document.addEventListener('keydown', e=>{
@@ -5315,6 +5419,19 @@ syncFromServer().then(()=>syncDraftFromServer());
 #idtLockBanner .idt-connect-btn{margin-left:auto;background:var(--primary);color:#fff;border:none;padding:8px 14px;border-radius:8px;font-weight:700;cursor:pointer;font-size:13px;white-space:nowrap}
 #idtLockBanner .idt-connect-btn:hover{opacity:.9}
 body.idt-locked main{pointer-events:none;user-select:none;opacity:.5;filter:grayscale(.5)}
+#avail .avail-cal{display:flex;flex-wrap:wrap;gap:6px;margin:14px 0}
+#avail .avail-day{width:54px;min-height:54px;border-radius:8px;border:1px solid var(--border);padding:5px 6px;font-size:11px;line-height:1.35;background:#f2fbf3;color:#256b33;cursor:default}
+#avail .avail-day .dn{font-weight:700;font-size:13px;display:block}
+#avail .avail-day.busy{background:#fdf4f4;color:#9b3232;border-color:#f0cfcf}
+#avail .avail-day .pl{display:block;font-size:9.5px;line-height:1.2;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#avail .avail-legend{display:flex;gap:14px;align-items:center;font-size:12px;color:var(--muted);margin-top:6px}
+#avail .avail-legend .sw{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:middle}
+#avail .avail-legend .sw.free{background:#f2fbf3;border:1px solid #bfe3c4}
+#avail .avail-legend .sw.busy{background:#fdf4f4;border:1px solid #f0cfcf}
+#avail .avail-list{margin-top:16px}
+#avail .avail-row{display:flex;gap:10px;align-items:baseline;padding:6px 0;border-bottom:1px dashed var(--border);font-size:13px}
+#avail .avail-row .d{font-weight:700;min-width:150px}
+#avail .avail-row .meta{color:var(--muted);font-size:12px}
 </style>
 <script>
 (function(){
