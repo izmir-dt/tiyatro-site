@@ -3312,56 +3312,6 @@ function pasteClipInto(vals){
   setStatus('Yapıştırıldı');
 }
 /* Ctrl+D: seçimin ilk satırını aşağıya doğru çoğaltır (aynı oyunu art arda eklemek için) */
-/* A ya da son sütundaki tarih metninden ("3 EYLÜL 2026 Perşembe") gün adını çıkarır */
-function rowDayName(m,r){
-  const v = String((m.cells[r+'_0']||{}).v || (m.cells[r+'_'+(m.cols-1)]||{}).v || '');
-  for(const dn of DAY_NAMES){ if(v.indexOf(dn)>=0) return dn; }
-  return null;
-}
-/* Seçili tek hücredeki gösterimi, aynı sütunda aynı haftanın gününe denk gelen
-   sonraki N satıra kopyalar (ör. "her Cuma 20:00" gibi tekrarlayan oyunları
-   tek tek elle girmek yerine). Dolu hücrelerin üzerine yazmaz. */
-async function opRepeatWeekly(){
-  const m = curMonth();
-  if(lockGuard(m)) return;
-  if(sel.r1!==sel.r2 || sel.c1!==sel.c2){
-    siteMessage('Tekrarlamak için tek bir hücre (kaynak gösterim) seçin.','warn','Tek hücre seçin');
-    return;
-  }
-  const r0=sel.r1, c0=sel.c1;
-  if(r0<2 || !programCols(m).includes(c0)){
-    siteMessage('Bu işlem sadece sahne/turne sütunlarındaki gösterim hücrelerinde kullanılabilir.','warn','Uygun hücre değil');
-    return;
-  }
-  const src = m.cells[r0+'_'+c0];
-  if(!src || !String(src.v||'').trim()){
-    siteMessage('Önce tekrarlanacak hücreye bir gösterim/oyun adı yazın.','warn','Hücre boş');
-    return;
-  }
-  const dayName = rowDayName(m,r0);
-  if(!dayName){
-    siteMessage('Bu satırın gün bilgisi (tarih sütunu) okunamadı.','warn','Gün belirlenemedi');
-    return;
-  }
-  const nStr = await sitePrompt('Aynı sütunda, sonraki "'+dayName+'" günlerine kaç hafta boyunca tekrarlansın?','4','Tekrarla: '+src.v);
-  if(nStr===null) return;
-  const n = parseInt(nStr,10);
-  if(!n || n<1){ siteMessage('Geçerli bir hafta sayısı girin.','warn','Geçersiz sayı'); return; }
-  snapshot();
-  let filled=0, skipped=0, remaining=n;
-  for(let r=r0+1; r<m.rows && remaining>0; r++){
-    if(isCovered(m,r,c0)) continue;
-    if(rowDayName(m,r)!==dayName) continue;
-    remaining--;
-    const existing = m.cells[r+'_'+c0];
-    if(existing && String(existing.v||'').trim()){ skipped++; continue; }
-    m.cells[r+'_'+c0] = {...src};
-    registerPlayName(src.v, m.cells[r+'_'+c0]);
-    filled++;
-  }
-  saveState(); renderSheet();
-  setStatus('Tekrarlandı: '+filled+' hücre dolduruldu'+(skipped?(', '+skipped+' hücre doluydu ve atlandı'):'')+'.');
-}
 function fillDown(){
   const m = curMonth();
   if(lockGuard(m)) return;
@@ -3649,7 +3599,6 @@ function showCtx(x,y,kind){
     ctxItem(el,'⧉','Kopyala', opCopy);
     ctxItem(el,'⎘','Yapıştır', opPaste);
     ctxItem(el,'␡','İçeriği temizle', opClear);
-    ctxItem(el,'🔁','Bu gösterimi tekrarla… (haftalık)', opRepeatWeekly);
     ctxSep(el);
     ctxItem(el,'⬓','Birleştir', opMerge);
     ctxItem(el,'⬒','Ayır', opUnmerge);
