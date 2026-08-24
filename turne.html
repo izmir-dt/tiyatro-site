@@ -14884,6 +14884,24 @@ const STATU_OPTS = [
 
 let tumPersonel = [];
 let turneler    = [];
+// ============================================================
+// REPERTUVARDAN KALKAN OYUNLAR
+// Bu oyunlar artık "Yeni Turne Ekle" formunda ve Kadro sekmesindeki
+// OYUN seçicide GÖRÜNMEZ (yeni turne/kadro işlemi yapılamaz).
+// Eski turne kayıtları, filtreler, istatistikler ve Oyun Yönetimi
+// listesi ETKİLENMEZ — oradaki geçmiş veriler aynen görünmeye devam eder.
+// Repertuvardan yeni bir oyun kalktığında adını aşağıdaki listeye
+// (Google E-Tablolar'daki yazımıyla BİREBİR aynı şekilde) eklemeniz yeterli.
+const PASIF_OYUNLAR = [
+  'ANAHTAR',
+  'İKİNCİ CADDENİN MAHKUMU',
+  'MÜNASEBETSİZ',
+  'KAÇAKLAR',
+  'OYUNCU BEN FEUERBACH',
+  'ORFİNİN MÜZİK KUTUSU (Ç.O)',
+  'KRAL OLMAK İSTEMEYEN ASLAN (Ç.O)',
+  'KARINCALAR BİR SAVAŞ VARDI',
+];
 window.__getTurneler = function(){ return turneler; };
 let _turneYukleniyor = true;
 let calYear, calMonth, calSelectedDay = null;
@@ -16279,6 +16297,9 @@ function populateFilters() {
     if (t.duraklar) t.duraklar.forEach(function(d){ if (d.oyun && d.oyun.trim()) oyunSet.add(d.oyun.trim()); });
   });
   const oyunlar = [...oyunSet].sort(function(a,b){ return a.localeCompare(b,'tr'); });
+  // Repertuvardan kalkan oyunlar: sadece "yeni iş" alanlarında (Turne Ekle formu,
+  // Kadro OYUN seçici) gizlenir; filtrelerde/geçmişte kullanılan listeler etkilenmez.
+  const oyunlarAktif = oyunlar.filter(function(o){ return PASIF_OYUNLAR.indexOf(o) === -1; });
   // Il filtresi: kompozit değerleri ("TRABZON, DİYARBAKIR") parçalara ayır, tekrarları kaldır
   const _ilRaw = [...turneler.map(t => t.il), ...turneler.flatMap(t => (t.duraklar||[]).map(d => d.il))];
   const _ilSet = new Set();
@@ -16301,7 +16322,9 @@ function populateFilters() {
     const first = sel.options[0];
     sel.innerHTML = '';
     sel.appendChild(first);
-    oyunlar.forEach(o => { const opt = document.createElement('option'); opt.value = o; opt.textContent = o; sel.appendChild(opt); });
+    // Kadro sekmesindeki OYUN seçici: repertuvardan kalkan oyunlar listelenmez
+    const kaynakListe = (id === 'kadro-oyun-sec') ? oyunlarAktif : oyunlar;
+    kaynakListe.forEach(o => { const opt = document.createElement('option'); opt.value = o; opt.textContent = o; sel.appendChild(opt); });
     if (savedVal) sel.value = savedVal; // Geri yükle
     if (id === 'kadro-oyun-sec') _kadroOyunDdSyncLabel();
   });
@@ -16314,7 +16337,8 @@ function populateFilters() {
     const mSavedVal = mo.value; // Mevcut seçili oyunu kaydet
     mo.innerHTML = '';
     if (mFirst) mo.appendChild(mFirst);
-    oyunlar.forEach(o => { const opt = document.createElement('option'); opt.value = o; opt.textContent = o; mo.appendChild(opt); });
+    // Yeni Turne Ekle formu: repertuvardan kalkan oyunlar seçilemez
+    oyunlarAktif.forEach(o => { const opt = document.createElement('option'); opt.value = o; opt.textContent = o; mo.appendChild(opt); });
     if (mSavedVal) mo.value = mSavedVal; // Seçili oyunu geri yükle
   }
 }
@@ -35582,7 +35606,7 @@ document.addEventListener('click', function(e) {
 });
 
 function acBindAll() {
-  acBind('m-oyun', 'oyunlar');
+  acBind('m-oyun', 'oyunlar', function(v){ return PASIF_OYUNLAR.indexOf(v) === -1; });
   acBind('m-otel-adi', 'otelAdlari');
   // Durak mekan inputları dinamik - konaklama sekmesindekiler de
   setTimeout(() => {
