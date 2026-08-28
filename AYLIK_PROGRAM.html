@@ -2165,6 +2165,7 @@ function gamesOfRow(m,r){
         if(info && info.g){
           const prev = info.g.members.filter(x=>x.r<r && x.cell && String(x.cell.v||'').trim());
           if(prev.length) src = prev[prev.length-1].cell.v;
+          else if(info.g.carried && info.g.headText) src = info.g.headText;
         }
         const pk = parseGame(src).key;
         if(pk) out.push({raw:src, key:pk, isPremiere:false, col:c, row:r, time:gameTimeOf(m,r,''), isReturn:true, virtual:true, ckey:pk+' ↩dönüş'});
@@ -2248,6 +2249,31 @@ function buildConflict(games){
 
 /* === Render === */
 /* === Turne grupları: şehir/kurum başlığı + altındaki oyunlar === */
+/* Ay sınırını aşan turneler: bir turne bir ayın son günlerinde yola çıkıp
+   bir sonraki ayın ilk günlerinde dönebilir (ör. 30 Eylül'de çıkış, 1 Ekim'de
+   dönüş). Aylar birbirinden bağımsız state.months nesneleri olduğundan,
+   computeTours() tek başına bunu göremez; bu yüzden yeni ayın hesaplamasına
+   başlamadan önce bir önceki ayın aynı TURNE sütununda "açık kalmış" (dönüş
+   günü hâlâ işaretlenmemiş) bir turne olup olmadığına bakılır. */
+function prevMonthOf(m){
+  const order = sortedMonthIdx();
+  const pos = order.findIndex(i => state.months[i] === m);
+  if(pos <= 0) return null;
+  return state.months[order[pos-1]];
+}
+function tourCarryFromPrev(m, c){
+  const pm = prevMonthOf(m);
+  if(!pm || !tourColsOf(pm).includes(c)) return null;
+  const pt = computeTours(pm);
+  const lastRow = pm.rows - 1;
+  for(const g of pt.groups){
+    if(g.col !== c || g.returnKey) continue; /* zaten o ayda kapanmışsa taşınmaz */
+    const rows = g.members.map(x=>x.r);
+    const gLast = Math.max(g.headRow!=null?g.headRow:-Infinity, rows.length?Math.max.apply(null,rows):-Infinity);
+    if(gLast === lastRow) return {headText:g.headText, id:g.id};
+  }
+  return null;
+}
 function tourColsOf(m){ return programCols(m).filter(c=>stageHeaderText(m,c).includes('TURNE')); }
 function isTourHeadCell(cell){
   if(!cell || !cell.v) return false;
@@ -2260,6 +2286,12 @@ function computeTours(m){
   const map={}, byId={}, groups=[];
   tourColsOf(m).forEach(c=>{
     let cur=null, gap=[];
+    const carry = tourCarryFromPrev(m, c);
+    if(carry){
+      cur = {id:'carry_'+carry.id, col:c, headKey:null, headRow:null, headText:carry.headText,
+             members:[], returnKey:null, locked:false, carried:true};
+      groups.push(cur); byId[cur.id]=cur;
+    }
     for(let r=2;r<m.rows;r++){
       const k=r+'_'+c, cell=m.cells[k];
       const v=(cell&&cell.v)?String(cell.v).trim():'';
@@ -4100,7 +4132,7 @@ function renderPrint(){
            arka planını taşısa bile satır içi stille sarıyı zorla — CSS önceliği
            ne olursa olsun garanti sarı basılsın (yazdırmada beyaz kalma sorunu). */
         let styleAttr = cellStyleString(cell);
-        if(cls){
+        if(cls && !cell.bg){
           styleAttr = (styleAttr?styleAttr+';':'') + 'background:#ffff00 !important;box-shadow:none !important';
           if(!cell.color) styleAttr += ';color:#000 !important';
         }
