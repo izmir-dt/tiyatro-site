@@ -230,7 +230,8 @@ table.sheet td.cell.freetext[data-cat="DUYURU"]::before{content:"📣 "}
 .draft-state.ok{color:#1a56b8;border-color:#a9c6e8;background:#eef4fc}
 .draft-state.syncing{color:#8a6d1a;border-color:#e8d6a9;background:#fdf7e8}
 #alwaysGroup .draft-state{background:#fff}
-table.sheet td.cell.note-mark::after{content:"";position:absolute;top:0;right:0;border-top:6px solid var(--accent);border-left:6px solid transparent}
+table.sheet td.cell.note-mark{box-shadow:inset 0 0 0 1.5px var(--accent)}
+table.sheet td.cell.note-mark::after{content:"📝";position:absolute;top:1px;right:1px;font-size:12px;line-height:1;background:#fff;border:1px solid var(--accent);border-radius:50%;width:15px;height:15px;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 3px rgba(0,0,0,.25)}
 
 /* Context menu */
 .ctxmenu{position:fixed;z-index:100002;background:#fff;border:1px solid var(--border);border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.18);min-width:200px;display:none;font-size:13px;padding:4px 0}
@@ -401,6 +402,11 @@ body.conflictFocus #sheet td.cell.conflict{opacity:1;filter:none}
   border-radius:6px;padding:5px 10px;min-height:32px}
 .conflict-bar button[aria-pressed=true]{background:#7a1610;color:#fff;border-color:#7a1610}
 .conflict-bar button:disabled{opacity:.45;cursor:not-allowed}
+
+/* Not gezinme şeridi */
+.note-bar{top:0;border-color:#e8d6a9;background:#fdf7e8;color:#8a6d1a}
+.note-bar.has{border-color:#e8d6a9;background:#fdf7e8;color:#8a6d1a}
+.note-bar button[aria-pressed=true]{background:#8a6d1a;color:#fff;border-color:#8a6d1a}
 
 /* Kısayol yardımı: varsayılan kapalı, dikkat dağıtmasın */
 .shortcuts{font-size:12px;color:var(--muted);margin-top:10px;border-top:1px dashed var(--border);padding-top:6px}
@@ -769,11 +775,19 @@ table.sheet td.cell.tour-mid{
     <button type="button" id="cbFocus" aria-pressed="false" title="Sadece çakışmaları öne çıkar (diğer hücreler soluklaşır)">Çakışma odağı</button>
   </div>
 
+  <div class="conflict-bar note-bar" id="noteBar" role="status" aria-live="polite">
+    <span class="cb-count" id="nbCount">📝 Not taranıyor…</span>
+    <span id="nbDetail"></span>
+    <span class="cb-spacer"></span>
+    <button type="button" id="nbPrev" title="Önceki nota git (Shift+F7)">&#9650; Önceki not</button>
+    <button type="button" id="nbNext" title="Sonraki nota git (F7)">&#9660; Sonraki not</button>
+  </div>
+
   <div class="tbl-wrap"><table class="sheet" id="sheet" role="grid" aria-label="Aylık tiyatro programı"></table></div>
   <details class="shortcuts">
     <summary>Kısayollar ve ipuçları</summary>
     <div class="sc-body">
-      Tıkla → seç · Shift+Tıkla → aralık · Çift tıkla → yaz · Enter/Esc · Delete → temizle · Ctrl+C/V · Ctrl+Z/Y · Sağ tık → menü · <b>F4</b> → bilgi balonunu hücreye sabitle/kaldır · <b>F9</b> → bilgi balonu sistemini tamamen aç/kapat · F8 → sonraki çakışma · Oyunun üzerine gel → çakışma bilgisi · <b>Serbest metin ✎</b> → hücreyi oyun sayma (il adı, açıklama, not) · Onay bekleyen metnin üzerine gel → tooltipten doğrudan <b>Oyun olarak ekle / Serbest metin yap / Oyun değil</b> · <b>Not ekle</b> → oyunun yanına not · <b>🏷 Kategori</b> → notu sınıflandır (İl, Sahne, Turne, Prova, Tatil, Duyuru) · Satırı tam seçip (sıra no'ya tıkla) <b>Zemin rengi</b> uygula → soldaki sıra no hücresi de boyanır
+      Tıkla → seç · Shift+Tıkla → aralık · Çift tıkla → yaz · Enter/Esc · Delete → temizle · Ctrl+C/V · Ctrl+Z/Y · Sağ tık → menü · <b>F4</b> → bilgi balonunu hücreye sabitle/kaldır · <b>F9</b> → bilgi balonu sistemini tamamen aç/kapat · F8 → sonraki çakışma · F7 → sonraki not (Shift+F7 → önceki not) · Oyunun üzerine gel → çakışma bilgisi · <b>Serbest metin ✎</b> → hücreyi oyun sayma (il adı, açıklama, not) · Onay bekleyen metnin üzerine gel → tooltipten doğrudan <b>Oyun olarak ekle / Serbest metin yap / Oyun değil</b> · <b>Not ekle</b> → oyunun yanına not · <b>🏷 Kategori</b> → notu sınıflandır (İl, Sahne, Turne, Prova, Tatil, Duyuru) · Satırı tam seçip (sıra no'ya tıkla) <b>Zemin rengi</b> uygula → soldaki sıra no hücresi de boyanır
     </div>
   </details>
 </section>
@@ -815,6 +829,13 @@ table.sheet td.cell.tour-mid{
 <section id="notes" role="tabpanel">
   <div class="controls">
     <b style="font-size:13px;color:var(--muted)">Hücrelere yazılan tüm notlar ve serbest metinler otomatik olarak burada toplanır. Notlar oyun sayımını etkilemez.</b>
+  </div>
+  <div class="controls">
+    <input type="search" id="notesSearch" aria-label="Notlarda ara" placeholder="Notlarda ara… (metin, oyun, tarih, sahne)" style="min-width:280px">
+    <select id="notesMonthFilter" aria-label="Aya göre filtrele" style="min-width:160px">
+      <option value="">Tüm aylar</option>
+    </select>
+    <span id="notesFilterCount" style="color:var(--muted);font-size:12px;margin-left:auto"></span>
   </div>
   <div class="pl-free" id="plFree"></div>
   <div id="notesList"></div>
@@ -2489,6 +2510,7 @@ function renderSheet(){
   }
   paintSel();
   if(window.refreshConflictBar) window.refreshConflictBar();
+  if(window.refreshNoteBar) window.refreshNoteBar();
 }
 function colName(c){ let s=''; c++; while(c){ s=String.fromCharCode(65+(c-1)%26)+s; c=Math.floor((c-1)/26);} return s; }
 
@@ -5067,16 +5089,43 @@ function collectNotes(){
   });
   return out;
 }
+function notesMatchesQuery(o,q){
+  if(!q) return true;
+  const hay=[o.text,o.note,o.inline,o.month,o.date,o.time,o.stage].join(' ').toLocaleLowerCase('tr');
+  return hay.includes(q);
+}
+function wireNotesFilters(){
+  const search=document.getElementById('notesSearch'), sel=document.getElementById('notesMonthFilter');
+  if(search && !search.dataset.wired){ search.dataset.wired='1'; search.addEventListener('input', renderNotes); }
+  if(sel && !sel.dataset.wired){ sel.dataset.wired='1'; sel.addEventListener('change', renderNotes); }
+}
 function renderNotes(){
   const box=document.getElementById('notesList');
   if(!box) return;
+  wireNotesFilters();
   const items=collectNotes();
   const badge=document.getElementById('notesBadge');
   if(badge){ if(items.length){ badge.textContent=items.length; badge.style.display='inline-block'; } else badge.style.display='none'; }
+
+  const monthSel=document.getElementById('notesMonthFilter');
+  if(monthSel){
+    const cur=monthSel.value;
+    const opts=['<option value="">Tüm aylar</option>'].concat((state.months||[]).map(m=>`<option value="${escapeHtml(m.name)}">${escapeHtml(m.name)}</option>`));
+    const html=opts.join('');
+    if(monthSel.innerHTML!==html){ monthSel.innerHTML=html; monthSel.value=cur; }
+  }
+  const q=(document.getElementById('notesSearch')?.value||'').trim().toLocaleLowerCase('tr');
+  const monthFilter=monthSel?.value||'';
+  const filtered=items.filter(o=>(!monthFilter||o.month===monthFilter) && notesMatchesQuery(o,q));
+  const countEl=document.getElementById('notesFilterCount');
+  if(countEl) countEl.textContent = (q||monthFilter) ? `${filtered.length} / ${items.length} not gösteriliyor` : '';
+
   if(!items.length){
     box.innerHTML='<div style="padding:14px;color:var(--muted)">Henüz not yok. Bir hücre seçip <b>Not ekle</b> ya da <b>Serbest metin ✎</b> kullanın; buraya otomatik düşer.</div>';
+  } else if(!filtered.length){
+    box.innerHTML='<div style="padding:14px;color:var(--muted)">Aramanızla eşleşen not bulunamadı.</div>';
   } else {
-    box.innerHTML = items.map((o,i)=>`
+    box.innerHTML = filtered.map((o,i)=>`
       <div style="display:flex;gap:10px;align-items:flex-start;background:#fff;border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:6px">
         <div style="flex:1;min-width:0">
           <div style="font-weight:700">${escapeHtml(o.text||'(boş hücre)')} ${o.free?'<span style="font-size:11px;color:var(--accent)">✎ serbest metin</span>':''}</div>
@@ -5087,8 +5136,8 @@ function renderNotes(){
         <button class="btn ghost small" data-ngo="${i}">Hücreye git</button>
         <button class="btn ghost small" data-nedit="${i}">✎ Notu düzenle</button>
       </div>`).join('');
-    box.querySelectorAll('[data-ngo]').forEach(b=>{ b.onclick=()=>{ const o=items[+b.dataset.ngo]; gotoCell(o.mi,o.r,o.c); }; });
-    box.querySelectorAll('[data-nedit]').forEach(b=>{ b.onclick=async()=>{ const o=items[+b.dataset.nedit]; const n=await sitePrompt('Not:',o.note,'Not ekle/düzenle'); if(n===null) return; setCellNote(o.mi,o.key,n); renderNotes(); }; });
+    box.querySelectorAll('[data-ngo]').forEach(b=>{ b.onclick=()=>{ const o=filtered[+b.dataset.ngo]; gotoCell(o.mi,o.r,o.c); }; });
+    box.querySelectorAll('[data-nedit]').forEach(b=>{ b.onclick=async()=>{ const o=filtered[+b.dataset.nedit]; const n=await sitePrompt('Not:',o.note,'Not ekle/düzenle'); if(n===null) return; setCellNote(o.mi,o.key,n); renderNotes(); }; });
   }
   const ta=document.getElementById('generalNotes');
   if(ta && document.activeElement!==ta) ta.value = state.generalNotes || '';
@@ -5708,6 +5757,66 @@ body.idt-locked main{pointer-events:none;user-select:none;opacity:.5;filter:gray
 })();
 </script>
 
+<script>
+/* ===== Not şeridi: sayım, hızlı gezinme (F7 / Shift+F7) =====
+   Görünürdeki not.mark hücreleri arasında dolaşır; not verisi değiştirmez. */
+(function(){
+  var idx = -1;
+  function list(){ return Array.prototype.slice.call(document.querySelectorAll('#sheet td.cell.note-mark')); }
+  function rowLabel(td){
+    var tr = td.parentElement; if(!tr) return '';
+    var first = tr.querySelector('td.cell.dateCol');
+    return first ? (first.textContent||'').trim() : '';
+  }
+  function refresh(){
+    var bar=document.getElementById('noteBar');
+    if(!bar) return;
+    var ns=list(), cnt=document.getElementById('nbCount'), det=document.getElementById('nbDetail');
+    var prev=document.getElementById('nbPrev'), next=document.getElementById('nbNext');
+    if(ns.length===0){
+      bar.classList.remove('has');
+      cnt.textContent='📝 Bu ayda not yok';
+      det.textContent='';
+    }else{
+      bar.classList.add('has');
+      cnt.textContent='📝 '+ns.length+' not';
+    }
+    if(prev) prev.disabled = next.disabled = (ns.length===0);
+    if(idx >= ns.length) idx = -1;
+  }
+  window.refreshNoteBar = refresh;
+
+  function go(dir){
+    var ns=list(); if(!ns.length) return;
+    idx = (idx + dir + ns.length) % ns.length;
+    var td=ns[idx];
+    var r=+td.dataset.r, c=+td.dataset.c;
+    if(typeof setSel==='function') setSel(r,c,r,c);
+    try{ td.scrollIntoView({block:'center',inline:'center',behavior:'smooth'}); }catch(e){ td.scrollIntoView(); }
+    td.classList.remove('cflash'); void td.offsetWidth; td.classList.add('cflash');
+    setTimeout(function(){ td.classList.remove('cflash'); }, 2000);
+    try{ td.focus({preventScroll:true}); }catch(e){}
+    var det=document.getElementById('nbDetail');
+    if(det) det.textContent='· '+(idx+1)+'/'+ns.length+' — '+(rowLabel(td)||'')+' '+(td.textContent||'').trim();
+  }
+
+  function ready(){
+    var next=document.getElementById('nbNext'), prev=document.getElementById('nbPrev');
+    if(!next) return;
+    next.addEventListener('click', function(){ go(1); });
+    prev.addEventListener('click', function(){ go(-1); });
+    document.addEventListener('keydown', function(e){
+      if(e.key!=='F7') return;
+      var a=document.activeElement;
+      if(a && (a.tagName==='INPUT'||a.tagName==='TEXTAREA'||a.isContentEditable)) return;
+      e.preventDefault(); go(e.shiftKey ? -1 : 1);
+    });
+    refresh();
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', ready);
+  else ready();
+})();
+</script>
 
 <script>
 /* ===== Çakışma/bilgi tooltip'i aç-kapat ===== */
