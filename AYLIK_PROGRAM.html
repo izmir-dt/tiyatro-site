@@ -2263,15 +2263,23 @@ function prevMonthOf(m){
 }
 function tourCarryFromPrev(m, c){
   const pm = prevMonthOf(m);
-  if(!pm || !tourColsOf(pm).includes(c)) return null;
+  if(!pm) return null;
   const pt = computeTours(pm);
   const lastRow = pm.rows - 1;
-  for(const g of pt.groups){
-    if(g.col !== c || g.returnKey) continue; /* zaten o ayda kapanmışsa taşınmaz */
+  const isOpenAtMonthEnd = g => {
+    if(g.returnKey) return false; /* zaten o ayda kapanmışsa taşınmaz */
     const rows = g.members.map(x=>x.r);
     const gLast = Math.max(g.headRow!=null?g.headRow:-Infinity, rows.length?Math.max.apply(null,rows):-Infinity);
-    if(gLast === lastRow) return {headText:g.headText, id:g.id};
-  }
+    return gLast === lastRow;
+  };
+  /* Önce aynı TURNE sütunu tercih edilir, ama sütunlar birbirinin yerine
+     kullanılabilen genel "hat"lar olduğundan (turne bu ay F'de, gelecek ay
+     G'de dönebilir), bulunamazsa önceki ayda açık kalan HERHANGİ bir turne
+     de kabul edilir. */
+  const sameCol = pt.groups.find(g => g.col===c && isOpenAtMonthEnd(g));
+  if(sameCol) return {headText:sameCol.headText, id:sameCol.id};
+  const anyCol = pt.groups.find(g => isOpenAtMonthEnd(g));
+  if(anyCol) return {headText:anyCol.headText, id:anyCol.id};
   return null;
 }
 function tourColsOf(m){ return programCols(m).filter(c=>stageHeaderText(m,c).includes('TURNE')); }
