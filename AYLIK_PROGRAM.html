@@ -111,9 +111,6 @@ table.sheet td.hdr{background:var(--head);color:var(--headInk);font-weight:700;f
 table.sheet td.hdr.corner{background:#e2d6b8}
 table.sheet td.rowh{background:#efe6d5;font-weight:700;font-size:11px;width:34px;color:#000;user-select:none;cursor:pointer}
 table.sheet td.cell{min-width:80px;height:26px;cursor:default}
-/* Program hücrelerinde metin parçası seçilebilsin; sütun harfleri ve sahne
-   başlığı satırı bu sınıfa hiç girmez ve sabit kalır. */
-table.sheet td.cell.partial-editable{user-select:text;-webkit-user-select:text;cursor:text}
 table.sheet td.cell:focus-visible,table.sheet td.hdr:focus-visible,table.sheet td.rowh:focus-visible{outline:3px solid var(--accent);outline-offset:-3px;z-index:4}
 button:focus-visible,a:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible,[contenteditable=true]:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 @media (pointer:coarse){button,.btn,.navbtn,.menu-trigger{min-height:44px}table.sheet td.cell{height:38px}}
@@ -902,8 +899,8 @@ main{padding-top:9px}
         <button type="button" class="menu-trigger" data-menu aria-haspopup="true" aria-expanded="false">Biçim <span class="caret">&#9662;</span></button>
         <div class="menu-panel">
           <div class="mp-title">Görünüm</div>
-          <button class="btn ghost small" id="bgColorBtn" title="Program hücresinde metni sürükleyerek seçin; yalnızca o bölümü boyar. Seçim yoksa hücrenin tamamını boyar.">Zemin rengi…</button>
-          <button class="btn ghost small" id="fgColorBtn" title="Program hücresinde metni sürükleyerek seçin; yalnızca o bölümü renklendirir. Seçim yoksa hücrenin tamamını renklendirir.">Yazı rengi…</button>
+          <button class="btn ghost small" id="bgColorBtn" title="Metnin bir kısmı seçiliyse yalnızca o bölümü, seçim yoksa hücrenin tamamını boya">Zemin rengi…</button>
+          <button class="btn ghost small" id="fgColorBtn" title="Metnin bir kısmı seçiliyse yalnızca o bölümü, seçim yoksa hücrenin tamamını renklendir">Yazı rengi…</button>
           <button class="btn ghost small" id="boldBtn" title="Kalın yazı (aç/kapat)">Kalın yazı</button>
           <button class="btn ghost small" id="underlineBtn" title="Altı çizili yazı (aç/kapat) — Ctrl+U">Altı çizili</button>
           <div class="mp-sep"></div>
@@ -2292,9 +2289,6 @@ function selectionCell(){
 function getPartialColorSelection(td){
   return getEditSelection() || getPlainCellSelection(td || selectionCell());
 }
-function isFixedHeaderCell(r){
-  return Number(r)===0 || Number(r)===1;
-}
 function stageHeaderText(m,c){
   const v = (m.cells['1_'+c]||{}).v || '';
   return v.toLocaleUpperCase('tr');
@@ -2839,7 +2833,6 @@ function renderSheet(){
       td.className='cell';
       td.dataset.r=r; td.dataset.c=c; td.tabIndex=0; td.setAttribute('role','gridcell');
       if(c===0 || c===m.cols-1) td.classList.add('dateCol');
-      if(r>=2 && programCols(m).includes(c)) td.classList.add('partial-editable');
       const cell = m.cells[r+'_'+c] || {};
       td.setAttribute('aria-label',(r+1)+'. satır '+colName(c)+' sütunu'+(cellDisplayText(cell)?': '+cellDisplayText(cell):': boş'));
       const _rich = cellRichHtml(cell);
@@ -2905,7 +2898,6 @@ function wireCell(td){
     if(e.target !== td) return; /* hücre içinde düzenleme kutusu (input/datalist) varsa seçim/preventDefault mantığını tetikleme */
     const r=+td.dataset.r, c=+td.dataset.c;
     if(e.button !== 0) return;
-    const textSelectable = r>=2 && programCols(curMonth()).includes(c);
     /* click handlerının "zaten seçiliydi mi" kararını verebilmesi için,
        seçim mousedown'da değişmeden ÖNCEKİ durumu sakla */
     td._wasSoleSelected = (sel.r1===r && sel.c1===c && sel.r2===r && sel.c2===c);
@@ -2913,15 +2905,11 @@ function wireCell(td){
     else { dragAnchor={r,c}; setSel(r,c,r,c); }
     dragSelecting = true;
     dragMoved = false;
-    /* Veri hücresinde native metin seçimini engelleme. Böylece kullanıcı
-       hücre içinden bir kelime/aralık seçip Biçim menüsünden yalnızca o
-       parçayı boyayabilir. Başlık/sahne satırlarında eski hücre seçimi
-       davranışı korunur. */
-    if(!textSelectable) e.preventDefault();
+    e.preventDefault();
     /* preventDefault() tarayıcının varsayılan odaklama davranışını engelliyor;
        hücre seçiliyken (düzenleme kutusu açılmadan) klavyeden direkt yazabilmek için
        odağı elle hücreye veriyoruz. */
-    if(!textSelectable) td.focus({preventScroll:true});
+    td.focus({preventScroll:true});
   });
   td.addEventListener('mouseenter', e=>{
     if(!dragSelecting || td.isContentEditable) return;
@@ -2968,7 +2956,6 @@ function wireCell(td){
   /* Fare aynı hücrede gezerken bir şey yapma; başka hücreye geçildiğinde
      (mouseenter kaçırılmış olsa bile) tooltip'i tazele — donmayı engeller. */
   td.addEventListener('mousemove', e=>{
-    if(dragSelecting && !td.isContentEditable && e.buttons===1) dragMoved=true;
     const key=td.dataset.r+'_'+td.dataset.c;
     if(window.__ttKey!==key) scheduleTooltipFor(+td.dataset.r,+td.dataset.c,e);
   });
@@ -2999,7 +2986,7 @@ function scheduleTooltipFor(r,c,ev){
     const rc=td.getBoundingClientRect();
     if(rc.bottom<=0 || rc.top>=window.innerHeight || rc.right<=0 || rc.left>=window.innerWidth) return;
     showTooltipFor(r,c,snapshotEv||{clientX:rc.left+rc.width/2,clientY:rc.top+rc.height/2});
-  }, 35);
+  }, 170);
 }
 function hideTooltipNow(force){
   /* Balon bir hücreye sabitlenmişse (F4 ile pinlendiyse) sadece Esc veya
@@ -3014,7 +3001,7 @@ function hideTooltipNow(force){
 }
 function scheduleTooltipHide(){
   clearTimeout(ttHideTimer);
-  ttHideTimer=setTimeout(hideTooltipNow, 110);
+  ttHideTimer=setTimeout(hideTooltipNow, 260);
 }
 function cancelTooltipHide(){ clearTimeout(ttHideTimer); ttHideTimer=null; }
 /* Tooltip'ten fareyle çıkıldığında (kaydırma/okuma bitince) imlecin GERÇEKTE
@@ -3416,10 +3403,6 @@ function startEdit(td){
   const r=+td.dataset.r, c=+td.dataset.c;
   const m = curMonth();
   if(lockGuard(m)) return;
-  if(isFixedHeaderCell(r)){
-    setStatus('A–I sütun başlıkları ve sahne adları sabittir.');
-    return;
-  }
   const orig = (m.cells[r+'_'+c]||{}).v || '';
   const isProgramCell = r>=2 && programCols(m).includes(c);
 
@@ -3936,14 +3919,8 @@ function selKeys(m){
   return out;
 }
 function applyCellsProp(prop, value){
-  const m=curMonth(); if(lockGuard(m)) return;
-  const keys = selKeys(m).filter(k=>!isFixedHeaderCell(+k.split('_')[0]));
-  if(!keys.length){
-    setStatus('A–I sütun başlıkları ve sahne adları sabittir; değiştirilemez.');
-    return;
-  }
-  snapshot();
-  for(const k of keys){
+  const m=curMonth(); if(lockGuard(m)) return; snapshot();
+  for(const k of selKeys(m)){
     const cell = {...(m.cells[k]||{v:''}), [prop]: value};
     /* Hücrenin tamamına yeni yazı rengi verildiğinde eski parça renkleri
        görünümü gölgelememeli. */
@@ -3966,10 +3943,6 @@ function applyStyleToRange(rangeInfo, color, rangeProp){
   const {mi,r,c,start,end}=rangeInfo;
   const m=state.months[mi];
   if(!m || lockGuard(m)) return false;
-  if(isFixedHeaderCell(r)){
-    setStatus('Sahne başlıkları sabittir; yalnızca program hücrelerindeki metinler boyanabilir.');
-    return false;
-  }
   const key=r+'_'+c;
   const cur=m.cells[key]||{v:''};
   const len=cellDisplayText(cur).length;
