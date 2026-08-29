@@ -788,7 +788,7 @@ table.sheet td.cell.tour-mid{
   <details class="shortcuts">
     <summary>Kısayollar ve ipuçları</summary>
     <div class="sc-body">
-      Tıkla → seç · Shift+Tıkla → aralık · Çift tıkla → yaz · Enter/Esc · Delete → temizle · Ctrl+C/V · Ctrl+Z/Y · Sağ tık → menü · Metnin bir bölümünü fareyle seçip <b>sağ tık → Yazı Rengi</b> veya <b>Biçim → Yazı rengi</b> seçin → yalnızca seçili bölüm renklenir · <b>F4</b> → bilgi balonunu hücreye sabitle/kaldır · <b>F9</b> → bilgi balonu sistemini tamamen aç/kapat · F8 → sonraki çakışma · F7 → sonraki not (Shift+F7 → önceki not) · Oyunun üzerine gel → çakışma bilgisi · <b>Serbest metin ✎</b> → hücreyi oyun sayma (il adı, açıklama, not) · Onay bekleyen metnin üzerine gel → tooltipten doğrudan <b>Oyun olarak ekle / Serbest metin yap / Oyun değil</b> · <b>Not ekle</b> → oyunun yanına not · <b>🏷 Kategori</b> → notu sınıflandır (İl, Sahne, Turne, Prova, Tatil, Duyuru) · Satırı tam seçip (sıra no'ya tıkla) <b>Zemin rengi</b> uygula → soldaki sıra no hücresi de boyanır
+      Tıkla → seç · Shift+Tıkla → aralık · Çift tıkla → yaz · Enter/Esc · Delete → temizle · Ctrl+C/V · Ctrl+Z/Y · Sağ tık → menü · <b>F4</b> → bilgi balonunu hücreye sabitle/kaldır · <b>F9</b> → bilgi balonu sistemini tamamen aç/kapat · F8 → sonraki çakışma · F7 → sonraki not (Shift+F7 → önceki not) · Oyunun üzerine gel → çakışma bilgisi · <b>Serbest metin ✎</b> → hücreyi oyun sayma (il adı, açıklama, not) · Onay bekleyen metnin üzerine gel → tooltipten doğrudan <b>Oyun olarak ekle / Serbest metin yap / Oyun değil</b> · <b>Not ekle</b> → oyunun yanına not · <b>🏷 Kategori</b> → notu sınıflandır (İl, Sahne, Turne, Prova, Tatil, Duyuru) · Satırı tam seçip (sıra no'ya tıkla) <b>Zemin rengi</b> uygula → soldaki sıra no hücresi de boyanır
     </div>
   </details>
 </section>
@@ -1919,7 +1919,9 @@ function cellStyleString(cell){
    hücre metni (v) değişince colorRanges temizlenir (bkz. startEdit/commit). */
 function cellRichHtml(cell){
   const text = cellDisplayText(cell);
-  const ranges = normalizeColorRanges(cell && cell.colorRanges, text.length);
+  const ranges = (cell && cell.colorRanges || [])
+    .filter(r=>r && r.e>r.s && r.s>=0 && r.e<=text.length && r.color)
+    .slice().sort((a,b)=>a.s-b.s);
   if(!ranges.length) return null;
   let out='', pos=0;
   for(const r of ranges){
@@ -1929,28 +1931,6 @@ function cellRichHtml(cell){
     pos = r.e;
   }
   if(pos<text.length) out += escapeHtml(text.slice(pos));
-  return out;
-}
-/* Renk aralıklarını güvenli ve kararlı biçimde normalleştirir.
-   Eski/bozuk bir kayıt tabloyu bozmasın; çakışan aralıklarda ilk kayıt,
-   bitişik aynı renklerde ise tek aralık korunur. */
-function normalizeColorRanges(ranges, textLength){
-  const max = Math.max(0, Number(textLength)||0);
-  if(!Array.isArray(ranges) || !max) return [];
-  const clean = ranges
-    .filter(r=>r && r.color && Number.isFinite(+r.s) && Number.isFinite(+r.e))
-    .map(r=>({s:Math.max(0,Math.min(max,Math.floor(+r.s))),
-              e:Math.max(0,Math.min(max,Math.floor(+r.e))),
-              color:String(r.color)}))
-    .filter(r=>r.e>r.s)
-    .sort((a,b)=>a.s-b.s || a.e-b.e);
-  const out=[];
-  for(const r of clean){
-    const last=out[out.length-1];
-    if(last && r.s<last.e) continue;
-    if(last && r.s===last.e && last.color===r.color){ last.e=r.e; continue; }
-    out.push(r);
-  }
   return out;
 }
 function addColorRange(mi, key, start, end, color){
@@ -1964,7 +1944,8 @@ function addColorRange(mi, key, start, end, color){
     if(r.e>end) next.push({s:end, e:r.e, color:r.color});
   }
   next.push({s:start, e:end, color});
-  cell.colorRanges = normalizeColorRanges(next, cellDisplayText(cell).length);
+  next.sort((a,b)=>a.s-b.s);
+  cell.colorRanges = next;
   m.cells[key] = cell;
 }
 /* Aktif düzenleme oturumundaki (varsa) fare/klavye ile seçilmiş METİN aralığını verir.
@@ -2009,9 +1990,7 @@ function getPlainCellSelection(td){
   if(!sel0 || !sel0.rangeCount || sel0.isCollapsed) return null;
   const range = sel0.getRangeAt(0);
   if(!td.contains(range.commonAncestorContainer)) return null;
-  /* Hücreye otomatik eklenen turne açıklaması/özetini gerçek veri metnine
-     dahil etme; renk aralıkları yalnızca cell.v üzerinde tutulur. */
-  const full = cellDisplayText((curMonth().cells[r+'_'+c]||{}));
+  const full = td.textContent;
   const preRange = document.createRange();
   preRange.selectNodeContents(td);
   preRange.setEnd(range.startContainer, range.startOffset);
@@ -2020,18 +1999,8 @@ function getPlainCellSelection(td){
   if(start===end) return null;
   return {mi: state.activeIdx, r, c, start, end, text: full};
 }
-function selectionCell(){
-  const s=window.getSelection && window.getSelection();
-  if(!s || !s.rangeCount || s.isCollapsed) return null;
-  const a=s.anchorNode, f=s.focusNode;
-  const ae=a && (a.nodeType===1 ? a : a.parentElement);
-  const fe=f && (f.nodeType===1 ? f : f.parentElement);
-  const at=ae && ae.closest ? ae.closest('#sheet td.cell') : null;
-  const ft=fe && fe.closest ? fe.closest('#sheet td.cell') : null;
-  return at && at===ft ? at : null;
-}
 function getPartialColorSelection(td){
-  return getEditSelection() || getPlainCellSelection(td || selectionCell());
+  return getEditSelection() || getPlainCellSelection(td);
 }
 function stageHeaderText(m,c){
   const v = (m.cells['1_'+c]||{}).v || '';
@@ -3634,11 +3603,7 @@ function selKeys(m){
 function applyCellsProp(prop, value){
   const m=curMonth(); if(lockGuard(m)) return; snapshot();
   for(const k of selKeys(m)){
-    const cell = {...(m.cells[k]||{v:''}), [prop]: value};
-    /* Hücrenin tamamına yeni yazı rengi verildiğinde eski parça renkleri
-       görünümü gölgelememeli. */
-    if(prop==='color') delete cell.colorRanges;
-    m.cells[k] = cell;
+    m.cells[k] = {...(m.cells[k]||{v:''}), [prop]: value};
   }
   /* Seçim tüm satır genişliğini kapsıyorsa (satır no'ya tıklayıp seçmek gibi),
      soldaki numaratik sıra hücresini de aynı zemin rengiyle boya. */
@@ -3650,22 +3615,6 @@ function applyCellsProp(prop, value){
 }
 function applyBg(color){ applyCellsProp('bg', color); }
 function applyFg(color){ applyCellsProp('color', color); }
-function applyFgToRange(rangeInfo, color){
-  if(!rangeInfo) return false;
-  const {mi,r,c,start,end}=rangeInfo;
-  const m=state.months[mi];
-  if(!m || lockGuard(m)) return false;
-  const key=r+'_'+c;
-  const cur=m.cells[key]||{v:''};
-  const len=cellDisplayText(cur).length;
-  const s=Math.max(0,Math.min(+start||0,len));
-  const e=Math.max(s,Math.min(+end||0,len));
-  if(e<=s) return false;
-  snapshot();
-  addColorRange(mi,key,s,e,color);
-  saveState(); renderSheet(); renderPrint();
-  return true;
-}
 /* Sağ tık menüsündeki "Yazı Rengi" paleti için: hücre düzenleme kipindeyken
    fare ile metnin sadece bir kısmı seçiliyse (bkz. _pendingCtxFgSel, sağ tık
    anında yakalanır) rengi tüm hücreye değil o kısma uygula. Aksi halde
@@ -3673,8 +3622,23 @@ function applyFgToRange(rangeInfo, color){
 let _pendingCtxFgSel = null;
 function applyFgOrPartial(color){
   const sel0 = _pendingCtxFgSel;
-  _pendingCtxFgSel = null;
-  if(applyFgToRange(sel0, color)) return;
+  if(sel0){
+    const {mi,r,c,start,end} = sel0;
+    const key = r+'_'+c;
+    const m = state.months[mi];
+    if(m && !lockGuard(m) && end>start){
+      snapshot();
+      const cur = m.cells[key] || {v:''};
+      const curLen = (cur.v||'').length;
+      const s = Math.max(0, Math.min(start, curLen));
+      const e = Math.max(s, Math.min(end, curLen));
+      if(e>s){
+        addColorRange(mi, key, s, e, color);
+        saveState(); renderSheet(); renderPrint();
+        return;
+      }
+    }
+  }
   applyFg(color);
 }
 function opAlignLeft(){ applyCellsProp('align', 'left'); }
@@ -5389,9 +5353,7 @@ document.getElementById('fgColorBtn').addEventListener('mousedown', e=>{
      yaklaşımı vardı; ama üstteki "Biçim" menüsünü AÇMAK için yapılan ilk
      tıklama zaten seçimi siliyordu — bkz. initMenus() içindeki trg mousedown. */
   e.preventDefault();
-  /* Hem düzenleme kutusundaki seçim hem de normal hücrede fareyle seçilmiş
-     metin desteklenir. Böylece kullanıcı hücreye çift tıklamak zorunda kalmaz. */
-  _pendingFgSel = getPartialColorSelection();
+  _pendingFgSel = getEditSelection();
 });
 document.getElementById('fgColorBtn').onclick = ()=>{
   const p=document.getElementById('fgColorPicker');
@@ -5401,12 +5363,26 @@ document.getElementById('fgColorBtn').onclick = ()=>{
      anında DEĞİL — çünkü butona basılır basılmaz tarayıcı odağı input'tan
      alıp düzenlemeyi otomatik kapatıyor (blur); click olayına gelindiğinde
      seçim bilgisi çoktan kaybolmuş oluyor. */
-   const capturedSel = _pendingFgSel; _pendingFgSel = null;
-   p.onchange=()=>{
-     /* Düzenleme kutusu bu sırada kapanıp metni kaydetmiş olsa bile,
-        aralık kayıtlı güncel metne göre güvenle yeniden sınırlandırılır. */
-     if(!applyFgToRange(capturedSel, p.value)) applyFg(p.value);
-   };
+  const editSel = _pendingFgSel; _pendingFgSel = null;
+  if(editSel){
+    p.onchange=()=>{
+      const {mi,r,c,start,end} = editSel;
+      const key = r+'_'+c;
+      const m = state.months[mi];
+      if(!m || lockGuard(m)) return;
+      snapshot();
+      /* Düzenleme kutusu bu sırada zaten kapanıp metni kaydetmiş olur (blur);
+         seçim aralığını, o an hücrede kayıtlı olan metne göre uygula. */
+      const cur = m.cells[key] || {v:''};
+      const curLen = (cur.v||'').length;
+      const s = Math.max(0, Math.min(start, curLen));
+      const e = Math.max(s, Math.min(end, curLen));
+      if(e>s) addColorRange(mi, key, s, e, p.value);
+      saveState(); renderSheet(); renderPrint();
+    };
+  } else {
+    p.onchange=()=>applyFg(p.value);
+  }
   p.click();
 };
 document.getElementById('boldBtn').onclick = opBold;
