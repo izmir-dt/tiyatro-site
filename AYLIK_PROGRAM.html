@@ -2617,6 +2617,10 @@ function wireCell(td){
   });
   td.addEventListener('contextmenu', e=>{
     e.preventDefault();
+    /* Menü açılıp herhangi bir düğmeye tıklanınca hücre odağı kaybolup
+       (blur) düzenleme kapanacağı için, o an fare ile seçili olan metin
+       aralığını (varsa) HEMEN burada, her şey değişmeden önce yakala. */
+    _pendingCtxFgSel = getEditSelection();
     const r=+td.dataset.r, c=+td.dataset.c;
     if(!inSel(r,c)) setSel(r,c,r,c);
     window.__ttPin=null;
@@ -3581,6 +3585,32 @@ function applyCellsProp(prop, value){
 }
 function applyBg(color){ applyCellsProp('bg', color); }
 function applyFg(color){ applyCellsProp('color', color); }
+/* Sağ tık menüsündeki "Yazı Rengi" paleti için: hücre düzenleme kipindeyken
+   fare ile metnin sadece bir kısmı seçiliyse (bkz. _pendingCtxFgSel, sağ tık
+   anında yakalanır) rengi tüm hücreye değil o kısma uygula. Aksi halde
+   (seçim yoksa) eskisi gibi tüm hücreyi boya. */
+let _pendingCtxFgSel = null;
+function applyFgOrPartial(color){
+  const sel0 = _pendingCtxFgSel;
+  if(sel0){
+    const {mi,r,c,start,end} = sel0;
+    const key = r+'_'+c;
+    const m = state.months[mi];
+    if(m && !lockGuard(m) && end>start){
+      snapshot();
+      const cur = m.cells[key] || {v:''};
+      const curLen = (cur.v||'').length;
+      const s = Math.max(0, Math.min(start, curLen));
+      const e = Math.max(s, Math.min(end, curLen));
+      if(e>s){
+        addColorRange(mi, key, s, e, color);
+        saveState(); renderSheet(); renderPrint();
+        return;
+      }
+    }
+  }
+  applyFg(color);
+}
 function opAlignLeft(){ applyCellsProp('align', 'left'); }
 function opAlignCenter(){ applyCellsProp('align', 'center'); }
 function opAlignRight(){ applyCellsProp('align', 'right'); }
@@ -3623,9 +3653,10 @@ function opClearFormat(){
   }
   saveState(); renderSheet(); renderPrint();
 }
-function buildColorRow(label, palette, applyFn, pickerId){
+function buildColorRow(label, palette, applyFn, pickerId, hint){
   const row=document.createElement('div');
   row.style.cssText='padding:3px 12px 4px';
+  if(hint) row.title=hint;
   const lbl=document.createElement('div');
   lbl.textContent=label;
   lbl.style.cssText='font-size:10px;line-height:1.2;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px;font-weight:600';
@@ -3740,7 +3771,7 @@ function showCtx(x,y,kind){
   el.dataset.x=x; el.dataset.y=y;
 
   el.appendChild(buildColorRow('Zemin Rengi', BG_PALETTE, applyBg, 'bgColorPicker'));
-  el.appendChild(buildColorRow('Yazı Rengi', FG_PALETTE, applyFg, 'fgColorPicker'));
+  el.appendChild(buildColorRow('Yazı Rengi', FG_PALETTE, applyFgOrPartial, 'fgColorPicker', 'Hücreyi düzenlerken fare ile metnin bir kısmını seçip buradan renk seçerseniz, sadece o kısım renklenir. Seçim yoksa tüm hücre renklenir.'));
   const ttl=document.createElement('div'); ttl.className='ttl'; ttl.textContent='Hizalama'; el.appendChild(ttl);
   ctxAlignRow(el);
   ctxSep(el);
