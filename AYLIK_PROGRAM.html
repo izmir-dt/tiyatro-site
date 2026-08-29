@@ -1975,6 +1975,33 @@ function getEditSelection(){
   if(start===end) return null;
   return {...__editCtx, start, end, text:full};
 }
+/* === DÜZENLEME MODUNA HİÇ GİRMEDEN de kısmi renklendirme yapılabilsin diye:
+   hücre normal (düzenlenmeyen) haldeyken bile, kullanıcı üzerindeki metni
+   fare ile (çift tıklama veya sürükleyerek) normal biçimde seçip sağ
+   tıklarsa, o seçimi oku. Tarayıcılar bir seçimin İÇİNDE sağ tıklandığında
+   seçimi bozmaz (dışında tıklanırsa imleç oraya taşınır/seçim bozulur —
+   bu native davranıştır). Öncelik aktif düzenleme oturumuna (getEditSelection),
+   yoksa bu düz seçime verilir. */
+function getPlainCellSelection(td){
+  if(!td) return null;
+  const r = +td.dataset.r, c = +td.dataset.c;
+  if(Number.isNaN(r) || Number.isNaN(c)) return null;
+  const sel0 = window.getSelection();
+  if(!sel0 || !sel0.rangeCount || sel0.isCollapsed) return null;
+  const range = sel0.getRangeAt(0);
+  if(!td.contains(range.commonAncestorContainer)) return null;
+  const full = td.textContent;
+  const preRange = document.createRange();
+  preRange.selectNodeContents(td);
+  preRange.setEnd(range.startContainer, range.startOffset);
+  const start = preRange.toString().length;
+  const end = start + range.toString().length;
+  if(start===end) return null;
+  return {mi: state.activeIdx, r, c, start, end, text: full};
+}
+function getPartialColorSelection(td){
+  return getEditSelection() || getPlainCellSelection(td);
+}
 function stageHeaderText(m,c){
   const v = (m.cells['1_'+c]||{}).v || '';
   return v.toLocaleUpperCase('tr');
@@ -2619,8 +2646,11 @@ function wireCell(td){
     e.preventDefault();
     /* Menü açılıp herhangi bir düğmeye tıklanınca hücre odağı kaybolup
        (blur) düzenleme kapanacağı için, o an fare ile seçili olan metin
-       aralığını (varsa) HEMEN burada, her şey değişmeden önce yakala. */
-    _pendingCtxFgSel = getEditSelection();
+       aralığını (varsa) HEMEN burada, her şey değişmeden önce yakala.
+       Hücre düzenleme kipinde DEĞİLSE de, kullanıcı normal şekilde
+       (düzenlemeye girmeden) metnin bir kısmını seçmiş olabilir —
+       getPartialColorSelection ikisini de dener. */
+    _pendingCtxFgSel = getPartialColorSelection(td);
     const r=+td.dataset.r, c=+td.dataset.c;
     if(!inSel(r,c)) setSel(r,c,r,c);
     window.__ttPin=null;
@@ -3667,12 +3697,16 @@ function buildColorRow(label, palette, applyFn, pickerId, hint){
     const b=document.createElement('button');
     b.title=name; b.type='button';
     b.style.cssText='flex:none;display:block;width:18px;height:18px;min-height:0;border-radius:4px;border:1px solid rgba(0,0,0,.25);cursor:pointer;background:'+color+';padding:0';
+    /* mousedown'da preventDefault: buton odağı ÇALMASIN, böylece hücredeki
+       (varsa) aktif metin seçimi/imleç durumu tıklama anına kadar bozulmaz. */
+    b.addEventListener('mousedown', e=>e.preventDefault());
     b.onclick=(e)=>{ e.stopPropagation(); hideCtx(); applyFn(color); };
     sw.appendChild(b);
   }
   const custom=document.createElement('button');
   custom.type='button'; custom.title='Özel Renk';
   custom.style.cssText='flex:none;display:block;width:18px;height:18px;min-height:0;border-radius:4px;border:1px dashed var(--muted);cursor:pointer;background:conic-gradient(red,#ff0,lime,cyan,blue,magenta,red);padding:0';
+  custom.addEventListener('mousedown', e=>e.preventDefault());
   custom.onclick=(e)=>{
     e.stopPropagation(); hideCtx();
     const picker=document.getElementById(pickerId);
@@ -3937,6 +3971,14 @@ function initMenus(){
     const trg = menu.querySelector('.menu-trigger');
     const panel = menu.querySelector('.menu-panel');
     if(!trg || !panel) return;
+    trg.addEventListener('mousedown', e=>{
+      /* Menü açılırken (tetikleyici düğmeye tıklanırken) odağın hücreden/
+         düzenleme kutusundan kaçmasını (ve bunun tetiklediği otomatik
+         kaydetme/kapanmayı) ÖNLE — aksi halde "Biçim" menüsünü açar açmaz
+         o an düzenlemekte olduğunuz hücredeki metin seçimi kayboluyor ve
+         "Yazı rengi…" kısmi renklendirmeyi hiç göremiyordu. */
+      e.preventDefault();
+    });
     trg.addEventListener('click', e=>{
       e.stopPropagation();
       const willOpen = !menu.classList.contains('open');
@@ -5297,15 +5339,20 @@ document.getElementById('clearBtn').onclick = opClear;
 document.getElementById('freeTextBtn').onclick = opFreeText;
 { const ab=document.getElementById('archiveCellBtn'); if(ab) ab.onclick = opArchiveCell; }
 document.getElementById('cellNoteBtn').onclick = opCellNote;
+document.getElementById('bgColorBtn').addEventListener('mousedown', e=>e.preventDefault());
 document.getElementById('bgColorBtn').onclick = ()=>{
   const p=document.getElementById('bgColorPicker');
   p.onchange=()=>applyBg(p.value);
   p.click();
 };
 let _pendingFgSel = null;
-document.getElementById('fgColorBtn').addEventListener('mousedown', ()=>{
-  /* Odak input'tan butona kaymadan (ve bu da düzenlemeyi kapatıp
-     seçimi silmeden) HEMEN ÖNCE, varsa aktif metin seçimini yakala. */
+document.getElementById('fgColorBtn').addEventListener('mousedown', e=>{
+  /* Odağın (ve onunla birlikte aktif metin seçiminin) bu düğmeye
+     basıldığı an kaybolmasını TAMAMEN ENGELLE — böylece aşağıdaki yakalama
+     tam olarak doğru/güncel seçimi okur. (Daha önce sadece "önce yakala"
+     yaklaşımı vardı; ama üstteki "Biçim" menüsünü AÇMAK için yapılan ilk
+     tıklama zaten seçimi siliyordu — bkz. initMenus() içindeki trg mousedown. */
+  e.preventDefault();
   _pendingFgSel = getEditSelection();
 });
 document.getElementById('fgColorBtn').onclick = ()=>{
