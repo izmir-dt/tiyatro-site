@@ -5271,27 +5271,35 @@ document.getElementById('bgColorBtn').onclick = ()=>{
   p.onchange=()=>applyBg(p.value);
   p.click();
 };
+let _pendingFgSel = null;
+document.getElementById('fgColorBtn').addEventListener('mousedown', ()=>{
+  /* Odak input'tan butona kaymadan (ve bu da düzenlemeyi kapatıp
+     seçimi silmeden) HEMEN ÖNCE, varsa aktif metin seçimini yakala. */
+  _pendingFgSel = getEditSelection();
+});
 document.getElementById('fgColorBtn').onclick = ()=>{
   const p=document.getElementById('fgColorPicker');
   /* Hücre düzenleme kipindeyken fare ile metnin SADECE bir kısmı seçiliyse,
-     rengi tüm hücreye değil o kısma uygula (kısmi/parçalı renklendirme). */
-  const editSel = getEditSelection();
+     rengi tüm hücreye değil o kısma uygula (kısmi/parçalı renklendirme).
+     ÖNEMLİ: seçim buraya "mousedown" anında (aşağıda) yakalanıyor, "click"
+     anında DEĞİL — çünkü butona basılır basılmaz tarayıcı odağı input'tan
+     alıp düzenlemeyi otomatik kapatıyor (blur); click olayına gelindiğinde
+     seçim bilgisi çoktan kaybolmuş oluyor. */
+  const editSel = _pendingFgSel; _pendingFgSel = null;
   if(editSel){
     p.onchange=()=>{
-      const {mi,r,c,start,end,text,type,input,td}=editSel;
+      const {mi,r,c,start,end} = editSel;
       const key = r+'_'+c;
       const m = state.months[mi];
       if(!m || lockGuard(m)) return;
       snapshot();
-      const prevCell = m.cells[key] || {v:''};
-      m.cells[key] = {...prevCell, v: text};
-      if(text !== (prevCell.v||'')) delete m.cells[key].colorRanges;
-      addColorRange(mi, key, start, end, p.value);
-      /* Düzenleme oturumunu, DOM'u yeniden çizmeden önce sessizce kapat —
-         input/td'nin blur/keydown olayları ikinci kez kaydetmeye çalışmasın. */
-      if(type==='input' && input){ input.onblur=null; input.onkeydown=null; }
-      if(type==='ce' && td){ td.onblur=null; td.onkeydown=null; }
-      __editCtx = null;
+      /* Düzenleme kutusu bu sırada zaten kapanıp metni kaydetmiş olur (blur);
+         seçim aralığını, o an hücrede kayıtlı olan metne göre uygula. */
+      const cur = m.cells[key] || {v:''};
+      const curLen = (cur.v||'').length;
+      const s = Math.max(0, Math.min(start, curLen));
+      const e = Math.max(s, Math.min(end, curLen));
+      if(e>s) addColorRange(mi, key, s, e, p.value);
       saveState(); renderSheet(); renderPrint();
     };
   } else {
