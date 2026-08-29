@@ -1913,6 +1913,68 @@ function cellStyleString(cell){
   if(cell.align) parts.push('text-align:'+cell.align);
   return parts.join(';');
 }
+/* === Hücre metninin SADECE BİR KISMINI renklendirme (kısmi/parçalı renk) ===
+   cell.colorRanges: [{s,e,color}, ...] — s/e, ekranda görünen metindeki (cellDisplayText)
+   karakter aralığı. Metin değiştiğinde aralıklar geçersiz olabileceğinden,
+   hücre metni (v) değişince colorRanges temizlenir (bkz. startEdit/commit). */
+function cellRichHtml(cell){
+  const text = cellDisplayText(cell);
+  const ranges = (cell && cell.colorRanges || [])
+    .filter(r=>r && r.e>r.s && r.s>=0 && r.e<=text.length && r.color)
+    .slice().sort((a,b)=>a.s-b.s);
+  if(!ranges.length) return null;
+  let out='', pos=0;
+  for(const r of ranges){
+    if(r.s>pos) out += escapeHtml(text.slice(pos, r.s));
+    if(r.s<pos) continue; /* çakışan aralık — atla, ilkini koru */
+    out += '<span style="color:'+escapeHtml(r.color)+'">'+escapeHtml(text.slice(r.s, r.e))+'</span>';
+    pos = r.e;
+  }
+  if(pos<text.length) out += escapeHtml(text.slice(pos));
+  return out;
+}
+function addColorRange(mi, key, start, end, color){
+  const m = state.months[mi]; if(!m) return;
+  const cell = {...(m.cells[key]||{v:''})};
+  const prev = (cell.colorRanges||[]);
+  const next = [];
+  for(const r of prev){
+    if(r.e<=start || r.s>=end){ next.push(r); continue; }
+    if(r.s<start) next.push({s:r.s, e:start, color:r.color});
+    if(r.e>end) next.push({s:end, e:r.e, color:r.color});
+  }
+  next.push({s:start, e:end, color});
+  next.sort((a,b)=>a.s-b.s);
+  cell.colorRanges = next;
+  m.cells[key] = cell;
+}
+/* Aktif düzenleme oturumundaki (varsa) fare/klavye ile seçilmiş METİN aralığını verir.
+   Program hücreleri <input>, diğerleri contentEditable <td> ile düzenlenir; ikisi de desteklenir. */
+let __editCtx = null;
+function getEditSelection(){
+  if(!__editCtx) return null;
+  if(__editCtx.type==='input'){
+    const el = __editCtx.input;
+    if(!el || !el.isConnected || el.selectionStart==null) return null;
+    const s=el.selectionStart, e=el.selectionEnd;
+    if(s===e) return null;
+    return {...__editCtx, start:s, end:e, text:el.value};
+  }
+  const td = __editCtx.td;
+  if(!td || !td.isConnected) return null;
+  const sel0 = window.getSelection();
+  if(!sel0 || !sel0.rangeCount) return null;
+  const range = sel0.getRangeAt(0);
+  if(range.collapsed || !td.contains(range.commonAncestorContainer)) return null;
+  const full = td.textContent;
+  const preRange = document.createRange();
+  preRange.selectNodeContents(td);
+  preRange.setEnd(range.startContainer, range.startOffset);
+  const start = preRange.toString().length;
+  const end = start + range.toString().length;
+  if(start===end) return null;
+  return {...__editCtx, start, end, text:full};
+}
 function stageHeaderText(m,c){
   const v = (m.cells['1_'+c]||{}).v || '';
   return v.toLocaleUpperCase('tr');
@@ -2459,7 +2521,8 @@ function renderSheet(){
       if(c===0 || c===m.cols-1) td.classList.add('dateCol');
       const cell = m.cells[r+'_'+c] || {};
       td.setAttribute('aria-label',(r+1)+'. satır '+colName(c)+' sütunu'+(cellDisplayText(cell)?': '+cellDisplayText(cell):': boş'));
-      td.textContent = cellDisplayText(cell);
+      const _rich = cellRichHtml(cell);
+      if(_rich!==null) td.innerHTML = _rich; else td.textContent = cellDisplayText(cell);
       if(cell.premiere) td.classList.add('premiere');
       if(cell.underline) td.classList.add('uline');
       // Otomatik prömiyer (* ile başlayan)
@@ -3008,17 +3071,22 @@ function startEdit(td){
     td.appendChild(input);
     input.focus();
     try{ const L=input.value.length; input.setSelectionRange(L,L); }catch(_){ }
+    __editCtx = {type:'input', input, r, c, mi: state.activeIdx};
     let done = false;
     function commit(save){
       if(done) return;
       done = true;
+      __editCtx = null;
       if(input.parentNode) input.remove();
       td.contentEditable='false';
       if(save){
         const nv = input.value.trim();
         snapshot();
         const mm = curMonth();
-        mm.cells[r+'_'+c] = {...(mm.cells[r+'_'+c]||{}), v: nv};
+        const prevCell = mm.cells[r+'_'+c] || {};
+        mm.cells[r+'_'+c] = {...prevCell, v: nv};
+        /* Metin değiştiyse eski kısmi renk aralıkları artık geçersiz — temizle */
+        if(nv !== (prevCell.v||'')) delete mm.cells[r+'_'+c].colorRanges;
         if(!nv){
         const kc = mm.cells[r+'_'+c] || {};
         /* turne bağı / dönüş işareti / not gibi bilgileri olan hücreyi silme,
@@ -3045,13 +3113,18 @@ function startEdit(td){
   td.focus();
   const range=document.createRange(); range.selectNodeContents(td); range.collapse(false);
   const s=window.getSelection(); s.removeAllRanges(); s.addRange(range);
+  __editCtx = {type:'ce', td, r, c, mi: state.activeIdx};
   function commit(save){
+    __editCtx = null;
     td.contentEditable='false';
     if(save){
       const nv = td.textContent.trim();
       snapshot();
       const mm = curMonth();
-      mm.cells[r+'_'+c] = {...(mm.cells[r+'_'+c]||{}), v: nv};
+      const prevCell = mm.cells[r+'_'+c] || {};
+      mm.cells[r+'_'+c] = {...prevCell, v: nv};
+      /* Metin değiştiyse eski kısmi renk aralıkları artık geçersiz — temizle */
+      if(nv !== (prevCell.v||'')) delete mm.cells[r+'_'+c].colorRanges;
       if(!nv){
         const kc = mm.cells[r+'_'+c] || {};
         /* turne bağı / dönüş işareti / not gibi bilgileri olan hücreyi silme,
@@ -3542,7 +3615,7 @@ function opClearFormat(){
   for(const k of selKeys(m)){
     const cur = m.cells[k];
     if(!cur) continue;
-    const {bg,color,bold,underline,align, ...rest} = cur;
+    const {bg,color,bold,underline,align,colorRanges, ...rest} = cur;
     m.cells[k] = rest;
   }
   if(sel.c1===0 && sel.c2===m.cols-1 && m.rowBg){
@@ -4116,7 +4189,26 @@ async function renameCurMonth(){
 }
 
 /* Print view */
+/* PERFORMANS: renderPrint() eskiden HER düzenlemede (kalın yap, renk, hücre
+   yazma, satır/sütun ekleme vb. — 30+ nokta) tüm ayların TAMAMINI yeniden
+   HTML'e döküyordu (her ay için computeTours + tüm satırlarda çakışma
+   hesabı). "Yazdır" sekmesi açık değilken bu iş tamamen boşa gidiyor ve
+   siteyi ağırlaştırıyordu ("hafif kasma"). Artık: sekme görünür değilse
+   sadece "kirli" olarak işaretlenir, gerçek inşa ertelenir; sekmeye
+   geçildiğinde (tabbar click handler zaten renderPrint() çağırıyor)
+   gerçek inşa tetiklenir. */
+let _printDirty = true;
+function isPrintTabActive(){
+  const sec = document.getElementById('print');
+  return !!(sec && sec.classList.contains('active'));
+}
 function renderPrint(){
+  _printDirty = true;
+  if(!isPrintTabActive()) return;
+  renderPrintNow();
+}
+function renderPrintNow(){
+  _printDirty = false;
   const wrap = document.getElementById('printView');
   const prev = document.getElementById('printPreview');
   const buildBlock = (m)=>{
@@ -4173,7 +4265,8 @@ function renderPrint(){
           if(!cell.color) styleAttr += ';color:#000 !important';
         }
         const st = styleAttr?` style="${styleAttr}"`:'';
-        h+=`<td class="${clist.join(' ')}"${rs}${cs}${st}>${escapeHtml(cellDisplayText(cell))}${extra}</td>`;
+        const _richTxt = cellRichHtml(cell);
+        h+=`<td class="${clist.join(' ')}"${rs}${cs}${st}>${_richTxt!==null?_richTxt:escapeHtml(cellDisplayText(cell))}${extra}</td>`;
       }
       h+='</tr>';
     }
@@ -4233,7 +4326,7 @@ function printProgram(val){
   const p = parsePaper(chosen);
   if((p.size === 'A4' || p.size === 'A5') && blockIfRedCell(p.size+' '+(p.orient==='portrait'?'dikey':'yatay')+' Yazdır')) return;
   setPrintSize(chosen);
-  renderPrint();
+  renderPrintNow();
   setTimeout(()=>window.print(), 120);
 }
 function fitPrintPages(){
@@ -5180,7 +5273,30 @@ document.getElementById('bgColorBtn').onclick = ()=>{
 };
 document.getElementById('fgColorBtn').onclick = ()=>{
   const p=document.getElementById('fgColorPicker');
-  p.onchange=()=>applyFg(p.value);
+  /* Hücre düzenleme kipindeyken fare ile metnin SADECE bir kısmı seçiliyse,
+     rengi tüm hücreye değil o kısma uygula (kısmi/parçalı renklendirme). */
+  const editSel = getEditSelection();
+  if(editSel){
+    p.onchange=()=>{
+      const {mi,r,c,start,end,text,type,input,td}=editSel;
+      const key = r+'_'+c;
+      const m = state.months[mi];
+      if(!m || lockGuard(m)) return;
+      snapshot();
+      const prevCell = m.cells[key] || {v:''};
+      m.cells[key] = {...prevCell, v: text};
+      if(text !== (prevCell.v||'')) delete m.cells[key].colorRanges;
+      addColorRange(mi, key, start, end, p.value);
+      /* Düzenleme oturumunu, DOM'u yeniden çizmeden önce sessizce kapat —
+         input/td'nin blur/keydown olayları ikinci kez kaydetmeye çalışmasın. */
+      if(type==='input' && input){ input.onblur=null; input.onkeydown=null; }
+      if(type==='ce' && td){ td.onblur=null; td.onkeydown=null; }
+      __editCtx = null;
+      saveState(); renderSheet(); renderPrint();
+    };
+  } else {
+    p.onchange=()=>applyFg(p.value);
+  }
   p.click();
 };
 document.getElementById('boldBtn').onclick = opBold;
@@ -5320,26 +5436,25 @@ function openMonthPreviewTab(){
       '#sheetFit{transform-origin:top left}'+
       '.sheetbox td.cell{cursor:default}'+
       '@media print{.pv-head button{display:none}}'+
-      '@media print{#notesSec{page-break-before:always;break-before:page}}'+
     '</style></head><body>'+
     '<div class="pv-head"><div>'+_pvIcon('calendar')+'</div><div><h1>'+esc(m.name)+' — Program Önizleme</h1>'+
       '<div class="sub">İzmir Devlet Tiyatrosu Müdürlüğü · yalnızca görüntüleme</div></div>'+
       '<button type="button" onclick="window.print()">'+_pvIcon('print')+' Yazdır / PDF</button></div>'+
     '<div class="wrap">'+
-      '<h2 class="sec" style="margin-top:0">'+_pvIcon('calendar')+' Aylık Program Tablosu</h2>'+
-      '<div class="sheetbox"><div id="sheetFit">'+sheet+'</div></div>'+
       '<div class="stats">'+
         '<div class="stat crit">'+_pvIcon('alert')+'<div><b>'+d.critical.length+'</b><span>Kritik çakışma</span></div></div>'+
         '<div class="stat soft">'+_pvIcon('info')+'<div><b>'+d.soft.length+'</b><span>Kritik olmayan çakışma</span></div></div>'+
         '<div class="stat note">'+_pvIcon('note')+'<div><b>'+d.notes.length+'</b><span>Not / serbest metin</span></div></div>'+
       '</div>'+
+      '<div id="notesSec">'+
+        '<h2 class="sec" style="margin-top:0">'+_pvIcon('note')+' Notlar</h2>'+notesHtml+
+      '</div>'+
+      '<h2 class="sec">'+_pvIcon('calendar')+' Aylık Program Tablosu</h2>'+
+      '<div class="sheetbox"><div id="sheetFit">'+sheet+'</div></div>'+
       '<h2 class="sec">'+_pvIcon('alert')+' Çakışmalar</h2>'+
       (d.critical.length || d.soft.length
         ? d.critical.map(i=>card(i,true)).join('')+d.soft.map(i=>card(i,false)).join('')
         : '<div class="empty">'+_pvIcon('check')+' Bu ayda çakışma bulunmuyor — program temiz.</div>')+
-      '<div id="notesSec">'+
-        '<h2 class="sec">'+_pvIcon('note')+' Notlar</h2>'+notesHtml+
-      '</div>'+
     '</div>'+
     '<'+'script>'+
       '(function(){'+
