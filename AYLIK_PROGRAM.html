@@ -2850,12 +2850,12 @@ function cancelTooltipShow(){ clearTimeout(ttShowTimer); ttShowTimer=null; }
    için) ulaşmaya çalışırken fare aradaki başka hücrelerin üzerinden geçebiliyor
    ve her biri ANINDA tooltip içeriğini değiştirip asıl hedefe ulaşmayı
    imkânsızlaştırıyordu. Artık hücreye girildiğinde tooltip anında değil, kısa
-   bir "niyet" gecikmesinden (130ms) sonra gösteriliyor: fare sadece geçiyorsa
+   bir "niyet" gecikmesinden (90ms) sonra gösteriliyor: fare sadece geçiyorsa
    (başka bir hücreye/tooltip'e doğru ilerliyorsa) bu hücrenin tooltip'i hiç
    açılmıyor; gerçekten o hücrede durulduysa normal şekilde açılıyor. */
 function scheduleTooltipShow(r,c,ev){
   cancelTooltipShow();
-  ttShowTimer=setTimeout(()=>{ ttShowTimer=null; showTooltipFor(r,c,ev); }, 130);
+  ttShowTimer=setTimeout(()=>{ ttShowTimer=null; showTooltipFor(r,c,ev); }, 90);
 }
 function hideTooltipNow(force){
   /* Balon bir hücreye sabitlenmişse (F4 ile pinlendiyse) sadece Esc veya
@@ -3078,6 +3078,17 @@ function showTooltipFor(r,c,ev){
   /* Balon bir hücreye sabitlenmişse (F4), fare başka hücreye gitse bile
      sadece sabitli hücrenin balonu gösterilir; diğerleri yok sayılır. */
   if(window.__ttPin && (window.__ttPin.r!==r || window.__ttPin.c!==c)) return;
+  /* Kuyruğun (balon okunun) her zaman GERÇEKTEN üzerinde durulan hücreyi
+     göstermesi için bağlanma noktası, fare imlecinin ham konumu yerine, o
+     hücrenin sınırları içine sabitlenir (clamp). Aksi halde fare hücrenin
+     kenarına yakınken imleç komşu satıra/sütuna taşabiliyor ve ok yanlış
+     hücreye işaret ediyormuş gibi görünüyordu. */
+  const tdAnchor=document.querySelector('#sheet td.cell[data-r="'+r+'"][data-c="'+c+'"]');
+  if(tdAnchor && ev && ev.clientX!=null){
+    const ar=tdAnchor.getBoundingClientRect();
+    ev={clientX:Math.max(ar.left+2,Math.min(ar.right-2,ev.clientX)),
+        clientY:Math.max(ar.top+2,Math.min(ar.bottom-2,ev.clientY))};
+  }
   cancelTooltipHide();
   window.__ttKey = r+'_'+c;
   const ttEl0 = document.getElementById('tooltip');
