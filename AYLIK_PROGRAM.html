@@ -2012,6 +2012,31 @@ function getPlainCellSelection(td){
 function getPartialColorSelection(td){
   return getEditSelection() || getPlainCellSelection(td);
 }
+/* getPlainCellSelection için hücreyi (td) bilmek gerekir; düzenleme dışı
+   serbest metin seçiminde hangi hücrede olduğumuzu geçerli seçimin
+   (window.getSelection) içinde bulunduğu en yakın td.cell'den buluyoruz. */
+function getPlainCellSelectionAny(){
+  const sel0 = window.getSelection();
+  if(!sel0 || !sel0.rangeCount || sel0.isCollapsed) return null;
+  const node = sel0.getRangeAt(0).commonAncestorContainer;
+  const el = node.nodeType===1 ? node : node.parentElement;
+  const td = el && el.closest ? el.closest('#sheet td.cell') : null;
+  return td ? getPlainCellSelection(td) : null;
+}
+/* Sağ tık menüsü açılana kadar (contextmenu olayı ateşlenene dek) tarayıcı
+   bazı durumlarda seçimi çoktan boşaltmış olabiliyor (sağ tık native
+   davranışı tutarsız). Bunu önlemek için geçerli metin seçimini SÜREKLİ
+   (fare/klavye ile her değiştiğinde) burada önbelleğe alıyoruz; contextmenu
+   anında canlı seçim boşsa bu önbellek kullanılıyor (bkz. td 'contextmenu'
+   handler'ı). Önbellek yalnızca aynı hücrede (mi/r/c eşleşmesi) ve yakın
+   zamanda (bkz. CTX_SEL_MAX_AGE_MS) yakalanmışsa geçerli sayılır. */
+let _lastTextSel = null;
+const CTX_SEL_MAX_AGE_MS = 4000;
+function captureCurrentSelection(){
+  const s = getEditSelection() || getPlainCellSelectionAny();
+  if(s) _lastTextSel = {...s, ts: Date.now()};
+}
+document.addEventListener('selectionchange', captureCurrentSelection);
 function stageHeaderText(m,c){
   const v = (m.cells['1_'+c]||{}).v || '';
   return v.toLocaleUpperCase('tr');
@@ -2645,8 +2670,16 @@ function wireCell(td){
   td.addEventListener('mousedown', e=>{
     if(td.isContentEditable) return;
     if(e.target !== td) return; /* hücre içinde düzenleme kutusu (input/datalist) varsa seçim/preventDefault mantığını tetikleme */
-    const r=+td.dataset.r, c=+td.dataset.c;
     if(e.button !== 0) return;
+    if(e.altKey){
+      /* Alt+sürükle: hücre aralığı seçimine girmeden tarayıcının doğal
+         METİN seçimine izin ver (kısmi renklendirme sağ tık menüsü için).
+         preventDefault YOK ki fare sürüklemesi native seçim yapabilsin;
+         dragSelecting da başlatılmıyor ki mouseenter hücre aralığını
+         seçime çevirmesin. */
+      return;
+    }
+    const r=+td.dataset.r, c=+td.dataset.c;
     /* click handlerının "zaten seçiliydi mi" kararını verebilmesi için,
        seçim mousedown'da değişmeden ÖNCEKİ durumu sakla */
     td._wasSoleSelected = (sel.r1===r && sel.c1===c && sel.r2===r && sel.c2===c);
@@ -2671,6 +2704,7 @@ function wireCell(td){
      yani hücrenin içine ayrıca girmeye gerek kalmadan yazabilirsin. */
   td.addEventListener('click', e=>{
     if(td.isContentEditable || e.target !== td) return;
+    if(e.altKey) return; /* Alt+sürükle native metin seçimiydi, hücre seçimini/düzenlemeyi tetikleme */
     const r=+td.dataset.r, c=+td.dataset.c;
     if(e.shiftKey || e.ctrlKey || e.metaKey || dragMoved){ setSel(r,c,r,c); return; }
     const wasSoleSelected = td._wasSoleSelected;
@@ -2686,8 +2720,18 @@ function wireCell(td){
        Hücre düzenleme kipinde DEĞİLSE de, kullanıcı normal şekilde
        (düzenlemeye girmeden) metnin bir kısmını seçmiş olabilir —
        getPartialColorSelection ikisini de dener. */
-    _pendingCtxFgSel = getPartialColorSelection(td);
     const r=+td.dataset.r, c=+td.dataset.c;
+    let fgSel = getPartialColorSelection(td);
+    /* Canlı seçim boşsa (tarayıcı sağ tıkta seçimi zaten temizlemiş olabilir)
+       aynı hücrede yakın zamanda yakalanmış önbelleğe düş. */
+    if(!fgSel){
+      const cached = _lastTextSel;
+      if(cached && cached.end>cached.start && cached.mi===state.activeIdx &&
+         cached.r===r && cached.c===c && (Date.now()-cached.ts)<CTX_SEL_MAX_AGE_MS){
+        fgSel = cached;
+      }
+    }
+    _pendingCtxFgSel = fgSel;
     if(!inSel(r,c)) setSel(r,c,r,c);
     window.__ttPin=null;
     document.getElementById('tooltip').style.display='none';
@@ -3147,6 +3191,7 @@ function startEdit(td){
       if(done) return;
       done = true;
       __editCtx = null;
+      _lastTextSel = null; /* düzenleme kapandı, eski offsetler artık geçersiz */
       if(input.parentNode) input.remove();
       td.contentEditable='false';
       if(save){
@@ -3169,6 +3214,12 @@ function startEdit(td){
       }
       renderSheet();
     }
+    /* document 'selectionchange' olayı <input> içindeki seçim değişikliklerini
+       YAKALAMAZ (input'un kendi iç seçim modeli ayrı); bu yüzden burada ayrıca
+       dinliyoruz ki sağ tık önbelleği (_lastTextSel) input alanında da çalışsın. */
+    input.addEventListener('select', captureCurrentSelection);
+    input.addEventListener('mouseup', captureCurrentSelection);
+    input.addEventListener('keyup', captureCurrentSelection);
     input.addEventListener('blur', ()=>commit(true));
     input.addEventListener('keydown', e=>{
       e.stopPropagation();
@@ -3186,6 +3237,7 @@ function startEdit(td){
   __editCtx = {type:'ce', td, r, c, mi: state.activeIdx};
   function commit(save){
     __editCtx = null;
+    _lastTextSel = null; /* düzenleme kapandı, eski offsetler artık geçersiz */
     td.contentEditable='false';
     if(save){
       const nv = td.textContent.trim();
