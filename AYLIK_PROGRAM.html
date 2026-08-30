@@ -1435,16 +1435,13 @@ async function pushDraft(){
     const encoded = utf8ToB64(payload);
     const ts = Date.now();
     const version = DRAFT_PREFIX + slug + '_' + ts;
-    const old = await fetch(PUBLISH_API + '/' + encodeURIComponent(PUBLISH_SHEET), {cache:'no-store'});
-    const oldData = old.ok ? await old.json() : {rows:[]};
     const prefix = DRAFT_PREFIX + slug + '_';
-    const oldRows = (oldData.rows || [])
-      .map((r,i)=>({r,i}))
-      .filter(x=>String(x.r[0]||'').startsWith(prefix))
-      .sort((a,b)=>b.i-a.i);
-    for(const item of oldRows){
-      await fetch(PUBLISH_API + '/' + encodeURIComponent(PUBLISH_SHEET) + '/row/' + item.i, {method:'DELETE'});
-    }
+    /* ÖNEMLİ (veri kaybını önleme): eski taslak satırları ÖNCE SİLİNMEZ.
+       Önce yeni veri eksiksiz yazılır ve doğrulanır; yalnızca bu başarılı
+       olduktan SONRA eski (artık gereksiz) satırlar silinir. Böylece yazma
+       sırasında bağlantı kopması/sekme kapanması gibi bir kesinti olursa,
+       sunucudaki önceki (dolu) taslak olduğu gibi kalır — hiçbir zaman hem
+       eski hem yeni veri aynı anda kaybolmaz. */
     const parts = [];
     for(let i=0;i<encoded.length;i+=PUBLISH_CHUNK) parts.push(encoded.slice(i,i+PUBLISH_CHUNK));
     for(let i=0;i<parts.length;i++){
@@ -1455,6 +1452,21 @@ async function pushDraft(){
       });
       if(!res.ok) throw new Error('Taslak yazılamadı (HTTP '+res.status+')');
     }
+    /* Yeni taslak tam olarak yazıldı — şimdi eskisini (varsa) sunucudan
+       güvenle temizleyebiliriz. Bu adım başarısız olsa bile önemli değil:
+       yeni taslak zaten sunucuda tam olarak duruyor, eski satırlar sadece
+       fazladan yer kaplar, veri kaybına yol açmaz. */
+    try{
+      const old = await fetch(PUBLISH_API + '/' + encodeURIComponent(PUBLISH_SHEET), {cache:'no-store'});
+      const oldData = old.ok ? await old.json() : {rows:[]};
+      const oldRows = (oldData.rows || [])
+        .map((r,i)=>({r,i}))
+        .filter(x=>String(x.r[0]||'').startsWith(prefix) && String(x.r[0]||'')!==version)
+        .sort((a,b)=>b.i-a.i);
+      for(const item of oldRows){
+        await fetch(PUBLISH_API + '/' + encodeURIComponent(PUBLISH_SHEET) + '/row/' + item.i, {method:'DELETE'});
+      }
+    }catch(e){ /* eski satırların temizlenememesi kritik değil, sessizce geç */ }
     state.monthDraft = state.monthDraft || {};
     state.monthDraft[m.name] = {draftAt: ts};
     /* localStorage'a doğrudan yaz — saveState() burada çağrılırsa yeni bir
