@@ -3009,58 +3009,57 @@ function repositionPinnedTooltip(){
   const visible = rc.bottom>0 && rc.top<vh && rc.right>0 && rc.left<vw;
   if(!visible){ tt.style.display='none'; const arrow=document.getElementById('tooltipArrow'); if(arrow) arrow.style.display='none'; return; }
   tt.style.display='block';
-  placeTooltip({clientX:rc.left+Math.min(60,rc.width/2), clientY:rc.bottom-4});
+  placeTooltip();
 }
-function placeTooltip(ev){
+/* Balonu, gösterildiği hücrenin (tt.dataset.r/c) GERÇEK dikdörtgenine göre
+   konumlandırır — fare konumuna değil. Böylece balon çok uzun olup hücrenin
+   üstüne kadar uzansa bile (dikey olarak hücreyle çakışsa bile) kuyruk her
+   zaman doğru yöne ve doğru hücreye bakar; önceki "en yakın kenar" mantığı
+   bu durumda (bağlanma noktası kutunun İÇİNDE kalınca) hiç ok göstermiyordu. */
+function placeTooltip(){
   const tt=document.getElementById('tooltip');
   if(tt.style.display!=='block') return;
-  const pad=8, gap=14;
+  const pad=8, gap=10;
   const vw=window.innerWidth, vh=window.innerHeight;
-  const mx=(ev&&ev.clientX!=null)?ev.clientX:vw/2;
-  const my=(ev&&ev.clientY!=null)?ev.clientY:vh/2;
+  const cellTd=document.querySelector('#sheet td.cell[data-r="'+tt.dataset.r+'"][data-c="'+tt.dataset.c+'"]');
+  const cellRect=cellTd?cellTd.getBoundingClientRect():null;
+  const mx=cellRect?(cellRect.left+cellRect.width/2):vw/2;
+  const cellTop=cellRect?cellRect.top:vh/2;
+  const cellBottom=cellRect?cellRect.bottom:vh/2;
   /* ölç */
   tt.style.maxHeight=''; tt.style.left='-9999px'; tt.style.top='0px';
   let r=tt.getBoundingClientRect();
-  const below=vh-my-gap-pad, above=my-gap-pad;
-  let h=r.height, top;
-  if(h<=below){ top=my+gap; }
-  else if(h<=above){ top=my-gap-h; }
+  const below=vh-cellBottom-gap-pad, above=cellTop-gap-pad;
+  let h=r.height, top, dir;
+  if(h<=below){ top=cellBottom+gap; dir='top'; }
+  else if(h<=above){ top=cellTop-gap-h; dir='bottom'; }
   else{
     /* hiçbir yöne sığmıyor: en geniş alana yerleştir, içeriği kaydırılabilir yap */
     const avail=Math.max(140, Math.min(vh-2*pad, Math.max(below,above)));
     tt.style.maxHeight=avail+'px';
     r=tt.getBoundingClientRect(); h=r.height;
-    top = (below>=above) ? my+gap : my-gap-h;
+    if(below>=above){ top=cellBottom+gap; dir='top'; } else { top=cellTop-gap-h; dir='bottom'; }
   }
   top=Math.max(pad, Math.min(top, vh-pad-h));
-  let left=mx+16;
-  if(left+r.width>vw-pad) left=mx-16-r.width;
+  let left=mx-r.width/2;
   left=Math.max(pad, Math.min(left, vw-pad-r.width));
   tt.style.left=left+'px'; tt.style.top=top+'px';
-  positionTooltipArrow(mx,my,left,top,r.width,h);
+  positionTooltipArrow(dir,mx,cellRect,left,top,r.width,h);
 }
-/* Konuşma balonu kuyruğunu (mx,my) bağlanma noktasına göre yerleştirir.
-   Balon kutusunun dört kenarından hangisi bağlanma noktasına en yakınsa
-   kuyruk oraya, o kenar boyunca bağlanma noktasına en yakın konuma
-   (köşe yuvarlaklarından kaçınacak şekilde) yerleştirilir. */
-function positionTooltipArrow(mx,my,left,top,w,h){
+/* Konuşma balonu kuyruğunu, balonun hücreye göre AŞAĞIDA mı (dir='top' —
+   ok yukarı, hücreye bakar) yoksa YUKARIDA mı (dir='bottom' — ok aşağı,
+   hücreye bakar) olduğuna göre üst ya da alt kenara, hücrenin yatay
+   ortasını gösterecek konuma yerleştirir. */
+function positionTooltipArrow(dir,mx,cellRect,left,top,w,h){
   const arrow=document.getElementById('tooltipArrow');
   if(!arrow) return;
-  const right=left+w, bottom=top+h, margin=14;
-  const cands=[];
-  if(my<=top+1){ const cx=Math.max(left+margin,Math.min(right-margin,mx)); cands.push({dir:'top',dist:Math.hypot(mx-cx,my-top),x:cx,y:top}); }
-  if(my>=bottom-1){ const cx=Math.max(left+margin,Math.min(right-margin,mx)); cands.push({dir:'bottom',dist:Math.hypot(mx-cx,my-bottom),x:cx,y:bottom}); }
-  if(mx<=left+1){ const cy=Math.max(top+margin,Math.min(bottom-margin,my)); cands.push({dir:'left',dist:Math.hypot(mx-left,my-cy),x:left,y:cy}); }
-  if(mx>=right-1){ const cy=Math.max(top+margin,Math.min(bottom-margin,my)); cands.push({dir:'right',dist:Math.hypot(mx-right,my-cy),x:right,y:cy}); }
-  if(!cands.length){ arrow.style.display='none'; return; }
-  cands.sort((a,b)=>a.dist-b.dist);
-  const b=cands[0];
-  arrow.className='dir-'+b.dir;
+  if(!cellRect){ arrow.style.display='none'; return; }
+  const margin=14;
+  const ax=Math.max(left+margin, Math.min(left+w-margin, mx));
+  arrow.className='dir-'+dir;
   arrow.style.display='block';
-  if(b.dir==='top'){ arrow.style.left=(b.x-9)+'px'; arrow.style.top=(top-10)+'px'; }
-  else if(b.dir==='bottom'){ arrow.style.left=(b.x-9)+'px'; arrow.style.top=bottom+'px'; }
-  else if(b.dir==='left'){ arrow.style.left=(left-10)+'px'; arrow.style.top=(b.y-9)+'px'; }
-  else{ arrow.style.left=right+'px'; arrow.style.top=(b.y-9)+'px'; }
+  if(dir==='top'){ arrow.style.left=(ax-9)+'px'; arrow.style.top=(top-10)+'px'; }
+  else{ arrow.style.left=(ax-9)+'px'; arrow.style.top=(top+h)+'px'; }
 }
 /* Bir kişinin o gündeki oyunlardaki görevlerini listeler (yeşil/kırmızı fark etmez) */
 function ttRoleLines(games, p){
@@ -3078,18 +3077,6 @@ function showTooltipFor(r,c,ev){
   /* Balon bir hücreye sabitlenmişse (F4), fare başka hücreye gitse bile
      sadece sabitli hücrenin balonu gösterilir; diğerleri yok sayılır. */
   if(window.__ttPin && (window.__ttPin.r!==r || window.__ttPin.c!==c)) return;
-  /* Kuyruğun (balon okunun) her zaman GERÇEKTEN üzerinde durulan hücreyi
-     göstermesi için bağlanma noktası hücrenin TAM MERKEZİNE sabitlenir.
-     Önceden fare olayının ham koordinatı kullanılıyordu; ama hücreye
-     girişte (mouseenter) bu koordinat genelde hücrenin üst kenarına/satır
-     sınırına çok yakın oluyordu (fare oraya "girerken" yakalanıyor), bu da
-     okun bir üstteki satıra işaret ediyormuş gibi görünmesine yol açıyordu.
-     Merkez kullanmak bu belirsizliği ortadan kaldırıyor. */
-  const tdAnchor=document.querySelector('#sheet td.cell[data-r="'+r+'"][data-c="'+c+'"]');
-  if(tdAnchor){
-    const ar=tdAnchor.getBoundingClientRect();
-    ev={clientX:ar.left+ar.width/2, clientY:ar.top+ar.height/2};
-  }
   cancelTooltipHide();
   window.__ttKey = r+'_'+c;
   const ttEl0 = document.getElementById('tooltip');
@@ -3123,13 +3110,13 @@ function showTooltipFor(r,c,ev){
     }
     const tiR = tourAt(m,r,c); if(tiR) hR += tourTooltipHtml(m,tiR);
     if(cell.note) hR += '<hr><div><b>Not:</b> '+escapeHtml(cell.note)+'</div>';
-    tt.innerHTML = hR; tt.style.display='block'; placeTooltip(ev); return;
+    tt.innerHTML = hR; tt.style.display='block'; placeTooltip(); return;
   }
   if(r<2 || !raw){
     if(cell.note){
       tt.innerHTML = '<div class="ttHead">Not</div>'+escapeHtml(cell.note);
       tt.style.display='block';
-      placeTooltip(ev);
+      placeTooltip();
     }
     return;
   }
@@ -3146,7 +3133,7 @@ function showTooltipFor(r,c,ev){
         (freeKey ? '<button type="button" class="ttBtn" data-ttact="unfreeAll" data-ttkey="'+escapeHtml(freeKey)+'">↩ Tüm hücrelerde geri al</button>' : '')+
       '</div>'+
       '<div class="ttHint">Geri alınca hücre yeniden oyun olarak değerlendirilir (çakışma denetimine girer).</div>';
-    tt.style.display='block'; placeTooltip(ev); return;
+    tt.style.display='block'; placeTooltip(); return;
   }
 
   if(isArchiveCell(cell)){
@@ -3154,7 +3141,7 @@ function showTooltipFor(r,c,ev){
       (cell.note ? '<hr><div><b>Not:</b> '+escapeHtml(cell.note)+'</div>' : '')+
       (tinfoTT ? tourTooltipHtml(m,tinfoTT) : '')+
       '<hr><div class="ttOk">Geçmiş sezon kaydı: oyun listesinde ve kadro/çakışma denetiminde sayılmaz.</div>';
-    tt.style.display='block'; placeTooltip(ev); return;
+    tt.style.display='block'; placeTooltip(); return;
   }
 
   const {key} = parseGame(raw);
@@ -3221,7 +3208,7 @@ function showTooltipFor(r,c,ev){
   html += '<div class="ttHint">İpucu: hücre seçiliyken <b>F4</b> balonu bu hücreye sabitler (fare başka hücreye gitse de değişmez) — kapatmak için tekrar <b>F4</b> veya <b>Esc</b>.</div>';
   tt.innerHTML = html;
   tt.style.display='block';
-  placeTooltip(ev);
+  placeTooltip();
 }
 /* Serbest metin işaretini geri al — tek hücre */
 function unmarkFreeTextCell(r,c){
