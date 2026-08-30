@@ -85,12 +85,25 @@ h3{font-family:'Fraunces',Georgia,serif;color:var(--primary);margin:0 0 6px}
 /* Tam ekranda araç çubuğu da görünür kalır; yalnızca tablo değil, program
    çalışma alanının tamamı ekranı kaplar. */
 body.fs-on #program{position:fixed;inset:0;z-index:99997;background:var(--bg);overflow:auto;padding:10px 12px 24px}
-body.fs-on #program .tbl-wrap{max-height:calc(100vh - 190px);border:1px solid #000}
-body.fs-on.toolbar-collapsed #program .tbl-wrap{max-height:calc(100vh - 120px)}
+/* Varsayılan: tam ekranda başlık/çakışma/not şeritleri gizli, tablo tüm alanı kaplar (odak programda) */
+body.fs-on #program .tbl-wrap{max-height:calc(100vh - 80px);border:1px solid #000}
+body.fs-on.toolbar-collapsed #program .tbl-wrap{max-height:calc(100vh - 80px)}
+body.fs-on #monthTitleRow,
+body.fs-on #conflictBar,
+body.fs-on #noteBar{display:none !important}
+/* "Bilgiler" düğmesiyle açıldığında eski (bilgi şeritli) görünüm geri gelir */
+body.fs-on.fs-showbars #monthTitleRow{display:flex !important}
+body.fs-on.fs-showbars #conflictBar,
+body.fs-on.fs-showbars #noteBar{display:flex !important}
+body.fs-on.fs-showbars #program .tbl-wrap{max-height:calc(100vh - 190px)}
+body.fs-on.fs-showbars.toolbar-collapsed #program .tbl-wrap{max-height:calc(100vh - 120px)}
 body.fs-on #program .controls{position:sticky;top:0;z-index:4;background:var(--bg);padding:4px 0 8px}
 body.fs-on{overflow:hidden}
 .fs-exit{position:fixed;top:10px;right:14px;z-index:99999;display:none;background:var(--primary);color:#fff;border:none;border-radius:6px;padding:7px 12px;cursor:pointer;font:inherit;font-size:13px;box-shadow:0 6px 18px rgba(0,0,0,.3)}
 body.fs-on .fs-exit{display:block}
+.fs-bars-toggle{position:fixed;top:10px;right:214px;z-index:99999;display:none;background:#fff;color:var(--primary);border:1px solid var(--primary);border-radius:6px;padding:7px 12px;cursor:pointer;font:inherit;font-size:13px;box-shadow:0 6px 18px rgba(0,0,0,.25)}
+body.fs-on .fs-bars-toggle{display:block}
+body.fs-on.fs-showbars .fs-bars-toggle{background:var(--primary);color:#fff}
 /* Odak modu: araç çubuğu gizlendiğinde ay grubu öne çıkar ve tabloya
    daha fazla dikey alan açılır — aylık program görünümün merkezi olur. */
 #alwaysGroup{background:var(--primary);border-color:var(--primary)}
@@ -877,6 +890,7 @@ table.sheet td.cell.tour-mid{
 </main>
 
 <div id="printView"></div>
+<button class="fs-bars-toggle" id="fsBarsToggle" title="Başlık, çakışma ve not şeritlerini göster/gizle">☰ Bilgiler</button>
 <button class="fs-exit" id="fsExit">⤫ Tam ekrandan çık (Esc)</button>
 <div id="tooltip" role="tooltip" aria-live="polite" aria-label="Hücre bilgisi" tabindex="-1"></div>
 <div id="ctxmenu" class="ctxmenu"></div>
@@ -4044,6 +4058,13 @@ document.addEventListener('scroll', e=>{
 
 /* === Fullscreen === */
 let toolbarWasVisibleBeforeFs = null;
+/* Tam ekranda başlık/çakışma/not şeritlerini göster/gizle. Varsayılan: gizli
+   (program tabloya tam odaklansın); "☰ Bilgiler" düğmesiyle geri açılabilir. */
+function setFsBarsVisible(visible){
+  document.body.classList.toggle('fs-showbars', !!visible);
+  const btn=document.getElementById('fsBarsToggle');
+  if(btn) btn.setAttribute('aria-pressed', visible ? 'true' : 'false');
+}
 function toggleFullscreen(force){
   const wrap = document.querySelector('#program .tbl-wrap');
   if(!wrap) return;
@@ -4059,9 +4080,11 @@ function toggleFullscreen(force){
   if(on){
     toolbarWasVisibleBeforeFs = extra ? extra.style.display !== 'none' : true;
     setToolbarVisible(false, false);
+    setFsBarsVisible(false);
   } else {
     setToolbarVisible(toolbarWasVisibleBeforeFs===null ? true : toolbarWasVisibleBeforeFs, false);
     toolbarWasVisibleBeforeFs = null;
+    setFsBarsVisible(false);
   }
 }
 function initFullscreen(){
@@ -4069,6 +4092,10 @@ function initFullscreen(){
   if(btn) btn.addEventListener('click', ()=>toggleFullscreen());
   const ex=document.getElementById('fsExit');
   if(ex) ex.addEventListener('click', ()=>toggleFullscreen(false));
+  const barsBtn=document.getElementById('fsBarsToggle');
+  if(barsBtn) barsBtn.addEventListener('click', ()=>{
+    setFsBarsVisible(!document.body.classList.contains('fs-showbars'));
+  });
   document.addEventListener('keydown', e=>{
     if(e.key==='Escape' && document.body.classList.contains('fs-on')){
       const ae=document.activeElement;
