@@ -2814,22 +2814,36 @@ function wireCell(td){
     const tid=td.dataset.tour;
     document.querySelectorAll('#sheet td.tour-hl').forEach(x=>x.classList.remove('tour-hl'));
     if(tid) document.querySelectorAll('#sheet td[data-tour="'+tid+'"]').forEach(x=>x.classList.add('tour-hl'));
-    showTooltipFor(r,c,e);
+    scheduleTooltipShow(r,c,e);
   });
   /* Fare aynı hücrede gezerken bir şey yapma; başka hücreye geçildiğinde
      (mouseenter kaçırılmış olsa bile) tooltip'i tazele — donmayı engeller. */
   td.addEventListener('mousemove', e=>{
     const key=td.dataset.r+'_'+td.dataset.c;
-    if(window.__ttKey!==key) showTooltipFor(+td.dataset.r,+td.dataset.c,e);
+    if(window.__ttKey!==key) scheduleTooltipShow(+td.dataset.r,+td.dataset.c,e);
   });
   td.addEventListener('mouseleave',()=>{
     document.querySelectorAll('#sheet td.tour-hl').forEach(x=>x.classList.remove('tour-hl'));
+    cancelTooltipShow();
     scheduleTooltipHide();
   });
 }
 document.addEventListener('mouseup', ()=>{ dragSelecting=false; });
 
 let ttHideTimer=null;
+let ttShowTimer=null;
+function cancelTooltipShow(){ clearTimeout(ttShowTimer); ttShowTimer=null; }
+/* Hücreler sık ve alt alta dizilmişken, açık bir tooltip'e (kaydırmak/kopyalamak
+   için) ulaşmaya çalışırken fare aradaki başka hücrelerin üzerinden geçebiliyor
+   ve her biri ANINDA tooltip içeriğini değiştirip asıl hedefe ulaşmayı
+   imkânsızlaştırıyordu. Artık hücreye girildiğinde tooltip anında değil, kısa
+   bir "niyet" gecikmesinden (130ms) sonra gösteriliyor: fare sadece geçiyorsa
+   (başka bir hücreye/tooltip'e doğru ilerliyorsa) bu hücrenin tooltip'i hiç
+   açılmıyor; gerçekten o hücrede durulduysa normal şekilde açılıyor. */
+function scheduleTooltipShow(r,c,ev){
+  cancelTooltipShow();
+  ttShowTimer=setTimeout(()=>{ ttShowTimer=null; showTooltipFor(r,c,ev); }, 130);
+}
 function hideTooltipNow(force){
   /* Balon bir hücreye sabitlenmişse (F4 ile pinlendiyse) sadece Esc veya
      tekrar F4 (force=true ile çağrılır) kapatabilir — fare kaydırma,
