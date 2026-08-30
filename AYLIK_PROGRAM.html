@@ -2839,7 +2839,18 @@ function hideTooltipNow(force){
 }
 function scheduleTooltipHide(){
   clearTimeout(ttHideTimer);
-  ttHideTimer=setTimeout(hideTooltipNow, 260);
+  /* 260ms çok kısaydı: fareyi balona doğru taşırken (kaydırma/kopyalama
+     yapmak için) balon genelde varmadan kapanıyordu. 450ms daha rahat bir
+     geçiş payı bırakıyor. */
+  ttHideTimer=setTimeout(hideTooltipNow, 450);
+}
+/* Balonun içinde aktif bir metin seçimi varsa (kopyalamak için sürüklüyor
+   olabilir) — imleç balonun dışına çıksa bile balonu kapatma. */
+function tooltipHasSelection(){
+  const sel = window.getSelection && window.getSelection();
+  if(!sel || sel.isCollapsed) return false;
+  const tt = document.getElementById('tooltip');
+  return !!(tt && sel.anchorNode && tt.contains(sel.anchorNode));
 }
 function cancelTooltipHide(){ clearTimeout(ttHideTimer); ttHideTimer=null; }
 /* Tooltip'ten fareyle çıkıldığında (kaydırma/okuma bitince) imlecin GERÇEKTE
@@ -2906,14 +2917,27 @@ function initTooltipInteraction(){
     setStatus('Bilgi balonu bu hücreye sabitlendi — kapatmak için F4 veya Esc.');
   });
   tt.addEventListener('mouseenter', cancelTooltipHide);
-  tt.addEventListener('mouseleave', e=>{ resolveTooltipAt(e.clientX, e.clientY); });
+  tt.addEventListener('mouseleave', e=>{
+    if(tooltipHasSelection()) return; /* metin seçimi sürüyorsa kapatma */
+    resolveTooltipAt(e.clientX, e.clientY);
+  });
   tt.addEventListener('wheel', e=>{ e.stopPropagation(); }, {passive:true});
-  /* Güvenlik ağı: fare ne bir tablo hücresinde ne de tooltip üzerindeyse kapat. */
+  /* Güvenlik ağı: fare ne bir tablo hücresinde ne de tooltip üzerindeyse
+     kapatmayı planla. Eskiden imleç tooltip'in hemen dışına (ör. hücre
+     ile balon arasındaki boşluğa) her değdiğinde ANINDA kapanıyordu; bu da
+     balona ulaşıp içeriği kaydırmayı/kopyalamayı zorlaştırıyordu. Artık
+     balonun çevresinde küçük bir tolerans payı var ve kapama anında değil,
+     kısa bir gecikmeyle (scheduleTooltipHide) yapılıyor. */
   document.addEventListener('mousemove', e=>{
     if(tt.style.display!=='block') return;
     const t=e.target;
-    if(t && t.closest && (t.closest('#tooltip') || t.closest('#sheet td.cell'))) return;
-    hideTooltipNow();
+    if(t && t.closest && (t.closest('#tooltip') || t.closest('#sheet td.cell'))){ cancelTooltipHide(); return; }
+    if(tooltipHasSelection()) return;
+    const r = tt.getBoundingClientRect();
+    const buf = 28; /* balona doğru giderken küçük sapmalarda kapanmasın */
+    const near = e.clientX>=r.left-buf && e.clientX<=r.right+buf && e.clientY>=r.top-buf && e.clientY<=r.bottom+buf;
+    if(near){ cancelTooltipHide(); return; }
+    scheduleTooltipHide();
   }, true);
   tt.addEventListener('focusout', e=>{
     if(tt.contains(e.relatedTarget)) return;
