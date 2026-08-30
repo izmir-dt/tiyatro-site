@@ -2302,37 +2302,42 @@ function gamesOfRow(m,r){
   for(const c of programCols(m)){
     const cellObj = m.cells[r+'_'+c] || {};
     const raw = cellObj.v || '';
-    if(!raw){
-      /* Boş dönüş günü hücresi: bağlı olduğu turnenin oyununu devralır,
-         böylece o gün aynı oyun/ortak kadro başka sahneye yazılırsa çakışır. */
-      if(cellObj.tourReturn){
-        const info = tourAt(m,r,c);
-        let src='';
-        if(info && info.g){
-          const prev = info.g.members.filter(x=>x.r<r && x.cell && String(x.cell.v||'').trim());
-          if(prev.length) src = prev[prev.length-1].cell.v;
-          /* Ay sınırını aşan (carried) turnede, bu ayın ilk günlerinde
-             members bu ay için henüz boş olabilir (önceki ayın oyun
-             kayıtları bu ayın grubuna taşınmaz) — bu durumda önceki aydan
-             taşınan SON OYUN adını (carriedLastPlay) kullan; eskiden burada
-             doğrudan turne başlığına (şehir/sahne adı, ör. "Aydın")
-             düşülüyordu, bu da o günü yanlış "oyuna" bağlayıp çakışmanın
-             hiç görünmemesine yol açıyordu. Gerçekten hiç oyun girilmemişse
-             (yalnızca şehir başlığı varsa) yine başlığa düş. */
-          else if(info.g.carried) src = info.g.carriedLastPlay || info.g.headText || '';
-        }
-        const pk = parseGame(src).key;
-        if(pk) out.push({raw:src, key:pk, isPremiere:false, col:c, row:r, time:gameTimeOf(m,r,''), isReturn:true, virtual:true, ckey:pk+' ↩dönüş'});
+    if(cellObj.tourReturn){
+      /* Dönüş günü hücresi: bağlı olduğu turnenin oyununu devralır, böylece
+         o gün aynı oyun/ortak kadro başka sahneye yazılırsa çakışır.
+         Bu çözüm hücre BOŞ olsa da, kullanıcı hücreye elle bir etiket
+         yazmış olsa da (ör. "MEDEA-TURNE DÖNÜŞ GÜNÜ") aynı şekilde
+         uygulanır: yazılan metin yalnızca görünen bir etikettir, çakışma
+         anahtarı olarak kullanılmaz — aksi halde parseGame(raw) o metni
+         gerçek oyun adıyla eşleşmeyen bambaşka bir anahtara çevirip
+         kadro çakışmasının hiç görünmemesine yol açar. */
+      const info = tourAt(m,r,c);
+      let src='';
+      if(info && info.g){
+        const prev = info.g.members.filter(x=>x.r<r && x.cell && String(x.cell.v||'').trim());
+        if(prev.length) src = prev[prev.length-1].cell.v;
+        /* Ay sınırını aşan (carried) turnede, bu ayın ilk günlerinde
+           members bu ay için henüz boş olabilir (önceki ayın oyun
+           kayıtları bu ayın grubuna taşınmaz) — bu durumda önceki aydan
+           taşınan SON OYUN adını (carriedLastPlay) kullan; eskiden burada
+           doğrudan turne başlığına (şehir/sahne adı, ör. "Aydın")
+           düşülüyordu, bu da o günü yanlış "oyuna" bağlayıp çakışmanın
+           hiç görünmemesine yol açıyordu. Gerçekten hiç oyun girilmemişse
+           (yalnızca şehir başlığı varsa) yine başlığa düş. */
+        else if(info.g.carried) src = info.g.carriedLastPlay || info.g.headText || '';
       }
+      let pk = parseGame(src).key;
+      if(!pk && raw) pk = parseGame(raw).key; /* turne bilgisi çözülemezse yazılan metne düş */
+      if(pk) out.push({raw:(raw||src), key:pk, isPremiere:false, col:c, row:r, time:gameTimeOf(m,r,raw), isReturn:true, virtual:!raw, ckey:pk+' ↩dönüş'});
       continue;
     }
+    if(!raw) continue;
     if(isPremiereLabel(raw)) continue;
     if(isFreeTextCell(cellObj)) continue;   /* serbest metin/not: oyun sayılmaz */
     if(isArchiveCell(cellObj)) continue;    /* arşiv oyun: çakışma denetimine girmez */
     const {key, isPremiere} = parseGame(raw);
     if(!key) continue;
-    const isReturn = !!cellObj.tourReturn;
-    out.push({raw, key, isPremiere, col:c, row:r, time:gameTimeOf(m,r,raw), isReturn, ckey:(isReturn? key+' ↩dönüş' : key)});
+    out.push({raw, key, isPremiere, col:c, row:r, time:gameTimeOf(m,r,raw), isReturn:false, ckey:key});
   }
   return out;
 }
@@ -2958,22 +2963,33 @@ function showTooltipFor(r,c,ev){
   const cell = m.cells[r+'_'+c] || {};
   const raw = (cell.v||'').trim();
   const tt = document.getElementById('tooltip');
-  if(r<2 || !raw){
-    if(cell.tourReturn){
-      const gamesR = rowGames(m,r);
-      const confR = gamesR.length>=2 ? buildConflict(gamesR) : {people:{}, hasCritical:false};
-      const mine = gamesR.find(g=>g.row===r && g.col===c);
-      let hR = '<div class="ttHead">↩ Turne dönüş günü</div>';
-      hR += '<div>Tarih: <b>'+escapeHtml(dateTextOfRow(m,r)||'-')+'</b></div>';
-      if(mine) hR += '<div>Dönen kadro: <b>'+escapeHtml(mine.key)+'</b></div>';
-      hR += '<div>Bu gün temsil olarak sayılmaz.</div><hr>';
-      hR += confR.hasCritical
-        ? '<div class="ttWarn">⚠️ Çakışma var</div>' + Object.values(confR.people).map(i=>'<div>🔴 '+escapeHtml(i.name)+'</div>').join('')
-        : '<div class="ttOk">Uygun ✅ Çakışma yok.</div>';
-      const tiR = tourAt(m,r,c); if(tiR) hR += tourTooltipHtml(m,tiR);
-      if(cell.note) hR += '<hr><div><b>Not:</b> '+escapeHtml(cell.note)+'</div>';
-      tt.innerHTML = hR; tt.style.display='block'; placeTooltip(ev); return;
+  /* Not: bu kontrol artık raw'dan bağımsız — hücreye elle bir etiket
+     yazılmış olsa bile (ör. "MEDEA-TURNE DÖNÜŞ GÜNÜ") balon yine
+     "Turne dönüş günü" biçiminde ve doğru çakışma bilgisiyle gösterilir. */
+  if(r>=2 && cell.tourReturn){
+    const gamesR = rowGames(m,r);
+    const confR = gamesR.length>=2 ? buildConflict(gamesR) : {people:{}, hasCritical:false};
+    const mine = gamesR.find(g=>g.row===r && g.col===c);
+    let hR = '<div class="ttHead">↩ Turne dönüş günü</div>';
+    if(raw) hR += '<div>'+escapeHtml(raw)+'</div>';
+    hR += '<div>Tarih: <b>'+escapeHtml(dateTextOfRow(m,r)||'-')+'</b></div>';
+    if(mine) hR += '<div>Dönen kadro: <b>'+escapeHtml(mine.key)+'</b></div>';
+    hR += '<div>Bu gün temsil olarak sayılmaz.</div><hr>';
+    if(confR.hasCritical){
+      hR += '<div class="ttWarn">⚠️ Çakışma var</div>';
+      for(const [p,info] of Object.entries(confR.people).sort((a,b)=>(a[1].name||a[0]).localeCompare(b[1].name||b[0],'tr'))){
+        const dot = info.critical ? '🔴' : '🟢';
+        hR += '<div class="ttPerson '+(info.critical?'crit':'soft')+'">'+dot+' '+escapeHtml(info.name||p)+'</div>';
+        hR += ttRoleLines(gamesR, p);
+      }
+    } else {
+      hR += '<div class="ttOk">Uygun ✅ Çakışma yok.</div>';
     }
+    const tiR = tourAt(m,r,c); if(tiR) hR += tourTooltipHtml(m,tiR);
+    if(cell.note) hR += '<hr><div><b>Not:</b> '+escapeHtml(cell.note)+'</div>';
+    tt.innerHTML = hR; tt.style.display='block'; placeTooltip(ev); return;
+  }
+  if(r<2 || !raw){
     if(cell.note){
       tt.innerHTML = '<div class="ttHead">Not</div>'+escapeHtml(cell.note);
       tt.style.display='block';
