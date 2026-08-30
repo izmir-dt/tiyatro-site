@@ -3012,54 +3012,51 @@ function repositionPinnedTooltip(){
   placeTooltip();
 }
 /* Balonu, gösterildiği hücrenin (tt.dataset.r/c) GERÇEK dikdörtgenine göre
-   konumlandırır — fare konumuna değil. Böylece balon çok uzun olup hücrenin
-   üstüne kadar uzansa bile (dikey olarak hücreyle çakışsa bile) kuyruk her
-   zaman doğru yöne ve doğru hücreye bakar; önceki "en yakın kenar" mantığı
-   bu durumda (bağlanma noktası kutunun İÇİNDE kalınca) hiç ok göstermiyordu. */
+   konumlandırır. Hücrenin ALTINA değil YANINA (sağına, sığmazsa soluna)
+   yerleştirilir — böylece balon o sütundaki alttaki satırları örtüp alanı
+   fazla kısıtlamaz; dikeyde hücrenin ortasına hizalanır, sığmazsa görünür
+   alana kaydırılır. Kuyruk, balonun hücreye bakan kenarına (sol ya da sağ)
+   hücrenin dikey ortasını gösterecek şekilde yerleştirilir. */
 function placeTooltip(){
   const tt=document.getElementById('tooltip');
   if(tt.style.display!=='block') return;
-  const pad=8, gap=10;
+  const pad=8, gap=12;
   const vw=window.innerWidth, vh=window.innerHeight;
   const cellTd=document.querySelector('#sheet td.cell[data-r="'+tt.dataset.r+'"][data-c="'+tt.dataset.c+'"]');
   const cellRect=cellTd?cellTd.getBoundingClientRect():null;
-  const mx=cellRect?(cellRect.left+cellRect.width/2):vw/2;
-  const cellTop=cellRect?cellRect.top:vh/2;
-  const cellBottom=cellRect?cellRect.bottom:vh/2;
+  const cellCY=cellRect?(cellRect.top+cellRect.height/2):vh/2;
+  const cellLeft=cellRect?cellRect.left:vw/2;
+  const cellRight=cellRect?cellRect.right:vw/2;
   /* ölç */
   tt.style.maxHeight=''; tt.style.left='-9999px'; tt.style.top='0px';
   let r=tt.getBoundingClientRect();
-  const below=vh-cellBottom-gap-pad, above=cellTop-gap-pad;
-  let h=r.height, top, dir;
-  if(h<=below){ top=cellBottom+gap; dir='top'; }
-  else if(h<=above){ top=cellTop-gap-h; dir='bottom'; }
-  else{
-    /* hiçbir yöne sığmıyor: en geniş alana yerleştir, içeriği kaydırılabilir yap */
-    const avail=Math.max(140, Math.min(vh-2*pad, Math.max(below,above)));
-    tt.style.maxHeight=avail+'px';
-    r=tt.getBoundingClientRect(); h=r.height;
-    if(below>=above){ top=cellBottom+gap; dir='top'; } else { top=cellTop-gap-h; dir='bottom'; }
-  }
+  let h=r.height, w=r.width;
+  if(h>vh-2*pad){ tt.style.maxHeight=(vh-2*pad)+'px'; r=tt.getBoundingClientRect(); h=r.height; }
+  let top=cellCY-h/2;
   top=Math.max(pad, Math.min(top, vh-pad-h));
-  let left=mx-r.width/2;
-  left=Math.max(pad, Math.min(left, vw-pad-r.width));
+  const spaceRight=vw-pad-cellRight-gap, spaceLeft=cellLeft-gap-pad;
+  let left, dir;
+  if(w<=spaceRight){ left=cellRight+gap; dir='left'; }
+  else if(w<=spaceLeft){ left=cellLeft-gap-w; dir='right'; }
+  else if(spaceRight>=spaceLeft){ left=Math.max(pad, Math.min(cellRight+gap, vw-pad-w)); dir='left'; }
+  else{ left=Math.max(pad, Math.min(cellLeft-gap-w, vw-pad-w)); dir='right'; }
   tt.style.left=left+'px'; tt.style.top=top+'px';
-  positionTooltipArrow(dir,mx,cellRect,left,top,r.width,h);
+  positionTooltipArrow(dir,cellCY,cellRect,left,top,w,h);
 }
-/* Konuşma balonu kuyruğunu, balonun hücreye göre AŞAĞIDA mı (dir='top' —
-   ok yukarı, hücreye bakar) yoksa YUKARIDA mı (dir='bottom' — ok aşağı,
-   hücreye bakar) olduğuna göre üst ya da alt kenara, hücrenin yatay
-   ortasını gösterecek konuma yerleştirir. */
-function positionTooltipArrow(dir,mx,cellRect,left,top,w,h){
+/* Konuşma balonu kuyruğunu, balonun hücrenin SAĞINDA mı (dir='left' — ok
+   sola, hücreye bakar) yoksa SOLUNDA mı (dir='right' — ok sağa, hücreye
+   bakar) olduğuna göre sol ya da sağ kenara, hücrenin dikey ortasını
+   gösterecek konuma yerleştirir. */
+function positionTooltipArrow(dir,cellCY,cellRect,left,top,w,h){
   const arrow=document.getElementById('tooltipArrow');
   if(!arrow) return;
   if(!cellRect){ arrow.style.display='none'; return; }
   const margin=14;
-  const ax=Math.max(left+margin, Math.min(left+w-margin, mx));
+  const ay=Math.max(top+margin, Math.min(top+h-margin, cellCY));
   arrow.className='dir-'+dir;
   arrow.style.display='block';
-  if(dir==='top'){ arrow.style.left=(ax-9)+'px'; arrow.style.top=(top-10)+'px'; }
-  else{ arrow.style.left=(ax-9)+'px'; arrow.style.top=(top+h)+'px'; }
+  if(dir==='left'){ arrow.style.left=(left-10)+'px'; arrow.style.top=(ay-9)+'px'; }
+  else{ arrow.style.left=(left+w)+'px'; arrow.style.top=(ay-9)+'px'; }
 }
 /* Bir kişinin o gündeki oyunlardaki görevlerini listeler (yeşil/kırmızı fark etmez) */
 function ttRoleLines(games, p){
