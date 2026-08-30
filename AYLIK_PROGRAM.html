@@ -2311,7 +2311,15 @@ function gamesOfRow(m,r){
         if(info && info.g){
           const prev = info.g.members.filter(x=>x.r<r && x.cell && String(x.cell.v||'').trim());
           if(prev.length) src = prev[prev.length-1].cell.v;
-          else if(info.g.carried && info.g.headText) src = info.g.headText;
+          /* Ay sınırını aşan (carried) turnede, bu ayın ilk günlerinde
+             members bu ay için henüz boş olabilir (önceki ayın oyun
+             kayıtları bu ayın grubuna taşınmaz) — bu durumda önceki aydan
+             taşınan SON OYUN adını (carriedLastPlay) kullan; eskiden burada
+             doğrudan turne başlığına (şehir/sahne adı, ör. "Aydın")
+             düşülüyordu, bu da o günü yanlış "oyuna" bağlayıp çakışmanın
+             hiç görünmemesine yol açıyordu. Gerçekten hiç oyun girilmemişse
+             (yalnızca şehir başlığı varsa) yine başlığa düş. */
+          else if(info.g.carried) src = info.g.carriedLastPlay || info.g.headText || '';
         }
         const pk = parseGame(src).key;
         if(pk) out.push({raw:src, key:pk, isPremiere:false, col:c, row:r, time:gameTimeOf(m,r,''), isReturn:true, virtual:true, ckey:pk+' ↩dönüş'});
@@ -2418,14 +2426,25 @@ function tourCarryFromPrev(m, c){
     const gLast = Math.max(g.headRow!=null?g.headRow:-Infinity, rows.length?Math.max.apply(null,rows):-Infinity);
     return gLast === lastRow;
   };
+  /* Grubun (bu ayda veya kendisi de bir önceki aydan taşınmışsa zincirleme
+     olarak önceki ayda) en son GERÇEK oyun adını bul — sadece turne
+     başlığını (şehir/sahne adı) değil. Ay sınırını aşan turnelerde bu,
+     boş dönüş günü hücresinin doğru oyun adına çözülebilmesi için gerekli
+     (bkz. gamesOfRow). */
+  const lastPlayOf = g=>{
+    const withText = g.members.filter(x=>x.cell && String(x.cell.v||'').trim());
+    if(withText.length) return withText[withText.length-1].cell.v;
+    if(g.carried) return g.carriedLastPlay || '';
+    return '';
+  };
   /* Önce aynı TURNE sütunu tercih edilir, ama sütunlar birbirinin yerine
      kullanılabilen genel "hat"lar olduğundan (turne bu ay F'de, gelecek ay
      G'de dönebilir), bulunamazsa önceki ayda açık kalan HERHANGİ bir turne
      de kabul edilir. */
   const sameCol = pt.groups.find(g => g.col===c && isOpenAtMonthEnd(g));
-  if(sameCol) return {headText:sameCol.headText, id:sameCol.id};
+  if(sameCol) return {headText:sameCol.headText, id:sameCol.id, lastPlay:lastPlayOf(sameCol)};
   const anyCol = pt.groups.find(g => isOpenAtMonthEnd(g));
-  if(anyCol) return {headText:anyCol.headText, id:anyCol.id};
+  if(anyCol) return {headText:anyCol.headText, id:anyCol.id, lastPlay:lastPlayOf(anyCol)};
   return null;
 }
 function tourColsOf(m){ return programCols(m).filter(c=>stageHeaderText(m,c).includes('TURNE')); }
@@ -2443,7 +2462,7 @@ function computeTours(m){
     const carry = tourCarryFromPrev(m, c);
     if(carry){
       cur = {id:'carry_'+carry.id, col:c, headKey:null, headRow:null, headText:carry.headText,
-             members:[], returnKey:null, locked:false, carried:true};
+             members:[], returnKey:null, locked:false, carried:true, carriedLastPlay:carry.lastPlay||''};
       groups.push(cur); byId[cur.id]=cur;
     }
     for(let r=2;r<m.rows;r++){
