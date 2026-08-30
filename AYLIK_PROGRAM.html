@@ -3035,11 +3035,23 @@ function placeTooltip(){
   let top=cellCY-h/2;
   top=Math.max(pad, Math.min(top, vh-pad-h));
   const spaceRight=vw-pad-cellRight-gap, spaceLeft=cellLeft-gap-pad;
+  /* Fare hücrenin sağ yarısındaysa önce sağı, sol yarısındaysa önce solu
+     dene — böylece balon fareyle aynı yöne açılır. Bilinen bir fare X
+     konumu yoksa (ör. klavye ile F4) sağ varsayılan olarak denenir. */
+  const cellCX=cellRect?(cellRect.left+cellRect.right)/2:vw/2;
+  const preferRight=(window.__ttMouseX==null) || (window.__ttMouseX>=cellCX);
   let left, dir;
-  if(w<=spaceRight){ left=cellRight+gap; dir='left'; }
-  else if(w<=spaceLeft){ left=cellLeft-gap-w; dir='right'; }
-  else if(spaceRight>=spaceLeft){ left=Math.max(pad, Math.min(cellRight+gap, vw-pad-w)); dir='left'; }
-  else{ left=Math.max(pad, Math.min(cellLeft-gap-w, vw-pad-w)); dir='right'; }
+  if(preferRight){
+    if(w<=spaceRight){ left=cellRight+gap; dir='left'; }
+    else if(w<=spaceLeft){ left=cellLeft-gap-w; dir='right'; }
+    else if(spaceRight>=spaceLeft){ left=Math.max(pad, Math.min(cellRight+gap, vw-pad-w)); dir='left'; }
+    else{ left=Math.max(pad, Math.min(cellLeft-gap-w, vw-pad-w)); dir='right'; }
+  } else {
+    if(w<=spaceLeft){ left=cellLeft-gap-w; dir='right'; }
+    else if(w<=spaceRight){ left=cellRight+gap; dir='left'; }
+    else if(spaceLeft>=spaceRight){ left=Math.max(pad, Math.min(cellLeft-gap-w, vw-pad-w)); dir='right'; }
+    else{ left=Math.max(pad, Math.min(cellRight+gap, vw-pad-w)); dir='left'; }
+  }
   tt.style.left=left+'px'; tt.style.top=top+'px';
   positionTooltipArrow(dir,cellCY,cellRect,left,top,w,h);
 }
@@ -3074,6 +3086,10 @@ function showTooltipFor(r,c,ev){
   /* Balon bir hücreye sabitlenmişse (F4), fare başka hücreye gitse bile
      sadece sabitli hücrenin balonu gösterilir; diğerleri yok sayılır. */
   if(window.__ttPin && (window.__ttPin.r!==r || window.__ttPin.c!==c)) return;
+  /* Balonun hangi yana (sağ/sol) açılacağını fare hücrenin hangi yarısında
+     olduğuna göre belirlemek için son bilinen fare X konumu saklanır —
+     mouseyi sağa götürünce balon sağa, sola götürünce sola açılsın diye. */
+  if(ev && ev.clientX!=null) window.__ttMouseX = ev.clientX;
   cancelTooltipHide();
   window.__ttKey = r+'_'+c;
   const ttEl0 = document.getElementById('tooltip');
