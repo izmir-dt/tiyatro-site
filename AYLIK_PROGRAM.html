@@ -108,6 +108,9 @@ body.fs-on #program .controls{
 }
 body.fs-on #program .controls:hover,
 body.fs-on #program .controls:focus-within{transform:translateY(0)}
+/* JS'in "takılı kaldı" tespitinde zorla kapatma — hover/focus-within
+   durumu tarayıcı hatası yüzünden yanlışlıkla açık görünse bile geçerli. */
+body.fs-on #program .controls.fs-forcehide{transform:translateY(calc(-100% + 7px)) !important}
 body.fs-on #program .tbl-wrap{margin-top:14px}
 body.fs-on{overflow:hidden}
 .fs-exit{position:fixed;top:10px;right:14px;z-index:99999;display:none;background:var(--primary);color:#fff;border:none;border-radius:6px;padding:7px 12px;cursor:pointer;font:inherit;font-size:13px;box-shadow:0 6px 18px rgba(0,0,0,.3)}
@@ -4136,6 +4139,54 @@ function initFullscreen(){
       if(ae && ae.isContentEditable) return;
       toggleFullscreen(false);
     }
+  });
+  /* === AY çubuğu bazen "takılı" açık kalıyordu ===
+     Sebep: native <select> (Ay seçimi) açılıp kapandığında veya bir düğmeye
+     tıklandığında tarayıcı odağı (focus) o elemanda bırakıyor; :focus-within
+     bu yüzden çubuğu sonsuza dek açık tutuyordu. Ayrıca bazı tarayıcılarda
+     native dropdown kapanınca fare hiç kıpırdamazsa :hover durumu da
+     "takılı" (bir sonraki fare hareketine kadar) kalabiliyor. Aşağıdaki
+     iki mekanizma bunu düzeltir: (1) fare her hareket ettiğinde çubuğun
+     üzerinde olup olmadığı gerçek koordinatlarla yeniden doğrulanır — değilse
+     ve içeride odak da yoksa zorla kapatılır; (2) çubuğun dışına her
+     tıklandığında (ör. bir tablo hücresine tıklayınca) odak temizlenir ve
+     çubuk anında zorla kapatılır. */
+  const fsBarWatch = (function(){
+    let forceTimer=null;
+    function bar(){ return document.querySelector('#program .controls'); }
+    function clearForce(){
+      const b=bar(); if(b) b.classList.remove('fs-forcehide');
+      clearTimeout(forceTimer); forceTimer=null;
+    }
+    function forceClose(){
+      const b=bar(); if(!b) return;
+      if(document.activeElement && b.contains(document.activeElement)) document.activeElement.blur();
+      b.classList.add('fs-forcehide');
+      clearTimeout(forceTimer);
+      forceTimer=setTimeout(clearForce, 500);
+    }
+    document.addEventListener('mousemove', e=>{
+      if(!document.body.classList.contains('fs-on')) return;
+      const b=bar(); if(!b) return;
+      const r=b.getBoundingClientRect();
+      const overBar = e.clientX>=r.left && e.clientX<=r.right && e.clientY>=r.top && e.clientY<=r.bottom;
+      const focusInside = document.activeElement && b.contains(document.activeElement);
+      if(overBar || focusInside){ clearForce(); return; }
+      b.classList.add('fs-forcehide');
+    }, true);
+    document.addEventListener('mousedown', e=>{
+      if(!document.body.classList.contains('fs-on')) return;
+      const b=bar(); if(!b) return;
+      const t=e.target;
+      if(t && t.closest && (t.closest('#program .controls') || t.closest('#fsBarsToggle') || t.closest('#fsExit'))) return;
+      forceClose();
+    }, true);
+    return {clearForce};
+  })();
+  const monthSel=document.getElementById('monthSel');
+  if(monthSel) monthSel.addEventListener('change', ()=>{
+    if(!document.body.classList.contains('fs-on')) return;
+    setTimeout(()=>{ monthSel.blur(); }, 30);
   });
 }
 
