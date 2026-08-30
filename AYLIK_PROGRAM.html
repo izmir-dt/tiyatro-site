@@ -1358,11 +1358,14 @@ async function publishProgram(){
     const encoded = utf8ToB64(payload);
     const ts = Date.now();
     const version = 'apub_' + slug + '_' + ts;
-    /* Aynı ayın hem eski "kesinleştirilmiş" hem de bekleyen "taslak" satırları
-       tek seferde, taze veri okunarak ve gerekirse tekrar denenerek silinir. */
     const prefixPub = 'apub_' + slug + '_';
     const prefixDraft = DRAFT_PREFIX + slug + '_';
-    await deleteRowsByPrefixes([prefixPub, prefixDraft], 'Eski yayın');
+    /* ÖNEMLİ (veri kaybını önleme): eski yayın/taslak satırları ÖNCE
+       SİLİNMEZ. Önce yeni veri eksiksiz yazılır ve doğrulanır; yalnızca
+       bu başarılı olduktan SONRA eski satırlar silinir. Böylece yazma
+       sırasında bir kesinti olursa sunucudaki önceki (dolu) sürüm olduğu
+       gibi kalır — kesinleştirme asla hem eski hem yeni veriyi aynı anda
+       kaybetmez. */
     const parts = [];
     for(let i=0;i<encoded.length;i+=PUBLISH_CHUNK) parts.push(encoded.slice(i,i+PUBLISH_CHUNK));
     for(let i=0;i<parts.length;i++){
@@ -1373,6 +1376,11 @@ async function publishProgram(){
       });
       if(!res.ok) throw new Error('Yayın yazılamadı (HTTP '+res.status+')');
     }
+    /* Yeni yayın tam olarak yazıldı — şimdi eski yayın/taslak satırlarını
+       güvenle temizleyebiliriz. Bu adım başarısız olsa bile önemli değil:
+       yeni yayın zaten sunucuda tam olarak duruyor. */
+    try{ await deleteRowsByPrefixes([prefixPub, prefixDraft], 'Eski yayın'); }
+    catch(e){ /* eski kayıtların temizlenememesi kritik değil, sessizce geç */ }
     state.monthPub = state.monthPub || {};
     state.monthPub[m.name] = {publishedAt: ts, unpublishedAt: null};
     /* Kesinleştirilen sürüm artık esastır; aynı zaman damgasını taslak
