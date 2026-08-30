@@ -132,6 +132,16 @@ table.sheet td.cell[style*="background"]{ }
 /* Alt sahne başlığı satırı (KARŞIYAKA / BKSM / URLA / TURNE) — sarı */
 table.sheet tr.stageHead td{background:var(--head);color:var(--headInk);font-weight:700}
 
+/* === Sabit üst başlık satırları: aşağı kaydırınca ay başlığı ve sahne adları
+   (KARŞIYAKA RAGIP HAYKIR SAHNESİ …) satırı üstte sabit kalır === */
+#sheet td.stickR{position:sticky;background-clip:padding-box;box-shadow:inset 0 -1px 0 #000,inset 1px 0 0 rgba(0,0,0,.35),inset -1px 0 0 rgba(0,0,0,.35)}
+@media print{#sheet td.stickR{position:static !important;box-shadow:none}}
+
+/* === Aylık program tablosu sayfanın merkezinde === */
+.tbl-wrap{width:fit-content;max-width:100%;margin-left:auto;margin-right:auto}
+#monthTitleRow{justify-content:center !important;flex-wrap:wrap}
+#monthTitleRow #ttToggleWrap{margin-left:auto}
+
 /* Prömiyer */
 table.sheet td.cell.premiere{color:var(--premiere);font-weight:700}
 table.sheet td.cell.uline{text-decoration:underline}
@@ -788,7 +798,7 @@ table.sheet td.cell.tour-mid{
   <details class="shortcuts">
     <summary>Kısayollar ve ipuçları</summary>
     <div class="sc-body">
-      Tıkla → seç · Shift+Tıkla → aralık · Çift tıkla → yaz · Enter/Esc · Delete → temizle · Ctrl+C/V · Ctrl+Z/Y · Sağ tık → menü · <b>F4</b> → bilgi balonunu hücreye sabitle/kaldır · <b>F9</b> → bilgi balonu sistemini tamamen aç/kapat · F8 → sonraki çakışma · F7 → sonraki not (Shift+F7 → önceki not) · Oyunun üzerine gel → çakışma bilgisi · <b>Serbest metin ✎</b> → hücreyi oyun sayma (il adı, açıklama, not) · Onay bekleyen metnin üzerine gel → tooltipten doğrudan <b>Oyun olarak ekle / Serbest metin yap / Oyun değil</b> · <b>Not ekle</b> → oyunun yanına not · <b>🏷 Kategori</b> → notu sınıflandır (İl, Sahne, Turne, Prova, Tatil, Duyuru) · Satırı tam seçip (sıra no'ya tıkla) <b>Zemin rengi</b> uygula → soldaki sıra no hücresi de boyanır
+      Tıkla → seç · Shift+Tıkla → aralık · Çift tıkla → yaz · Enter/Esc · Delete → temizle · Ctrl+C/V · Ctrl+Z/Y · Sağ tık → menü · <b>F4</b> → bilgi balonunu hücreye sabitle/kaldır · <b>F9</b> → bilgi balonu sistemini tamamen aç/kapat · F8 → sonraki çakışma · F7 → sonraki not (Shift+F7 → önceki not) · Oyunun üzerine gel → çakışma bilgisi · <b>Serbest metin ✎</b> → hücreyi oyun sayma (il adı, açıklama, not) · Onay bekleyen metnin üzerine gel → tooltipten doğrudan <b>Oyun olarak ekle / Serbest metin yap / Oyun değil</b> · <b>Not ekle</b> → oyunun yanına not · <b>🏷 Kategori</b> → notu sınıflandır (İl, Sahne, Turne, Prova, Tatil, Duyuru) · Satırı tam seçip (sıra no'ya tıkla) <b>Zemin rengi</b> uygula → soldaki sıra no hücresi de boyanır · <b>Kısmi yazı boyama:</b> hücrede metnin bir kısmını fareyle seçip sağ tık → <b>Yazı Rengi</b> (veya düzenleme sırasında Biçim → Yazı rengi…) → sadece seçili kısım renklenir
     </div>
   </details>
 </section>
@@ -2602,6 +2612,32 @@ function renderSheet(){
   paintSel();
   if(window.refreshConflictBar) window.refreshConflictBar();
   if(window.refreshNoteBar) window.refreshNoteBar();
+  applyStickyHeads();
+}
+/* İlk üç satırı (sütun harfleri, ay başlığı, sahne adları satırı) tablonun
+   üstüne sabitler. Satır yükseklikleri aya göre değişebildiği için üst
+   mesafeler her çizimde ölçülerek verilir. */
+function applyStickyHeads(){
+  const t=document.getElementById('sheet');
+  if(!t) return;
+  const rows=t.rows;
+  let top=0;
+  for(let i=0;i<rows.length;i++){
+    const tr=rows[i];
+    const pin = i<3;
+    for(const td of tr.cells){
+      if(pin){
+        td.classList.add('stickR');
+        td.style.top=top+'px';
+        td.style.zIndex=(i===0? 12 : 11-i);
+      } else {
+        td.classList.remove('stickR');
+        td.style.top='';
+        td.style.zIndex='';
+      }
+    }
+    if(pin) top += tr.offsetHeight;
+  }
 }
 function colName(c){ let s=''; c++; while(c){ s=String.fromCharCode(65+(c-1)%26)+s; c=Math.floor((c-1)/26);} return s; }
 
