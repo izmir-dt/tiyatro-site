@@ -1340,14 +1340,14 @@ function utf8ToB64(text){
    kaymışsa) sheet yeniden taze okunup kalan eşleşen satırlar bulunarak
    tekrar denenir. Böylece geçici uyumsuzluklarda kullanıcıya "eski yayın
    temizlenemedi" hatası göstermek yerine işlem kendi kendine toparlanır. */
-async function deleteRowsByPrefixes(prefixes, actionLabel){
+async function deleteRowsByPrefixes(prefixes, actionLabel, keepId){
   const MAX_ATTEMPTS = 3;
   for(let attempt=1; attempt<=MAX_ATTEMPTS; attempt++){
     const res = await fetch(PUBLISH_API + '/' + encodeURIComponent(PUBLISH_SHEET) + '?fresh=1', {cache:'no-store'});
     const data = res.ok ? await res.json() : {rows:[]};
     const rows = (data.rows || [])
       .map((r,i)=>({r,i}))
-      .filter(x=>prefixes.some(p=>String(x.r[0]||'').startsWith(p)))
+      .filter(x=>prefixes.some(p=>String(x.r[0]||'').startsWith(p)) && String(x.r[0]||'')!==keepId)
       .sort((a,b)=>b.i-a.i);
     if(!rows.length) return; /* silinecek bir şey kalmadı */
     let failed = false;
@@ -1420,7 +1420,7 @@ async function publishProgram(){
     /* Yeni yayın tam olarak yazıldı — şimdi eski yayın/taslak satırlarını
        güvenle temizleyebiliriz. Bu adım başarısız olsa bile önemli değil:
        yeni yayın zaten sunucuda tam olarak duruyor. */
-    try{ await deleteRowsByPrefixes([prefixPub, prefixDraft], 'Eski yayın'); }
+    try{ await deleteRowsByPrefixes([prefixPub, prefixDraft], 'Eski yayın', version); }
     catch(e){ /* eski kayıtların temizlenememesi kritik değil, sessizce geç */ }
     state.monthPub = state.monthPub || {};
     state.monthPub[m.name] = {publishedAt: ts, unpublishedAt: null};
