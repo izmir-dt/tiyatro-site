@@ -1393,7 +1393,8 @@ async function publishProgram(){
       playsArchived: state.playsArchived || [],
       generalNotes: state.generalNotes || '',
       playNotes: state.playNotes || {},
-      playFreeNotes: state.playFreeNotes || {}
+      playFreeNotes: state.playFreeNotes || {},
+      monthLocked: true
     });
     const encoded = utf8ToB64(payload);
     const ts = Date.now();
@@ -1478,7 +1479,8 @@ async function pushDraft(){
       playsArchived: state.playsArchived || [],
       generalNotes: state.generalNotes || '',
       playNotes: state.playNotes || {},
-      playFreeNotes: state.playFreeNotes || {}
+      playFreeNotes: state.playFreeNotes || {},
+      monthLocked: isMonthLocked(m.name)
     });
     const encoded = utf8ToB64(payload);
     const ts = Date.now();
@@ -1613,6 +1615,8 @@ async function syncFromServer(){
     const idx = state.months.findIndex(mo=>mo.name===name);
     if(idx>=0) state.months[idx] = normalized; else state.months.push(normalized);
     state.monthPub[name] = {publishedAt: ts, unpublishedAt: null};
+    state.monthLocked = state.monthLocked || {};
+    if(typeof data.monthLocked === 'boolean'){ if(data.monthLocked) state.monthLocked[name] = true; else delete state.monthLocked[name]; }
     { const ign = new Set(state.playsIgnored||[]);
       if(Array.isArray(data.plays)) state.plays = data.plays.filter(p=>!ign.has(p));
       if(Array.isArray(data.playsExtra)) state.playsExtra = data.playsExtra.filter(p=>!ign.has(p)); }
@@ -1731,6 +1735,8 @@ async function syncDraftFromServer(){
     const idx = state.months.findIndex(mo=>mo.name===name);
     if(idx>=0) state.months[idx] = normalized; else state.months.push(normalized);
     state.monthDraft[name] = {draftAt: ts};
+    state.monthLocked = state.monthLocked || {};
+    if(typeof data.monthLocked === 'boolean'){ if(data.monthLocked) state.monthLocked[name] = true; else delete state.monthLocked[name]; }
     { const ign = new Set(state.playsIgnored||[]);
       if(Array.isArray(data.plays)) state.plays = data.plays.filter(p=>!ign.has(p));
       if(Array.isArray(data.playsExtra)) state.playsExtra = data.playsExtra.filter(p=>!ign.has(p)); }
