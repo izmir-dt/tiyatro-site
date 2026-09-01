@@ -1096,12 +1096,19 @@ function rebuildPeopleMap(){
          gösterilir: kendi başına kritik çakışma üretmez, sadece bilgi
          amaçlı "kimin kastı olduğu" belirtilir. */
       const kastM = kisi.match(/^(.*?)\s*\(\s*kast\s*-\s*(.+?)\s*\)\s*$/i);
+      /* Bazı satırlarda kast bilgisi kişi adında değil, görev (Görev) hücresinde
+         "Kast (Asıl İsim)" biçiminde yazılıyor (ör. kat:"Figüran", görev:
+         "Kast (Müge Uyan Yeşilpınar)"). Bu biçim de aynı şekilde SARI 🟡
+         gösterime dönüştürülür — kişi adının kendisinde etiket aranmaz. */
+      const gorevKastM = !kastM ? gorev.match(/^\s*kast\s*\(\s*(.+?)\s*\)\s*$/i) : null;
+      const isKast = !!(kastM || gorevKastM);
       const temizKisi = kastM ? kastM[1].trim() : kisi;
       const pk = normNameKey(temizKisi);
       if(!pk) continue;
       if(!map[ok]) map[ok] = {};
       if(!map[ok][pk]) map[ok][pk] = {roles:[], critical:false, name:temizKisi, kast:false, kastOf:null};
       if(kastM){ map[ok][pk].kast = true; map[ok][pk].kastOf = kastM[2].trim(); }
+      else if(gorevKastM){ map[ok][pk].kast = true; map[ok][pk].kastOf = gorevKastM[1].trim(); }
       const rt = [kat,gorev].filter(Boolean).join(' / ');
       if(rt && !map[ok][pk].roles.includes(rt)) map[ok][pk].roles.push(rt);
       const lk = kat.toLocaleLowerCase('tr');
@@ -1116,8 +1123,8 @@ function rebuildPeopleMap(){
          orada biri (Figüran) etiketli olsa bile bu satır kırmızı üretmez
          (asistanlık görevi sahne çakışması sayılmaz). */
       const isYonetim = lk.includes('yönetim') || lk.includes('yonetim');
-      const personTag = !isYonetim && !kastM && /\((?:figüran|figuran|oyuncu)\)\s*$/i.test(kisi.trim());
-      if(!kastM && !soft && ((lk.includes('oyuncu') || lk.includes('figüran') || lk.includes('figuran')) || personTag)){
+      const personTag = !isYonetim && !isKast && /\((?:figüran|figuran|oyuncu)\)\s*$/i.test(kisi.trim());
+      if(!isKast && !soft && ((lk.includes('oyuncu') || lk.includes('figüran') || lk.includes('figuran')) || personTag)){
         map[ok][pk].critical = true;
       }
     }
@@ -3147,8 +3154,10 @@ function ttRoleLines(games, p){
 function ttPersonLine(p, info){
   const dot = info.kast ? '🟡' : (info.critical ? '🔴' : '🟢');
   const cls = info.kast ? 'kast' : (info.critical ? 'crit' : 'soft');
-  const kastNote = info.kast && info.kastOf ? ' <span class="ttKastNote">('+escapeHtml(info.kastOf)+'\u2019in kastı)</span>' : '';
-  return '<div class="ttPerson '+cls+'">'+dot+' '+escapeHtml(info.name||p)+kastNote+'</div>';
+  if(info.kast && info.kastOf){
+    return '<div class="ttPerson '+cls+'">'+dot+' '+escapeHtml(info.kastOf)+' <span class="ttKastNote">Görevlendirilen Kast: '+escapeHtml(info.name||p)+'</span></div>';
+  }
+  return '<div class="ttPerson '+cls+'">'+dot+' '+escapeHtml(info.name||p)+'</div>';
 }
 function showTooltipFor(r,c,ev){
   if(window.TOOLTIPS_OFF){ hideTooltipNow(); return; }
