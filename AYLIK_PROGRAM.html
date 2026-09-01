@@ -249,15 +249,18 @@ table.sheet td.cell[data-cat="TURNE"]{border-left-color:#d00000 !important}
 table.sheet td.cell[data-cat="PROVA"]{border-left-color:#2e7d32 !important}
 table.sheet td.cell[data-cat="TATİL"]{border-left-color:#ef6c00 !important}
 table.sheet td.cell[data-cat="DUYURU"]{border-left-color:#00838f !important}
+table.sheet td.cell[data-cat="KONUK OYUN"]{border-left-color:#ad1457 !important}
 table.sheet td.cell.freetext[data-cat="İL"]::before{content:"📍 "}
 table.sheet td.cell.freetext[data-cat="SAHNE"]::before{content:"🎭 "}
 table.sheet td.cell.freetext[data-cat="PROVA"]::before{content:"🛠 "}
 table.sheet td.cell.freetext[data-cat="TATİL"]::before{content:"⛱ "}
 table.sheet td.cell.freetext[data-cat="DUYURU"]::before{content:"📣 "}
+table.sheet td.cell.freetext[data-cat="KONUK OYUN"]::before{content:"🏛 "}
 .cat-chip{display:inline-block;font-size:11px;font-weight:700;border-radius:99px;padding:1px 8px;border:1px solid currentColor;background:#fff}
 .cat-chip.c-İL{color:#1565c0}.cat-chip.c-SAHNE{color:#6a1b9a}.cat-chip.c-TURNE{color:#d00000}
 .cat-chip.c-PROVA{color:#2e7d32}.cat-chip.c-TATİL{color:#ef6c00}.cat-chip.c-DUYURU{color:#00838f}
 .cat-chip.c-DİĞER{color:#6b6b6b}
+.cat-chip.c-KONUK-OYUN{color:#ad1457}
 .pl-free-tools{display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:6px 10px;border:1px solid #a9d6c2;border-top:none;background:#fff}
 .pub-state{font-size:12px;font-weight:700;padding:3px 9px;border-radius:99px;border:1px solid var(--border);background:#fff;color:var(--muted)}
 .pub-state.ok{color:#1f7a5c;border-color:#a9d6c2;background:#eefaf4}
@@ -2515,7 +2518,8 @@ async function syncDraftFromServer(){
 }
 
 /* === Kategoriler === */
-const CATEGORIES = ['İL','SAHNE','TURNE','PROVA','TATİL','DUYURU','DİĞER'];
+const CATEGORIES = ['İL','SAHNE','TURNE','KONUK OYUN','PROVA','TATİL','DUYURU','DİĞER'];
+function catSlug(cat){ return String(cat||'').trim().replace(/\s+/g,'-'); }
 async function opSetCategory(){
   const m = curMonth();
   if(lockGuard(m)) return;
@@ -3073,7 +3077,7 @@ function renderCategories(){
       <div class="data-group-h"><strong>${escapeHtml(name)}</strong><span class="chip">${rows.length} kayıt</span></div>
       <div class="data-group-items">${rows.map(o=>`
         <div class="category-row">
-          <div class="category-main"><span class="cat-chip c-${escapeHtml(o.category)}">${escapeHtml(o.category)}</span> <strong>${escapeHtml(o.text)}</strong>${o.note?`<div class="category-meta">Not: ${escapeHtml(o.note)}</div>`:''}</div>
+          <div class="category-main"><span class="cat-chip c-${escapeHtml(catSlug(o.category))}">${escapeHtml(o.category)}</span> <strong>${escapeHtml(o.text)}</strong>${o.note?`<div class="category-meta">Not: ${escapeHtml(o.note)}</div>`:''}</div>
           <div class="category-meta">${escapeHtml(o.month||'')} · ${escapeHtml(o.date||'')}${o.time?' · '+escapeHtml(o.time):''}${o.stage?' · '+escapeHtml(o.stage):''}</div>
           <button class="btn ghost small" data-category-go="${all.indexOf(o)}">Hücreye git</button>
           <button class="btn ghost small" data-category-edit="${all.indexOf(o)}">Kategoriyi değiştir</button>
@@ -5989,14 +5993,14 @@ function renderPlays(filter){
         <button class="btn ghost small" data-fcat="">Tümü</button>
         ${Object.keys(counts).sort((a,b)=>a.localeCompare(b,'tr')).map(c=>`
           <button class="btn ghost small" data-fcat="${escapeHtml(c)}" style="${freeCatFilter===c?'background:#f0e6d2;font-weight:700':''}">
-            <span class="cat-chip c-${escapeHtml(c)}">${c==='—'?'Kategorisiz':escapeHtml(c)}</span> ${counts[c]}
+            <span class="cat-chip c-${escapeHtml(catSlug(c))}">${c==='—'?'Kategorisiz':escapeHtml(c)}</span> ${counts[c]}
           </button>`).join('')}
         <span style="font-size:11px;color:var(--muted)">${total} hücre gösteriliyor</span>
       </div>
       <div class="pl-free-list">
         ${keys.map(t=>`
           <div class="pl-free-row">
-            <span class="nm">${catOf(t)?`<span class="cat-chip c-${escapeHtml(catOf(t))}">${escapeHtml(catOf(t))}</span> `:''}${escapeHtml(t)}</span>
+            <span class="nm">${catOf(t)?`<span class="cat-chip c-${escapeHtml(catSlug(catOf(t)))}">${escapeHtml(catOf(t))}</span> `:''}${escapeHtml(t)}</span>
             <span class="wh">${fts[t].length} hücre · ${escapeHtml(fts[t].map(o=>(o.month||'')+(o.date?' / '+o.date:'')).slice(0,3).join(' · '))}${fts[t].length>3?' …':''}</span>
             <button class="btn ghost small" data-fgo="${escapeHtml(t)}">Hücreye git</button>
             <button class="btn ghost small" data-fcatset="${escapeHtml(t)}">🏷 Kategori</button>
@@ -6482,7 +6486,7 @@ function collectAllFreeNotes(){
       const [r,c]=key.split('_').map(Number);
       if(r<2) return;
       out.push({mi,key,r,c,month:m.name,date:dateTextOfRow(m,r),time:timeTextOfRow(m,r),
-        stage:(m.cells['1_'+c]||{}).v||'', text:cell.v||'', note:cell.note||'', inline:inline, free:!!cell.freeText});
+        stage:(m.cells['1_'+c]||{}).v||'', text:cell.v||'', note:cell.note||'', inline:inline, free:!!cell.freeText, cat:cell.cat||''});
     });
   });
   return out;
@@ -6497,6 +6501,7 @@ function wireFreeNotesFilters(){
   if(search && !search.dataset.wired){ search.dataset.wired='1'; search.addEventListener('input', renderFreeNotesTab); }
   if(sel && !sel.dataset.wired){ sel.dataset.wired='1'; sel.addEventListener('change', renderFreeNotesTab); }
 }
+let freeNotesCatFilter = '';
 function renderFreeNotesTab(){
   const box=document.getElementById('freeNotesList');
   if(!box) return;
@@ -6514,29 +6519,45 @@ function renderFreeNotesTab(){
   }
   const q=(document.getElementById('freeNotesSearch')?.value||'').trim().toLocaleLowerCase('tr');
   const monthFilter=monthSel?.value||'';
-  const filtered=items.filter(o=>(!monthFilter||o.month===monthFilter) && freeNotesMatchesQuery(o,q));
+  const catCounts={};
+  items.forEach(o=>{ const c=o.cat||'—'; catCounts[c]=(catCounts[c]||0)+1; });
+  const catKeys=Object.keys(catCounts).sort((a,b)=>a.localeCompare(b,'tr'));
+  const filtered=items.filter(o=>(!monthFilter||o.month===monthFilter) && freeNotesMatchesQuery(o,q) && (!freeNotesCatFilter || (freeNotesCatFilter==='—' ? !o.cat : o.cat===freeNotesCatFilter)));
   const countEl=document.getElementById('freeNotesFilterCount');
-  if(countEl) countEl.textContent = (q||monthFilter) ? `${filtered.length} / ${items.length} not gösteriliyor` : '';
+  if(countEl) countEl.textContent = (q||monthFilter||freeNotesCatFilter) ? `${filtered.length} / ${items.length} not gösteriliyor` : '';
+
+  const catBarHtml = catKeys.length ? `
+    <div class="pl-free-tools" style="margin-bottom:8px">
+      <b style="font-size:11px;text-transform:uppercase;color:var(--muted)">Kategori</b>
+      <button class="btn ghost small" data-fncat="">Tümü</button>
+      ${catKeys.map(c=>`
+        <button class="btn ghost small" data-fncat="${escapeHtml(c)}" style="${freeNotesCatFilter===c?'background:#f0e6d2;font-weight:700':''}">
+          <span class="cat-chip c-${escapeHtml(catSlug(c))}">${c==='—'?'Kategorisiz':escapeHtml(c)}</span> ${catCounts[c]}
+        </button>`).join('')}
+    </div>` : '';
 
   if(!items.length){
     box.innerHTML='<div style="padding:14px;color:var(--muted)">Henüz not yok. Bir hücre seçip <b>Not ekle</b> ya da <b>Serbest metin ✎</b> kullanın; buraya otomatik düşer.</div>';
   } else if(!filtered.length){
-    box.innerHTML='<div style="padding:14px;color:var(--muted)">Aramanızla eşleşen not bulunamadı.</div>';
+    box.innerHTML=catBarHtml+'<div style="padding:14px;color:var(--muted)">Aramanızla eşleşen not bulunamadı.</div>';
   } else {
-    box.innerHTML = filtered.map((o,i)=>`
+    box.innerHTML = catBarHtml + filtered.map((o,i)=>`
       <div style="display:flex;gap:10px;align-items:flex-start;background:#fff;border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:6px">
         <div style="flex:1;min-width:0">
-          <div style="font-weight:700">${escapeHtml(o.text||'(boş hücre)')} ${o.free?'<span style="font-size:11px;color:var(--accent)">✎ serbest metin</span>':''}</div>
+          <div style="font-weight:700">${o.cat?`<span class="cat-chip c-${escapeHtml(catSlug(o.cat))}">${escapeHtml(o.cat)}</span> `:''}${escapeHtml(o.text||'(boş hücre)')} ${o.free?'<span style="font-size:11px;color:var(--accent)">✎ serbest metin</span>':''}</div>
           <div style="font-size:12px;color:var(--muted)">${escapeHtml(o.month)} · ${escapeHtml(o.date||'')}${o.time?' / '+escapeHtml(o.time):''}${o.stage?' · '+escapeHtml(o.stage):''}</div>
           ${o.inline?`<div style="margin-top:4px;font-size:13px"><b>Hücre içi not:</b> ${escapeHtml(o.inline)}</div>`:''}
           ${o.note?`<div style="margin-top:4px;font-size:13px"><b>Not:</b> ${escapeHtml(o.note)}</div>`:''}
         </div>
         <button class="btn ghost small" data-fngo="${i}">Hücreye git</button>
+        <button class="btn ghost small" data-fncatset="${i}">🏷 Kategori</button>
         <button class="btn ghost small" data-fnedit="${i}">✎ Notu düzenle</button>
       </div>`).join('');
     box.querySelectorAll('[data-fngo]').forEach(b=>{ b.onclick=()=>{ const o=filtered[+b.dataset.fngo]; gotoCell(o.mi,o.r,o.c); }; });
+    box.querySelectorAll('[data-fncatset]').forEach(b=>{ b.onclick=async()=>{ const o=filtered[+b.dataset.fncatset]; const cat=await askCategory(o.cat); if(cat===null) return; setCellCategory(o.mi,o.key,cat); renderFreeNotesTab(); }; });
     box.querySelectorAll('[data-fnedit]').forEach(b=>{ b.onclick=async()=>{ const o=filtered[+b.dataset.fnedit]; const n=await sitePrompt('Not:',o.note,'Not ekle/düzenle'); if(n===null) return; setCellNote(o.mi,o.key,n); renderFreeNotesTab(); }; });
   }
+  box.querySelectorAll('[data-fncat]').forEach(b=>{ b.onclick=()=>{ freeNotesCatFilter=b.dataset.fncat; renderFreeNotesTab(); }; });
 }
 
 function closeNotesPopover(){
