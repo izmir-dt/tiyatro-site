@@ -1232,6 +1232,20 @@ table.sheet td.cell{min-width:86px;height:29px}
   border-color:#d5a04a;
   box-shadow:0 0 0 2px rgba(213,160,74,.55),0 18px 40px rgba(25,13,8,.45)
 }
+#quickNotesBtn{
+  border-color:#a9d6c2;background:#eef8f2;color:#226247
+}
+#quickNotesBtn:hover{background:#dff2e8;border-color:#78b995}
+.quick-notes-count{
+  display:inline-flex;align-items:center;justify-content:center;
+  min-width:17px;height:17px;padding:0 4px;border-radius:99px;
+  background:#2f8961;color:#fff;font-size:10px;line-height:1;font-weight:800
+}
+#nbOpen{font-weight:800;background:#fff;border-color:#c9b36e}
+#nbOpen:hover{background:#fff5d7}
+@media(max-width:720px){
+  #quickNotesBtn{width:100%;justify-content:center}
+}
 </style>
 </head>
 <body>
@@ -1426,6 +1440,9 @@ table.sheet td.cell{min-width:86px;height:29px}
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
         Program Önizleme</button>
       <button type="button" id="cbTip" aria-pressed="true" title="Hücre üzerine gelince çıkan bilgi balonunu aç/kapat (F9)">💬 Bilgi Balonu: Açık</button>
+       <button type="button" class="titlebar-btn quick-notes-btn" id="quickNotesBtn" title="Serbest notlar sekmesini aç ve arama alanına geç">
+         📝 Serbest Notlar <span id="quickNotesCount" class="quick-notes-count" style="display:none"></span>
+       </button>
     </div>
   </div>
 
@@ -1443,6 +1460,7 @@ table.sheet td.cell{min-width:86px;height:29px}
     <span class="cb-count" id="nbCount">📝 Not taranıyor…</span>
     <span id="nbDetail"></span>
     <span class="cb-spacer"></span>
+    <button type="button" id="nbOpen" title="Tüm aylardaki serbest notları ve hücre notlarını aç">📝 Notları aç</button>
     <button type="button" id="nbPrev" title="Önceki nota git (Shift+F7)">&#9650; Önceki not</button>
     <button type="button" id="nbNext" title="Sonraki nota git (F7)">&#9660; Sonraki not</button>
   </div>
@@ -3580,13 +3598,7 @@ function wireCell(td){
   td.addEventListener('mousemove', e=>{
     const key=td.dataset.r+'_'+td.dataset.c;
     if(window.__ttKey!==key){ scheduleTooltipShow(+td.dataset.r,+td.dataset.c,e); return; }
-    /* Aynı hücrede fare sola/sağa kayarsa balon da o yöne dönsün — içeriği
-       yeniden kurmadan, sadece konumu güncelle (ucuz ve titremesiz). */
-    const ttNow=document.getElementById('tooltip');
-    if(ttNow && ttNow.style.display==='block' && !window.__ttPin){
-      window.__ttMouseX = e.clientX;
-      placeTooltip();
-    }
+    /* Aynı hücrede hareket ederken tooltip konumunu değiştirme. */
   });
   td.addEventListener('mouseleave',()=>{
     document.querySelectorAll('#sheet td.tour-hl').forEach(x=>x.classList.remove('tour-hl'));
@@ -3602,15 +3614,15 @@ function cancelTooltipShow(){ clearTimeout(ttShowTimer); ttShowTimer=null; }
 /* Hücreler sık ve alt alta dizilmişken, açık bir tooltip'e (kaydırmak/kopyalamak
    için) ulaşmaya çalışırken fare aradaki başka hücrelerin üzerinden geçebiliyor
    ve her biri ANINDA tooltip içeriğini değiştirip asıl hedefe ulaşmayı
-   imkânsızlaştırıyordu. Artık hücreye girildiğinde tooltip anında değil, kısa
-   bir "niyet" gecikmesinden (90ms) sonra gösteriliyor: fare sadece geçiyorsa
+    imkânsızlaştırıyordu. Artık hücreye girildiğinde tooltip anında değil, daha
+    belirgin bir "niyet" gecikmesinden sonra gösteriliyor: fare sadece geçiyorsa
    (başka bir hücreye/tooltip'e doğru ilerliyorsa) bu hücrenin tooltip'i hiç
    açılmıyor; gerçekten o hücrede durulduysa normal şekilde açılıyor. */
 function scheduleTooltipShow(r,c,ev){
   cancelTooltipShow();
   /* Kısa hücre geçişlerinde balonun parlayıp sönmesini önle; kullanıcı
      hücrede gerçekten durduğunda göster. */
-  ttShowTimer=setTimeout(()=>{ ttShowTimer=null; showTooltipFor(r,c,ev); }, 140);
+   ttShowTimer=setTimeout(()=>{ ttShowTimer=null; showTooltipFor(r,c,ev); }, 260);
 }
 function hideTooltipNow(force){
   /* Balon bir hücreye sabitlenmişse (F4 ile pinlendiyse) sadece Esc veya
@@ -6423,6 +6435,11 @@ function renderNotes(){
   const items=collectNotes();
   const badge=document.getElementById('notesBadge');
   if(badge){ if(items.length){ badge.textContent=items.length; badge.style.display='inline-block'; } else badge.style.display='none'; }
+  const quickCount=document.getElementById('quickNotesCount');
+  if(quickCount){
+    if(items.length){ quickCount.textContent=items.length; quickCount.style.display='inline-flex'; }
+    else { quickCount.textContent=''; quickCount.style.display='none'; }
+  }
 
   const monthSel=document.getElementById('notesMonthFilter');
   if(monthSel){
@@ -6781,6 +6798,14 @@ document.getElementById('availGoBtn')?.addEventListener('click', renderAvailabil
 document.getElementById('availPerson')?.addEventListener('keydown', e=>{ if(e.key==='Enter') renderAvailability(); });
 document.getElementById('availMonthSel')?.addEventListener('change', renderAvailability);
 
+function openNotesFast(){
+  const tab=document.querySelector('#tabbar button[data-tab="notes"]');
+  if(tab) tab.click();
+  requestAnimationFrame(()=>{
+    const search=document.getElementById('notesSearch');
+    if(search){ search.focus({preventScroll:true}); search.select(); }
+  });
+}
 
 document.querySelectorAll('#tabbar button').forEach(b=>b.onclick=()=>{
   document.querySelectorAll('#tabbar button').forEach(x=>{ x.classList.remove('active'); x.setAttribute('aria-selected','false'); });
@@ -6794,6 +6819,8 @@ document.querySelectorAll('#tabbar button').forEach(b=>b.onclick=()=>{
   if(b.dataset.tab==='categories') renderCategories();
   if(b.dataset.tab==='avail') renderAvailability();
 });
+document.getElementById('quickNotesBtn')?.addEventListener('click', openNotesFast);
+document.getElementById('nbOpen')?.addEventListener('click', openNotesFast);
 
 document.addEventListener('keydown', e=>{
   if(e.target.isContentEditable) return;
