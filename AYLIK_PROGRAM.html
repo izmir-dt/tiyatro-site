@@ -4051,15 +4051,24 @@ function ctxGroup(el, icon, label, items){
     subCloseTimer=setTimeout(()=>{ g.classList.remove('open'); b.classList.remove('open-parent'); }, 260);
   };
   const cancelClose=()=>{ clearTimeout(subCloseTimer); subCloseTimer=null; };
-  /* Alt menü fareyle açılır, ama fare menüden ayrılınca KAPANMAZ:
-     böylece imleç ana menü ile alt panel arasındaki boşluktan geçerken
-     panel kaybolmaz ve seçenekler her zaman tıklanabilir kalır.
-     Kapanma: başka bir alt menü açılınca ya da menü kapanınca olur. */
-  wrap.addEventListener('mouseenter', ()=>{ cancelClose(); open(); });
+  /* Açmayı da geciktir: fare, bir alt menüye (örn. "Oyun / Tiyatro") girip
+     içindeki bir öğeye ulaşmaya çalışırken çapraz hareket sırasında yan
+     satırdaki başka bir grup düğmesinin (örn. "Turne") üzerinden anlık
+     geçebilir. Bu, gecikmesiz açılırsa closeAll() tetiklenip az önce açılan
+     menü hemen kapanıyordu ("menü yok oluyor" şikayeti). Kısa bir gecikmeyle
+     sadece gerçekten o düğmede durulursa açılır; sadece geçilirse (mouseleave
+     ile iptal) hiçbir şey kapanmaz/açılmaz. */
+  let openTimer=null;
+  wrap.addEventListener('mouseenter', ()=>{
+    cancelClose();
+    clearTimeout(openTimer);
+    openTimer=setTimeout(open, 140);
+  });
+  wrap.addEventListener('mouseleave', ()=>{ clearTimeout(openTimer); });
   wrap.addEventListener('pointerdown', e=>{ e.stopPropagation(); });
   g.addEventListener('mouseenter', cancelClose);
   g.addEventListener('pointerdown', e=>{ e.stopPropagation(); });
-  b.onclick=(e)=>{ e.stopPropagation(); if(g.classList.contains('open')){ cancelClose(); g.classList.remove('open'); b.classList.remove('open-parent'); } else { cancelClose(); open(); } };
+  b.onclick=(e)=>{ e.stopPropagation(); clearTimeout(openTimer); if(g.classList.contains('open')){ cancelClose(); g.classList.remove('open'); b.classList.remove('open-parent'); } else { cancelClose(); open(); } };
   wrap.appendChild(b); wrap.appendChild(g);
   el.appendChild(wrap);
 }
@@ -4084,8 +4093,6 @@ function showCtx(x,y,kind){
   ctxSep(el);
 
   if(kind==='cell'){
-    ctxItem(el,'⚠️','Çakışmayı yok say (aç/kapat)', opIgnoreConflict);
-    ctxSep(el);
     ctxItem(el,'B','Kalın', opBold);
     ctxItem(el,'U','Altı çizili', opUnderline);
     ctxItem(el,'⌫','Biçimi temizle', opClearFormat);
@@ -4110,6 +4117,7 @@ function showCtx(x,y,kind){
     ctxGroup(el,'🎭','Oyun / Tiyatro', [
       ['★','Prömiyer (aç/kapat)', opPremiere],
       ['★','PRÖMİYER açıklaması yaz', opPremiereLabel],
+      ['⚠️','Çakışmayı yok say (aç/kapat)', opIgnoreConflict],
       ['✎','Serbest metin / not hücresi', opFreeText],
       ['🗄','Arşiv oyun hücresi', opArchiveCell]
     ]);
