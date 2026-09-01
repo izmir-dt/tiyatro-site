@@ -3180,6 +3180,16 @@ function ttRoleLines(games, p){
 /* Çakışma listesinde bir kişi satırını (renkli nokta + isim + varsa "X'in
    kastı" notu) üretir — kırmızı/yeşil/kritik olmayan "Kast" (yedek) kişiler
    için ayrı sarı 🟡 gösterim kullanılır. */
+/* Çakışma listesindeki kişi sırası: SARI (kast/karşılanmış) en üstte, sonra
+   KIRMIZI (kritik), en altta YEŞİL — böylece "bunun için bir kastı var"
+   bilgisi ilk bakışta görülür. */
+function ttPersonRank(info){
+  if(info.kast || (!info.critical && info.kastCovered)) return 0;
+  return info.critical ? 1 : 2;
+}
+function ttPersonSort(a,b){
+  return ttPersonRank(a[1])-ttPersonRank(b[1]) || (a[1].name||a[0]).localeCompare(b[1].name||b[0],'tr');
+}
 function ttPersonLine(p, info){
   if(info.kast && info.kastOf){
     return '<div class="ttPerson kast">🟡 '+escapeHtml(info.kastOf)+' Kastı: <span class="ttKastNote">'+escapeHtml(info.name||p)+'</span></div>';
@@ -3232,7 +3242,7 @@ function showTooltipFor(r,c,ev){
     hR += '<div>Bu gün temsil olarak sayılmaz.</div><hr>';
     if(confR.hasCritical){
       hR += '<div class="ttWarn">⚠️ Çakışma var</div>';
-      for(const [p,info] of Object.entries(confR.people).sort((a,b)=>(b[1].critical?1:0)-(a[1].critical?1:0) || (a[1].name||a[0]).localeCompare(b[1].name||b[0],'tr'))){
+      for(const [p,info] of Object.entries(confR.people).sort(ttPersonSort)){
         hR += ttPersonLine(p, info);
         hR += ttRoleLines(gamesR, p);
       }
@@ -3298,7 +3308,7 @@ function showTooltipFor(r,c,ev){
       html += '<div class="ttOk">Uygun ✅ Çakışan kişi yok.</div>';
     } else if(!conflict.hasCritical){
       html += '<div class="ttOk">🟢 Ortak kişi(ler) var ama Oyuncu/Figüran çakışması yok:</div>';
-      for(const [p,info] of Object.entries(conflict.people).sort((a,b)=>(a[1].name||a[0]).localeCompare(b[1].name||b[0],'tr'))){
+      for(const [p,info] of Object.entries(conflict.people).sort(ttPersonSort)){
         html += ttPersonLine(p, info);
         html += ttRoleLines(games, p);
       }
@@ -3306,7 +3316,7 @@ function showTooltipFor(r,c,ev){
       html += cell.ignoreConflict
         ? '<div class="ttOk">🟢 Çakışma bu hücrede yok sayıldı (aşağıdaki kayıt bilgi amaçlı)</div>'
         : '<div class="ttWarn">⚠️ Çakışma var</div>';
-      for(const [p,info] of Object.entries(conflict.people).sort((a,b)=>(b[1].critical?1:0)-(a[1].critical?1:0) || (a[1].name||a[0]).localeCompare(b[1].name||b[0],'tr'))){
+      for(const [p,info] of Object.entries(conflict.people).sort(ttPersonSort)){
         html += ttPersonLine(p, info);
         html += ttRoleLines(games, p);
       }
