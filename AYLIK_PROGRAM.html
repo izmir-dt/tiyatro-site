@@ -6122,6 +6122,25 @@ function renderPlayDetail(byPlay){
     </div>
     <div class="play-pane ${tab==='categories'?'active':''}" data-play-pane="categories">
        <div class="play-pane-title">Kadro ve görevler <small>Oyuncu, teknik ekip ve diğer görevleri burada düzenleyin.</small></div>
+      <div class="pl-cat" id="crewSyncBox">
+        <div class="pl-cat-h"><span class="cat">Kadro Güncelleme</span><span class="chip">Salt okunur</span></div>
+        <div style="padding:14px 12px;background:#fdfbf6;border-top:1px solid var(--border)">
+          <p style="margin:0 0 10px;font-size:13px;color:var(--muted);line-height:1.5">
+            Bu sekmedeki kadro ve görev kayıtları artık burada düzenlenmiyor. Tüm ekleme, silme ve düzeltmeler doğrudan Google E-Tablo üzerinden yapılır ve repertuvar sistemiyle eşzamanlı olarak güncellenir.
+          </p>
+          <div id="crewSyncStatus" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px;font-size:12px;color:var(--muted)">
+            ${crewState==='loading'
+              ? '<span>⏳ Google E-Tablo ile senkronize ediliyor…</span>'
+              : crewState==='err'
+                ? '<span style="color:#a33">⚠ Sekme verisi çekilemedi, yerel kopya gösteriliyor.</span>'
+                : crewState==='cache'
+                  ? '<span>ℹ Yerel kopya gösteriliyor (son çekilen veri).</span>'
+                  : `<span>✅ Google E-Tablo ile eşit · ${(state.crew||[]).length} kayıt</span>`}
+            <button class="btn ghost small" id="crewSyncReload">${crewState==='loading'?'Yenileniyor…':'🔄 Şimdi Yenile'}</button>
+          </div>
+          <a class="btn small" id="crewSheetLink" href="https://docs.google.com/spreadsheets/d/1sIzswZnMkyRPJejAsE_ylSKzAF0RmFiACP4jYtz-AE0/edit?pli=1&gid=2043325861#gid=2043325861" target="_blank" rel="noopener" style="text-decoration:none;display:inline-flex;align-items:center;gap:6px">📊 Google E-Tablo'da Düzenle</a>
+        </div>
+      </div>
       ${cats.map(cat=>`
         <div class="pl-cat">
           <div class="pl-cat-h"><span class="cat">${escapeHtml(cat)}</span><span class="chip">${byCat[cat].length} kayıt</span></div>
@@ -6148,15 +6167,6 @@ function renderPlayDetail(byPlay){
             }).join('')}
           </div>
         </div>`).join('')}
-      <div class="pl-cat">
-        <div class="pl-cat-h"><span class="cat">Kadro Güncelleme</span><span class="chip">Salt okunur</span></div>
-        <div style="padding:14px 12px;background:#fdfbf6;border-top:1px solid var(--border)">
-          <p style="margin:0 0 12px;font-size:13px;color:var(--muted);line-height:1.5">
-            Bu sekmedeki kadro ve görev kayıtları artık burada düzenlenmiyor. Tüm ekleme, silme ve düzeltmeler doğrudan Google E-Tablo üzerinden yapılır ve repertuvar sistemiyle eşzamanlı olarak güncellenir.
-          </p>
-          <a class="btn small" id="crewSheetLink" href="https://docs.google.com/spreadsheets/d/1sIzswZnMkyRPJejAsE_ylSKzAF0RmFiACP4jYtz-AE0/edit?pli=1&gid=2043325861#gid=2043325861" target="_blank" rel="noopener" style="text-decoration:none;display:inline-flex;align-items:center;gap:6px">📊 Google E-Tablo'da Düzenle</a>
-        </div>
-      </div>
     </div>
     <div class="play-pane ${tab==='showings'?'active':''}" data-play-pane="showings">
        <div class="play-pane-title">Gösterim takvimi <small>Programdaki kayıtlar aylara göre gruplanır.</small></div>
@@ -6192,6 +6202,14 @@ function renderPlayDetail(byPlay){
     playDetailTab=b.dataset.playTab;
     renderPlayDetail(byPlay);
   });
+  { const csr=document.getElementById('crewSyncReload');
+    if(csr) csr.onclick=async ()=>{
+      setStatus('Google E-Tablo ile senkronize ediliyor…');
+      await loadCrewSheet(true);
+      renderPlayDetail();
+      setStatus(crewState==='ok' ? 'Kadro Google E-Tablo ile güncellendi.' : 'Senkronizasyon tamamlanamadı, yerel kopya gösteriliyor.');
+    };
+  }
   const nameEl=document.getElementById('plName');
   const saveName=()=>{
     const v=nameEl.textContent.trim();
