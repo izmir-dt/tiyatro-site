@@ -81,7 +81,7 @@ h2{font-family:'Fraunces',Georgia,serif;color:var(--primary);margin:6px 0 8px;fo
 h3{font-family:'Fraunces',Georgia,serif;color:var(--primary);margin:0 0 6px}
 
 /* Program table (spreadsheet look) */
-.tbl-wrap{overflow:auto;background:#fff;border:1px solid #000;max-height:76vh}
+.tbl-wrap{overflow:auto;background:#fff;border:1px solid #000;max-height:84vh}
 /* Tam ekranda araç çubuğu da görünür kalır; yalnızca tablo değil, program
    çalışma alanının tamamı ekranı kaplar. */
 body.fs-on #program{position:fixed;inset:0;z-index:99997;background:var(--bg);overflow:auto;padding:10px 12px 24px}
@@ -126,7 +126,7 @@ body.fs-on.fs-showbars .fs-bars-toggle{background:var(--primary);color:#fff}
 #alwaysGroup button.btn.ghost:hover{background:rgba(255,255,255,.2)}
 #toolbarToggleBtn{background:#fff;color:var(--primary);font-weight:700;border-color:#fff}
 #toolbarToggleBtn:hover{background:#f4e6c8}
-body.toolbar-collapsed .tbl-wrap{max-height:82vh}
+body.toolbar-collapsed .tbl-wrap{max-height:90vh}
 body.toolbar-collapsed h2#monthTitle{margin-top:10px}
 
 table.sheet td.cell.noconf{outline:2px dashed #1f7a5c;outline-offset:-2px}
@@ -675,7 +675,7 @@ nav button{
 nav button:hover{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.4)}
 nav button.active{background:#d39a3d;border-color:#d39a3d;color:#2b180a;box-shadow:0 3px 9px rgba(0,0,0,.16)}
 .tabBadge{background:#ffe29a;color:#4f3100;padding:2px 7px}
-main{max-width:1680px;margin:0 auto;padding:22px clamp(14px,3vw,42px) 56px}
+main{max-width:1680px;margin:0 auto;padding:22px clamp(14px,3vw,42px) 16px}
 section.active{animation:sectionIn .18s ease-out}
 @keyframes sectionIn{from{opacity:.5;transform:translateY(3px)}to{opacity:1;transform:none}}
 
@@ -702,9 +702,13 @@ button.btn.ghost:hover{background:var(--accent-soft);border-color:var(--accent)}
 .titlebar-btn{border-color:var(--border);border-radius:8px;box-shadow:0 2px 5px rgba(57,35,24,.05)}
 .titlebar-btn:hover{border-color:var(--accent);background:var(--accent-soft)}
 .tbl-wrap{
-  background:var(--surface);border:1px solid var(--border);border-radius:12px;
-  padding:8px;box-shadow:var(--shadow);scrollbar-color:#b8a796 #f2ede7
+  background:var(--surface);border:1px solid var(--border);border-radius:8px;
+  padding:2px;box-shadow:var(--shadow);scrollbar-color:#b8a796 #f2ede7;scrollbar-width:thin
 }
+.tbl-wrap::-webkit-scrollbar{width:8px;height:8px}
+.tbl-wrap::-webkit-scrollbar-track{background:#f2ede7}
+.tbl-wrap::-webkit-scrollbar-thumb{background:#b8a796;border-radius:6px}
+.tbl-wrap::-webkit-scrollbar-corner{background:#f2ede7}
 table.sheet{font-size:13px;letter-spacing:0;border-collapse:separate;border-spacing:0}
 table.sheet th,table.sheet td{border-color:#cfc5ba;line-height:1.22}
 table.sheet td.hdr{background:#ead8b3;color:#39240e;font-size:11px;letter-spacing:.25px}
@@ -3331,7 +3335,7 @@ function computeTours(m){
         if(cur && cell && cell.tourReturn){
           cur.members.push({r,c,key:k,cell});
           cur.returnKey=k; map[k]={g:cur,role:'member'};
-          gap=[];
+          gap=[]; cur=null;   /* dönüş günüyle turne kapanır: altındaki boş günler artık bu turneye ait sayılmaz */
           continue;
         }
         /* Boş gün (ör. PAZARTESİ yol günü) turneyi kesmez: en fazla 3 boş günü
@@ -3357,9 +3361,10 @@ function computeTours(m){
         /* tampondaki boş günleri de bloğa dahil et (çizgiler kesilmesin) */
         gap.forEach(gp=>{ cur.members.push({...gp, gap:true}); map[gp.key]={g:cur,role:'member',gap:true}; });
         gap=[];
-        cur.members.push({r,c,key:k,cell});
-        if(cell.tourReturn) cur.returnKey=k;
-        map[k]={g:cur,role:'member'};
+        const g=cur;
+        g.members.push({r,c,key:k,cell});
+        if(cell.tourReturn){ g.returnKey=k; cur=null; }   /* aynı gün dönüş + metin varsa da turne burada kapanır */
+        map[k]={g,role:'member'};
       }
     }
   });
