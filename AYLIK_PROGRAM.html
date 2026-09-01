@@ -319,6 +319,8 @@ table.sheet td.cell.note-mark::after{content:"";position:absolute;top:0;right:0;
 #tooltip .ttPerson{display:flex;align-items:center;gap:6px;margin:10px 0 3px;font-weight:700;font-size:13.5px;padding-bottom:2px}
 #tooltip .ttPerson.crit{color:#ffcfcb}
 #tooltip .ttPerson.soft{color:#c9f5dd}
+#tooltip .ttPerson.kast{color:#ffe6a3}
+#tooltip .ttKastNote{font-weight:400;opacity:.8;font-size:12px}
 #tooltip .ttRole{margin-left:9px;padding:2px 0 2px 12px;border-left:2px solid var(--tt-border);color:#e7dccf;font-size:12.5px}
 #tooltip .ttRole b{color:var(--tt-accent);font-weight:600}
 #tooltip .ttActions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;padding-top:10px;border-top:1px solid var(--tt-border)}
@@ -1088,10 +1090,18 @@ function rebuildPeopleMap(){
        ayrı kişi olarak işliyoruz. */
     const isimler = kisiRaw.split(',').map(s=>s.trim()).filter(Boolean);
     for(const kisi of isimler){
-      const pk = normNameKey(kisi);
+      /* "(Kast-Asıl İsim)" etiketi: bu kişi, parantez içindeki asıl kişinin
+         YEDEĞİ/alternatifi — çakıştığı günlerde asıl kişinin yerine sahneye
+         çıkar. Böyle etiketlenmiş kişiler kırmızı/yeşil değil, SARI 🟡
+         gösterilir: kendi başına kritik çakışma üretmez, sadece bilgi
+         amaçlı "kimin kastı olduğu" belirtilir. */
+      const kastM = kisi.match(/^(.*?)\s*\(\s*kast\s*-\s*(.+?)\s*\)\s*$/i);
+      const temizKisi = kastM ? kastM[1].trim() : kisi;
+      const pk = normNameKey(temizKisi);
       if(!pk) continue;
       if(!map[ok]) map[ok] = {};
-      if(!map[ok][pk]) map[ok][pk] = {roles:[], critical:false, name:kisi};
+      if(!map[ok][pk]) map[ok][pk] = {roles:[], critical:false, name:temizKisi, kast:false, kastOf:null};
+      if(kastM){ map[ok][pk].kast = true; map[ok][pk].kastOf = kastM[2].trim(); }
       const rt = [kat,gorev].filter(Boolean).join(' / ');
       if(rt && !map[ok][pk].roles.includes(rt)) map[ok][pk].roles.push(rt);
       const lk = kat.toLocaleLowerCase('tr');
@@ -1106,8 +1116,8 @@ function rebuildPeopleMap(){
          orada biri (Figüran) etiketli olsa bile bu satır kırmızı üretmez
          (asistanlık görevi sahne çakışması sayılmaz). */
       const isYonetim = lk.includes('yönetim') || lk.includes('yonetim');
-      const personTag = !isYonetim && /\((?:figüran|figuran|oyuncu)\)\s*$/i.test(kisi.trim());
-      if(!soft && ((lk.includes('oyuncu') || lk.includes('figüran') || lk.includes('figuran')) || personTag)){
+      const personTag = !isYonetim && !kastM && /\((?:figüran|figuran|oyuncu)\)\s*$/i.test(kisi.trim());
+      if(!kastM && !soft && ((lk.includes('oyuncu') || lk.includes('figüran') || lk.includes('figuran')) || personTag)){
         map[ok][pk].critical = true;
       }
     }
@@ -2491,7 +2501,8 @@ function buildConflict(games){
         cl.forEach(x=>critCells.push(x.g.row+'_'+x.g.col));
       }
     }
-    people[p] = {critical:isCrit, criticalGameCount:crit, totalGameCount:distinct.size, name:(list[0].rec.name||p)};
+    people[p] = {critical:isCrit, criticalGameCount:crit, totalGameCount:distinct.size, name:(list[0].rec.name||p),
+      kast:!!list[0].rec.kast, kastOf:list[0].rec.kastOf||null};
     if(isCrit){ hasCritical = true; critCells.forEach(k=>cells.add(k)); }
   }
   /* Turne dönüş günü + aynı oyun aynı gün başka sahnede: kadro verisi olmasa da uyar */
@@ -3130,6 +3141,15 @@ function ttRoleLines(games, p){
   }
   return out;
 }
+/* Çakışma listesinde bir kişi satırını (renkli nokta + isim + varsa "X'in
+   kastı" notu) üretir — kırmızı/yeşil/kritik olmayan "Kast" (yedek) kişiler
+   için ayrı sarı 🟡 gösterim kullanılır. */
+function ttPersonLine(p, info){
+  const dot = info.kast ? '🟡' : (info.critical ? '🔴' : '🟢');
+  const cls = info.kast ? 'kast' : (info.critical ? 'crit' : 'soft');
+  const kastNote = info.kast && info.kastOf ? ' <span class="ttKastNote">('+escapeHtml(info.kastOf)+'\u2019in kastı)</span>' : '';
+  return '<div class="ttPerson '+cls+'">'+dot+' '+escapeHtml(info.name||p)+kastNote+'</div>';
+}
 function showTooltipFor(r,c,ev){
   if(window.TOOLTIPS_OFF){ hideTooltipNow(); return; }
   /* Balon bir hücreye sabitlenmişse (F4), fare başka hücreye gitse bile
@@ -3163,8 +3183,7 @@ function showTooltipFor(r,c,ev){
     if(confR.hasCritical){
       hR += '<div class="ttWarn">⚠️ Çakışma var</div>';
       for(const [p,info] of Object.entries(confR.people).sort((a,b)=>(b[1].critical?1:0)-(a[1].critical?1:0) || (a[1].name||a[0]).localeCompare(b[1].name||b[0],'tr'))){
-        const dot = info.critical ? '🔴' : '🟢';
-        hR += '<div class="ttPerson '+(info.critical?'crit':'soft')+'">'+dot+' '+escapeHtml(info.name||p)+'</div>';
+        hR += ttPersonLine(p, info);
         hR += ttRoleLines(gamesR, p);
       }
     } else {
@@ -3230,7 +3249,7 @@ function showTooltipFor(r,c,ev){
     } else if(!conflict.hasCritical){
       html += '<div class="ttOk">🟢 Ortak kişi(ler) var ama Oyuncu/Figüran çakışması yok:</div>';
       for(const [p,info] of Object.entries(conflict.people).sort((a,b)=>(a[1].name||a[0]).localeCompare(b[1].name||b[0],'tr'))){
-        html += '<div class="ttPerson soft">🟢 '+escapeHtml(info.name||p)+'</div>';
+        html += ttPersonLine(p, info);
         html += ttRoleLines(games, p);
       }
     } else {
@@ -3238,8 +3257,7 @@ function showTooltipFor(r,c,ev){
         ? '<div class="ttOk">🟢 Çakışma bu hücrede yok sayıldı (aşağıdaki kayıt bilgi amaçlı)</div>'
         : '<div class="ttWarn">⚠️ Çakışma var</div>';
       for(const [p,info] of Object.entries(conflict.people).sort((a,b)=>(b[1].critical?1:0)-(a[1].critical?1:0) || (a[1].name||a[0]).localeCompare(b[1].name||b[0],'tr'))){
-        const dot = info.critical ? '🔴' : '🟢';
-        html += '<div class="ttPerson '+(info.critical?'crit':'soft')+'">'+dot+' '+escapeHtml(info.name||p)+'</div>';
+        html += ttPersonLine(p, info);
         html += ttRoleLines(games, p);
       }
     }
