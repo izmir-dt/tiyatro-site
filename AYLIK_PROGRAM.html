@@ -412,8 +412,12 @@ table.sheet td.cell.note-mark::after{content:"";position:absolute;top:0;right:0;
 .pl-row input.role{font-weight:600;color:var(--muted);font-size:12px}
 .pl-row .x{border:none;background:none;color:var(--muted);cursor:pointer;font-size:14px;line-height:1}
 .pl-row .x:hover{color:var(--premiere)}
+.pl-row-multi{grid-template-columns:150px 170px 1fr auto 30px}
+.pl-multi-names{display:flex;flex-wrap:wrap;gap:5px;font-size:12.5px}
+.pl-multi-name{background:#fdfbf6;border:1px solid var(--border);border-radius:5px;padding:2px 7px}
+.pl-row-multi [data-split]{white-space:nowrap}
 .pl-addcrew{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:6px;padding:8px 12px;background:#fdfbf6;border-top:1px solid var(--border)}
-@media(max-width:700px){.pl-addcrew{grid-template-columns:1fr}.pl-row{grid-template-columns:1fr}}
+@media(max-width:700px){.pl-addcrew{grid-template-columns:1fr}.pl-row{grid-template-columns:1fr}.pl-row-multi{grid-template-columns:1fr}}
 .pl-placeholder{background:#fff;border:1px dashed var(--border);border-radius:8px;padding:36px 18px;text-align:center;color:var(--muted);font-size:13px}
 
 
@@ -993,6 +997,18 @@ function crewDeleteAt(idx){
   applyCrew(); saveState();
 }
 function crewAddRow(o){ state.crewLocal = state.crewLocal||[]; state.crewLocal.push(o); applyCrew(); saveState(); }
+/* Bir kayıttaki virgülle ayrılmış kişileri (ör. koro: bazıları Figüran) ayrı
+   kadro satırlarına böler — her kişi kendi düzenlenebilir satırında görünür. */
+function crewSplitAt(idx){
+  const e = state.crew[idx]; if(!e) return;
+  const isimler = String(e.person||'').split(',').map(s=>s.trim()).filter(Boolean);
+  if(isimler.length<2) return;
+  if(e.src==='local') state.crewLocal.splice(e._li,1);
+  else { state.crewHidden = state.crewHidden||[]; state.crewHidden.push(crewKey(e)); }
+  state.crewLocal = state.crewLocal||[];
+  isimler.forEach(kisi=>{ state.crewLocal.push({play:e.play, category:e.category, role:e.role, person:kisi}); });
+  applyCrew(); saveState();
+}
 function crewRenamePlay(oldName, newName){
   (state.crew||[]).slice().forEach(e=>{
     if(e.play!==oldName) return;
@@ -5302,13 +5318,26 @@ function renderPlayDetail(byPlay){
         <div class="pl-cat">
           <div class="pl-cat-h"><span class="cat">${escapeHtml(cat)}</span><span class="chip">${byCat[cat].length} kayıt</span></div>
           <div class="pl-crew">
-            ${byCat[cat].map(c=>`
+            ${byCat[cat].map(c=>{
+              const isimler = String(c.person||'').split(',').map(s=>s.trim()).filter(Boolean);
+              if(isimler.length>1){
+                return `
+              <div class="pl-row pl-row-multi">
+                <input class="cat" value="${escapeHtml(c.category||'')}" placeholder="Ünvan / kategori" list="kategoriList" data-idx="${c._idx}" data-f="category" title="Ünvan / kategori (Oyuncu, Figüran, Işık…) — değiştirebilirsiniz">
+                <input class="role" value="${escapeHtml(c.role||'')}" placeholder="Görev / rol" data-idx="${c._idx}" data-f="role">
+                <div class="pl-multi-names" title="Bu kayıtta birden fazla kişi virgülle yazılmış — ayrı satır yapmak için Ayır'a basın">${isimler.map(n=>`<span class="pl-multi-name">${escapeHtml(n)}</span>`).join('')}</div>
+                <button class="btn ghost small" data-split="${c._idx}" title="Bu kayıttaki kişileri ayrı satırlara böl">⤸ Ayır (${isimler.length})</button>
+                <button class="x" data-del="${c._idx}" title="Kaydı sil">✕</button>
+              </div>`;
+              }
+              return `
               <div class="pl-row">
                 <input class="cat" value="${escapeHtml(c.category||'')}" placeholder="Ünvan / kategori" list="kategoriList" data-idx="${c._idx}" data-f="category" title="Ünvan / kategori (Oyuncu, Figüran, Işık…) — değiştirebilirsiniz">
                 <input class="role" value="${escapeHtml(c.role||'')}" placeholder="Görev / rol" data-idx="${c._idx}" data-f="role">
                 <input value="${escapeHtml(c.person||'')}" placeholder="Ad Soyad" list="kisiList" data-idx="${c._idx}" data-f="person">
                 <button class="x" data-del="${c._idx}" title="Kaydı sil">✕</button>
-              </div>`).join('')}
+              </div>`;
+            }).join('')}
           </div>
         </div>`).join('')}
       <div class="pl-cat">
@@ -5371,6 +5400,11 @@ function renderPlayDetail(byPlay){
     crewDeleteAt(+b.dataset.del);
     renderSheet(); renderPrint(); renderPlays();
     setStatus('Kayıt silindi (yerel).');
+  });
+  box.querySelectorAll('[data-split]').forEach(b=>b.onclick=()=>{
+    crewSplitAt(+b.dataset.split);
+    buildOyunDatalist(); renderSheet(); renderPrint(); renderPlays();
+    setStatus('Kişiler ayrı satırlara bölündü (yerel).');
   });
   const nameEl=document.getElementById('plName');
   const saveName=()=>{
