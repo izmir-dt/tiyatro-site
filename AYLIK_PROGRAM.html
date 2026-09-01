@@ -85,12 +85,39 @@ h3{font-family:'Fraunces',Georgia,serif;color:var(--primary);margin:0 0 6px}
 /* Tam ekranda araç çubuğu da görünür kalır; yalnızca tablo değil, program
    çalışma alanının tamamı ekranı kaplar. */
 body.fs-on #program{position:fixed;inset:0;z-index:99997;background:var(--bg);overflow:auto;padding:10px 12px 24px}
-body.fs-on #program .tbl-wrap{max-height:calc(100vh - 190px);border:1px solid #000}
-body.fs-on.toolbar-collapsed #program .tbl-wrap{max-height:calc(100vh - 120px)}
-body.fs-on #program .controls{position:sticky;top:0;z-index:4;background:var(--bg);padding:4px 0 8px}
+/* Varsayılan: tam ekranda AY çubuğu + başlık/çakışma/not şeritleri gizli,
+   tablo tüm alanı kaplar (odak programda). AY çubuğu artık akışın dışında
+   (fixed + hover ile açılır) olduğu için yüksekliğe dahil edilmiyor. */
+body.fs-on #program .tbl-wrap{max-height:calc(100vh - 34px);border:1px solid #000}
+body.fs-on.toolbar-collapsed #program .tbl-wrap{max-height:calc(100vh - 34px)}
+body.fs-on #monthTitleRow,
+body.fs-on #conflictBar,
+body.fs-on #noteBar{display:none !important}
+/* "Bilgiler" düğmesiyle açıldığında eski (bilgi şeritli) görünüm geri gelir */
+body.fs-on.fs-showbars #monthTitleRow{display:flex !important}
+body.fs-on.fs-showbars #conflictBar,
+body.fs-on.fs-showbars #noteBar{display:flex !important}
+body.fs-on.fs-showbars #program .tbl-wrap{max-height:calc(100vh - 144px)}
+body.fs-on.fs-showbars.toolbar-collapsed #program .tbl-wrap{max-height:calc(100vh - 144px)}
+/* AY/EKİM üst çubuğu (cmdbar) tam ekranda varsayılan gizli — sadece üstte
+   ince bir şerit kalır, fareyle üzerine gelince tamamen açılır. */
+body.fs-on #program .controls{
+  position:fixed;top:0;left:0;right:0;z-index:50;background:var(--bg);
+  padding:4px 12px 8px;margin:0;box-shadow:0 4px 14px rgba(0,0,0,.18);
+  transform:translateY(calc(-100% + 7px));transition:transform .16s ease;
+}
+body.fs-on #program .controls:hover,
+body.fs-on #program .controls:focus-within{transform:translateY(0)}
+/* JS'in "takılı kaldı" tespitinde zorla kapatma — hover/focus-within
+   durumu tarayıcı hatası yüzünden yanlışlıkla açık görünse bile geçerli. */
+body.fs-on #program .controls.fs-forcehide{transform:translateY(calc(-100% + 7px)) !important}
+body.fs-on #program .tbl-wrap{margin-top:14px}
 body.fs-on{overflow:hidden}
 .fs-exit{position:fixed;top:10px;right:14px;z-index:99999;display:none;background:var(--primary);color:#fff;border:none;border-radius:6px;padding:7px 12px;cursor:pointer;font:inherit;font-size:13px;box-shadow:0 6px 18px rgba(0,0,0,.3)}
 body.fs-on .fs-exit{display:block}
+.fs-bars-toggle{position:fixed;top:10px;right:214px;z-index:99999;display:none;background:#fff;color:var(--primary);border:1px solid var(--primary);border-radius:6px;padding:7px 12px;cursor:pointer;font:inherit;font-size:13px;box-shadow:0 6px 18px rgba(0,0,0,.25)}
+body.fs-on .fs-bars-toggle{display:block}
+body.fs-on.fs-showbars .fs-bars-toggle{background:var(--primary);color:#fff}
 /* Odak modu: araç çubuğu gizlendiğinde ay grubu öne çıkar ve tabloya
    daha fazla dikey alan açılır — aylık program görünümün merkezi olur. */
 #alwaysGroup{background:var(--primary);border-color:var(--primary)}
@@ -131,6 +158,16 @@ table.sheet td.cell[style*="background"]{ }
 
 /* Alt sahne başlığı satırı (KARŞIYAKA / BKSM / URLA / TURNE) — sarı */
 table.sheet tr.stageHead td{background:var(--head);color:var(--headInk);font-weight:700}
+
+/* === Sabit üst başlık satırları: aşağı kaydırınca ay başlığı ve sahne adları
+   (KARŞIYAKA RAGIP HAYKIR SAHNESİ …) satırı üstte sabit kalır === */
+#sheet td.stickR{position:sticky;background-clip:padding-box;box-shadow:inset 0 -1px 0 #000,inset 1px 0 0 rgba(0,0,0,.35),inset -1px 0 0 rgba(0,0,0,.35)}
+@media print{#sheet td.stickR{position:static !important;box-shadow:none}}
+
+/* === Aylık program tablosu sayfanın merkezinde === */
+.tbl-wrap{width:fit-content;max-width:100%;margin-left:auto;margin-right:auto}
+#monthTitleRow{justify-content:center !important;flex-wrap:wrap}
+#monthTitleRow #ttToggleWrap{margin-left:auto}
 
 /* Prömiyer */
 table.sheet td.cell.premiere{color:var(--premiere);font-weight:700}
@@ -230,7 +267,9 @@ table.sheet td.cell.freetext[data-cat="DUYURU"]::before{content:"📣 "}
 .draft-state.ok{color:#1a56b8;border-color:#a9c6e8;background:#eef4fc}
 .draft-state.syncing{color:#8a6d1a;border-color:#e8d6a9;background:#fdf7e8}
 #alwaysGroup .draft-state{background:#fff}
-table.sheet td.cell.note-mark::after{content:"";position:absolute;top:0;right:0;border-top:6px solid var(--accent);border-left:6px solid transparent}
+table.sheet td.cell.note-mark{border-left:3px solid var(--accent) !important}
+table.sheet td.cell.note-mark::after{content:"";position:absolute;top:0;right:0;width:0;height:0;
+  border-style:solid;border-width:0 10px 10px 0;border-color:transparent var(--accent) transparent transparent;pointer-events:none}
 
 /* Context menu */
 .ctxmenu{position:fixed;z-index:100002;background:#fff;border:1px solid var(--border);border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.18);min-width:200px;display:none;font-size:13px;padding:4px 0}
@@ -263,28 +302,40 @@ table.sheet td.cell.note-mark::after{content:"";position:absolute;top:0;right:0;
 .modal input,.modal select{width:100%}
 .modal .row{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
 
-/* Tooltip */
-#tooltip{position:fixed;z-index:100000;max-width:min(460px,94vw);max-height:min(80vh,640px);overscroll-behavior:contain;overflow:auto;background:linear-gradient(180deg,#2b1a12 0%,#170d08 100%);color:#fdf7ef;padding:12px 14px;border:1px solid rgba(255,255,255,.14);border-radius:12px;font-size:13px;line-height:1.55;box-shadow:0 18px 44px rgba(0,0,0,.5);display:none;pointer-events:auto;white-space:pre-wrap;font-family:'Manrope',system-ui,sans-serif;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.35) transparent}
+/* Tooltip — konuşma balonu tasarımı: #tooltip düz (gradyansız) bir zemin
+   kullanır ki #tooltipArrow ("kuyruk") ile renk birebir eşleşsin ve ek
+   görünmesin. */
+:root{--tt-bg:#20140d;--tt-border:rgba(255,255,255,.12);--tt-accent:#e8b04f}
+#tooltip{position:fixed;z-index:100000;max-width:min(420px,94vw);max-height:min(80vh,640px);overscroll-behavior:contain;overflow:auto;background:var(--tt-bg);color:#f6efe4;padding:14px 16px;border:1px solid var(--tt-border);border-radius:14px;font-size:13px;line-height:1.55;box-shadow:0 22px 48px -12px rgba(0,0,0,.55),0 4px 14px rgba(0,0,0,.32);display:none;pointer-events:auto;white-space:pre-wrap;font-family:'Manrope',system-ui,sans-serif;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.35) transparent}
 #tooltip:focus{outline:none}
-#tooltip.tt-pinned{outline:2px solid #ffd645;outline-offset:2px}
-#tooltip.tt-pinned::before{content:"📌 Sabitlendi — kapatmak için F4 veya Esc";display:block;font-size:11px;color:#ffd645;font-weight:700;margin-bottom:7px;letter-spacing:.2px}
+#tooltip.tt-pinned{box-shadow:0 0 0 2px var(--tt-accent),0 22px 48px -12px rgba(0,0,0,.55)}
+#tooltip.tt-pinned::before{content:"📌 Sabitlendi — kapatmak için F4 veya Esc";display:flex;align-items:center;gap:5px;font-size:10.5px;color:#2a1c0a;font-weight:700;background:var(--tt-accent);border-radius:6px;padding:3px 8px;margin:-2px -2px 9px;letter-spacing:.2px;width:fit-content}
 #tooltip::-webkit-scrollbar{width:9px}
 #tooltip::-webkit-scrollbar-thumb{background:rgba(255,255,255,.32);border-radius:6px}
-#tooltip .ttHead{font-family:'Fraunces',Georgia,serif;font-weight:700;font-size:15px;margin:0 0 7px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,.16);letter-spacing:.2px}
-#tooltip .ttWarn{color:#ffc0c0;font-weight:700;background:rgba(255,77,77,.16);border-left:3px solid #ff7b7b;border-radius:7px;padding:6px 9px;margin:5px 0}
-#tooltip .ttOk{color:#bdf5d4;font-weight:600;background:rgba(60,200,130,.14);border-left:3px solid #5fdda1;border-radius:7px;padding:6px 9px;margin:5px 0}
-#tooltip .ttGame{color:#ffd97a}
-#tooltip .ttPerson{margin:8px 0 2px;font-weight:700;font-size:13.5px}
-#tooltip .ttPerson.crit{color:#ffc0c0}
-#tooltip .ttPerson.soft{color:#bdf5d4}
-#tooltip .ttRole{padding-left:18px;color:#e7dccf;font-size:12.5px}
-#tooltip .ttRole b{color:#ffd97a;font-weight:600}
-#tooltip .ttActions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
-#tooltip .ttBtn{cursor:pointer;border:1px solid rgba(255,255,255,.42);background:rgba(255,255,255,.10);color:#fff;border-radius:8px;padding:8px 12px;font-size:12.5px;font-family:inherit;line-height:1.3;min-height:36px}
-#tooltip .ttBtn:hover{background:rgba(255,255,255,.22)}
-#tooltip .ttBtn:focus-visible{outline:2px solid #ffd645;outline-offset:2px}
-#tooltip .ttHint{margin-top:9px;padding-top:7px;border-top:1px solid rgba(255,255,255,.12);font-size:11.5px;color:#cbbdae}
-#tooltip hr{border:none;border-top:1px solid rgba(255,255,255,.16);margin:8px 0}
+#tooltip .ttHead{font-family:'Fraunces',Georgia,serif;font-weight:700;font-size:15.5px;margin:0 0 9px;padding-bottom:8px;border-bottom:1px solid var(--tt-border);letter-spacing:.2px;color:#fff}
+#tooltip .ttWarn{display:flex;align-items:flex-start;gap:7px;color:#ffd4d0;font-weight:700;background:rgba(255,77,77,.14);border:1px solid rgba(255,110,100,.35);border-radius:9px;padding:7px 10px;margin:6px 0}
+#tooltip .ttOk{display:flex;align-items:flex-start;gap:7px;color:#c9f5dd;font-weight:600;background:rgba(60,200,130,.12);border:1px solid rgba(95,221,161,.35);border-radius:9px;padding:7px 10px;margin:6px 0}
+#tooltip .ttGame{color:var(--tt-accent);font-weight:600}
+#tooltip .ttPerson{display:flex;align-items:center;gap:6px;margin:10px 0 3px;font-weight:700;font-size:13.5px;padding-bottom:2px}
+#tooltip .ttPerson.crit{color:#ffcfcb}
+#tooltip .ttPerson.soft{color:#c9f5dd}
+#tooltip .ttRole{margin-left:9px;padding:2px 0 2px 12px;border-left:2px solid var(--tt-border);color:#e7dccf;font-size:12.5px}
+#tooltip .ttRole b{color:var(--tt-accent);font-weight:600}
+#tooltip .ttActions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;padding-top:10px;border-top:1px solid var(--tt-border)}
+#tooltip .ttBtn{cursor:pointer;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.07);color:#fff;border-radius:8px;padding:8px 12px;font-size:12.5px;font-family:inherit;line-height:1.3;min-height:36px;transition:background .12s,border-color .12s,transform .12s}
+#tooltip .ttBtn:hover{background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.3)}
+#tooltip .ttBtn:active{transform:scale(.97)}
+#tooltip .ttBtn:focus-visible{outline:2px solid var(--tt-accent);outline-offset:2px}
+#tooltip .ttHint{margin-top:9px;padding-top:7px;border-top:1px solid var(--tt-border);font-size:11.5px;color:#cbbdae}
+#tooltip hr{border:none;border-top:1px solid var(--tt-border);margin:9px 0}
+/* Konuşma balonu kuyruğu: tooltip'in hangi hücreye/noktaya bağlı olduğunu
+   gösteren küçük üçgen. JS (positionTooltipArrow) konumunu ve yönünü
+   (dir-top/right/bottom/left) hesaplar; rengi #tooltip ile birebir aynı. */
+#tooltipArrow{position:fixed;z-index:100000;width:0;height:0;display:none;pointer-events:none;filter:drop-shadow(0 3px 4px rgba(0,0,0,.28))}
+#tooltipArrow.dir-top{border-left:9px solid transparent;border-right:9px solid transparent;border-bottom:10px solid var(--tt-bg)}
+#tooltipArrow.dir-bottom{border-left:9px solid transparent;border-right:9px solid transparent;border-top:10px solid var(--tt-bg)}
+#tooltipArrow.dir-left{border-top:9px solid transparent;border-bottom:9px solid transparent;border-right:10px solid var(--tt-bg)}
+#tooltipArrow.dir-right{border-top:9px solid transparent;border-bottom:9px solid transparent;border-left:10px solid var(--tt-bg)}
 
 /* ===== Oyunlar & Oyuncular (yeni tasarım) ===== */
 .cat{color:var(--accent);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.4px}
@@ -402,6 +453,11 @@ body.conflictFocus #sheet td.cell.conflict{opacity:1;filter:none}
 .conflict-bar button[aria-pressed=true]{background:#7a1610;color:#fff;border-color:#7a1610}
 .conflict-bar button:disabled{opacity:.45;cursor:not-allowed}
 
+/* Not gezinme şeridi */
+.note-bar{top:0;border-color:#e8d6a9;background:#fdf7e8;color:#8a6d1a}
+.note-bar.has{border-color:#e8d6a9;background:#fdf7e8;color:#8a6d1a}
+.note-bar button[aria-pressed=true]{background:#8a6d1a;color:#fff;border-color:#8a6d1a}
+
 /* Kısayol yardımı: varsayılan kapalı, dikkat dağıtmasın */
 .shortcuts{font-size:12px;color:var(--muted);margin-top:10px;border-top:1px dashed var(--border);padding-top:6px}
 .shortcuts summary{cursor:pointer;font-weight:600;color:var(--primary)}
@@ -412,7 +468,7 @@ body.conflictFocus #sheet td.cell.conflict{opacity:1;filter:none}
 /* Print — YATAY (görseldeki renkler ekranla aynı) */
 @media print{
   @page{size:A4 landscape;margin:5mm}  /* çalışma anında #printPageStyle ile güncellenir */
-  header,nav,.controls,#tooltip,.ctxmenu,.modal-back,.tbl-wrap,#idtBridgeBar,.fs-exit{display:none !important}
+  header,nav,.controls,#tooltip,#tooltipArrow,.ctxmenu,.modal-back,.tbl-wrap,#idtBridgeBar,.fs-exit{display:none !important}
   section{display:none !important}
   body{background:#fff}
   #printView{display:block !important}
@@ -538,7 +594,6 @@ body.conflictFocus #sheet td.cell.conflict{opacity:1;filter:none}
 .publishzone .btn.ghost{background:#fff;color:var(--primary);border:1px solid var(--border)}
 .publishzone .btn.locked{background:#fdeceb;color:#a3121f;border-color:#f0cfcf;font-weight:600}
 body.toolbar-collapsed .cmdbar{border-radius:10px}
-body.fs-on #program .controls{position:sticky;top:0;z-index:40;background:var(--bg);padding:4px 0 8px}
 @media(max-width:820px){.cmdbar .cmd-right{margin-left:0}.menubar{gap:4px}}
 
 /* === Turne bloğu düzeltmeleri (yol günü, boş gün, kenar çizgileri) === */
@@ -769,11 +824,19 @@ table.sheet td.cell.tour-mid{
     <button type="button" id="cbFocus" aria-pressed="false" title="Sadece çakışmaları öne çıkar (diğer hücreler soluklaşır)">Çakışma odağı</button>
   </div>
 
+  <div class="conflict-bar note-bar" id="noteBar" role="status" aria-live="polite">
+    <span class="cb-count" id="nbCount">📝 Not taranıyor…</span>
+    <span id="nbDetail"></span>
+    <span class="cb-spacer"></span>
+    <button type="button" id="nbPrev" title="Önceki nota git (Shift+F7)">&#9650; Önceki not</button>
+    <button type="button" id="nbNext" title="Sonraki nota git (F7)">&#9660; Sonraki not</button>
+  </div>
+
   <div class="tbl-wrap"><table class="sheet" id="sheet" role="grid" aria-label="Aylık tiyatro programı"></table></div>
   <details class="shortcuts">
     <summary>Kısayollar ve ipuçları</summary>
     <div class="sc-body">
-      Tıkla → seç · Shift+Tıkla → aralık · Çift tıkla → yaz · Enter/Esc · Delete → temizle · Ctrl+C/V · Ctrl+Z/Y · Sağ tık → menü · <b>F4</b> → bilgi balonunu hücreye sabitle/kaldır · <b>F9</b> → bilgi balonu sistemini tamamen aç/kapat · F8 → sonraki çakışma · Oyunun üzerine gel → çakışma bilgisi · <b>Serbest metin ✎</b> → hücreyi oyun sayma (il adı, açıklama, not) · Onay bekleyen metnin üzerine gel → tooltipten doğrudan <b>Oyun olarak ekle / Serbest metin yap / Oyun değil</b> · <b>Not ekle</b> → oyunun yanına not · <b>🏷 Kategori</b> → notu sınıflandır (İl, Sahne, Turne, Prova, Tatil, Duyuru) · Satırı tam seçip (sıra no'ya tıkla) <b>Zemin rengi</b> uygula → soldaki sıra no hücresi de boyanır
+      Tıkla → seç · Shift+Tıkla → aralık · Çift tıkla → yaz · Enter/Esc · Delete → temizle · Ctrl+C/V · Ctrl+Z/Y · Sağ tık → menü · <b>F4</b> → bilgi balonunu hücreye sabitle/kaldır · <b>F9</b> → bilgi balonu sistemini tamamen aç/kapat · F8 → sonraki çakışma · F7 → sonraki not (Shift+F7 → önceki not) · Oyunun üzerine gel → çakışma bilgisi · <b>Serbest metin ✎</b> → hücreyi oyun sayma (il adı, açıklama, not) · Onay bekleyen metnin üzerine gel → tooltipten doğrudan <b>Oyun olarak ekle / Serbest metin yap / Oyun değil</b> · <b>Not ekle</b> → oyunun yanına not · <b>🏷 Kategori</b> → notu sınıflandır (İl, Sahne, Turne, Prova, Tatil, Duyuru) · Satırı tam seçip (sıra no'ya tıkla) <b>Zemin rengi</b> uygula → soldaki sıra no hücresi de boyanır · <b>Kısmi yazı boyama:</b> hücrede metnin bir kısmını fareyle seçip sağ tık → <b>Yazı Rengi</b> (veya düzenleme sırasında Biçim → Yazı rengi…) → sadece seçili kısım renklenir
     </div>
   </details>
 </section>
@@ -816,6 +879,13 @@ table.sheet td.cell.tour-mid{
   <div class="controls">
     <b style="font-size:13px;color:var(--muted)">Hücrelere yazılan tüm notlar ve serbest metinler otomatik olarak burada toplanır. Notlar oyun sayımını etkilemez.</b>
   </div>
+  <div class="controls">
+    <input type="search" id="notesSearch" aria-label="Notlarda ara" placeholder="Notlarda ara… (metin, oyun, tarih, sahne)" style="min-width:280px">
+    <select id="notesMonthFilter" aria-label="Aya göre filtrele" style="min-width:160px">
+      <option value="">Tüm aylar</option>
+    </select>
+    <span id="notesFilterCount" style="color:var(--muted);font-size:12px;margin-left:auto"></span>
+  </div>
   <div class="pl-free" id="plFree"></div>
   <div id="notesList"></div>
   <div style="margin-top:14px;background:#fff;border:1px solid var(--border);border-radius:8px;padding:10px">
@@ -845,8 +915,10 @@ table.sheet td.cell.tour-mid{
 </main>
 
 <div id="printView"></div>
+<button class="fs-bars-toggle" id="fsBarsToggle" title="Başlık, çakışma ve not şeritlerini göster/gizle">☰ Bilgiler</button>
 <button class="fs-exit" id="fsExit">⤫ Tam ekrandan çık (Esc)</button>
 <div id="tooltip" role="tooltip" aria-live="polite" aria-label="Hücre bilgisi" tabindex="-1"></div>
+<div id="tooltipArrow" aria-hidden="true"></div>
 <div id="ctxmenu" class="ctxmenu"></div>
 <div id="siteToast" class="site-toast" role="status" aria-live="polite"></div>
 
@@ -1268,14 +1340,14 @@ function utf8ToB64(text){
    kaymışsa) sheet yeniden taze okunup kalan eşleşen satırlar bulunarak
    tekrar denenir. Böylece geçici uyumsuzluklarda kullanıcıya "eski yayın
    temizlenemedi" hatası göstermek yerine işlem kendi kendine toparlanır. */
-async function deleteRowsByPrefixes(prefixes, actionLabel){
+async function deleteRowsByPrefixes(prefixes, actionLabel, keepId){
   const MAX_ATTEMPTS = 3;
   for(let attempt=1; attempt<=MAX_ATTEMPTS; attempt++){
     const res = await fetch(PUBLISH_API + '/' + encodeURIComponent(PUBLISH_SHEET) + '?fresh=1', {cache:'no-store'});
     const data = res.ok ? await res.json() : {rows:[]};
     const rows = (data.rows || [])
       .map((r,i)=>({r,i}))
-      .filter(x=>prefixes.some(p=>String(x.r[0]||'').startsWith(p)))
+      .filter(x=>prefixes.some(p=>String(x.r[0]||'').startsWith(p)) && String(x.r[0]||'')!==keepId)
       .sort((a,b)=>b.i-a.i);
     if(!rows.length) return; /* silinecek bir şey kalmadı */
     let failed = false;
@@ -1321,16 +1393,20 @@ async function publishProgram(){
       playsArchived: state.playsArchived || [],
       generalNotes: state.generalNotes || '',
       playNotes: state.playNotes || {},
-      playFreeNotes: state.playFreeNotes || {}
+      playFreeNotes: state.playFreeNotes || {},
+      monthLocked: true
     });
     const encoded = utf8ToB64(payload);
     const ts = Date.now();
     const version = 'apub_' + slug + '_' + ts;
-    /* Aynı ayın hem eski "kesinleştirilmiş" hem de bekleyen "taslak" satırları
-       tek seferde, taze veri okunarak ve gerekirse tekrar denenerek silinir. */
     const prefixPub = 'apub_' + slug + '_';
     const prefixDraft = DRAFT_PREFIX + slug + '_';
-    await deleteRowsByPrefixes([prefixPub, prefixDraft], 'Eski yayın');
+    /* ÖNEMLİ (veri kaybını önleme): eski yayın/taslak satırları ÖNCE
+       SİLİNMEZ. Önce yeni veri eksiksiz yazılır ve doğrulanır; yalnızca
+       bu başarılı olduktan SONRA eski satırlar silinir. Böylece yazma
+       sırasında bir kesinti olursa sunucudaki önceki (dolu) sürüm olduğu
+       gibi kalır — kesinleştirme asla hem eski hem yeni veriyi aynı anda
+       kaybetmez. */
     const parts = [];
     for(let i=0;i<encoded.length;i+=PUBLISH_CHUNK) parts.push(encoded.slice(i,i+PUBLISH_CHUNK));
     for(let i=0;i<parts.length;i++){
@@ -1341,6 +1417,11 @@ async function publishProgram(){
       });
       if(!res.ok) throw new Error('Yayın yazılamadı (HTTP '+res.status+')');
     }
+    /* Yeni yayın tam olarak yazıldı — şimdi eski yayın/taslak satırlarını
+       güvenle temizleyebiliriz. Bu adım başarısız olsa bile önemli değil:
+       yeni yayın zaten sunucuda tam olarak duruyor. */
+    try{ await deleteRowsByPrefixes([prefixPub, prefixDraft], 'Eski yayın', version); }
+    catch(e){ /* eski kayıtların temizlenememesi kritik değil, sessizce geç */ }
     state.monthPub = state.monthPub || {};
     state.monthPub[m.name] = {publishedAt: ts, unpublishedAt: null};
     /* Kesinleştirilen sürüm artık esastır; aynı zaman damgasını taslak
@@ -1398,21 +1479,19 @@ async function pushDraft(){
       playsArchived: state.playsArchived || [],
       generalNotes: state.generalNotes || '',
       playNotes: state.playNotes || {},
-      playFreeNotes: state.playFreeNotes || {}
+      playFreeNotes: state.playFreeNotes || {},
+      monthLocked: isMonthLocked(m.name)
     });
     const encoded = utf8ToB64(payload);
     const ts = Date.now();
     const version = DRAFT_PREFIX + slug + '_' + ts;
-    const old = await fetch(PUBLISH_API + '/' + encodeURIComponent(PUBLISH_SHEET), {cache:'no-store'});
-    const oldData = old.ok ? await old.json() : {rows:[]};
     const prefix = DRAFT_PREFIX + slug + '_';
-    const oldRows = (oldData.rows || [])
-      .map((r,i)=>({r,i}))
-      .filter(x=>String(x.r[0]||'').startsWith(prefix))
-      .sort((a,b)=>b.i-a.i);
-    for(const item of oldRows){
-      await fetch(PUBLISH_API + '/' + encodeURIComponent(PUBLISH_SHEET) + '/row/' + item.i, {method:'DELETE'});
-    }
+    /* ÖNEMLİ (veri kaybını önleme): eski taslak satırları ÖNCE SİLİNMEZ.
+       Önce yeni veri eksiksiz yazılır ve doğrulanır; yalnızca bu başarılı
+       olduktan SONRA eski (artık gereksiz) satırlar silinir. Böylece yazma
+       sırasında bağlantı kopması/sekme kapanması gibi bir kesinti olursa,
+       sunucudaki önceki (dolu) taslak olduğu gibi kalır — hiçbir zaman hem
+       eski hem yeni veri aynı anda kaybolmaz. */
     const parts = [];
     for(let i=0;i<encoded.length;i+=PUBLISH_CHUNK) parts.push(encoded.slice(i,i+PUBLISH_CHUNK));
     for(let i=0;i<parts.length;i++){
@@ -1423,6 +1502,21 @@ async function pushDraft(){
       });
       if(!res.ok) throw new Error('Taslak yazılamadı (HTTP '+res.status+')');
     }
+    /* Yeni taslak tam olarak yazıldı — şimdi eskisini (varsa) sunucudan
+       güvenle temizleyebiliriz. Bu adım başarısız olsa bile önemli değil:
+       yeni taslak zaten sunucuda tam olarak duruyor, eski satırlar sadece
+       fazladan yer kaplar, veri kaybına yol açmaz. */
+    try{
+      const old = await fetch(PUBLISH_API + '/' + encodeURIComponent(PUBLISH_SHEET), {cache:'no-store'});
+      const oldData = old.ok ? await old.json() : {rows:[]};
+      const oldRows = (oldData.rows || [])
+        .map((r,i)=>({r,i}))
+        .filter(x=>String(x.r[0]||'').startsWith(prefix) && String(x.r[0]||'')!==version)
+        .sort((a,b)=>b.i-a.i);
+      for(const item of oldRows){
+        await fetch(PUBLISH_API + '/' + encodeURIComponent(PUBLISH_SHEET) + '/row/' + item.i, {method:'DELETE'});
+      }
+    }catch(e){ /* eski satırların temizlenememesi kritik değil, sessizce geç */ }
     state.monthDraft = state.monthDraft || {};
     state.monthDraft[m.name] = {draftAt: ts};
     /* localStorage'a doğrudan yaz — saveState() burada çağrılırsa yeni bir
@@ -1521,6 +1615,8 @@ async function syncFromServer(){
     const idx = state.months.findIndex(mo=>mo.name===name);
     if(idx>=0) state.months[idx] = normalized; else state.months.push(normalized);
     state.monthPub[name] = {publishedAt: ts, unpublishedAt: null};
+    state.monthLocked = state.monthLocked || {};
+    if(typeof data.monthLocked === 'boolean'){ if(data.monthLocked) state.monthLocked[name] = true; else delete state.monthLocked[name]; }
     { const ign = new Set(state.playsIgnored||[]);
       if(Array.isArray(data.plays)) state.plays = data.plays.filter(p=>!ign.has(p));
       if(Array.isArray(data.playsExtra)) state.playsExtra = data.playsExtra.filter(p=>!ign.has(p)); }
@@ -1639,6 +1735,8 @@ async function syncDraftFromServer(){
     const idx = state.months.findIndex(mo=>mo.name===name);
     if(idx>=0) state.months[idx] = normalized; else state.months.push(normalized);
     state.monthDraft[name] = {draftAt: ts};
+    state.monthLocked = state.monthLocked || {};
+    if(typeof data.monthLocked === 'boolean'){ if(data.monthLocked) state.monthLocked[name] = true; else delete state.monthLocked[name]; }
     { const ign = new Set(state.playsIgnored||[]);
       if(Array.isArray(data.plays)) state.plays = data.plays.filter(p=>!ign.has(p));
       if(Array.isArray(data.playsExtra)) state.playsExtra = data.playsExtra.filter(p=>!ign.has(p)); }
@@ -1891,6 +1989,120 @@ function cellStyleString(cell){
   if(cell.align) parts.push('text-align:'+cell.align);
   return parts.join(';');
 }
+/* === Hücre metninin SADECE BİR KISMINI renklendirme (kısmi/parçalı renk) ===
+   cell.colorRanges: [{s,e,color}, ...] — s/e, ekranda görünen metindeki (cellDisplayText)
+   karakter aralığı. Metin değiştiğinde aralıklar geçersiz olabileceğinden,
+   hücre metni (v) değişince colorRanges temizlenir (bkz. startEdit/commit). */
+function cellRichHtml(cell){
+  const text = cellDisplayText(cell);
+  const ranges = (cell && cell.colorRanges || [])
+    .filter(r=>r && r.e>r.s && r.s>=0 && r.e<=text.length && r.color)
+    .slice().sort((a,b)=>a.s-b.s);
+  if(!ranges.length) return null;
+  let out='', pos=0;
+  for(const r of ranges){
+    if(r.s>pos) out += escapeHtml(text.slice(pos, r.s));
+    if(r.s<pos) continue; /* çakışan aralık — atla, ilkini koru */
+    out += '<span style="color:'+escapeHtml(r.color)+'">'+escapeHtml(text.slice(r.s, r.e))+'</span>';
+    pos = r.e;
+  }
+  if(pos<text.length) out += escapeHtml(text.slice(pos));
+  return out;
+}
+function addColorRange(mi, key, start, end, color){
+  const m = state.months[mi]; if(!m) return;
+  const cell = {...(m.cells[key]||{v:''})};
+  const prev = (cell.colorRanges||[]);
+  const next = [];
+  for(const r of prev){
+    if(r.e<=start || r.s>=end){ next.push(r); continue; }
+    if(r.s<start) next.push({s:r.s, e:start, color:r.color});
+    if(r.e>end) next.push({s:end, e:r.e, color:r.color});
+  }
+  next.push({s:start, e:end, color});
+  next.sort((a,b)=>a.s-b.s);
+  cell.colorRanges = next;
+  m.cells[key] = cell;
+}
+/* Aktif düzenleme oturumundaki (varsa) fare/klavye ile seçilmiş METİN aralığını verir.
+   Program hücreleri <input>, diğerleri contentEditable <td> ile düzenlenir; ikisi de desteklenir. */
+let __editCtx = null;
+function getEditSelection(){
+  if(!__editCtx) return null;
+  if(__editCtx.type==='input'){
+    const el = __editCtx.input;
+    if(!el || !el.isConnected || el.selectionStart==null) return null;
+    const s=el.selectionStart, e=el.selectionEnd;
+    if(s===e) return null;
+    return {...__editCtx, start:s, end:e, text:el.value};
+  }
+  const td = __editCtx.td;
+  if(!td || !td.isConnected) return null;
+  const sel0 = window.getSelection();
+  if(!sel0 || !sel0.rangeCount) return null;
+  const range = sel0.getRangeAt(0);
+  if(range.collapsed || !td.contains(range.commonAncestorContainer)) return null;
+  const full = td.textContent;
+  const preRange = document.createRange();
+  preRange.selectNodeContents(td);
+  preRange.setEnd(range.startContainer, range.startOffset);
+  const start = preRange.toString().length;
+  const end = start + range.toString().length;
+  if(start===end) return null;
+  return {...__editCtx, start, end, text:full};
+}
+/* === DÜZENLEME MODUNA HİÇ GİRMEDEN de kısmi renklendirme yapılabilsin diye:
+   hücre normal (düzenlenmeyen) haldeyken bile, kullanıcı üzerindeki metni
+   fare ile (çift tıklama veya sürükleyerek) normal biçimde seçip sağ
+   tıklarsa, o seçimi oku. Tarayıcılar bir seçimin İÇİNDE sağ tıklandığında
+   seçimi bozmaz (dışında tıklanırsa imleç oraya taşınır/seçim bozulur —
+   bu native davranıştır). Öncelik aktif düzenleme oturumuna (getEditSelection),
+   yoksa bu düz seçime verilir. */
+function getPlainCellSelection(td){
+  if(!td) return null;
+  const r = +td.dataset.r, c = +td.dataset.c;
+  if(Number.isNaN(r) || Number.isNaN(c)) return null;
+  const sel0 = window.getSelection();
+  if(!sel0 || !sel0.rangeCount || sel0.isCollapsed) return null;
+  const range = sel0.getRangeAt(0);
+  if(!td.contains(range.commonAncestorContainer)) return null;
+  const full = td.textContent;
+  const preRange = document.createRange();
+  preRange.selectNodeContents(td);
+  preRange.setEnd(range.startContainer, range.startOffset);
+  const start = preRange.toString().length;
+  const end = start + range.toString().length;
+  if(start===end) return null;
+  return {mi: state.activeIdx, r, c, start, end, text: full};
+}
+function getPartialColorSelection(td){
+  return getEditSelection() || getPlainCellSelection(td);
+}
+/* getPlainCellSelection için hücreyi (td) bilmek gerekir; düzenleme dışı
+   serbest metin seçiminde hangi hücrede olduğumuzu geçerli seçimin
+   (window.getSelection) içinde bulunduğu en yakın td.cell'den buluyoruz. */
+function getPlainCellSelectionAny(){
+  const sel0 = window.getSelection();
+  if(!sel0 || !sel0.rangeCount || sel0.isCollapsed) return null;
+  const node = sel0.getRangeAt(0).commonAncestorContainer;
+  const el = node.nodeType===1 ? node : node.parentElement;
+  const td = el && el.closest ? el.closest('#sheet td.cell') : null;
+  return td ? getPlainCellSelection(td) : null;
+}
+/* Sağ tık menüsü açılana kadar (contextmenu olayı ateşlenene dek) tarayıcı
+   bazı durumlarda seçimi çoktan boşaltmış olabiliyor (sağ tık native
+   davranışı tutarsız). Bunu önlemek için geçerli metin seçimini SÜREKLİ
+   (fare/klavye ile her değiştiğinde) burada önbelleğe alıyoruz; contextmenu
+   anında canlı seçim boşsa bu önbellek kullanılıyor (bkz. td 'contextmenu'
+   handler'ı). Önbellek yalnızca aynı hücrede (mi/r/c eşleşmesi) ve yakın
+   zamanda (bkz. CTX_SEL_MAX_AGE_MS) yakalanmışsa geçerli sayılır. */
+let _lastTextSel = null;
+const CTX_SEL_MAX_AGE_MS = 4000;
+function captureCurrentSelection(){
+  const s = getEditSelection() || getPlainCellSelectionAny();
+  if(s) _lastTextSel = {...s, ts: Date.now()};
+}
+document.addEventListener('selectionchange', captureCurrentSelection);
 function stageHeaderText(m,c){
   const v = (m.cells['1_'+c]||{}).v || '';
   return v.toLocaleUpperCase('tr');
@@ -2156,28 +2368,42 @@ function gamesOfRow(m,r){
   for(const c of programCols(m)){
     const cellObj = m.cells[r+'_'+c] || {};
     const raw = cellObj.v || '';
-    if(!raw){
-      /* Boş dönüş günü hücresi: bağlı olduğu turnenin oyununu devralır,
-         böylece o gün aynı oyun/ortak kadro başka sahneye yazılırsa çakışır. */
-      if(cellObj.tourReturn){
-        const info = tourAt(m,r,c);
-        let src='';
-        if(info && info.g){
-          const prev = info.g.members.filter(x=>x.r<r && x.cell && String(x.cell.v||'').trim());
-          if(prev.length) src = prev[prev.length-1].cell.v;
-        }
-        const pk = parseGame(src).key;
-        if(pk) out.push({raw:src, key:pk, isPremiere:false, col:c, row:r, time:gameTimeOf(m,r,''), isReturn:true, virtual:true, ckey:pk+' ↩dönüş'});
+    if(cellObj.tourReturn){
+      /* Dönüş günü hücresi: bağlı olduğu turnenin oyununu devralır, böylece
+         o gün aynı oyun/ortak kadro başka sahneye yazılırsa çakışır.
+         Bu çözüm hücre BOŞ olsa da, kullanıcı hücreye elle bir etiket
+         yazmış olsa da (ör. "MEDEA-TURNE DÖNÜŞ GÜNÜ") aynı şekilde
+         uygulanır: yazılan metin yalnızca görünen bir etikettir, çakışma
+         anahtarı olarak kullanılmaz — aksi halde parseGame(raw) o metni
+         gerçek oyun adıyla eşleşmeyen bambaşka bir anahtara çevirip
+         kadro çakışmasının hiç görünmemesine yol açar. */
+      const info = tourAt(m,r,c);
+      let src='';
+      if(info && info.g){
+        const prev = info.g.members.filter(x=>x.r<r && x.cell && String(x.cell.v||'').trim());
+        if(prev.length) src = prev[prev.length-1].cell.v;
+        /* Ay sınırını aşan (carried) turnede, bu ayın ilk günlerinde
+           members bu ay için henüz boş olabilir (önceki ayın oyun
+           kayıtları bu ayın grubuna taşınmaz) — bu durumda önceki aydan
+           taşınan SON OYUN adını (carriedLastPlay) kullan; eskiden burada
+           doğrudan turne başlığına (şehir/sahne adı, ör. "Aydın")
+           düşülüyordu, bu da o günü yanlış "oyuna" bağlayıp çakışmanın
+           hiç görünmemesine yol açıyordu. Gerçekten hiç oyun girilmemişse
+           (yalnızca şehir başlığı varsa) yine başlığa düş. */
+        else if(info.g.carried) src = info.g.carriedLastPlay || info.g.headText || '';
       }
+      let pk = parseGame(src).key;
+      if(!pk && raw) pk = parseGame(raw).key; /* turne bilgisi çözülemezse yazılan metne düş */
+      if(pk) out.push({raw:(raw||src), key:pk, isPremiere:false, col:c, row:r, time:gameTimeOf(m,r,raw), isReturn:true, virtual:!raw, ckey:pk+' ↩dönüş'});
       continue;
     }
+    if(!raw) continue;
     if(isPremiereLabel(raw)) continue;
     if(isFreeTextCell(cellObj)) continue;   /* serbest metin/not: oyun sayılmaz */
     if(isArchiveCell(cellObj)) continue;    /* arşiv oyun: çakışma denetimine girmez */
     const {key, isPremiere} = parseGame(raw);
     if(!key) continue;
-    const isReturn = !!cellObj.tourReturn;
-    out.push({raw, key, isPremiere, col:c, row:r, time:gameTimeOf(m,r,raw), isReturn, ckey:(isReturn? key+' ↩dönüş' : key)});
+    out.push({raw, key, isPremiere, col:c, row:r, time:gameTimeOf(m,r,raw), isReturn:false, ckey:key});
   }
   return out;
 }
@@ -2248,6 +2474,50 @@ function buildConflict(games){
 
 /* === Render === */
 /* === Turne grupları: şehir/kurum başlığı + altındaki oyunlar === */
+/* Ay sınırını aşan turneler: bir turne bir ayın son günlerinde yola çıkıp
+   bir sonraki ayın ilk günlerinde dönebilir (ör. 30 Eylül'de çıkış, 1 Ekim'de
+   dönüş). Aylar birbirinden bağımsız state.months nesneleri olduğundan,
+   computeTours() tek başına bunu göremez; bu yüzden yeni ayın hesaplamasına
+   başlamadan önce bir önceki ayın aynı TURNE sütununda "açık kalmış" (dönüş
+   günü hâlâ işaretlenmemiş) bir turne olup olmadığına bakılır. */
+function prevMonthOf(m){
+  const order = sortedMonthIdx();
+  const pos = order.findIndex(i => state.months[i] === m);
+  if(pos <= 0) return null;
+  return state.months[order[pos-1]];
+}
+function tourCarryFromPrev(m, c){
+  const pm = prevMonthOf(m);
+  if(!pm) return null;
+  const pt = computeTours(pm);
+  const lastRow = pm.rows - 1;
+  const isOpenAtMonthEnd = g => {
+    if(g.returnKey) return false; /* zaten o ayda kapanmışsa taşınmaz */
+    const rows = g.members.map(x=>x.r);
+    const gLast = Math.max(g.headRow!=null?g.headRow:-Infinity, rows.length?Math.max.apply(null,rows):-Infinity);
+    return gLast === lastRow;
+  };
+  /* Grubun (bu ayda veya kendisi de bir önceki aydan taşınmışsa zincirleme
+     olarak önceki ayda) en son GERÇEK oyun adını bul — sadece turne
+     başlığını (şehir/sahne adı) değil. Ay sınırını aşan turnelerde bu,
+     boş dönüş günü hücresinin doğru oyun adına çözülebilmesi için gerekli
+     (bkz. gamesOfRow). */
+  const lastPlayOf = g=>{
+    const withText = g.members.filter(x=>x.cell && String(x.cell.v||'').trim());
+    if(withText.length) return withText[withText.length-1].cell.v;
+    if(g.carried) return g.carriedLastPlay || '';
+    return '';
+  };
+  /* Önce aynı TURNE sütunu tercih edilir, ama sütunlar birbirinin yerine
+     kullanılabilen genel "hat"lar olduğundan (turne bu ay F'de, gelecek ay
+     G'de dönebilir), bulunamazsa önceki ayda açık kalan HERHANGİ bir turne
+     de kabul edilir. */
+  const sameCol = pt.groups.find(g => g.col===c && isOpenAtMonthEnd(g));
+  if(sameCol) return {headText:sameCol.headText, id:sameCol.id, lastPlay:lastPlayOf(sameCol)};
+  const anyCol = pt.groups.find(g => isOpenAtMonthEnd(g));
+  if(anyCol) return {headText:anyCol.headText, id:anyCol.id, lastPlay:lastPlayOf(anyCol)};
+  return null;
+}
 function tourColsOf(m){ return programCols(m).filter(c=>stageHeaderText(m,c).includes('TURNE')); }
 function isTourHeadCell(cell){
   if(!cell || !cell.v) return false;
@@ -2260,6 +2530,12 @@ function computeTours(m){
   const map={}, byId={}, groups=[];
   tourColsOf(m).forEach(c=>{
     let cur=null, gap=[];
+    const carry = tourCarryFromPrev(m, c);
+    if(carry){
+      cur = {id:'carry_'+carry.id, col:c, headKey:null, headRow:null, headText:carry.headText,
+             members:[], returnKey:null, locked:false, carried:true, carriedLastPlay:carry.lastPlay||''};
+      groups.push(cur); byId[cur.id]=cur;
+    }
     for(let r=2;r<m.rows;r++){
       const k=r+'_'+c, cell=m.cells[k];
       const v=(cell&&cell.v)?String(cell.v).trim():'';
@@ -2285,12 +2561,17 @@ function computeTours(m){
         }
         continue;
       }
-      if(isTourHeadCell(cell)){
+      if(isTourHeadCell(cell) && (cell.tourHead || !cur)){
         gap=[];
         cur={id:(cell.tourId||('auto_'+c+'_'+r)), col:c, headKey:k, headRow:r, headText:v, members:[], returnKey:null, locked:!!cell.tourId};
         groups.push(cur); byId[cur.id]=cur; map[k]={g:cur,role:'head'};
         continue;
       }
+      /* Aktif bir turne zaten sürüyorken girilen serbest metin (ör. "DEKOR
+         KURULUMU" gibi bir not) yeni turne başlığı saymaz: turnenin kimliği
+         (headText) değişmeden, bu hücre mevcut turnenin bir üyesi/notu olarak
+         eklenir. Böylece ay sonunda bir sonraki aya "dönüş günü" için doğru
+         oyun/turne adı taşınır. */
       if(cur){
         /* tampondaki boş günleri de bloğa dahil et (çizgiler kesilmesin) */
         gap.forEach(gp=>{ cur.members.push({...gp, gap:true}); map[gp.key]={g:cur,role:'member',gap:true}; });
@@ -2392,7 +2673,8 @@ function renderSheet(){
       if(c===0 || c===m.cols-1) td.classList.add('dateCol');
       const cell = m.cells[r+'_'+c] || {};
       td.setAttribute('aria-label',(r+1)+'. satır '+colName(c)+' sütunu'+(cellDisplayText(cell)?': '+cellDisplayText(cell):': boş'));
-      td.textContent = cellDisplayText(cell);
+      const _rich = cellRichHtml(cell);
+      if(_rich!==null) td.innerHTML = _rich; else td.textContent = cellDisplayText(cell);
       if(cell.premiere) td.classList.add('premiere');
       if(cell.underline) td.classList.add('uline');
       // Otomatik prömiyer (* ile başlayan)
@@ -2444,6 +2726,33 @@ function renderSheet(){
   }
   paintSel();
   if(window.refreshConflictBar) window.refreshConflictBar();
+  if(window.refreshNoteBar) window.refreshNoteBar();
+  applyStickyHeads();
+}
+/* İlk üç satırı (sütun harfleri, ay başlığı, sahne adları satırı) tablonun
+   üstüne sabitler. Satır yükseklikleri aya göre değişebildiği için üst
+   mesafeler her çizimde ölçülerek verilir. */
+function applyStickyHeads(){
+  const t=document.getElementById('sheet');
+  if(!t) return;
+  const rows=t.rows;
+  let top=0;
+  for(let i=0;i<rows.length;i++){
+    const tr=rows[i];
+    const pin = i<3;
+    for(const td of tr.cells){
+      if(pin){
+        td.classList.add('stickR');
+        td.style.top=top+'px';
+        td.style.zIndex=(i===0? 12 : 11-i);
+      } else {
+        td.classList.remove('stickR');
+        td.style.top='';
+        td.style.zIndex='';
+      }
+    }
+    if(pin) top += tr.offsetHeight;
+  }
 }
 function colName(c){ let s=''; c++; while(c){ s=String.fromCharCode(65+(c-1)%26)+s; c=Math.floor((c-1)/26);} return s; }
 
@@ -2451,8 +2760,16 @@ function wireCell(td){
   td.addEventListener('mousedown', e=>{
     if(td.isContentEditable) return;
     if(e.target !== td) return; /* hücre içinde düzenleme kutusu (input/datalist) varsa seçim/preventDefault mantığını tetikleme */
-    const r=+td.dataset.r, c=+td.dataset.c;
     if(e.button !== 0) return;
+    if(e.altKey){
+      /* Alt+sürükle: hücre aralığı seçimine girmeden tarayıcının doğal
+         METİN seçimine izin ver (kısmi renklendirme sağ tık menüsü için).
+         preventDefault YOK ki fare sürüklemesi native seçim yapabilsin;
+         dragSelecting da başlatılmıyor ki mouseenter hücre aralığını
+         seçime çevirmesin. */
+      return;
+    }
+    const r=+td.dataset.r, c=+td.dataset.c;
     /* click handlerının "zaten seçiliydi mi" kararını verebilmesi için,
        seçim mousedown'da değişmeden ÖNCEKİ durumu sakla */
     td._wasSoleSelected = (sel.r1===r && sel.c1===c && sel.r2===r && sel.c2===c);
@@ -2477,6 +2794,7 @@ function wireCell(td){
      yani hücrenin içine ayrıca girmeye gerek kalmadan yazabilirsin. */
   td.addEventListener('click', e=>{
     if(td.isContentEditable || e.target !== td) return;
+    if(e.altKey) return; /* Alt+sürükle native metin seçimiydi, hücre seçimini/düzenlemeyi tetikleme */
     const r=+td.dataset.r, c=+td.dataset.c;
     if(e.shiftKey || e.ctrlKey || e.metaKey || dragMoved){ setSel(r,c,r,c); return; }
     const wasSoleSelected = td._wasSoleSelected;
@@ -2486,7 +2804,24 @@ function wireCell(td){
   });
   td.addEventListener('contextmenu', e=>{
     e.preventDefault();
+    /* Menü açılıp herhangi bir düğmeye tıklanınca hücre odağı kaybolup
+       (blur) düzenleme kapanacağı için, o an fare ile seçili olan metin
+       aralığını (varsa) HEMEN burada, her şey değişmeden önce yakala.
+       Hücre düzenleme kipinde DEĞİLSE de, kullanıcı normal şekilde
+       (düzenlemeye girmeden) metnin bir kısmını seçmiş olabilir —
+       getPartialColorSelection ikisini de dener. */
     const r=+td.dataset.r, c=+td.dataset.c;
+    let fgSel = getPartialColorSelection(td);
+    /* Canlı seçim boşsa (tarayıcı sağ tıkta seçimi zaten temizlemiş olabilir)
+       aynı hücrede yakın zamanda yakalanmış önbelleğe düş. */
+    if(!fgSel){
+      const cached = _lastTextSel;
+      if(cached && cached.end>cached.start && cached.mi===state.activeIdx &&
+         cached.r===r && cached.c===c && (Date.now()-cached.ts)<CTX_SEL_MAX_AGE_MS){
+        fgSel = cached;
+      }
+    }
+    _pendingCtxFgSel = fgSel;
     if(!inSel(r,c)) setSel(r,c,r,c);
     window.__ttPin=null;
     document.getElementById('tooltip').style.display='none';
@@ -2498,22 +2833,43 @@ function wireCell(td){
     const tid=td.dataset.tour;
     document.querySelectorAll('#sheet td.tour-hl').forEach(x=>x.classList.remove('tour-hl'));
     if(tid) document.querySelectorAll('#sheet td[data-tour="'+tid+'"]').forEach(x=>x.classList.add('tour-hl'));
-    showTooltipFor(r,c,e);
+    scheduleTooltipShow(r,c,e);
   });
   /* Fare aynı hücrede gezerken bir şey yapma; başka hücreye geçildiğinde
      (mouseenter kaçırılmış olsa bile) tooltip'i tazele — donmayı engeller. */
   td.addEventListener('mousemove', e=>{
     const key=td.dataset.r+'_'+td.dataset.c;
-    if(window.__ttKey!==key) showTooltipFor(+td.dataset.r,+td.dataset.c,e);
+    if(window.__ttKey!==key){ scheduleTooltipShow(+td.dataset.r,+td.dataset.c,e); return; }
+    /* Aynı hücrede fare sola/sağa kayarsa balon da o yöne dönsün — içeriği
+       yeniden kurmadan, sadece konumu güncelle (ucuz ve titremesiz). */
+    const ttNow=document.getElementById('tooltip');
+    if(ttNow && ttNow.style.display==='block' && !window.__ttPin){
+      window.__ttMouseX = e.clientX;
+      placeTooltip();
+    }
   });
   td.addEventListener('mouseleave',()=>{
     document.querySelectorAll('#sheet td.tour-hl').forEach(x=>x.classList.remove('tour-hl'));
+    cancelTooltipShow();
     scheduleTooltipHide();
   });
 }
 document.addEventListener('mouseup', ()=>{ dragSelecting=false; });
 
 let ttHideTimer=null;
+let ttShowTimer=null;
+function cancelTooltipShow(){ clearTimeout(ttShowTimer); ttShowTimer=null; }
+/* Hücreler sık ve alt alta dizilmişken, açık bir tooltip'e (kaydırmak/kopyalamak
+   için) ulaşmaya çalışırken fare aradaki başka hücrelerin üzerinden geçebiliyor
+   ve her biri ANINDA tooltip içeriğini değiştirip asıl hedefe ulaşmayı
+   imkânsızlaştırıyordu. Artık hücreye girildiğinde tooltip anında değil, kısa
+   bir "niyet" gecikmesinden (90ms) sonra gösteriliyor: fare sadece geçiyorsa
+   (başka bir hücreye/tooltip'e doğru ilerliyorsa) bu hücrenin tooltip'i hiç
+   açılmıyor; gerçekten o hücrede durulduysa normal şekilde açılıyor. */
+function scheduleTooltipShow(r,c,ev){
+  cancelTooltipShow();
+  ttShowTimer=setTimeout(()=>{ ttShowTimer=null; showTooltipFor(r,c,ev); }, 90);
+}
 function hideTooltipNow(force){
   /* Balon bir hücreye sabitlenmişse (F4 ile pinlendiyse) sadece Esc veya
      tekrar F4 (force=true ile çağrılır) kapatabilir — fare kaydırma,
@@ -2522,11 +2878,24 @@ function hideTooltipNow(force){
   clearTimeout(ttHideTimer); ttHideTimer=null;
   const tt=document.getElementById('tooltip');
   if(tt){ tt.style.display='none'; tt.classList.remove('tt-pinned'); }
+  const arrow=document.getElementById('tooltipArrow');
+  if(arrow) arrow.style.display='none';
   window.__ttKey=null;
 }
 function scheduleTooltipHide(){
   clearTimeout(ttHideTimer);
-  ttHideTimer=setTimeout(hideTooltipNow, 260);
+  /* 260ms çok kısaydı: fareyi balona doğru taşırken (kaydırma/kopyalama
+     yapmak için) balon genelde varmadan kapanıyordu. 450ms daha rahat bir
+     geçiş payı bırakıyor. */
+  ttHideTimer=setTimeout(hideTooltipNow, 450);
+}
+/* Balonun içinde aktif bir metin seçimi varsa (kopyalamak için sürüklüyor
+   olabilir) — imleç balonun dışına çıksa bile balonu kapatma. */
+function tooltipHasSelection(){
+  const sel = window.getSelection && window.getSelection();
+  if(!sel || sel.isCollapsed) return false;
+  const tt = document.getElementById('tooltip');
+  return !!(tt && sel.anchorNode && tt.contains(sel.anchorNode));
 }
 function cancelTooltipHide(){ clearTimeout(ttHideTimer); ttHideTimer=null; }
 /* Tooltip'ten fareyle çıkıldığında (kaydırma/okuma bitince) imlecin GERÇEKTE
@@ -2593,14 +2962,27 @@ function initTooltipInteraction(){
     setStatus('Bilgi balonu bu hücreye sabitlendi — kapatmak için F4 veya Esc.');
   });
   tt.addEventListener('mouseenter', cancelTooltipHide);
-  tt.addEventListener('mouseleave', e=>{ resolveTooltipAt(e.clientX, e.clientY); });
+  tt.addEventListener('mouseleave', e=>{
+    if(tooltipHasSelection()) return; /* metin seçimi sürüyorsa kapatma */
+    resolveTooltipAt(e.clientX, e.clientY);
+  });
   tt.addEventListener('wheel', e=>{ e.stopPropagation(); }, {passive:true});
-  /* Güvenlik ağı: fare ne bir tablo hücresinde ne de tooltip üzerindeyse kapat. */
+  /* Güvenlik ağı: fare ne bir tablo hücresinde ne de tooltip üzerindeyse
+     kapatmayı planla. Eskiden imleç tooltip'in hemen dışına (ör. hücre
+     ile balon arasındaki boşluğa) her değdiğinde ANINDA kapanıyordu; bu da
+     balona ulaşıp içeriği kaydırmayı/kopyalamayı zorlaştırıyordu. Artık
+     balonun çevresinde küçük bir tolerans payı var ve kapama anında değil,
+     kısa bir gecikmeyle (scheduleTooltipHide) yapılıyor. */
   document.addEventListener('mousemove', e=>{
     if(tt.style.display!=='block') return;
     const t=e.target;
-    if(t && t.closest && (t.closest('#tooltip') || t.closest('#sheet td.cell'))) return;
-    hideTooltipNow();
+    if(t && t.closest && (t.closest('#tooltip') || t.closest('#sheet td.cell'))){ cancelTooltipHide(); return; }
+    if(tooltipHasSelection()) return;
+    const r = tt.getBoundingClientRect();
+    const buf = 28; /* balona doğru giderken küçük sapmalarda kapanmasın */
+    const near = e.clientX>=r.left-buf && e.clientX<=r.right+buf && e.clientY>=r.top-buf && e.clientY<=r.bottom+buf;
+    if(near){ cancelTooltipHide(); return; }
+    scheduleTooltipHide();
   }, true);
   tt.addEventListener('focusout', e=>{
     if(tt.contains(e.relatedTarget)) return;
@@ -2638,36 +3020,68 @@ function repositionPinnedTooltip(){
   const rc=td.getBoundingClientRect();
   const vw=window.innerWidth, vh=window.innerHeight;
   const visible = rc.bottom>0 && rc.top<vh && rc.right>0 && rc.left<vw;
-  if(!visible){ tt.style.display='none'; return; }
+  if(!visible){ tt.style.display='none'; const arrow=document.getElementById('tooltipArrow'); if(arrow) arrow.style.display='none'; return; }
   tt.style.display='block';
-  placeTooltip({clientX:rc.left+Math.min(60,rc.width/2), clientY:rc.bottom-4});
+  placeTooltip();
 }
-function placeTooltip(ev){
+/* Balonu, gösterildiği hücrenin (tt.dataset.r/c) GERÇEK dikdörtgenine göre
+   konumlandırır. Hücrenin ALTINA değil YANINA (sağına, sığmazsa soluna)
+   yerleştirilir — böylece balon o sütundaki alttaki satırları örtüp alanı
+   fazla kısıtlamaz; dikeyde hücrenin ortasına hizalanır, sığmazsa görünür
+   alana kaydırılır. Kuyruk, balonun hücreye bakan kenarına (sol ya da sağ)
+   hücrenin dikey ortasını gösterecek şekilde yerleştirilir. */
+function placeTooltip(){
   const tt=document.getElementById('tooltip');
   if(tt.style.display!=='block') return;
-  const pad=8, gap=14;
+  const pad=8, gap=12;
   const vw=window.innerWidth, vh=window.innerHeight;
-  const mx=(ev&&ev.clientX!=null)?ev.clientX:vw/2;
-  const my=(ev&&ev.clientY!=null)?ev.clientY:vh/2;
+  const cellTd=document.querySelector('#sheet td.cell[data-r="'+tt.dataset.r+'"][data-c="'+tt.dataset.c+'"]');
+  const cellRect=cellTd?cellTd.getBoundingClientRect():null;
+  const cellCY=cellRect?(cellRect.top+cellRect.height/2):vh/2;
+  const cellLeft=cellRect?cellRect.left:vw/2;
+  const cellRight=cellRect?cellRect.right:vw/2;
   /* ölç */
   tt.style.maxHeight=''; tt.style.left='-9999px'; tt.style.top='0px';
   let r=tt.getBoundingClientRect();
-  const below=vh-my-gap-pad, above=my-gap-pad;
-  let h=r.height, top;
-  if(h<=below){ top=my+gap; }
-  else if(h<=above){ top=my-gap-h; }
-  else{
-    /* hiçbir yöne sığmıyor: en geniş alana yerleştir, içeriği kaydırılabilir yap */
-    const avail=Math.max(140, Math.min(vh-2*pad, Math.max(below,above)));
-    tt.style.maxHeight=avail+'px';
-    r=tt.getBoundingClientRect(); h=r.height;
-    top = (below>=above) ? my+gap : my-gap-h;
-  }
+  let h=r.height, w=r.width;
+  if(h>vh-2*pad){ tt.style.maxHeight=(vh-2*pad)+'px'; r=tt.getBoundingClientRect(); h=r.height; }
+  let top=cellCY-h/2;
   top=Math.max(pad, Math.min(top, vh-pad-h));
-  let left=mx+16;
-  if(left+r.width>vw-pad) left=mx-16-r.width;
-  left=Math.max(pad, Math.min(left, vw-pad-r.width));
+  const spaceRight=vw-pad-cellRight-gap, spaceLeft=cellLeft-gap-pad;
+  /* Fare hücrenin sağ yarısındaysa önce sağı, sol yarısındaysa önce solu
+     dene — böylece balon fareyle aynı yöne açılır. Bilinen bir fare X
+     konumu yoksa (ör. klavye ile F4) sağ varsayılan olarak denenir. */
+  const cellCX=cellRect?(cellRect.left+cellRect.right)/2:vw/2;
+  const preferRight=(window.__ttMouseX==null) || (window.__ttMouseX>=cellCX);
+  let left, dir;
+  if(preferRight){
+    if(w<=spaceRight){ left=cellRight+gap; dir='left'; }
+    else if(w<=spaceLeft){ left=cellLeft-gap-w; dir='right'; }
+    else if(spaceRight>=spaceLeft){ left=Math.max(pad, Math.min(cellRight+gap, vw-pad-w)); dir='left'; }
+    else{ left=Math.max(pad, Math.min(cellLeft-gap-w, vw-pad-w)); dir='right'; }
+  } else {
+    if(w<=spaceLeft){ left=cellLeft-gap-w; dir='right'; }
+    else if(w<=spaceRight){ left=cellRight+gap; dir='left'; }
+    else if(spaceLeft>=spaceRight){ left=Math.max(pad, Math.min(cellLeft-gap-w, vw-pad-w)); dir='right'; }
+    else{ left=Math.max(pad, Math.min(cellRight+gap, vw-pad-w)); dir='left'; }
+  }
   tt.style.left=left+'px'; tt.style.top=top+'px';
+  positionTooltipArrow(dir,cellCY,cellRect,left,top,w,h);
+}
+/* Konuşma balonu kuyruğunu, balonun hücrenin SAĞINDA mı (dir='left' — ok
+   sola, hücreye bakar) yoksa SOLUNDA mı (dir='right' — ok sağa, hücreye
+   bakar) olduğuna göre sol ya da sağ kenara, hücrenin dikey ortasını
+   gösterecek konuma yerleştirir. */
+function positionTooltipArrow(dir,cellCY,cellRect,left,top,w,h){
+  const arrow=document.getElementById('tooltipArrow');
+  if(!arrow) return;
+  if(!cellRect){ arrow.style.display='none'; return; }
+  const margin=14;
+  const ay=Math.max(top+margin, Math.min(top+h-margin, cellCY));
+  arrow.className='dir-'+dir;
+  arrow.style.display='block';
+  if(dir==='left'){ arrow.style.left=(left-10)+'px'; arrow.style.top=(ay-9)+'px'; }
+  else{ arrow.style.left=(left+w)+'px'; arrow.style.top=(ay-9)+'px'; }
 }
 /* Bir kişinin o gündeki oyunlardaki görevlerini listeler (yeşil/kırmızı fark etmez) */
 function ttRoleLines(games, p){
@@ -2685,6 +3099,10 @@ function showTooltipFor(r,c,ev){
   /* Balon bir hücreye sabitlenmişse (F4), fare başka hücreye gitse bile
      sadece sabitli hücrenin balonu gösterilir; diğerleri yok sayılır. */
   if(window.__ttPin && (window.__ttPin.r!==r || window.__ttPin.c!==c)) return;
+  /* Balonun hangi yana (sağ/sol) açılacağını fare hücrenin hangi yarısında
+     olduğuna göre belirlemek için son bilinen fare X konumu saklanır —
+     mouseyi sağa götürünce balon sağa, sola götürünce sola açılsın diye. */
+  if(ev && ev.clientX!=null) window.__ttMouseX = ev.clientX;
   cancelTooltipHide();
   window.__ttKey = r+'_'+c;
   const ttEl0 = document.getElementById('tooltip');
@@ -2694,26 +3112,37 @@ function showTooltipFor(r,c,ev){
   const cell = m.cells[r+'_'+c] || {};
   const raw = (cell.v||'').trim();
   const tt = document.getElementById('tooltip');
-  if(r<2 || !raw){
-    if(cell.tourReturn){
-      const gamesR = rowGames(m,r);
-      const confR = gamesR.length>=2 ? buildConflict(gamesR) : {people:{}, hasCritical:false};
-      const mine = gamesR.find(g=>g.row===r && g.col===c);
-      let hR = '<div class="ttHead">↩ Turne dönüş günü</div>';
-      hR += '<div>Tarih: <b>'+escapeHtml(dateTextOfRow(m,r)||'-')+'</b></div>';
-      if(mine) hR += '<div>Dönen kadro: <b>'+escapeHtml(mine.key)+'</b></div>';
-      hR += '<div>Bu gün temsil olarak sayılmaz.</div><hr>';
-      hR += confR.hasCritical
-        ? '<div class="ttWarn">⚠️ Çakışma var</div>' + Object.values(confR.people).map(i=>'<div>🔴 '+escapeHtml(i.name)+'</div>').join('')
-        : '<div class="ttOk">Uygun ✅ Çakışma yok.</div>';
-      const tiR = tourAt(m,r,c); if(tiR) hR += tourTooltipHtml(m,tiR);
-      if(cell.note) hR += '<hr><div><b>Not:</b> '+escapeHtml(cell.note)+'</div>';
-      tt.innerHTML = hR; tt.style.display='block'; placeTooltip(ev); return;
+  /* Not: bu kontrol artık raw'dan bağımsız — hücreye elle bir etiket
+     yazılmış olsa bile (ör. "MEDEA-TURNE DÖNÜŞ GÜNÜ") balon yine
+     "Turne dönüş günü" biçiminde ve doğru çakışma bilgisiyle gösterilir. */
+  if(r>=2 && cell.tourReturn){
+    const gamesR = rowGames(m,r);
+    const confR = gamesR.length>=2 ? buildConflict(gamesR) : {people:{}, hasCritical:false};
+    const mine = gamesR.find(g=>g.row===r && g.col===c);
+    let hR = '<div class="ttHead">↩ Turne dönüş günü</div>';
+    if(raw) hR += '<div>'+escapeHtml(raw)+'</div>';
+    hR += '<div>Tarih: <b>'+escapeHtml(dateTextOfRow(m,r)||'-')+'</b></div>';
+    if(mine) hR += '<div>Dönen kadro: <b>'+escapeHtml(mine.key)+'</b></div>';
+    hR += '<div>Bu gün temsil olarak sayılmaz.</div><hr>';
+    if(confR.hasCritical){
+      hR += '<div class="ttWarn">⚠️ Çakışma var</div>';
+      for(const [p,info] of Object.entries(confR.people).sort((a,b)=>(b[1].critical?1:0)-(a[1].critical?1:0) || (a[1].name||a[0]).localeCompare(b[1].name||b[0],'tr'))){
+        const dot = info.critical ? '🔴' : '🟢';
+        hR += '<div class="ttPerson '+(info.critical?'crit':'soft')+'">'+dot+' '+escapeHtml(info.name||p)+'</div>';
+        hR += ttRoleLines(gamesR, p);
+      }
+    } else {
+      hR += '<div class="ttOk">Uygun ✅ Çakışma yok.</div>';
     }
+    const tiR = tourAt(m,r,c); if(tiR) hR += tourTooltipHtml(m,tiR);
+    if(cell.note) hR += '<hr><div><b>Not:</b> '+escapeHtml(cell.note)+'</div>';
+    tt.innerHTML = hR; tt.style.display='block'; placeTooltip(); return;
+  }
+  if(r<2 || !raw){
     if(cell.note){
       tt.innerHTML = '<div class="ttHead">Not</div>'+escapeHtml(cell.note);
       tt.style.display='block';
-      placeTooltip(ev);
+      placeTooltip();
     }
     return;
   }
@@ -2730,7 +3159,7 @@ function showTooltipFor(r,c,ev){
         (freeKey ? '<button type="button" class="ttBtn" data-ttact="unfreeAll" data-ttkey="'+escapeHtml(freeKey)+'">↩ Tüm hücrelerde geri al</button>' : '')+
       '</div>'+
       '<div class="ttHint">Geri alınca hücre yeniden oyun olarak değerlendirilir (çakışma denetimine girer).</div>';
-    tt.style.display='block'; placeTooltip(ev); return;
+    tt.style.display='block'; placeTooltip(); return;
   }
 
   if(isArchiveCell(cell)){
@@ -2738,7 +3167,7 @@ function showTooltipFor(r,c,ev){
       (cell.note ? '<hr><div><b>Not:</b> '+escapeHtml(cell.note)+'</div>' : '')+
       (tinfoTT ? tourTooltipHtml(m,tinfoTT) : '')+
       '<hr><div class="ttOk">Geçmiş sezon kaydı: oyun listesinde ve kadro/çakışma denetiminde sayılmaz.</div>';
-    tt.style.display='block'; placeTooltip(ev); return;
+    tt.style.display='block'; placeTooltip(); return;
   }
 
   const {key} = parseGame(raw);
@@ -2772,7 +3201,7 @@ function showTooltipFor(r,c,ev){
       html += cell.ignoreConflict
         ? '<div class="ttOk">🟢 Çakışma bu hücrede yok sayıldı (aşağıdaki kayıt bilgi amaçlı)</div>'
         : '<div class="ttWarn">⚠️ Çakışma var</div>';
-      for(const [p,info] of Object.entries(conflict.people).sort((a,b)=>(a[1].name||a[0]).localeCompare(b[1].name||b[0],'tr'))){
+      for(const [p,info] of Object.entries(conflict.people).sort((a,b)=>(b[1].critical?1:0)-(a[1].critical?1:0) || (a[1].name||a[0]).localeCompare(b[1].name||b[0],'tr'))){
         const dot = info.critical ? '🔴' : '🟢';
         html += '<div class="ttPerson '+(info.critical?'crit':'soft')+'">'+dot+' '+escapeHtml(info.name||p)+'</div>';
         html += ttRoleLines(games, p);
@@ -2805,7 +3234,7 @@ function showTooltipFor(r,c,ev){
   html += '<div class="ttHint">İpucu: hücre seçiliyken <b>F4</b> balonu bu hücreye sabitler (fare başka hücreye gitse de değişmez) — kapatmak için tekrar <b>F4</b> veya <b>Esc</b>.</div>';
   tt.innerHTML = html;
   tt.style.display='block';
-  placeTooltip(ev);
+  placeTooltip();
 }
 /* Serbest metin işaretini geri al — tek hücre */
 function unmarkFreeTextCell(r,c){
@@ -2940,17 +3369,23 @@ function startEdit(td){
     td.appendChild(input);
     input.focus();
     try{ const L=input.value.length; input.setSelectionRange(L,L); }catch(_){ }
+    __editCtx = {type:'input', input, r, c, mi: state.activeIdx};
     let done = false;
     function commit(save){
       if(done) return;
       done = true;
+      __editCtx = null;
+      _lastTextSel = null; /* düzenleme kapandı, eski offsetler artık geçersiz */
       if(input.parentNode) input.remove();
       td.contentEditable='false';
       if(save){
         const nv = input.value.trim();
         snapshot();
         const mm = curMonth();
-        mm.cells[r+'_'+c] = {...(mm.cells[r+'_'+c]||{}), v: nv};
+        const prevCell = mm.cells[r+'_'+c] || {};
+        mm.cells[r+'_'+c] = {...prevCell, v: nv};
+        /* Metin değiştiyse eski kısmi renk aralıkları artık geçersiz — temizle */
+        if(nv !== (prevCell.v||'')) delete mm.cells[r+'_'+c].colorRanges;
         if(!nv){
         const kc = mm.cells[r+'_'+c] || {};
         /* turne bağı / dönüş işareti / not gibi bilgileri olan hücreyi silme,
@@ -2963,6 +3398,12 @@ function startEdit(td){
       }
       renderSheet();
     }
+    /* document 'selectionchange' olayı <input> içindeki seçim değişikliklerini
+       YAKALAMAZ (input'un kendi iç seçim modeli ayrı); bu yüzden burada ayrıca
+       dinliyoruz ki sağ tık önbelleği (_lastTextSel) input alanında da çalışsın. */
+    input.addEventListener('select', captureCurrentSelection);
+    input.addEventListener('mouseup', captureCurrentSelection);
+    input.addEventListener('keyup', captureCurrentSelection);
     input.addEventListener('blur', ()=>commit(true));
     input.addEventListener('keydown', e=>{
       e.stopPropagation();
@@ -2977,13 +3418,19 @@ function startEdit(td){
   td.focus();
   const range=document.createRange(); range.selectNodeContents(td); range.collapse(false);
   const s=window.getSelection(); s.removeAllRanges(); s.addRange(range);
+  __editCtx = {type:'ce', td, r, c, mi: state.activeIdx};
   function commit(save){
+    __editCtx = null;
+    _lastTextSel = null; /* düzenleme kapandı, eski offsetler artık geçersiz */
     td.contentEditable='false';
     if(save){
       const nv = td.textContent.trim();
       snapshot();
       const mm = curMonth();
-      mm.cells[r+'_'+c] = {...(mm.cells[r+'_'+c]||{}), v: nv};
+      const prevCell = mm.cells[r+'_'+c] || {};
+      mm.cells[r+'_'+c] = {...prevCell, v: nv};
+      /* Metin değiştiyse eski kısmi renk aralıkları artık geçersiz — temizle */
+      if(nv !== (prevCell.v||'')) delete mm.cells[r+'_'+c].colorRanges;
       if(!nv){
         const kc = mm.cells[r+'_'+c] || {};
         /* turne bağı / dönüş işareti / not gibi bilgileri olan hücreyi silme,
@@ -3440,6 +3887,32 @@ function applyCellsProp(prop, value){
 }
 function applyBg(color){ applyCellsProp('bg', color); }
 function applyFg(color){ applyCellsProp('color', color); }
+/* Sağ tık menüsündeki "Yazı Rengi" paleti için: hücre düzenleme kipindeyken
+   fare ile metnin sadece bir kısmı seçiliyse (bkz. _pendingCtxFgSel, sağ tık
+   anında yakalanır) rengi tüm hücreye değil o kısma uygula. Aksi halde
+   (seçim yoksa) eskisi gibi tüm hücreyi boya. */
+let _pendingCtxFgSel = null;
+function applyFgOrPartial(color){
+  const sel0 = _pendingCtxFgSel;
+  if(sel0){
+    const {mi,r,c,start,end} = sel0;
+    const key = r+'_'+c;
+    const m = state.months[mi];
+    if(m && !lockGuard(m) && end>start){
+      snapshot();
+      const cur = m.cells[key] || {v:''};
+      const curLen = (cur.v||'').length;
+      const s = Math.max(0, Math.min(start, curLen));
+      const e = Math.max(s, Math.min(end, curLen));
+      if(e>s){
+        addColorRange(mi, key, s, e, color);
+        saveState(); renderSheet(); renderPrint();
+        return;
+      }
+    }
+  }
+  applyFg(color);
+}
 function opAlignLeft(){ applyCellsProp('align', 'left'); }
 function opAlignCenter(){ applyCellsProp('align', 'center'); }
 function opAlignRight(){ applyCellsProp('align', 'right'); }
@@ -3474,7 +3947,7 @@ function opClearFormat(){
   for(const k of selKeys(m)){
     const cur = m.cells[k];
     if(!cur) continue;
-    const {bg,color,bold,underline,align, ...rest} = cur;
+    const {bg,color,bold,underline,align,colorRanges, ...rest} = cur;
     m.cells[k] = rest;
   }
   if(sel.c1===0 && sel.c2===m.cols-1 && m.rowBg){
@@ -3482,9 +3955,10 @@ function opClearFormat(){
   }
   saveState(); renderSheet(); renderPrint();
 }
-function buildColorRow(label, palette, applyFn, pickerId){
+function buildColorRow(label, palette, applyFn, pickerId, hint){
   const row=document.createElement('div');
   row.style.cssText='padding:3px 12px 4px';
+  if(hint) row.title=hint;
   const lbl=document.createElement('div');
   lbl.textContent=label;
   lbl.style.cssText='font-size:10px;line-height:1.2;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px;font-weight:600';
@@ -3495,12 +3969,16 @@ function buildColorRow(label, palette, applyFn, pickerId){
     const b=document.createElement('button');
     b.title=name; b.type='button';
     b.style.cssText='flex:none;display:block;width:18px;height:18px;min-height:0;border-radius:4px;border:1px solid rgba(0,0,0,.25);cursor:pointer;background:'+color+';padding:0';
+    /* mousedown'da preventDefault: buton odağı ÇALMASIN, böylece hücredeki
+       (varsa) aktif metin seçimi/imleç durumu tıklama anına kadar bozulmaz. */
+    b.addEventListener('mousedown', e=>e.preventDefault());
     b.onclick=(e)=>{ e.stopPropagation(); hideCtx(); applyFn(color); };
     sw.appendChild(b);
   }
   const custom=document.createElement('button');
   custom.type='button'; custom.title='Özel Renk';
   custom.style.cssText='flex:none;display:block;width:18px;height:18px;min-height:0;border-radius:4px;border:1px dashed var(--muted);cursor:pointer;background:conic-gradient(red,#ff0,lime,cyan,blue,magenta,red);padding:0';
+  custom.addEventListener('mousedown', e=>e.preventDefault());
   custom.onclick=(e)=>{
     e.stopPropagation(); hideCtx();
     const picker=document.getElementById(pickerId);
@@ -3599,7 +4077,7 @@ function showCtx(x,y,kind){
   el.dataset.x=x; el.dataset.y=y;
 
   el.appendChild(buildColorRow('Zemin Rengi', BG_PALETTE, applyBg, 'bgColorPicker'));
-  el.appendChild(buildColorRow('Yazı Rengi', FG_PALETTE, applyFg, 'fgColorPicker'));
+  el.appendChild(buildColorRow('Yazı Rengi', FG_PALETTE, applyFgOrPartial, 'fgColorPicker', 'Hücreyi düzenlerken fare ile metnin bir kısmını seçip buradan renk seçerseniz, sadece o kısım renklenir. Seçim yoksa tüm hücre renklenir.'));
   const ttl=document.createElement('div'); ttl.className='ttl'; ttl.textContent='Hizalama'; el.appendChild(ttl);
   ctxAlignRow(el);
   ctxSep(el);
@@ -3695,6 +4173,13 @@ document.addEventListener('scroll', e=>{
 
 /* === Fullscreen === */
 let toolbarWasVisibleBeforeFs = null;
+/* Tam ekranda başlık/çakışma/not şeritlerini göster/gizle. Varsayılan: gizli
+   (program tabloya tam odaklansın); "☰ Bilgiler" düğmesiyle geri açılabilir. */
+function setFsBarsVisible(visible){
+  document.body.classList.toggle('fs-showbars', !!visible);
+  const btn=document.getElementById('fsBarsToggle');
+  if(btn) btn.setAttribute('aria-pressed', visible ? 'true' : 'false');
+}
 function toggleFullscreen(force){
   const wrap = document.querySelector('#program .tbl-wrap');
   if(!wrap) return;
@@ -3710,9 +4195,11 @@ function toggleFullscreen(force){
   if(on){
     toolbarWasVisibleBeforeFs = extra ? extra.style.display !== 'none' : true;
     setToolbarVisible(false, false);
+    setFsBarsVisible(false);
   } else {
     setToolbarVisible(toolbarWasVisibleBeforeFs===null ? true : toolbarWasVisibleBeforeFs, false);
     toolbarWasVisibleBeforeFs = null;
+    setFsBarsVisible(false);
   }
 }
 function initFullscreen(){
@@ -3720,12 +4207,64 @@ function initFullscreen(){
   if(btn) btn.addEventListener('click', ()=>toggleFullscreen());
   const ex=document.getElementById('fsExit');
   if(ex) ex.addEventListener('click', ()=>toggleFullscreen(false));
+  const barsBtn=document.getElementById('fsBarsToggle');
+  if(barsBtn) barsBtn.addEventListener('click', ()=>{
+    setFsBarsVisible(!document.body.classList.contains('fs-showbars'));
+  });
   document.addEventListener('keydown', e=>{
     if(e.key==='Escape' && document.body.classList.contains('fs-on')){
       const ae=document.activeElement;
       if(ae && ae.isContentEditable) return;
       toggleFullscreen(false);
     }
+  });
+  /* === AY çubuğu bazen "takılı" açık kalıyordu ===
+     Sebep: native <select> (Ay seçimi) açılıp kapandığında veya bir düğmeye
+     tıklandığında tarayıcı odağı (focus) o elemanda bırakıyor; :focus-within
+     bu yüzden çubuğu sonsuza dek açık tutuyordu. Ayrıca bazı tarayıcılarda
+     native dropdown kapanınca fare hiç kıpırdamazsa :hover durumu da
+     "takılı" (bir sonraki fare hareketine kadar) kalabiliyor. Aşağıdaki
+     iki mekanizma bunu düzeltir: (1) fare her hareket ettiğinde çubuğun
+     üzerinde olup olmadığı gerçek koordinatlarla yeniden doğrulanır — değilse
+     ve içeride odak da yoksa zorla kapatılır; (2) çubuğun dışına her
+     tıklandığında (ör. bir tablo hücresine tıklayınca) odak temizlenir ve
+     çubuk anında zorla kapatılır. */
+  const fsBarWatch = (function(){
+    let forceTimer=null;
+    function bar(){ return document.querySelector('#program .controls'); }
+    function clearForce(){
+      const b=bar(); if(b) b.classList.remove('fs-forcehide');
+      clearTimeout(forceTimer); forceTimer=null;
+    }
+    function forceClose(){
+      const b=bar(); if(!b) return;
+      if(document.activeElement && b.contains(document.activeElement)) document.activeElement.blur();
+      b.classList.add('fs-forcehide');
+      clearTimeout(forceTimer);
+      forceTimer=setTimeout(clearForce, 500);
+    }
+    document.addEventListener('mousemove', e=>{
+      if(!document.body.classList.contains('fs-on')) return;
+      const b=bar(); if(!b) return;
+      const r=b.getBoundingClientRect();
+      const overBar = e.clientX>=r.left && e.clientX<=r.right && e.clientY>=r.top && e.clientY<=r.bottom;
+      const focusInside = document.activeElement && b.contains(document.activeElement);
+      if(overBar || focusInside){ clearForce(); return; }
+      b.classList.add('fs-forcehide');
+    }, true);
+    document.addEventListener('mousedown', e=>{
+      if(!document.body.classList.contains('fs-on')) return;
+      const b=bar(); if(!b) return;
+      const t=e.target;
+      if(t && t.closest && (t.closest('#program .controls') || t.closest('#fsBarsToggle') || t.closest('#fsExit'))) return;
+      forceClose();
+    }, true);
+    return {clearForce};
+  })();
+  const monthSel=document.getElementById('monthSel');
+  if(monthSel) monthSel.addEventListener('change', ()=>{
+    if(!document.body.classList.contains('fs-on')) return;
+    setTimeout(()=>{ monthSel.blur(); }, 30);
   });
 }
 
@@ -3765,6 +4304,14 @@ function initMenus(){
     const trg = menu.querySelector('.menu-trigger');
     const panel = menu.querySelector('.menu-panel');
     if(!trg || !panel) return;
+    trg.addEventListener('mousedown', e=>{
+      /* Menü açılırken (tetikleyici düğmeye tıklanırken) odağın hücreden/
+         düzenleme kutusundan kaçmasını (ve bunun tetiklediği otomatik
+         kaydetme/kapanmayı) ÖNLE — aksi halde "Biçim" menüsünü açar açmaz
+         o an düzenlemekte olduğunuz hücredeki metin seçimi kayboluyor ve
+         "Yazı rengi…" kısmi renklendirmeyi hiç göremiyordu. */
+      e.preventDefault();
+    });
     trg.addEventListener('click', e=>{
       e.stopPropagation();
       const willOpen = !menu.classList.contains('open');
@@ -4048,7 +4595,26 @@ async function renameCurMonth(){
 }
 
 /* Print view */
+/* PERFORMANS: renderPrint() eskiden HER düzenlemede (kalın yap, renk, hücre
+   yazma, satır/sütun ekleme vb. — 30+ nokta) tüm ayların TAMAMINI yeniden
+   HTML'e döküyordu (her ay için computeTours + tüm satırlarda çakışma
+   hesabı). "Yazdır" sekmesi açık değilken bu iş tamamen boşa gidiyor ve
+   siteyi ağırlaştırıyordu ("hafif kasma"). Artık: sekme görünür değilse
+   sadece "kirli" olarak işaretlenir, gerçek inşa ertelenir; sekmeye
+   geçildiğinde (tabbar click handler zaten renderPrint() çağırıyor)
+   gerçek inşa tetiklenir. */
+let _printDirty = true;
+function isPrintTabActive(){
+  const sec = document.getElementById('print');
+  return !!(sec && sec.classList.contains('active'));
+}
 function renderPrint(){
+  _printDirty = true;
+  if(!isPrintTabActive()) return;
+  renderPrintNow();
+}
+function renderPrintNow(){
+  _printDirty = false;
   const wrap = document.getElementById('printView');
   const prev = document.getElementById('printPreview');
   const buildBlock = (m)=>{
@@ -4100,12 +4666,13 @@ function renderPrint(){
            arka planını taşısa bile satır içi stille sarıyı zorla — CSS önceliği
            ne olursa olsun garanti sarı basılsın (yazdırmada beyaz kalma sorunu). */
         let styleAttr = cellStyleString(cell);
-        if(cls){
+        if(cls && !cell.bg){
           styleAttr = (styleAttr?styleAttr+';':'') + 'background:#ffff00 !important;box-shadow:none !important';
           if(!cell.color) styleAttr += ';color:#000 !important';
         }
         const st = styleAttr?` style="${styleAttr}"`:'';
-        h+=`<td class="${clist.join(' ')}"${rs}${cs}${st}>${escapeHtml(cellDisplayText(cell))}${extra}</td>`;
+        const _richTxt = cellRichHtml(cell);
+        h+=`<td class="${clist.join(' ')}"${rs}${cs}${st}>${_richTxt!==null?_richTxt:escapeHtml(cellDisplayText(cell))}${extra}</td>`;
       }
       h+='</tr>';
     }
@@ -4165,7 +4732,7 @@ function printProgram(val){
   const p = parsePaper(chosen);
   if((p.size === 'A4' || p.size === 'A5') && blockIfRedCell(p.size+' '+(p.orient==='portrait'?'dikey':'yatay')+' Yazdır')) return;
   setPrintSize(chosen);
-  renderPrint();
+  renderPrintNow();
   setTimeout(()=>window.print(), 120);
 }
 function fitPrintPages(){
@@ -5022,16 +5589,43 @@ function collectNotes(){
   });
   return out;
 }
+function notesMatchesQuery(o,q){
+  if(!q) return true;
+  const hay=[o.text,o.note,o.inline,o.month,o.date,o.time,o.stage].join(' ').toLocaleLowerCase('tr');
+  return hay.includes(q);
+}
+function wireNotesFilters(){
+  const search=document.getElementById('notesSearch'), sel=document.getElementById('notesMonthFilter');
+  if(search && !search.dataset.wired){ search.dataset.wired='1'; search.addEventListener('input', renderNotes); }
+  if(sel && !sel.dataset.wired){ sel.dataset.wired='1'; sel.addEventListener('change', renderNotes); }
+}
 function renderNotes(){
   const box=document.getElementById('notesList');
   if(!box) return;
+  wireNotesFilters();
   const items=collectNotes();
   const badge=document.getElementById('notesBadge');
   if(badge){ if(items.length){ badge.textContent=items.length; badge.style.display='inline-block'; } else badge.style.display='none'; }
+
+  const monthSel=document.getElementById('notesMonthFilter');
+  if(monthSel){
+    const cur=monthSel.value;
+    const opts=['<option value="">Tüm aylar</option>'].concat((state.months||[]).map(m=>`<option value="${escapeHtml(m.name)}">${escapeHtml(m.name)}</option>`));
+    const html=opts.join('');
+    if(monthSel.innerHTML!==html){ monthSel.innerHTML=html; monthSel.value=cur; }
+  }
+  const q=(document.getElementById('notesSearch')?.value||'').trim().toLocaleLowerCase('tr');
+  const monthFilter=monthSel?.value||'';
+  const filtered=items.filter(o=>(!monthFilter||o.month===monthFilter) && notesMatchesQuery(o,q));
+  const countEl=document.getElementById('notesFilterCount');
+  if(countEl) countEl.textContent = (q||monthFilter) ? `${filtered.length} / ${items.length} not gösteriliyor` : '';
+
   if(!items.length){
     box.innerHTML='<div style="padding:14px;color:var(--muted)">Henüz not yok. Bir hücre seçip <b>Not ekle</b> ya da <b>Serbest metin ✎</b> kullanın; buraya otomatik düşer.</div>';
+  } else if(!filtered.length){
+    box.innerHTML='<div style="padding:14px;color:var(--muted)">Aramanızla eşleşen not bulunamadı.</div>';
   } else {
-    box.innerHTML = items.map((o,i)=>`
+    box.innerHTML = filtered.map((o,i)=>`
       <div style="display:flex;gap:10px;align-items:flex-start;background:#fff;border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:6px">
         <div style="flex:1;min-width:0">
           <div style="font-weight:700">${escapeHtml(o.text||'(boş hücre)')} ${o.free?'<span style="font-size:11px;color:var(--accent)">✎ serbest metin</span>':''}</div>
@@ -5042,8 +5636,8 @@ function renderNotes(){
         <button class="btn ghost small" data-ngo="${i}">Hücreye git</button>
         <button class="btn ghost small" data-nedit="${i}">✎ Notu düzenle</button>
       </div>`).join('');
-    box.querySelectorAll('[data-ngo]').forEach(b=>{ b.onclick=()=>{ const o=items[+b.dataset.ngo]; gotoCell(o.mi,o.r,o.c); }; });
-    box.querySelectorAll('[data-nedit]').forEach(b=>{ b.onclick=async()=>{ const o=items[+b.dataset.nedit]; const n=await sitePrompt('Not:',o.note,'Not ekle/düzenle'); if(n===null) return; setCellNote(o.mi,o.key,n); renderNotes(); }; });
+    box.querySelectorAll('[data-ngo]').forEach(b=>{ b.onclick=()=>{ const o=filtered[+b.dataset.ngo]; gotoCell(o.mi,o.r,o.c); }; });
+    box.querySelectorAll('[data-nedit]').forEach(b=>{ b.onclick=async()=>{ const o=filtered[+b.dataset.nedit]; const n=await sitePrompt('Not:',o.note,'Not ekle/düzenle'); if(n===null) return; setCellNote(o.mi,o.key,n); renderNotes(); }; });
   }
   const ta=document.getElementById('generalNotes');
   if(ta && document.activeElement!==ta) ta.value = state.generalNotes || '';
@@ -5078,14 +5672,50 @@ document.getElementById('clearBtn').onclick = opClear;
 document.getElementById('freeTextBtn').onclick = opFreeText;
 { const ab=document.getElementById('archiveCellBtn'); if(ab) ab.onclick = opArchiveCell; }
 document.getElementById('cellNoteBtn').onclick = opCellNote;
+document.getElementById('bgColorBtn').addEventListener('mousedown', e=>e.preventDefault());
 document.getElementById('bgColorBtn').onclick = ()=>{
   const p=document.getElementById('bgColorPicker');
   p.onchange=()=>applyBg(p.value);
   p.click();
 };
+let _pendingFgSel = null;
+document.getElementById('fgColorBtn').addEventListener('mousedown', e=>{
+  /* Odağın (ve onunla birlikte aktif metin seçiminin) bu düğmeye
+     basıldığı an kaybolmasını TAMAMEN ENGELLE — böylece aşağıdaki yakalama
+     tam olarak doğru/güncel seçimi okur. (Daha önce sadece "önce yakala"
+     yaklaşımı vardı; ama üstteki "Biçim" menüsünü AÇMAK için yapılan ilk
+     tıklama zaten seçimi siliyordu — bkz. initMenus() içindeki trg mousedown. */
+  e.preventDefault();
+  _pendingFgSel = getEditSelection();
+});
 document.getElementById('fgColorBtn').onclick = ()=>{
   const p=document.getElementById('fgColorPicker');
-  p.onchange=()=>applyFg(p.value);
+  /* Hücre düzenleme kipindeyken fare ile metnin SADECE bir kısmı seçiliyse,
+     rengi tüm hücreye değil o kısma uygula (kısmi/parçalı renklendirme).
+     ÖNEMLİ: seçim buraya "mousedown" anında (aşağıda) yakalanıyor, "click"
+     anında DEĞİL — çünkü butona basılır basılmaz tarayıcı odağı input'tan
+     alıp düzenlemeyi otomatik kapatıyor (blur); click olayına gelindiğinde
+     seçim bilgisi çoktan kaybolmuş oluyor. */
+  const editSel = _pendingFgSel; _pendingFgSel = null;
+  if(editSel){
+    p.onchange=()=>{
+      const {mi,r,c,start,end} = editSel;
+      const key = r+'_'+c;
+      const m = state.months[mi];
+      if(!m || lockGuard(m)) return;
+      snapshot();
+      /* Düzenleme kutusu bu sırada zaten kapanıp metni kaydetmiş olur (blur);
+         seçim aralığını, o an hücrede kayıtlı olan metne göre uygula. */
+      const cur = m.cells[key] || {v:''};
+      const curLen = (cur.v||'').length;
+      const s = Math.max(0, Math.min(start, curLen));
+      const e = Math.max(s, Math.min(end, curLen));
+      if(e>s) addColorRange(mi, key, s, e, p.value);
+      saveState(); renderSheet(); renderPrint();
+    };
+  } else {
+    p.onchange=()=>applyFg(p.value);
+  }
   p.click();
 };
 document.getElementById('boldBtn').onclick = opBold;
@@ -5225,26 +5855,25 @@ function openMonthPreviewTab(){
       '#sheetFit{transform-origin:top left}'+
       '.sheetbox td.cell{cursor:default}'+
       '@media print{.pv-head button{display:none}}'+
-      '@media print{#notesSec{page-break-before:always;break-before:page}}'+
     '</style></head><body>'+
     '<div class="pv-head"><div>'+_pvIcon('calendar')+'</div><div><h1>'+esc(m.name)+' — Program Önizleme</h1>'+
       '<div class="sub">İzmir Devlet Tiyatrosu Müdürlüğü · yalnızca görüntüleme</div></div>'+
       '<button type="button" onclick="window.print()">'+_pvIcon('print')+' Yazdır / PDF</button></div>'+
     '<div class="wrap">'+
-      '<h2 class="sec" style="margin-top:0">'+_pvIcon('calendar')+' Aylık Program Tablosu</h2>'+
-      '<div class="sheetbox"><div id="sheetFit">'+sheet+'</div></div>'+
       '<div class="stats">'+
         '<div class="stat crit">'+_pvIcon('alert')+'<div><b>'+d.critical.length+'</b><span>Kritik çakışma</span></div></div>'+
         '<div class="stat soft">'+_pvIcon('info')+'<div><b>'+d.soft.length+'</b><span>Kritik olmayan çakışma</span></div></div>'+
         '<div class="stat note">'+_pvIcon('note')+'<div><b>'+d.notes.length+'</b><span>Not / serbest metin</span></div></div>'+
       '</div>'+
+      '<div id="notesSec">'+
+        '<h2 class="sec" style="margin-top:0">'+_pvIcon('note')+' Notlar</h2>'+notesHtml+
+      '</div>'+
+      '<h2 class="sec">'+_pvIcon('calendar')+' Aylık Program Tablosu</h2>'+
+      '<div class="sheetbox"><div id="sheetFit">'+sheet+'</div></div>'+
       '<h2 class="sec">'+_pvIcon('alert')+' Çakışmalar</h2>'+
       (d.critical.length || d.soft.length
         ? d.critical.map(i=>card(i,true)).join('')+d.soft.map(i=>card(i,false)).join('')
         : '<div class="empty">'+_pvIcon('check')+' Bu ayda çakışma bulunmuyor — program temiz.</div>')+
-      '<div id="notesSec">'+
-        '<h2 class="sec">'+_pvIcon('note')+' Notlar</h2>'+notesHtml+
-      '</div>'+
     '</div>'+
     '<'+'script>'+
       '(function(){'+
@@ -5663,6 +6292,72 @@ body.idt-locked main{pointer-events:none;user-select:none;opacity:.5;filter:gray
 })();
 </script>
 
+<script>
+/* ===== Not şeridi: sayım, hızlı gezinme (F7 / Shift+F7) =====
+   Görünürdeki not.mark hücreleri arasında dolaşır; not verisi değiştirmez. */
+(function(){
+  var idx = -1;
+  function list(){ return Array.prototype.slice.call(document.querySelectorAll('#sheet td.cell.note-mark')); }
+  function rowLabel(td){
+    var tr = td.parentElement; if(!tr) return '';
+    var first = tr.querySelector('td.cell.dateCol');
+    return first ? (first.textContent||'').trim() : '';
+  }
+  function refresh(){
+    var bar=document.getElementById('noteBar');
+    if(!bar) return;
+    var ns=list(), cnt=document.getElementById('nbCount'), det=document.getElementById('nbDetail');
+    var prev=document.getElementById('nbPrev'), next=document.getElementById('nbNext');
+    if(ns.length===0){
+      bar.classList.remove('has');
+      cnt.textContent='📝 Bu ayda not yok';
+      det.textContent='';
+    }else{
+      bar.classList.add('has');
+      cnt.textContent='📝 '+ns.length+' not';
+    }
+    if(prev) prev.disabled = next.disabled = (ns.length===0);
+    if(idx >= ns.length) idx = -1;
+  }
+  window.refreshNoteBar = refresh;
+
+  function go(dir){
+    var ns=list(); if(!ns.length) return;
+    idx = (idx + dir + ns.length) % ns.length;
+    var td=ns[idx];
+    var r=+td.dataset.r, c=+td.dataset.c;
+    if(typeof setSel==='function') setSel(r,c,r,c);
+    try{ td.scrollIntoView({block:'center',inline:'center',behavior:'smooth'}); }catch(e){ td.scrollIntoView(); }
+    td.classList.remove('cflash'); void td.offsetWidth; td.classList.add('cflash');
+    setTimeout(function(){ td.classList.remove('cflash'); }, 2000);
+    try{ td.focus({preventScroll:true}); }catch(e){}
+    var det=document.getElementById('nbDetail');
+    if(det){
+      var r=+td.dataset.r, c=+td.dataset.c;
+      var m=(typeof curMonth==='function')?curMonth():null;
+      var cellObj=(m && m.cells) ? (m.cells[r+'_'+c]||{}) : {};
+      var noteTxt=cellObj.note || (td.textContent||'').trim();
+      det.innerHTML='· '+(idx+1)+'/'+ns.length+' — '+escapeHtml(rowLabel(td)||'')+' <b>'+escapeHtml(noteTxt)+'</b>';
+    }
+  }
+
+  function ready(){
+    var next=document.getElementById('nbNext'), prev=document.getElementById('nbPrev');
+    if(!next) return;
+    next.addEventListener('click', function(){ go(1); });
+    prev.addEventListener('click', function(){ go(-1); });
+    document.addEventListener('keydown', function(e){
+      if(e.key!=='F7') return;
+      var a=document.activeElement;
+      if(a && (a.tagName==='INPUT'||a.tagName==='TEXTAREA'||a.isContentEditable)) return;
+      e.preventDefault(); go(e.shiftKey ? -1 : 1);
+    });
+    refresh();
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', ready);
+  else ready();
+})();
+</script>
 
 <script>
 /* ===== Çakışma/bilgi tooltip'i aç-kapat ===== */
