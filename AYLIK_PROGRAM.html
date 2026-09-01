@@ -1058,23 +1058,34 @@ function rebuildPeopleMap(){
   const map = {};
   for(const c of (state.crew||[])){
     const oyun = String(c.play||'').trim();
-    const kisi = String(c.person||'').trim();
-    if(!oyun || !kisi) continue;
-    const ok = normNameKey(oyun), pk = normNameKey(kisi);
-    if(!ok || !pk) continue;
+    const kisiRaw = String(c.person||'').trim();
+    if(!oyun || !kisiRaw) continue;
+    const ok = normNameKey(oyun);
+    if(!ok) continue;
     const kat = String(c.category||'').trim();
     const gorev = String(c.role||'').trim();
-    if(!map[ok]) map[ok] = {};
-    if(!map[ok][pk]) map[ok][pk] = {roles:[], critical:false, name:kisi};
-    const rt = [kat,gorev].filter(Boolean).join(' / ');
-    if(rt && !map[ok][pk].roles.includes(rt)) map[ok][pk].roles.push(rt);
-    const lk = kat.toLocaleLowerCase('tr');
-    const lg = gorev.toLocaleLowerCase('tr');
-    /* "Oyuncu / Barkovizyon" gibi görevler sahnede oynamak değildir:
-       kırmızı (kritik) çakışma üretmez, yeşil bilgi olarak listelenir. */
-    const soft = /bark[oa]v[ıi]zyon/.test(lg) || /bark[oa]v[ıi]zyon/.test(lk);
-    if(!soft && (lk.includes('oyuncu') || lk.includes('figüran') || lk.includes('figuran'))){
-      map[ok][pk].critical = true;
+    /* Bazı satırlarda "Kişi" hücresine birden fazla isim virgülle yazılıyor
+       (ör. "Ahmet Yılmaz, Mehmet Kaya") — tek satırda ortak görev paylaşan
+       birden fazla kişi. Böyle yazılırsa eskiden tüm liste TEK bir (eşleşmeyen)
+       ad olarak kaydediliyor, bu da o kişilerin hiçbirinin başka oyunlarla
+       çakışma denetimine girmemesine yol açıyordu. Virgülle ayırıp her ismi
+       ayrı kişi olarak işliyoruz. */
+    const isimler = kisiRaw.split(',').map(s=>s.trim()).filter(Boolean);
+    for(const kisi of isimler){
+      const pk = normNameKey(kisi);
+      if(!pk) continue;
+      if(!map[ok]) map[ok] = {};
+      if(!map[ok][pk]) map[ok][pk] = {roles:[], critical:false, name:kisi};
+      const rt = [kat,gorev].filter(Boolean).join(' / ');
+      if(rt && !map[ok][pk].roles.includes(rt)) map[ok][pk].roles.push(rt);
+      const lk = kat.toLocaleLowerCase('tr');
+      const lg = gorev.toLocaleLowerCase('tr');
+      /* "Oyuncu / Barkovizyon" gibi görevler sahnede oynamak değildir:
+         kırmızı (kritik) çakışma üretmez, yeşil bilgi olarak listelenir. */
+      const soft = /bark[oa]v[ıi]zyon/.test(lg) || /bark[oa]v[ıi]zyon/.test(lk);
+      if(!soft && (lk.includes('oyuncu') || lk.includes('figüran') || lk.includes('figuran'))){
+        map[ok][pk].critical = true;
+      }
     }
   }
   PEOPLE_MAP = map;
@@ -5477,10 +5488,14 @@ function castMapAP(play){
   if(!target) return m;
   (state.crew||[]).forEach(c=>{
     if(String(c.play||'').trim() !== target) return;
-    const n = String(c.person||'').trim(); if(!n) return;
-    if(!m.has(n)) m.set(n, new Set());
+    const raw = String(c.person||'').trim(); if(!raw) return;
     const rl = String(c.role||'').trim() || String(c.category||'').trim();
-    if(rl) m.get(n).add(rl);
+    /* "Kişi" hücresinde virgülle birden fazla isim olabilir (ör. "Ahmet, Mehmet") —
+       her birini ayrı kişi olarak say (bkz. rebuildPeopleMap ile aynı mantık). */
+    raw.split(',').map(s=>s.trim()).filter(Boolean).forEach(n=>{
+      if(!m.has(n)) m.set(n, new Set());
+      if(rl) m.get(n).add(rl);
+    });
   });
   return m;
 }
