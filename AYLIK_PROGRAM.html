@@ -2478,6 +2478,26 @@ function buildConflict(games){
     const crew = crewOf(g.key) || {};
     for(const p in crew){ (byPerson[p] = byPerson[p] || []).push({g, rec:crew[p]}); }
   }
+  /* Bir oyunda asıl kişinin (ör. Müge Uyan Yeşilpınar) bir KASTI (yedeği)
+     kayıtlıysa, o oyun için asıl kişinin fiziksel olarak sahnede olması
+     ZORUNLU değildir — kast onun yerine çıkabilir. Bu yüzden çakışma
+     hesaplanırken, kişinin kritik olduğu oyunlardan kastı olanlar
+     "karşılanmış" sayılır; kişinin kendi fiziksel bulunma zorunluluğu
+     bunlar düşülerek hesaplanır. Karşılanan oyun(lar) bilgi amaçlı ayrıca
+     saklanır ki tooltipte "X oyunu için kastı var: Y" notu gösterilebilsin. */
+  const kastCoverage = {}; /* normNameKey(asılKişi) -> { oyunCkey: {kastName, raw} } */
+  for(const g of games){
+    const crew = crewOf(g.key) || {};
+    for(const kp in crew){
+      const rec = crew[kp];
+      if(!rec.kast || !rec.kastOf) continue;
+      const targetKey = normNameKey(rec.kastOf);
+      if(!targetKey) continue;
+      const gk = g.ckey || g.key;
+      if(!kastCoverage[targetKey]) kastCoverage[targetKey] = {};
+      kastCoverage[targetKey][gk] = {kastName: rec.name || kp, raw: g.raw};
+    }
+  }
   const people = {};
   const cells = new Set();
   let hasCritical = false;
@@ -2485,6 +2505,8 @@ function buildConflict(games){
     const list = byPerson[p];
     const distinct = new Set(list.map(x=>x.g.ckey||x.g.key));
     if(distinct.size < 2) continue;           /* aynı oyun tekrarı çakışma değil */
+    const myCoverage = kastCoverage[p] || {};
+    const coveredBy = {};                     /* bu kişi için karşılanan oyun(lar) */
     const slots = {};
     for(const x of list){ const t = x.g.time || ''; (slots[t] = slots[t] || []).push(x); }
     let crit = 0, isCrit = false; const critCells = [];
@@ -2495,21 +2517,27 @@ function buildConflict(games){
     const hasRetCrit = critList.some(x=>x.g.isReturn);
     if(hasRetCrit){
       const critKeys = new Set(critList.map(x=>x.g.ckey||x.g.key));
-      if(critKeys.size>=2){
-        isCrit = true; crit = Math.max(crit, critKeys.size);
-        critList.forEach(x=>critCells.push(x.g.row+'_'+x.g.col));
+      critKeys.forEach(k=>{ if(myCoverage[k]) coveredBy[k]=myCoverage[k]; });
+      const uncoveredKeys = [...critKeys].filter(k=>!myCoverage[k]);
+      if(uncoveredKeys.length>=2){
+        isCrit = true; crit = Math.max(crit, uncoveredKeys.length);
+        critList.forEach(x=>{ const k=x.g.ckey||x.g.key; if(!myCoverage[k]) critCells.push(x.g.row+'_'+x.g.col); });
       }
     }
     for(const t in slots){
       const cl = slots[t].filter(x=>x.rec.critical);
       const keys = new Set(cl.map(x=>x.g.ckey||x.g.key));
-      if(keys.size >= 2){
-        isCrit = true; crit = Math.max(crit, keys.size);
-        cl.forEach(x=>critCells.push(x.g.row+'_'+x.g.col));
+      keys.forEach(k=>{ if(myCoverage[k]) coveredBy[k]=myCoverage[k]; });
+      const uncoveredKeys = [...keys].filter(k=>!myCoverage[k]);
+      if(uncoveredKeys.length >= 2){
+        isCrit = true; crit = Math.max(crit, uncoveredKeys.length);
+        cl.forEach(x=>{ const k=x.g.ckey||x.g.key; if(!myCoverage[k]) critCells.push(x.g.row+'_'+x.g.col); });
       }
     }
+    const kastCoveredList = Object.keys(coveredBy).map(k=>coveredBy[k]);
     people[p] = {critical:isCrit, criticalGameCount:crit, totalGameCount:distinct.size, name:(list[0].rec.name||p),
-      kast:!!list[0].rec.kast, kastOf:list[0].rec.kastOf||null};
+      kast:!!list[0].rec.kast, kastOf:list[0].rec.kastOf||null,
+      kastCovered: kastCoveredList.length>0, kastCoveredList};
     if(isCrit){ hasCritical = true; critCells.forEach(k=>cells.add(k)); }
   }
   /* Turne dönüş günü + aynı oyun aynı gün başka sahnede: kadro verisi olmasa da uyar */
@@ -3152,12 +3180,24 @@ function ttRoleLines(games, p){
    kastı" notu) üretir — kırmızı/yeşil/kritik olmayan "Kast" (yedek) kişiler
    için ayrı sarı 🟡 gösterim kullanılır. */
 function ttPersonLine(p, info){
-  const dot = info.kast ? '🟡' : (info.critical ? '🔴' : '🟢');
-  const cls = info.kast ? 'kast' : (info.critical ? 'crit' : 'soft');
   if(info.kast && info.kastOf){
-    return '<div class="ttPerson '+cls+'">'+dot+' '+escapeHtml(info.kastOf)+' <span class="ttKastNote">Görevlendirilen Kast: '+escapeHtml(info.name||p)+'</span></div>';
+    return '<div class="ttPerson kast">🟡 '+escapeHtml(info.kastOf)+' Kastı: <span class="ttKastNote">'+escapeHtml(info.name||p)+'</span></div>';
   }
-  return '<div class="ttPerson '+cls+'">'+dot+' '+escapeHtml(info.name||p)+'</div>';
+  /* Kişinin kendisi kast değil ama bir/birkaç çakışan oyunda ona kayıtlı
+     bir kastı var: o oyun(lar) için fiziksel bulunma zorunlu değil. Tüm
+     çakışma bu şekilde karşılanmışsa (isKast=false, critical=false) sarı;
+     kısmen karşılanmışsa (hâlâ critical) kırmızı kalır ama karşılanan
+     oyun(lar) ayrıca not düşülür. */
+  const resolved = !info.critical && info.kastCovered;
+  const dot = resolved ? '🟡' : (info.critical ? '🔴' : '🟢');
+  const cls = resolved ? 'kast' : (info.critical ? 'crit' : 'soft');
+  let html = '<div class="ttPerson '+cls+'">'+dot+' '+escapeHtml(info.name||p)+'</div>';
+  if(info.kastCoveredList && info.kastCoveredList.length){
+    for(const c of info.kastCoveredList){
+      html += '<div class="ttKastNote">↳ '+escapeHtml(c.raw||'')+' için kastı var: <b>'+escapeHtml(c.kastName)+'</b></div>';
+    }
+  }
+  return html;
 }
 function showTooltipFor(r,c,ev){
   if(window.TOOLTIPS_OFF){ hideTooltipNow(); return; }
