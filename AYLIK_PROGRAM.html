@@ -1294,6 +1294,7 @@ table.sheet td.cell{min-width:86px;height:29px}
   <nav id="tabbar" role="tablist" aria-label="Ana bölümler">
     <button type="button" role="tab" aria-selected="true" aria-controls="program" data-tab="program" class="active">Aylık Program</button>
     <button type="button" role="tab" aria-selected="false" aria-controls="plays" data-tab="plays">Oyun &amp; Kadro<span id="playsPendingBadge" class="tabBadge" style="display:none"></span></button>
+    <button type="button" role="tab" aria-selected="false" aria-controls="showings" data-tab="showings">📅 Gösterim Takvimi<span id="showingsBadge" class="tabBadge" style="display:none"></span></button>
     <button type="button" role="tab" aria-selected="false" aria-controls="avail" data-tab="avail">Müsaitlik</button>
     <button type="button" role="tab" aria-selected="false" aria-controls="notes" data-tab="notes">Serbest Notlar<span id="freeNotesBadge" class="tabBadge" style="display:none"></span></button>
     <button type="button" role="tab" aria-selected="false" aria-controls="print" data-tab="print">Yatay Yazdır</button>
@@ -1580,6 +1581,24 @@ table.sheet td.cell{min-width:86px;height:29px}
       <textarea id="generalNotes" aria-label="Genel notlar" class="pl-note-box" style="min-height:120px" placeholder="Programla ilgili genel notlarınız… (otomatik kaydedilir)"></textarea>
     </div>
   </details>
+</section>
+
+<section id="showings" role="tabpanel">
+  <div class="play-pane-title" style="margin:2px 2px 14px">📅 Gösterim Takvimi <small>Bir oyun seçin — hangi ayda kaç temsil verildiğini görün.</small></div>
+  <div class="pl-wrap">
+    <aside class="pl-side">
+      <div class="pl-side-h">
+        <div class="side-heading">
+          <div><span class="eyebrow">Oyunlar</span><strong>Oyun seç</strong></div>
+          <span class="side-icon" aria-hidden="true">⌕</span>
+        </div>
+        <input type="search" id="showcalSearch" aria-label="Oyun ara" placeholder="Oyun ara…">
+      </div>
+      <div class="list-caption"><span>Oyunlar</span><span>Gösterim</span></div>
+      <div class="pl-list" id="showcalList"></div>
+    </aside>
+    <div class="pl-detail" id="showcalDetail"></div>
+  </div>
 </section>
 
 <section id="avail" role="tabpanel">
@@ -3104,7 +3123,7 @@ function renderCategories(){
   const badge=document.getElementById('categoriesBadge');
   if(badge){ badge.textContent=all.length; badge.style.display=all.length?'inline-block':'none'; }
 }
-function renderDataViews(){ renderShowings(); renderCategories(); }
+function renderDataViews(){ renderShowCalendar(); renderCategories(); }
 /* "* PRÖMİYER" açıklama metni: prömiyer işaretlendiğinde baştaki * kaldırılır,
    yıldız ikonu oyun hücrelerindekiyle aynı (★) şekilde gösterilir. */
 function cellDisplayText(cell){
@@ -5801,6 +5820,82 @@ function playOccurrenceList(play){
 }
 function playOccurrences(play){ return playOccurrenceList(play).length; }
 
+/* === Gösterim Takvimi sekmesi: solda oyun listesi, sağda seçili oyunun aylık dökümü === */
+let selectedShowcalPlay = null, showcalFilter = '';
+function renderShowCalendar(filter){
+  if(filter !== undefined) showcalFilter = filter;
+  const q = (showcalFilter||'').toLocaleLowerCase('tr');
+  const allPlays = (state.plays||[]).filter(p=>!isArchivedPlayName(p)).sort((a,b)=>a.localeCompare(b,'tr'));
+  const plays = allPlays.filter(p=> !q || p.toLocaleLowerCase('tr').includes(q));
+  if(selectedShowcalPlay && !allPlays.includes(selectedShowcalPlay)) selectedShowcalPlay = null;
+  if(!selectedShowcalPlay && plays.length) selectedShowcalPlay = plays[0];
+
+  const list = document.getElementById('showcalList');
+  if(list){
+    list.innerHTML = plays.length ? plays.map(p=>{
+      const occ = playOccurrences(p);
+      return `<button class="pl-item${p===selectedShowcalPlay?' on':''}" data-play="${escapeHtml(p)}">
+        <span class="nm">${escapeHtml(p)}</span><span class="ct">${occ}</span></button>`;
+    }).join('') : '<div class="pl-empty">Sonuç yok.</div>';
+    list.querySelectorAll('.pl-item').forEach(b=>{
+      b.onclick = ()=>{ selectedShowcalPlay = b.dataset.play; renderShowCalendar(); };
+    });
+  }
+
+  renderShowCalendarDetail();
+
+  const badge = document.getElementById('showingsBadge');
+  if(badge){
+    const total = collectShowings().length;
+    badge.textContent = total; badge.style.display = total ? 'inline-block' : 'none';
+  }
+}
+function renderShowCalendarDetail(){
+  const box = document.getElementById('showcalDetail');
+  if(!box) return;
+  const p = selectedShowcalPlay;
+  if(!p){ box.innerHTML = '<div class="pl-placeholder">Soldan bir oyun seçin.</div>'; return; }
+  const occList = playOccurrenceList(p);
+  const occ = occList.length;
+  const byMonth = {};
+  occList.forEach(o=>{ (byMonth[o.month||'Ay belirtilmemiş']=byMonth[o.month||'Ay belirtilmemiş']||[]).push(o); });
+  const monthGroups = Object.entries(byMonth);
+  const monthlyCountHtml = monthGroups.length
+    ? monthGroups.map(([month,rows])=>`<span class="chip">${escapeHtml(month)}: ${rows.length}</span>`).join('')
+    : '<span class="chip">Gösterim yok</span>';
+
+  box.innerHTML = `
+    <div class="pl-head">
+      <h3>${escapeHtml(p)}</h3>
+      <div class="pl-chips">
+        <span class="chip gold">${occ} gösterim</span>
+        <span class="chip">${monthGroups.length} ay</span>
+      </div>
+    </div>
+    <div class="play-counts">${monthlyCountHtml}</div>
+    ${monthGroups.length ? monthGroups.map(([month,rows])=>`
+      <div class="play-month-group">
+        <div class="play-month-h"><span>${escapeHtml(month)}</span><span class="chip">${rows.length} gösterim</span></div>
+        ${rows.map((o,i)=>`
+          <div class="play-month-row">
+            <span class="meta">${escapeHtml(o.date||'Tarih yok')}${o.time?' · '+escapeHtml(o.time):''}${o.stage?' · '+escapeHtml(o.stage):''}${o.note?`<br><span class="nt">✎ ${escapeHtml(o.note)}</span>`:''}</span>
+            <button class="btn ghost small" data-scnote="${occList.indexOf(o)}">${o.note?'Notu düzenle':'Not ekle'}</button>
+            <button class="btn ghost small" data-scgo="${occList.indexOf(o)}">Hücreye git</button>
+          </div>`).join('')}
+      </div>`).join('') : '<div class="empty-panel">Programda gösterim yok.</div>'}
+  `;
+  box.querySelectorAll('[data-scgo]').forEach(b=>b.onclick=()=>{
+    const o=occList[+b.dataset.scgo]; if(o) gotoCell(o.mi,o.r,o.c);
+  });
+  box.querySelectorAll('[data-scnote]').forEach(b=>b.onclick=async()=>{
+    const o=occList[+b.dataset.scnote]; if(!o) return;
+    const n=await sitePrompt('Not — '+(o.month||'')+' '+(o.date||'')+(o.time?' '+o.time:'')+':',o.note||'','Not ekle/düzenle');
+    if(n===null) return;
+    setCellNote(o.mi,o.key,n);
+    renderShowCalendarDetail();
+  });
+}
+
 /* === Kadro Müsaitlik (kişi bazlı, seçili ayda müsait/dolu günler) === */
 function monthDayNumbers(m){
   const days = new Set();
@@ -6138,7 +6233,7 @@ function renderPlayDetail(byPlay){
                   : `<span>✅ Google E-Tablo ile eşit · ${(state.crew||[]).length} kayıt</span>`}
             <button class="btn ghost small" id="crewSyncReload">${crewState==='loading'?'Yenileniyor…':'🔄 Şimdi Yenile'}</button>
           </div>
-          <a class="btn small" id="crewSheetLink" href="https://docs.google.com/spreadsheets/d/1sIzswZnMkyRPJejAsE_ylSKzAF0RmFiACP4jYtz-AE0/edit?pli=1&gid=2043325861#gid=2043325861" target="_blank" rel="noopener" style="text-decoration:none;display:inline-flex;align-items:center;gap:6px">📊 Google E-Tablo'da Düzenle</a>
+          <a class="btn small" id="crewSheetLink" href="https://docs.google.com/spreadsheets/d/1sIzswZnMkyRPJejAsE_ylSKzAF0RmFiACP4jYtz-AE0/edit?pli=1&gid=831363206#gid=831363206" target="_blank" rel="noopener" style="text-decoration:none;display:inline-flex;align-items:center;gap:6px">📊 Google E-Tablo'da Düzenle</a>
         </div>
       </div>
       ${cats.map(cat=>`
@@ -6895,6 +6990,9 @@ document.getElementById('availGoBtn')?.addEventListener('click', renderAvailabil
 document.getElementById('availPerson')?.addEventListener('keydown', e=>{ if(e.key==='Enter') renderAvailability(); });
 document.getElementById('availMonthSel')?.addEventListener('change', renderAvailability);
 
+/* Gösterim Takvimi sekmesi wiring */
+document.getElementById('showcalSearch')?.addEventListener('input', e=>renderShowCalendar(e.target.value));
+
 document.querySelectorAll('#tabbar button').forEach(b=>b.onclick=()=>{
   document.querySelectorAll('#tabbar button').forEach(x=>{ x.classList.remove('active'); x.setAttribute('aria-selected','false'); });
   document.querySelectorAll('main section').forEach(x=>x.classList.remove('active'));
@@ -6902,7 +7000,7 @@ document.querySelectorAll('#tabbar button').forEach(b=>b.onclick=()=>{
   b.setAttribute('aria-selected','true');
   document.getElementById(b.dataset.tab).classList.add('active');
   if(b.dataset.tab==='print') renderPrint();
-  if(b.dataset.tab==='showings') renderShowings();
+  if(b.dataset.tab==='showings') renderShowCalendar();
   if(b.dataset.tab==='categories') renderCategories();
   if(b.dataset.tab==='avail') renderAvailability();
   if(b.dataset.tab==='notes') renderFreeNotesTab();
