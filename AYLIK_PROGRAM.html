@@ -513,6 +513,11 @@ body.conflictFocus #sheet td.cell.conflict{opacity:1;filter:none}
   .print-month table.sheet td.cell.tour-return::after,
   .print-month table.sheet td.cell.tour-return.tour-empty::after{content:"" !important}
   .print-month table.sheet .tourSum{display:none !important}
+  /* 1b) Kategori renkli sol kenarlıkları (İL/SAHNE/PROVA/TATİL/DUYURU/KONUK OYUN)
+        yazdırmada tamamen kaldır — bu vurgular ekranda anlamlı ama basılı
+        sayfada rastgele/kalın siyah çizgi gibi görünüyordu. Sadece tablonun
+        normal ince gri çizgisi kalsın. */
+  .print-month table.sheet td.cell[data-cat]{border-left:1px solid #000 !important}
   /* 2) Sarı hücreler (başlık / sahne başlığı / Pazartesi) yazdırmada da sarı kalsın.
         Arka plan kapalı yazdırılsa bile inset gölge ile sarı görünür. */
   .print-month table.sheet tr.titleRow td,
@@ -5586,6 +5591,33 @@ function printProgram(val){
   renderPrintNow();
   setTimeout(()=>window.print(), 120);
 }
+/* Bir hücrenin metni sütun genişliğine sığmayıp 2. satıra taştığında,
+   o hücreye özel yazı boyutunu (yalnızca o hücrede) tek satıra sığana kadar
+   küçültür. Zaten tek satıra sığan hücrelere dokunmaz (boyutu değiştirmez). */
+function autoFitPrintText(scope){
+  const MIN_SCALE = 0.6;   // taban boyutun altına bu oranın altına inmez
+  const STEP = 0.4;        // her denemede küçültme adımı (px)
+  const cells = scope.querySelectorAll('table.sheet td.cell');
+  cells.forEach(td=>{
+    if(td.rowSpan && td.rowSpan > 1) return; // birleşmiş hücrelerde zaten fazladan yer var, dokunma
+    td.style.fontSize = '';
+    const cs = getComputedStyle(td);
+    const baseFs = parseFloat(cs.fontSize) || 9;
+    let lh = parseFloat(cs.lineHeight);
+    if(!lh || isNaN(lh)) lh = baseFs*1.15;
+    const padV = (parseFloat(cs.paddingTop)||0) + (parseFloat(cs.paddingBottom)||0);
+    const singleLine = lh + padV;
+    if(td.scrollHeight <= singleLine + 1) return; // zaten tek satıra sığıyor
+    let fs = baseFs;
+    const minFs = Math.max(5.5, baseFs*MIN_SCALE);
+    let guard = 0;
+    while(td.scrollHeight > singleLine + 1 && fs > minFs && guard < 24){
+      fs -= STEP;
+      td.style.fontSize = fs.toFixed(2)+'px';
+      guard++;
+    }
+  });
+}
 function fitPrintPages(){
   const wrap = document.getElementById('printView');
   if(!wrap) return;
@@ -5610,6 +5642,7 @@ function fitPrintPages(){
       W = Wn;
     }
     ps.style.width = W+'px';
+    autoFitPrintText(ps);
     const h = ps.getBoundingClientRect().height;
     let sc = pageW / W;
     if(h*sc > pageH) sc = pageH / h;
