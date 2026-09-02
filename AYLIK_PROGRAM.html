@@ -3472,7 +3472,7 @@ function renderSheet(){
 
     const rh=document.createElement('td'); rh.className='rowh'; rh.textContent=(r+1);
     rh.dataset.r=r; rh.tabIndex=0; rh.setAttribute('role','rowheader'); rh.setAttribute('aria-label',(r+1)+' satırını seç');
-    if(m.rowBg && m.rowBg[r]) rh.style.background = m.rowBg[r];
+    if(m.rowBg && m.rowBg[r] && !isMondayRow(m,r)) rh.style.background = m.rowBg[r];
     rh.addEventListener('click',()=>{ setSel(r,0,r,m.cols-1); });
     rh.addEventListener('contextmenu',e=>{e.preventDefault(); setSel(r,0,r,m.cols-1); showCtx(e.clientX,e.clientY,'row');});
     tr.appendChild(rh);
@@ -4735,6 +4735,30 @@ function applyCellsProp(prop, value){
 }
 function applyBg(color){ applyCellsProp('bg', color); }
 function applyFg(color){ applyCellsProp('color', color); }
+/* Sağ tık paletindeki "✕" (rengi kaldır) düğmeleri: sadece ilgili renk
+   özelliğini siler, diğer biçimlendirmeye (kalın, altı çizili, hizalama vb.)
+   dokunmaz — "Biçimi temizle"nin aksine yalnızca boyamayı geri alır. */
+function applyBgClear(){
+  const m=curMonth(); if(lockGuard(m)) return; snapshot();
+  for(const k of selKeys(m)){
+    const cur=m.cells[k]; if(!cur) continue;
+    const {bg, ...rest}=cur;
+    m.cells[k]=rest;
+  }
+  if(sel.c1===0 && sel.c2===m.cols-1 && m.rowBg){
+    for(let r=sel.r1;r<=sel.r2;r++) delete m.rowBg[r];
+  }
+  saveState(); renderSheet(); renderPrint();
+}
+function applyFgClear(){
+  const m=curMonth(); if(lockGuard(m)) return; snapshot();
+  for(const k of selKeys(m)){
+    const cur=m.cells[k]; if(!cur) continue;
+    const {color, colorRanges, ...rest}=cur;
+    m.cells[k]=rest;
+  }
+  saveState(); renderSheet(); renderPrint();
+}
 /* Sağ tık menüsündeki "Yazı Rengi" paleti için: hücre düzenleme kipindeyken
    fare ile metnin sadece bir kısmı seçiliyse (bkz. _pendingCtxFgSel, sağ tık
    anında yakalanır) rengi tüm hücreye değil o kısma uygula. Aksi halde
@@ -4803,7 +4827,7 @@ function opClearFormat(){
   }
   saveState(); renderSheet(); renderPrint();
 }
-function buildColorRow(label, palette, applyFn, pickerId, hint){
+function buildColorRow(label, palette, applyFn, pickerId, hint, clearFn){
   const row=document.createElement('div');
   row.style.cssText='padding:3px 12px 4px';
   if(hint) row.title=hint;
@@ -4834,6 +4858,15 @@ function buildColorRow(label, palette, applyFn, pickerId, hint){
     picker.click();
   };
   sw.appendChild(custom);
+  if(clearFn){
+    const clr=document.createElement('button');
+    clr.type='button'; clr.title='Rengi kaldır';
+    clr.style.cssText='flex:none;display:flex;align-items:center;justify-content:center;width:18px;height:18px;min-height:0;border-radius:4px;border:1px solid var(--border);cursor:pointer;background:#fff;color:#b3261e;font-size:12px;line-height:1;padding:0;margin-left:2px';
+    clr.textContent='✕';
+    clr.addEventListener('mousedown', e=>e.preventDefault());
+    clr.onclick=(e)=>{ e.stopPropagation(); hideCtx(); clearFn(); };
+    sw.appendChild(clr);
+  }
   row.appendChild(sw);
   return row;
 }
@@ -4933,8 +4966,8 @@ function showCtx(x,y,kind){
   el.innerHTML='';
   el.dataset.x=x; el.dataset.y=y;
 
-  el.appendChild(buildColorRow('Zemin Rengi', BG_PALETTE, applyBg, 'bgColorPicker'));
-  el.appendChild(buildColorRow('Yazı Rengi', FG_PALETTE, applyFgOrPartial, 'fgColorPicker', 'Hücreyi düzenlerken fare ile metnin bir kısmını seçip buradan renk seçerseniz, sadece o kısım renklenir. Seçim yoksa tüm hücre renklenir.'));
+  el.appendChild(buildColorRow('Zemin Rengi', BG_PALETTE, applyBg, 'bgColorPicker', undefined, applyBgClear));
+  el.appendChild(buildColorRow('Yazı Rengi', FG_PALETTE, applyFgOrPartial, 'fgColorPicker', 'Hücreyi düzenlerken fare ile metnin bir kısmını seçip buradan renk seçerseniz, sadece o kısım renklenir. Seçim yoksa tüm hücre renklenir.', applyFgClear));
   const ttl=document.createElement('div'); ttl.className='ttl'; ttl.textContent='Hizalama'; el.appendChild(ttl);
   ctxAlignRow(el);
   ctxSep(el);
@@ -5742,7 +5775,9 @@ function exportExcel(){
     let color = isPrem ? XLS_PREMIERE : '000000';
     let bold = headerish || isDateCol || isPrem;
     let underline = !!cell.underline;
-    if(cell.bg) bg = safeHex(cell.bg, bg);
+    /* Pazartesi satırları Excel'de de her zaman açık sarı kalsın — ekran ve
+       yazdırmadakiyle tutarlı olsun (kullanıcı hücreyi boyamış olsa bile). */
+    if(cell.bg && !isMondayRow(m,r)) bg = safeHex(cell.bg, bg);
     if(cell.color) color = safeHex(cell.color, color);   /* renk sadece kullanıcı verdiyse değişir */
     if(cell.bold) bold = true;
     if(isConflict){ bg = XLS_CONFLICT; color = 'FFFFFF'; bold = true; }
