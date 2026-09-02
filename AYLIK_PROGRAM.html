@@ -395,7 +395,8 @@ table.sheet td.cell.note-mark::after{content:"💬";position:absolute;top:0;righ
 .play-pane-title{display:flex;align-items:center;gap:8px;flex-wrap:wrap;color:var(--primary);font-family:'Fraunces',Georgia,serif;font-size:17px;font-weight:700;margin:2px 2px 10px}
 .play-pane-title small{font-family:'Manrope',system-ui,sans-serif;font-size:11px;font-weight:600;color:var(--muted)}
 .play-month-group{border:1px solid var(--border);border-radius:7px;overflow:hidden;margin-bottom:8px}
-.play-month-h{display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap;padding:7px 10px;background:#fdfbf6;border-bottom:1px solid var(--border);font-weight:700;color:var(--primary)}
+.play-month-h{display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap;padding:9px 12px;border-bottom:none;font-weight:800;color:#fff;font-family:'Fraunces',Georgia,serif;font-size:14.5px;letter-spacing:.2px}
+.play-month-h .chip{background:rgba(255,255,255,.22);color:#fff;border-color:rgba(255,255,255,.4)}
 .play-month-row{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:7px 10px;border-bottom:1px solid #f5efe1;font-size:12px}
 .play-month-row:last-child{border-bottom:none}
 .play-month-row .meta{color:var(--muted);flex:1;min-width:220px}
@@ -844,7 +845,7 @@ table.sheet td.cell{min-width:86px;height:29px}
 .pl-addcrew input{height:36px}
 .pl-placeholder{padding:70px 20px;border-radius:14px;background:var(--surface);box-shadow:var(--shadow)}
 .play-month-group{border-color:var(--border);border-radius:10px}
-.play-month-h{padding:10px 13px;background:#f7f2eb}
+.play-month-h{padding:11px 14px}
 .play-month-row{padding:10px 13px;border-bottom-color:var(--line)}
 .play-month-row:hover{background:#fffbf4}
 .play-counts{margin-bottom:14px}
@@ -1306,7 +1307,7 @@ table.sheet td.cell{min-width:86px;height:29px}
   <nav id="tabbar" role="tablist" aria-label="Ana bölümler">
     <button type="button" role="tab" aria-selected="true" aria-controls="program" data-tab="program" class="active">Aylık Program</button>
     <button type="button" role="tab" aria-selected="false" aria-controls="plays" data-tab="plays">Oyun &amp; Kadro<span id="playsPendingBadge" class="tabBadge" style="display:none"></span></button>
-    <button type="button" role="tab" aria-selected="false" aria-controls="showings" data-tab="showings">📅 Gösterim Takvimi<span id="showingsBadge" class="tabBadge" style="display:none"></span></button>
+    <button type="button" role="tab" aria-selected="false" aria-controls="showings" data-tab="showings">📅 Gösterim Takvimi</button>
     <button type="button" role="tab" aria-selected="false" aria-controls="avail" data-tab="avail">Müsaitlik</button>
     <button type="button" role="tab" aria-selected="false" aria-controls="notes" data-tab="notes">Serbest Notlar<span id="freeNotesBadge" class="tabBadge" style="display:none"></span></button>
     <button type="button" role="tab" aria-selected="false" aria-controls="print" data-tab="print">Yatay Yazdır</button>
@@ -3099,8 +3100,6 @@ function renderShowings(){
     const n=await sitePrompt('Not:',o.note||'','Not ekle/düzenle'); if(n===null) return;
     setCellNote(o.mi,o.key,n); renderShowings();
   });
-  const badge=document.getElementById('showingsBadge');
-  if(badge){ badge.textContent=all.length; badge.style.display=all.length?'inline-block':'none'; }
 }
 function renderCategories(){
   const list=document.getElementById('categoriesList');
@@ -5833,6 +5832,10 @@ function playOccurrenceList(play){
 function playOccurrences(play){ return playOccurrenceList(play).length; }
 
 /* === Gösterim Takvimi sekmesi: solda oyun listesi, sağda seçili oyunun aylık dökümü === */
+/* Ay başlıklarına görsel hiyerarşi için renk paleti (kategori renkleriyle
+   tutarlı) — her ay grubu kendi rengiyle öne çıkar, taramak kolaylaşır. */
+const MONTH_HUES = ['#1565c0','#6a1b9a','#ad1457','#2e7d32','#00838f','#ef6c00','#8a6d1a','#37474f'];
+function monthHue(idx){ return MONTH_HUES[idx % MONTH_HUES.length]; }
 let selectedShowcalPlay = null, showcalFilter = '';
 function renderShowCalendar(filter){
   if(filter !== undefined) showcalFilter = filter;
@@ -5855,12 +5858,6 @@ function renderShowCalendar(filter){
   }
 
   renderShowCalendarDetail();
-
-  const badge = document.getElementById('showingsBadge');
-  if(badge){
-    const total = collectShowings().length;
-    badge.textContent = total; badge.style.display = total ? 'inline-block' : 'none';
-  }
 }
 function renderShowCalendarDetail(){
   const box = document.getElementById('showcalDetail');
@@ -5885,9 +5882,9 @@ function renderShowCalendarDetail(){
       </div>
     </div>
     <div class="play-counts">${monthlyCountHtml}</div>
-    ${monthGroups.length ? monthGroups.map(([month,rows])=>`
+    ${monthGroups.length ? monthGroups.map(([month,rows],mIdx)=>`
       <div class="play-month-group">
-        <div class="play-month-h"><span>${escapeHtml(month)}</span><span class="chip">${rows.length} gösterim</span></div>
+        <div class="play-month-h" style="background:${monthHue(mIdx)}"><span>${escapeHtml(month)}</span><span class="chip">${rows.length} gösterim</span></div>
         ${rows.map((o,i)=>`
           <div class="play-month-row">
             <span class="meta">${escapeHtml(o.date||'Tarih yok')}${o.time?' · '+escapeHtml(o.time):''}${o.stage?' · '+escapeHtml(o.stage):''}${o.note?`<br><span class="nt">✎ ${escapeHtml(o.note)}</span>`:''}</span>
@@ -6278,9 +6275,9 @@ function renderPlayDetail(byPlay){
     <div class="play-pane ${tab==='showings'?'active':''}" data-play-pane="showings">
        <div class="play-pane-title">Gösterim takvimi <small>Programdaki kayıtlar aylara göre gruplanır.</small></div>
       <div class="play-counts">${monthlyCountHtml}</div>
-      ${monthGroups.length ? monthGroups.map(([month,rows])=>`
+      ${monthGroups.length ? monthGroups.map(([month,rows],mIdx)=>`
         <div class="play-month-group">
-          <div class="play-month-h"><span>${escapeHtml(month)}</span><span class="chip">${rows.length} gösterim</span></div>
+          <div class="play-month-h" style="background:${monthHue(mIdx)}"><span>${escapeHtml(month)}</span><span class="chip">${rows.length} gösterim</span></div>
           ${rows.map((o,i)=>`
             <div class="play-month-row">
               <span class="meta">${escapeHtml(o.date||'Tarih yok')}${o.time?' · '+escapeHtml(o.time):''}${o.stage?' · '+escapeHtml(o.stage):''}${o.note?`<br><span class="nt">✎ ${escapeHtml(o.note)}</span>`:''}</span>
