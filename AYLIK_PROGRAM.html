@@ -526,18 +526,6 @@ body.conflictFocus #sheet td.cell.conflict{opacity:1;filter:none}
     color:#000 !important;
     -webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;
   }
-  /* 3) v8: Tablo yazdırmadan önce transform:scale() ile küçültülüyor
-        (fitPrintPages). Kesirli ölçek oranlarında Chrome, hücreler arası
-        PAYLAŞILAN (border-collapse) çizgilerin bir kısmını atlayabiliyor —
-        bu, sayfaya göre (ay içeriğine, dolayısıyla ölçek oranına göre)
-        değişken bir kayıp olduğundan bazı aylarda hiç görülmeyip bazılarında
-        çerçizgiler "bozuk/eksik" görünüyordu. Çözüm: her hücreye, komşularla
-        PAYLAŞILMAYAN, kendi içine gömülü bağımsız bir outline eklemek —
-        outline collapse edilmediği için ölçekte kayıp yaşanmaz. */
-  .print-month table.sheet td{
-    outline:1px solid #000 !important;
-    outline-offset:-1px !important;
-  }
 }
 /* Ekrandaki yazdırma önizlemesi de aynı görünsün */
 #printView .print-month table.sheet td.cell.tour-head,
@@ -5484,19 +5472,6 @@ function renderPrintNow(){
   const buildBlock = (m)=>{
     const tours = computeTours(m);
     let h = `<div class="print-month"><div class="psWrap"><h2>${escapeHtml(m.name)}</h2><table class="sheet">`;
-    /* Sütun genişlikleri: "saat" sütunu (B, index 1) her zaman dar kalsın —
-       table-layout:fixed altında ilk satırdaki colspan'lı başlık hücreleri
-       yüzünden tarayıcı sütun genişliklerini güvenilir biçimde
-       hesaplayamıyor; bu yüzden genişlikler burada açıkça <colgroup> ile
-       veriliyor. */
-    const stageColCount = Math.max(1, m.cols-3);
-    const stageColW = (100-4-16) / stageColCount;
-    h += '<colgroup>';
-    for(let c=0;c<m.cols;c++){
-      const w = c===1 ? 4 : (c===0||c===m.cols-1) ? 8 : stageColW;
-      h += `<col style="width:${w}%">`;
-    }
-    h += '</colgroup>';
     for(let r=0;r<m.rows;r++){
       const cls = r===0 ? 'titleRow' : (r===1 ? 'stageHead' : (isMondayRow(m,r) ? 'monday' : ''));
       h += `<tr${cls?` class="${cls}"`:''}>`;
@@ -5637,13 +5612,9 @@ function fitPrintPages(){
     }
     ps.style.width = W+'px';
     const h = ps.getBoundingClientRect().height;
-    /* Sayfayı olabildiğince doldur: hangi boyut kısıtlayıcıysa ona göre
-       ölçekle (önceden yalnızca genişliğe göre ölçeklenip yükseklik kısa
-       kalınca altta boşluk bırakıyordu). Yükseklik kısıtlayıcıysa tablo
-       sayfada yatayda ortalanır. */
-    let sc = Math.min(pageW / W, pageH / h);
-    const offX = Math.max(0, (pageW - W*sc) / 2);
-    ps.style.transform = offX ? `translateX(${offX}px) scale(${sc})` : `scale(${sc})`;
+    let sc = pageW / W;
+    if(h*sc > pageH) sc = pageH / h;
+    ps.style.transform = 'scale('+sc+')';
     mo.style.height = Math.floor(Math.min(pageH, h*sc))+'px';
   });
   wrap.setAttribute('style', prevStyle);
