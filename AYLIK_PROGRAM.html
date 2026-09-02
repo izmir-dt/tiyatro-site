@@ -5591,32 +5591,35 @@ function printProgram(val){
   renderPrintNow();
   setTimeout(()=>window.print(), 120);
 }
-/* Bir hücrenin metni sütun genişliğine sığmayıp 2. satıra taştığında,
-   o hücreye özel yazı boyutunu (yalnızca o hücrede) tek satıra sığana kadar
-   küçültür. Zaten tek satıra sığan hücrelere dokunmaz (boyutu değiştirmez). */
+/* Bir ay tablosunda herhangi bir hücre metni sütun genişliğine sığmayıp
+   2. satıra taşıyorsa, TÜM TABLO için ortak tek bir yazı boyutunu (en dar/
+   en uzun metinli hücre neyi gerektiriyorsa) kademeli küçültür. Böylece
+   tablodaki tüm hücreler her zaman aynı punto boyutunda kalır. */
 function autoFitPrintText(scope){
-  const MIN_SCALE = 0.6;   // taban boyutun altına bu oranın altına inmez
-  const STEP = 0.4;        // her denemede küçültme adımı (px)
-  const cells = scope.querySelectorAll('table.sheet td.cell');
-  cells.forEach(td=>{
-    if(td.rowSpan && td.rowSpan > 1) return; // birleşmiş hücrelerde zaten fazladan yer var, dokunma
-    td.style.fontSize = '';
-    const cs = getComputedStyle(td);
-    const baseFs = parseFloat(cs.fontSize) || 9;
-    let lh = parseFloat(cs.lineHeight);
-    if(!lh || isNaN(lh)) lh = baseFs*1.15;
-    const padV = (parseFloat(cs.paddingTop)||0) + (parseFloat(cs.paddingBottom)||0);
-    const singleLine = lh + padV;
-    if(td.scrollHeight <= singleLine + 1) return; // zaten tek satıra sığıyor
-    let fs = baseFs;
-    const minFs = Math.max(5.5, baseFs*MIN_SCALE);
-    let guard = 0;
-    while(td.scrollHeight > singleLine + 1 && fs > minFs && guard < 24){
-      fs -= STEP;
-      td.style.fontSize = fs.toFixed(2)+'px';
-      guard++;
-    }
-  });
+  const table = scope.querySelector('table.sheet');
+  if(!table) return;
+  table.style.fontSize = '';
+  const cs = getComputedStyle(table);
+  const baseFs = parseFloat(cs.fontSize) || 9;
+  const minFs = Math.max(5.5, baseFs*0.6);
+  const cells = Array.from(table.querySelectorAll('td.cell')).filter(td=>!(td.rowSpan && td.rowSpan>1));
+  function anyWraps(){
+    return cells.some(td=>{
+      const tcs = getComputedStyle(td);
+      let lh = parseFloat(tcs.lineHeight);
+      if(!lh || isNaN(lh)) lh = parseFloat(tcs.fontSize)*1.15;
+      const padV = (parseFloat(tcs.paddingTop)||0) + (parseFloat(tcs.paddingBottom)||0);
+      return td.scrollHeight > lh + padV + 1;
+    });
+  }
+  let fs = baseFs;
+  const STEP = 0.3;
+  let guard = 0;
+  while(anyWraps() && fs > minFs && guard < 40){
+    fs -= STEP;
+    table.style.fontSize = fs.toFixed(2)+'px';
+    guard++;
+  }
 }
 function fitPrintPages(){
   const wrap = document.getElementById('printView');
