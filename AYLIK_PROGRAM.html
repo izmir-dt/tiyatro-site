@@ -481,7 +481,7 @@ body.conflictFocus #sheet td.cell.conflict{opacity:1;filter:none}
   section{display:none !important}
   body{background:#fff}
   #printView{display:block !important}
-  .print-month{page-break-after:always;margin-bottom:0;overflow:hidden}
+  .print-month{page-break-after:always;break-inside:avoid;page-break-inside:avoid;margin:0;padding:0;overflow:hidden}
   .print-month .psWrap{transform-origin:top left}
   .print-month:last-child{page-break-after:auto}
   .print-month h2{margin:0 0 4px;font-size:16px;text-align:center}
@@ -3528,7 +3528,9 @@ function renderSheet(){
       if(cell.cat){ td.setAttribute('data-cat', cell.cat); td.title = (td.title?td.title+' · ':'') + 'Kategori: ' + cell.cat; }
       if(cell.ignoreConflict) td.classList.add('noconf');
       if(cell.note){ td.classList.add('note-mark'); }
-      const cs = cellStyleString(cell);
+      /* Pazartesi satırları boyansa bile ekranda da açık sarı kalır:
+         hücreye uygulanan arka plan boyasını bu satırlarda yok say. */
+      const cs = cellStyleString(isMondayRow(m,r) ? {...cell, bg:null} : cell);
       if(cs) td.style.cssText += cs;
       if(mm){ td.rowSpan = mm[2]-mm[0]+1; td.colSpan = mm[3]-mm[1]+1; }
       wireCell(td);
@@ -5518,12 +5520,17 @@ function renderPrintNow(){
         const rs = mm?` rowspan="${mm[2]-mm[0]+1}"`:''; const cs = mm?` colspan="${mm[3]-mm[1]+1}"`:'';
         /* Pazartesi / başlık satırlarında hücre içi turne-oyun kutuları vb. kendi
            arka planını taşısa bile satır içi stille sarıyı zorla — CSS önceliği
-           ne olursa olsun garanti sarı basılsın (yazdırmada beyaz kalma sorunu). */
-        let styleAttr = cellStyleString(cell);
-        if(cls && !cell.bg){
-          styleAttr = (styleAttr?styleAttr+';':'') + 'background:#ffff00 !important;box-shadow:none !important';
-          if(!cell.color) styleAttr += ';color:#000 !important';
-        }
+           ne olursa olsun garanti sarı basılsın (yazdırmada beyaz kalma sorunu).
+           Pazartesi satırları boyansa (cell.bg) bile daima sarı kalır. */
+         let styleAttr = cellStyleString(cell);
+         if(cls==='monday' && cell.bg){
+           /* Pazartesi'ye uygulanan boyama arka planını yok say — satır açık sarı kalsın */
+           styleAttr = styleAttr.replace(/background:[^;]*;?/g,'').replace(/^;+|;+$/g,'');
+         }
+         if(cls && (cls==='monday' || !cell.bg)){
+           styleAttr = (styleAttr?styleAttr+';':'') + 'background:#ffff00 !important;box-shadow:none !important';
+           if(!cell.color) styleAttr += ';color:#000 !important';
+         }
         const st = styleAttr?` style="${styleAttr}"`:'';
         const _richTxt = cellRichHtml(cell);
         h+=`<td class="${clist.join(' ')}"${rs}${cs}${st}>${_richTxt!==null?_richTxt:escapeHtml(cellDisplayText(cell))}${extra}</td>`;
@@ -5617,8 +5624,21 @@ function fitPrintPages(){
     let sc = pageW / W;
     if(h*sc > pageH) sc = pageH / h;
     ps.style.transform = 'scale('+sc+')';
+    /* GÜVENCE: içerik asla ikinci sayfaya taşmasın — ölçeği uyguladıktan
+       sonra gerçek (ölçekli) yüksekliği ölç; sayfayı 1px bile aşıyorsa
+       ölçeği biraz daha küçült. */
+    let rh = ps.getBoundingClientRect().height;
+    if(rh > pageH - 2){
+      sc *= (pageH - 2) / rh;
+      ps.style.transform = 'scale('+sc+')';
+      rh = ps.getBoundingClientRect().height;
+    }
+    /* Ay bloğunun yüksekliğini sayfa alanına sabitle ve taşanı kes —
+       tarayıcı yuvarlamasıyla ekstra (boş/içerikli) sayfa oluşmasın. */
     mo.style.width = pageW+'px';
-    mo.style.height = Math.floor(pageH)+'px';
+    mo.style.height = Math.max(1, Math.floor(pageH - 1))+'px';
+    mo.style.maxHeight = Math.max(1, Math.floor(pageH - 1))+'px';
+    mo.style.overflow = 'hidden';
   });
   wrap.setAttribute('style', prevStyle);
 }
