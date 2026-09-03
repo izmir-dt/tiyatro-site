@@ -2765,6 +2765,23 @@ function isSaturdayRow(m,r){
 function isMondayRow(m,r){
   return dateTextOfRow(m,r).toLocaleLowerCase('tr').includes('pazartesi');
 }
+/* Cumartesi günleri matine(15.00)/suare(20.00) iki ayrı satıra bölünüyor.
+   Bir turne sütununda bu iki satırdan biri boş, diğeri doluysa (ör. matine
+   turneye dahil değil ama suarede aynı gün oyun var), boş satır GERÇEK bir
+   "yol / oyunsuz gün" değildir — aynı takvim günüdür. Bu fonksiyon, verilen
+   satırla AYNI tarihe sahip başka bir satırda bu sütunda dolu metin olup
+   olmadığını söyler. */
+function rowHasSameDayContent(m,r,c){
+  const dt = dateTextOfRow(m,r);
+  if(!dt) return false;
+  for(let rr=2; rr<m.rows; rr++){
+    if(rr===r) continue;
+    if(dateTextOfRow(m,rr)!==dt) continue;
+    const cell = m.cells[rr+'_'+c];
+    if(cell && String(cell.v||'').trim()) return true;
+  }
+  return false;
+}
 function cellStyleString(cell){
   const parts=[];
   if(cell.bg) parts.push('background:'+cell.bg+' !important');
@@ -3354,7 +3371,8 @@ function computeTours(m){
       if(cell && cell.tourId && !cell.tourHead && byId[cell.tourId]){
         const g=byId[cell.tourId];
         gap=[];
-        g.members.push({r,c,key:k,cell,gap:!v});
+        const sameDay0 = !v && rowHasSameDayContent(m,r,c);
+        g.members.push({r,c,key:k,cell,gap:!v && !sameDay0, sameDay:sameDay0});
         if(cell.tourReturn) g.returnKey=k;
         map[k]={g,role:'member'}; cur=g; continue;
       }
@@ -3385,8 +3403,15 @@ function computeTours(m){
          eklenir. Böylece ay sonunda bir sonraki aya "dönüş günü" için doğru
          oyun/turne adı taşınır. */
       if(cur){
-        /* tampondaki boş günleri de bloğa dahil et (çizgiler kesilmesin) */
-        gap.forEach(gp=>{ cur.members.push({...gp, gap:true}); map[gp.key]={g:cur,role:'member',gap:true}; });
+        /* tampondaki boş günleri de bloğa dahil et (çizgiler kesilmesin).
+           Ancak boş satır Cumartesi matine/suare gibi AYNI takvim gününe
+           ait başka bir dolu satırla eşleşiyorsa gerçek bir "yol/oyunsuz
+           gün" değildir — gap etiketi bastırılır. */
+        gap.forEach(gp=>{
+          const sameDay = rowHasSameDayContent(m,gp.r,c);
+          cur.members.push({...gp, gap:!sameDay, sameDay});
+          map[gp.key]={g:cur,role:'member',gap:!sameDay,sameDay};
+        });
         gap=[];
         const g=cur;
         g.members.push({r,c,key:k,cell});
@@ -3518,7 +3543,7 @@ function renderSheet(){
         } else {
           td.classList.add('tour-member');
           if(r===lastR) td.classList.add('tour-last'); else td.classList.add('tour-mid');
-          if(tinfo.gap || !String(cell.v||'').trim()){ if(!cell.tourReturn) td.classList.add('tour-gap'); }
+          if((tinfo.gap || !String(cell.v||'').trim()) && !tinfo.sameDay){ if(!cell.tourReturn) td.classList.add('tour-gap'); }
           if(cell.tourReturn) td.classList.add('tour-return');
         }
       }
@@ -5555,7 +5580,7 @@ function renderPrintNow(){
             clist.push('tour-member');
             const rws=tinfo.g.members.map(x=>x.r);
             if(r===Math.max.apply(null,rws)) clist.push('tour-last'); else clist.push('tour-mid');
-            if((tinfo.gap || !String(cell.v||'').trim()) && !cell.tourReturn) clist.push('tour-gap');
+            if((tinfo.gap || !String(cell.v||'').trim()) && !cell.tourReturn && !tinfo.sameDay) clist.push('tour-gap');
             if(cell.tourReturn) clist.push('tour-return');
           }
         }
