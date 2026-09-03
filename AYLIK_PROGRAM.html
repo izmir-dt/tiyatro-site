@@ -163,9 +163,9 @@ table.sheet tr.stageHead td{background:var(--head);color:var(--headInk);font-wei
 @media print{#sheet td.stickR{position:static !important;box-shadow:none}}
 #sheet td.stickL{position:sticky !important;background-clip:padding-box;box-shadow:inset -1px 0 0 rgba(0,0,0,.35)}
 @media print{#sheet td.stickL{position:static !important;box-shadow:none}}
-table.sheet tr.rowTrack>td{box-shadow:inset 0 0 0 999px rgba(20,10,0,.07),inset 0 2px 0 var(--accent,#b8863b),inset 0 -2px 0 var(--accent,#b8863b)}
-table.sheet tr.rowTrack>td.stickL{box-shadow:inset -1px 0 0 rgba(0,0,0,.35),inset 0 0 0 999px rgba(20,10,0,.09),inset 0 2px 0 var(--accent,#b8863b),inset 0 -2px 0 var(--accent,#b8863b)}
-@media print{table.sheet tr.rowTrack>td{box-shadow:none !important}}
+table.sheet td.rowTrack{box-shadow:inset 0 0 0 999px rgba(197,139,50,.13),inset 0 2px 0 var(--accent,#b8863b),inset 0 -2px 0 var(--accent,#b8863b)}
+table.sheet td.rowTrack.stickL{box-shadow:inset -1px 0 0 rgba(0,0,0,.35),inset 0 0 0 999px rgba(197,139,50,.17),inset 0 2px 0 var(--accent,#b8863b),inset 0 -2px 0 var(--accent,#b8863b)}
+@media print{table.sheet td.rowTrack{box-shadow:none !important}}
 
 /* === Aylık program tablosu sayfanın merkezinde === */
 .tbl-wrap{width:fit-content;max-width:100%;margin-left:auto;margin-right:auto}
@@ -631,35 +631,35 @@ table.sheet td.cell.tour-mid{
 /* Satır takibi (rowTrack) gölgesi turne sınır çizgilerini ezmesin diye
    iki efekt tek box-shadow içinde birleştirildi (aksi halde box-shadow
    tekil bir özellik olduğu için sadece biri görünüyordu). */
-table.sheet tr.rowTrack td.cell.tour-head,
-table.sheet tr.rowTrack td.cell.tour-member,
-table.sheet tr.rowTrack td.cell.tour-return{
-  box-shadow:inset 0 0 0 999px rgba(20,10,0,.07),
+table.sheet td.cell.rowTrack.tour-head,
+table.sheet td.cell.rowTrack.tour-member,
+table.sheet td.cell.rowTrack.tour-return{
+  box-shadow:inset 0 0 0 999px rgba(197,139,50,.13),
              inset 4px 0 0 var(--tourLine), inset -1px 0 0 var(--tourEdge);
 }
-table.sheet tr.rowTrack td.cell.tour-first{
-  box-shadow:inset 0 0 0 999px rgba(20,10,0,.07),
+table.sheet td.cell.rowTrack.tour-first{
+  box-shadow:inset 0 0 0 999px rgba(197,139,50,.13),
              inset 4px 0 0 var(--tourLine), inset -1px 0 0 var(--tourEdge),
              inset 0 2px 0 var(--tourLine);
 }
-table.sheet tr.rowTrack td.cell.tour-last{
-  box-shadow:inset 0 0 0 999px rgba(20,10,0,.07),
+table.sheet td.cell.rowTrack.tour-last{
+  box-shadow:inset 0 0 0 999px rgba(197,139,50,.13),
              inset 4px 0 0 var(--tourLine), inset -1px 0 0 var(--tourEdge),
              inset 0 -2px 0 var(--tourLine);
 }
-table.sheet tr.rowTrack td.cell.tour-first.tour-last{
-  box-shadow:inset 0 0 0 999px rgba(20,10,0,.07),
+table.sheet td.cell.rowTrack.tour-first.tour-last{
+  box-shadow:inset 0 0 0 999px rgba(197,139,50,.13),
              inset 4px 0 0 var(--tourLine), inset -1px 0 0 var(--tourEdge),
              inset 0 2px 0 var(--tourLine), inset 0 -2px 0 var(--tourLine);
 }
-table.sheet tr.rowTrack td.cell.tour-return.tour-last,
-table.sheet tr.rowTrack td.cell.tour-return:not(.tour-first):not(.tour-last){
-  box-shadow:inset 0 0 0 999px rgba(20,10,0,.07),
+table.sheet td.cell.rowTrack.tour-return.tour-last,
+table.sheet td.cell.rowTrack.tour-return:not(.tour-first):not(.tour-last){
+  box-shadow:inset 0 0 0 999px rgba(197,139,50,.13),
              inset 4px 0 0 #b23018, inset -1px 0 0 rgba(178,48,24,.5),
              inset 0 -2px 0 #b23018 !important;
 }
-table.sheet tr.rowTrack td.cell.tour-mid{
-  box-shadow:inset 0 0 0 999px rgba(20,10,0,.07),
+table.sheet td.cell.rowTrack.tour-mid{
+  box-shadow:inset 0 0 0 999px rgba(197,139,50,.13),
              inset 4px 0 0 var(--tourLine), inset -1px 0 0 var(--tourEdge);
 }
 #printView .print-month table.sheet td.cell.tour-gap::after,.print-month table.sheet td.cell.tour-gap::after{content:"·"}
@@ -3762,19 +3762,58 @@ function applyStickyLeft(){
    gözle takip etmeyi kolaylaştırır. Hücrelerin kendi zemin renklerini
    bozmaması için opak bir arka plan yerine ince bir üst/alt çizgi + hafif
    karartma (inset box-shadow) kullanılır. */
+/* Satırın görsel olarak kapsadığı TÜM hücreleri hesaplar (rowSpan ile
+   birleştirilmiş tarih hücresi gibi, o satıra fiziksel olarak ait olmayan
+   ama görsel olarak o satırı da kaplayan hücreler dahil). Böylece satır
+   takibi gölgesi, örn. tarihin yazılı olduğu (matine/suare ile birleşmiş)
+   satırları da kapsar. */
+function computeRowCoverage(t){
+  const rows=t.rows, coverage=[], active=[];
+  for(let r=0;r<rows.length;r++){
+    const tr=rows[r], rowCells=[];
+    let col=0, cellIdx=0;
+    const trCells=tr.cells;
+    while(cellIdx<trCells.length || active[col]){
+      if(active[col] && active[col].remaining>0){
+        rowCells[col]=active[col].td;
+        active[col].remaining--;
+        if(active[col].remaining<=0) active[col]=null;
+        col++;
+        continue;
+      }
+      const td=trCells[cellIdx];
+      if(!td) break;
+      cellIdx++;
+      const rs=td.rowSpan||1, cs=td.colSpan||1;
+      for(let k=0;k<cs;k++) rowCells[col+k]=td;
+      if(rs>1) active[col]={td, remaining:rs-1};
+      col+=cs;
+    }
+    coverage[r]=rowCells;
+  }
+  return coverage;
+}
 function initRowTrackHover(){
   const t=document.getElementById('sheet');
-  if(!t || t.__rowTrackWired) return;
+  if(!t) return;
+  t.__rowTrackCoverage = computeRowCoverage(t);
+  if(t.__rowTrackWired) return;
   t.__rowTrackWired = true;
-  let curTr=null;
-  const clear=()=>{ if(curTr){ curTr.classList.remove('rowTrack'); curTr=null; } };
+  let curCells=[], curR=-1;
+  const clear=()=>{ curCells.forEach(td=>td.classList.remove('rowTrack')); curCells=[]; curR=-1; };
   t.addEventListener('mouseover', e=>{
     const td = e.target.closest && e.target.closest('td');
     if(!td) return;
     const tr = td.parentElement;
-    if(tr===curTr) return;
+    if(!tr || tr.rowIndex<3){ clear(); return; }
+    const r = tr.rowIndex;
+    if(r===curR) return;
+    const coverage = t.__rowTrackCoverage || [];
+    const cells = (coverage[r]||[]).filter(Boolean);
     clear();
-    if(tr && tr.rowIndex>=3){ tr.classList.add('rowTrack'); curTr=tr; }
+    cells.forEach(c=>c.classList.add('rowTrack'));
+    curCells = cells;
+    curR = r;
   });
   t.addEventListener('mouseleave', clear);
 }
