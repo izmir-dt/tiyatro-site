@@ -3358,9 +3358,9 @@ function tourCarryFromPrev(m, c){
      G'de dönebilir), bulunamazsa önceki ayda açık kalan HERHANGİ bir turne
      de kabul edilir. */
   const sameCol = pt.groups.find(g => g.col===c && isOpenAtMonthEnd(g));
-  if(sameCol) return {headText:sameCol.headText, id:sameCol.id, lastPlay:lastPlayOf(sameCol)};
+  if(sameCol) return {headText:sameCol.headText, id:sameCol.id, lastPlay:lastPlayOf(sameCol), legs:sameCol.legs||[]};
   const anyCol = pt.groups.find(g => isOpenAtMonthEnd(g));
-  if(anyCol) return {headText:anyCol.headText, id:anyCol.id, lastPlay:lastPlayOf(anyCol)};
+  if(anyCol) return {headText:anyCol.headText, id:anyCol.id, lastPlay:lastPlayOf(anyCol), legs:anyCol.legs||[]};
   return null;
 }
 function tourColsOf(m){ return programCols(m).filter(c=>stageHeaderText(m,c).includes('TURNE')); }
@@ -3371,6 +3371,19 @@ function isTourHeadCell(cell){
   if(cell.tourId) return false;
   return isFreeTextCell(cell);
 }
+function pushTourLeg(g, text){
+  text = String(text||'').trim();
+  if(!text) return;
+  g.legs = g.legs||[];
+  const last = g.legs.length ? g.legs[g.legs.length-1].text : g.headText;
+  if(last===text) return; /* aynı durak arka arkaya tekrar etmesin */
+  g.legs.push({text});
+}
+function tourDisplayHead(g){
+  let h = g.headText||'';
+  (g.legs||[]).forEach(l=>{ h += ' → '+l.text; });
+  return h;
+}
 function computeTours(m){
   const map={}, byId={}, groups=[];
   tourColsOf(m).forEach(c=>{
@@ -3378,7 +3391,7 @@ function computeTours(m){
     const carry = tourCarryFromPrev(m, c);
     if(carry){
       cur = {id:'carry_'+carry.id, col:c, headKey:null, headRow:null, headText:carry.headText,
-             members:[], returnKey:null, locked:false, carried:true, carriedLastPlay:carry.lastPlay||''};
+             members:[], returnKey:null, locked:false, carried:true, carriedLastPlay:carry.lastPlay||'', legs:(carry.legs||[]).slice()};
       groups.push(cur); byId[cur.id]=cur;
     }
     for(let r=2;r<m.rows;r++){
@@ -3389,6 +3402,7 @@ function computeTours(m){
         gap=[];
         const sameDay0 = !v && rowHasSameDayContent(m,r,c);
         g.members.push({r,c,key:k,cell,gap:!v && !sameDay0, sameDay:sameDay0});
+        if(cell.tourLeg && v) pushTourLeg(g, v);
         if(cell.tourReturn) g.returnKey=k;
         map[k]={g,role:'member'}; cur=g; continue;
       }
@@ -3409,7 +3423,7 @@ function computeTours(m){
       }
       if(isTourHeadCell(cell) && (cell.tourHead || !cur)){
         gap=[];
-        cur={id:(cell.tourId||('auto_'+c+'_'+r)), col:c, headKey:k, headRow:r, headText:v, members:[], returnKey:null, locked:!!cell.tourId};
+        cur={id:(cell.tourId||('auto_'+c+'_'+r)), col:c, headKey:k, headRow:r, headText:v, members:[], returnKey:null, locked:!!cell.tourId, legs:[]};
         groups.push(cur); byId[cur.id]=cur; map[k]={g:cur,role:'head'};
         continue;
       }
@@ -3431,6 +3445,7 @@ function computeTours(m){
         gap=[];
         const g=cur;
         g.members.push({r,c,key:k,cell});
+        if(cell.tourLeg && v) pushTourLeg(g, v);
         if(cell.tourReturn){ g.returnKey=k; cur=null; }   /* aynı gün dönüş + metin varsa da turne burada kapanır */
         map[k]={g,role:'member'};
       }
@@ -3467,7 +3482,7 @@ function tourAt(m,r,c){
 }
 function tourTooltipHtml(m,info){
   const g=info.g;
-  let h='<hr><div class="ttHead">🚌 '+escapeHtml(g.headText)+' turnesi</div>';
+  let h='<hr><div class="ttHead">🚌 '+escapeHtml(tourDisplayHead(g))+' turnesi</div>';
   h+='<div>'+escapeHtml(tourSummary(m,g))+(g.locked?' · <b>kilitli</b>':'')+'</div>';
   g.members.forEach(x=>{
     h+='<div class="ttGame">• '+escapeHtml(tourDayLabel(m,x.r))+' — '+escapeHtml(x.cell.v)+(x.key===g.returnKey?' <b>↩ dönüş</b>':'')+'</div>';
@@ -3787,6 +3802,7 @@ function initTooltipInteraction(){
     else if(act==='dismiss') dismissPendingPlay(k);
     else if(act==='unfreeCell') unmarkFreeTextCell(rr,cc);
     else if(act==='unfreeAll') unmarkAllFreeText(k);
+    else if(act==='toggleTourLeg') toggleTourLegCell(rr,cc);
     window.__ttPin=null;
     hideTooltipNow(true);
   });
@@ -4044,9 +4060,11 @@ function showTooltipFor(r,c,ev){
        (cell.note ? '<hr><div class="ttNote"><b>Not</b><span>'+escapeHtml(cell.note)+'</span></div>' : '')+
       (tinfoTT ? tourTooltipHtml(m,tinfoTT) : '')+
       '<hr><div class="ttOk">Bu hücre oyun sayılmaz (çakışma ve oyun listesine girmez).</div>'+
+      (tinfoTT ? '<div class="ttOk">'+(cell.tourLeg ? '🚏 Bu hücre turnede yeni bir durak (şehir) olarak işaretli — başlıkta gösteriliyor.' : 'Bu, 2+ bacaklı bir turnede yeni bir şehre geçiş ise, aşağıdan "durak" olarak işaretleyip turne başlığına ekleyebilirsin.')+'</div>' : '')+
       '<div class="ttActions">'+
         '<button type="button" class="ttBtn" data-ttact="unfreeCell">↩ Bu hücrede geri al</button>'+
         (freeKey ? '<button type="button" class="ttBtn" data-ttact="unfreeAll" data-ttkey="'+escapeHtml(freeKey)+'">↩ Tüm hücrelerde geri al</button>' : '')+
+        (tinfoTT ? '<button type="button" class="ttBtn" data-ttact="toggleTourLeg">'+(cell.tourLeg ? '🚏 Durak işaretini kaldır' : '🚏 Yeni durak (şehir) yap') + '</button>' : '')+
       '</div>'+
       '<div class="ttHint">Geri alınca hücre yeniden oyun olarak değerlendirilir (çakışma denetimine girer).</div>';
     tt.style.display='block'; placeTooltip(); return;
@@ -4153,6 +4171,21 @@ function unmarkAllFreeText(name){
   saveState(); registerPlayName(key, {v:key, notFree:true});
   renderSheet(); renderPrint(); renderPlays();
   setStatus('"'+key+'" için serbest metin işareti kaldırıldı.');
+}
+/* 2 (veya daha çok) bacaklı turneler: bir turne devam ederken araya giren
+   serbest metin hücresi (ör. "MALATYA") aslında yeni bir durak/şehir
+   duyurusudur. Böyle bir hücre "durak" olarak işaretlenince, turnenin
+   tooltip başlığı "ELAZIĞ → MALATYA turnesi" gibi zincirlenir; hücre yine
+   oyun sayılmaz, sadece başlık bilgisine eklenir. */
+function toggleTourLegCell(r,c){
+  const m=curMonth(); const cur=m.cells[r+'_'+c];
+  if(!cur || !cur.v) return;
+  snapshot();
+  const n={...cur};
+  if(n.tourLeg) delete n.tourLeg; else n.tourLeg = true;
+  m.cells[r+'_'+c]=n;
+  saveState(); renderSheet(); renderPrint();
+  setStatus(n.tourLeg ? 'Bu hücre turnede yeni durak (şehir) olarak işaretlendi.' : 'Durak işareti kaldırıldı.');
 }
 
 function buildOyunDatalist(){
