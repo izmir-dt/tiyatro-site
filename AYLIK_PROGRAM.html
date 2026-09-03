@@ -163,8 +163,8 @@ table.sheet tr.stageHead td{background:var(--head);color:var(--headInk);font-wei
 @media print{#sheet td.stickR{position:static !important;box-shadow:none}}
 #sheet td.stickL{position:sticky !important;background-clip:padding-box;box-shadow:inset -1px 0 0 rgba(0,0,0,.35)}
 @media print{#sheet td.stickL{position:static !important;box-shadow:none}}
-table.sheet td.rowTrack{box-shadow:inset 0 0 0 999px rgba(15,98,166,.22),inset 0 3px 0 #0f62a6,inset 0 -3px 0 #0f62a6,inset 3px 0 0 #0f62a6,inset -3px 0 0 #0f62a6}
-table.sheet td.rowTrack.stickL{box-shadow:inset -1px 0 0 rgba(0,0,0,.35),inset 0 0 0 999px rgba(15,98,166,.26),inset 0 3px 0 #0f62a6,inset 0 -3px 0 #0f62a6,inset 3px 0 0 #0f62a6}
+table.sheet td.rowTrack{box-shadow:inset 0 0 0 999px rgba(197,139,50,.13),inset 0 2px 0 var(--accent,#b8863b),inset 0 -2px 0 var(--accent,#b8863b)}
+table.sheet td.rowTrack.stickL{box-shadow:inset -1px 0 0 rgba(0,0,0,.35),inset 0 0 0 999px rgba(197,139,50,.17),inset 0 2px 0 var(--accent,#b8863b),inset 0 -2px 0 var(--accent,#b8863b)}
 @media print{table.sheet td.rowTrack{box-shadow:none !important}}
 
 /* === Aylık program tablosu sayfanın merkezinde === */
@@ -638,32 +638,32 @@ table.sheet td.cell.tour-mid{
 table.sheet td.cell.rowTrack.tour-head,
 table.sheet td.cell.rowTrack.tour-member,
 table.sheet td.cell.rowTrack.tour-return{
-  box-shadow:inset 0 0 0 999px rgba(15,98,166,.22),
+  box-shadow:inset 0 0 0 999px rgba(197,139,50,.13),
              inset 4px 0 0 var(--tourLine), inset -1px 0 0 var(--tourEdge);
 }
 table.sheet td.cell.rowTrack.tour-first{
-  box-shadow:inset 0 0 0 999px rgba(15,98,166,.22),
+  box-shadow:inset 0 0 0 999px rgba(197,139,50,.13),
              inset 4px 0 0 var(--tourLine), inset -1px 0 0 var(--tourEdge),
              inset 0 2px 0 var(--tourLine);
 }
 table.sheet td.cell.rowTrack.tour-last{
-  box-shadow:inset 0 0 0 999px rgba(15,98,166,.22),
+  box-shadow:inset 0 0 0 999px rgba(197,139,50,.13),
              inset 4px 0 0 var(--tourLine), inset -1px 0 0 var(--tourEdge),
              inset 0 -2px 0 var(--tourLine);
 }
 table.sheet td.cell.rowTrack.tour-first.tour-last{
-  box-shadow:inset 0 0 0 999px rgba(15,98,166,.22),
+  box-shadow:inset 0 0 0 999px rgba(197,139,50,.13),
              inset 4px 0 0 var(--tourLine), inset -1px 0 0 var(--tourEdge),
              inset 0 2px 0 var(--tourLine), inset 0 -2px 0 var(--tourLine);
 }
 table.sheet td.cell.rowTrack.tour-return.tour-last,
 table.sheet td.cell.rowTrack.tour-return:not(.tour-first):not(.tour-last){
-  box-shadow:inset 0 0 0 999px rgba(15,98,166,.22),
+  box-shadow:inset 0 0 0 999px rgba(197,139,50,.13),
              inset 4px 0 0 #b23018, inset -1px 0 0 rgba(178,48,24,.5),
              inset 0 -2px 0 #b23018 !important;
 }
 table.sheet td.cell.rowTrack.tour-mid{
-  box-shadow:inset 0 0 0 999px rgba(15,98,166,.22),
+  box-shadow:inset 0 0 0 999px rgba(197,139,50,.13),
              inset 4px 0 0 var(--tourLine), inset -1px 0 0 var(--tourEdge);
 }
 #printView .print-month table.sheet td.cell.tour-gap::after,.print-month table.sheet td.cell.tour-gap::after{content:"·"}
@@ -3802,32 +3802,45 @@ function initRowTrackHover(){
   const t=document.getElementById('sheet');
   if(!t) return;
   /* Her yeniden çizimde tablo tamamen yeniden oluşturulduğu (t.innerHTML='')
-     için önceki gölgeli hücrenin DOM referansı artık geçersiz — izleme
-     durumunu burada sıfırla ki tıklama mantığı bir sonraki tıklamada
-     tutarlı çalışsın. */
-  t.__rowTrackCur = null;
+     için önceki gölgeli hücrelerin DOM referansları artık geçersiz —
+     izleme durumunu burada sıfırla ki tıklama mantığı bir sonraki
+     tıklamada tutarlı çalışsın. */
+  t.__rowTrackCells = [];
+  t.__rowTrackR = -1;
   if(t.__rowTrackWired) return;
   t.__rowTrackWired = true;
-  const clear=()=>{ if(t.__rowTrackCur) t.__rowTrackCur.forEach(el=>el.classList.remove('rowTrack')); t.__rowTrackCur=null; };
-  /* Gölge artık fare gezinirken (hover) DEĞİL, herhangi bir hücreye (tarih
-     hücresi olsun, oyun adı yazan hücre olsun) tek tıklandığında açılır/
-     kapanır — tıklanan hücrenin kendisinde VE o satırın soldaki tarih
-     hücresinde (A sütunu, rowSpan ile birleşmiş olsa bile) birlikte,
-     boydan boya. Rastgele fare hareketi hiçbir şey yapmaz. Aynı hücreye
-     tekrar tıklamak gölgeyi kapatır. */
+  const clear=()=>{ t.__rowTrackCells.forEach(td=>td.classList.remove('rowTrack')); t.__rowTrackCells=[]; t.__rowTrackR=-1; };
+  /* Satır takibi gölgesi bir hücreye (tarih hücresi dahil, satırdaki
+     HERHANGİ bir hücre) tek tıklandığında açılır/kapanır — o satırın
+     TÜM sütunlarında, birleşik (merge) hücreler dahil, boydan boya.
+     data-r/data-c ve m.merges'e göre gerçek sahibi hücre bulunduğu için
+     'rowh' (satır numarası) hücresi gibi sütun kayması olmaz. Aynı
+     satırdaki bir hücreye tekrar tıklamak gölgeyi kapatır. */
   t.addEventListener('click', e=>{
     const td = e.target.closest && e.target.closest('td.cell');
     if(!td) return;
-    if(t.__rowTrackCur && t.__rowTrackCur.includes(td)){ clear(); return; }
+    const r = +td.dataset.r;
+    if(isNaN(r) || r<2) return; // başlık satırları (ay adı, sahne adları)
+    if(r===t.__rowTrackR){ clear(); return; }
     clear();
-    const cells=new Set([td]);
-    const tr=td.closest('tr');
-    if(tr){
-      const rowCells=computeRowCoverage(t)[tr.rowIndex];
-      if(rowCells && rowCells[0]) cells.add(rowCells[0]);
+    const m = curMonth();
+    const seen = new Set();
+    const cells = [];
+    for(let c=0;c<m.cols;c++){
+      let r0=r, c0=c;
+      for(const mrg of m.merges){
+        const [mr1,mc1,mr2,mc2]=mrg;
+        if(r>=mr1&&r<=mr2&&c>=mc1&&c<=mc2){ r0=mr1; c0=mc1; break; }
+      }
+      const key=r0+'_'+c0;
+      if(seen.has(key)) continue;
+      seen.add(key);
+      const cellTd = t.querySelector('td.cell[data-r="'+r0+'"][data-c="'+c0+'"]');
+      if(cellTd) cells.push(cellTd);
     }
-    cells.forEach(el=>el.classList.add('rowTrack'));
-    t.__rowTrackCur = [...cells];
+    cells.forEach(c=>c.classList.add('rowTrack'));
+    t.__rowTrackCells = cells;
+    t.__rowTrackR = r;
   });
 }
 function colName(c){ let s=''; c++; while(c){ s=String.fromCharCode(65+(c-1)%26)+s; c=Math.floor((c-1)/26);} return s; }
