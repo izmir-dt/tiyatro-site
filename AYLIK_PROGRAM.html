@@ -2748,6 +2748,38 @@ function dateTextOfRow(m,r){
   return '';
 }
 function timeTextOfRow(m,r){ return (m.cells[r+'_1']||{}).v || ''; }
+/* Cumartesi matine/suare gibi aynı takvim gününe yayılan satır çiftini bulur:
+   satırın kendisi mi yoksa komşusu mu "devam satırı" (A sütunu boş) ona bakar. */
+function sameDaySiblingRows(m,r){
+  const ownDateRaw=(rr)=>(m.cells[rr+'_0']||{}).v||'';
+  const isContinuationRow=(rr)=>{ const raw=ownDateRaw(rr); return !(raw && /\d/.test(raw)); };
+  if(isContinuationRow(r) && r-1>=2) return [r-1,r];
+  if(isContinuationRow(r+1) && r+1<m.rows) return [r,r+1];
+  return [r];
+}
+function timeNumOf(m,r){
+  const t=String(timeTextOfRow(m,r)||'').replace(',','.').trim();
+  const mt=t.match(/(\d{1,2})[.:](\d{2})/);
+  return mt ? (+mt[1] + (+mt[2])/60) : NaN;
+}
+/* Aynı gün 2 (veya daha çok) satıra bölünmüşse (matine/suare), bu satırın
+   hangisi olduğunu saatine göre söyler; tek satırlık günlerde boş döner. */
+function sessionLabelForRow(m,r){
+  const rows=sameDaySiblingRows(m,r);
+  if(rows.length<2) return '';
+  const withTime=rows.map(rr=>({r:rr,t:timeNumOf(m,rr)}));
+  const sorted=withTime.slice().sort((a,b)=>{
+    if(isNaN(a.t)&&isNaN(b.t)) return 0;
+    if(isNaN(a.t)) return 1;
+    if(isNaN(b.t)) return -1;
+    return a.t-b.t;
+  });
+  const pos=sorted.findIndex(x=>x.r===r);
+  if(rows.length===2) return pos===0 ? 'Matine' : 'Suare';
+  if(pos===0) return 'Matine';
+  if(pos===sorted.length-1) return 'Suare';
+  return 'Ara '+(pos+1);
+}
 function isWeekendRow(m,r){
   const t = dateTextOfRow(m,r).toLocaleLowerCase('tr');
   return t.includes('cumartesi') || t.includes('pazar');
@@ -3485,7 +3517,13 @@ function tourTooltipHtml(m,info){
   let h='<hr><div class="ttHead">🚌 '+escapeHtml(tourDisplayHead(g))+' turnesi</div>';
   h+='<div>'+escapeHtml(tourSummary(m,g))+(g.locked?' · <b>kilitli</b>':'')+'</div>';
   g.members.forEach(x=>{
-    h+='<div class="ttGame">• '+escapeHtml(tourDayLabel(m,x.r))+' — '+escapeHtml(x.cell.v)+(x.key===g.returnKey?' <b>↩ dönüş</b>':'')+'</div>';
+    const raw = x.cell.v||'';
+    const hasInlineTime = /\d{1,2}[.:]\d{2}/.test(raw);
+    const t = gameTimeOf(m,x.r,raw);
+    const sess = sessionLabelForRow(m,x.r);
+    const parts=[]; if(sess) parts.push(sess); if(t && !hasInlineTime) parts.push(t);
+    const suffix = parts.length ? ' <span style="opacity:.75">('+escapeHtml(parts.join(' '))+')</span>' : '';
+    h+='<div class="ttGame">• '+escapeHtml(tourDayLabel(m,x.r))+suffix+' — '+escapeHtml(raw)+(x.key===g.returnKey?' <b>↩ dönüş</b>':'')+'</div>';
   });
   if(g.returnKey){
     const rows=g.members.map(x=>x.r);
@@ -4028,7 +4066,7 @@ function showTooltipFor(r,c,ev){
     const mine = gamesR.find(g=>g.row===r && g.col===c);
     let hR = '<div class="ttHead">↩ Turne dönüş günü</div>';
     if(raw) hR += '<div>'+escapeHtml(raw)+'</div>';
-    hR += '<div>Tarih: <b>'+escapeHtml(dateTextOfRow(m,r)||'-')+'</b></div>';
+    hR += '<div>Tarih: <b>'+escapeHtml(dateTextOfRow(m,r)||'-')+'</b>'+(sessionLabelForRow(m,r)?' · <b>'+escapeHtml(sessionLabelForRow(m,r))+'</b>':'')+'</div>';
     if(mine) hR += '<div>Dönen kadro: <b>'+escapeHtml(mine.key)+'</b></div>';
     hR += '<div>Bu gün temsil olarak sayılmaz.</div><hr>';
     if(confR.hasCritical){
@@ -4084,18 +4122,19 @@ function showTooltipFor(r,c,ev){
 
   const dateText = dateTextOfRow(m,r);
   const timeText = timeTextOfRow(m,r);
+  const sessLabel = sessionLabelForRow(m,r);
   const stage = stageHeaderText(m,c);
 
   let html = '';
   html += '<div class="ttHead">'+escapeHtml(raw)+'</div>';
-  html += '<div>Tarih: <b>'+escapeHtml(dateText||'-')+'</b>'+(timeText?' · saat <b>'+escapeHtml(timeText)+'</b>':'')+'</div>';
+  html += '<div>Tarih: <b>'+escapeHtml(dateText||'-')+'</b>'+(timeText?' · saat <b>'+escapeHtml(timeText)+'</b>':'')+(sessLabel?' · <b>'+escapeHtml(sessLabel)+'</b>':'')+'</div>';
   if(stage) html += '<div>Sahne: '+escapeHtml(stage)+'</div>';
   html += '<hr>';
   if(games.length<=1){
     html += '<div class="ttOk">Uygun ✅ (bu tarihte tek oyun)</div>';
   } else {
      html += '<div class="ttSectionLabel">Bu tarihteki diğer oyunlar</div>';
-    for(const g of games) html += '<div class="ttGame">• '+escapeHtml(g.raw)+(g.time?' <span style="opacity:.75">('+escapeHtml(g.time)+')</span>':'')+(g.isReturn?' <b style="color:#ffb4a2">↩ dönüş</b>':'')+'</div>';
+    for(const g of games) html += '<div class="ttGame">• '+escapeHtml(g.raw)+((g.time||sessionLabelForRow(m,g.row))?' <span style="opacity:.75">('+escapeHtml([sessionLabelForRow(m,g.row),g.time].filter(Boolean).join(' '))+')</span>':'')+(g.isReturn?' <b style="color:#ffb4a2">↩ dönüş</b>':'')+'</div>';
     html += '<hr>';
     if(!conflict.hasCritical && Object.keys(conflict.people).length===0){
       html += '<div class="ttOk">Uygun ✅ Çakışan kişi yok.</div>';
