@@ -2765,13 +2765,36 @@ function isMondayRow(m,r){
    satırla AYNI tarihe sahip başka bir satırda bu sütunda dolu metin olup
    olmadığını söyler. */
 function rowHasSameDayContent(m,r,c){
-  const dt = dateTextOfRow(m,r);
-  if(!dt) return false;
-  for(let rr=2; rr<m.rows; rr++){
-    if(rr===r) continue;
-    if(dateTextOfRow(m,rr)!==dt) continue;
+  const hasText = (rr)=>{
+    if(rr<2 || rr>=m.rows) return false;
     const cell = m.cells[rr+'_'+c];
-    if(cell && String(cell.v||'').trim()) return true;
+    return !!(cell && String(cell.v||'').trim());
+  };
+  const ownDateRaw = (rr)=> (m.cells[rr+'_0']||{}).v || '';
+  const isContinuationRow = (rr)=>{
+    const raw = ownDateRaw(rr);
+    return !(raw && /\d/.test(raw));
+  };
+  /* Birincil kontrol: Cumartesi matine/suare ikilisi, tablo üretiminde
+     ikinci satırın KENDİ tarih hücresi (A sütunu) bilerek boş bırakılır
+     (tarih üstteki satırla birleşimden miras alınır). Bu yüzden "satırın
+     kendi tarih hücresi boş mu" doğrudan ve merges dizisine bağlı olmayan,
+     sağlam bir "aynı gün" göstergesidir — merges kaydı bir şekilde bozulmuş
+     olsa bile çalışır. */
+  if(isContinuationRow(r)){
+    if(hasText(r-1)) return true;
+  } else if(isContinuationRow(r+1)){
+    if(hasText(r+1)) return true;
+  }
+  /* İkincil kontrol (yedek): tam tarih metni eşleşmesiyle tablo genelinde
+     ara — merges kaydı sağlamsa ve gün ikiden fazla satıra yayılmışsa. */
+  const dt = dateTextOfRow(m,r);
+  if(dt){
+    for(let rr=2; rr<m.rows; rr++){
+      if(rr===r) continue;
+      if(dateTextOfRow(m,rr)!==dt) continue;
+      if(hasText(rr)) return true;
+    }
   }
   return false;
 }
