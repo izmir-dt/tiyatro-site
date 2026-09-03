@@ -2727,6 +2727,7 @@ let sel = {r1:0,c1:0,r2:0,c2:0};
 let dragSelecting = false;
 let dragMoved = false;
 let dragAnchor = {r:0,c:0};
+let curTourHlId = null; /* turne bloğu vurgusunun (tour-hl) yanıp sönmesini önlemek için: aynı gruptaki komşu hücreler arasında gezinirken tekrar tekrar temizleyip yeniden eklemeyi atla */
 function setSel(r1,c1,r2,c2){
   sel = {r1:Math.min(r1,r2),c1:Math.min(c1,c2),r2:Math.max(r1,r2),c2:Math.max(c1,c2)};
   paintSel();
@@ -3893,9 +3894,15 @@ function wireCell(td){
   });
   td.addEventListener('mouseenter', e=>{
     const r=+td.dataset.r, c=+td.dataset.c;
-    const tid=td.dataset.tour;
-    document.querySelectorAll('#sheet td.tour-hl').forEach(x=>x.classList.remove('tour-hl'));
-    if(tid) document.querySelectorAll('#sheet td[data-tour="'+tid+'"]').forEach(x=>x.classList.add('tour-hl'));
+    const tid=td.dataset.tour || null;
+    /* Aynı turne grubu içindeki komşu hücreler arasında gezinirken (tid
+       değişmiyorsa) vurguyu temizleyip yeniden eklemiyoruz — bu, kırmızı
+       çizginin her hücre sınırında yanıp sönmesine sebep oluyordu. */
+    if(tid !== curTourHlId){
+      document.querySelectorAll('#sheet td.tour-hl').forEach(x=>x.classList.remove('tour-hl'));
+      if(tid) document.querySelectorAll('#sheet td[data-tour="'+tid+'"]').forEach(x=>x.classList.add('tour-hl'));
+      curTourHlId = tid;
+    }
     scheduleTooltipShow(r,c,e);
   });
   /* Fare aynı hücrede gezerken bir şey yapma; başka hücreye geçildiğinde
@@ -3906,12 +3913,18 @@ function wireCell(td){
     /* Aynı hücrede hareket ederken tooltip konumunu değiştirme. */
   });
   td.addEventListener('mouseleave',()=>{
-    document.querySelectorAll('#sheet td.tour-hl').forEach(x=>x.classList.remove('tour-hl'));
     cancelTooltipShow();
     scheduleTooltipHide();
   });
 }
 document.addEventListener('mouseup', ()=>{ dragSelecting=false; });
+/* Fare tablodan tamamen çıkınca turne vurgusunu (tour-hl) temizle. */
+document.getElementById('sheet') && document.getElementById('sheet').addEventListener('mouseleave', ()=>{
+  if(curTourHlId!==null){
+    document.querySelectorAll('#sheet td.tour-hl').forEach(x=>x.classList.remove('tour-hl'));
+    curTourHlId = null;
+  }
+});
 
 let ttHideTimer=null;
 let ttShowTimer=null;
