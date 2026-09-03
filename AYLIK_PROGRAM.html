@@ -3802,25 +3802,32 @@ function initRowTrackHover(){
   const t=document.getElementById('sheet');
   if(!t) return;
   t.__rowTrackCoverage = computeRowCoverage(t);
+  /* Her yeniden çizimde tablo tamamen yeniden oluşturulduğu (t.innerHTML='')
+     için önceki gölgeli hücrelerin DOM referansları artık geçersiz —
+     izleme durumunu burada sıfırla ki tıklama mantığı bir sonraki
+     tıklamada tutarlı çalışsın. */
+  t.__rowTrackCur = {cells:[], r:-1};
   if(t.__rowTrackWired) return;
   t.__rowTrackWired = true;
-  let curCells=[], curR=-1;
-  const clear=()=>{ curCells.forEach(td=>td.classList.remove('rowTrack')); curCells=[]; curR=-1; };
-  t.addEventListener('mouseover', e=>{
-    const td = e.target.closest && e.target.closest('td');
+  const clear=()=>{ t.__rowTrackCur.cells.forEach(td=>td.classList.remove('rowTrack')); t.__rowTrackCur={cells:[], r:-1}; };
+  /* Satır takibi gölgesi artık fare gezinirken (hover) DEĞİL, sadece tarih
+     hücresine (dateCol — A sütunu ve tabloyu takip eden tarih tekrar
+     sütunu) tek tıklandığında açılır/kapanır; böylece rastgele fare
+     hareketleri gölgeyi tetiklemez. Aynı tarih hücresine tekrar tıklamak
+     gölgeyi kapatır. */
+  t.addEventListener('click', e=>{
+    const td = e.target.closest && e.target.closest('td.dateCol');
     if(!td) return;
     const tr = td.parentElement;
-    if(!tr || tr.rowIndex<3){ clear(); return; }
+    if(!tr || tr.rowIndex<3) return;
     const r = tr.rowIndex;
-    if(r===curR) return;
+    if(r===t.__rowTrackCur.r){ clear(); return; }
     const coverage = t.__rowTrackCoverage || [];
     const cells = (coverage[r]||[]).filter(Boolean);
     clear();
     cells.forEach(c=>c.classList.add('rowTrack'));
-    curCells = cells;
-    curR = r;
+    t.__rowTrackCur = {cells, r};
   });
-  t.addEventListener('mouseleave', clear);
 }
 function colName(c){ let s=''; c++; while(c){ s=String.fromCharCode(65+(c-1)%26)+s; c=Math.floor((c-1)/26);} return s; }
 
@@ -6886,6 +6893,11 @@ function collectNotes(){
         stage:(m.cells['1_'+c]||{}).v||'', text:cell.v||'', note:cell.note});
     });
   });
+  /* Tarih sırasına göre (küçükten büyüğe) sırala: tablo satırları zaten
+     ay içinde kronolojik olduğu için satır (r) numarasına göre sıralamak
+     tarihe göre sıralamakla aynı anlama gelir; aynı satırda birden fazla
+     sütun notu varsa sütuna (c) göre ikincil sırala. */
+  out.sort((a,b)=> a.r-b.r || a.c-b.c);
   return out;
 }
 function renderNotes(){
