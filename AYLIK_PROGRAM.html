@@ -161,6 +161,11 @@ table.sheet tr.stageHead td{background:var(--head);color:var(--headInk);font-wei
    (KARŞIYAKA RAGIP HAYKIR SAHNESİ …) satırı üstte sabit kalır === */
 #sheet td.stickR{position:sticky;background-clip:padding-box;box-shadow:inset 0 -1px 0 #000,inset 1px 0 0 rgba(0,0,0,.35),inset -1px 0 0 rgba(0,0,0,.35)}
 @media print{#sheet td.stickR{position:static !important;box-shadow:none}}
+#sheet td.stickL{position:sticky !important;background-clip:padding-box;box-shadow:inset -1px 0 0 rgba(0,0,0,.35)}
+@media print{#sheet td.stickL{position:static !important;box-shadow:none}}
+table.sheet tr.rowTrack>td{box-shadow:inset 0 0 0 999px rgba(20,10,0,.07),inset 0 2px 0 var(--accent,#b8863b),inset 0 -2px 0 var(--accent,#b8863b)}
+table.sheet tr.rowTrack>td.stickL{box-shadow:inset -1px 0 0 rgba(0,0,0,.35),inset 0 0 0 999px rgba(20,10,0,.09),inset 0 2px 0 var(--accent,#b8863b),inset 0 -2px 0 var(--accent,#b8863b)}
+@media print{table.sheet tr.rowTrack>td{box-shadow:none !important}}
 
 /* === Aylık program tablosu sayfanın merkezinde === */
 .tbl-wrap{width:fit-content;max-width:100%;margin-left:auto;margin-right:auto}
@@ -1082,6 +1087,13 @@ table.sheet td.cell{min-width:86px;height:29px}
 #program table.sheet tr:nth-child(1) td.stickR{z-index:103!important}
 #program table.sheet tr:nth-child(2) td.stickR{z-index:102!important}
 #program table.sheet tr:nth-child(3) td.stickR{z-index:101!important}
+#program table.sheet td.stickL{
+  position:sticky!important;opacity:1!important;background-clip:padding-box;
+  background-image:none;isolation:isolate
+}
+#program table.sheet tr:nth-child(1) td.stickL{z-index:203!important}
+#program table.sheet tr:nth-child(2) td.stickL{z-index:202!important}
+#program table.sheet tr:nth-child(3) td.stickL{z-index:201!important}
 
 /* Tooltip yenilemesi — sakin görünüm, net bilgi hiyerarşisi */
 :root{
@@ -3636,6 +3648,8 @@ function renderSheet(){
   paintSel();
   if(window.refreshConflictBar) window.refreshConflictBar();
   applyStickyHeads();
+  applyStickyLeft();
+  initRowTrackHover();
 }
 /* İlk üç satırı (sütun harfleri, ay başlığı, sahne adları satırı) tablonun
    üstüne sabitler. Satır yükseklikleri aya göre değişebildiği için üst
@@ -3668,6 +3682,67 @@ function applyStickyHeads(){
     }
     if(pin) top += tr.offsetHeight;
   }
+}
+/* Yatay kaydırmada satır takibini kolaylaştırmak için: satır numarası (rowh)
+   ve tarih (A) sütunu sola sabitlenir. Böylece sağa doğru TURNE sütunlarına
+   kaydırıldığında bile hangi güne bakıldığı hep görünür kalır. Üstteki 3
+   sabit satırla kesiştiği köşe hücrelerde hem üst hem sol sabitleme birlikte
+   uygulanır (en yüksek z-index ile). */
+function applyStickyLeft(){
+  const t=document.getElementById('sheet');
+  if(!t) return;
+  const rows=t.rows;
+  let rowhW=0, dateW=0;
+  for(let i=0;i<rows.length && (!rowhW || !dateW); i++){
+    for(const td of rows[i].cells){
+      if(!rowhW && td.classList.contains('rowh')) rowhW = td.offsetWidth;
+      if(!dateW && td.dataset && td.dataset.c==='0') dateW = td.offsetWidth;
+    }
+  }
+  for(let i=0;i<rows.length;i++){
+    const isHeadRow = i<3;
+    for(const td of rows[i].cells){
+      const isRowh = td.classList.contains('rowh') || td.classList.contains('corner');
+      const isDateCol = td.dataset && td.dataset.c==='0';
+      if(!isRowh && !isDateCol) continue;
+      td.classList.add('stickL');
+      td.style.position='sticky';
+      td.style.left = isRowh ? '0px' : rowhW+'px';
+      if(isHeadRow){
+        /* Zaten applyStickyHeads() ile üst sabitlenmiş (top ayarlı) köşe
+           hücreler: en yüksek z-index'i alır ki hem alttaki hem sağdaki
+           kayan hücrelerin üstünde kalsın. */
+        td.style.zIndex = String(300+i);
+      } else {
+        td.style.zIndex = '40';
+        const bg = getComputedStyle(td).backgroundColor;
+        if(!bg || bg==='transparent' || /rgba\([^)]*,\s*0\s*\)/.test(bg)){
+          td.style.backgroundColor = isRowh ? '#f0e9df' : '#fffdfa';
+        }
+      }
+    }
+  }
+}
+/* Fare hangi satırın üzerindeyse, o satırın tamamını (yatayda görünmeyen
+   kısımlar dahil) hafifçe vurgular — yatay kaydırma sırasında satırı
+   gözle takip etmeyi kolaylaştırır. Hücrelerin kendi zemin renklerini
+   bozmaması için opak bir arka plan yerine ince bir üst/alt çizgi + hafif
+   karartma (inset box-shadow) kullanılır. */
+function initRowTrackHover(){
+  const t=document.getElementById('sheet');
+  if(!t || t.__rowTrackWired) return;
+  t.__rowTrackWired = true;
+  let curTr=null;
+  const clear=()=>{ if(curTr){ curTr.classList.remove('rowTrack'); curTr=null; } };
+  t.addEventListener('mouseover', e=>{
+    const td = e.target.closest && e.target.closest('td');
+    if(!td) return;
+    const tr = td.parentElement;
+    if(tr===curTr) return;
+    clear();
+    if(tr && tr.rowIndex>=3){ tr.classList.add('rowTrack'); curTr=tr; }
+  });
+  t.addEventListener('mouseleave', clear);
 }
 function colName(c){ let s=''; c++; while(c){ s=String.fromCharCode(65+(c-1)%26)+s; c=Math.floor((c-1)/26);} return s; }
 
