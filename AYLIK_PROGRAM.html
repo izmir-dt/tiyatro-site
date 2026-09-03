@@ -3801,31 +3801,26 @@ function computeRowCoverage(t){
 function initRowTrackHover(){
   const t=document.getElementById('sheet');
   if(!t) return;
-  t.__rowTrackCoverage = computeRowCoverage(t);
   /* Her yeniden çizimde tablo tamamen yeniden oluşturulduğu (t.innerHTML='')
-     için önceki gölgeli hücrelerin DOM referansları artık geçersiz —
-     izleme durumunu burada sıfırla ki tıklama mantığı bir sonraki
-     tıklamada tutarlı çalışsın. */
-  t.__rowTrackCur = {cells:[], r:-1};
+     için önceki gölgeli hücrenin DOM referansı artık geçersiz — izleme
+     durumunu burada sıfırla ki tıklama mantığı bir sonraki tıklamada
+     tutarlı çalışsın. */
+  t.__rowTrackCur = null;
   if(t.__rowTrackWired) return;
   t.__rowTrackWired = true;
-  const clear=()=>{ t.__rowTrackCur.cells.forEach(td=>td.classList.remove('rowTrack')); t.__rowTrackCur={cells:[], r:-1}; };
-  /* Satır takibi gölgesi artık fare gezinirken (hover) DEĞİL, sadece SOL
-     taraftaki tarih hücresine (A sütunu) tek tıklandığında açılır/kapanır;
-     böylece rastgele fare hareketleri ya da başka bir hücreye tıklamak
-     gölgeyi tetiklemez. Aynı tarih hücresine tekrar tıklamak gölgeyi kapatır. */
+  const clear=()=>{ if(t.__rowTrackCur) t.__rowTrackCur.classList.remove('rowTrack'); t.__rowTrackCur=null; };
+  /* Gölge artık fare gezinirken (hover) DEĞİL, herhangi bir hücreye (tarih
+     hücresi olsun, oyun adı yazan hücre olsun) tek tıklandığında açılır/
+     kapanır — sadece o tıklanan hücrenin kendisinde, boydan boya (birleşik/
+     "oyun oyun içinde" hücresiyse tamamı boyunca). Rastgele fare hareketi
+     hiçbir şey yapmaz. Aynı hücreye tekrar tıklamak gölgeyi kapatır. */
   t.addEventListener('click', e=>{
-    const td = e.target.closest && e.target.closest('td.dateCol');
-    if(!td || td.dataset.c!=='0') return;
-    const tr = td.parentElement;
-    if(!tr || tr.rowIndex<3) return;
-    const r = tr.rowIndex;
-    if(r===t.__rowTrackCur.r){ clear(); return; }
-    const coverage = t.__rowTrackCoverage || [];
-    const cells = (coverage[r]||[]).filter(Boolean);
+    const td = e.target.closest && e.target.closest('td.cell');
+    if(!td) return;
+    if(td===t.__rowTrackCur){ clear(); return; }
     clear();
-    cells.forEach(c=>c.classList.add('rowTrack'));
-    t.__rowTrackCur = {cells, r};
+    td.classList.add('rowTrack');
+    t.__rowTrackCur = td;
   });
 }
 function colName(c){ let s=''; c++; while(c){ s=String.fromCharCode(65+(c-1)%26)+s; c=Math.floor((c-1)/26);} return s; }
