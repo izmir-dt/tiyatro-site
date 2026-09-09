@@ -1770,7 +1770,6 @@ table.sheet td.cell{min-width:86px;height:29px}
         <button type="button" id="agViewWeek" class="on">Haftalık</button>
         <button type="button" id="agViewMonth">Aylık</button>
       </div>
-      <span class="ag-tlabel">Hafta</span>
       <div class="ag-weeknav">
         <button class="ag-navbtn" id="agPrev" title="Önceki" aria-label="Önceki">‹</button>
         <button class="ag-navbtn ag-today-btn" id="agToday">Bugün</button>
@@ -1780,7 +1779,7 @@ table.sheet td.cell{min-width:86px;height:29px}
       <b id="agRangeLabel" class="ag-range"></b>
     </div>
     <div class="ag-tgroup ag-tgroup-right">
-      <span class="ag-tlabel">Görünen saatler</span>
+      <span class="ag-tlabel">Saatler</span>
       <select id="agStart" aria-label="Başlangıç saati"></select>
       <span class="ag-dash">–</span>
       <select id="agEnd" aria-label="Bitiş saati"></select>
@@ -1790,14 +1789,16 @@ table.sheet td.cell{min-width:86px;height:29px}
         <option value="60">Bir saat</option>
         <option value="15">15 dakika</option>
       </select>
-      <button class="btn small" id="agPrint" title="Bu haftayı yazdır">🖨 Yazdır</button>
+      <button class="btn small ag-toggle" id="agShowProg" aria-pressed="true" title="Aylık programa yazılan oyunları ajandada göster">🎭 Oyunlar: Açık</button>
+      <button class="btn small" id="agPrint" title="Görünen ajandayı yazdır / PDF">🖨 Yazdır</button>
+      <button class="btn small ag-primary" id="agPdfMonth" title="Bu ayın ajandasını PDF olarak indir">⬇ Aylık PDF</button>
       <button class="btn small ag-danger" id="agClearWeek" title="Bu haftadaki tüm notları sil">Haftayı temizle</button>
     </div>
   </div>
 
   <div id="agendaWrap"><div id="agendaGrid"></div></div>
   <div id="agendaMonthWrap"><div id="agendaMonthGrid"></div></div>
-  <p class="ag-foot">Boş bir kutuyu boş bırakırsanız not silinir. <b>Shift+Enter</b> alt satıra geçer. Buradaki notlar aylık programı ve oyun sayımlarını <b>etkilemez</b>. Aylık görünümde bir güne tıklarsanız o günün haftalık görünümü açılır.</p>
+  <p class="ag-foot">Aylık programa yazdığınız oyunlar ajandada otomatik görünür (🎭 renkli kartlar) — bunlar ajandadan düzenlenmez. Beyaz alanlara kendi notlarınızı yazabilirsiniz; boş bırakırsanız not silinir. <b>Shift+Enter</b> alt satıra geçer. Aylık görünümde bir güne tıklarsanız o günün haftası açılır.</p>
 </section>
 
 <section id="notes" role="tabpanel">
@@ -7908,19 +7909,106 @@ body.idt-locked main{pointer-events:none;user-select:none;opacity:.5;filter:gray
 })();
 </script>
 
+<style id="ag-refresh-v2">
+/* =========================================================
+   AJANDA v2 — estetik görünüm, program bağlantısı, yazdırma
+   ========================================================= */
+.ag-toolbar{gap:10px}
+.btn.small.ag-toggle{background:#fff;border:1px solid var(--border);color:var(--primary);font-weight:700}
+.btn.small.ag-toggle[aria-pressed="false"]{background:#f1ece1;color:var(--muted);opacity:.85}
+.btn.small.ag-primary{background:var(--primary) !important;color:#fff !important;border:1px solid var(--primary) !important;font-weight:700}
+.btn.small.ag-primary:hover{filter:brightness(1.08)}
+
+#agendaWrap,#agendaMonthWrap{border:1px solid var(--border);border-radius:14px;background:#fff;
+  box-shadow:0 10px 26px rgba(57,35,24,.07)}
+
+/* ---- Haftalık ızgara ---- */
+.ag-grid{display:grid;min-width:1040px;background:#fff}
+.ag-slot{position:relative;border-top:1px solid #f2ead8;border-left:1px solid #f4eee0;min-height:40px;
+  display:flex;flex-direction:column;gap:3px;padding:3px 4px}
+.ag-slot.ag-hourline{border-top:1px solid #d8c79c}
+.ag-slot.ag-weekend{background:#fffdf3}
+.ag-slot.ag-todaycol{background:#fffafa}
+.ag-slot .ag-cell{border:0;min-height:26px;padding:3px 5px;border-radius:6px;background:transparent}
+.ag-slot .ag-cell.has-text{background:#f7f1e6;border-left:3px solid var(--primary);font-weight:600}
+.ag-band{border-left:1px solid #f4eee0;border-bottom:2px solid var(--border);background:#fcf9f3;
+  padding:5px;display:flex;flex-direction:column;gap:4px;min-height:34px}
+.ag-band.ag-weekend{background:#fdf8ea}
+.ag-bandlabel{position:sticky;left:0;z-index:4;background:#fcf9f3;border-right:2px solid var(--border);
+  border-bottom:2px solid var(--border);font-size:10px;letter-spacing:.5px;text-transform:uppercase;
+  color:var(--muted);font-weight:700;display:flex;align-items:center;justify-content:flex-end;padding:4px 6px}
+
+/* ---- Program kartları (aylık programdan gelir) ---- */
+.ag-ev{display:block;border-radius:7px;padding:4px 7px;font-size:12px;line-height:1.25;
+  background:linear-gradient(180deg,#fbeff1,#f7e3e6);border:1px solid #e7c4cb;border-left:4px solid var(--primary);
+  color:#3a1119;box-shadow:0 1px 2px rgba(90,20,32,.07);overflow:hidden}
+.ag-ev .ag-evt{font-variant-numeric:tabular-nums;font-weight:800;color:var(--primary);margin-right:5px}
+.ag-ev .ag-evn{font-weight:700}
+.ag-ev .ag-evs{display:block;font-size:10.5px;color:#8a6a55;letter-spacing:.2px;text-transform:uppercase;margin-top:1px}
+.ag-ev.ag-prem{background:linear-gradient(180deg,#fff3d8,#ffe9bd);border-color:#e2bd6e;border-left-color:#b8892b}
+.ag-ev.ag-prem .ag-evt{color:#8a6512}
+
+.ag-cell:empty::before{content:'+ not'}
+.ag-time{padding-top:5px}
+
+/* ---- Aylık görünüm ---- */
+.ag-mday{min-height:124px}
+.ag-mday .ag-ev{margin-top:3px;font-size:11px;padding:2px 5px;white-space:nowrap;text-overflow:ellipsis}
+.ag-mday .ag-ev .ag-evs{display:none}
+.ag-mday .ag-mitem{border-left:3px solid var(--accent);background:#f7f1e6}
+
+/* =================== YAZDIRMA / PDF =================== */
+#agPrintView{display:none}
+.agp-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;
+  border-bottom:2.5px solid #6b1220;padding-bottom:6px;margin-bottom:8px}
+.agp-head h1{margin:0;font-family:'Fraunces',Georgia,serif;font-size:17px;color:#6b1220}
+.agp-head .agp-sub{font-size:12px;color:#7a6a58}
+.agp-head .agp-range{font-size:13px;font-weight:700;color:#1a0f0a}
+table.agp{width:100%;border-collapse:collapse;table-layout:fixed;font-family:'Manrope',system-ui,sans-serif}
+table.agp th{border:1px solid #c9b98f;background:#f6efe0;color:#3a1119;font-size:11px;padding:4px 5px;
+  text-transform:uppercase;letter-spacing:.5px}
+table.agp th .agp-d{display:block;font-size:15px;font-family:'Barlow Semi Condensed',sans-serif;letter-spacing:0}
+table.agp th.wknd{background:#fff59d}
+table.agp td{border:1px solid #c9b98f;vertical-align:top;padding:4px;height:150px}
+table.agp td.wknd{background:#fffdf0}
+table.agp td.out{background:#f7f4ee;color:#a99e8c}
+.agp-num{font-size:12px;font-weight:800;color:#6b1220;display:block;margin-bottom:2px}
+.agp-item{display:block;font-size:10.5px;line-height:1.25;margin-bottom:3px;padding:2px 4px;
+  border-left:3px solid #6b1220;background:#f8f1ea;border-radius:0 4px 4px 0;
+  print-color-adjust:exact;-webkit-print-color-adjust:exact}
+.agp-item.note{border-left-color:#b8892b;background:#fdf8ec;font-style:italic}
+.agp-item b{font-variant-numeric:tabular-nums;color:#6b1220}
+.agp-item i{font-style:normal;color:#7a6a58}
+.agp-empty{font-size:10px;color:#b7ac9b}
+.agp-foot{margin-top:6px;font-size:9.5px;color:#7a6a58;text-align:right}
+@media print{
+  body.ag-printing #printView{display:none !important}
+  body.ag-printing #agPrintView{display:block !important}
+  body.ag-printing header,body.ag-printing nav,body.ag-printing main,
+  body.ag-printing section,body.ag-printing .controls{display:none !important}
+  body.ag-printing{background:#fff !important}
+  #agPrintView{print-color-adjust:exact;-webkit-print-color-adjust:exact}
+  #agPrintView table.agp tr,#agPrintView table.agp td{page-break-inside:avoid}
+}
+</style>
+<style id="agPageStyle"></style>
 <script>
-/* ================= Haftalık Ajanda — serbest metin hücreleri =================
-   state.agenda: { "YYYY-MM-DD|HH:MM": "metin" } — aylık programdan bağımsızdır. */
+/* ================= Ajanda v2 =================
+   - state.agenda: { "YYYY-MM-DD|HH:MM": "not" }  (elle yazılan notlar)
+   - Aylık programdaki oyunlar salt-okunur kart olarak ajandada gösterilir. */
 (function(){
-  const AG_DOW = ['Pzt','Sal','Çar','Per','Cum','Cmt','Paz'];
-  const AG_MON = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
+  const AG_DOW  = ['Pzt','Sal','Çar','Per','Cum','Cmt','Paz'];
+  const AG_DOWL = ['Pazartesi','Salı','Çarşamba','Perşembe','Cuma','Cumartesi','Pazar'];
+  const AG_MON  = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
+  const AY_UP   = ['OCAK','ŞUBAT','MART','NİSAN','MAYIS','HAZİRAN','TEMMUZ','AĞUSTOS','EYLÜL','EKİM','KASIM','ARALIK'];
   const AG_PREF = 'idt_agenda_pref_v1';
   const AG_VIEW_KEY = 'idt_agenda_view_v1';
   let agAnchor = new Date();
-  let agPref = {start:9, end:24, step:30};
+  let agPref = {start:9, end:24, step:30, prog:true};
   let agView = 'week';
   try{ agView = localStorage.getItem(AG_VIEW_KEY) || 'week'; }catch(e){}
   try{ const p = JSON.parse(localStorage.getItem(AG_PREF)||'null'); if(p) agPref = Object.assign(agPref, p); }catch(e){}
+  if(typeof agPref.prog !== 'boolean') agPref.prog = true;
 
   function agSavePref(){ try{ localStorage.setItem(AG_PREF, JSON.stringify(agPref)); }catch(e){} }
   function agStore(){
@@ -7932,13 +8020,92 @@ body.idt-locked main{pointer-events:none;user-select:none;opacity:.5;filter:gray
   function ymd(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
   function mondayOf(d){ const x=new Date(d.getFullYear(),d.getMonth(),d.getDate()); x.setDate(x.getDate()-((x.getDay()+6)%7)); return x; }
   function hhmm(m){ return String(Math.floor(m/60)%24).padStart(2,'0')+':'+String(m%60).padStart(2,'0'); }
-  function esc(t){ return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function esc(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function upTr(s){ return String(s||'').toLocaleUpperCase('tr'); }
+
+  /* ---------- Aylık program → ajanda olayları ---------- */
+  function monthIdxOfName(nm){
+    const s = upTr(nm); let mi=-1;
+    AY_UP.forEach((a,i)=>{ if(mi<0 && s.indexOf(a)>=0) mi=i; });
+    const ym = s.match(/(20\d{2})/);
+    return {mi, y: ym ? +ym[1] : null};
+  }
+  function rowDateOf(txt, monthName){
+    const s = upTr(txt);
+    const dm = s.match(/(\d{1,2})/); if(!dm) return null;
+    const day = +dm[1]; if(!day || day>31) return null;
+    let mi=-1; AY_UP.forEach((a,i)=>{ if(mi<0 && s.indexOf(a)>=0) mi=i; });
+    let ymm = s.match(/(20\d{2})/); let year = ymm ? +ymm[1] : null;
+    const mo = monthIdxOfName(monthName);
+    if(mi<0) mi = mo.mi;
+    if(!year) year = mo.y;
+    if(mi<0 || !year) return null;
+    const d = new Date(year, mi, day);
+    if(isNaN(d.getTime()) || d.getDate()!==day) return null;
+    return d;
+  }
+  function timeIn(txt){
+    const mt = String(txt||'').replace(',','.').match(/(\d{1,2})[.:](\d{2})/);
+    if(!mt) return '';
+    const h = Math.min(23, +mt[1]), mi = Math.min(59, +mt[2]);
+    return String(h).padStart(2,'0')+':'+String(mi).padStart(2,'0');
+  }
+  function dateTxtOfRow(m,r){
+    if(typeof dateTextOfRow==='function'){ try{ return dateTextOfRow(m,r); }catch(e){} }
+    return (m.cells[r+'_0']||{}).v || '';
+  }
+  function stageOf(m,c){
+    const v = (m.cells['1_'+c]||{}).v || '';
+    return String(v).trim();
+  }
+  /* { 'YYYY-MM-DD': [ {t:'20:00', title, stage, prem} ] } */
+  function buildProgIndex(){
+    const idx = {};
+    if(!agPref.prog) return idx;
+    const months = (typeof state==='object' && state && Array.isArray(state.months)) ? state.months : [];
+    months.forEach(m=>{
+      if(!m || !m.cells) return;
+      for(let r=2;r<m.rows;r++){
+        const d = rowDateOf(dateTxtOfRow(m,r), m.name);
+        if(!d) continue;
+        const key = ymd(d);
+        const rowT = timeIn((m.cells[r+'_1']||{}).v || '');
+        for(let c=2;c<m.cols-1;c++){
+          const cell = m.cells[r+'_'+c]; if(!cell) continue;
+          let v = String(cell.v||'').replace(/\s+/g,' ').trim();
+          if(!v) continue;
+          if(typeof isPremiereLabel==='function' && isPremiereLabel(v)) continue;
+          if(!/[a-zA-ZğüşıöçĞÜŞİÖÇ]/.test(v)) continue;
+          const inCell = timeIn(v);
+          let title = v;
+          if(inCell) title = title.replace(/[\(\[]?\s*\d{1,2}[.:]\d{2}\s*[\)\]]?/, ' ').replace(/\s+/g,' ').trim();
+          const prem = !!cell.premiere || /^\s*[\*★]/.test(title);
+          title = title.replace(/^\s*[\*★]\s*/,'').trim();
+          if(!title) continue;
+          (idx[key] = idx[key] || []).push({t: inCell || rowT || '', title, stage: stageOf(m,c), prem});
+        }
+      }
+    });
+    Object.keys(idx).forEach(k=>idx[k].sort((a,b)=> (a.t||'99').localeCompare(b.t||'99')));
+    return idx;
+  }
+  function evHtml(ev){
+    return '<span class="ag-ev'+(ev.prem?' ag-prem':'')+'" title="'+esc((ev.t?ev.t+' · ':'')+ev.title+(ev.stage?' · '+ev.stage:''))+'">'+
+      (ev.t?'<span class="ag-evt">'+esc(ev.t)+'</span>':'')+
+      '<span class="ag-evn">'+esc(ev.title)+(ev.prem?' ★':'')+'</span>'+
+      (ev.stage?'<span class="ag-evs">'+esc(ev.stage)+'</span>':'')+'</span>';
+  }
 
   function fillSelects(){
     const s1 = document.getElementById('agStart'), s2 = document.getElementById('agEnd');
     if(!s1 || !s2 || s1.options.length) return;
     for(let h=0;h<=23;h++){ const o=document.createElement('option'); o.value=h; o.textContent=String(h).padStart(2,'0')+':00'; s1.appendChild(o); }
     for(let h=1;h<=24;h++){ const o=document.createElement('option'); o.value=h; o.textContent=String(h).padStart(2,'0')+':00'; s2.appendChild(o); }
+  }
+  function paintProgBtn(){
+    const b = document.getElementById('agShowProg'); if(!b) return;
+    b.setAttribute('aria-pressed', agPref.prog ? 'true' : 'false');
+    b.textContent = agPref.prog ? '🎭 Oyunlar: Açık' : '🎭 Oyunlar: Kapalı';
   }
 
   function applyAgView(){
@@ -7953,7 +8120,7 @@ body.idt-locked main{pointer-events:none;user-select:none;opacity:.5;filter:gray
   function setAgView(v){
     agView = v; try{ localStorage.setItem(AG_VIEW_KEY, agView); }catch(e){}
     applyAgView();
-    if(agView==='month') renderAgendaMonth(); else renderAgenda();
+    renderAgenda();
   }
   window.setAgendaView = setAgView;
 
@@ -7961,39 +8128,40 @@ body.idt-locked main{pointer-events:none;user-select:none;opacity:.5;filter:gray
     const grid = document.getElementById('agendaMonthGrid');
     if(!grid) return;
     const y = agAnchor.getFullYear(), m = agAnchor.getMonth();
-    const first = new Date(y, m, 1);
-    const gridStart = mondayOf(first);
+    const gridStart = mondayOf(new Date(y, m, 1));
     const lbl = document.getElementById('agRangeLabel');
     if(lbl) lbl.textContent = AG_MON[m]+' '+y;
     const dinp = document.getElementById('agDate'); if(dinp) dinp.value = ymd(agAnchor);
 
-    const store = agStore(); const todayStr = ymd(new Date());
+    const store = agStore(), prog = buildProgIndex(), todayStr = ymd(new Date());
     let html = '';
     AG_DOW.forEach((dow,i)=>{ html += '<div class="ag-mhead'+(i>=5?' ag-weekend':'')+'">'+dow+'</div>'; });
     for(let i=0;i<42;i++){
       const d = new Date(gridStart); d.setDate(gridStart.getDate()+i);
       const dstr = ymd(d);
-      const out = d.getMonth()!==m;
-      const isW = (i%7)>=5, isT = dstr===todayStr;
-      const entries = Object.keys(store).filter(k=>k.indexOf(dstr+'|')===0).sort();
+      const out = d.getMonth()!==m, isW=(i%7)>=5, isT=dstr===todayStr;
+      const evs = prog[dstr] || [];
+      const notes = Object.keys(store).filter(k=>k.indexOf(dstr+'|')===0).sort();
       let items = '';
-      entries.slice(0,3).forEach(k=>{
-        const t = store[k]||''; const hh = k.split('|')[1]||'';
-        items += '<span class="ag-mitem">'+hh+' '+esc(t)+'</span>';
+      evs.slice(0,3).forEach(ev=>{ items += evHtml(ev); });
+      if(evs.length>3) items += '<span class="ag-mmore">+'+(evs.length-3)+' oyun</span>';
+      notes.slice(0,2).forEach(k=>{
+        items += '<span class="ag-mitem">'+esc((k.split('|')[1]||'')+' '+(store[k]||''))+'</span>';
       });
-      if(entries.length>3) items += '<span class="ag-mmore">+'+(entries.length-3)+' daha</span>';
+      if(notes.length>2) items += '<span class="ag-mmore">+'+(notes.length-2)+' not</span>';
       html += '<div class="ag-mday'+(out?' ag-out':'')+(isW?' ag-weekend':'')+(isT?' ag-today':'')+
         '" data-agday="'+dstr+'"><span class="ag-mnum">'+d.getDate()+'</span>'+items+'</div>';
     }
     grid.className = 'ag-mgrid';
     grid.innerHTML = html;
     grid.querySelectorAll('.ag-mday').forEach(el=>{
-      el.onclick = ()=>{ const [yy,mm,dd]=el.dataset.agday.split('-').map(Number); agAnchor=new Date(yy,mm-1,dd); setAgView('week'); };
+      el.onclick = ()=>{ const p=el.dataset.agday.split('-').map(Number); agAnchor=new Date(p[0],p[1]-1,p[2]); setAgView('week'); };
     });
   };
 
   window.renderAgenda = function renderAgenda(){
     applyAgView();
+    paintProgBtn();
     if(agView==='month'){ renderAgendaMonth(); return; }
     const grid = document.getElementById('agendaGrid');
     if(!grid) return;
@@ -8015,10 +8183,22 @@ body.idt-locked main{pointer-events:none;user-select:none;opacity:.5;filter:gray
 
     const step = parseInt(agPref.step,10)||30;
     const from = agPref.start*60, to = agPref.end*60;
-    const store = agStore(); const todayStr = ymd(new Date());
+    const store = agStore(), prog = buildProgIndex(), todayStr = ymd(new Date());
+
+    /* Olayları saat dilimlerine yerleştir; aralık dışındakiler üst bantta */
+    const slotted = {}, banded = {};
+    days.forEach(d=>{
+      const key = ymd(d); banded[key] = [];
+      (prog[key]||[]).forEach(ev=>{
+        const t = ev.t ? (+ev.t.slice(0,2))*60 + (+ev.t.slice(3,5)) : NaN;
+        if(isNaN(t) || t<from || t>=to){ banded[key].push(ev); return; }
+        const s = from + Math.floor((t-from)/step)*step;
+        (slotted[key+'|'+hhmm(s)] = slotted[key+'|'+hhmm(s)] || []).push(ev);
+      });
+    });
 
     grid.className = 'ag-grid';
-    grid.style.gridTemplateColumns = '78px repeat(7, minmax(120px, 1fr))';
+    grid.style.gridTemplateColumns = '78px repeat(7, minmax(140px, 1fr))';
     let html = '<div class="ag-head ag-corner">Saat</div>';
     days.forEach((d,i)=>{
       const isW=i>=5, isT=ymd(d)===todayStr;
@@ -8027,6 +8207,13 @@ body.idt-locked main{pointer-events:none;user-select:none;opacity:.5;filter:gray
         '<span class="ag-dnum">'+d.getDate()+'</span>'+
         '<span class="ag-mon">'+AG_MON[d.getMonth()]+'</span></div>';
     });
+    const anyBand = days.some(d=>banded[ymd(d)].length);
+    if(anyBand){
+      html += '<div class="ag-bandlabel">Gün</div>';
+      days.forEach((d,i)=>{
+        html += '<div class="ag-band'+(i>=5?' ag-weekend':'')+'">'+banded[ymd(d)].map(evHtml).join('')+'</div>';
+      });
+    }
     for(let m=from;m<to;m+=step){
       const isHour = (m%60===0);
       html += '<div class="ag-time'+(isHour?' ag-hour':'')+'">'+hhmm(m)+'</div>';
@@ -8034,9 +8221,11 @@ body.idt-locked main{pointer-events:none;user-select:none;opacity:.5;filter:gray
         const key = ymd(d)+'|'+hhmm(m);
         const txt = store[key]||'';
         const isT = ymd(d)===todayStr;
-        html += '<div class="ag-cell'+(isHour?' ag-hourline':'')+(i>=5?' ag-weekend':'')+(isT?' ag-todaycol':'')+
-          (txt?' has-text':'')+'" contenteditable="true" spellcheck="false" data-agkey="'+key+'" title="'+
-          d.getDate()+' '+AG_MON[d.getMonth()]+' · '+hhmm(m)+' — yazmak için tıklayın">'+esc(txt)+'</div>';
+        const evs = (slotted[key]||[]).map(evHtml).join('');
+        html += '<div class="ag-slot'+(isHour?' ag-hourline':'')+(i>=5?' ag-weekend':'')+(isT?' ag-todaycol':'')+'">'+
+          evs+
+          '<div class="ag-cell'+(txt?' has-text':'')+'" contenteditable="true" spellcheck="false" data-agkey="'+key+'" title="'+
+          d.getDate()+' '+AG_MON[d.getMonth()]+' · '+hhmm(m)+' — yazmak için tıklayın">'+esc(txt)+'</div></div>';
       });
     }
     grid.innerHTML = html;
@@ -8052,7 +8241,6 @@ body.idt-locked main{pointer-events:none;user-select:none;opacity:.5;filter:gray
     el.classList.toggle('has-text', !!txt);
     agPersist();
   }
-
   document.addEventListener('focusout', e=>{
     const el=e.target; if(el&&el.classList&&el.classList.contains('ag-cell')) agCommit(el);
   });
@@ -8068,6 +8256,90 @@ body.idt-locked main{pointer-events:none;user-select:none;opacity:.5;filter:gray
     document.execCommand('insertText', false, t);
   }, true);
 
+  /* ================= YAZDIRMA / PDF ================= */
+  function printHost(){
+    let el = document.getElementById('agPrintView');
+    if(!el){ el = document.createElement('div'); el.id='agPrintView'; document.body.appendChild(el); }
+    return el;
+  }
+  function dayItems(dstr, prog, store){
+    const out = (prog[dstr]||[]).map(ev=>({t:ev.t||'', html:
+      '<span class="agp-item'+(ev.prem?' prem':'')+'"><b>'+esc(ev.t||'--:--')+'</b> '+esc(ev.title)+(ev.prem?' ★':'')+
+      (ev.stage?' <i>· '+esc(ev.stage)+'</i>':'')+'</span>'}));
+    Object.keys(store).filter(k=>k.indexOf(dstr+'|')===0).sort().forEach(k=>{
+      const t = k.split('|')[1]||'';
+      out.push({t, html:'<span class="agp-item note"><b>'+esc(t)+'</b> '+esc(store[k])+'</span>'});
+    });
+    out.sort((a,b)=>(a.t||'99').localeCompare(b.t||'99'));
+    return out;
+  }
+  function printHeader(title, range){
+    const now = new Date();
+    return '<div class="agp-head"><div><h1>İzmir Devlet Tiyatrosu — '+esc(title)+'</h1>'+
+      '<div class="agp-sub">Ajanda çıktısı · '+now.toLocaleDateString('tr-TR')+' '+
+      String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0')+'</div></div>'+
+      '<div class="agp-range">'+esc(range)+'</div></div>';
+  }
+  function buildWeekPrint(){
+    const mon = mondayOf(agAnchor);
+    const days=[]; for(let i=0;i<7;i++){ const d=new Date(mon); d.setDate(mon.getDate()+i); days.push(d); }
+    const last=days[6];
+    const range = mon.getDate()+' '+AG_MON[mon.getMonth()]+' – '+last.getDate()+' '+AG_MON[last.getMonth()]+' '+last.getFullYear();
+    const prog = buildProgIndex(), store = agStore();
+    let h = printHeader('Haftalık Ajanda', range);
+    h += '<table class="agp"><colgroup>'+days.map(()=>'<col style="width:14.28%">').join('')+'</colgroup><tr>';
+    days.forEach((d,i)=>{
+      h += '<th'+(i>=5?' class="wknd"':'')+'>'+AG_DOWL[i]+'<span class="agp-d">'+d.getDate()+' '+AG_MON[d.getMonth()]+'</span></th>';
+    });
+    h += '</tr><tr>';
+    days.forEach((d,i)=>{
+      const items = dayItems(ymd(d), prog, store);
+      h += '<td'+(i>=5?' class="wknd"':'')+' style="height:auto;min-height:420px">'+
+        (items.length ? items.map(x=>x.html).join('') : '<span class="agp-empty">—</span>')+'</td>';
+    });
+    h += '</tr></table><div class="agp-foot">İzmir Devlet Tiyatrosu · Aylık Program & Ajanda</div>';
+    return h;
+  }
+  function buildMonthPrint(){
+    const y=agAnchor.getFullYear(), m=agAnchor.getMonth();
+    const gridStart = mondayOf(new Date(y,m,1));
+    const prog = buildProgIndex(), store = agStore();
+    let h = printHeader('Aylık Ajanda', AG_MON[m]+' '+y);
+    h += '<table class="agp"><colgroup>'+AG_DOW.map(()=>'<col style="width:14.28%">').join('')+'</colgroup><tr>';
+    AG_DOWL.forEach((n,i)=>{ h += '<th'+(i>=5?' class="wknd"':'')+'>'+n+'</th>'; });
+    h += '</tr>';
+    let cells = 42;
+    /* Son hafta tamamen boşsa 35 hücrede bitir */
+    const lastWeekStart = new Date(gridStart); lastWeekStart.setDate(gridStart.getDate()+35);
+    if(lastWeekStart.getMonth()!==m) cells = 35;
+    for(let i=0;i<cells;i++){
+      if(i%7===0) h += '<tr>';
+      const d = new Date(gridStart); d.setDate(gridStart.getDate()+i);
+      const dstr = ymd(d), out = d.getMonth()!==m;
+      const items = out ? [] : dayItems(dstr, prog, store);
+      h += '<td class="'+(out?'out':'')+((i%7)>=5?' wknd':'')+'"><span class="agp-num">'+d.getDate()+
+        (d.getDate()===1?' '+AG_MON[d.getMonth()]:'')+'</span>'+items.map(x=>x.html).join('')+'</td>';
+      if(i%7===6) h += '</tr>';
+    }
+    h += '</table><div class="agp-foot">İzmir Devlet Tiyatrosu · Aylık Program & Ajanda</div>';
+    return h;
+  }
+  function doPrint(kind){
+    const host = printHost();
+    host.innerHTML = (kind==='month') ? buildMonthPrint() : buildWeekPrint();
+    const ps = document.getElementById('agPageStyle');
+    if(ps) ps.textContent = '@media print{@page{size:A4 landscape;margin:9mm}}';
+    document.body.classList.add('ag-printing');
+    const cleanup = ()=>{
+      document.body.classList.remove('ag-printing');
+      if(ps) ps.textContent='';
+      window.removeEventListener('afterprint', cleanup);
+    };
+    window.addEventListener('afterprint', cleanup);
+    setTimeout(()=>{ try{ window.print(); }catch(e){} setTimeout(cleanup, 1500); }, 120);
+  }
+  window.printAgenda = doPrint;
+
   function wire(){
     const q = id => document.getElementById(id);
     q('agViewWeek') && (q('agViewWeek').onclick = ()=>setAgView('week'));
@@ -8075,11 +8347,13 @@ body.idt-locked main{pointer-events:none;user-select:none;opacity:.5;filter:gray
     q('agPrev') && (q('agPrev').onclick = ()=>{ if(agView==='month') agAnchor.setMonth(agAnchor.getMonth()-1); else agAnchor.setDate(agAnchor.getDate()-7); renderAgenda(); });
     q('agNext') && (q('agNext').onclick = ()=>{ if(agView==='month') agAnchor.setMonth(agAnchor.getMonth()+1); else agAnchor.setDate(agAnchor.getDate()+7); renderAgenda(); });
     q('agToday') && (q('agToday').onclick = ()=>{ agAnchor=new Date(); renderAgenda(); });
-    q('agDate') && (q('agDate').onchange = e=>{ const v=e.target.value; if(v){ const [y,m,d]=v.split('-').map(Number); agAnchor=new Date(y,m-1,d); renderAgenda(); } });
+    q('agDate') && (q('agDate').onchange = e=>{ const v=e.target.value; if(v){ const p=v.split('-').map(Number); agAnchor=new Date(p[0],p[1]-1,p[2]); renderAgenda(); } });
     q('agStart') && (q('agStart').onchange = e=>{ agPref.start=parseInt(e.target.value,10); if(agPref.end<=agPref.start) agPref.end=Math.min(24,agPref.start+1); agSavePref(); renderAgenda(); });
     q('agEnd') && (q('agEnd').onchange = e=>{ agPref.end=parseInt(e.target.value,10); if(agPref.end<=agPref.start) agPref.start=Math.max(0,agPref.end-1); agSavePref(); renderAgenda(); });
     q('agStep') && (q('agStep').onchange = e=>{ agPref.step=parseInt(e.target.value,10); agSavePref(); renderAgenda(); });
-    q('agPrint') && (q('agPrint').onclick = ()=>window.print());
+    q('agShowProg') && (q('agShowProg').onclick = ()=>{ agPref.prog=!agPref.prog; agSavePref(); renderAgenda(); });
+    q('agPrint') && (q('agPrint').onclick = ()=>doPrint(agView==='month'?'month':'week'));
+    q('agPdfMonth') && (q('agPdfMonth').onclick = ()=>doPrint('month'));
     q('agClearWeek') && (q('agClearWeek').onclick = async ()=>{
       const mon=mondayOf(agAnchor); const store=agStore(); const keys=[];
       for(let i=0;i<7;i++){ const d=new Date(mon); d.setDate(mon.getDate()+i); const pre=ymd(d)+'|';
@@ -8094,6 +8368,8 @@ body.idt-locked main{pointer-events:none;user-select:none;opacity:.5;filter:gray
       agPersist(); renderAgenda();
       if(typeof siteMessage==='function') siteMessage('Hafta temizlendi.','ok','Ajanda');
     });
+    paintProgBtn();
+    printHost();
   }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', wire); else wire();
 })();
