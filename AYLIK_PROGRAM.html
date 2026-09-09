@@ -8113,7 +8113,7 @@ table.agp td.out{background:#f7f4ee;color:#a99e8c}
     const bW = document.getElementById('agViewWeek'), bM = document.getElementById('agViewMonth');
     const isWeek = agView !== 'month';
     if(wWrap) wWrap.style.display = isWeek ? '' : 'none';
-    if(mWrap) mWrap.style.display = isWeek ? 'none' : '';
+    if(mWrap) mWrap.style.display = isWeek ? 'none' : 'block';
     if(bW) bW.classList.toggle('on', isWeek);
     if(bM) bM.classList.toggle('on', !isWeek);
   }
@@ -8273,11 +8273,16 @@ table.agp td.out{background:#f7f4ee;color:#a99e8c}
     out.sort((a,b)=>(a.t||'99').localeCompare(b.t||'99'));
     return out;
   }
+  function agLogoImg(){
+    const img = document.querySelector('.brand-mark img');
+    return img && img.src ? '<img src="'+img.src+'" alt="" style="width:32px;height:32px;object-fit:contain;flex:0 0 auto">' : '';
+  }
   function printHeader(title, range){
     const now = new Date();
-    return '<div class="agp-head"><div><h1>İzmir Devlet Tiyatrosu — '+esc(title)+'</h1>'+
+    return '<div class="agp-head"><div style="display:flex;align-items:center;gap:8px">'+agLogoImg()+
+      '<div><h1>İzmir Devlet Tiyatrosu — '+esc(title)+'</h1>'+
       '<div class="agp-sub">Ajanda çıktısı · '+now.toLocaleDateString('tr-TR')+' '+
-      String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0')+'</div></div>'+
+      String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0')+'</div></div></div>'+
       '<div class="agp-range">'+esc(range)+'</div></div>';
   }
   function buildWeekPrint(){
@@ -8324,11 +8329,48 @@ table.agp td.out{background:#f7f4ee;color:#a99e8c}
     h += '</table><div class="agp-foot">İzmir Devlet Tiyatrosu · Aylık Program & Ajanda</div>';
     return h;
   }
+  const AG_PRINT_MARGIN_MM = 9;
+  function agPageMetrics(){
+    /* A4 yatay, doPrint'teki @page kuralıyla aynı kenar boşluğu */
+    return {
+      w: ((297 - AG_PRINT_MARGIN_MM*2)/25.4*96),
+      h: ((210 - AG_PRINT_MARGIN_MM*2)/25.4*96)
+    };
+  }
+  function fitAgendaPrint(){
+    const host = document.getElementById('agPrintView');
+    if(!host) return;
+    const wrap = host.querySelector('.agp-scale');
+    if(!wrap) return;
+    const {w:pageW, h:pageH} = agPageMetrics();
+    /* Ölçüm için görünürlük gerekir */
+    host.setAttribute('style','display:block;position:absolute;left:-20000px;top:0');
+    wrap.style.transform = 'none';
+    wrap.style.width = pageW+'px';
+    const h = wrap.getBoundingClientRect().height || 1;
+    /* %0.5 pay: yuvarlama farklarında alt satırın kırpılmasını önler */
+    let sc = h > pageH ? (pageH/h)*0.995 : 1;
+    /* Yüksekliğe göre küçültüldüyse genişliği de sayfayı tam kaplayacak
+       şekilde büyüt (hücre yükseklikleri sabit olduğundan genişlik
+       değişimi tablo yüksekliğini etkilemez) */
+    wrap.style.width = (pageW/sc)+'px';
+    wrap.style.transformOrigin = 'top left';
+    wrap.style.transform = 'scale('+sc+')';
+    /* ÖNEMLİ: CSS transform, öğenin GÖRSEL boyutunu küçültür ama yazdırma
+       motorunun sayfa taşması/sayfa sonu hesabında kullandığı YERLEŞİM
+       kutusunu küçültmez — bu yüzden ölçek uygulanmış içerik görsel olarak
+       bir sayfaya sığsa da, tarayıcı hâlâ ölçeksiz (büyük) yüksekliği ayırıp
+       son satırı ikinci sayfaya taşırdı. Çözüm: dış kutuyu (host) gerçekten
+       hesaplanan sayfa yüksekliğine sabitleyip taşan kısmı gizlemek. */
+    host.setAttribute('style','display:block;overflow:hidden;height:'+pageH+'px;width:'+pageW+'px');
+  }
   function doPrint(kind){
     const host = printHost();
-    host.innerHTML = (kind==='month') ? buildMonthPrint() : buildWeekPrint();
+    const content = (kind==='month') ? buildMonthPrint() : buildWeekPrint();
+    host.innerHTML = '<div class="agp-scale">'+content+'</div>';
     const ps = document.getElementById('agPageStyle');
-    if(ps) ps.textContent = '@media print{@page{size:A4 landscape;margin:9mm}}';
+    if(ps) ps.textContent = '@media print{@page{size:A4 landscape;margin:'+AG_PRINT_MARGIN_MM+'mm}}';
+    fitAgendaPrint();
     document.body.classList.add('ag-printing');
     const cleanup = ()=>{
       document.body.classList.remove('ag-printing');
@@ -8336,9 +8378,10 @@ table.agp td.out{background:#f7f4ee;color:#a99e8c}
       window.removeEventListener('afterprint', cleanup);
     };
     window.addEventListener('afterprint', cleanup);
-    setTimeout(()=>{ try{ window.print(); }catch(e){} setTimeout(cleanup, 1500); }, 120);
+    setTimeout(()=>{ try{ fitAgendaPrint(); window.print(); }catch(e){} setTimeout(cleanup, 1500); }, 120);
   }
   window.printAgenda = doPrint;
+  window.addEventListener('beforeprint', ()=>{ try{ fitAgendaPrint(); }catch(e){} });
 
   function wire(){
     const q = id => document.getElementById(id);
