@@ -6932,18 +6932,49 @@ function renderNotes(){
     box.innerHTML='<div style="padding:17px 14px;border:1px dashed #cbbfad;border-radius:8px;background:#fffdf8;color:var(--muted)">Bu ayda hücre notu yok. Tabloda bir hücreye sağ tıklayıp <strong>Not ekle / düzenle</strong> seçeneğini kullanın.</div>';
     return;
   }
-  box.innerHTML = items.map((o,i)=>`
-    <div style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:6px;font-size:12px;line-height:1.35">
-      <div style="font-weight:700;font-size:13px;overflow-wrap:normal;word-break:normal">${escapeHtml(o.text||'(boş hücre)')}</div>
-      <div style="font-size:11px;color:var(--muted);margin-top:2px">${escapeHtml(o.month)} · ${escapeHtml(o.date||'')}${o.time?' / '+escapeHtml(o.time):''}${o.stage?' · '+escapeHtml(o.stage):''}</div>
-      <div style="margin-top:4px;overflow-wrap:normal;word-break:normal;color:#c1121f;font-weight:700"><span style="color:var(--ink);font-weight:700">Not:</span> ${escapeHtml(o.note)}</div>
-      <div style="display:flex;gap:6px;margin-top:8px">
-        <button class="btn ghost small" style="flex:1;padding:4px 6px;font-size:11px" data-ngo="${i}">Hücreye git</button>
-        <button class="btn ghost small" style="flex:1;padding:4px 6px;font-size:11px" data-nedit="${i}">✎ Düzenle</button>
+  /* Aynı not metni birden çok hücreye (küme/toplu not) yazılmışsa, panelde
+     her hücre için ayrı ayrı tekrar etmek yerine notu TEK kart olarak
+     gösterip altında hangi hücrelere ait olduğunu listeleriz. */
+  const groups=[]; const byNote=new Map();
+  for(const o of items){
+    const gKey=o.note;
+    let g=byNote.get(gKey);
+    if(!g){ g={note:o.note, items:[]}; byNote.set(gKey,g); groups.push(g); }
+    g.items.push(o);
+  }
+  box.innerHTML = groups.map((g,gi)=>{
+    const multi = g.items.length>1;
+    const rows = g.items.map((o,ii)=>`
+      <div style="display:flex;align-items:center;gap:6px;padding:${multi?'5px 0':'0'};${multi&&ii>0?'border-top:1px dashed var(--border)':''}">
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:700;font-size:12.5px;overflow-wrap:normal;word-break:normal">${escapeHtml(o.text||'(boş hücre)')}</div>
+          <div style="font-size:11px;color:var(--muted)">${escapeHtml(o.month)} · ${escapeHtml(o.date||'')}${o.time?' / '+escapeHtml(o.time):''}${o.stage?' · '+escapeHtml(o.stage):''}</div>
+        </div>
+        <button class="btn ghost small" style="flex:none;padding:4px 6px;font-size:11px" data-ggo="${gi}-${ii}">Hücreye git</button>
+      </div>`).join('');
+    return `<div style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:6px;font-size:12px;line-height:1.35">
+      <div style="overflow-wrap:normal;word-break:normal;color:#c1121f;font-weight:700">
+        <span style="color:var(--ink);font-weight:700">Not:</span> ${escapeHtml(g.note)}
+        ${multi?'<span class="pill neutral" style="margin-left:6px;font-weight:600;color:var(--muted)">'+g.items.length+' hücre</span>':''}
       </div>
-    </div>`).join('');
-  box.querySelectorAll('[data-ngo]').forEach(b=>{ b.onclick=()=>{ const o=items[+b.dataset.ngo]; gotoCell(o.mi,o.r,o.c); closeNotesPopover(); }; });
-  box.querySelectorAll('[data-nedit]').forEach(b=>{ b.onclick=async()=>{ const o=items[+b.dataset.nedit]; const n=await sitePrompt('Not:',o.note,'Not ekle/düzenle'); if(n===null) return; setCellNote(o.mi,o.key,n); renderNotes(); }; });
+      <div style="margin-top:6px">${rows}</div>
+      <div style="display:flex;gap:6px;margin-top:8px">
+        <button class="btn ghost small" style="flex:1;padding:4px 6px;font-size:11px" data-gedit="${gi}">✎ ${multi?'Bu '+g.items.length+' hücrenin notunu birlikte düzenle':'Düzenle'}</button>
+      </div>
+    </div>`;
+  }).join('');
+  box.querySelectorAll('[data-ggo]').forEach(b=>{
+    b.onclick=()=>{ const [gi,ii]=b.dataset.ggo.split('-').map(Number); const o=groups[gi].items[ii]; gotoCell(o.mi,o.r,o.c); closeNotesPopover(); };
+  });
+  box.querySelectorAll('[data-gedit]').forEach(b=>{
+    b.onclick=async()=>{
+      const g=groups[+b.dataset.gedit];
+      const n=await sitePrompt(g.items.length>1?'Bu '+g.items.length+' hücrenin ortak notu:':'Not:', g.note, 'Not ekle/düzenle');
+      if(n===null) return;
+      for(const o of g.items) setCellNote(o.mi,o.key,n);
+      renderNotes();
+    };
+  });
 }
 
 /* === Serbest Notlar sekmesi (tüm aylar, aranabilir) — eski sürümden geri getirildi === */
