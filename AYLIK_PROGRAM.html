@@ -1377,6 +1377,7 @@ table.sheet td.cell{min-width:86px;height:29px}
         <button class="btn small newmonth-btn" id="addMonthTop" title="Yeni ay oluştur (Cumartesi 2 satır otomatik)">+ YENİ AY</button>
         <button class="btn ghost small" id="delMonthTop" title="Görüntülenen ayı kalıcı olarak sil (sunucudan da kaldırılır)">&#128465; Ayı sil</button>
         <button class="btn ghost small" id="fsBtn" title="Aylık programı tam sayfa görüntüle (Esc ile çık)">Tam Ekran</button>
+        <button class="btn ghost small" id="uxFocusBtn" title="Aylık programı sade ve tablo odaklı görünümde aç" aria-pressed="false">Odak modu</button>
         <button class="btn small" id="toolbarToggleBtn" title="Düzenleme araç çubuğunu gizle/göster — aylık program odakta kalsın">Araçları gizle</button>
       </div>
     </div>
@@ -8034,6 +8035,64 @@ body.idt-locked main{pointer-events:none;user-select:none;opacity:.5;filter:gray
     background:linear-gradient(#faf7f2 82%,rgba(250,247,242,0));
   }
   body.fs-on #uxOverview{display:none}
+  #uxFocusBtn{
+    border-color:rgba(255,255,255,.5);
+    background:rgba(255,255,255,.1);
+    color:#fff;
+    font-weight:700;
+  }
+  #uxFocusBtn:hover{background:rgba(255,255,255,.2)}
+  body.ux-focus-mode{
+    overflow:hidden;
+  }
+  body.ux-focus-mode>header,
+  body.ux-focus-mode>#idtBridgeBar,
+  body.ux-focus-mode>#idtLockBanner,
+  body.ux-focus-mode #uxOverview,
+  body.ux-focus-mode #monthTitleRow,
+  body.ux-focus-mode #conflictBar,
+  body.ux-focus-mode #program>.shortcuts{
+    display:none!important;
+  }
+  body.ux-focus-mode main{
+    max-width:none;
+    padding:10px 12px 14px;
+  }
+  body.ux-focus-mode #program .controls{
+    top:0;
+    margin-bottom:8px;
+    padding-top:0;
+  }
+  body.ux-focus-mode #program .menubar{
+    display:none;
+  }
+  body.ux-focus-mode #program .cmdbar{
+    border-radius:12px;
+    box-shadow:0 8px 24px rgba(64,30,18,.18);
+  }
+  body.ux-focus-mode #program .tbl-wrap{
+    width:100%;
+    max-width:none;
+    max-height:calc(100vh - 76px);
+    margin:0;
+    border-radius:12px;
+  }
+  body.ux-focus-mode #uxFocusBtn{
+    background:#f0c778;
+    border-color:#f0c778;
+    color:#3c210d;
+  }
+  @media (max-width:760px){
+    body.ux-focus-mode main{padding:7px}
+    body.ux-focus-mode #program .cmdbar{padding:8px}
+    body.ux-focus-mode #program .cmdbar .cmd-right{gap:4px}
+    body.ux-focus-mode #program .cmdbar .cmd-right .btn{
+      flex:0 1 auto;
+      padding-left:7px;
+      padding-right:7px;
+    }
+    body.ux-focus-mode #program .tbl-wrap{max-height:calc(100vh - 66px)}
+  }
   #program .cmdbar{box-shadow:0 8px 22px rgba(64,30,18,.11)}
   #program .menubar{box-shadow:0 5px 15px rgba(64,30,18,.06)}
   #program .cmdbar,
@@ -8237,8 +8296,37 @@ body.idt-locked main{pointer-events:none;user-select:none;opacity:.5;filter:gray
     if(conflictMetric) conflictMetric.parentElement.classList.toggle('is-alert',conflicts>0);
   }
 
+  function initFocusMode(){
+    var button=document.getElementById('uxFocusBtn');
+    if(!button) return;
+    function paint(){
+      var on=document.body.classList.contains('ux-focus-mode');
+      button.setAttribute('aria-pressed',String(on));
+      button.textContent=on?'Odaktan çık':'Odak modu';
+      button.title=on?'Normal görünüme dön':'Aylık programı sade ve tablo odaklı görünümde aç';
+    }
+    button.addEventListener('click',function(){
+      var on=document.body.classList.toggle('ux-focus-mode');
+      paint();
+      if(typeof setStatus==='function') setStatus(on?'Odak modu açıldı.':'Normal görünüme dönüldü.');
+      if(on){
+        var table=document.querySelector('#program .tbl-wrap');
+        if(table) table.scrollTop=0;
+      }
+    });
+    document.addEventListener('keydown',function(event){
+      if(event.key==='Escape' && document.body.classList.contains('ux-focus-mode')){
+        document.body.classList.remove('ux-focus-mode');
+        paint();
+        if(typeof setStatus==='function') setStatus('Normal görünüme dönüldü.');
+      }
+    });
+    paint();
+  }
+
   function init(){
     makeOverview();
+    initFocusMode();
     updateOverview();
     var sheet=document.getElementById('sheet');
     if(sheet && window.MutationObserver){
