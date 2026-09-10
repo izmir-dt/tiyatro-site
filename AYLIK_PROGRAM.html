@@ -9501,13 +9501,14 @@ body.idt-locked main{pointer-events:none;user-select:none;opacity:.5;filter:gray
 })();
 </script>
 <style id="idt-ask-dock-style">
-/* Arama paneli artık sayfayı daraltmıyor: sağ üstte yüzen,
-   yuvarlatılmış bir kart olarak açılıyor. */
+/* Arama paneli: sağ üstte yüzen, TAŞINABİLİR ve BOYUTLANDIRILABİLİR kart. */
 #uxTitleAskReply{display:none !important}
 #uxTitleAskInput{caret-color:#6b1220}
 #uxTitleAskInput:focus{outline:2px solid #b8892b;outline-offset:-2px}
 #idtAskDock{
-  position:fixed;top:84px;right:18px;bottom:18px;width:352px;max-width:calc(100vw - 36px);z-index:9000;
+  position:fixed;top:84px;right:18px;width:392px;height:calc(100vh - 120px);
+  min-width:280px;min-height:220px;max-width:calc(100vw - 24px);max-height:calc(100vh - 24px);
+  z-index:9000;resize:both;
   background:rgba(255,251,244,.97);backdrop-filter:blur(6px);
   border:1px solid #e3cd9d;border-radius:16px;overflow:hidden;
   box-shadow:0 18px 44px rgba(74,42,12,.22),0 2px 6px rgba(74,42,12,.10);
@@ -9515,11 +9516,10 @@ body.idt-locked main{pointer-events:none;user-select:none;opacity:.5;filter:gray
 }
 body.idt-ask-open #idtAskDock{display:flex}
 body.idt-ask-open{padding-right:0}
-@media (max-width:900px){
-  #idtAskDock{top:auto;left:10px;right:10px;bottom:10px;width:auto;max-height:62vh;border-radius:14px}
-}
+#idtAskDock.is-dragging{transition:none;user-select:none}
 #idtAskDock header{
   background:linear-gradient(180deg,#7a1526,#63101d);color:#fff;padding:11px 14px;display:flex;align-items:center;gap:8px;flex:0 0 auto;
+  cursor:move;user-select:none;touch-action:none;
 }
 #idtAskDock header strong{font-size:14px;font-weight:700}
 #idtAskDock header .idt-dock-sub{font-size:11px;opacity:.82;display:block;font-weight:400}
@@ -9538,6 +9538,12 @@ body.idt-ask-open{padding-right:0}
 #idtAskDockBody p{margin:0 0 8px}
 #idtAskDockBody::-webkit-scrollbar{width:9px}
 #idtAskDockBody::-webkit-scrollbar-thumb{background:#e0cda6;border-radius:9px;border:2px solid transparent;background-clip:content-box}
+/* sağ alt köşede görünür tutamak (resize:both ile birlikte) */
+#idtAskDock .idt-grip{
+  position:absolute;right:2px;bottom:2px;width:16px;height:16px;pointer-events:none;opacity:.55;
+  background:
+    linear-gradient(135deg,transparent 45%,#b8892b 45%,#b8892b 55%,transparent 55%) 0 0/6px 6px repeat;
+}
 .idt-card{border:1px solid #e5d9c8;border-radius:9px;background:#fff;padding:9px 10px;margin:0 0 9px}
 .idt-card.is-clash{border-color:#d38a8a;background:#fff6f5}
 .idt-card.is-hard{border-color:#c62828;background:#ffeceb}
@@ -9553,8 +9559,15 @@ body.idt-ask-open{padding-right:0}
 .idt-row .idt-when{flex:0 0 auto;font-size:11px;color:#7a6a58}
 .idt-btn{border:1px solid #dfc58e;background:#fff8ea;border-radius:6px;padding:3px 8px;font:inherit;font-size:11.5px;cursor:pointer;color:#5a1726}
 .idt-btn:hover{background:#ffeecb}
+/* Kadro: alt alta değil, sütunlu ve gruplu okunur liste */
 .idt-crew{margin:6px 0 0;padding:7px 8px;background:#fbf6ec;border:1px solid #eadfc9;border-radius:7px;font-size:12px}
-.idt-crew span.p{display:inline-block;background:#fff;border:1px solid #e5d9c8;border-radius:999px;padding:2px 8px;margin:0 4px 4px 0}
+.idt-crew .idt-crew-sum{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px}
+.idt-crew .idt-crew-sum .n{background:#fff;border:1px solid #e0cda6;border-radius:999px;padding:2px 9px;font-size:11px;font-weight:700;color:#5a1726}
+.idt-crew .idt-crew-grp{margin:0 0 6px}
+.idt-crew .idt-crew-grp:last-child{margin-bottom:0}
+.idt-crew .idt-crew-grp > b{display:block;font-size:10.5px;letter-spacing:.4px;text-transform:uppercase;color:#7a6a58;margin:0 0 3px}
+.idt-crew .idt-crew-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:3px 8px}
+.idt-crew span.p{display:block;background:#fff;border:1px solid #e5d9c8;border-radius:6px;padding:2px 7px;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .idt-crew span.p.crit{border-color:#d99;background:#fff1f0;color:#a02020;font-weight:600}
 .idt-shared{margin-top:6px;font-size:12px;color:#a02020}
 .idt-empty{color:#7a6a58}
@@ -9593,6 +9606,13 @@ body.idt-ask-open{padding-right:0}
     var mm=norm(date).match(/\b(\d{1,2})\b/);
     return mm?Number(mm[1]):null;
   }
+  /* Kişinin türü: oyuncu / figüran / diğer (teknik, yönetim vb.) */
+  function kindOf(rolesText){
+    var t=norm(rolesText);
+    if(/figuran/.test(t)) return 'figuran';
+    if(/oyuncu/.test(t)) return 'oyuncu';
+    return 'diger';
+  }
   function crewList(key){
     var crew=(typeof crewOf==='function'?crewOf(key):null)||{};
     var seen={},list=[];
@@ -9601,12 +9621,12 @@ body.idt-ask-open{padding-right:0}
       var name=rec.name||k;
       if(!name || name.indexOf('__ret_')===0 || seen[name]) return;
       seen[name]=1;
-      list.push({name:name,critical:!!rec.critical,roles:(rec.roles||[]).join(', ')});
+      var roles=(rec.roles||[]).join(', ');
+      list.push({name:name,critical:!!rec.critical,roles:roles,kind:kindOf(roles)});
     });
     return list.sort(function(a,b){return (b.critical?1:0)-(a.critical?1:0)||a.name.localeCompare(b.name,'tr')});
   }
-  /* Aynı günde 2-3-4-5… oyun varsa hepsini gruplar; ortak kadroyu ve
-     aynı saate denk gelenleri ayrıca işaretler. */
+  /* Aynı günde 2-3-4-5… oyun varsa hepsini gruplar. */
   function groupsByDay(list){
     var map={},order=[];
     list.forEach(function(it){
@@ -9634,10 +9654,18 @@ body.idt-ask-open{padding-right:0}
       return g;
     });
   }
+  function counts(list){
+    var c={oyuncu:0,figuran:0,diger:0};
+    list.forEach(function(p){ c[p.kind]++; });
+    return c;
+  }
   function showRow(s){
+    var c=counts(crewList(s.key));
+    var tot=c.oyuncu+c.figuran+c.diger;
     return '<div class="idt-row">'+
       '<span class="idt-name">'+esc(s.key)+'</span>'+
-      '<span class="idt-when">'+esc((s.time||'Saat yok')+(s.stage?' · '+s.stage:''))+'</span>'+
+      '<span class="idt-when">'+esc((s.time||'Saat yok')+(s.stage?' · '+s.stage:''))+
+        (tot?' · '+c.oyuncu+' oyuncu / '+c.figuran+' figüran':'')+'</span>'+
       '<button type="button" class="idt-btn" data-jump="'+esc(s.cellKey)+'">Tabloda göster</button>'+
       '<button type="button" class="idt-btn" data-crew="'+esc(s.key)+'">Kadro</button>'+
     '</div>';
@@ -9658,31 +9686,77 @@ body.idt-ask-open{padding-right:0}
     '</div>';
   }
 
-  var dock,body,dockInput,lastQuery='';
+  var dock,body,dockInput,lastQuery='',placed=false;
+
+  /* --- taşıma (başlıktan sürükle) --- */
+  function clamp(v,min,max){ return Math.max(min,Math.min(max,v)); }
+  function ensurePlaced(){
+    if(placed||!dock) return;
+    var r=dock.getBoundingClientRect();
+    dock.style.left=r.left+'px';
+    dock.style.top=r.top+'px';
+    dock.style.right='auto';
+    dock.style.bottom='auto';
+    dock.style.width=r.width+'px';
+    dock.style.height=r.height+'px';
+    placed=true;
+  }
+  function wireDrag(head){
+    var sx=0,sy=0,ox=0,oy=0,on=false;
+    head.addEventListener('pointerdown',function(e){
+      if(e.target.closest('button')) return;
+      ensurePlaced();
+      on=true; sx=e.clientX; sy=e.clientY;
+      var r=dock.getBoundingClientRect(); ox=r.left; oy=r.top;
+      dock.classList.add('is-dragging');
+      try{head.setPointerCapture(e.pointerId)}catch(err){}
+    });
+    head.addEventListener('pointermove',function(e){
+      if(!on) return;
+      var r=dock.getBoundingClientRect();
+      dock.style.left=clamp(ox+(e.clientX-sx),-r.width+80,window.innerWidth-80)+'px';
+      dock.style.top=clamp(oy+(e.clientY-sy),0,window.innerHeight-40)+'px';
+    });
+    ['pointerup','pointercancel'].forEach(function(ev){
+      head.addEventListener(ev,function(e){
+        on=false; dock.classList.remove('is-dragging');
+        try{head.releasePointerCapture(e.pointerId)}catch(err){}
+      });
+    });
+  }
+
   function build(){
-    if(document.getElementById('idtAskDock')) return;
+    if(document.getElementById('idtAskDock')){
+      dock=document.getElementById('idtAskDock');
+      body=dock.querySelector('#idtAskDockBody');
+      dockInput=dock.querySelector('#idtAskDockInput');
+      return;
+    }
     dock=document.createElement('aside');
     dock.id='idtAskDock';
     dock.innerHTML=
       '<header><div><strong>Program arama</strong>'+
-      '<span class="idt-dock-sub">Çakışmalar ve kadrolar — tabloyu kapatmaz</span></div>'+
+      '<span class="idt-dock-sub">Sürükleyerek taşı · köşeden boyutlandır</span></div>'+
       '<button type="button" id="idtAskClose">Kapat ✕</button></header>'+
       '<div id="idtAskDockSearch"><input type="text" id="idtAskDockInput" placeholder="Gün no, oyun adı, kişi adı veya “çakışma”…" aria-label="Programda ara"></div>'+
-      '<div id="idtAskDockBody"></div>';
+      '<div id="idtAskDockBody"></div><span class="idt-grip"></span>';
     document.body.appendChild(dock);
     body=dock.querySelector('#idtAskDockBody');
     dockInput=dock.querySelector('#idtAskDockInput');
-    dock.querySelector('#idtAskClose').addEventListener('click',close);
+    dock.querySelector('#idtAskClose').addEventListener('click',function(){ if(dockInput) dockInput.value=''; lastQuery=''; close(); });
+    wireDrag(dock.querySelector('header'));
     ['keydown','keyup','keypress'].forEach(function(ev){
       dockInput.addEventListener(ev,function(e){
         e.stopPropagation();
-        if(e.key==='Escape'){ close(); }
+        if(e.key==='Escape'){ dockInput.value=''; lastQuery=''; close(); }
       });
     });
     var t=null;
     dockInput.addEventListener('input',function(){
       window.clearTimeout(t);
       var v=dockInput.value;
+      /* Kutu boşalınca panel anında kaybolsun */
+      if(!v.trim()){ lastQuery=''; close(); return; }
       t=window.setTimeout(function(){ render(v,true); },200);
     });
     body.addEventListener('click',function(e){
@@ -9692,18 +9766,31 @@ body.idt-ask-open{padding-right:0}
       if(crewBtn){ toggleCrew(crewBtn); }
     });
   }
+  function crewHtml(list){
+    if(!list.length) return '<span class="idt-empty">Bu oyun için kadro bilgisi girilmemiş.</span>';
+    var c=counts(list);
+    var out='<div class="idt-crew-sum">'+
+      '<span class="n">'+c.oyuncu+' oyuncu</span>'+
+      '<span class="n">'+c.figuran+' figüran</span>'+
+      (c.diger?'<span class="n">'+c.diger+' diğer</span>':'')+
+      '<span class="n">toplam '+(c.oyuncu+c.figuran+c.diger)+'</span></div>';
+    [['oyuncu','Oyuncular'],['figuran','Figüranlar'],['diger','Diğer görevler']].forEach(function(g){
+      var arr=list.filter(function(p){return p.kind===g[0]});
+      if(!arr.length) return;
+      out+='<div class="idt-crew-grp"><b>'+g[1]+' ('+arr.length+')</b><div class="idt-crew-grid">'+
+        arr.map(function(p){
+          return '<span class="p'+(p.critical?' crit':'')+'" title="'+esc(p.roles)+'">'+esc(p.name)+'</span>';
+        }).join('')+'</div></div>';
+    });
+    return out;
+  }
   function toggleCrew(btn){
     var row=btn.closest('.idt-row');
     var next=row.nextElementSibling;
     if(next && next.classList.contains('idt-crew')){ next.remove(); btn.textContent='Kadro'; return; }
-    var list=crewList(btn.getAttribute('data-crew'));
     var box=document.createElement('div');
     box.className='idt-crew';
-    box.innerHTML=list.length
-      ? list.map(function(p){
-          return '<span class="p'+(p.critical?' crit':'')+'" title="'+esc(p.roles)+'">'+esc(p.name)+'</span>';
-        }).join('')
-      : '<span class="idt-empty">Bu oyun için kadro bilgisi girilmemiş.</span>';
+    box.innerHTML=crewHtml(crewList(btn.getAttribute('data-crew')));
     row.parentNode.insertBefore(box,row.nextSibling);
     btn.textContent='Gizle';
   }
@@ -9729,27 +9816,27 @@ body.idt-ask-open{padding-right:0}
   function render(query,fromDock){
     build();
     var q=String(query||'').trim();
+    /* 1) Arama kutusunda harf/kelime yoksa panel açılmaz, açıksa kapanır. */
+    if(!q){ lastQuery=''; close(); return; }
     lastQuery=q;
     if(dockInput && dockInput.value!==q && !fromDock) dockInput.value=q;
     var all=items();
     var html='';
-    if(!all.length){
-      html='<p class="idt-empty">Bu ayda gösterim bulunmuyor.</p>';
-    }else if(!q || norm(q).indexOf('cakis')!==-1 || norm(q).indexOf('sorun')!==-1){
+    if(!all.length){ close(); return; }
+    if(norm(q).indexOf('cakis')!==-1 || norm(q).indexOf('sorun')!==-1){
       var groups=groupsByDay(all).filter(function(g){return g.count>1});
       var risky=groups.filter(function(g){return g.sameTime.length||g.shared.length});
+      if(!groups.length){ close(); return; }
       html='<p><strong>'+groups.length+' günde birden fazla oyun</strong> var; '+
            risky.length+' tanesinde aynı saat ya da ortak kadro riski görünüyor.</p>'+
-           (groups.length?groups.map(dayCard).join(''):'<p class="idt-empty">Aynı güne düşen ikinci bir oyun yok.</p>');
+           groups.map(dayCard).join('');
     }else if(/^\d{1,2}$/.test(q)){
       var day=Number(q);
       var dayItems=all.filter(function(it){return dayOf(it.date)===day});
-      if(dayItems.length){
-        html=groupsByDay(dayItems).map(dayCard).join('');
-        jumpTo(dayItems[0].cellKey);
-      }else{
-        html='<p class="idt-empty">'+day+'. günde kayıtlı gösterim bulunamadı.</p>';
-      }
+      /* 2) O günde etkinlik yoksa pencere hiç açılmasın. */
+      if(!dayItems.length){ close(); return; }
+      html=groupsByDay(dayItems).map(dayCard).join('');
+      jumpTo(dayItems[0].cellKey);
     }else{
       var nq=norm(q);
       var byPlay=all.filter(function(it){ return norm(it.key+' '+it.stage+' '+it.date).indexOf(nq)!==-1; });
@@ -9764,17 +9851,14 @@ body.idt-ask-open{padding-right:0}
         });
       }
       var found=byPlay.length?byPlay:byPerson;
-      if(!found.length){
-        html='<p class="idt-empty">“'+esc(q)+'” için eşleşme bulunamadı. Gün numarası, oyun adı, oyuncu adı ya da “çakışma” yazabilirsiniz.</p>';
-      }else{
-        var days=groupsByDay(found);
-        var dayKeys={};
-        found.forEach(function(f){dayKeys[f.date]=1;});
-        var withOthers=groupsByDay(all.filter(function(it){return dayKeys[it.date];}));
-        html='<p><strong>'+found.length+' gösterim</strong> bulundu ('+
-             (byPlay.length?'oyun/sahne':'kadro')+' eşleşmesi). Aynı günlerdeki diğer oyunlar da aşağıda:</p>'+
-             withOthers.map(dayCard).join('');
-      }
+      /* Eşleşme yoksa da pencere açılmasın. */
+      if(!found.length){ close(); return; }
+      var dayKeys={};
+      found.forEach(function(f){dayKeys[f.date]=1;});
+      var withOthers=groupsByDay(all.filter(function(it){return dayKeys[it.date];}));
+      html='<p><strong>'+found.length+' gösterim</strong> bulundu ('+
+           (byPlay.length?'oyun/sahne':'kadro')+' eşleşmesi). Aynı günlerdeki diğer oyunlar da aşağıda:</p>'+
+           withOthers.map(dayCard).join('');
     }
     body.innerHTML=html;
     open();
@@ -9783,16 +9867,12 @@ body.idt-ask-open{padding-right:0}
   function wireTitleInput(){
     var oldForm=document.getElementById('uxTitleAskForm');
     if(!oldForm || oldForm.dataset.idtDock) return;
-    /* Eski dinleyicileri düşürmek için formu klonluyoruz: böylece cevap
-       artık tablonun üstüne düşen kutuda değil, sağdaki panelde çıkıyor. */
     var form=oldForm.cloneNode(true);
     form.dataset.idtDock='1';
     oldForm.parentNode.replaceChild(form,oldForm);
     var input=form.querySelector('#uxTitleAskInput');
     input.setAttribute('type','text');
     input.setAttribute('placeholder','Gün no, oyun, kişi veya “çakışma” ara…');
-    /* İmleç kaybolması: tablo kısayolları input içindeyken devreye
-       girmesin diye tuş olayları burada durduruluyor. */
     ['keydown','keyup','keypress'].forEach(function(ev){
       input.addEventListener(ev,function(e){ e.stopPropagation(); });
     });
@@ -9800,8 +9880,8 @@ body.idt-ask-open{padding-right:0}
     input.addEventListener('input',function(){
       window.clearTimeout(t);
       var v=input.value;
+      if(!v.trim()){ lastQuery=''; if(dockInput) dockInput.value=''; close(); return; }
       t=window.setTimeout(function(){
-        if(!v.trim()){ return; }
         render(v,false);
         input.focus();
       },250);
