@@ -750,6 +750,35 @@ button.btn.ghost:hover{background:var(--accent-soft);border-color:var(--accent)}
 .menu-trigger:hover{background:var(--accent-soft);color:var(--primary)}
 #monthTitleRow{margin-top:18px}
 #monthTitle{font-size:27px;letter-spacing:-.3px}
+/* Başlık satırındaki kural tabanlı hızlı-asistan kutusu: tabloyu asla
+   kaplamaz (sadece küçük bir açılır cevap şeridi düşer), gün numarası
+   yazınca ilgili tarihe atlar, metin yazınca oyun/kadro/çakışma sorularını
+   cevaplar. Hem normal görünümde hem odak modunda (kendi kopyası) çalışır. */
+#uxTitleAssistant{position:relative;flex:1 1 260px;min-width:160px;max-width:420px}
+#uxTitleAskForm{display:flex;gap:0;border:1px solid var(--border);border-radius:8px;overflow:hidden;background:#fff}
+#uxTitleAskInput{flex:1;min-width:0;border:0;padding:7px 10px;font:inherit;font-size:13px;background:transparent}
+#uxTitleAskInput:focus{outline:none;background:var(--accent-soft)}
+#uxTitleAskForm button{border:0;background:var(--primary);color:#fff;padding:0 12px;cursor:pointer;font-size:14px}
+#uxTitleAskForm button:hover{background:#5a1726}
+.ux-title-assistant-reply{
+  position:absolute;top:calc(100% + 6px);left:0;right:0;z-index:60;
+  background:#fffaf0;border:1px solid #dfc58e;border-radius:9px;
+  box-shadow:0 10px 26px rgba(93,57,18,.18);
+  padding:10px 12px;font-size:13px;line-height:1.45;color:#3a1c14;
+  max-height:60vh;overflow:auto;
+}
+.ux-title-assistant-reply p{margin:0 0 6px}
+.ux-title-assistant-reply p:last-child{margin-bottom:0}
+.ux-title-assistant-reply strong{color:#5a1726}
+.ux-title-assistant-reply .ux-assistant-result{
+  display:block;width:100%;text-align:left;padding:6px 8px;margin:4px 0;
+  border:1px solid #e5d9c8;border-radius:6px;background:#fff;font:inherit;cursor:pointer;
+}
+.ux-title-assistant-reply .ux-assistant-result:hover{background:#fff3dd}
+.ux-title-assistant-reply .ux-assistant-result small{display:block;color:#766559;font-size:11px;margin-top:2px}
+@media (max-width:920px){
+  #uxTitleAssistant{order:3;flex-basis:100%;max-width:none;margin-top:6px}
+}
 .titlebar-btn{border-color:var(--border);border-radius:8px;box-shadow:0 2px 5px rgba(57,35,24,.05)}
 .titlebar-btn:hover{border-color:var(--accent);background:var(--accent-soft)}
 .tbl-wrap{
@@ -1521,6 +1550,13 @@ table.sheet td.cell{min-width:86px;height:29px}
   </div>
   <div id="monthTitleRow" style="display:flex;align-items:center;justify-content:space-between;gap:12px">
     <h2 id="monthTitle" style="margin:6px 0 8px"></h2>
+    <div id="uxTitleAssistant" class="ux-title-assistant">
+      <form id="uxTitleAskForm" autocomplete="off">
+        <input id="uxTitleAskInput" type="search" placeholder="Gün no (ör. 10) veya oyun adı…" aria-label="Programa hızlı soru sor">
+        <button type="submit" aria-label="Sor">↵</button>
+      </form>
+      <div id="uxTitleAskReply" class="ux-title-assistant-reply" hidden aria-live="polite"></div>
+    </div>
     <div id="ttToggleWrap" style="display:flex;flex-shrink:0;gap:8px;align-items:center;flex-wrap:wrap">
       <button type="button" class="titlebar-btn" id="quickPrintBtn" title="Seçili kâğıt ayarıyla SADECE görüntülenen ayı yazdır / PDF">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9V3h12v6"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="7" rx="1"/></svg>
@@ -7872,6 +7908,11 @@ body.idt-locked main{pointer-events:none;user-select:none;opacity:.5;filter:gray
 
   /* A small orientation layer keeps the dense spreadsheet from becoming
      the first and only thing users have to parse. */
+  /* Kullanıcı isteğiyle "Aylık program özeti" şeridi kaldırıldı — yerine
+     EKİM 2026 başlığının sağındaki kural tabanlı hızlı-asistan kutusu
+     (#uxTitleAssistant) geçti. Kod/fonksiyonlar (makeOverview/updateOverview)
+     zararsız biçimde arka planda kalmaya devam ediyor, sadece görünmüyor. */
+  #uxOverview{display:none!important}
   #uxOverview{
     position:relative;
     display:grid;
@@ -8889,6 +8930,10 @@ body.idt-locked main{pointer-events:none;user-select:none;opacity:.5;filter:gray
     var m=typeof curMonth==='function'?curMonth():null;
     var items=assistantProgramItems();
     var issues=window.__uxAssistantIssues||assistantIssues();
+    /* Sonuç kartlarındaki data-ux-issue index'i her zaman bu diziye göre
+       çözülüyor; odak modu kapalıyken (updateAssistant hiç çalışmadığında)
+       de tıklanabilir kalsın diye burada da global önbelleğe yazılıyor. */
+    window.__uxAssistantIssues=issues;
     if(!q){
       return '<p>Bir tarih, oyun adı ya da soru yazabilirsin.</p><p>Örnek: <strong>3 Ekim\'de ne var?</strong> veya <strong>Çakışma var mı?</strong></p>';
     }
@@ -9292,10 +9337,96 @@ body.idt-locked main{pointer-events:none;user-select:none;opacity:.5;filter:gray
     paint();
   }
 
+  /* Kural tabanlı hızlı gezinme: girilen 1-2 haneli sayıyı, AÇIK OLAN
+     ayın gün numarası olarak yorumlar ve o güne ait satıra atlar —
+     o günde gösterim olsun olmasın (boş günler dahil) çalışır. */
+  function jumpToDay(dayNum){
+    var m=typeof curMonth==='function'?curMonth():null;
+    if(!m) return false;
+    var target={day:dayNum,month:''};
+    for(var r=2;r<m.rows;r++){
+      var date=dateTextOfRow(m,r);
+      if(!date || !assistantDateMatches(date,target)) continue;
+      var td=document.querySelector('#sheet td.cell[data-r="'+r+'"][data-c="0"]');
+      if(!td) continue;
+      if(typeof setSel==='function') setSel(r,0,r,0);
+      try{td.scrollIntoView({block:'center',inline:'center',behavior:'smooth'})}catch(e){td.scrollIntoView()}
+      td.classList.remove('ux-assistant-hit');
+      void td.offsetWidth;
+      td.classList.add('ux-assistant-hit');
+      window.setTimeout(function(){td.classList.remove('ux-assistant-hit')},1800);
+      return true;
+    }
+    return false;
+  }
+  /* Başlık satırındaki hızlı-asistan kutusu (#uxTitleAssistant): normal
+     görünümde EKİM 2026 başlığının sağında durur, odak modunda kendi
+     kopyası (#uxAssistantInput) zaten mevcut. Cevap tabloyu KAPLAMAZ —
+     başlık satırının hemen altına düşen küçük bir şerit olarak açılır ve
+     dışarı tıklayınca/Esc'e basınca kapanır. */
+  function initTitleAssistant(){
+    var form=document.getElementById('uxTitleAskForm');
+    var input=document.getElementById('uxTitleAskInput');
+    var reply=document.getElementById('uxTitleAskReply');
+    if(!form || !input || !reply) return;
+    function showReply(html){
+      reply.innerHTML=html;
+      reply.hidden=false;
+    }
+    function hideReply(){ reply.hidden=true; }
+    function run(question){
+      var q=String(question||'').trim();
+      if(!q){ hideReply(); return; }
+      var numeric=/^\d{1,2}$/.test(q);
+      if(numeric) jumpToDay(Number(q));
+      showReply(assistantReply(q));
+    }
+    form.addEventListener('submit',function(event){
+      event.preventDefault();
+      run(input.value);
+    });
+    var debounceTimer=null;
+    input.addEventListener('input',function(){
+      window.clearTimeout(debounceTimer);
+      var value=input.value;
+      if(!value.trim()){ hideReply(); return; }
+      /* Sadece 1-2 haneli sayı yazılırken (gün no) anında atla — serbest
+         metin (oyun adı vb.) için kullanıcı Enter'a basana kadar bekle,
+         aksi halde her harfte yeniden hesaplama yaparak kasmaya yol açar. */
+      if(/^\d{1,2}$/.test(value.trim())){
+        debounceTimer=window.setTimeout(function(){ run(value); },150);
+      }
+    });
+    reply.addEventListener('click',function(event){
+      var result=event.target.closest('.ux-assistant-result,[data-ux-jump],[data-ux-issue]');
+      if(!result) return;
+      var issueKey=result.getAttribute('data-ux-issue');
+      var issue=issueKey!==null && window.__uxAssistantIssues ? window.__uxAssistantIssues[Number(issueKey)] : null;
+      var jumpKey=result.getAttribute('data-ux-jump') || (issue && issue.cellKeys && issue.cellKeys[0]);
+      if(!jumpKey) return;
+      var parts=jumpKey.split('_');
+      var td=document.querySelector('#sheet td.cell[data-r="'+parts[0]+'"][data-c="'+parts[1]+'"]');
+      if(!td) return;
+      if(typeof setSel==='function') setSel(Number(parts[0]),Number(parts[1]),Number(parts[0]),Number(parts[1]));
+      try{td.scrollIntoView({block:'center',inline:'center',behavior:'smooth'})}catch(e){td.scrollIntoView()}
+      td.classList.remove('ux-assistant-hit');
+      void td.offsetWidth;
+      td.classList.add('ux-assistant-hit');
+      window.setTimeout(function(){td.classList.remove('ux-assistant-hit')},1800);
+    });
+    document.addEventListener('click',function(event){
+      if(!reply.hidden && !form.contains(event.target) && !reply.contains(event.target)) hideReply();
+    });
+    document.addEventListener('keydown',function(event){
+      if(event.key==='Escape' && !reply.hidden && document.activeElement===input) hideReply();
+    });
+  }
+
   function init(){
     makeOverview();
     makeFocusAssistant();
     initFocusMode();
+    initTitleAssistant();
     updateOverview();
     updateAssistant();
     var sheet=document.getElementById('sheet');
