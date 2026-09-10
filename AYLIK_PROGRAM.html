@@ -749,6 +749,14 @@ button.btn.ghost:hover{background:var(--accent-soft);border-color:var(--accent)}
 .menu-trigger{border-radius:7px}
 .menu-trigger:hover{background:var(--accent-soft);color:var(--primary)}
 #monthTitleRow{margin-top:18px}
+/* Kullanıcı isteğiyle: sayfa aşağı kaydırılınca bu satır (ve içindeki
+   hızlı-asistan kutusu) kaybolmasın — araç çubuğunun (.controls) hemen
+   altına yapışık kalsın. Kesin "top" değeri araç çubuğunun gerçek
+   yüksekliğine göre değiştiği için JS (syncTitleRowSticky) tarafından
+   inline style olarak sürekli güncellenir; burada sadece güvenli bir
+   varsayılan var. */
+#monthTitleRow{position:sticky;top:78px;z-index:34;background:var(--bg);padding:6px 0 4px;box-shadow:0 6px 10px -6px rgba(0,0,0,.12)}
+body.toolbar-collapsed #monthTitleRow{box-shadow:0 6px 10px -6px rgba(0,0,0,.1)}
 #monthTitle{font-size:27px;letter-spacing:-.3px}
 /* Başlık satırındaki kural tabanlı hızlı-asistan kutusu: tabloyu asla
    kaplamaz (sadece küçük bir açılır cevap şeridi düşer), gün numarası
@@ -5517,6 +5525,10 @@ function setToolbarVisible(visible, persist){
   if(btn) btn.textContent = visible ? 'Araçları gizle' : 'Araçları göster';
   document.body.classList.toggle('toolbar-collapsed', !visible);
   if(persist){ try{ localStorage.setItem(TOOLBAR_PREF_KEY, visible ? '1' : '0'); }catch(e){} }
+  /* Araç çubuğu gizlenip/gösterilince yüksekliği değiştiği için, altına
+     yapışık duran başlık/asistan satırının "top" değeri de yeniden
+     hesaplanmalı — aksi halde tabloyla üst üste biner ya da boşluk kalır. */
+  if(window.__syncTitleRowSticky) window.requestAnimationFrame(window.__syncTitleRowSticky);
 }
 function initToolbarToggle(){
   const btn = document.getElementById('toolbarToggleBtn');
@@ -9422,6 +9434,33 @@ body.idt-locked main{pointer-events:none;user-select:none;opacity:.5;filter:gray
     });
   }
 
+  /* Sayfa aşağı kaydırılınca başlık satırı (ve içindeki hızlı-asistan
+     kutusu) araç çubuğunun (.controls) hemen altına yapışık kalsın diye
+     "top" değerini araç çubuğunun GERÇEK yüksekliğine göre sürekli
+     günceller — bu yükseklik ekran genişliğine, "Araçları gizle"
+     durumuna ve tam ekran/odak moduna göre değişebiliyor. */
+  function syncTitleRowSticky(){
+    var row=document.getElementById('monthTitleRow');
+    var controls=document.querySelector('#program .controls');
+    if(!row || !controls) return;
+    if(document.body.classList.contains('ux-focus-mode')) return;
+    if(document.body.classList.contains('fs-on') && !document.body.classList.contains('fs-showbars')) return;
+    var rect=controls.getBoundingClientRect();
+    var top=Math.max(0,Math.round(rect.bottom));
+    row.style.top=top+'px';
+  }
+  window.__syncTitleRowSticky=syncTitleRowSticky;
+  (function initTitleRowStickySync(){
+    var ticking=false;
+    function onScrollOrResize(){
+      if(ticking) return;
+      ticking=true;
+      window.requestAnimationFrame(function(){ ticking=false; syncTitleRowSticky(); });
+    }
+    window.addEventListener('scroll',onScrollOrResize,{passive:true});
+    window.addEventListener('resize',onScrollOrResize);
+  })();
+
   function init(){
     makeOverview();
     makeFocusAssistant();
@@ -9429,6 +9468,7 @@ body.idt-locked main{pointer-events:none;user-select:none;opacity:.5;filter:gray
     initTitleAssistant();
     updateOverview();
     updateAssistant();
+    syncTitleRowSticky();
     var sheet=document.getElementById('sheet');
     if(sheet && window.MutationObserver){
       /* Hücre düzenleme/seçim sırasında sheet üzerinde çok kısa aralıklarla
