@@ -9500,5 +9500,322 @@ body.idt-locked main{pointer-events:none;user-select:none;opacity:.5;filter:gray
   else init();
 })();
 </script>
+<style id="idt-ask-dock-style">
+/* Başlık satırındaki arama kutusu artık tabloyu KAPLAMAYAN, sağa yaslı
+   sabit bir panelde cevap veriyor. Panel açıkken sayfa daralıyor, böylece
+   program tablosu hiçbir zaman açılır pencerenin altında kalmıyor. */
+#uxTitleAskReply{display:none !important}
+#uxTitleAskInput{caret-color:#6b1220}
+#uxTitleAskInput:focus{outline:2px solid #b8892b;outline-offset:-2px}
+#idtAskDock{
+  position:fixed;top:0;right:0;bottom:0;width:376px;max-width:92vw;z-index:9000;
+  background:#fffaf0;border-left:1px solid #dfc58e;box-shadow:-14px 0 34px rgba(93,57,18,.16);
+  display:none;flex-direction:column;font-family:'Manrope',system-ui,sans-serif;color:#3a1c14;
+}
+body.idt-ask-open #idtAskDock{display:flex}
+body.idt-ask-open{padding-right:376px}
+@media (max-width:900px){ body.idt-ask-open{padding-right:0} #idtAskDock{width:100%} }
+#idtAskDock header{
+  background:#6b1220;color:#fff;padding:10px 12px;display:flex;align-items:center;gap:8px;flex:0 0 auto;
+}
+#idtAskDock header strong{font-size:14px;font-weight:700}
+#idtAskDock header .idt-dock-sub{font-size:11px;opacity:.8;display:block;font-weight:400}
+#idtAskDock header button{
+  margin-left:auto;background:transparent;border:1px solid rgba(255,255,255,.4);color:#fff;
+  border-radius:6px;padding:4px 9px;cursor:pointer;font:inherit;font-size:12px;
+}
+#idtAskDockSearch{flex:0 0 auto;padding:8px 12px;border-bottom:1px solid #ecdcbb;background:#fff}
+#idtAskDockSearch input{
+  width:100%;border:1px solid #dfc58e;border-radius:7px;padding:8px 10px;font:inherit;font-size:13px;
+  caret-color:#6b1220;background:#fff;color:#3a1c14;
+}
+#idtAskDockSearch input:focus{outline:2px solid #b8892b;outline-offset:-1px}
+#idtAskDockBody{flex:1 1 auto;overflow:auto;padding:10px 12px 26px;font-size:13px;line-height:1.45}
+#idtAskDockBody p{margin:0 0 8px}
+.idt-card{border:1px solid #e5d9c8;border-radius:9px;background:#fff;padding:9px 10px;margin:0 0 9px}
+.idt-card.is-clash{border-color:#d38a8a;background:#fff6f5}
+.idt-card.is-hard{border-color:#c62828;background:#ffeceb}
+.idt-card h4{margin:0 0 4px;font-size:13px;color:#5a1726}
+.idt-card .idt-meta{font-size:11px;color:#7a6a58;display:block;margin-bottom:6px}
+.idt-badge{display:inline-block;font-size:10.5px;font-weight:700;border-radius:999px;padding:2px 8px;margin:0 4px 4px 0}
+.idt-badge.warn{background:#ffe6e3;color:#a02020;border:1px solid #e5a9a4}
+.idt-badge.ok{background:#e8f3e6;color:#2c6b2c;border:1px solid #b6d5b1}
+.idt-badge.info{background:#fdf1d6;color:#7a5a12;border:1px solid #e2c98d}
+.idt-row{display:flex;gap:6px;align-items:flex-start;flex-wrap:wrap;padding:5px 0;border-top:1px dashed #eee0c8}
+.idt-row:first-of-type{border-top:0}
+.idt-row .idt-name{flex:1 1 130px;min-width:0;font-weight:600}
+.idt-row .idt-when{flex:0 0 auto;font-size:11px;color:#7a6a58}
+.idt-btn{border:1px solid #dfc58e;background:#fff8ea;border-radius:6px;padding:3px 8px;font:inherit;font-size:11.5px;cursor:pointer;color:#5a1726}
+.idt-btn:hover{background:#ffeecb}
+.idt-crew{margin:6px 0 0;padding:7px 8px;background:#fbf6ec;border:1px solid #eadfc9;border-radius:7px;font-size:12px}
+.idt-crew span.p{display:inline-block;background:#fff;border:1px solid #e5d9c8;border-radius:999px;padding:2px 8px;margin:0 4px 4px 0}
+.idt-crew span.p.crit{border-color:#d99;background:#fff1f0;color:#a02020;font-weight:600}
+.idt-shared{margin-top:6px;font-size:12px;color:#a02020}
+.idt-empty{color:#7a6a58}
+@media print{#idtAskDock{display:none !important} body.idt-ask-open{padding-right:0}}
+</style>
+<script id="idt-ask-dock">
+(function(){
+  'use strict';
+  function esc(s){ return typeof escapeHtml==='function'?escapeHtml(s):String(s==null?'':s); }
+  function norm(s){
+    return String(s||'').toLocaleLowerCase('tr')
+      .replace(/ı/g,'i').replace(/İ/g,'i').replace(/ş/g,'s').replace(/ğ/g,'g')
+      .replace(/ü/g,'u').replace(/ö/g,'o').replace(/ç/g,'c').trim();
+  }
+  /* Açık ayın tüm gösterimleri: tarih / saat / oyun / sahne / hücre */
+  function items(){
+    var m=typeof curMonth==='function'?curMonth():null;
+    if(!m || typeof gamesOfRow!=='function') return [];
+    var out=[],seen={};
+    for(var r=2;r<m.rows;r++){
+      (gamesOfRow(m,r)||[]).forEach(function(g){
+        var ck=g.row+'_'+g.col;
+        if(seen[ck]) return; seen[ck]=true;
+        out.push({
+          date:(typeof dateTextOfRow==='function'&&dateTextOfRow(m,g.row))||'Tarihsiz gün',
+          time:g.time||(typeof timeTextOfRow==='function'?timeTextOfRow(m,g.row):'')||'',
+          key:g.key||'',
+          stage:typeof stageHeaderText==='function'?stageHeaderText(m,g.col):'',
+          cellKey:ck,row:g.row,col:g.col
+        });
+      });
+    }
+    return out;
+  }
+  function dayOf(date){
+    var mm=norm(date).match(/\b(\d{1,2})\b/);
+    return mm?Number(mm[1]):null;
+  }
+  function crewList(key){
+    var crew=(typeof crewOf==='function'?crewOf(key):null)||{};
+    var seen={},list=[];
+    Object.keys(crew).forEach(function(k){
+      var rec=crew[k]||{};
+      var name=rec.name||k;
+      if(!name || name.indexOf('__ret_')===0 || seen[name]) return;
+      seen[name]=1;
+      list.push({name:name,critical:!!rec.critical,roles:(rec.roles||[]).join(', ')});
+    });
+    return list.sort(function(a,b){return (b.critical?1:0)-(a.critical?1:0)||a.name.localeCompare(b.name,'tr')});
+  }
+  /* Aynı günde 2-3-4-5… oyun varsa hepsini gruplar; ortak kadroyu ve
+     aynı saate denk gelenleri ayrıca işaretler. */
+  function groupsByDay(list){
+    var map={},order=[];
+    list.forEach(function(it){
+      if(!map[it.date]){ map[it.date]={date:it.date,shows:[]}; order.push(it.date); }
+      map[it.date].shows.push(it);
+    });
+    return order.map(function(d){
+      var g=map[d];
+      var names={},shared={};
+      g.shows.forEach(function(s){
+        crewList(s.key).forEach(function(p){
+          if(names[p.name] && names[p.name]!==s.key) shared[p.name]=p.critical?2:1;
+          names[p.name]=s.key;
+        });
+      });
+      var times={},sameTime=[];
+      g.shows.forEach(function(s){
+        var t=(s.time||'').trim();
+        if(!t) return;
+        if(times[t]) sameTime.push(t); else times[t]=1;
+      });
+      g.shared=Object.keys(shared).map(function(n){return {name:n,critical:shared[n]===2}});
+      g.sameTime=sameTime.filter(function(v,i,a){return a.indexOf(v)===i});
+      g.count=g.shows.length;
+      return g;
+    });
+  }
+  function showRow(s){
+    return '<div class="idt-row">'+
+      '<span class="idt-name">'+esc(s.key)+'</span>'+
+      '<span class="idt-when">'+esc((s.time||'Saat yok')+(s.stage?' · '+s.stage:''))+'</span>'+
+      '<button type="button" class="idt-btn" data-jump="'+esc(s.cellKey)+'">Tabloda göster</button>'+
+      '<button type="button" class="idt-btn" data-crew="'+esc(s.key)+'">Kadro</button>'+
+    '</div>';
+  }
+  function dayCard(g){
+    var cls=g.count>=2?(g.sameTime.length||g.shared.length?' is-hard':' is-clash'):'';
+    var badges='<span class="idt-badge '+(g.count>1?'warn':'ok')+'">'+g.count+' oyun</span>';
+    if(g.sameTime.length) badges+='<span class="idt-badge warn">aynı saat: '+esc(g.sameTime.join(', '))+'</span>';
+    if(g.shared.length) badges+='<span class="idt-badge warn">'+g.shared.length+' ortak kadro</span>';
+    if(g.count>1 && !g.sameTime.length && !g.shared.length) badges+='<span class="idt-badge ok">çakışma yok</span>';
+    return '<div class="idt-card'+cls+'">'+
+      '<h4>'+esc(g.date)+'</h4>'+
+      '<span class="idt-meta">'+badges+'</span>'+
+      g.shows.map(showRow).join('')+
+      (g.shared.length?'<div class="idt-shared">Ortak kadro: '+g.shared.map(function(p){
+        return esc(p.name)+(p.critical?' (kritik)':'');
+      }).join(', ')+'</div>':'')+
+    '</div>';
+  }
+
+  var dock,body,dockInput,lastQuery='';
+  function build(){
+    if(document.getElementById('idtAskDock')) return;
+    dock=document.createElement('aside');
+    dock.id='idtAskDock';
+    dock.innerHTML=
+      '<header><div><strong>Program arama</strong>'+
+      '<span class="idt-dock-sub">Çakışmalar ve kadrolar — tabloyu kapatmaz</span></div>'+
+      '<button type="button" id="idtAskClose">Kapat ✕</button></header>'+
+      '<div id="idtAskDockSearch"><input type="text" id="idtAskDockInput" placeholder="Gün no, oyun adı, kişi adı veya “çakışma”…" aria-label="Programda ara"></div>'+
+      '<div id="idtAskDockBody"></div>';
+    document.body.appendChild(dock);
+    body=dock.querySelector('#idtAskDockBody');
+    dockInput=dock.querySelector('#idtAskDockInput');
+    dock.querySelector('#idtAskClose').addEventListener('click',close);
+    ['keydown','keyup','keypress'].forEach(function(ev){
+      dockInput.addEventListener(ev,function(e){
+        e.stopPropagation();
+        if(e.key==='Escape'){ close(); }
+      });
+    });
+    var t=null;
+    dockInput.addEventListener('input',function(){
+      window.clearTimeout(t);
+      var v=dockInput.value;
+      t=window.setTimeout(function(){ render(v,true); },200);
+    });
+    body.addEventListener('click',function(e){
+      var jump=e.target.closest('[data-jump]');
+      if(jump){ jumpTo(jump.getAttribute('data-jump')); return; }
+      var crewBtn=e.target.closest('[data-crew]');
+      if(crewBtn){ toggleCrew(crewBtn); }
+    });
+  }
+  function toggleCrew(btn){
+    var row=btn.closest('.idt-row');
+    var next=row.nextElementSibling;
+    if(next && next.classList.contains('idt-crew')){ next.remove(); btn.textContent='Kadro'; return; }
+    var list=crewList(btn.getAttribute('data-crew'));
+    var box=document.createElement('div');
+    box.className='idt-crew';
+    box.innerHTML=list.length
+      ? list.map(function(p){
+          return '<span class="p'+(p.critical?' crit':'')+'" title="'+esc(p.roles)+'">'+esc(p.name)+'</span>';
+        }).join('')
+      : '<span class="idt-empty">Bu oyun için kadro bilgisi girilmemiş.</span>';
+    row.parentNode.insertBefore(box,row.nextSibling);
+    btn.textContent='Gizle';
+  }
+  function jumpTo(cellKey){
+    var p=String(cellKey||'').split('_');
+    var td=document.querySelector('#sheet td.cell[data-r="'+p[0]+'"][data-c="'+p[1]+'"]');
+    if(!td) return;
+    if(typeof setSel==='function') setSel(Number(p[0]),Number(p[1]),Number(p[0]),Number(p[1]));
+    try{td.scrollIntoView({block:'center',inline:'center',behavior:'smooth'})}catch(e){td.scrollIntoView()}
+    td.classList.remove('ux-assistant-hit'); void td.offsetWidth; td.classList.add('ux-assistant-hit');
+    window.setTimeout(function(){td.classList.remove('ux-assistant-hit')},1800);
+  }
+  function open(){
+    build();
+    document.body.classList.add('idt-ask-open');
+    if(typeof window.__syncTitleRowSticky==='function') window.__syncTitleRowSticky();
+  }
+  function close(){
+    document.body.classList.remove('idt-ask-open');
+    if(typeof window.__syncTitleRowSticky==='function') window.__syncTitleRowSticky();
+  }
+
+  function render(query,fromDock){
+    build();
+    var q=String(query||'').trim();
+    lastQuery=q;
+    if(dockInput && dockInput.value!==q && !fromDock) dockInput.value=q;
+    var all=items();
+    var html='';
+    if(!all.length){
+      html='<p class="idt-empty">Bu ayda gösterim bulunmuyor.</p>';
+    }else if(!q || norm(q).indexOf('cakis')!==-1 || norm(q).indexOf('sorun')!==-1){
+      var groups=groupsByDay(all).filter(function(g){return g.count>1});
+      var risky=groups.filter(function(g){return g.sameTime.length||g.shared.length});
+      html='<p><strong>'+groups.length+' günde birden fazla oyun</strong> var; '+
+           risky.length+' tanesinde aynı saat ya da ortak kadro riski görünüyor.</p>'+
+           (groups.length?groups.map(dayCard).join(''):'<p class="idt-empty">Aynı güne düşen ikinci bir oyun yok.</p>');
+    }else if(/^\d{1,2}$/.test(q)){
+      var day=Number(q);
+      var dayItems=all.filter(function(it){return dayOf(it.date)===day});
+      if(dayItems.length){
+        html=groupsByDay(dayItems).map(dayCard).join('');
+        jumpTo(dayItems[0].cellKey);
+      }else{
+        html='<p class="idt-empty">'+day+'. günde kayıtlı gösterim bulunamadı.</p>';
+      }
+    }else{
+      var nq=norm(q);
+      var byPlay=all.filter(function(it){ return norm(it.key+' '+it.stage+' '+it.date).indexOf(nq)!==-1; });
+      var byPerson=[];
+      if(!byPlay.length){
+        var keys={};
+        all.forEach(function(it){ keys[it.key]=1; });
+        Object.keys(keys).forEach(function(k){
+          if(crewList(k).some(function(p){return norm(p.name).indexOf(nq)!==-1})){
+            byPerson=byPerson.concat(all.filter(function(it){return it.key===k}));
+          }
+        });
+      }
+      var found=byPlay.length?byPlay:byPerson;
+      if(!found.length){
+        html='<p class="idt-empty">“'+esc(q)+'” için eşleşme bulunamadı. Gün numarası, oyun adı, oyuncu adı ya da “çakışma” yazabilirsiniz.</p>';
+      }else{
+        var days=groupsByDay(found);
+        var dayKeys={};
+        found.forEach(function(f){dayKeys[f.date]=1;});
+        var withOthers=groupsByDay(all.filter(function(it){return dayKeys[it.date];}));
+        html='<p><strong>'+found.length+' gösterim</strong> bulundu ('+
+             (byPlay.length?'oyun/sahne':'kadro')+' eşleşmesi). Aynı günlerdeki diğer oyunlar da aşağıda:</p>'+
+             withOthers.map(dayCard).join('');
+      }
+    }
+    body.innerHTML=html;
+    open();
+  }
+
+  function wireTitleInput(){
+    var oldForm=document.getElementById('uxTitleAskForm');
+    if(!oldForm || oldForm.dataset.idtDock) return;
+    /* Eski dinleyicileri düşürmek için formu klonluyoruz: böylece cevap
+       artık tablonun üstüne düşen kutuda değil, sağdaki panelde çıkıyor. */
+    var form=oldForm.cloneNode(true);
+    form.dataset.idtDock='1';
+    oldForm.parentNode.replaceChild(form,oldForm);
+    var input=form.querySelector('#uxTitleAskInput');
+    input.setAttribute('type','text');
+    input.setAttribute('placeholder','Gün no, oyun, kişi veya “çakışma” ara…');
+    /* İmleç kaybolması: tablo kısayolları input içindeyken devreye
+       girmesin diye tuş olayları burada durduruluyor. */
+    ['keydown','keyup','keypress'].forEach(function(ev){
+      input.addEventListener(ev,function(e){ e.stopPropagation(); });
+    });
+    var t=null;
+    input.addEventListener('input',function(){
+      window.clearTimeout(t);
+      var v=input.value;
+      t=window.setTimeout(function(){
+        if(!v.trim()){ return; }
+        render(v,false);
+        input.focus();
+      },250);
+    });
+    form.addEventListener('submit',function(e){
+      e.preventDefault();
+      render(input.value,false);
+      input.focus();
+    });
+    input.addEventListener('focus',function(){ if(lastQuery) render(lastQuery,false); });
+  }
+
+  function boot(){
+    build();
+    wireTitleInput();
+    window.setInterval(wireTitleInput,2000);
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',boot);
+  else boot();
+})();
+</script>
 </body>
 </html>
