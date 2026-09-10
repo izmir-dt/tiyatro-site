@@ -8099,6 +8099,55 @@ body.idt-locked main{pointer-events:none;user-select:none;opacity:.5;filter:gray
     from{opacity:0;transform:translateY(-5px)}
     to{opacity:1;transform:none}
   }
+  /* Hızlı soru-cevap kutusu: panelin en üstünde, en dikkat çeken öğe —
+     telefonda konuşurken tek elle hızlıca soru yazıp anında cevap
+     görülebilsin diye büyük puntolu. */
+  .ux-quickask{
+    display:flex;
+    gap:8px;
+    padding:10px 12px;
+    background:var(--primary);
+    border-radius:11px 11px 0 0;
+  }
+  .ux-quickask-input{
+    flex:1;
+    min-width:0;
+    padding:10px 12px;
+    border:0;
+    border-radius:8px;
+    font:inherit;
+    font-size:16px; /* 16px altı iOS'ta odaklanınca sayfayı otomatik yakınlaştırır */
+    background:#fff;
+    color:#3a1c14;
+  }
+  .ux-quickask-input:focus{outline:3px solid rgba(255,255,255,.5)}
+  .ux-quickask-btn{
+    flex:none;
+    background:#fff;
+    color:var(--primary);
+    font-weight:800;
+    border-radius:8px;
+    padding:0 16px;
+  }
+  .ux-quickask-reply{
+    padding:12px 14px;
+    font-size:15px;
+    line-height:1.5;
+    color:#3a1c14;
+    background:#fffaf0;
+    border-bottom:1px solid #efe2cc;
+  }
+  .ux-quickask-reply p{margin:0 0 8px}
+  .ux-quickask-reply p:last-child{margin-bottom:0}
+  .ux-quickask-reply strong{color:#5a1726}
+  .ux-quickask-reply .ux-assistant-result{
+    display:block;width:100%;text-align:left;padding:8px 10px;margin:4px 0;
+    border:1px solid #e5d9c8;border-radius:7px;background:#fff;
+    font:inherit;cursor:pointer;
+  }
+  .ux-quickask-reply .ux-assistant-result:hover{background:#fff3dd}
+  .ux-quickask-reply .ux-assistant-result strong{display:block;font-size:14px}
+  .ux-quickask-reply .ux-assistant-result small{display:block;color:#766559;font-size:12px;margin-top:2px}
   .ux-assistant-head{
     display:flex;
     align-items:center;
@@ -8706,6 +8755,14 @@ body.idt-locked main{pointer-events:none;user-select:none;opacity:.5;filter:gray
     panel.id='uxFocusAssistant';
     panel.setAttribute('aria-live','polite');
     panel.innerHTML=
+      /* Hızlı soru-cevap kutusu — telefonda konuşurken "10 Ekim'de ne var?"
+         gibi sorulara en hızlı erişilecek, panelin EN ÜSTÜNDEKİ öğe budur.
+         Panel açılır açılmaz otomatik odaklanır (bkz. initFocusMode). */
+      '<form id="uxQuickAskForm" class="ux-quickask" autocomplete="off">'+
+        '<input id="uxAssistantInput" type="search" class="ux-quickask-input" placeholder="Örn: 10 Ekim\'de ne var? / Kanlı Nigar kim oynuyor?" aria-label="Programa hızlı soru sor">'+
+        '<button type="submit" class="btn small ux-quickask-btn">Sor</button>'+
+      '</form>'+
+      '<div class="ux-quickask-reply" id="uxAssistantReply" aria-live="polite"></div>'+
       '<div class="ux-assistant-head">'+
         '<div class="ux-assistant-label">'+
           '<span class="ux-assistant-icon" aria-hidden="true">✦</span>'+
@@ -8713,16 +8770,24 @@ body.idt-locked main{pointer-events:none;user-select:none;opacity:.5;filter:gray
         '</div>'+
         '<div class="ux-assistant-summary" id="uxAssistantSummary"></div>'+
       '</div>'+
-      '<div class="ux-conflict-map" id="uxConflictMap"></div>'+
-      '<div class="ux-assistant-list" id="uxAssistantList"></div>';
+      '<div class="ux-conflict-map" id="uxConflictMap"></div>';
     program.insertBefore(panel,table);
+    var quickForm=panel.querySelector('#uxQuickAskForm');
+    if(quickForm){
+      quickForm.addEventListener('submit',function(event){
+        event.preventDefault();
+        var input=document.getElementById('uxAssistantInput');
+        askFocusAssistant(input?input.value:'');
+      });
+    }
+    setAssistantReply(assistantReply(''));
     panel.addEventListener('click',function(event){
       var crewBtn=event.target.closest('.ux-crew-full-btn');
       if(crewBtn){
         openFullCrewModal(crewBtn.getAttribute('data-ux-crew'));
         return;
       }
-      var item=event.target.closest('.ux-assistant-issue');
+      var item=event.target.closest('.ux-assistant-result[data-ux-issue]');
       var result=event.target.closest('.ux-assistant-result,[data-ux-jump]');
       var key=item ? item.getAttribute('data-ux-issue') : null;
       var issue=key!==null && window.__uxAssistantIssues ? window.__uxAssistantIssues[Number(key)] : null;
@@ -9093,8 +9158,7 @@ body.idt-locked main{pointer-events:none;user-select:none;opacity:.5;filter:gray
     var issues=assistantIssues();
     window.__uxAssistantIssues=issues;
     var summary=document.getElementById('uxAssistantSummary');
-    var list=document.getElementById('uxAssistantList');
-    if(!summary || !list) return;
+    if(!summary) return;
     var critical=issues.filter(function(issue){return issue.critical}).length;
     var ignored=issues.filter(function(issue){return issue.ignoredGames===issue.totalGames}).length;
     var open=issues.length-ignored;
@@ -9209,6 +9273,13 @@ body.idt-locked main{pointer-events:none;user-select:none;opacity:.5;filter:gray
            bir sonraki hücre düzenlemesine veya 1.5sn'lik zamanlayıcıya
            kadar panel eski (boş/bayat) veri gösterebilir. */
         updateAssistant();
+        /* Telefonda konuşurken en hızlı erişilecek şey soru kutusu olsun:
+           odak modu açılır açılmaz otomatik odaklanıp klavye hazır bekler,
+           tek elle "10 Ekim'de ne var?" yazılıp Enter'a basılabilsin. */
+        window.setTimeout(function(){
+          var qa=document.getElementById('uxAssistantInput');
+          if(qa){ qa.focus(); qa.select(); }
+        },60);
       }
     });
     document.addEventListener('keydown',function(event){
