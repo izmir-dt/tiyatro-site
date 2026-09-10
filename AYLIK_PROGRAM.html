@@ -1378,6 +1378,7 @@ table.sheet td.cell{min-width:86px;height:29px}
         <button class="btn ghost small" id="delMonthTop" title="Görüntülenen ayı kalıcı olarak sil (sunucudan da kaldırılır)">&#128465; Ayı sil</button>
         <button class="btn ghost small" id="fsBtn" title="Aylık programı tam sayfa görüntüle (Esc ile çık)">Tam Ekran</button>
         <button class="btn ghost small" id="uxFocusBtn" title="Aylık programı sade ve tablo odaklı görünümde aç" aria-pressed="false">Odak modu</button>
+        <button class="btn ghost small ux-focus-only" id="uxCrewPickerBtn" title="Odak modundayken bu ayın herhangi bir oyununun tam kadrosunu gör">☰ Tam kadro</button>
         <button class="btn small" id="toolbarToggleBtn" title="Düzenleme araç çubuğunu gizle/göster — aylık program odakta kalsın">Araçları gizle</button>
       </div>
     </div>
@@ -8070,6 +8071,10 @@ body.idt-locked main{pointer-events:none;user-select:none;opacity:.5;filter:gray
     border-radius:12px;
     box-shadow:0 8px 24px rgba(64,30,18,.18);
   }
+  /* "Tam kadro" düğmesi yalnızca odak modundayken görünür — normal
+     görünümde zaten "Oyun & Kadro" sekmesi bu işi yapıyor. */
+  .ux-focus-only{display:none}
+  body.ux-focus-mode .ux-focus-only{display:inline-block}
   body.ux-focus-mode #program .tbl-wrap{
     width:100%;
     max-width:none;
@@ -8236,6 +8241,55 @@ body.idt-locked main{pointer-events:none;user-select:none;opacity:.5;filter:gray
     font-size:8px;
     line-height:1.25;
   }
+  .ux-crew-full-btn{
+    display:block;
+    margin-top:5px;
+    padding:3px 0 0;
+    border:0;
+    border-top:1px dashed #e5d9c8;
+    background:transparent;
+    color:#8a5a1f;
+    font:inherit;
+    font-size:8px;
+    font-weight:800;
+    text-align:left;
+    cursor:pointer;
+  }
+  .ux-crew-full-btn:hover{color:#5a1726;text-decoration:underline}
+  /* Tam kadro modali: odak modu içinde herhangi bir oyunun eksiksiz
+     (kısaltılmamış) kadro listesini gösterir. */
+  .ux-crew-modal-back{
+    position:fixed;inset:0;z-index:100010;background:rgba(30,14,10,.55);
+    display:flex;align-items:center;justify-content:center;padding:24px;
+  }
+  .ux-crew-modal{
+    background:#fffaf2;border-radius:14px;max-width:640px;width:100%;
+    max-height:82vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.35);
+    padding:18px 20px 20px;
+  }
+  .ux-crew-modal h3{margin:0 0 2px;font-size:18px}
+  .ux-crew-modal .ux-crew-sub{color:#766559;font-size:12px;margin:0 0 14px}
+  .ux-crew-modal .ux-crew-close{
+    float:right;border:0;background:transparent;color:#766559;
+    font-size:20px;line-height:1;cursor:pointer;padding:2px 4px;
+  }
+  .ux-crew-modal .ux-crew-close:hover{color:#5a1726}
+  .ux-crew-modal .ux-crew-row{
+    display:flex;justify-content:space-between;gap:10px;
+    padding:7px 0;border-bottom:1px solid #f0e6d5;font-size:13px;
+  }
+  .ux-crew-modal .ux-crew-row:last-child{border-bottom:0}
+  .ux-crew-modal .ux-crew-row .name{font-weight:700;color:#3a1c14}
+  .ux-crew-modal .ux-crew-row .name.is-critical{color:#9b2e28}
+  .ux-crew-modal .ux-crew-row .roles{color:#69463c;text-align:right;font-size:12px}
+  .ux-crew-modal .ux-crew-empty{color:#766559;font-size:13px;padding:10px 0}
+  .ux-crew-picker-item{
+    display:block;width:100%;text-align:left;padding:8px 10px;
+    border:0;border-bottom:1px solid #f0e6d5;background:transparent;
+    font:inherit;font-size:13px;color:#3a1c14;cursor:pointer;
+  }
+  .ux-crew-picker-item:hover{background:#fff3dd}
+  .ux-crew-picker-item small{display:block;color:#766559;font-size:11px;margin-top:2px}
   .ux-conflict-people{
     display:flex;
     flex-wrap:wrap;
@@ -8663,6 +8717,11 @@ body.idt-locked main{pointer-events:none;user-select:none;opacity:.5;filter:gray
       '<div class="ux-assistant-list" id="uxAssistantList"></div>';
     program.insertBefore(panel,table);
     panel.addEventListener('click',function(event){
+      var crewBtn=event.target.closest('.ux-crew-full-btn');
+      if(crewBtn){
+        openFullCrewModal(crewBtn.getAttribute('data-ux-crew'));
+        return;
+      }
       var item=event.target.closest('.ux-assistant-issue');
       var result=event.target.closest('.ux-assistant-result,[data-ux-jump]');
       var key=item ? item.getAttribute('data-ux-issue') : null;
@@ -8829,6 +8888,90 @@ body.idt-locked main{pointer-events:none;user-select:none;opacity:.5;filter:gray
     setAssistantReply(assistantReply(question));
   }
 
+  function closeFullCrewModal(){
+    var back=document.querySelector('.ux-crew-modal-back');
+    if(back) back.remove();
+    document.removeEventListener('keydown',crewModalKeyHandler);
+  }
+  function crewModalKeyHandler(event){
+    if(event.key==='Escape') closeFullCrewModal();
+  }
+  /* Odak modundayken bir oyunun EKSİKSİZ kadro listesini gösterir —
+     çakışma haritasındaki 6 kişilik kısaltılmış önizlemenin aksine,
+     crewOf() içindeki tüm kişi ve tüm rolleri (kısaltmasız) listeler. */
+  function openFullCrewModal(playKey){
+    closeFullCrewModal();
+    var crew=(typeof crewOf==='function'?crewOf(playKey):null)||{};
+    var people=Object.keys(crew).map(function(key){
+      var rec=crew[key]||{};
+      return {
+        name:rec.name||key,
+        critical:!!rec.critical,
+        roles:(rec.roles||[]).join(', '),
+        kast:!!rec.kast,
+        kastOf:rec.kastOf||''
+      };
+    }).filter(function(person){return person.name && person.name.indexOf('__ret_')!==0;})
+      .sort(function(a,b){
+        if(a.critical!==b.critical) return a.critical?-1:1;
+        return a.name.localeCompare(b.name,'tr');
+      });
+    var rows=people.map(function(person){
+      var roleText=person.roles||'Rol belirtilmemiş';
+      if(person.kast) roleText+=person.kastOf?' · '+person.kastOf+' kastı':' · kast';
+      return '<div class="ux-crew-row"><span class="name'+(person.critical?' is-critical':'')+'">'+
+        escapeHtml(person.name)+'</span><span class="roles">'+escapeHtml(roleText)+'</span></div>';
+    }).join('');
+    var back=document.createElement('div');
+    back.className='ux-crew-modal-back';
+    back.innerHTML=
+      '<div class="ux-crew-modal" role="dialog" aria-modal="true">'+
+        '<button type="button" class="ux-crew-close" aria-label="Kapat">×</button>'+
+        '<h3>'+escapeHtml(playKey)+'</h3>'+
+        '<p class="ux-crew-sub">'+people.length+' kişi'+(people.filter(function(p){return p.critical}).length?' · kritik kadro kırmızı gösterilir':'')+'</p>'+
+        (rows||'<div class="ux-crew-empty">Bu oyun için kadro/personel kaydı bulunamadı.</div>')+
+      '</div>';
+    document.body.appendChild(back);
+    back.querySelector('.ux-crew-close').addEventListener('click',closeFullCrewModal);
+    back.addEventListener('click',function(event){if(event.target===back) closeFullCrewModal();});
+    document.addEventListener('keydown',crewModalKeyHandler);
+  }
+  /* "☰ Tam kadro" düğmesi: odak modundayken, çakışma olsun olmasın, bu
+     ayda gösterimi olan HERHANGİ bir oyunu seçip tam kadrosunu görmeyi
+     sağlar — sadece çakışan oyunlarla sınırlı kalmaz. */
+  function openCrewPicker(){
+    var items=assistantProgramItems();
+    var seen={},plays=[];
+    items.forEach(function(item){
+      if(!item.key || seen[item.key]) return;
+      seen[item.key]=true;
+      plays.push(item);
+    });
+    plays.sort(function(a,b){return a.key.localeCompare(b.key,'tr');});
+    closeFullCrewModal();
+    var back=document.createElement('div');
+    back.className='ux-crew-modal-back';
+    var list=plays.map(function(item){
+      return '<button type="button" class="ux-crew-picker-item" data-ux-crew="'+escapeHtml(item.key)+'">'+
+        escapeHtml(item.key)+'<small>'+escapeHtml(item.date+(item.stage?' · '+item.stage:''))+'</small></button>';
+    }).join('');
+    back.innerHTML=
+      '<div class="ux-crew-modal" role="dialog" aria-modal="true">'+
+        '<button type="button" class="ux-crew-close" aria-label="Kapat">×</button>'+
+        '<h3>Bu ayın oyunları</h3>'+
+        '<p class="ux-crew-sub">Tam kadrosunu görmek için bir oyun seçin</p>'+
+        (list||'<div class="ux-crew-empty">Bu ayda henüz gösterim yok.</div>')+
+      '</div>';
+    document.body.appendChild(back);
+    back.querySelector('.ux-crew-close').addEventListener('click',closeFullCrewModal);
+    back.addEventListener('click',function(event){
+      if(event.target===back){closeFullCrewModal();return;}
+      var item=event.target.closest('.ux-crew-picker-item');
+      if(item) openFullCrewModal(item.getAttribute('data-ux-crew'));
+    });
+    document.addEventListener('keydown',crewModalKeyHandler);
+  }
+
   function assistantIssues(){
     var m=typeof curMonth==='function'?curMonth():null;
     if(!m || typeof rowGames!=='function' || typeof buildConflict!=='function') return [];
@@ -8926,6 +9069,7 @@ body.idt-locked main{pointer-events:none;user-select:none;opacity:.5;filter:gray
           '<button type="button" class="ux-assistant-result" data-ux-jump="'+safe(game.cellKey)+'">'+safe(game.key)+'</button>'+
           '<span class="game-meta">'+safe(game.time)+(game.stage?' · '+safe(game.stage):'')+'</span>'+
           '<span class="game-cast">'+(cast||'Kadro bilgisi girilmemiş')+'</span>'+
+          '<button type="button" class="ux-crew-full-btn" data-ux-crew="'+safe(game.key)+'">Tam kadro →</button>'+
         '</div>';
       }).join('');
       return '<section class="ux-conflict-group">'+
@@ -8938,6 +9082,12 @@ body.idt-locked main{pointer-events:none;user-select:none;opacity:.5;filter:gray
   }
 
   function updateAssistant(){
+    /* Performans: asistan paneli sadece odak modunda görünür. Odak modu
+       kapalıyken (yani panel zaten gizliyken) tüm ay verisini tarayıp
+       çakışma/kadro hesabı yapmanın hiçbir görsel karşılığı yok — bu
+       yüzden site genelinde fark edilen "kasma"nın asıl kaynağı buydu.
+       Panel görünür değilse hesaplamayı tamamen atla. */
+    if(!document.body.classList.contains('ux-focus-mode')) return;
     var panel=document.getElementById('uxFocusAssistant');
     if(!panel) return;
     var issues=assistantIssues();
@@ -9040,6 +9190,8 @@ body.idt-locked main{pointer-events:none;user-select:none;opacity:.5;filter:gray
   function initFocusMode(){
     var button=document.getElementById('uxFocusBtn');
     if(!button) return;
+    var crewPickerBtn=document.getElementById('uxCrewPickerBtn');
+    if(crewPickerBtn) crewPickerBtn.addEventListener('click',openCrewPicker);
     function paint(){
       var on=document.body.classList.contains('ux-focus-mode');
       button.setAttribute('aria-pressed',String(on));
@@ -9053,6 +9205,10 @@ body.idt-locked main{pointer-events:none;user-select:none;opacity:.5;filter:gray
       if(on){
         var table=document.querySelector('#program .tbl-wrap');
         if(table) table.scrollTop=0;
+        /* Odak moduna girer girmez asistanı bir kez tazele — aksi halde
+           bir sonraki hücre düzenlemesine veya 1.5sn'lik zamanlayıcıya
+           kadar panel eski (boş/bayat) veri gösterebilir. */
+        updateAssistant();
       }
     });
     document.addEventListener('keydown',function(event){
@@ -9073,12 +9229,30 @@ body.idt-locked main{pointer-events:none;user-select:none;opacity:.5;filter:gray
     updateAssistant();
     var sheet=document.getElementById('sheet');
     if(sheet && window.MutationObserver){
-      var observer=new MutationObserver(function(){
-        window.requestAnimationFrame(function(){updateOverview();updateAssistant()});
-      });
+      /* Hücre düzenleme/seçim sırasında sheet üzerinde çok kısa aralıklarla
+         onlarca mutasyon birden oluşabiliyordu; her biri için ayrı ayrı
+         yeniden hesaplama yapmak (özellikle updateAssistant'ın tüm ayı
+         tarayan maliyetli işi) kasmaya yol açıyordu. Artık art arda gelen
+         mutasyonlar 200ms içinde tek bir güncellemeye toplanıyor (debounce),
+         ve updateAssistant zaten yalnızca odak modunda gerçek iş yapıyor. */
+      var pendingUpdate=null;
+      var scheduleUpdate=function(){
+        if(pendingUpdate) return;
+        pendingUpdate=window.setTimeout(function(){
+          pendingUpdate=null;
+          window.requestAnimationFrame(function(){updateOverview();updateAssistant()});
+        },200);
+      };
+      var observer=new MutationObserver(scheduleUpdate);
       observer.observe(sheet,{childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:['class','style']});
     }
-    window.setInterval(function(){updateOverview();updateAssistant()},1500);
+    window.setInterval(function(){
+      updateOverview();
+      /* updateAssistant kendi içinde odak modu kontrolü yapıyor; yine de
+         odak modu kapalıyken bu zamanlayıcının hiçbir maliyetli iş
+         tetiklememesi için burada da erken çıkıyoruz. */
+      if(document.body.classList.contains('ux-focus-mode')) updateAssistant();
+    },1500);
   }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init);
   else init();
