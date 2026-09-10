@@ -9569,6 +9569,10 @@ body.idt-ask-open{padding-right:0}
 .idt-crew .idt-crew-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:3px 8px}
 .idt-crew span.p{display:block;background:#fff;border:1px solid #e5d9c8;border-radius:6px;padding:2px 7px;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .idt-crew span.p.crit{border-color:#d99;background:#fff1f0;color:#a02020;font-weight:600}
+.idt-crew span.p.shared{background:#fff3c4;border-color:#d9b23a;color:#6b4e00;font-weight:700}
+.idt-crew span.p.shared.crit{background:#ffe1d6;border-color:#c96;color:#a02020}
+.idt-crew .idt-shared-note{font-size:11px;color:#6b4e00;margin:4px 0 0}
+.idt-crew .idt-shared-note b{background:#fff3c4;border:1px solid #d9b23a;border-radius:999px;padding:1px 7px}
 .idt-shared{margin-top:6px;font-size:12px;color:#a02020}
 .idt-empty{color:#7a6a58}
 @media print{#idtAskDock{display:none !important} body.idt-ask-open{padding-right:0}}
@@ -9779,20 +9783,51 @@ body.idt-ask-open{padding-right:0}
       if(!arr.length) return;
       out+='<div class="idt-crew-grp"><b>'+g[1]+' ('+arr.length+')</b><div class="idt-crew-grid">'+
         arr.map(function(p){
-          return '<span class="p'+(p.critical?' crit':'')+'" title="'+esc(p.roles)+'">'+esc(p.name)+'</span>';
+          return '<span class="p'+(p.critical?' crit':'')+'" data-pname="'+esc(p.name)+'" title="'+esc(p.roles)+'">'+esc(p.name)+'</span>';
         }).join('')+'</div></div>';
     });
     return out;
   }
+  /* Açık olan tüm kadro kutularını tarayıp birden fazla kadroda geçen
+     kişileri sarı vurguyla işaretler — ortak kişiler göze çarpar. */
+  function refreshShared(){
+    var boxes=body.querySelectorAll('.idt-crew');
+    var count={};
+    boxes.forEach(function(box){
+      var seen={};
+      box.querySelectorAll('span.p[data-pname]').forEach(function(sp){
+        var n=sp.getAttribute('data-pname');
+        if(seen[n]) return; seen[n]=1;
+        count[n]=(count[n]||0)+1;
+      });
+    });
+    var sharedNames=Object.keys(count).filter(function(n){return count[n]>1});
+    boxes.forEach(function(box){
+      box.querySelectorAll('span.p').forEach(function(sp){
+        sp.classList.toggle('shared', (count[sp.getAttribute('data-pname')]||0)>1);
+      });
+      var old=box.querySelector('.idt-shared-note'); if(old) old.remove();
+      if(boxes.length>1 && sharedNames.length){
+        var mine=sharedNames.filter(function(n){ return box.querySelector('span.p[data-pname="'+CSS.escape(n)+'"]'); });
+        if(mine.length){
+          var note=document.createElement('div');
+          note.className='idt-shared-note';
+          note.innerHTML='<b>'+mine.length+' ortak kişi</b> sarı işaretli — diğer açık kadrolarda da var: '+esc(mine.join(', '));
+          box.appendChild(note);
+        }
+      }
+    });
+  }
   function toggleCrew(btn){
     var row=btn.closest('.idt-row');
     var next=row.nextElementSibling;
-    if(next && next.classList.contains('idt-crew')){ next.remove(); btn.textContent='Kadro'; return; }
+    if(next && next.classList.contains('idt-crew')){ next.remove(); btn.textContent='Kadro'; refreshShared(); return; }
     var box=document.createElement('div');
     box.className='idt-crew';
     box.innerHTML=crewHtml(crewList(btn.getAttribute('data-crew')));
     row.parentNode.insertBefore(box,row.nextSibling);
     btn.textContent='Gizle';
+    refreshShared();
   }
   function jumpTo(cellKey){
     var p=String(cellKey||'').split('_');
