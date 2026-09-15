@@ -1485,8 +1485,8 @@ table.sheet td.cell{min-width:86px;height:29px}
             <select id="expExcelSize" title="Excel sayfa boyutu (yazdırma ayarı)">
               <option value="A5|landscape">A5 yatay</option>
               <option value="A5|portrait">A5 dikey</option>
-              <option value="A4|landscape">A4 yatay</option>
-              <option value="A4|portrait" selected>A4 dikey</option>
+              <option value="A4|landscape" selected>A4 yatay</option>
+              <option value="A4|portrait">A4 dikey</option>
               <option value="A3|landscape">A3 yatay</option>
               <option value="A3|portrait">A3 dikey</option>
             </select>
@@ -6096,13 +6096,6 @@ function exportExcel(){
     return {bg,color,bold,underline,text};
   }
   function colLetter(n){ let s=''; n=n+1; while(n>0){ const m=(n-1)%26; s=String.fromCharCode(65+m)+s; n=Math.floor((n-1)/26); } return s; }
-  function coveringMerge(m,r,c){
-    for(const [r1,c1,r2,c2] of m.merges){
-      if(r>=r1&&r<=r2&&c>=c1&&c<=c2 && !(r===r1&&c===c1)) return [r1,c1,r2,c2];
-    }
-    return null;
-  }
-  const NO_CONFLICT = {people:{}, hasCritical:false};
 
   const usedNames = new Set();
   const sheets = [];
@@ -6117,15 +6110,7 @@ function exportExcel(){
       }
       const cells = [];
       for(let c=0;c<m.cols;c++){
-        const cov = coveringMerge(m,r,c);
-        if(cov){
-          /* birleştirilmiş alanın kapalı hücreleri de yazılmalı — yoksa kenarlıklar kaybolur */
-          const ar=cov[0], ac=cov[1];
-          const acell = m.cells[ar+'_'+ac] || {};
-          const fa = cellFormat(m,ar,ac,acell,NO_CONFLICT);
-          cells.push({c, s:styleIdFor(fa.bg,fa.color,fa.bold,fa.underline), t:''});
-          continue;
-        }
+        if(isCovered(m,r,c)) continue;
         const mm = mergeOf(m,r,c);
         const cell = m.cells[r+'_'+c] || {};
         const f = cellFormat(m,r,c,cell,conflict);
@@ -6134,20 +6119,12 @@ function exportExcel(){
       }
       rows.push(cells);
     }
-    const cols = []; let totalPt = 0;
+    const cols = [];
     for(let c=0;c<m.cols;c++){
       const pt = (c===0||c===m.cols-1) ? 150 : (c===1 ? 55 : 170);
-      totalPt += pt;
       cols.push({c, w: Math.round(pt*0.19*100)/100});
     }
-    /* Sayfayı tam kaplaması için tablo en/boy oranını kağıt oranına eşitle */
-    const [pgWmm, pgHmm] = paperMM(xlsSize, xlsPaper.orient);
-    const marginMM = ((xlsSize==='A5') ? 0.12 : 0.2) * 25.4;
-    const printW = Math.max(10, pgWmm - 2*marginMM);
-    const printH = Math.max(10, pgHmm - 2*marginMM);
-    const targetH = totalPt * (printH/printW);
-    const rowH = Math.max(11, Math.min(90, Math.round((targetH / Math.max(1,m.rows)) * 100)/100));
-    sheets.push({name:sheetName, rows, merges, cols, rowH});
+    sheets.push({name:sheetName, rows, merges, cols});
   }
 
   /* styles.xml */
@@ -6178,13 +6155,13 @@ function exportExcel(){
       for(const cc of cells){
         cx += '<c r="'+colLetter(cc.c)+(ri+1)+'" s="'+(cc.s+1)+'" t="inlineStr"><is><t xml:space="preserve">'+xmlEscape(cc.t)+'</t></is></c>';
       }
-      rowsXml += '<row r="'+(ri+1)+'" ht="'+sh.rowH+'" customHeight="1">'+cx+'</row>';
+      rowsXml += '<row r="'+(ri+1)+'">'+cx+'</row>';
     });
     return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
       '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'+
       '<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>'+
       '<sheetViews><sheetView workbookViewId="0"/></sheetViews>'+
-      '<sheetFormatPr defaultRowHeight="'+sh.rowH+'" customHeight="1"/>'+
+      '<sheetFormatPr defaultRowHeight="15"/>'+
       '<cols>'+sh.cols.map(c=>'<col min="'+(c.c+1)+'" max="'+(c.c+1)+'" width="'+c.w+'" customWidth="1"/>').join('')+'</cols>'+
       '<sheetData>'+rowsXml+'</sheetData>'+
       (sh.merges.length?('<mergeCells count="'+sh.merges.length+'">'+sh.merges.map(r=>'<mergeCell ref="'+r+'"/>').join('')+'</mergeCells>'):'')+
