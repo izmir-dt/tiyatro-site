@@ -3028,7 +3028,36 @@ function parseGame(txt){
   /* " - açıklama" biçimindeki ekler de not sayılır */
   const dash = body.match(/\s[-–—]\s*(\S.*)$/);
   if(dash){ notes.push(dash[1].trim()); body = body.slice(0, dash.index); }
-  const key = body.replace(/\s+/g,' ').trim();
+  let key = body.replace(/\s+/g,' ').trim();
+  /* Bilinen (repertuvardan gelen) bir oyun adı doğrudan tanınsın: mekân/sahne
+     adı gibi bir ön/son ek boşluksuz tire ile BİTİŞİK yazılmışsa (ör. "CSO
+     Mavi Salon-Bir Düş Gibi") yukarıdaki temizlik bunu ayıklayamaz — metnin
+     tamamı tek bir oyun adı sanılır ve repertuvarla eşleşmediği için "onay
+     bekliyor" listesine düşer. Temizlenmiş metin bilinen oyunların hiçbiriyle
+     birebir eşleşmiyorsa, metnin BAŞINDA ya da SONUNDA bilinen bir oyun adı
+     var mı diye bakılır (en uzun/tam eşleşme tercih edilir); bulunursa
+     fazlalık kısım nota taşınır ve oyun adı olarak doğrudan bilinen isim
+     kullanılır. */
+  if(key && typeof state!=='undefined' && Array.isArray(state.plays) && state.plays.length){
+    const norm = s=>String(s||'').toLocaleLowerCase('tr').replace(/\s+/g,' ').trim();
+    const nk = norm(key);
+    if(!state.plays.some(p=>norm(p)===nk)){
+      let best=null, bestExtra='';
+      for(const p of state.plays){
+        const pt = String(p||'').trim();
+        const np = norm(pt);
+        if(!np || np===nk) continue;
+        if(nk.endsWith(np)){
+          const extra = key.slice(0, Math.max(0, key.length-pt.length)).trim();
+          if(extra && (!best || pt.length>best.length)){ best=pt; bestExtra=extra.replace(/[-–—]\s*$/,'').trim(); }
+        } else if(nk.startsWith(np)){
+          const extra = key.slice(Math.min(key.length, pt.length)).trim();
+          if(extra && (!best || pt.length>best.length)){ best=pt; bestExtra=extra.replace(/^[-–—]\s*/,'').trim(); }
+        }
+      }
+      if(best){ if(bestExtra) notes.unshift(bestExtra); key = best; }
+    }
+  }
   return {key, isPremiere:isPrem, inlineNote: notes.filter(Boolean).join(' · ')};
 }
 function isFreeTextValue(v){
