@@ -3497,7 +3497,15 @@ function computeTourCarryMap(m){
       const cell=m.cells[r+'_'+c];
       if(!cell) continue;
       if(cell.tourReturn) return true;
-      if(cell.v && isTourHeadCell(cell)) return false; /* yeni turne başlığı geldi, artık aday değil */
+      /* Dönüş işaretinden ÖNCE, türü ne olursa olsun (turne başlığı ya da
+         alâkasız tek seferlik bir metin/oyun) herhangi bir içerik varsa, bu
+         sütun artık "yalnızca eski turneyi kapatmak için kullanılan sade
+         sütun" sayılmaz — kullanıcı aynı sütuna hem yeni bir şey yazıp hem
+         de (belki fazladan/yanlışlıkla) bir dönüş işareti koymuş olabilir;
+         böyle bir sütunun sırf sütun numarası aynı diye önceliği çalması
+         yanlış eşleşmeye yol açar (gerçek asıl kapanış sütunu başka yerde
+         olabilir). */
+      if(cell.v && String(cell.v).trim()) return false;
     }
     return false;
   };
@@ -3554,7 +3562,7 @@ function computeTours(m){
   const map={}, byId={}, groups=[];
   const carryMap = computeTourCarryMap(m);
   tourColsOf(m).forEach(c=>{
-    let cur=null, gap=[];
+    let cur=null, gap=[], pending=[];
     const carry = carryMap[c] || null;
     if(carry){
       cur = {id:'carry_'+carry.id, col:c, headKey:null, headRow:null, headText:carry.headText,
@@ -3566,7 +3574,7 @@ function computeTours(m){
       const v=(cell&&cell.v)?String(cell.v).trim():'';
       if(cell && cell.tourId && !cell.tourHead && byId[cell.tourId]){
         const g=byId[cell.tourId];
-        gap=[];
+        gap=[]; pending=[];
         const sameDay0 = !v && rowHasSameDayContent(m,r,c);
         g.members.push({r,c,key:k,cell,gap:!v && !sameDay0, sameDay:sameDay0});
         if(cell.tourLeg && v) pushTourLeg(g, v);
@@ -3580,6 +3588,23 @@ function computeTours(m){
           gap=[]; cur=null;   /* dönüş günüyle turne kapanır: altındaki boş günler artık bu turneye ait sayılmaz */
           continue;
         }
+        /* Açık bir turne yokken (ör. bu ay için taşınmış bir turne de yok,
+           öncesinde açık bir başlık da girilmemiş) tek başına bir oyun
+           hücresi normal şartlarda hiçbir gruba dahil edilmez. Ama hemen
+           ardından bir "dönüş günü" işareti gelirse, kullanıcı o hücreyi
+           bilhassa "gidiş-dönüş" niteliğinde küçük, kendi başına bir turne
+           olarak kurmuş demektir (ör. tek günlük bir misafir sahne
+           gösterimi + ertesi gün dönüş) — bu durumda gerçek bir turne
+           başlığı gibi işlenir, ayrı bir gruba (implicit) dönüştürülür. */
+        if(!cur && cell && cell.tourReturn && pending.length){
+          const headInfo = pending[0];
+          const g = {id:'implicit_'+c+'_'+headInfo.r, col:c, headKey:headInfo.key, headRow:headInfo.r,
+                     headText:(headInfo.cell.v||''), members:[], returnKey:null, locked:false, legs:[]};
+          groups.push(g); byId[g.id]=g;
+          pending.forEach((p,i)=>{ g.members.push({r:p.r,c,key:p.key,cell:p.cell}); map[p.key]={g,role:(i===0?'head':'member')}; });
+          g.members.push({r,c,key:k,cell}); g.returnKey=k; map[k]={g,role:'member'};
+          pending=[]; gap=[]; continue;
+        }
         /* Boş gün (ör. PAZARTESİ yol günü) turneyi kesmez: en fazla 3 boş günü
            tampona al; altında gruba ait bir hücre gelirse blok devam eder. */
         if(cur){
@@ -3589,7 +3614,7 @@ function computeTours(m){
         continue;
       }
       if(isTourHeadCell(cell) && (cell.tourHead || !cur)){
-        gap=[];
+        gap=[]; pending=[];
         cur={id:(cell.tourId||('auto_'+c+'_'+r)), col:c, headKey:k, headRow:r, headText:v, members:[], returnKey:null, locked:!!cell.tourId, legs:[]};
         groups.push(cur); byId[cur.id]=cur; map[k]={g:cur,role:'head'};
         continue;
@@ -3615,6 +3640,12 @@ function computeTours(m){
         if(cell.tourLeg && v) pushTourLeg(g, v);
         if(cell.tourReturn){ g.returnKey=k; cur=null; }   /* aynı gün dönüş + metin varsa da turne burada kapanır */
         map[k]={g,role:'member'};
+      } else {
+        /* Açık bir turne yok: bu hücre, hemen ardından bir "dönüş günü"
+           gelme ihtimaline karşı bekletilir (bkz. yukarıdaki implicit
+           turne oluşturma). Ardından yeni bir gerçek turne başlığı gelirse
+           (yukarıdaki dal) bu bekleme listesi zaten sıfırlanır. */
+        pending.push({r,c,key:k,cell});
       }
     }
   });
