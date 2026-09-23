@@ -3415,9 +3415,24 @@ function prevMonthOf(m){
   if(pos <= 0) return null;
   return state.months[order[pos-1]];
 }
-function tourCarryFromPrev(m, c){
+/* Bir önceki ayda açık kalmış (dönüş günü henüz işaretlenmemiş) turneleri
+   bu ayın TURNE sütunlarına taşır. ÖNEMLİ: her açık turne yalnızca TEK bir
+   sütuna taşınabilir — eskiden her sütun için ayrı ayrı (bağımsız) hesap
+   yapıldığından, aynı ayın Eylül-sonunda başlayıp henüz dönmemiş TEK bir
+   turne (ör. "ARNAVUTLUK-ELBASAN"), hem kendi sütununa (sameCol eşleşmesiyle)
+   hem de dönüş günü başka bir TURNE sütununa işaretlendiğinde o sütuna
+   (anyCol yedek eşleşmesiyle) AYNI ANDA taşınabiliyordu. Sonuç: o sütuna o
+   ay girilen alâkasız bir oyun (ör. "CSO Mavi Salon-Bir Düş Gibi") turne
+   başlığı hâlâ "açık" sayıldığı için yanlışlıkla o turnenin bir günü olarak
+   yutuluyordu. Artık her sütun için önce sameCol denenir, bir turne bir kez
+   eşleştirildiğinde (claimed) başka hiçbir sütun onu bir daha alamaz; yedek
+   (anyCol) eşleştirme yalnızca henüz hiçbir sütuna atanmamış turneler
+   arasından, sütun sırasına göre yapılır. */
+function computeTourCarryMap(m){
   const pm = prevMonthOf(m);
-  if(!pm) return null;
+  const cols = tourColsOf(m);
+  const result = {};
+  if(!pm) return result;
   const pt = computeTours(pm);
   const lastRow = pm.rows - 1;
   const isOpenAtMonthEnd = g => {
@@ -3437,15 +3452,53 @@ function tourCarryFromPrev(m, c){
     if(g.carried) return g.carriedLastPlay || '';
     return '';
   };
-  /* Önce aynı TURNE sütunu tercih edilir, ama sütunlar birbirinin yerine
-     kullanılabilen genel "hat"lar olduğundan (turne bu ay F'de, gelecek ay
-     G'de dönebilir), bulunamazsa önceki ayda açık kalan HERHANGİ bir turne
-     de kabul edilir. */
-  const sameCol = pt.groups.find(g => g.col===c && isOpenAtMonthEnd(g));
-  if(sameCol) return {headText:sameCol.headText, id:sameCol.id, lastPlay:lastPlayOf(sameCol), legs:sameCol.legs||[]};
-  const anyCol = pt.groups.find(g => isOpenAtMonthEnd(g));
-  if(anyCol) return {headText:anyCol.headText, id:anyCol.id, lastPlay:lastPlayOf(anyCol), legs:anyCol.legs||[]};
-  return null;
+  const openGroups = pt.groups.filter(isOpenAtMonthEnd);
+  const claimed = new Set();
+  const carryByCol = {};
+  /* Bir sütunda, o ayki YENİ bir turne başlığından (serbest metin/tourHead)
+     ÖNCE açık bir "dönüş günü" (tourReturn) işareti varsa, kullanıcı o
+     sütunu bilhassa önceki ayın turnesini KAPATMAK için kullanmış demektir
+     — bu, salt sütun numarası eşleşmesinden daha güvenilir bir sinyaldir
+     (turne başka sütunda dönebilir). Böyle sütunlar taşıma eşleştirmesinde
+     öncelik alır; aksi halde aynı ayda sonradan girilen alâkasız bir metin
+     (ör. tek seferlik bir CSO/misafir sahne oyunu) o sütuna aynı zamanda
+     "aynı sütun" heuristiğiyle taşınan eski turnenin günü sanılabilir. */
+  const hasEarlyReturn = c=>{
+    for(let r=2;r<m.rows;r++){
+      const cell=m.cells[r+'_'+c];
+      if(!cell) continue;
+      if(cell.tourReturn) return true;
+      if(cell.v && isTourHeadCell(cell)) return false; /* yeni turne başlığı geldi, artık aday değil */
+    }
+    return false;
+  };
+  const returnCols = cols.filter(hasEarlyReturn);
+  /* 1. geçiş: erken dönüş işareti taşıyan sütunlar önce eşleştirilir (önce
+     aynı sütun, yoksa herhangi açık turne) */
+  returnCols.forEach(c=>{
+    let g = openGroups.find(g => g.col===c && !claimed.has(g.id));
+    if(!g) g = openGroups.find(g => !claimed.has(g.id));
+    if(g){ claimed.add(g.id); carryByCol[c]=g; }
+  });
+  /* 2. geçiş: kalan sütunlar için aynı sütunda kalan turneler eşleştirilir */
+  cols.forEach(c=>{
+    if(carryByCol[c]) return;
+    const g = openGroups.find(g => g.col===c && !claimed.has(g.id));
+    if(g){ claimed.add(g.id); carryByCol[c]=g; }
+  });
+  /* 3. geçiş: sütunu tamamen değişmiş turneler — henüz hiçbir sütuna
+     atanmamışlar arasından, sütun sırasına göre, bir turne yalnızca bir kez
+     kullanılır */
+  cols.forEach(c=>{
+    if(carryByCol[c]) return;
+    const g = openGroups.find(g => !claimed.has(g.id));
+    if(g){ claimed.add(g.id); carryByCol[c]=g; }
+  });
+  cols.forEach(c=>{
+    const g = carryByCol[c];
+    if(g) result[c] = {headText:g.headText, id:g.id, lastPlay:lastPlayOf(g), legs:g.legs||[]};
+  });
+  return result;
 }
 function tourColsOf(m){ return programCols(m).filter(c=>stageHeaderText(m,c).includes('TURNE')); }
 function isTourHeadCell(cell){
@@ -3470,9 +3523,10 @@ function tourDisplayHead(g){
 }
 function computeTours(m){
   const map={}, byId={}, groups=[];
+  const carryMap = computeTourCarryMap(m);
   tourColsOf(m).forEach(c=>{
     let cur=null, gap=[];
-    const carry = tourCarryFromPrev(m, c);
+    const carry = carryMap[c] || null;
     if(carry){
       cur = {id:'carry_'+carry.id, col:c, headKey:null, headRow:null, headText:carry.headText,
              members:[], returnKey:null, locked:false, carried:true, carriedLastPlay:carry.lastPlay||'', legs:(carry.legs||[]).slice()};
