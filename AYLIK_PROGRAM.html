@@ -3028,36 +3028,7 @@ function parseGame(txt){
   /* " - açıklama" biçimindeki ekler de not sayılır */
   const dash = body.match(/\s[-–—]\s*(\S.*)$/);
   if(dash){ notes.push(dash[1].trim()); body = body.slice(0, dash.index); }
-  let key = body.replace(/\s+/g,' ').trim();
-  /* Bilinen (repertuvardan gelen) bir oyun adı doğrudan tanınsın: mekân/sahne
-     adı gibi bir ön/son ek boşluksuz tire ile BİTİŞİK yazılmışsa (ör. "CSO
-     Mavi Salon-Bir Düş Gibi") yukarıdaki temizlik bunu ayıklayamaz — metnin
-     tamamı tek bir oyun adı sanılır ve repertuvarla eşleşmediği için "onay
-     bekliyor" listesine düşer. Temizlenmiş metin bilinen oyunların hiçbiriyle
-     birebir eşleşmiyorsa, metnin BAŞINDA ya da SONUNDA bilinen bir oyun adı
-     var mı diye bakılır (en uzun/tam eşleşme tercih edilir); bulunursa
-     fazlalık kısım nota taşınır ve oyun adı olarak doğrudan bilinen isim
-     kullanılır. */
-  if(key && typeof state!=='undefined' && Array.isArray(state.plays) && state.plays.length){
-    const norm = s=>String(s||'').toLocaleLowerCase('tr').replace(/\s+/g,' ').trim();
-    const nk = norm(key);
-    if(!state.plays.some(p=>norm(p)===nk)){
-      let best=null, bestExtra='';
-      for(const p of state.plays){
-        const pt = String(p||'').trim();
-        const np = norm(pt);
-        if(!np || np===nk) continue;
-        if(nk.endsWith(np)){
-          const extra = key.slice(0, Math.max(0, key.length-pt.length)).trim();
-          if(extra && (!best || pt.length>best.length)){ best=pt; bestExtra=extra.replace(/[-–—]\s*$/,'').trim(); }
-        } else if(nk.startsWith(np)){
-          const extra = key.slice(Math.min(key.length, pt.length)).trim();
-          if(extra && (!best || pt.length>best.length)){ best=pt; bestExtra=extra.replace(/^[-–—]\s*/,'').trim(); }
-        }
-      }
-      if(best){ if(bestExtra) notes.unshift(bestExtra); key = best; }
-    }
-  }
+  const key = body.replace(/\s+/g,' ').trim();
   return {key, isPremiere:isPrem, inlineNote: notes.filter(Boolean).join(' · ')};
 }
 function isFreeTextValue(v){
@@ -3444,24 +3415,9 @@ function prevMonthOf(m){
   if(pos <= 0) return null;
   return state.months[order[pos-1]];
 }
-/* Bir önceki ayda açık kalmış (dönüş günü henüz işaretlenmemiş) turneleri
-   bu ayın TURNE sütunlarına taşır. ÖNEMLİ: her açık turne yalnızca TEK bir
-   sütuna taşınabilir — eskiden her sütun için ayrı ayrı (bağımsız) hesap
-   yapıldığından, aynı ayın Eylül-sonunda başlayıp henüz dönmemiş TEK bir
-   turne (ör. "ARNAVUTLUK-ELBASAN"), hem kendi sütununa (sameCol eşleşmesiyle)
-   hem de dönüş günü başka bir TURNE sütununa işaretlendiğinde o sütuna
-   (anyCol yedek eşleşmesiyle) AYNI ANDA taşınabiliyordu. Sonuç: o sütuna o
-   ay girilen alâkasız bir oyun (ör. "CSO Mavi Salon-Bir Düş Gibi") turne
-   başlığı hâlâ "açık" sayıldığı için yanlışlıkla o turnenin bir günü olarak
-   yutuluyordu. Artık her sütun için önce sameCol denenir, bir turne bir kez
-   eşleştirildiğinde (claimed) başka hiçbir sütun onu bir daha alamaz; yedek
-   (anyCol) eşleştirme yalnızca henüz hiçbir sütuna atanmamış turneler
-   arasından, sütun sırasına göre yapılır. */
-function computeTourCarryMap(m){
+function tourCarryFromPrev(m, c){
   const pm = prevMonthOf(m);
-  const cols = tourColsOf(m);
-  const result = {};
-  if(!pm) return result;
+  if(!pm) return null;
   const pt = computeTours(pm);
   const lastRow = pm.rows - 1;
   const isOpenAtMonthEnd = g => {
@@ -3481,61 +3437,15 @@ function computeTourCarryMap(m){
     if(g.carried) return g.carriedLastPlay || '';
     return '';
   };
-  const openGroups = pt.groups.filter(isOpenAtMonthEnd);
-  const claimed = new Set();
-  const carryByCol = {};
-  /* Bir sütunda, o ayki YENİ bir turne başlığından (serbest metin/tourHead)
-     ÖNCE açık bir "dönüş günü" (tourReturn) işareti varsa, kullanıcı o
-     sütunu bilhassa önceki ayın turnesini KAPATMAK için kullanmış demektir
-     — bu, salt sütun numarası eşleşmesinden daha güvenilir bir sinyaldir
-     (turne başka sütunda dönebilir). Böyle sütunlar taşıma eşleştirmesinde
-     öncelik alır; aksi halde aynı ayda sonradan girilen alâkasız bir metin
-     (ör. tek seferlik bir CSO/misafir sahne oyunu) o sütuna aynı zamanda
-     "aynı sütun" heuristiğiyle taşınan eski turnenin günü sanılabilir. */
-  const hasEarlyReturn = c=>{
-    for(let r=2;r<m.rows;r++){
-      const cell=m.cells[r+'_'+c];
-      if(!cell) continue;
-      if(cell.tourReturn) return true;
-      /* Dönüş işaretinden ÖNCE, türü ne olursa olsun (turne başlığı ya da
-         alâkasız tek seferlik bir metin/oyun) herhangi bir içerik varsa, bu
-         sütun artık "yalnızca eski turneyi kapatmak için kullanılan sade
-         sütun" sayılmaz — kullanıcı aynı sütuna hem yeni bir şey yazıp hem
-         de (belki fazladan/yanlışlıkla) bir dönüş işareti koymuş olabilir;
-         böyle bir sütunun sırf sütun numarası aynı diye önceliği çalması
-         yanlış eşleşmeye yol açar (gerçek asıl kapanış sütunu başka yerde
-         olabilir). */
-      if(cell.v && String(cell.v).trim()) return false;
-    }
-    return false;
-  };
-  const returnCols = cols.filter(hasEarlyReturn);
-  /* 1. geçiş: erken dönüş işareti taşıyan sütunlar önce eşleştirilir (önce
-     aynı sütun, yoksa herhangi açık turne) */
-  returnCols.forEach(c=>{
-    let g = openGroups.find(g => g.col===c && !claimed.has(g.id));
-    if(!g) g = openGroups.find(g => !claimed.has(g.id));
-    if(g){ claimed.add(g.id); carryByCol[c]=g; }
-  });
-  /* 2. geçiş: kalan sütunlar için aynı sütunda kalan turneler eşleştirilir */
-  cols.forEach(c=>{
-    if(carryByCol[c]) return;
-    const g = openGroups.find(g => g.col===c && !claimed.has(g.id));
-    if(g){ claimed.add(g.id); carryByCol[c]=g; }
-  });
-  /* 3. geçiş: sütunu tamamen değişmiş turneler — henüz hiçbir sütuna
-     atanmamışlar arasından, sütun sırasına göre, bir turne yalnızca bir kez
-     kullanılır */
-  cols.forEach(c=>{
-    if(carryByCol[c]) return;
-    const g = openGroups.find(g => !claimed.has(g.id));
-    if(g){ claimed.add(g.id); carryByCol[c]=g; }
-  });
-  cols.forEach(c=>{
-    const g = carryByCol[c];
-    if(g) result[c] = {headText:g.headText, id:g.id, lastPlay:lastPlayOf(g), legs:g.legs||[]};
-  });
-  return result;
+  /* Önce aynı TURNE sütunu tercih edilir, ama sütunlar birbirinin yerine
+     kullanılabilen genel "hat"lar olduğundan (turne bu ay F'de, gelecek ay
+     G'de dönebilir), bulunamazsa önceki ayda açık kalan HERHANGİ bir turne
+     de kabul edilir. */
+  const sameCol = pt.groups.find(g => g.col===c && isOpenAtMonthEnd(g));
+  if(sameCol) return {headText:sameCol.headText, id:sameCol.id, lastPlay:lastPlayOf(sameCol), legs:sameCol.legs||[]};
+  const anyCol = pt.groups.find(g => isOpenAtMonthEnd(g));
+  if(anyCol) return {headText:anyCol.headText, id:anyCol.id, lastPlay:lastPlayOf(anyCol), legs:anyCol.legs||[]};
+  return null;
 }
 function tourColsOf(m){ return programCols(m).filter(c=>stageHeaderText(m,c).includes('TURNE')); }
 function isTourHeadCell(cell){
@@ -3560,10 +3470,9 @@ function tourDisplayHead(g){
 }
 function computeTours(m){
   const map={}, byId={}, groups=[];
-  const carryMap = computeTourCarryMap(m);
   tourColsOf(m).forEach(c=>{
-    let cur=null, gap=[], pending=[];
-    const carry = carryMap[c] || null;
+    let cur=null, gap=[];
+    const carry = tourCarryFromPrev(m, c);
     if(carry){
       cur = {id:'carry_'+carry.id, col:c, headKey:null, headRow:null, headText:carry.headText,
              members:[], returnKey:null, locked:false, carried:true, carriedLastPlay:carry.lastPlay||'', legs:(carry.legs||[]).slice()};
@@ -3574,7 +3483,7 @@ function computeTours(m){
       const v=(cell&&cell.v)?String(cell.v).trim():'';
       if(cell && cell.tourId && !cell.tourHead && byId[cell.tourId]){
         const g=byId[cell.tourId];
-        gap=[]; pending=[];
+        gap=[];
         const sameDay0 = !v && rowHasSameDayContent(m,r,c);
         g.members.push({r,c,key:k,cell,gap:!v && !sameDay0, sameDay:sameDay0});
         if(cell.tourLeg && v) pushTourLeg(g, v);
@@ -3588,23 +3497,6 @@ function computeTours(m){
           gap=[]; cur=null;   /* dönüş günüyle turne kapanır: altındaki boş günler artık bu turneye ait sayılmaz */
           continue;
         }
-        /* Açık bir turne yokken (ör. bu ay için taşınmış bir turne de yok,
-           öncesinde açık bir başlık da girilmemiş) tek başına bir oyun
-           hücresi normal şartlarda hiçbir gruba dahil edilmez. Ama hemen
-           ardından bir "dönüş günü" işareti gelirse, kullanıcı o hücreyi
-           bilhassa "gidiş-dönüş" niteliğinde küçük, kendi başına bir turne
-           olarak kurmuş demektir (ör. tek günlük bir misafir sahne
-           gösterimi + ertesi gün dönüş) — bu durumda gerçek bir turne
-           başlığı gibi işlenir, ayrı bir gruba (implicit) dönüştürülür. */
-        if(!cur && cell && cell.tourReturn && pending.length){
-          const headInfo = pending[0];
-          const g = {id:'implicit_'+c+'_'+headInfo.r, col:c, headKey:headInfo.key, headRow:headInfo.r,
-                     headText:(headInfo.cell.v||''), members:[], returnKey:null, locked:false, legs:[]};
-          groups.push(g); byId[g.id]=g;
-          pending.forEach((p,i)=>{ g.members.push({r:p.r,c,key:p.key,cell:p.cell}); map[p.key]={g,role:(i===0?'head':'member')}; });
-          g.members.push({r,c,key:k,cell}); g.returnKey=k; map[k]={g,role:'member'};
-          pending=[]; gap=[]; continue;
-        }
         /* Boş gün (ör. PAZARTESİ yol günü) turneyi kesmez: en fazla 3 boş günü
            tampona al; altında gruba ait bir hücre gelirse blok devam eder. */
         if(cur){
@@ -3614,7 +3506,7 @@ function computeTours(m){
         continue;
       }
       if(isTourHeadCell(cell) && (cell.tourHead || !cur)){
-        gap=[]; pending=[];
+        gap=[];
         cur={id:(cell.tourId||('auto_'+c+'_'+r)), col:c, headKey:k, headRow:r, headText:v, members:[], returnKey:null, locked:!!cell.tourId, legs:[]};
         groups.push(cur); byId[cur.id]=cur; map[k]={g:cur,role:'head'};
         continue;
@@ -3640,12 +3532,6 @@ function computeTours(m){
         if(cell.tourLeg && v) pushTourLeg(g, v);
         if(cell.tourReturn){ g.returnKey=k; cur=null; }   /* aynı gün dönüş + metin varsa da turne burada kapanır */
         map[k]={g,role:'member'};
-      } else {
-        /* Açık bir turne yok: bu hücre, hemen ardından bir "dönüş günü"
-           gelme ihtimaline karşı bekletilir (bkz. yukarıdaki implicit
-           turne oluşturma). Ardından yeni bir gerçek turne başlığı gelirse
-           (yukarıdaki dal) bu bekleme listesi zaten sıfırlanır. */
-        pending.push({r,c,key:k,cell});
       }
     }
   });
