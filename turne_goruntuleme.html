@@ -2,7 +2,7 @@
 <html lang="tr" data-theme="light">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Turne Görüntüleme</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -276,6 +276,15 @@ body {
 
 /* Responsive */
 @media (max-width: 760px) {
+  .search-input, .filter-select { font-size: 16px; } /* iOS'ta odaklanınca zoom olmasın */
+  .search-input { padding-top: 11px; padding-bottom: 11px; }
+  .filter-select { padding: 10px 8px; }
+  .turne-item:hover { transform: none; box-shadow: none; }
+  .turne-item { -webkit-tap-highlight-color: transparent; }
+  .list-scroll, .detail-panel { overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+  .detail-content { padding-bottom: calc(40px + env(safe-area-inset-bottom, 0px)); }
+  .list-scroll { padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px)); }
+  .mobile-back-bar { padding: 14px 16px; padding-top: calc(14px + env(safe-area-inset-top, 0px)); }
   html, body { height: 100dvh; overflow: hidden; }
   .app { flex-direction: column; height: 100dvh; position: relative; }
   .list-panel { width: 100%; height: 100%; border-right: none; }
@@ -480,13 +489,15 @@ function detailEmpty(){
   b.innerHTML='<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg><h2>Turne detayı</h2><p>Soldaki listeden bir turne seçin.</p>';
 }
 
+// Türkçe uyumlu normalizasyon: İ/I/ı/i ve büyük-küçük harf farkını yok sayar
+function trNorm(v){ return String(v==null?'':v).trim().toLocaleLowerCase('tr').replace(/\u0131/g,'i'); }
 function getFiltered(){
-  var q=(document.getElementById('search').value||'').trim().toLowerCase();
+  var q=trNorm(document.getElementById('search').value||'');
   var sf=document.getElementById('statu-filter').value;
   var sez=document.getElementById('sezon-filter').value;
   var sort=document.getElementById('sort-select').value;
   var list = turneler.map((t,i)=>({t,i}));
-  if(q) list = list.filter(({t}) => (t.oyun+' '+t.il+' '+(t.mekan||'')).toLowerCase().includes(q));
+  if(q) list = list.filter(({t}) => trNorm(t.oyun+' '+t.il+' '+(t.mekan||'')).includes(q));
   if(sf) list = list.filter(({t}) => t.statu===sf);
   if(sez) list = list.filter(({t}) => tarihSezon(t.baslangicTarih)===sez);
   list.sort(function(a,b){
