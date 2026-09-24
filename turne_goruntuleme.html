@@ -95,6 +95,11 @@ body {
   cursor: pointer; display: flex; align-items: center; justify-content: center;
 }
 .theme-btn:hover { background: var(--muted); }
+.refresh-btn { margin-left: 0; }
+.refresh-btn:disabled { opacity: .6; cursor: default; }
+.refresh-btn.yukleniyor svg { animation: spin .8s linear infinite; }
+.mini-toast { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 9999; max-width: calc(100% - 32px); padding: 8px 14px; border-radius: 10px; background: var(--foreground); color: var(--background); font-size: 12.5px; font-weight: 600; box-shadow: 0 8px 24px rgba(0,0,0,.25); opacity: 0; pointer-events: none; transition: opacity .2s; }
+.mini-toast.goster { opacity: 1; }
 
 .list-scroll { flex: 1; overflow-y: auto; padding: 8px; }
 .list-meta {
@@ -372,7 +377,7 @@ body {
     font-weight: 600;
   }
 
-  .theme-row { display: grid; grid-template-columns: minmax(0,1fr) 44px; gap: 8px; }
+  .theme-row { display: grid; grid-template-columns: minmax(0,1fr) 44px 44px; gap: 8px; }
   .search-wrap { min-width: 0; }
   .search-wrap svg { left: 14px; width: 17px; height: 17px; }
   .search-input {
@@ -664,6 +669,7 @@ body {
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
           <input id="search" class="search-input" aria-label="Oyun, il veya mekan ara" placeholder="Oyun / il ara…">
         </div>
+        <button id="refresh-btn" class="theme-btn refresh-btn" type="button" title="Verileri yenile" aria-label="Verileri yenile"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg></button>
         <button id="theme-btn" class="theme-btn" type="button" title="Tema değiştir" aria-label="Temayı değiştir"></button>
       </div>
       <select id="statu-filter" class="filter-select" aria-label="Statüye göre filtrele">
@@ -753,10 +759,14 @@ function tarihGun(iso){
 var turneler = [];
 var selectedIdx = -1;
 
-async function fetchTurneler(){
+async function fetchTurneler(yenileme){
   var body = document.getElementById('detail-body');
-  body.className = 'loading';
-  body.innerHTML = '<div class="spinner"></div><div>Turneler yükleniyor…</div>';
+  var oncekiTurne = (yenileme && turneler[selectedIdx]) ? turneler[selectedIdx] : null;
+  var oncekiScroll = document.getElementById('detail-panel').scrollTop;
+  if(!yenileme){
+    body.className = 'loading';
+    body.innerHTML = '<div class="spinner"></div><div>Turneler yükleniyor…</div>';
+  }
   try{
     var res = await fetch(API + '/' + encodeURIComponent(TURNE_SHEET), { signal: (function(){var c=new AbortController();setTimeout(()=>c.abort(),60000);return c.signal;})() });
     if(!res.ok) throw new Error('HTTP '+res.status);
@@ -816,14 +826,52 @@ async function fetchTurneler(){
         };
       });
     populateSezonFilter();
+    if(yenileme && oncekiTurne){
+      // Yenilemede aynı turne açık kalsın (oyun+il+tarih, olmazsa satır no)
+      var ni = turneler.findIndex(function(x){ return x.oyun===oncekiTurne.oyun && x.il===oncekiTurne.il && x.baslangicTarih===oncekiTurne.baslangicTarih; });
+      if(ni < 0) ni = turneler.findIndex(function(x){ return x._rowIdx===oncekiTurne._rowIdx; });
+      if(ni >= 0){
+        selectTurne(ni, true);
+        document.getElementById('detail-panel').scrollTop = oncekiScroll;
+        return true;
+      }
+    }
     renderList();
     if(turneler.length){ selectTurne(0, true); }
     else { detailEmpty(); }
+    return true;
   }catch(e){
+    if(yenileme) return false; // eldeki veri korunur
     body.className = 'loading';
     body.innerHTML = '<div class="error-box">Turne verisi yüklenemedi: ' + (e.message||e) + '</div>';
+    return false;
   }
 }
+
+// Küçük bildirim
+var _toastTimer;
+function miniToast(msg){
+  var el = document.getElementById('mini-toast');
+  if(!el){ el = document.createElement('div'); el.id = 'mini-toast'; el.className = 'mini-toast'; document.body.appendChild(el); }
+  el.textContent = msg;
+  el.classList.add('goster');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(function(){ el.classList.remove('goster'); }, 2200);
+}
+
+// Veri yenile butonu
+var _yenileniyor = false;
+async function verileriYenile(){
+  if(_yenileniyor) return;
+  _yenileniyor = true;
+  var btn = document.getElementById('refresh-btn');
+  btn.disabled = true; btn.classList.add('yukleniyor');
+  var ok = await fetchTurneler(true);
+  btn.disabled = false; btn.classList.remove('yukleniyor');
+  _yenileniyor = false;
+  miniToast(ok ? 'Veriler güncellendi' : 'Yenilenemedi, mevcut veriler korunuyor');
+}
+document.getElementById('refresh-btn').addEventListener('click', verileriYenile);
 
 function detailEmpty(){
   var b=document.getElementById('detail-body');
