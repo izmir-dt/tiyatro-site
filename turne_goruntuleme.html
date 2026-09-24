@@ -968,16 +968,48 @@ function selectTurne(idx, silent){
 
   // Katılımcılar
   if(t.katilimcilar && t.katilimcilar.length){
-    var katHtml = '<div class="table-scroll"><table class="kat-table"><thead><tr><th>Kişi</th><th>Kategori</th><th>Oda</th></tr></thead><tbody>';
+    // Ana konaklama atamaları: hiç yoksa ya da eksikse (oda tipi/eş) Oda sütunu gizlenir
+    var odaGoster = t.katilimcilar.some(function(k){ return k.munferit || k.odaTip; })
+      && t.katilimcilar.every(function(k){ return k.munferit || k.odaTip==='tek' || (k.odaTip==='cift' && k.odaEsi); });
+    var katHtml = '<div class="table-scroll"><table class="kat-table"><thead><tr><th>Kişi</th><th>Kategori</th>'+(odaGoster?'<th>Oda</th>':'')+'</tr></thead><tbody>';
     t.katilimcilar.forEach(function(k){
       katHtml += '<tr>'
         + '<td data-label="Kişi"><strong>'+esc(k.kisi||'')+'</strong>'+(k.ekstra?' <span class="kat-ekstra">+</span>':'')+'</td>'
         + '<td data-label="Kategori">'+esc(k.kategori||'')+'</td>'
-        + '<td data-label="Oda">'+odaHucre(k)+'</td>'
+        + (odaGoster ? '<td data-label="Oda">'+odaHucre(k)+'</td>' : '')
         + '</tr>';
     });
     katHtml += '</tbody></table></div>';
     html += sectionHtml('Katılımcılar ('+t.katilimcilar.length+')', '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>', katHtml);
+  }
+
+  // Oda Planları (oda eşleşmesinde kaydedilmiş planlar varsa)
+  if(t.odaPlanlari && t.odaPlanlari.length){
+    var planHtml = '';
+    t.odaPlanlari.forEach(function(plan, pi){
+      var kapsam = _odaPlanEffectiveKat(t, plan);
+      if(!kapsam.length) return;
+      planHtml += '<div style="margin-bottom:14px">'
+        + '<div style="font-size:13px;font-weight:800;margin:0 0 6px">'+esc(plan.baslik || ('Plan '+(pi+1)))+'</div>'
+        + (plan.not ? '<div style="font-size:12px;color:var(--muted-foreground);font-style:italic;margin-bottom:6px">'+esc(plan.not)+'</div>' : '')
+        + '<div class="table-scroll"><table class="kat-table"><thead><tr><th>Kişi</th><th>Kategori</th><th>Oda</th></tr></thead><tbody>';
+      kapsam.forEach(function(p){
+        var pk = {
+          munferit: !!(plan.munferitler||{})[p.kisi],
+          odaTip: (plan.odaTipleri||{})[p.kisi] || '',
+          odaEsi: (plan.odaEsleri||{})[p.kisi] || ''
+        };
+        planHtml += '<tr>'
+          + '<td data-label="Kişi"><strong>'+esc(p.kisi||'')+'</strong>'+(p._ekKisi?' <span class="kat-ekstra">+</span>':'')+'</td>'
+          + '<td data-label="Kategori">'+esc(p.kategori||p.gorev||'')+'</td>'
+          + '<td data-label="Oda">'+odaHucre(pk)+'</td>'
+          + '</tr>';
+      });
+      planHtml += '</tbody></table></div></div>';
+    });
+    if(planHtml){
+      html += sectionHtml('Oda Planları ('+t.odaPlanlari.length+')', '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v11"/><path d="M21 18v-7a3 3 0 0 0-3-3H11v10"/><path d="M3 14h18"/><circle cx="7" cy="11" r="1.5"/></svg>', planHtml);
+    }
   }
 
   // Notlar
