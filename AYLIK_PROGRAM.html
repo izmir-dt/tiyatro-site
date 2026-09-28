@@ -1825,6 +1825,20 @@ function applyCrew(){
   rebuildPeopleMap();
 }
 function crewPendingCount(){ return (state.crewLocal||[]).length + (state.crewHidden||[]).length; }
+/* E-Tablodaki bir satırın KİŞİ hücresinde virgülle birden fazla kişi yazılabilir ("Ali Avcı, Veli Yılmaz"):
+   her kişi ayrı kadro kaydı olur; aynı oyun/kategori/görevde tekrar eden isim tek sayılır. */
+function parseCrewRows(d){
+  const out=[], seen=new Set();
+  for(const row of (d.rows||[])){
+    const play=String(row[0]||'').trim(), category=String(row[1]||'').trim(), role=String(row[2]||'').trim();
+    if(!play) continue;
+    for(const person of String(row[3]||'').split(',').map(x=>x.trim()).filter(Boolean)){
+      const k=[play,category,role,person].join('|'); if(seen.has(k)) continue; seen.add(k);
+      out.push({play,category,role,person});
+    }
+  }
+  return out;
+}
 async function loadCrewSheet(force){
   if(crewState==='loading') return;
   if((state.sheetCrew||[]).length && !force) { applyCrew(); return; }
@@ -1833,12 +1847,7 @@ async function loadCrewSheet(force){
     const r = await fetch(CREW_API, {cache:'no-store'});
     if(!r.ok) throw new Error('HTTP '+r.status);
     const d = await r.json();
-    const rows = (d.rows||[]).map(row=>({
-      play: String(row[0]||'').trim(),
-      category: String(row[1]||'').trim(),
-      role: String(row[2]||'').trim(),
-      person: String(row[3]||'').trim()
-    })).filter(c=>c.play && c.person);
+    const rows = parseCrewRows(d);
     if(!rows.length) throw new Error('boş');
     state.sheetCrew = rows;
     crewState='ok';
@@ -7852,10 +7861,7 @@ async function crewAutoSync(){
     const r = await fetch(CREW_API, {cache:'no-store'});
     if(!r.ok) throw new Error('HTTP '+r.status);
     const d = await r.json();
-    const rows = (d.rows||[]).map(row=>({
-      play: String(row[0]||'').trim(), category: String(row[1]||'').trim(),
-      role: String(row[2]||'').trim(), person: String(row[3]||'').trim()
-    })).filter(c=>c.play && c.person);
+    const rows = parseCrewRows(d);
     if(!rows.length) return;
     if(crewUserBusy()) return; /* beklerken yazmaya başlandıysa bu turu atla */
     const changed = JSON.stringify(rows) !== JSON.stringify(state.sheetCrew||[]);
