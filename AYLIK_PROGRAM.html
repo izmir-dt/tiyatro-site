@@ -2214,9 +2214,39 @@ function monthSlug(name){
     .replace(/[^a-z0-9]+/g,'_')
     .replace(/^_+|_+$/g,'') || 'ay';
 }
+/* ❗ Kritik işaretli (cell.attn) ve HÂLÂ çakışan kişileri gün bazında toplar */
+function collectAttnItems(m){
+  const items=[], seen=new Set();
+  for(let r=2; r<m.rows; r++){
+    const games = rowGames(m,r);
+    if(games.length<2) continue;
+    const dt = dateTextOfRow(m,r)||('satır '+(r+1));
+    let conflict = null;
+    for(const g of games){
+      const cell = m.cells[g.row+'_'+g.col] || {};
+      if(!Array.isArray(cell.attn) || !cell.attn.length || isArchiveCell(cell)) continue;
+      conflict = conflict || buildConflict(games);
+      for(const p of cell.attn){
+        const info = conflict.people[p]; if(!info) continue;
+        const k = normNameKey(dt)+'|'+p; if(seen.has(k)) continue; seen.add(k);
+        const oyunlar = games.filter(x=>{ const cw=crewOf(x.key); return cw && cw[p]; }).map(x=>x.raw);
+        items.push({dt, name:info.name||p, oyunlar});
+      }
+    }
+  }
+  return items;
+}
 async function publishProgram(){
   if(blockIfRedCell('Kesinleştir')) return;
   const m = curMonth();
+  { const ai = collectAttnItems(m);
+    if(ai.length){
+      const lines = ai.slice(0,12).map(x=>'• '+x.name+' — '+x.dt+': '+x.oyunlar.join(' + '));
+      const extra = ai.length>12 ? '\n… ve '+(ai.length-12)+' işaret daha' : '';
+      const ok = await siteConfirm('❗ Kritik işaretlediğiniz '+ai.length+' çakışma var:\n\n'+lines.join('\n')+extra+'\n\nBunları kontrol ettiniz mi? Emin misiniz, kesinleştirmeye devam edilsin mi?','❗ Kritik işaretli çakışmalar');
+      if(!ok) return;
+    }
+  }
   const nv = await sitePrompt('Bu ay için bir not eklemek ister misiniz? (index sitesinde bu ayın kartında görünür)\nTamam\'a basarsanız kesinleştirme devam eder (kutuyu boş bırakırsanız not silinir). Vazgeç\'e basarsanız KESİNLEŞTİRME İPTAL EDİLİR, hiçbir şey değişmez.', m.siteNote || '', 'Ay notu');
   if(nv === null) return; /* Vazgeç: kesinleştirmenin tamamı iptal edilir */
   const t = nv.trim();
@@ -3653,7 +3683,7 @@ function renderSheet(){
       }
       if(isFreeTextCell(cell) && cell.v){ td.classList.add('freetext'); td.classList.remove('conflict'); }
       if(isArchiveCell(cell) && cell.v){ td.classList.add('archived'); td.classList.remove('conflict'); }
-      if(r>=2 && Array.isArray(cell.attn) && cell.attn.length && !cell.ignoreConflict && !isArchiveCell(cell) && !isFreeTextCell(cell) &&
+      if(r>=2 && Array.isArray(cell.attn) && cell.attn.length && !isArchiveCell(cell) && !isFreeTextCell(cell) &&
          cell.attn.some(q=>conflict.people[q])){
         td.classList.add('attn-mark');
         const ab=document.createElement('span'); ab.className='attnBadge'; ab.setAttribute('aria-hidden','true'); ab.textContent='❗';
@@ -4040,7 +4070,13 @@ function initTooltipInteraction(){
     else if(act==='unfreeCell') unmarkFreeTextCell(rr,cc);
     else if(act==='unfreeAll') unmarkAllFreeText(k);
     else if(act==='toggleTourLeg') toggleTourLegCell(rr,cc);
-    else if(act==='attn') toggleAttnPerson(rr,cc,b.dataset.ttp||'');
+    else if(act==='attn'){
+      const st = tt.scrollTop;
+      toggleAttnPerson(rr,cc,b.dataset.ttp||'');
+      showTooltipFor(rr,cc,null);
+      tt.scrollTop = st;
+      return;
+    }
     window.__ttPin=null;
     hideTooltipNow(true);
   });
@@ -4348,7 +4384,7 @@ function showTooltipFor(r,c,ev){
   html += '<div>Tarih: <b>'+escapeHtml(dateText||'-')+'</b>'+(timeText?' · saat <b>'+escapeHtml(timeText)+'</b>':'')+(sessLabel?' · <b>'+escapeHtml(sessLabel)+'</b>':'')+'</div>';
   if(stage) html += '<div>Sahne: '+escapeHtml(stage)+'</div>';
   html += '<hr>';
-  { const an = cell.ignoreConflict ? [] : Object.keys(conflict.people).filter(q=>attnSet.has(q)).map(q=>conflict.people[q].name||q);
+  { const an = Object.keys(conflict.people).filter(q=>attnSet.has(q)).map(q=>conflict.people[q].name||q);
     if(an.length) html += '<div class="ttWarn">❗ DİKKAT — bu hücrede kritik işaretli çakışma: <b>'+escapeHtml(an.join(', '))+'</b></div>'; }
   if(games.length<=1){
     html += '<div class="ttOk">Uygun ✅ (bu tarihte tek oyun)</div>';
@@ -4851,20 +4887,28 @@ function gotoCell(mi,r,c){
    bulunduğu TÜM oyun hücrelerine cell.attn=[kişiAnahtarı,...] olarak yazılır. */
 function toggleAttnPerson(rr,cc,p){
   const m = curMonth(); if(!p || lockGuard(m)) return; snapshot();
-  const games = rowGames(m,rr);
-  const turnOn = !rowAttnSet(m,games).has(p);
-  const seen = new Set(); let n=0;
-  for(const g of games){
-    const cw = crewOf(g.key); if(!cw || !cw[p]) continue;
-    const k = g.row+'_'+g.col; if(seen.has(k)) continue; seen.add(k);
-    const cur = {...(m.cells[k]||{v:''})};
-    let a = Array.isArray(cur.attn) ? cur.attn.filter(x=>x!==p) : [];
-    if(turnOn) a.push(p);
-    if(a.length) cur.attn = a; else delete cur.attn;
-    m.cells[k] = cur; n++;
+  const sigOf = games => [...new Set(games.filter(g=>{ const cw=crewOf(g.key); return cw && cw[p]; }).map(g=>g.ckey||g.key))].sort().join('|');
+  const baseGames = rowGames(m,rr);
+  const baseSig = sigOf(baseGames);
+  const turnOn = !rowAttnSet(m,baseGames).has(p);
+  const seen = new Set(); let n=0, days=0;
+  for(let r=2; r<m.rows; r++){
+    const games = (r===rr) ? baseGames : rowGames(m,r);
+    if(games.length<2) continue;
+    if(r!==rr && (baseSig.indexOf('|')<0 || sigOf(games)!==baseSig)) continue;
+    days++;
+    for(const g of games){
+      const cw = crewOf(g.key); if(!cw || !cw[p]) continue;
+      const k = g.row+'_'+g.col; if(seen.has(k)) continue; seen.add(k);
+      const cur = {...(m.cells[k]||{v:''})};
+      let a = Array.isArray(cur.attn) ? cur.attn.filter(x=>x!==p) : [];
+      if(turnOn) a.push(p);
+      if(a.length) cur.attn = a; else delete cur.attn;
+      m.cells[k] = cur; n++;
+    }
   }
   saveState(); renderSheet(); renderPrint();
-  setStatus(turnOn ? '❗ Kritik işaretlendi ('+n+' hücre).' : 'Kritik işareti kaldırıldı.');
+  setStatus(turnOn ? '❗ Kritik işaretlendi ('+n+' hücre, '+days+' gün).' : 'Kritik işareti kaldırıldı ('+n+' hücre).');
 }
 function opIgnoreConflict(){
   const m = curMonth(); if(lockGuard(m)) return; snapshot();
