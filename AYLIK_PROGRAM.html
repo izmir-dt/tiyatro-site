@@ -281,13 +281,15 @@ table.sheet td.cell.note-mark::after{content:"💬";position:absolute;top:0;righ
   font-size:11px;line-height:1;pointer-events:none;filter:drop-shadow(0 0 1.5px #fff) drop-shadow(0 0 1.5px #fff)}
 /* ❗ Kritik dikkat işareti (tooltip'ten kişi bazlı işaretlenir) */
 #sheet td.cell.attn-mark{outline:2px solid #e0a100;outline-offset:-2px}
+#sheet td.cell.sw-focus{outline:3px solid #1e6fd9 !important;outline-offset:-3px;z-index:3;animation:swFocusPulse 1.3s ease-in-out infinite}
+@keyframes swFocusPulse{0%,100%{box-shadow:inset 0 0 0 0 rgba(30,111,217,.0)}50%{box-shadow:inset 0 0 0 40px rgba(30,111,217,.22)}}
 #sheet td.cell.alt-ok:not(.attn-mark){outline:2px solid #2e9e6a;outline-offset:-2px}
 #sheet td.cell .attnBadge{position:absolute;top:0;left:1px;display:flex;gap:1px;font-size:13px;line-height:1;pointer-events:none;font-style:normal;filter:drop-shadow(0 0 1.5px #fff) drop-shadow(0 0 1.5px #fff)}
 #sheet td.cell .attnBadge i{font-style:normal}
 #sheet td.cell .attnBadge i.bWarn::before{content:"❗"}
 #sheet td.cell .attnBadge i.bOk::before{content:"✅"}
 /* ❗/✅ işaretleri ve yüzen pencere ASLA yazdırılmaz (sitenin kendi yazdırma kurallarından bağımsız) */
-@media print{.attnBadge,#subWin{display:none !important}#sheet td.cell.attn-mark,#sheet td.cell.alt-ok{outline:none !important}}
+@media print{.attnBadge,#subWin{display:none !important}#sheet td.cell.attn-mark,#sheet td.cell.alt-ok,#sheet td.cell.sw-focus{outline:none !important;animation:none !important}}
 
 /* Context menu */
 .ctxmenu{position:fixed;z-index:100002;background:#fff;border:1px solid var(--border);border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.18);min-width:200px;display:none;font-size:13px;padding:4px 0}
@@ -5041,6 +5043,18 @@ function gotoCell(mi,r,c){
 /* 🔍 Yedek bul: kişinin çakışan oyunlardaki görev(ler)ini bulur; aynı görevdeki
    diğer tüm kişileri (ör. tüm Kondüvitler) ve görevli oldukları oyunları listeler.
    O günün müsaitliği (aynı tarihteki gösterimleri) yanında gösterilir. */
+/* 🔍 açıkken, aramanın başladığı hücre(ler) tabloda mavi çerçeve + nabızla işaretli kalır */
+function swApplyFocus(){
+  document.querySelectorAll('#sheet td.sw-focus').forEach(x=>x.classList.remove('sw-focus'));
+  const f = window.__subFocus;
+  if(!f || f.m!==curMonth()) return;
+  f.keys.forEach(k=>{
+    const i=k.indexOf('_');
+    const td=document.querySelector('#sheet td.cell[data-r="'+k.slice(0,i)+'"][data-c="'+k.slice(i+1)+'"]');
+    if(td) td.classList.add('sw-focus');
+  });
+}
+(function(){ const o=renderSheet; renderSheet=function(){ const r=o.apply(this,arguments); try{swApplyFocus();}catch(e){} return r; }; })();
 function showSubstituteFinder(rr,cc,p){
   const m = curMonth(); if(!p) return;
   const games = rowGames(m,rr);
@@ -5094,6 +5108,8 @@ function showSubstituteFinder(rr,cc,p){
     '<div class="swFoot"><span>Müsaitlik yalnızca açık aydaki bu tarihe göre hesaplanır. Başlıktan sürükleyip taşıyabilir, köşeden boyutlandırabilirsiniz.</span>'+
       '<button type="button" class="btn" id="swClose">Kapat</button></div>';
   document.body.appendChild(win);
+  window.__subFocus = {m, keys: games.filter(g=>{const cw=crewOf(g.key); return cw && cw[p];}).map(g=>g.row+'_'+g.col)};
+  swApplyFocus();
   const pos = window.__subWinPos;
   if(pos){
     win.style.right='auto'; win.style.left=pos.left+'px'; win.style.top=pos.top+'px';
@@ -5144,7 +5160,7 @@ function showSubstituteFinder(rr,cc,p){
   });
 
   /* Kapatma: YALNIZCA ✕ veya Kapat düğmesi (Esc / dış tıklama kapatmaz) */
-  const close = ()=>{ savePos(); win.remove(); };
+  const close = ()=>{ savePos(); win.remove(); window.__subFocus=null; swApplyFocus(); };
   const savePos = ()=>{ const r=win.getBoundingClientRect(); window.__subWinPos={left:Math.round(r.left), top:Math.round(r.top), w:Math.round(r.width), h:Math.round(r.height)}; };
   win.querySelector('#swX').onclick = close;
   win.querySelector('#swClose').onclick = close;
