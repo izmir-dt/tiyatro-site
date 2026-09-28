@@ -279,6 +279,9 @@ table.sheet td.cell.freetext[data-cat="KONUK OYUN"]::before{content:"🏛 "}
 #alwaysGroup .draft-state{background:#fff}
 table.sheet td.cell.note-mark::after{content:"💬";position:absolute;top:0;right:1px;
   font-size:11px;line-height:1;pointer-events:none;filter:drop-shadow(0 0 1.5px #fff) drop-shadow(0 0 1.5px #fff)}
+/* ❗ Kritik dikkat işareti (tooltip'ten kişi bazlı işaretlenir) */
+table.sheet td.cell.attn-mark{outline:2px solid #e0a100;outline-offset:-2px}
+table.sheet td.cell .attnBadge{position:absolute;top:0;left:1px;font-size:13px;line-height:1;pointer-events:none;font-style:normal;filter:drop-shadow(0 0 1.5px #fff) drop-shadow(0 0 1.5px #fff)}
 
 /* Context menu */
 .ctxmenu{position:fixed;z-index:100002;background:#fff;border:1px solid var(--border);border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.18);min-width:200px;display:none;font-size:13px;padding:4px 0}
@@ -1258,6 +1261,9 @@ table.sheet td.cell{min-width:86px;height:29px}
 #tooltip b{color:#f2c978}
 #tooltip hr{border-top-color:rgba(255,232,198,.16)}
 #tooltip .ttSectionLabel{color:#dfc7a7}
+#tooltip .ttBang{margin-left:auto;flex:none;cursor:pointer;border:1px solid rgba(255,255,255,.28);background:rgba(255,255,255,.08);border-radius:7px;padding:1px 7px;font-size:13px;line-height:1.5;font-family:inherit;filter:grayscale(1);opacity:.6;transition:opacity .12s,background .12s}
+#tooltip .ttBang:hover{opacity:1;filter:none}
+#tooltip .ttBang.on{filter:none;opacity:1;background:#e0a100;border-color:#ffd166}
 #tooltip .ttWarn,#tooltip .ttOk{border-color:rgba(255,255,255,.15)}
 #tooltip .ttWarn{
   color:#ffd7d1;background:rgba(174,48,41,.24);
@@ -3647,6 +3653,12 @@ function renderSheet(){
       }
       if(isFreeTextCell(cell) && cell.v){ td.classList.add('freetext'); td.classList.remove('conflict'); }
       if(isArchiveCell(cell) && cell.v){ td.classList.add('archived'); td.classList.remove('conflict'); }
+      if(r>=2 && Array.isArray(cell.attn) && cell.attn.length && !cell.ignoreConflict && !isArchiveCell(cell) && !isFreeTextCell(cell) &&
+         cell.attn.some(q=>conflict.people[q])){
+        td.classList.add('attn-mark');
+        const ab=document.createElement('span'); ab.className='attnBadge'; ab.setAttribute('aria-hidden','true'); ab.textContent='❗';
+        td.appendChild(ab);
+      }
       const tinfo = r>=2 ? tours.map[r+'_'+c] : null;
       if(tinfo){
         td.dataset.tour = tinfo.g.id;
@@ -4028,6 +4040,7 @@ function initTooltipInteraction(){
     else if(act==='unfreeCell') unmarkFreeTextCell(rr,cc);
     else if(act==='unfreeAll') unmarkAllFreeText(k);
     else if(act==='toggleTourLeg') toggleTourLegCell(rr,cc);
+    else if(act==='attn') toggleAttnPerson(rr,cc,b.dataset.ttp||'');
     window.__ttPin=null;
     hideTooltipNow(true);
   });
@@ -4206,7 +4219,21 @@ function ttPersonRank(info){
 function ttPersonSort(a,b){
   return ttPersonRank(a[1])-ttPersonRank(b[1]) || (a[1].name||a[0]).localeCompare(b[1].name||b[0],'tr');
 }
-function ttPersonLine(p, info){
+/* ❗ "Kritik / dikkat et" düğmesi — kişi bazlı, kişinin olduğu tüm çakışan hücrelere işlenir */
+function rowAttnSet(m, games){
+  const out = new Set();
+  for(const g of games){
+    const a = (m.cells[g.row+'_'+g.col]||{}).attn;
+    if(Array.isArray(a)) a.forEach(x=>out.add(x));
+  }
+  return out;
+}
+function ttBangBtn(p, attnSet){
+  if(!attnSet || String(p).indexOf('__ret_')===0) return '';
+  const on = attnSet.has(p);
+  return '<button type="button" class="ttBang'+(on?' on':'')+'" data-ttact="attn" data-ttp="'+escapeHtml(p)+'" title="'+(on?'Kritik işaretini kaldır':'Kritik işaretle: bu hücrelere dikkat et')+'">❗</button>';
+}
+function ttPersonLine(p, info, attnSet){
   if(info.kast && info.kastOf){
     return '<div class="ttPerson kast">🟡 '+escapeHtml(info.kastOf)+' Kastı: <span class="ttKastNote">'+escapeHtml(info.name||p)+'</span></div>';
   }
@@ -4218,7 +4245,7 @@ function ttPersonLine(p, info){
   const resolved = !info.critical && info.kastCovered;
   const dot = resolved ? '🟡' : (info.critical ? '🔴' : '🟢');
   const cls = resolved ? 'kast' : (info.critical ? 'crit' : 'soft');
-  let html = '<div class="ttPerson '+cls+'">'+dot+' '+escapeHtml(info.name||p)+'</div>';
+  let html = '<div class="ttPerson '+cls+'">'+dot+' '+escapeHtml(info.name||p)+ttBangBtn(p, attnSet)+'</div>';
   if(info.kastCoveredList && info.kastCoveredList.length){
     for(const c of info.kastCoveredList){
       html += '<div class="ttKastNote">↳ '+escapeHtml(c.raw||'')+' için kastı var: <b>'+escapeHtml(c.kastName)+'</b></div>';
@@ -4250,6 +4277,7 @@ function showTooltipFor(r,c,ev){
   if(r>=2 && cell.tourReturn){
     const gamesR = rowGames(m,r);
     const confR = gamesR.length>=2 ? buildConflict(gamesR) : {people:{}, hasCritical:false};
+    const attnSetR = rowAttnSet(m, gamesR);
     const mine = gamesR.find(g=>g.row===r && g.col===c);
     let hR = '<div class="ttHead">↩ Turne dönüş günü</div>';
     if(raw) hR += '<div>'+escapeHtml(raw)+'</div>';
@@ -4258,8 +4286,10 @@ function showTooltipFor(r,c,ev){
     hR += '<div>Bu gün temsil olarak sayılmaz.</div><hr>';
     if(confR.hasCritical){
       hR += '<div class="ttWarn">⚠️ Çakışma var</div>';
+      { const an = Object.keys(confR.people).filter(q=>attnSetR.has(q)).map(q=>confR.people[q].name||q);
+        if(an.length) hR += '<div class="ttWarn">❗ DİKKAT — kritik işaretli: <b>'+escapeHtml(an.join(', '))+'</b></div>'; }
       for(const [p,info] of Object.entries(confR.people).sort(ttPersonSort)){
-        hR += ttPersonLine(p, info);
+        hR += ttPersonLine(p, info, attnSetR);
         hR += ttRoleLines(gamesR, p);
       }
     } else {
@@ -4306,6 +4336,7 @@ function showTooltipFor(r,c,ev){
   const {key} = parseGame(raw);
   const games = rowGames(m,r);
   const conflict = games.length>=2 ? buildConflict(games) : {people:{}, hasCritical:false};
+  const attnSet = rowAttnSet(m, games);
 
   const dateText = dateTextOfRow(m,r);
   const timeText = timeTextOfRow(m,r);
@@ -4317,6 +4348,8 @@ function showTooltipFor(r,c,ev){
   html += '<div>Tarih: <b>'+escapeHtml(dateText||'-')+'</b>'+(timeText?' · saat <b>'+escapeHtml(timeText)+'</b>':'')+(sessLabel?' · <b>'+escapeHtml(sessLabel)+'</b>':'')+'</div>';
   if(stage) html += '<div>Sahne: '+escapeHtml(stage)+'</div>';
   html += '<hr>';
+  { const an = cell.ignoreConflict ? [] : Object.keys(conflict.people).filter(q=>attnSet.has(q)).map(q=>conflict.people[q].name||q);
+    if(an.length) html += '<div class="ttWarn">❗ DİKKAT — bu hücrede kritik işaretli çakışma: <b>'+escapeHtml(an.join(', '))+'</b></div>'; }
   if(games.length<=1){
     html += '<div class="ttOk">Uygun ✅ (bu tarihte tek oyun)</div>';
   } else {
@@ -4328,7 +4361,7 @@ function showTooltipFor(r,c,ev){
     } else if(!conflict.hasCritical){
       html += '<div class="ttOk">🟢 Ortak kişi(ler) var ama Oyuncu/Figüran çakışması yok:</div>';
       for(const [p,info] of Object.entries(conflict.people).sort(ttPersonSort)){
-        html += ttPersonLine(p, info);
+        html += ttPersonLine(p, info, attnSet);
         html += ttRoleLines(games, p);
       }
     } else {
@@ -4336,7 +4369,7 @@ function showTooltipFor(r,c,ev){
         ? '<div class="ttOk">🟢 Çakışma bu hücrede yok sayıldı (aşağıdaki kayıt bilgi amaçlı)</div>'
         : '<div class="ttWarn">⚠️ Çakışma var</div>';
       for(const [p,info] of Object.entries(conflict.people).sort(ttPersonSort)){
-        html += ttPersonLine(p, info);
+        html += ttPersonLine(p, info, attnSet);
         html += ttRoleLines(games, p);
       }
     }
@@ -4813,6 +4846,25 @@ function gotoCell(mi,r,c){
   setSel(r,c,r,c);
   const td = document.querySelector('#sheet td.cell[data-r="'+r+'"][data-c="'+c+'"]');
   if(td) td.scrollIntoView({block:'center', inline:'center'});
+}
+/* ❗ Kişi bazlı "kritik / dikkat et" işareti: o günün çakışmasındaki kişinin
+   bulunduğu TÜM oyun hücrelerine cell.attn=[kişiAnahtarı,...] olarak yazılır. */
+function toggleAttnPerson(rr,cc,p){
+  const m = curMonth(); if(!p || lockGuard(m)) return; snapshot();
+  const games = rowGames(m,rr);
+  const turnOn = !rowAttnSet(m,games).has(p);
+  const seen = new Set(); let n=0;
+  for(const g of games){
+    const cw = crewOf(g.key); if(!cw || !cw[p]) continue;
+    const k = g.row+'_'+g.col; if(seen.has(k)) continue; seen.add(k);
+    const cur = {...(m.cells[k]||{v:''})};
+    let a = Array.isArray(cur.attn) ? cur.attn.filter(x=>x!==p) : [];
+    if(turnOn) a.push(p);
+    if(a.length) cur.attn = a; else delete cur.attn;
+    m.cells[k] = cur; n++;
+  }
+  saveState(); renderSheet(); renderPrint();
+  setStatus(turnOn ? '❗ Kritik işaretlendi ('+n+' hücre).' : 'Kritik işareti kaldırıldı.');
 }
 function opIgnoreConflict(){
   const m = curMonth(); if(lockGuard(m)) return; snapshot();
