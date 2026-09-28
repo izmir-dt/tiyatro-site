@@ -4301,6 +4301,15 @@ function ttPersonRank(info){
   if(info.kast || (!info.critical && info.kastCovered)) return 0;
   return info.critical ? 1 : 2;
 }
+/* ❗ Kritik işaretli (attnSet) kişiler, diğer tüm sıralamadan bağımsız olarak
+   listenin EN ÜSTÜNDE görünür; kalan sıra eskisi gibi (sarı → kırmızı → yeşil). */
+function ttPersonSortFor(attnSet){
+  return function(a,b){
+    const fa = (attnSet && attnSet.has(a[0])) ? 0 : 1;
+    const fb = (attnSet && attnSet.has(b[0])) ? 0 : 1;
+    return (fa-fb) || ttPersonRank(a[1])-ttPersonRank(b[1]) || (a[1].name||a[0]).localeCompare(b[1].name||b[0],'tr');
+  };
+}
 function ttPersonSort(a,b){
   return ttPersonRank(a[1])-ttPersonRank(b[1]) || (a[1].name||a[0]).localeCompare(b[1].name||b[0],'tr');
 }
@@ -4378,7 +4387,7 @@ function showTooltipFor(r,c,ev){
       hR += '<div class="ttWarn">⚠️ Çakışma var</div>';
       { const an = Object.keys(confR.people).filter(q=>attnSetR.has(q)).map(q=>confR.people[q].name||q);
         if(an.length) hR += '<div class="ttWarn">❗ DİKKAT — kritik işaretli: <b>'+escapeHtml(an.join(', '))+'</b></div>'; }
-      for(const [p,info] of Object.entries(confR.people).sort(ttPersonSort)){
+      for(const [p,info] of Object.entries(confR.people).sort(ttPersonSortFor(attnSetR))){
         hR += ttPersonLine(p, info, attnSetR, altMapR);
         hR += ttRoleLines(gamesR, p);
       }
@@ -4451,7 +4460,7 @@ function showTooltipFor(r,c,ev){
       html += '<div class="ttOk">Uygun ✅ Çakışan kişi yok.</div>';
     } else if(!conflict.hasCritical){
       html += '<div class="ttOk">🟢 Ortak kişi(ler) var ama Oyuncu/Figüran çakışması yok:</div>';
-      for(const [p,info] of Object.entries(conflict.people).sort(ttPersonSort)){
+      for(const [p,info] of Object.entries(conflict.people).sort(ttPersonSortFor(attnSet))){
         html += ttPersonLine(p, info, attnSet, altMap);
         html += ttRoleLines(games, p);
       }
@@ -4459,7 +4468,7 @@ function showTooltipFor(r,c,ev){
       html += cell.ignoreConflict
         ? '<div class="ttOk">🟢 Çakışma bu hücrede yok sayıldı (aşağıdaki kayıt bilgi amaçlı)</div>'
         : '<div class="ttWarn">⚠️ Çakışma var</div>';
-      for(const [p,info] of Object.entries(conflict.people).sort(ttPersonSort)){
+      for(const [p,info] of Object.entries(conflict.people).sort(ttPersonSortFor(attnSet))){
         html += ttPersonLine(p, info, attnSet, altMap);
         html += ttRoleLines(games, p);
       }
