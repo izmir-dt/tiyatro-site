@@ -7783,8 +7783,62 @@ function closeNotesPopover(){
   document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeAttnPopover(); });
 })();
 /* Tablo her yenilendiğinde ❗ rozeti/paneli de güncellensin (hücre düzenleme, geri al, ay değişimi…) */
+/* Açık duran balon veri yenilenince (kadro çekildi, taslak eşitlendi, işaret değişti…) bayat kalmasın:
+   ❗ 📌 🔍 düğmeleri yeniden gezinmeye/sayfa yenilemeye gerek kalmadan gelsin */
+function refreshOpenTooltip(){
+  const tt = document.getElementById('tooltip');
+  if(!tt || tt.style.display!=='block' || window.TOOLTIPS_OFF) return;
+  if(typeof tooltipHasSelection==='function' && tooltipHasSelection()) return;
+  const r = +tt.dataset.r, c = +tt.dataset.c; if(isNaN(r) || isNaN(c)) return;
+  const cell = (curMonth().cells[r+'_'+c]) || {};
+  if(!(cell.v || cell.tourReturn || cell.note)) return;
+  const st = tt.scrollTop;
+  showTooltipFor(r, c, null);
+  tt.scrollTop = st;
+}
 { const __renderSheet0 = renderSheet;
-  renderSheet = function(){ const rv = __renderSheet0.apply(this, arguments); try{ renderAttnPanel(); }catch(e){} return rv; }; }
+  renderSheet = function(){ const rv = __renderSheet0.apply(this, arguments); try{ renderAttnPanel(); }catch(e){} try{ refreshOpenTooltip(); }catch(e){} return rv; }; }
+
+/* Kadroyu Google E-Tablo'dan arka planda, sessizce tazele: yalnızca veri gerçekten değiştiyse uygular.
+   Açılışta, sekmeye dönünce ve 5 dakikada bir çalışır; hücre yazılırken dokunmaz. */
+let _crewAutoAt = 0, _crewAutoBusy = false;
+function crewUserBusy(){
+  const ae = document.activeElement;
+  if(ae && ae.closest && ae.closest('#sheet') && (ae.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName))) return true;
+  return document.querySelector('#sheet td.cell[contenteditable="true"]') ? true : false;
+}
+async function crewAutoSync(){
+  if(_crewAutoBusy || crewState==='loading' || document.hidden) return;
+  if(Date.now() - _crewAutoAt < 60000) return;
+  if(crewUserBusy()) return;
+  _crewAutoBusy = true; _crewAutoAt = Date.now();
+  try{
+    const r = await fetch(CREW_API, {cache:'no-store'});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const d = await r.json();
+    const rows = (d.rows||[]).map(row=>({
+      play: String(row[0]||'').trim(), category: String(row[1]||'').trim(),
+      role: String(row[2]||'').trim(), person: String(row[3]||'').trim()
+    })).filter(c=>c.play && c.person);
+    if(!rows.length) return;
+    if(crewUserBusy()) return; /* beklerken yazmaya başlandıysa bu turu atla */
+    const changed = JSON.stringify(rows) !== JSON.stringify(state.sheetCrew||[]);
+    const wasOk = crewState==='ok';
+    if(changed){
+      state.sheetCrew = rows; crewState = 'ok';
+      applyCrew(); saveState();
+      try{ buildOyunDatalist(); renderSheet(); renderPrint(); renderPlays(); }catch(e){}
+      setStatus('Kadro Google E-Tablo ile otomatik güncellendi.');
+    } else if(!wasOk){
+      crewState = 'ok'; try{ renderPlays(); }catch(e){}
+    }
+  }catch(e){ /* sessiz: elle "Şimdi Yenile" her zaman kullanılabilir */ }
+  finally{ _crewAutoBusy = false; }
+}
+setTimeout(crewAutoSync, 1500);
+document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) crewAutoSync(); });
+window.addEventListener('focus', ()=>{ crewAutoSync(); });
+setInterval(crewAutoSync, 5*60*1000);
 
 function renderAll(){
   refreshMonthSel();
@@ -8220,6 +8274,13 @@ syncFromServer().then(()=>syncDraftFromServer());
 #idtBridgeBar .idt-ico:hover{background:var(--primary);color:#fff;border-color:var(--primary)}
 #idtBridgeBar .idt-ico svg{width:15px;height:15px}
 #idtBridgeBar .idt-ico.spin svg{animation:idtspin .8s linear infinite}
+#idtBridgeBar .idt-btn{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 11px;border:1px solid #d8b56a;border-radius:8px;background:#fdf3dc;color:#6b4a0e;font:inherit;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;transition:.15s}
+#idtBridgeBar .idt-btn:hover{background:#d5a04a;border-color:#d5a04a;color:#302014}
+#idtBridgeBar .idt-btn:disabled{opacity:.7;cursor:progress}
+#idtBridgeBar .idt-btn svg{width:14px;height:14px;flex:none}
+#idtBridgeBar .idt-btn.spin svg{animation:idtspin .8s linear infinite}
+#idtBridgeBar .idt-btn.done{background:#e8f6ec;border-color:#9fd1ab;color:#1f6b35}
+#idtBridgeBar .idt-btn.fail{background:#fdf0ee;border-color:#e3aaa3;color:#9b3232}
 #idtLockBanner{display:none;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 18px;background:#fdf4f4;border-bottom:1px solid #f0cfcf;color:#9b3232;font-size:13px}
 #idtLockBanner.show{display:flex}
 #idtLockBanner b{font-weight:700}
@@ -8308,6 +8369,7 @@ body.idt-locked main{pointer-events:none;user-select:none;opacity:.5;filter:gray
   bar.id = 'idtBridgeBar';
   bar.innerHTML = '<span id="idtBridgeInfo" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"></span>' +
     '<button class="idt-ico" id="idtPullBtn" title="Verileri yenile" aria-label="Verileri yenile" style="margin-left:auto">' + IC.refresh + '</button>' +
+    '<button type="button" class="idt-btn" id="idtCrewSyncBtn" title="Google E-Tablo\'dan kadro ve görevleri hemen çek">' + IC.refresh + '<span>Şimdi Yenile</span></button>' +
     '<a class="idt-ico" id="idtBackBtn" href="' + SITE + '" title="Repertuvar sitesi" aria-label="Repertuvar sitesi">' + IC.back + '</a>';
   document.querySelector('header').insertAdjacentElement('afterend', bar);
   document.getElementById('idtPullBtn').onclick = (e) => {
@@ -8315,6 +8377,26 @@ body.idt-locked main{pointer-events:none;user-select:none;opacity:.5;filter:gray
     setTimeout(()=>b.classList.remove('spin'), 900);
     pullFromSite(false);
   };
+
+  /* Şimdi Yenile: Oyun & Kadro sekmesindeki düğmenin aynısı — kadro/görevleri Google E-Tablo'dan hemen çeker */
+  { const sb = document.getElementById('idtCrewSyncBtn'); const lbl = sb.querySelector('span');
+    let _t = null;
+    sb.onclick = async () => {
+      if(sb.disabled) return;
+      clearTimeout(_t); sb.classList.remove('done','fail');
+      sb.disabled = true; sb.classList.add('spin'); lbl.textContent = 'Yenileniyor…';
+      setStatus('Google E-Tablo ile senkronize ediliyor…');
+      try{ await loadCrewSheet(true); }catch(e){}
+      try{ renderPlayDetail(); }catch(e){}
+      try{ const b = readBridge(); if(b) stamp(b); }catch(e){}
+      const ok = (typeof crewState!=='undefined') && crewState==='ok';
+      sb.disabled = false; sb.classList.remove('spin');
+      sb.classList.add(ok ? 'done' : 'fail');
+      lbl.textContent = ok ? '✓ Güncellendi' : 'Yerel kopya';
+      setStatus(ok ? 'Kadro Google E-Tablo ile güncellendi.' : 'Senkronizasyon tamamlanamadı, yerel kopya gösteriliyor.');
+      _t = setTimeout(()=>{ sb.classList.remove('done','fail'); lbl.textContent = 'Şimdi Yenile'; }, 2500);
+    };
+  }
 
   /* Repertuvar bağlı değilken gösterilen uyarı + bağlantı butonu */
   const lockBanner = document.createElement('div');
