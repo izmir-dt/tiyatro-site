@@ -1645,11 +1645,8 @@ table.sheet td.cell{min-width:86px;height:29px}
   <div class="play-pane-title" style="margin:2px 2px 14px">📅 Gösterim Takvimi <small>Bir oyun seçin — hangi ayda kaç temsil verildiğini görün.</small></div>
   <div class="controls" style="margin-bottom:14px">
     <span class="cmd-label">Gösterim raporu</span>
-    <select id="showReportMonth" aria-label="Rapor ayı">
-      <option value="all">Tüm aylar</option>
-    </select>
-    <button type="button" class="btn small solid" id="showReportBtn">▦ Gösterim Raporu Oluştur</button>
-    <span style="color:var(--muted);font-size:12px">Oyun oyun, tarih tarih tablo halinde açılır.</span>
+    <button type="button" class="btn small solid" id="showReportBtn">▦ Excel Gösterim Raporu İndir</button>
+    <span style="color:var(--muted);font-size:12px">Her oyunun aylık temsil sayısını ve toplamını Excel tablosu olarak indirir.</span>
   </div>
   <div class="pl-wrap">
     <aside class="pl-side">
@@ -7443,34 +7440,53 @@ function openMonthPreviewTab(){
   w.document.open(); w.document.write(html); w.document.close();
 }
 
-/* === Oyun / tarih bazlı gösterim raporu === */
-function refreshShowReportMonths(){
-  const sel=document.getElementById('showReportMonth');
-  if(!sel) return;
-  const prev=sel.value;
-  sel.innerHTML='<option value="all">Tüm aylar</option>'+sortedMonthIdx().map(i=>`<option value="${i}">${escapeHtml(state.months[i].name)}</option>`).join('');
-  if(Array.prototype.some.call(sel.options,o=>o.value===prev)) sel.value=prev;
-}
-function openShowingsReport(){
-  const sel=document.getElementById('showReportMonth');
-  const chosen=sel ? sel.value : 'all';
-  const allowed=chosen==='all' ? null : Number(chosen);
+/* === Oyun bazlı, aylara göre temsil sayısı Excel raporu === */
+function exportShowingsSummaryExcel(){
+  const monthIndexes=sortedMonthIdx();
+  const months=monthIndexes.map(i=>state.months[i]);
   const plays=(state.plays||[]).filter(p=>!isArchivedPlayName(p)).sort((a,b)=>a.localeCompare(b,'tr'));
-  const groups=plays.map(play=>({play,rows:playOccurrenceList(play).filter(o=>allowed===null || o.mi===allowed)})).filter(g=>g.rows.length);
-  const total=groups.reduce((n,g)=>n+g.rows.length,0);
-  const period=allowed===null ? 'Tüm Aylar' : ((state.months[allowed]||{}).name||'Seçili Ay');
-  const w=window.open('', '_blank');
-  if(!w){ siteMessage('Tarayıcı rapor sekmesini engelledi. Açılır pencere iznini verin.','warn','Gösterim raporu'); return; }
-  const esc=escapeHtml;
-  const rows=groups.length ? groups.map(g=>
-    `<tbody><tr class="game"><th colspan="6">${esc(g.play)} <span>${g.rows.length} gösterim</span></th></tr>`+
-    g.rows.map(o=>`<tr><td>${esc(g.play)}</td><td>${esc(o.month||'')}</td><td>${esc(o.date||'Tarih yok')}</td><td>${esc(o.time||'—')}</td><td>${esc(o.stage||'—')}</td><td>${esc(o.note||'')}</td></tr>`).join('')+'</tbody>'
-  ).join('') : '<tbody><tr><td colspan="6" class="empty">Seçilen dönem için gösterim kaydı bulunamadı.</td></tr></tbody>';
-  const html='<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'+
-    '<title>'+esc(period)+' — Gösterim Raporu</title><style>'+
-    'body{margin:0;background:#faf7f2;color:#1a0f0a;font:13px Arial,sans-serif}.head{background:#6b1220;color:#fff;padding:18px 24px;display:flex;align-items:center;gap:16px}.head h1{margin:0;font:700 22px Georgia,serif}.head p{margin:3px 0 0;opacity:.85}.head button{margin-left:auto;border:0;border-radius:6px;background:#b8892b;color:#fff;padding:9px 14px;font-weight:700;cursor:pointer}.wrap{padding:20px 24px 48px}.summary{margin-bottom:14px;color:#6b1220;font-weight:700}.table-wrap{overflow:auto;background:#fff;border:1px solid #d8ccb3;border-radius:8px}table{width:100%;border-collapse:collapse;min-width:850px}thead th{position:sticky;top:0;background:#efe7d8;color:#6b1220;text-align:left;padding:9px;border-bottom:1px solid #c9b98f;font-size:11px;text-transform:uppercase}td{padding:8px 9px;border-bottom:1px solid #eee5d6;vertical-align:top}.game th{background:#6b1220;color:#fff;text-align:left;padding:9px 10px}.game span{float:right;background:#b8892b;padding:2px 8px;border-radius:10px;font:700 11px Arial}.empty{text-align:center;padding:28px;color:#7a6a58}@media print{.head button{display:none}.wrap{padding:10px}.table-wrap{border:0}thead th{position:static}.game{break-after:avoid}.game th{background:#ddd!important;color:#000!important}}'+
-    '</style></head><body><div class="head"><div><h1>Gösterim Raporu</h1><p>İzmir Devlet Tiyatrosu · '+esc(period)+'</p></div><button onclick="window.print()">Yazdır / PDF</button></div><div class="wrap"><div class="summary">'+groups.length+' oyun · '+total+' gösterim</div><div class="table-wrap"><table><thead><tr><th>Oyun</th><th>Ay</th><th>Tarih</th><th>Saat</th><th>Sahne</th><th>Not</th></tr></thead>'+rows+'</table></div></div></body></html>';
-  w.document.open(); w.document.write(html); w.document.close();
+  const report=plays.map(play=>{
+    const occurrences=playOccurrenceList(play);
+    const counts=monthIndexes.map(mi=>occurrences.filter(o=>o.mi===mi).length);
+    return {play,counts,total:counts.reduce((sum,n)=>sum+n,0)};
+  }).filter(row=>row.total>0);
+  if(!months.length || !report.length){ siteMessage('Excel raporu için gösterim kaydı bulunamadı.','warn','Gösterim raporu'); return; }
+  function colLetter1(n){ let out=''; while(n>0){ const r=(n-1)%26; out=String.fromCharCode(65+r)+out; n=Math.floor((n-1)/26); } return out; }
+  const lastMonthCol=colLetter1(months.length+1);
+  const totalCol=colLetter1(months.length+2);
+  const header=['Oyun',...months.map(m=>m.name),'Toplam Temsil'];
+  let rows='<row r="1" ht="28" customHeight="1">'+header.map((v,i)=>'<c r="'+colLetter1(i+1)+'1" s="1" t="inlineStr"><is><t>'+xmlEscape(v)+'</t></is></c>').join('')+'</row>';
+  report.forEach((item,idx)=>{
+    const r=idx+2;
+    rows+='<row r="'+r+'"><c r="A'+r+'" s="2" t="inlineStr"><is><t>'+xmlEscape(item.play)+'</t></is></c>'+
+      item.counts.map((n,i)=>'<c r="'+colLetter1(i+2)+r+'" s="3"><v>'+n+'</v></c>').join('')+
+      '<c r="'+totalCol+r+'" s="4"><f>SUM(B'+r+':'+lastMonthCol+r+')</f><v>'+item.total+'</v></c></row>';
+  });
+  const totalRow=report.length+2;
+  rows+='<row r="'+totalRow+'"><c r="A'+totalRow+'" s="1" t="inlineStr"><is><t>GENEL TOPLAM</t></is></c>';
+  for(let c=2;c<=months.length+2;c++){
+    const letter=colLetter1(c);
+    const value=c===months.length+2 ? report.reduce((sum,x)=>sum+x.total,0) : report.reduce((sum,x)=>sum+x.counts[c-2],0);
+    rows+='<c r="'+letter+totalRow+'" s="4"><f>SUM('+letter+'2:'+letter+(totalRow-1)+')</f><v>'+value+'</v></c>';
+  }
+  rows+='</row>';
+  const cols='<col min="1" max="1" width="42" customWidth="1"/><col min="2" max="'+(months.length+1)+'" width="16" customWidth="1"/><col min="'+(months.length+2)+'" max="'+(months.length+2)+'" width="18" customWidth="1"/>';
+  const sheet='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight="18"/><cols>'+cols+'</cols><sheetData>'+rows+'</sheetData><autoFilter ref="A1:'+totalCol+(totalRow-1)+'"/><pageMargins left="0.25" right="0.25" top="0.4" bottom="0.4" header="0" footer="0"/><pageSetup orientation="landscape" fitToWidth="1" fitToHeight="0"/></worksheet>';
+  const styles='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="3"><font><sz val="10"/><name val="Arial"/></font><font><b/><sz val="10"/><color rgb="FFFFFFFF"/><name val="Arial"/></font><font><b/><sz val="10"/><color rgb="FF6B1220"/><name val="Arial"/></font></fonts><fills count="4"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF6B1220"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFE8A3"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color rgb="FFD8CCB3"/></left><right style="thin"><color rgb="FFD8CCB3"/></right><top style="thin"><color rgb="FFD8CCB3"/></top><bottom style="thin"><color rgb="FFD8CCB3"/></bottom><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="5"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="0" fontId="2" fillId="3" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
+  const files={
+    '[Content_Types].xml':'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>',
+    '_rels/.rels':'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>',
+    'xl/workbook.xml':'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><calcPr calcId="0" fullCalcOnLoad="1" forceFullCalc="1"/><sheets><sheet name="Gösterim Raporu" sheetId="1" r:id="rId1"/></sheets></workbook>',
+    'xl/_rels/workbook.xml.rels':'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>',
+    'xl/styles.xml':styles,
+    'xl/worksheets/sheet1.xml':sheet
+  };
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(zipStore(files));
+  a.download='izmir-dt-aylik-gosterim-raporu.xlsx';
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+  setStatus('Aylık gösterim raporu Excel olarak indirildi.');
 }
 
 /* Hızlı butonlar HER ZAMAN sadece görüntülenen ayı işler; kâğıt/boyut
@@ -7496,8 +7512,7 @@ document.getElementById('monthlyCrewRefreshBtn').onclick = async e=>{
   btn.disabled=false; btn.lastChild.textContent=' Şimdi Yenile';
   setStatus(crewState==='ok' ? 'Kadro ve görev kayıtları güncellendi.' : 'Yenileme tamamlanamadı, yerel kopya gösteriliyor.');
 };
-document.getElementById('showReportBtn').onclick = openShowingsReport;
-refreshShowReportMonths();
+document.getElementById('showReportBtn').onclick = exportShowingsSummaryExcel;
 document.getElementById('printPreviewBtn').onclick = ()=>printProgram(document.getElementById('printSizePreview')?.value);
 document.getElementById('printSize').onchange = e=>{
   setPrintSize(e.target.value);
