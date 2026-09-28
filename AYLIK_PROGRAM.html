@@ -1289,6 +1289,12 @@ table.sheet td.cell{min-width:86px;height:29px}
 #subWin .swBusy{font-size:12px;color:#9a211d;margin-top:3px}
 #subWin .swPlays{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
 #subWin .swTag{font-size:11px;background:#f3ece3;color:#5a4636;border-radius:6px;padding:2px 7px}
+#subWin .swRow.sel{border-color:#d9a400;border-left-color:#d9a400;background:#fffbe8}
+#subWin .swAct{display:flex;justify-content:flex-end;margin-top:6px}
+#subWin .swAlt{cursor:pointer;border:1px solid #cdbfae;background:#fff;color:#5a4636;border-radius:8px;padding:4px 10px;font:inherit;font-size:12px;font-weight:700}
+#subWin .swAlt:hover{background:#f6efe6}
+#subWin .swRow.sel .swAlt{background:#d9a400;border-color:#b98a00;color:#fff}
+#subWin .swSum{margin:10px 0 2px;padding:8px 10px;border-radius:9px;background:#fff6d6;border:1px solid #ecd27a;font-size:12.5px;line-height:1.45}
 #subWin .swEmpty{padding:18px 6px;text-align:center;font-size:12.5px;color:#777}
 #subWin .swFoot{flex:none;display:flex;align-items:center;gap:10px;padding:9px 14px;border-top:1px solid #eadfd2;background:#faf6f0}
 #subWin .swFoot span{flex:1;font-size:11px;color:#7a6a5a;line-height:1.35}
@@ -2259,7 +2265,8 @@ function collectAttnItems(m){
         const info = conflict.people[p]; if(!info) continue;
         const k = normNameKey(dt)+'|'+p; if(seen.has(k)) continue; seen.add(k);
         const oyunlar = games.filter(x=>{ const cw=crewOf(x.key); return cw && cw[p]; }).map(x=>x.raw);
-        items.push({dt, name:info.name||p, oyunlar});
+        const alts = ((cell.alts||{})[p]||[]).map(x=>x.name);
+        items.push({dt, name:info.name||p, oyunlar, alts});
       }
     }
   }
@@ -2270,7 +2277,7 @@ async function publishProgram(){
   const m = curMonth();
   { const ai = collectAttnItems(m);
     if(ai.length){
-      const lines = ai.slice(0,12).map(x=>'• '+x.name+' — '+x.dt+': '+x.oyunlar.join(' + '));
+      const lines = ai.slice(0,12).map(x=>'• '+x.name+' — '+x.dt+': '+x.oyunlar.join(' + ')+(x.alts&&x.alts.length?' → alternatif: '+x.alts.join(', '):' → alternatif seçilmedi'));
       const extra = ai.length>12 ? '\n… ve '+(ai.length-12)+' işaret daha' : '';
       const ok = await siteConfirm('❗ Kritik işaretlediğiniz '+ai.length+' çakışma var:\n\n'+lines.join('\n')+extra+'\n\nBunları kontrol ettiniz mi? Emin misiniz, kesinleştirmeye devam edilsin mi?','❗ Kritik işaretli çakışmalar');
       if(!ok) return;
@@ -4300,7 +4307,7 @@ function ttBangBtn(p, attnSet){
   return '<button type="button" class="ttBang'+(on?' on':'')+'" data-ttact="attn" data-ttp="'+escapeHtml(p)+'" title="'+(on?'Kritik işaretini kaldır':'Kritik işaretle: bu hücrelere dikkat et')+'">❗</button>'+
     '<button type="button" class="ttFind" data-ttact="sub" data-ttp="'+escapeHtml(p)+'" title="Aynı görevdeki diğer kişileri ve oyunlarını göster (yedek bul)">🔍</button>';
 }
-function ttPersonLine(p, info, attnSet){
+function ttPersonLine(p, info, attnSet, altMap){
   if(info.kast && info.kastOf){
     return '<div class="ttPerson kast">🟡 '+escapeHtml(info.kastOf)+' Kastı: <span class="ttKastNote">'+escapeHtml(info.name||p)+'</span></div>';
   }
@@ -4317,6 +4324,9 @@ function ttPersonLine(p, info, attnSet){
     for(const c of info.kastCoveredList){
       html += '<div class="ttKastNote">↳ '+escapeHtml(c.raw||'')+' için kastı var: <b>'+escapeHtml(c.kastName)+'</b></div>';
     }
+  }
+  if(altMap && altMap[p] && altMap[p].length){
+    html += '<div class="ttKastNote">↳ ✅ Alternatif olarak eklendi: <b>'+altMap[p].map(x=>escapeHtml(x.name)).join(', ')+'</b></div>';
   }
   return html;
 }
@@ -4345,6 +4355,7 @@ function showTooltipFor(r,c,ev){
     const gamesR = rowGames(m,r);
     const confR = gamesR.length>=2 ? buildConflict(gamesR) : {people:{}, hasCritical:false};
     const attnSetR = rowAttnSet(m, gamesR);
+    const altMapR = rowAltMap(m, gamesR);
     const mine = gamesR.find(g=>g.row===r && g.col===c);
     let hR = '<div class="ttHead">↩ Turne dönüş günü</div>';
     if(raw) hR += '<div>'+escapeHtml(raw)+'</div>';
@@ -4356,7 +4367,7 @@ function showTooltipFor(r,c,ev){
       { const an = Object.keys(confR.people).filter(q=>attnSetR.has(q)).map(q=>confR.people[q].name||q);
         if(an.length) hR += '<div class="ttWarn">❗ DİKKAT — kritik işaretli: <b>'+escapeHtml(an.join(', '))+'</b></div>'; }
       for(const [p,info] of Object.entries(confR.people).sort(ttPersonSort)){
-        hR += ttPersonLine(p, info, attnSetR);
+        hR += ttPersonLine(p, info, attnSetR, altMapR);
         hR += ttRoleLines(gamesR, p);
       }
     } else {
@@ -4404,6 +4415,7 @@ function showTooltipFor(r,c,ev){
   const games = rowGames(m,r);
   const conflict = games.length>=2 ? buildConflict(games) : {people:{}, hasCritical:false};
   const attnSet = rowAttnSet(m, games);
+  const altMap = rowAltMap(m, games);
 
   const dateText = dateTextOfRow(m,r);
   const timeText = timeTextOfRow(m,r);
@@ -4428,7 +4440,7 @@ function showTooltipFor(r,c,ev){
     } else if(!conflict.hasCritical){
       html += '<div class="ttOk">🟢 Ortak kişi(ler) var ama Oyuncu/Figüran çakışması yok:</div>';
       for(const [p,info] of Object.entries(conflict.people).sort(ttPersonSort)){
-        html += ttPersonLine(p, info, attnSet);
+        html += ttPersonLine(p, info, attnSet, altMap);
         html += ttRoleLines(games, p);
       }
     } else {
@@ -4436,7 +4448,7 @@ function showTooltipFor(r,c,ev){
         ? '<div class="ttOk">🟢 Çakışma bu hücrede yok sayıldı (aşağıdaki kayıt bilgi amaçlı)</div>'
         : '<div class="ttWarn">⚠️ Çakışma var</div>';
       for(const [p,info] of Object.entries(conflict.people).sort(ttPersonSort)){
-        html += ttPersonLine(p, info, attnSet);
+        html += ttPersonLine(p, info, attnSet, altMap);
         html += ttRoleLines(games, p);
       }
     }
@@ -4980,7 +4992,9 @@ function showSubstituteFinder(rr,cc,p){
   const qEl = win.querySelector('#swQ'), fEl = win.querySelector('#swFree');
   const render = ()=>{
     const q = normNameKey(qEl.value), onlyFree = fEl.checked;
-    let html = '';
+    const altNow = rowAltMap(m,games)[p] || [];
+    const altSet = new Set(altNow.map(x=>x.pk));
+    let html = altNow.length ? '<div class="swSum">✅ <b>Alternatifler ('+altNow.length+'):</b> '+altNow.map(x=>escapeHtml(x.name)).join(', ')+'</div>' : '';
     for(const g of data){
       const all = g.list;
       const freeN = all.filter(x=>!x.busy.length).length;
@@ -4993,13 +5007,15 @@ function showSubstituteFinder(rr,cc,p){
       if(!list.length){ html += '<div class="swEmpty">'+(all.length?'Filtreye uyan kişi yok.':'Bu görevde başka kişi kayıtlı değil.')+'</div>'; continue; }
       for(const x of list){
         const isBusy = x.busy.length>0;
-        html += '<div class="swRow '+(isBusy?'busy':'free')+'"><div class="swName">'+escapeHtml(x.name)+(x.kast?' <span class="pill gray">kast</span>':'')+
+        const isSel = altSet.has(x.pk);
+        html += '<div class="swRow '+(isBusy?'busy':'free')+(isSel?' sel':'')+'"><div class="swName">'+escapeHtml(x.name)+(x.kast?' <span class="pill gray">kast</span>':'')+
           '<span class="pill '+(isBusy?'busy':'free')+'">'+(isBusy?'Meşgul':'Müsait')+'</span></div>'+
           (isBusy?'<div class="swBusy">Bu gün: '+escapeHtml(x.busy.join(' + '))+'</div>':'')+
           '<div class="swPlays">'+x.plays.map(pl=>{
             const extra = pl.roles.filter(r=>r!==g.rt).join(', ');
             return '<span class="swTag" title="'+escapeHtml(pl.roles.join(', '))+'">'+escapeHtml(pl.play)+(extra?' · '+escapeHtml(extra):'')+'</span>';
-          }).join('')+'</div></div>';
+          }).join('')+'</div>'+
+          '<div class="swAct"><button type="button" class="swAlt" data-altpk="'+escapeHtml(x.pk)+'" data-altname="'+escapeHtml(x.name)+'">'+(isSel?'✓ Alternatif olarak eklendi — kaldır':'＋ Alternatif olarak ekle')+'</button></div></div>';
       }
     }
     if(!data.length) html = '<div class="swEmpty">Bu kişi için görev bilgisi bulunamadı.</div>';
@@ -5007,6 +5023,12 @@ function showSubstituteFinder(rr,cc,p){
   };
   render();
   qEl.addEventListener('input', render); fEl.addEventListener('change', render);
+  body.addEventListener('click', e=>{
+    const b = e.target.closest && e.target.closest('[data-altpk]'); if(!b) return;
+    const st = body.scrollTop;
+    toggleAltPerson(rr, p, b.dataset.altpk, b.dataset.altname);
+    render(); body.scrollTop = st;
+  });
 
   /* Kapatma: YALNIZCA ✕ veya Kapat düğmesi (Esc / dış tıklama kapatmaz) */
   const close = ()=>{ savePos(); win.remove(); };
@@ -5036,13 +5058,12 @@ function showSubstituteFinder(rr,cc,p){
 }
 /* ❗ Kişi bazlı "kritik / dikkat et" işareti: o günün çakışmasındaki kişinin
    bulunduğu TÜM oyun hücrelerine cell.attn=[kişiAnahtarı,...] olarak yazılır. */
-function toggleAttnPerson(rr,cc,p){
-  const m = curMonth(); if(!p || lockGuard(m)) return; snapshot();
+/* Aynı oyun ikilisinin ayın tüm çakışma günlerindeki hücre anahtarları (❗ ve alternatif için ortak) */
+function attnTargets(m, rr, p){
   const sigOf = games => [...new Set(games.filter(g=>{ const cw=crewOf(g.key); return cw && cw[p]; }).map(g=>g.ckey||g.key))].sort().join('|');
   const baseGames = rowGames(m,rr);
   const baseSig = sigOf(baseGames);
-  const turnOn = !rowAttnSet(m,baseGames).has(p);
-  const seen = new Set(); let n=0, days=0;
+  const keys = [], seen = new Set(); let days = 0;
   for(let r=2; r<m.rows; r++){
     const games = (r===rr) ? baseGames : rowGames(m,r);
     if(games.length<2) continue;
@@ -5050,16 +5071,55 @@ function toggleAttnPerson(rr,cc,p){
     days++;
     for(const g of games){
       const cw = crewOf(g.key); if(!cw || !cw[p]) continue;
-      const k = g.row+'_'+g.col; if(seen.has(k)) continue; seen.add(k);
-      const cur = {...(m.cells[k]||{v:''})};
-      let a = Array.isArray(cur.attn) ? cur.attn.filter(x=>x!==p) : [];
-      if(turnOn) a.push(p);
-      if(a.length) cur.attn = a; else delete cur.attn;
-      m.cells[k] = cur; n++;
+      const k = g.row+'_'+g.col; if(seen.has(k)) continue; seen.add(k); keys.push(k);
     }
   }
+  return {keys, days, baseGames};
+}
+function rowAltMap(m, games){
+  const out = {};
+  for(const g of games){
+    const al = (m.cells[g.row+'_'+g.col]||{}).alts;
+    if(!al) continue;
+    for(const p in al){
+      const arr = out[p] = out[p] || [];
+      for(const x of al[p]) if(!arr.some(y=>y.pk===x.pk)) arr.push(x);
+    }
+  }
+  return out;
+}
+function toggleAttnPerson(rr,cc,p){
+  const m = curMonth(); if(!p || lockGuard(m)) return; snapshot();
+  const t = attnTargets(m,rr,p);
+  const turnOn = !rowAttnSet(m,t.baseGames).has(p);
+  for(const k of t.keys){
+    const cur = {...(m.cells[k]||{v:''})};
+    let a = Array.isArray(cur.attn) ? cur.attn.filter(x=>x!==p) : [];
+    if(turnOn) a.push(p);
+    if(a.length) cur.attn = a; else delete cur.attn;
+    m.cells[k] = cur;
+  }
   saveState(); renderSheet(); renderPrint();
-  setStatus(turnOn ? '❗ Kritik işaretlendi ('+n+' hücre, '+days+' gün).' : 'Kritik işareti kaldırıldı ('+n+' hücre).');
+  setStatus(turnOn ? '❗ Kritik işaretlendi ('+t.keys.length+' hücre, '+t.days+' gün).' : 'Kritik işareti kaldırıldı ('+t.keys.length+' hücre).');
+}
+/* Seçilen kişiyi p için "alternatif" olarak ekler/kaldırır (❗ ile aynı günlere yayılır). */
+function toggleAltPerson(rr,p,altPk,altName){
+  const m = curMonth(); if(!p || !altPk || lockGuard(m)) return false; snapshot();
+  const t = attnTargets(m,rr,p);
+  const now = (rowAltMap(m,t.baseGames)[p]||[]);
+  const turnOn = !now.some(x=>x.pk===altPk);
+  for(const k of t.keys){
+    const cur = {...(m.cells[k]||{v:''})};
+    const alts = {...(cur.alts||{})};
+    const list = (alts[p]||[]).filter(x=>x.pk!==altPk);
+    if(turnOn) list.push({pk:altPk, name:altName});
+    if(list.length) alts[p]=list; else delete alts[p];
+    if(Object.keys(alts).length) cur.alts = alts; else delete cur.alts;
+    m.cells[k] = cur;
+  }
+  saveState(); renderSheet(); renderPrint();
+  setStatus(turnOn ? '✅ '+altName+' alternatif olarak eklendi ('+t.keys.length+' hücre).' : altName+' alternatiflikten çıkarıldı.');
+  return turnOn;
 }
 function opIgnoreConflict(){
   const m = curMonth(); if(lockGuard(m)) return; snapshot();
