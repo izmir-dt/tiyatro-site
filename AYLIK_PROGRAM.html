@@ -1309,6 +1309,11 @@ table.sheet td.cell{min-width:86px;height:29px}
 #subWin .swBusy{font-size:12px;color:#9a211d;margin-top:3px}
 #subWin .swPlays{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
 #subWin .swTag{font-size:11px;background:#f3ece3;color:#5a4636;border-radius:6px;padding:2px 7px}
+#subWin .swPlaysLbl{margin-top:9px;font-size:10.5px;font-weight:800;letter-spacing:.7px;text-transform:uppercase;color:#a58f78}
+#subWin .swPlays{margin-top:5px;gap:5px}
+#subWin .swTag{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;line-height:1.3;background:#fff;color:#3b2a1e;border:1px solid #e4d8ca;border-radius:999px;padding:3px 10px 3px 9px;box-shadow:0 1px 0 rgba(90,70,54,.05)}
+#subWin .swDot{flex:none;width:6px;height:6px;border-radius:50%;background:#b8892b}
+#subWin .swRole{font-size:10.5px;font-weight:700;color:#7a1a2b;background:#f6e9d6;border-radius:99px;padding:1px 7px}
 #subWin .swRow.sel{border-color:#d9a400;border-left-color:#d9a400;background:#fffbe8}
 #subWin .swAct{display:flex;justify-content:flex-end;margin-top:6px}
 #subWin .swAlt{cursor:pointer;border:1px solid #cdbfae;background:#fff;color:#5a4636;border-radius:8px;padding:4px 10px;font:inherit;font-size:12px;font-weight:700}
@@ -5060,6 +5065,16 @@ function swApplyFocus(){
   });
 }
 (function(){ const o=renderSheet; renderSheet=function(){ const r=o.apply(this,arguments); try{swApplyFocus();}catch(e){} return r; }; })();
+/* TAMAMEN BÜYÜK HARFLİ oyun adlarını okunur hâle getirir (BAĞDAT RÜZGARINDA → Bağdat Rüzgarında); karışık harfli adlara dokunmaz */
+function swTitleCase(t){
+  t=String(t||'').trim();
+  if(!t || t!==t.toLocaleUpperCase('tr-TR')) return t;
+  const small=new Set(['ve','ile','de','da','ki','mi','mı','mu','mü']);
+  return t.toLocaleLowerCase('tr-TR').split(/(\s+)/).map((w,i)=>{
+    if(!w.trim() || (i>0 && small.has(w))) return w;
+    return w.charAt(0).toLocaleUpperCase('tr-TR')+w.slice(1);
+  }).join('');
+}
 function showSubstituteFinder(rr,cc,p){
   const m = curMonth(); if(!p) return;
   const games = rowGames(m,rr);
@@ -5145,9 +5160,9 @@ function showSubstituteFinder(rr,cc,p){
         html += '<div class="swRow '+(isBusy?'busy':'free')+(isSel?' sel':'')+'"><div class="swName">'+escapeHtml(x.name)+(x.kast?' <span class="pill gray">kast</span>':'')+
           '<span class="pill '+(isBusy?'busy':'free')+'">'+(isBusy?'Meşgul':'Müsait')+'</span></div>'+
           (isBusy?'<div class="swBusy">Bu gün: '+escapeHtml(x.busy.join(' + '))+'</div>':'')+
-          '<div class="swPlays">'+x.plays.map(pl=>{
+          '<div class="swPlaysLbl">Oyunlar · '+x.plays.length+'</div><div class="swPlays">'+x.plays.map(pl=>{
             const extra = pl.roles.filter(r=>r!==g.rt).join(', ');
-            return '<span class="swTag" title="'+escapeHtml(pl.roles.join(', '))+'">'+escapeHtml(pl.play)+(extra?' · '+escapeHtml(extra):'')+'</span>';
+            return '<span class="swTag" title="'+escapeHtml(pl.roles.join(', '))+'"><i class="swDot"></i><span>'+escapeHtml(swTitleCase(pl.play))+'</span>'+(extra?'<span class="swRole">'+escapeHtml(extra)+'</span>':'')+'</span>';
           }).join('')+'</div>'+
           '<div class="swAct"><button type="button" class="swAlt" data-altpk="'+escapeHtml(x.pk)+'" data-altname="'+escapeHtml(x.name)+'">'+(isSel?'✓ Alternatif olarak eklendi — kaldır':'＋ Alternatif olarak ekle')+'</button></div></div>';
       }
