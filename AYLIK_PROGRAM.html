@@ -1263,6 +1263,15 @@ table.sheet td.cell{min-width:86px;height:29px}
 #tooltip .ttSectionLabel{color:#dfc7a7}
 #tooltip .ttBang{margin-left:auto;flex:none;cursor:pointer;border:1px solid rgba(255,255,255,.28);background:rgba(255,255,255,.08);border-radius:7px;padding:1px 7px;font-size:13px;line-height:1.5;font-family:inherit;filter:grayscale(1);opacity:.6;transition:opacity .12s,background .12s}
 #tooltip .ttBang:hover{opacity:1;filter:none}
+#tooltip .ttFind{flex:none;cursor:pointer;border:1px solid rgba(255,255,255,.28);background:rgba(255,255,255,.08);border-radius:7px;padding:1px 7px;font-size:13px;line-height:1.5;font-family:inherit;opacity:.85}
+#tooltip .ttFind:hover{opacity:1;background:rgba(255,255,255,.2)}
+.subBox{max-width:600px !important}
+.subBox h4{margin:14px 0 4px;font-size:13.5px;color:var(--primary)}
+.subBox .subRow{padding:6px 9px;border:1px solid var(--border);border-radius:8px;margin:5px 0;font-size:12.5px;line-height:1.45}
+.subBox .subRow.free{background:#eefaf3;border-color:#a9dcc0}
+.subBox .subRow.busy{background:#fdf1ef;border-color:#e8b9b4}
+.subBox .subPlays{color:#555;font-size:11.5px;margin-top:2px}
+.subBox .subHint{font-size:11.5px;color:#666;margin-top:6px}
 #tooltip .ttBang.on{filter:none;opacity:1;background:#e0a100;border-color:#ffd166}
 #tooltip .ttWarn,#tooltip .ttOk{border-color:rgba(255,255,255,.15)}
 #tooltip .ttWarn{
@@ -4070,6 +4079,7 @@ function initTooltipInteraction(){
     else if(act==='unfreeCell') unmarkFreeTextCell(rr,cc);
     else if(act==='unfreeAll') unmarkAllFreeText(k);
     else if(act==='toggleTourLeg') toggleTourLegCell(rr,cc);
+    else if(act==='sub') showSubstituteFinder(rr,cc,b.dataset.ttp||'');
     else if(act==='attn'){
       const st = tt.scrollTop;
       toggleAttnPerson(rr,cc,b.dataset.ttp||'');
@@ -4267,7 +4277,8 @@ function rowAttnSet(m, games){
 function ttBangBtn(p, attnSet){
   if(!attnSet || String(p).indexOf('__ret_')===0) return '';
   const on = attnSet.has(p);
-  return '<button type="button" class="ttBang'+(on?' on':'')+'" data-ttact="attn" data-ttp="'+escapeHtml(p)+'" title="'+(on?'Kritik işaretini kaldır':'Kritik işaretle: bu hücrelere dikkat et')+'">❗</button>';
+  return '<button type="button" class="ttBang'+(on?' on':'')+'" data-ttact="attn" data-ttp="'+escapeHtml(p)+'" title="'+(on?'Kritik işaretini kaldır':'Kritik işaretle: bu hücrelere dikkat et')+'">❗</button>'+
+    '<button type="button" class="ttFind" data-ttact="sub" data-ttp="'+escapeHtml(p)+'" title="Aynı görevdeki diğer kişileri ve oyunlarını göster (yedek bul)">🔍</button>';
 }
 function ttPersonLine(p, info, attnSet){
   if(info.kast && info.kastOf){
@@ -4882,6 +4893,67 @@ function gotoCell(mi,r,c){
   setSel(r,c,r,c);
   const td = document.querySelector('#sheet td.cell[data-r="'+r+'"][data-c="'+c+'"]');
   if(td) td.scrollIntoView({block:'center', inline:'center'});
+}
+/* 🔍 Yedek bul: kişinin çakışan oyunlardaki görev(ler)ini bulur; aynı görevdeki
+   diğer tüm kişileri (ör. tüm Kondüvitler) ve görevli oldukları oyunları listeler.
+   O günün müsaitliği (aynı tarihteki gösterimleri) yanında gösterilir. */
+function showSubstituteFinder(rr,cc,p){
+  const m = curMonth(); if(!p) return;
+  const games = rowGames(m,rr);
+  const dt = dateTextOfRow(m,rr)||'';
+  const me = (crewOf((games.find(g=>{const cw=crewOf(g.key);return cw&&cw[p];})||{}).key)||{})[p];
+  const myName = (me && me.name) || p;
+  const split = rt=>{ const i=rt.indexOf(' / '); return i<0?{kat:rt,gorev:''}:{kat:rt.slice(0,i),gorev:rt.slice(i+3)}; };
+  const disp = {};
+  for(const c of (state.crew||[])){ const ok=normNameKey(c.play); if(ok && !disp[ok]) disp[ok]=String(c.play).trim(); }
+  const groups = {}; /* rt -> {kat,gorev} */
+  for(const g of games){
+    const cw = crewOf(g.key); if(!cw || !cw[p]) continue;
+    for(const rt of (cw[p].roles||[])) if(!groups[rt]) groups[rt]=split(rt);
+  }
+  const busyOf = pk=>{
+    const out=[];
+    for(const g of games){ const cw=crewOf(g.key); if(cw && cw[pk]) out.push(g.raw+(g.time?' ('+g.time+')':'')); }
+    return out;
+  };
+  let body='';
+  const rts = Object.keys(groups);
+  if(!rts.length) body = '<div>Bu kişi için görev bilgisi bulunamadı.</div>';
+  for(const rt of rts){
+    const {kat,gorev} = groups[rt];
+    const nk = normNameKey(kat), ng = normNameKey(gorev);
+    const cand = {};
+    for(const ok in PEOPLE_MAP){
+      for(const pk in PEOPLE_MAP[ok]){
+        if(pk===p) continue;
+        const info = PEOPLE_MAP[ok][pk];
+        const hits = (info.roles||[]).filter(r2=>{ const q=split(r2); return (nk && normNameKey(q.kat)===nk) || (ng && normNameKey(q.gorev)===ng); });
+        if(!hits.length) continue;
+        (cand[pk] = cand[pk] || {name:info.name||pk, kast:!!info.kast, plays:[]}).plays.push((disp[ok]||ok)+' — '+hits.join(', '));
+      }
+    }
+    const list = Object.keys(cand).map(pk=>({pk, ...cand[pk], busy:busyOf(pk)}))
+      .sort((a,b)=>(a.busy.length?1:0)-(b.busy.length?1:0) || a.name.localeCompare(b.name,'tr'));
+    body += '<h4>'+escapeHtml(rt)+' — aynı görevdekiler ('+list.length+')</h4>';
+    if(!list.length) body += '<div class="subHint">Bu görevde başka kişi kayıtlı değil.</div>';
+    for(const x of list){
+      body += '<div class="subRow '+(x.busy.length?'busy':'free')+'"><b>'+(x.busy.length?'🔴 ':'🟢 ')+escapeHtml(x.name)+'</b>'+(x.kast?' <i>(kast)</i>':'')+
+        ' — '+(x.busy.length ? 'bu gün: '+escapeHtml(x.busy.join(' + ')) : 'bu gün müsait')+
+        '<div class="subPlays">Görevli olduğu oyunlar: '+x.plays.map(escapeHtml).join(' · ')+'</div></div>';
+    }
+  }
+  const back = document.createElement('div');
+  back.className = 'modal-back active';
+  back.innerHTML = '<div class="modal subBox"><h3 style="margin:0 0 4px">🔍 Aynı görevdekiler — '+escapeHtml(myName)+'</h3>'+
+    '<div style="font-size:12.5px;color:#555">'+escapeHtml(dt)+' için müsaitlik gösteriliyor.</div>'+body+
+    '<div class="subHint">Müsaitlik yalnızca bu tarihteki (açık ay) gösterimlere göre hesaplanır; farklı ayı görmek için “Müsaitlik” sekmesini kullanın.</div>'+
+    '<div class="row"><button class="btn" id="subClose">Kapat</button></div></div>';
+  document.body.appendChild(back);
+  const close=()=>{ back.remove(); document.removeEventListener('keydown',onKey); };
+  const onKey=e=>{ if(e.key==='Escape') close(); };
+  document.addEventListener('keydown',onKey);
+  back.querySelector('#subClose').onclick=close;
+  back.onclick=e=>{ if(e.target===back) close(); };
 }
 /* ❗ Kişi bazlı "kritik / dikkat et" işareti: o günün çakışmasındaki kişinin
    bulunduğu TÜM oyun hücrelerine cell.attn=[kişiAnahtarı,...] olarak yazılır. */
