@@ -1529,6 +1529,9 @@ table.sheet td.cell{min-width:86px;height:29px}
       <button type="button" class="titlebar-btn" id="previewTabBtn" title="Bu ayın programını, çakışma ve not özetiyle birlikte yeni sekmede önizle">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
         Program Önizleme</button>
+      <button type="button" class="titlebar-btn" id="monthlyCrewRefreshBtn" title="Kadro ve görev kayıtlarını Google E-Tablo'dan hemen yenile">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/></svg>
+        Şimdi Yenile</button>
       <button type="button" id="cbTip" aria-pressed="true" title="Hücre üzerine gelince çıkan bilgi balonunu aç/kapat (F9)">💬 Bilgi Balonu: Açık</button>
       <div style="position:relative;display:inline-flex">
         <button type="button" class="titlebar-btn" id="notesPopBtn" title="Sağ tık ile eklediğiniz hücre notlarını göster">
@@ -1640,6 +1643,14 @@ table.sheet td.cell{min-width:86px;height:29px}
 
 <section id="showings" role="tabpanel">
   <div class="play-pane-title" style="margin:2px 2px 14px">📅 Gösterim Takvimi <small>Bir oyun seçin — hangi ayda kaç temsil verildiğini görün.</small></div>
+  <div class="controls" style="margin-bottom:14px">
+    <span class="cmd-label">Gösterim raporu</span>
+    <select id="showReportMonth" aria-label="Rapor ayı">
+      <option value="all">Tüm aylar</option>
+    </select>
+    <button type="button" class="btn small solid" id="showReportBtn">▦ Gösterim Raporu Oluştur</button>
+    <span style="color:var(--muted);font-size:12px">Oyun oyun, tarih tarih tablo halinde açılır.</span>
+  </div>
   <div class="pl-wrap">
     <aside class="pl-side">
       <div class="pl-side-h">
@@ -6709,7 +6720,7 @@ function renderPlayDetail(byPlay){
                 : crewState==='cache'
                   ? '<span>ℹ Yerel kopya gösteriliyor (son çekilen veri).</span>'
                   : `<span>✅ Google E-Tablo ile eşit · ${(state.crew||[]).length} kayıt</span>`}
-            <button class="btn ghost small" id="crewSyncReload">${crewState==='loading'?'Yenileniyor…':'🔄 Şimdi Yenile'}</button>
+
           </div>
           <a class="btn small" id="crewSheetLink" href="https://docs.google.com/spreadsheets/d/1sIzswZnMkyRPJejAsE_ylSKzAF0RmFiACP4jYtz-AE0/edit?pli=1&gid=831363206#gid=831363206" target="_blank" rel="noopener" style="text-decoration:none;display:inline-flex;align-items:center;gap:6px">📊 Google E-Tablo'da Düzenle</a>
         </div>
@@ -6775,14 +6786,6 @@ function renderPlayDetail(byPlay){
     playDetailTab=b.dataset.playTab;
     renderPlayDetail(byPlay);
   });
-  { const csr=document.getElementById('crewSyncReload');
-    if(csr) csr.onclick=async ()=>{
-      setStatus('Google E-Tablo ile senkronize ediliyor…');
-      await loadCrewSheet(true);
-      renderPlayDetail();
-      setStatus(crewState==='ok' ? 'Kadro Google E-Tablo ile güncellendi.' : 'Senkronizasyon tamamlanamadı, yerel kopya gösteriliyor.');
-    };
-  }
   const nameEl=document.getElementById('plName');
   const saveName=()=>{
     const v=nameEl.textContent.trim();
@@ -7440,6 +7443,36 @@ function openMonthPreviewTab(){
   w.document.open(); w.document.write(html); w.document.close();
 }
 
+/* === Oyun / tarih bazlı gösterim raporu === */
+function refreshShowReportMonths(){
+  const sel=document.getElementById('showReportMonth');
+  if(!sel) return;
+  const prev=sel.value;
+  sel.innerHTML='<option value="all">Tüm aylar</option>'+sortedMonthIdx().map(i=>`<option value="${i}">${escapeHtml(state.months[i].name)}</option>`).join('');
+  if(Array.prototype.some.call(sel.options,o=>o.value===prev)) sel.value=prev;
+}
+function openShowingsReport(){
+  const sel=document.getElementById('showReportMonth');
+  const chosen=sel ? sel.value : 'all';
+  const allowed=chosen==='all' ? null : Number(chosen);
+  const plays=(state.plays||[]).filter(p=>!isArchivedPlayName(p)).sort((a,b)=>a.localeCompare(b,'tr'));
+  const groups=plays.map(play=>({play,rows:playOccurrenceList(play).filter(o=>allowed===null || o.mi===allowed)})).filter(g=>g.rows.length);
+  const total=groups.reduce((n,g)=>n+g.rows.length,0);
+  const period=allowed===null ? 'Tüm Aylar' : ((state.months[allowed]||{}).name||'Seçili Ay');
+  const w=window.open('', '_blank');
+  if(!w){ siteMessage('Tarayıcı rapor sekmesini engelledi. Açılır pencere iznini verin.','warn','Gösterim raporu'); return; }
+  const esc=escapeHtml;
+  const rows=groups.length ? groups.map(g=>
+    `<tbody><tr class="game"><th colspan="6">${esc(g.play)} <span>${g.rows.length} gösterim</span></th></tr>`+
+    g.rows.map(o=>`<tr><td>${esc(g.play)}</td><td>${esc(o.month||'')}</td><td>${esc(o.date||'Tarih yok')}</td><td>${esc(o.time||'—')}</td><td>${esc(o.stage||'—')}</td><td>${esc(o.note||'')}</td></tr>`).join('')+'</tbody>'
+  ).join('') : '<tbody><tr><td colspan="6" class="empty">Seçilen dönem için gösterim kaydı bulunamadı.</td></tr></tbody>';
+  const html='<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'+
+    '<title>'+esc(period)+' — Gösterim Raporu</title><style>'+
+    'body{margin:0;background:#faf7f2;color:#1a0f0a;font:13px Arial,sans-serif}.head{background:#6b1220;color:#fff;padding:18px 24px;display:flex;align-items:center;gap:16px}.head h1{margin:0;font:700 22px Georgia,serif}.head p{margin:3px 0 0;opacity:.85}.head button{margin-left:auto;border:0;border-radius:6px;background:#b8892b;color:#fff;padding:9px 14px;font-weight:700;cursor:pointer}.wrap{padding:20px 24px 48px}.summary{margin-bottom:14px;color:#6b1220;font-weight:700}.table-wrap{overflow:auto;background:#fff;border:1px solid #d8ccb3;border-radius:8px}table{width:100%;border-collapse:collapse;min-width:850px}thead th{position:sticky;top:0;background:#efe7d8;color:#6b1220;text-align:left;padding:9px;border-bottom:1px solid #c9b98f;font-size:11px;text-transform:uppercase}td{padding:8px 9px;border-bottom:1px solid #eee5d6;vertical-align:top}.game th{background:#6b1220;color:#fff;text-align:left;padding:9px 10px}.game span{float:right;background:#b8892b;padding:2px 8px;border-radius:10px;font:700 11px Arial}.empty{text-align:center;padding:28px;color:#7a6a58}@media print{.head button{display:none}.wrap{padding:10px}.table-wrap{border:0}thead th{position:static}.game{break-after:avoid}.game th{background:#ddd!important;color:#000!important}}'+
+    '</style></head><body><div class="head"><div><h1>Gösterim Raporu</h1><p>İzmir Devlet Tiyatrosu · '+esc(period)+'</p></div><button onclick="window.print()">Yazdır / PDF</button></div><div class="wrap"><div class="summary">'+groups.length+' oyun · '+total+' gösterim</div><div class="table-wrap"><table><thead><tr><th>Oyun</th><th>Ay</th><th>Tarih</th><th>Saat</th><th>Sahne</th><th>Not</th></tr></thead>'+rows+'</table></div></div></body></html>';
+  w.document.open(); w.document.write(html); w.document.close();
+}
+
 /* Hızlı butonlar HER ZAMAN sadece görüntülenen ayı işler; kâğıt/boyut
    ayarları menülerdeki seçimden aynen alınır. */
 function withCurrentMonthOnly(selId, fn){
@@ -7454,6 +7487,17 @@ function withCurrentMonthOnly(selId, fn){
 document.getElementById('quickPrintBtn').onclick = ()=>withCurrentMonthOnly('printMonthSel', ()=>printProgram());
 document.getElementById('quickExcelBtn').onclick = ()=>withCurrentMonthOnly('expExcelMonth', ()=>exportExcel());
 document.getElementById('previewTabBtn').onclick = ()=>openMonthPreviewTab();
+document.getElementById('monthlyCrewRefreshBtn').onclick = async e=>{
+  const btn=e.currentTarget;
+  btn.disabled=true; btn.lastChild.textContent=' Yenileniyor…';
+  setStatus('Kadro ve görev kayıtları yenileniyor…');
+  await loadCrewSheet(true);
+  renderPlays(); renderSheet();
+  btn.disabled=false; btn.lastChild.textContent=' Şimdi Yenile';
+  setStatus(crewState==='ok' ? 'Kadro ve görev kayıtları güncellendi.' : 'Yenileme tamamlanamadı, yerel kopya gösteriliyor.');
+};
+document.getElementById('showReportBtn').onclick = openShowingsReport;
+refreshShowReportMonths();
 document.getElementById('printPreviewBtn').onclick = ()=>printProgram(document.getElementById('printSizePreview')?.value);
 document.getElementById('printSize').onchange = e=>{
   setPrintSize(e.target.value);
