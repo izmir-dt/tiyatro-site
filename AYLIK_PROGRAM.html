@@ -1271,6 +1271,13 @@ table.sheet td.cell{min-width:86px;height:29px}
 #tooltip .ttBang:hover{opacity:1;filter:none}
 #tooltip .ttFind{flex:none;cursor:pointer;border:1px solid rgba(255,255,255,.28);background:rgba(255,255,255,.08);border-radius:7px;padding:1px 7px;font-size:13px;line-height:1.5;font-family:inherit;opacity:.85}
 #tooltip .ttFind:hover{opacity:1;background:rgba(255,255,255,.2)}
+#tooltip .ttWatch{flex:none;cursor:pointer;border:1px solid rgba(255,255,255,.28);background:rgba(255,255,255,.08);border-radius:7px;padding:1px 7px;font-size:13px;line-height:1.5;font-family:inherit;filter:grayscale(1);opacity:.6;transition:opacity .12s,background .12s}
+#tooltip .ttWatch:hover{opacity:1;filter:none}
+#tooltip .ttWatch.on{filter:none;opacity:1;background:#2f7fd0;border-color:#8fc1ff}
+#tooltip .ttAttnMeta{margin:1px 0 5px 18px;font-size:12px;line-height:1.35;opacity:.92}
+#tooltip .ttAttnMeta .ttMetaWho{opacity:.7}
+#tooltip .ttNoteBtn{cursor:pointer;border:1px dashed rgba(255,255,255,.35);background:transparent;color:inherit;border-radius:6px;padding:0 6px;font-size:11px;font-family:inherit;opacity:.8}
+#tooltip .ttNoteBtn:hover{opacity:1;background:rgba(255,255,255,.12)}
 #subWin{position:fixed;z-index:100001;top:96px;right:24px;width:470px;height:min(78vh,720px);min-width:340px;min-height:260px;max-width:96vw;max-height:94vh;display:flex;flex-direction:column;background:#fff;border:1px solid #d9cfc4;border-radius:14px;box-shadow:0 24px 60px -14px rgba(40,10,10,.5),0 4px 14px rgba(0,0,0,.18);resize:both;overflow:hidden;font-family:'Manrope',system-ui,sans-serif;color:#2a1c14}
 #subWin .swHead{flex:none;display:flex;align-items:center;gap:10px;padding:11px 12px 11px 16px;background:linear-gradient(180deg,#7a1a2b,#5e1120);color:#fff;cursor:move;user-select:none;touch-action:none}
 #subWin .swTitle{flex:1;min-width:0}
@@ -1355,6 +1362,18 @@ table.sheet td.cell{min-width:86px;height:29px}
 }
 .notes-popover-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
 .notes-popover-head b{font-size:13px}
+#attnPopover{width:420px}
+.attn-count{background:#c47f00 !important}
+.attn-card{background:#fff;border:1px solid var(--border);border-left:4px solid #e0a100;border-radius:8px;padding:8px 10px;margin-bottom:8px;font-size:12px;line-height:1.4}
+.attn-card.resolved{border-left-color:#2e9e6a;opacity:.85}
+.attn-head{display:flex;align-items:center;gap:6px;font-size:13px}
+.attn-pill{flex:none;font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:99px;background:#e4f0fc;color:#1d5a99}
+.attn-note{margin-top:4px;color:#7a4a00}
+.attn-note small{color:var(--muted)}
+.attn-row{display:flex;align-items:center;gap:6px;padding:4px 0;margin-top:4px;border-top:1px dashed var(--border)}
+.attn-sub{font-size:11px;color:var(--muted)}
+.attn-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.attn-stale{display:flex;align-items:center;gap:6px;margin-top:6px;padding:4px 8px;background:#f3f1ea;border-radius:6px;color:var(--muted);font-size:11px}
 @media(max-width:520px){.notes-popover{position:fixed;top:auto;bottom:0;left:0;right:0;width:auto;max-width:none;max-height:60vh;border-radius:12px 12px 0 0}}
 .secondary-notes{
   margin-top:14px;border:1px solid var(--border);border-radius:9px;
@@ -1587,6 +1606,18 @@ table.sheet td.cell{min-width:86px;height:29px}
             <button type="button" id="notesPopClose" class="btn ghost small" aria-label="Kapat">✕</button>
           </div>
           <div id="notesList"></div>
+        </div>
+      </div>
+      <div style="position:relative;display:inline-flex">
+        <button type="button" class="titlebar-btn" id="attnPopBtn" title="Kritik işaretlediğiniz kişileri, çakışma günlerini ve nedenlerini listele">
+          ❗ Kritik <span id="attnBadge" class="quick-notes-count attn-count" style="display:none"></span>
+        </button>
+        <div id="attnPopover" class="notes-popover" hidden>
+          <div class="notes-popover-head">
+            <b>Kritik işaretliler</b>
+            <button type="button" id="attnPopClose" class="btn ghost small" aria-label="Kapat">✕</button>
+          </div>
+          <div id="attnList"></div>
         </div>
       </div>
     </div>
@@ -2042,6 +2073,8 @@ function normalizeMonth(m){
   const out = {name:m.name, rows:m.rows, cols:m.cols, cells, merges:(m.merges||[]).map(x=>x.slice())};
   if(m.siteNote) out.siteNote = m.siteNote;
   if(m.rowBg) out.rowBg = {...m.rowBg};
+  if(Array.isArray(m.attnWatch) && m.attnWatch.length) out.attnWatch = m.attnWatch.slice();
+  if(m.attnMeta && typeof m.attnMeta==='object' && Object.keys(m.attnMeta).length) out.attnMeta = JSON.parse(JSON.stringify(m.attnMeta));
   return out;
 }
 const BKKEY = LSKEY + '_backups';
@@ -2265,14 +2298,15 @@ function collectAttnItems(m){
     let conflict = null;
     for(const g of games){
       const cell = m.cells[g.row+'_'+g.col] || {};
-      if(!Array.isArray(cell.attn) || !cell.attn.length || isArchiveCell(cell)) continue;
+      const attnL = gameAttn(m,g);
+      if(!attnL.length || isArchiveCell(cell)) continue;
       conflict = conflict || buildConflict(games);
-      for(const p of cell.attn){
+      for(const p of attnL){
         const info = conflict.people[p]; if(!info) continue;
         const k = normNameKey(dt)+'|'+p; if(seen.has(k)) continue; seen.add(k);
         const oyunlar = games.filter(x=>{ const cw=crewOf(x.key); return cw && cw[p]; }).map(x=>x.raw);
         const alts = ((cell.alts||{})[p]||[]).map(x=>x.name);
-        items.push({dt, name:info.name||p, oyunlar, alts});
+        items.push({dt, name:info.name||p, oyunlar, alts, note:(attnMetaOf(m,p)||{}).note||''});
       }
     }
   }
@@ -2283,7 +2317,7 @@ async function publishProgram(){
   const m = curMonth();
   { const ai = collectAttnItems(m);
     if(ai.length){
-      const lines = ai.slice(0,12).map(x=>'• '+x.name+' — '+x.dt+': '+x.oyunlar.join(' + ')+(x.alts&&x.alts.length?' → alternatif: '+x.alts.join(', '):' → alternatif seçilmedi'));
+      const lines = ai.slice(0,12).map(x=>'• '+x.name+' — '+x.dt+': '+x.oyunlar.join(' + ')+(x.alts&&x.alts.length?' → alternatif: '+x.alts.join(', '):' → alternatif seçilmedi')+(x.note?' ['+x.note+']':''));
       const extra = ai.length>12 ? '\n… ve '+(ai.length-12)+' işaret daha' : '';
       const ok = await siteConfirm('❗ Kritik işaretlediğiniz '+ai.length+' çakışma var:\n\n'+lines.join('\n')+extra+'\n\nBunları kontrol ettiniz mi? Emin misiniz, kesinleştirmeye devam edilsin mi?','❗ Kritik işaretli çakışmalar');
       if(!ok) return;
@@ -3689,8 +3723,10 @@ function renderSheet(){
 
     // Konflikt hesabı (sadece veri satırlarında)
     let conflict = {people:{}, hasCritical:false};
+    let rowGamesCache = null;
     if(r>=2){
       const games = rowGames(m,r);
+      rowGamesCache = games;
       if(games.length>=2) conflict = buildConflict(games);
     }
 
@@ -3725,8 +3761,9 @@ function renderSheet(){
       }
       if(isFreeTextCell(cell) && cell.v){ td.classList.add('freetext'); td.classList.remove('conflict'); }
       if(isArchiveCell(cell) && cell.v){ td.classList.add('archived'); td.classList.remove('conflict'); }
-      if(r>=2 && !isArchiveCell(cell) && !isFreeTextCell(cell) && (cell.attn || cell.alts)){
-        const A = Array.isArray(cell.attn) ? cell.attn : [];
+      if(r>=2 && !isArchiveCell(cell) && !isFreeTextCell(cell) && (cell.attn || cell.alts || attnWatchOf(m).length)){
+        const gmA = rowGamesCache ? rowGamesCache.find(x=>x.row===r && x.col===c) : null;
+        const A = gmA ? gameAttn(m,gmA) : (Array.isArray(cell.attn) ? cell.attn : []);
         const AL = cell.alts || {};
         const pend = A.filter(q=>conflict.people[q] && !(AL[q] && AL[q].length));
         const cov = Object.keys(AL).filter(q=>AL[q] && AL[q].length && conflict.people[q]);
@@ -4126,6 +4163,14 @@ function initTooltipInteraction(){
       tt.scrollTop = st;
       return;
     }
+    else if(act==='watch'){
+      const st = tt.scrollTop;
+      toggleAttnWatch(b.dataset.ttp||'');
+      showTooltipFor(rr,cc,null);
+      tt.scrollTop = st;
+      return;
+    }
+    else if(act==='attnnote'){ editAttnNote(b.dataset.ttp||''); }
     window.__ttPin=null;
     hideTooltipNow(true);
   });
@@ -4314,18 +4359,58 @@ function ttPersonSort(a,b){
   return ttPersonRank(a[1])-ttPersonRank(b[1]) || (a[1].name||a[0]).localeCompare(b[1].name||b[0],'tr');
 }
 /* ❗ "Kritik / dikkat et" düğmesi — kişi bazlı, kişinin olduğu tüm çakışan hücrelere işlenir */
+/* ---- ❗ Kritik işaret yardımcıları: ay boyu izleme (m.attnWatch), neden notu (m.attnMeta) ---- */
+function attnWatchOf(m){ return Array.isArray(m.attnWatch) ? m.attnWatch : []; }
+function attnMetaOf(m,p){ return (m.attnMeta && m.attnMeta[p]) || null; }
+/* Bir oyun hücresindeki etkin kritik kişiler: hücreye yazılı işaretler + ay boyu izlenenlerden
+   o oyunun kadrosunda olanlar */
+function gameAttn(m,g){
+  const cell = m.cells[g.row+'_'+g.col] || {};
+  const out = Array.isArray(cell.attn) ? cell.attn.slice() : [];
+  const W = attnWatchOf(m);
+  if(W.length){ const cw = crewOf(g.key); if(cw) for(const q of W) if(cw[q] && !out.includes(q)) out.push(q); }
+  return out;
+}
 function rowAttnSet(m, games){
   const out = new Set();
-  for(const g of games){
-    const a = (m.cells[g.row+'_'+g.col]||{}).attn;
-    if(Array.isArray(a)) a.forEach(x=>out.add(x));
-  }
+  for(const g of games) gameAttn(m,g).forEach(x=>out.add(x));
   return out;
+}
+function attnFindName(m,p){
+  for(const k in m.cells){
+    const v = String(m.cells[k].v||'').trim(); if(!v) continue;
+    const cw = crewOf(parseGame(v).key);
+    if(cw && cw[p]) return cw[p].name || p;
+  }
+  return p;
+}
+function attnByName(){ try{ const v=localStorage.getItem('attnBy'); return (v && v!=='-') ? v : ''; }catch(e){ return ''; } }
+function attnFmtAt(iso){
+  if(!iso) return ''; const d = new Date(iso); if(isNaN(d)) return '';
+  return d.toLocaleString('tr-TR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+}
+function attnEnsureMeta(m,p){
+  m.attnMeta = m.attnMeta || {};
+  if(!m.attnMeta[p]){
+    const meta = {name: attnFindName(m,p), at: new Date().toISOString()};
+    const by = attnByName(); if(by) meta.by = by;
+    m.attnMeta[p] = meta;
+  }
+  return m.attnMeta[p];
+}
+function attnAnywhere(m,p){
+  if(attnWatchOf(m).includes(p)) return true;
+  for(const k in m.cells){ const a = m.cells[k].attn; if(Array.isArray(a) && a.includes(p)) return true; }
+  return false;
+}
+function attnCleanupMeta(m,p){
+  if(m.attnMeta && !attnAnywhere(m,p)){ delete m.attnMeta[p]; if(!Object.keys(m.attnMeta).length) delete m.attnMeta; }
 }
 function ttBangBtn(p, attnSet){
   if(!attnSet || String(p).indexOf('__ret_')===0) return '';
   const on = attnSet.has(p);
   return '<button type="button" class="ttBang'+(on?' on':'')+'" data-ttact="attn" data-ttp="'+escapeHtml(p)+'" title="'+(on?'Kritik işaretini kaldır':'Kritik işaretle: bu hücrelere dikkat et')+'">❗</button>'+
+    '<button type="button" class="ttWatch'+(attnWatchOf(curMonth()).includes(p)?' on':'')+'" data-ttact="watch" data-ttp="'+escapeHtml(p)+'" title="'+(attnWatchOf(curMonth()).includes(p)?'Ay boyu izlemeyi kapat':'Ay boyu izle: bu kişi bu ayda hangi çakışmaya girerse ❗ ile göster')+'">📌</button>'+
     '<button type="button" class="ttFind" data-ttact="sub" data-ttp="'+escapeHtml(p)+'" title="Aynı görevdeki diğer kişileri ve oyunlarını göster (yedek bul)">🔍</button>';
 }
 function ttPersonLine(p, info, attnSet, altMap){
@@ -4341,6 +4426,12 @@ function ttPersonLine(p, info, attnSet, altMap){
   const dot = resolved ? '🟡' : (info.critical ? '🔴' : '🟢');
   const cls = resolved ? 'kast' : (info.critical ? 'crit' : 'soft');
   let html = '<div class="ttPerson '+cls+'">'+dot+' '+escapeHtml(info.name||p)+ttBangBtn(p, attnSet)+'</div>';
+  if(attnSet && attnSet.has(p) && String(p).indexOf('__ret_')!==0){
+    const meta = attnMetaOf(curMonth(), p) || {};
+    const who = [meta.by, attnFmtAt(meta.at)].filter(Boolean).join(' · ');
+    html += '<div class="ttAttnMeta">'+(meta.note ? '📝 '+escapeHtml(meta.note)+(who?' <span class="ttMetaWho">— '+escapeHtml(who)+'</span>':'')+' ' : '')+
+      '<button type="button" class="ttNoteBtn" data-ttact="attnnote" data-ttp="'+escapeHtml(p)+'" title="Bu kişiyi neden kritik işaretlediğinizi yazın">'+(meta.note?'✎ Düzenle':'📝 Neden yaz')+'</button></div>';
+  }
   if(info.kastCoveredList && info.kastCoveredList.length){
     for(const c of info.kastCoveredList){
       html += '<div class="ttKastNote">↳ '+escapeHtml(c.raw||'')+' için kastı var: <b>'+escapeHtml(c.kastName)+'</b></div>';
@@ -5132,8 +5223,167 @@ function toggleAttnPerson(rr,cc,p){
     if(a.length) cur.attn = a; else delete cur.attn;
     m.cells[k] = cur;
   }
+  let wasWatched = false;
+  if(turnOn){ attnEnsureMeta(m,p); }
+  else {
+    if(attnWatchOf(m).includes(p)){ wasWatched = true; m.attnWatch = m.attnWatch.filter(x=>x!==p); if(!m.attnWatch.length) delete m.attnWatch; }
+    attnCleanupMeta(m,p);
+  }
   saveState(); renderSheet(); renderPrint();
-  setStatus(turnOn ? '❗ Kritik işaretlendi ('+t.keys.length+' hücre, '+t.days+' gün).' : 'Kritik işareti kaldırıldı ('+t.keys.length+' hücre).');
+  setStatus(turnOn ? '❗ Kritik işaretlendi ('+t.keys.length+' hücre, '+t.days+' gün).' : 'Kritik işareti kaldırıldı ('+t.keys.length+' hücre)'+(wasWatched?' ve ay boyu izleme kapatıldı.':'.'));
+}
+/* 📌 Ay boyu izle: kişi bu ayda hangi oyun çiftiyle çakışırsa çakışsın ❗ ile gösterilir */
+function toggleAttnWatch(p){
+  const m = curMonth(); if(!p || lockGuard(m)) return; snapshot();
+  const W = attnWatchOf(m).slice();
+  const i = W.indexOf(p); const turnOn = i<0;
+  if(turnOn){ W.push(p); attnEnsureMeta(m,p); } else W.splice(i,1);
+  if(W.length) m.attnWatch = W; else delete m.attnWatch;
+  if(!turnOn) attnCleanupMeta(m,p);
+  saveState(); renderSheet(); renderPrint();
+  setStatus(turnOn ? '📌 Ay boyu izleniyor: '+((attnMetaOf(m,p)||{}).name||p) : 'Ay boyu izleme kapatıldı.');
+}
+async function askAttnBy(){
+  let v = null; try{ v = localStorage.getItem('attnBy'); }catch(e){}
+  if(v===null){
+    const n = await sitePrompt('Notlarda "kim yazdı" görünsün diye adınızı yazın (boş bırakabilirsiniz; bir daha sorulmaz):','','Adınız');
+    if(n===null) return '';
+    v = n.trim() || '-'; try{ localStorage.setItem('attnBy', v); }catch(e){}
+  }
+  return v==='-' ? '' : v;
+}
+/* 📝 Kişinin neden kritik işaretlendiğini yaz / düzenle */
+async function editAttnNote(p){
+  const m = curMonth(); if(!p || lockGuard(m)) return;
+  const meta = (m.attnMeta||{})[p] || null;
+  const n = await sitePrompt('Bu kişiyi neden kritik işaretlediniz? (Kısa not: balonda, ❗ panelinde ve kesinleştirme onayında görünür. Boş bırakıp Tamam derseniz not silinir.)', (meta&&meta.note)||'', 'Kritik işaret notu');
+  if(n===null) return;
+  snapshot();
+  const cur = attnEnsureMeta(m,p);
+  const t = n.trim();
+  if(t){ cur.note = t; const by = await askAttnBy(); if(by) cur.by = by; else delete cur.by; cur.at = new Date().toISOString(); }
+  else { delete cur.note; }
+  saveState(); renderAttnPanel();
+  setStatus(t ? '📝 Kritik işaret notu kaydedildi.' : 'Kritik işaret notu silindi.');
+}
+/* Ayın kritik işaretli kişilerini çözümler: hâlâ çakışanlar (aktif) ve artık çakışmayan eski işaretler */
+function attnAnalyze(m){
+  const W = attnWatchOf(m);
+  const marked = new Set(W);
+  for(const k in m.cells){ const a = m.cells[k].attn; if(Array.isArray(a)) a.forEach(q=>marked.add(q)); }
+  if(!marked.size) return [];
+  const info = {};
+  const get = q => info[q] || (info[q] = {p:q, name:'', watched:W.includes(q), active:[], staleKeys:[], _cells:new Set()});
+  marked.forEach(get);
+  const seenDay = new Set();
+  for(let r=2; r<m.rows; r++){
+    const dt = dateTextOfRow(m,r) || ('satır '+(r+1));
+    const dk = normNameKey(dt); if(seenDay.has(dk)) continue; seenDay.add(dk);
+    const games = rowGames(m,r);
+    if(games.length<2) continue;
+    const conflict = buildConflict(games);
+    const done = new Set();
+    for(const g of games){
+      const cell = m.cells[g.row+'_'+g.col] || {};
+      if(isArchiveCell(cell)) continue;
+      for(const q of gameAttn(m,g)){
+        const cf = conflict.people[q]; if(!cf) continue;
+        const x = get(q);
+        x._cells.add(g.row+'_'+g.col);
+        if(!x.name) x.name = cf.name || '';
+        if(done.has(q)) continue; done.add(q);
+        const withQ = games.filter(y=>{ const cw=crewOf(y.key); return cw && cw[q]; });
+        const altMap = new Map();
+        for(const y of withQ){ const al = ((m.cells[y.row+'_'+y.col]||{}).alts||{})[q] || []; al.forEach(a=>altMap.set(a.pk,a.name)); }
+        x.active.push({r:g.row, c:g.col, dt, oyunlar:withQ.map(y=>y.raw), alts:[...altMap.values()], covered:altMap.size>0});
+      }
+    }
+  }
+  for(const k in m.cells){
+    const a = m.cells[k].attn; if(!Array.isArray(a)) continue;
+    for(const q of a){ const x = get(q); if(!x._cells.has(k)) x.staleKeys.push(k); }
+  }
+  const out = Object.values(info);
+  for(const x of out){ if(!x.name) x.name = ((m.attnMeta||{})[x.p]||{}).name || attnFindName(m,x.p); delete x._cells; }
+  const rank = x => x.active.some(z=>!z.covered) ? 0 : (x.active.length ? 1 : 2);
+  out.sort((a,b)=> rank(a)-rank(b) || a.name.localeCompare(b.name,'tr'));
+  return out;
+}
+/* Çözülmüş (artık çakışmayan) eski ❗ işaretlerini temizler */
+function attnClearStale(items){
+  const m = curMonth(); if(lockGuard(m) || !items.length) return; snapshot();
+  let n = 0;
+  for(const x of items) for(const k of x.staleKeys){
+    const cur = {...(m.cells[k]||{v:''})};
+    const a = (Array.isArray(cur.attn)?cur.attn:[]).filter(q=>q!==x.p);
+    if(a.length) cur.attn = a; else delete cur.attn;
+    m.cells[k] = cur; n++;
+  }
+  for(const x of items) attnCleanupMeta(m,x.p);
+  saveState(); renderSheet(); renderPrint();
+  setStatus('✔ '+n+' çözülmüş eski işaret temizlendi.');
+}
+/* Kişinin kritik işaretini tüm ay boyunca (hücre işaretleri + ay boyu izleme + not) kaldırır */
+function attnRemovePerson(p){
+  const m = curMonth(); if(lockGuard(m)) return; snapshot();
+  for(const k in m.cells){
+    const a = m.cells[k].attn;
+    if(Array.isArray(a) && a.includes(p)){
+      const cur = {...m.cells[k]}; const nn = a.filter(q=>q!==p);
+      if(nn.length) cur.attn = nn; else delete cur.attn;
+      m.cells[k] = cur;
+    }
+  }
+  if(attnWatchOf(m).includes(p)){ m.attnWatch = m.attnWatch.filter(q=>q!==p); if(!m.attnWatch.length) delete m.attnWatch; }
+  if(m.attnMeta){ delete m.attnMeta[p]; if(!Object.keys(m.attnMeta).length) delete m.attnMeta; }
+  saveState(); renderSheet(); renderPrint();
+  setStatus('Kritik işaret bu ay için kaldırıldı.');
+}
+function closeAttnPopover(){ const pop = document.getElementById('attnPopover'); if(pop) pop.hidden = true; }
+function attnReopen(){ setTimeout(()=>{ renderAttnPanel(); const pop = document.getElementById('attnPopover'); if(pop) pop.hidden = false; },0); }
+/* ❗ Kritik paneli (araç çubuğu): rozet sayısı = alternatifi seçilmemiş çakışma günü */
+function renderAttnPanel(){
+  const m = curMonth(); if(!m) return;
+  const list = attnAnalyze(m);
+  const pend = list.reduce((n,x)=>n+x.active.filter(a=>!a.covered).length, 0);
+  const badge = document.getElementById('attnBadge');
+  if(badge){ if(pend){ badge.textContent = pend; badge.style.display = 'inline-flex'; } else badge.style.display = 'none'; }
+  const box = document.getElementById('attnList'); if(!box) return;
+  const esc = escapeHtml;
+  if(!list.length){
+    box.innerHTML = '<div style="padding:17px 14px;border:1px dashed #cbbfad;border-radius:8px;background:#fffdf8;color:var(--muted)">Bu ayda kritik işaretli kişi yok. Çakışma balonunda kişinin yanındaki <strong>❗</strong> düğmesiyle işaretleyebilirsiniz.</div>';
+    return;
+  }
+  const staleTotal = list.reduce((n,x)=>n+x.staleKeys.length, 0);
+  let html = '';
+  if(staleTotal) html += '<div class="attn-stale" style="margin-bottom:8px;justify-content:space-between"><span>✔ '+staleTotal+' hücrede çözülmüş eski işaret var</span><button type="button" class="btn ghost small" data-attnclean="all">Hepsini temizle</button></div>';
+  html += list.map((x,i)=>{
+    const meta = attnMetaOf(m,x.p) || {};
+    const anyPend = x.active.some(a=>!a.covered);
+    const icon = anyPend ? '❗' : (x.active.length ? '✅' : '✔');
+    const who = [meta.by, attnFmtAt(meta.at)].filter(Boolean).join(' · ');
+    const rows = x.active.map((a,j)=>'<div class="attn-row"><div style="flex:1;min-width:0"><b>'+esc(a.dt)+'</b> · '+esc(a.oyunlar.join(' + '))+'<div class="attn-sub">'+(a.covered?'✅ Alternatif: '+esc(a.alts.join(', ')):'⚠ Alternatif seçilmedi')+'</div></div><button type="button" class="btn ghost small" style="flex:none;padding:4px 6px;font-size:11px" data-attngo="'+i+'-'+j+'">Git</button></div>').join('');
+    const stale = x.staleKeys.length ? '<div class="attn-stale"><span style="flex:1">✔ '+x.staleKeys.length+' hücrede çözülmüş eski işaret</span><button type="button" class="btn ghost small" style="padding:2px 6px;font-size:11px" data-attnclean="'+i+'">Temizle</button></div>' : '';
+    return '<div class="attn-card'+(anyPend?'':' resolved')+'">'+
+      '<div class="attn-head"><span>'+icon+'</span><b style="flex:1;min-width:0">'+esc(x.name||x.p)+'</b>'+(x.watched?'<span class="attn-pill">📌 ay boyu</span>':'')+'</div>'+
+      (meta.note?'<div class="attn-note">📝 '+esc(meta.note)+(who?' <small>— '+esc(who)+'</small>':'')+'</div>':'')+
+      (rows || '<div class="attn-sub" style="margin-top:4px">Şu an çakışan gün yok.</div>')+
+      stale+
+      '<div class="attn-actions"><button type="button" class="btn ghost small" data-attnnote="'+i+'">'+(meta.note?'✎ Notu düzenle':'📝 Neden yaz')+'</button>'+
+      '<button type="button" class="btn ghost small" data-attnwatch="'+i+'">'+(x.watched?'📌 İzlemeyi kapat':'📌 Ay boyu izle')+'</button>'+
+      '<button type="button" class="btn ghost small" data-attnrm="'+i+'">✕ İşareti kaldır</button></div>'+
+    '</div>';
+  }).join('');
+  box.innerHTML = html;
+  box.querySelectorAll('[data-attngo]').forEach(b=>{ b.onclick = e=>{ e.stopPropagation(); const [i,j] = b.dataset.attngo.split('-').map(Number); const a = list[i].active[j]; closeAttnPopover(); gotoCell(state.activeIdx, a.r, a.c); }; });
+  box.querySelectorAll('[data-attnclean]').forEach(b=>{ b.onclick = e=>{ e.stopPropagation(); const v = b.dataset.attnclean; attnClearStale(v==='all' ? list.filter(x=>x.staleKeys.length) : [list[+v]]); }; });
+  box.querySelectorAll('[data-attnnote]').forEach(b=>{ b.onclick = async e=>{ e.stopPropagation(); await editAttnNote(list[+b.dataset.attnnote].p); attnReopen(); }; });
+  box.querySelectorAll('[data-attnwatch]').forEach(b=>{ b.onclick = e=>{ e.stopPropagation(); toggleAttnWatch(list[+b.dataset.attnwatch].p); }; });
+  box.querySelectorAll('[data-attnrm]').forEach(b=>{ b.onclick = async e=>{
+    e.stopPropagation(); const x = list[+b.dataset.attnrm];
+    if(await siteConfirm('"'+(x.name||x.p)+'" için kritik işaret bu ayın tüm hücrelerinden (ay boyu izleme ve not dahil) kaldırılsın mı?','Kritik işareti kaldır')) attnRemovePerson(x.p);
+    attnReopen();
+  }; });
 }
 /* Seçilen kişiyi p için "alternatif" olarak ekler/kaldırır (❗ ile aynı günlere yayılır). */
 function toggleAltPerson(rr,p,altPk,altName){
@@ -7520,6 +7770,21 @@ function closeNotesPopover(){
   document.addEventListener('click', e=>{ if(!pop.hidden && !pop.contains(e.target) && e.target!==btn) closeNotesPopover(); });
   document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeNotesPopover(); });
 })();
+
+(function(){
+  const btn=document.getElementById('attnPopBtn'), pop=document.getElementById('attnPopover'), closeBtn=document.getElementById('attnPopClose');
+  if(!btn || !pop) return;
+  btn.addEventListener('click', e=>{
+    e.stopPropagation();
+    if(pop.hidden){ renderAttnPanel(); pop.hidden=false; } else { pop.hidden=true; }
+  });
+  closeBtn?.addEventListener('click', closeAttnPopover);
+  document.addEventListener('click', e=>{ if(!pop.hidden && !pop.contains(e.target) && e.target!==btn && !btn.contains(e.target)) closeAttnPopover(); });
+  document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeAttnPopover(); });
+})();
+/* Tablo her yenilendiğinde ❗ rozeti/paneli de güncellensin (hücre düzenleme, geri al, ay değişimi…) */
+{ const __renderSheet0 = renderSheet;
+  renderSheet = function(){ const rv = __renderSheet0.apply(this, arguments); try{ renderAttnPanel(); }catch(e){} return rv; }; }
 
 function renderAll(){
   refreshMonthSel();
