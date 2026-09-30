@@ -844,7 +844,33 @@ const trLower = s => String(s).replace(/İ/g,"i").replace(/I/g,"ı").replace(/Ğ
 const esc = s => String(s??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 const unent = s => String(s??"").replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&nbsp;/g," ");
 const has = (h,n) => trLower(h).includes(trLower(n));
-const isFig = c => has(c||"","figüran") || has(c||"","figuran");
+const isFig = c => has(c||"","figüran") || has(c||"","figuran") || has(c||"","figiüran");
+/* ============ Kategori taksonomisi ============
+   Sheet'teki Kategori/Görev değerleri DEĞİŞMEZ; her satıra yalnızca görüntü/istatistik için r.grup eklenir.
+   Yeni bir yazım varyantı gelirse buradaki kurallara eklenir; eşleşmeyen satırlar "Diğer"de görünür. */
+const KAT_SIRA = ["Yaratıcı Ekip","Oyuncular","Figüranlar","Müzik ve Hareket","Tasarım","Sahne ve Teknik Ekip"];
+const katRank = k => { const i = KAT_SIRA.indexOf(k); return i < 0 ? 99 : i; };
+const sortByKat = arr => arr.sort((a,b) => katRank(a[0]) - katRank(b[0]) || sortTr(a[0],b[0]));
+const normTx = s => trLower(String(s||"")).replace(/[\u2010-\u2015\u2212]/g,"-").replace(/\s+/g," ").trim();
+function kategoriGrubu(kat, gorev){
+  const k = normTx(kat), g = normTx(gorev);
+  if(!k) return "Diğer";
+  if(/sinevizyon/.test(g)) return "Tasarım";
+  if(/kond[üu]v[iî]t/.test(k) || /kond[üu]v[iî]t/.test(g)) return "Sahne ve Teknik Ekip";
+  if(/fig[üu]ran|figi[üu]ran/.test(k)){
+    return /dans çalıştırıcı|koreograf/.test(g) ? "Müzik ve Hareket" : "Figüranlar";
+  }
+  if(k.includes("yönetim")){
+    return /besteci|koro çalıştırıcı/.test(g) ? "Müzik ve Hareket" : "Yaratıcı Ekip";
+  }
+  if(k === "ses") return "Oyuncular";
+  if(k.startsWith("oyuncu")) return "Oyuncular";
+  if(k.startsWith("eğitmen")) return "Müzik ve Hareket";
+  if(/dramaturg|sanatsal denetim|uzman/.test(k)) return "Yaratıcı Ekip";
+  if(/tasarım|peruk|makyaj|video|görüntü/.test(k)) return "Tasarım";
+  if(/sahne|dekor|aksesuar/.test(k)) return "Sahne ve Teknik Ekip";
+  return "Diğer";
+}
 const FIGTAG = /\(\s*fig[üu]ran\s*\)/i;
 const stripTag = s => s.replace(/\(\s*fig[üu]ran\s*\)/ig,"").replace(/^"+|"+$/g,"").trim();
 /* Bir satırdaki kişilerden hangilerinin FİGÜRAN sayılacağını belirler:
@@ -871,11 +897,19 @@ function parseRows(headers, rows){
   HEADERS = headers;
   COL_COUNT = Math.max(headers.length, 4);
   if(io >= 0) COLS = {oyun:io, kategori:ik<0?1:ik, gorev:ig<0?2:ig, kisi:ip<0?3:ip};
-  return rows.map((r,i) => ({
-    _i: i,
-    oyun: unent(String(r[COLS.oyun]??"").trim()), kategori: unent(String(r[COLS.kategori]??"").trim()),
-    gorev: unent(String(r[COLS.gorev]??"").trim()), kisi: unent(String(r[COLS.kisi]??"").trim())
-  })).filter(r => r.oyun);
+  const out = rows.map((r,i) => {
+    const kategori = unent(String(r[COLS.kategori]??"").trim()).replace(/\s+/g," ");
+    const gorev = unent(String(r[COLS.gorev]??"").trim()).replace(/\s+/g," ");
+    return {
+      _i: i,
+      oyun: unent(String(r[COLS.oyun]??"").trim()), kategori, gorev,
+      kisi: unent(String(r[COLS.kisi]??"").trim()),
+      grup: kategoriGrubu(kategori, gorev)
+    };
+  }).filter(r => r.oyun);
+  const eslesmeyen = [...new Set(out.filter(r => r.grup === "Diğer").map(r => r.kategori + " / " + r.gorev))];
+  if(eslesmeyen.length) console.info("Kategori eşleşmeyen satırlar (Diğer):", eslesmeyen);
+  return out;
 }
 const names = s => s.split(",").map(x => x.trim()).filter(Boolean);
 
@@ -970,12 +1004,12 @@ function buildPlays(rows){
     const figSet = figNamesInRow(r);
     names(r.kisi).forEach(n => { const c = stripTag(n); if(c) o.people.add(c); });
     figSet.forEach(c => o.figs.add(c));
-    if(r.kategori) o.cats.add(r.kategori);
+    if(r.grup) o.cats.add(r.grup);
   });
   return [...m.values()].map(o => {
     const all = [...o.people], akt = all.filter(n => !PASIF.has(norm(n)));
     return {name:o.name, personel:akt.length, tumPersonel:all.length, pasif:all.length - akt.length,
-      figuran:[...o.figs].filter(n => !PASIF.has(norm(n))).length, rowCount:o.rows, cats:[...o.cats].sort(sortTr)};
+      figuran:[...o.figs].filter(n => !PASIF.has(norm(n))).length, rowCount:o.rows, cats:sortByKat([...o.cats].map(c=>[c])).map(x=>x[0])};
   }).sort((a,b) => sortTr(a.name,b.name));
 }
 function buildPeople(rows){
@@ -987,7 +1021,7 @@ function buildPeople(rows){
       if(!m.has(n)) m.set(n,{name:n,oyunlar:new Set(),gorevler:new Set(),cats:new Set(),fig:false});
       const p = m.get(n); p.oyunlar.add(r.oyun);
       if(r.gorev) p.gorevler.add(r.gorev);
-      if(r.kategori) p.cats.add(r.kategori);
+      if(r.grup) p.cats.add(r.grup);
       if(figSet.has(n)) p.fig = true;
     });
   });
@@ -1327,7 +1361,7 @@ async function setPersonActiveForPlay(name, oyun, aktif){
 function playDetail(name){
   const rows = DATA.filter(r => r.oyun === name);
   const byCat = new Map();
-  rows.forEach(r => { const k = r.kategori || "Diğer"; if(!byCat.has(k)) byCat.set(k,[]); byCat.get(k).push(r); });
+  rows.forEach(r => { const k = r.grup || "Diğer"; if(!byCat.has(k)) byCat.set(k,[]); byCat.get(k).push(r); });
   const people = new Set(); rows.forEach(r => names(r.kisi).forEach(n => people.add(stripTag(n))));
   const aktifSet = [...people].filter(n => !isPasifInPlay(n, name));
   const figs = new Set(FIGROWS.filter(r => r.oyun === name).map(r => r.kisi));
@@ -1338,7 +1372,7 @@ function playDetail(name){
       <button class="btn sm" onclick="exportPDF(${jq(name+' — Kadro')},['Oyun','Kategori','Görev','Kişi'],playExportRows(${jq(name)}))">PDF</button>
       <button class="btn sm dan" onclick="archivePlay(${jq(name)})">📦 Arşive Al</button></div></div>
     ${seasonStrip(name)}</div>
-  ${[...byCat.entries()].map(([cat,rs]) => `<div class="card"><div class="card-h">
+  ${sortByKat([...byCat.entries()]).map(([cat,rs]) => `<div class="card"><div class="card-h">
       <h3 style="font-size:12.5px;letter-spacing:.08em;text-transform:uppercase">${esc(cat)}</h3>
       <span class="chip ${isFig(cat)?"crim":""}">${rs.length} kayıt</span></div>
     <div class="card-b">${rs.map(r => {
@@ -1552,7 +1586,7 @@ function renderFilter(){
         p = trLower(document.getElementById("f-kisi").value.trim());
   const box = document.getElementById("filter-res");
   if(!k && !o && !p){ box.innerHTML = `<div class="empty">Filtre girin.</div>`; return; }
-  const res = DATA.filter(r => (!k || trLower(r.kategori).includes(k)) && (!o || trLower(r.oyun).includes(o)) && (!p || trLower(r.kisi).includes(p)));
+  const res = DATA.filter(r => (!k || trLower(r.kategori).includes(k) || trLower(r.grup).includes(k)) && (!o || trLower(r.oyun).includes(o)) && (!p || trLower(r.kisi).includes(p)));
   window.__filterRes = [["Oyun","Kategori","Görev","Kişi"]].concat(res.map(r=>[r.oyun,r.kategori,r.gorev,r.kisi]));
   box.innerHTML = `<div class="card"><div class="card-h"><h3 style="font-size:14px">Sonuçlar</h3>
     <div class="tools"><span class="chip gold">${res.length} kayıt</span>
@@ -1572,11 +1606,11 @@ const PALETTE = ["#c0392b","#e67e22","#f1c40f","#27ae60","#2980b9","#8e44ad","#1
 function catCounts(){
   const m = new Map();
   DATA.forEach(r => {
-    const c = r.kategori || "Diğer";
+    const c = r.grup || "Diğer";
     if(!m.has(c)) m.set(c,new Set());
     names(r.kisi).forEach(raw => { const n = stripTag(raw); if(n && !PASIF.has(norm(n))) m.get(c).add(n); });
   });
-  return [...m.entries()].map(([k,v]) => [k, v.size]).filter(x => x[1] > 0).sort((a,b) => b[1]-a[1]);
+  return [...m.entries()].map(([k,v]) => [k, v.size]).filter(x => x[1] > 0).sort((a,b) => katRank(a[0]) - katRank(b[0]) || b[1]-a[1]);
 }
 function donut(title, data, note, onclickFn, dimLabels){
   const dim = new Set(dimLabels||[]);
@@ -1649,8 +1683,8 @@ function statKpiPasif(){
 }
 function statKpiKayit(){
   const catM = new Map();
-  DATA.forEach(r => catM.set(r.kategori||"Diğer", (catM.get(r.kategori||"Diğer")||0)+1));
-  const catRows = [...catM.entries()].sort((a,b) => b[1]-a[1]);
+  DATA.forEach(r => catM.set(r.grup||"Diğer", (catM.get(r.grup||"Diğer")||0)+1));
+  const catRows = sortByKat([...catM.entries()]);
   statModal("Toplam Kayıt Özeti — " + DATA.length + " kayıt",
     miniTable(["Kategori","Kayıt Sayısı"], catRows.map(([k,v]) => [k, v])));
 }
@@ -1688,7 +1722,7 @@ function statPerson(name){
       <button class="btn sm" onclick="exportPDF(${jq(name)},['Oyun','Kategori','Görev'],${jq(rows.map(r=>[r.oyun,r.kategori,r.gorev]))})">PDF</button></div>`);
 }
 function statCat(cat){
-  const rows = DATA.filter(r => r.kategori === cat);
+  const rows = DATA.filter(r => (r.grup || "Diğer") === cat);
   const set = new Set(); rows.forEach(r => names(r.kisi).forEach(x => { const n = stripTag(x); if(n && !PASIF.has(norm(n))) set.add(n); }));
   statModal(cat, `<p class="sec-sub" style="margin-bottom:12px">${set.size} tekil kişi · ${rows.length} kayıt</p>
     ${miniTable(["Oyun","Görev","Kişi"], rows.map(r => [r.oyun, r.gorev || "—", r.kisi]))}`);
@@ -3201,13 +3235,13 @@ window.exportPDF = function(title, headers, data){
       const figSet = figNamesInRow(r);
       names(r.kisi).forEach(n => { const c = stripTag(n); if(c) o.people.add(c); });
       figSet.forEach(c => o.figs.add(c));
-      if(r.kategori) o.cats.add(r.kategori);
+      if(r.grup) o.cats.add(r.grup);
     });
     return [...m.values()].map(o => {
       const all = [...o.people];
       const akt = all.filter(n => !isPasifInPlay(n, o.name));   /* global + oyun bazlı pasif */
       return {name:o.name, personel:akt.length, tumPersonel:all.length, pasif:all.length - akt.length,
-        figuran:[...o.figs].filter(n => !isPasifInPlay(n, o.name)).length, rowCount:o.rows, cats:[...o.cats].sort(sortTr)};
+        figuran:[...o.figs].filter(n => !isPasifInPlay(n, o.name)).length, rowCount:o.rows, cats:sortByKat([...o.cats].map(c=>[c])).map(x=>x[0])};
     }).sort((a,b) => sortTr(a.name,b.name));
   };
 
@@ -3222,7 +3256,7 @@ window.exportPDF = function(title, headers, data){
         if(PASIF_PLAY.has(norm(n) + "|||" + norm(r.oyun))) p.pasifOyun.add(r.oyun);
         else p.oyunlar.add(r.oyun);
         if(r.gorev) p.gorevler.add(r.gorev);
-        if(r.kategori) p.cats.add(r.kategori);
+        if(r.grup) p.cats.add(r.grup);
         if(figSet.has(n)) p.fig = true;
       });
     });
