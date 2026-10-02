@@ -1200,14 +1200,14 @@ table.sheet td.cell{min-width:86px;height:29px}
 #tooltip .ttPerson{
   display:flex;align-items:center;gap:6px;margin:7px 0 2px;
   padding:4px 7px;border-radius:6px;background:#faf7f3;
-  font-size:12px;border-left:3px solid #9abda8
+  font-size:13px;border-left:3px solid #9abda8
 }
 #tooltip .ttPerson.crit{color:#9a211d;border-left-color:#bc2c27;background:#fff3f1}
 #tooltip .ttPerson.soft{color:#226247}
 #tooltip .ttPerson.kast{color:#79520a;border-left-color:#d09a3b;background:#fff7e4}
 #tooltip .ttKastNote{
   display:block;margin:2px 0 3px 21px;color:#806f62;opacity:1;
-  font-size:13px;line-height:1.45
+  font-size:12.5px;line-height:1.45
 }
 #tooltip .ttKastNote b{color:#876019}
 #tooltip .ttRole{
@@ -1285,6 +1285,9 @@ table.sheet td.cell{min-width:86px;height:29px}
 #tooltip .ttAttnMeta .ttMetaWho{opacity:.7}
 #tooltip .ttNoteBtn{cursor:pointer;border:1px dashed rgba(255,255,255,.35);background:transparent;color:inherit;border-radius:6px;padding:1px 7px;font-size:12px;font-family:inherit;opacity:.8}
 #tooltip .ttNoteBtn:hover{opacity:1;background:rgba(255,255,255,.12)}
+#tooltip .ttOther{opacity:.72}
+#tooltip .ttHereRole{border-left-color:#dfad58;background:rgba(223,173,88,.12);border-radius:0 6px 6px 0}
+#tooltip .ttHere{display:inline-block;margin-left:4px;padding:0 6px;border-radius:99px;background:#dfad58;color:#302014;font-size:10.5px;font-weight:800;letter-spacing:.2px;vertical-align:1px}
 #subWin{position:fixed;z-index:100001;top:96px;right:24px;width:470px;height:min(78vh,720px);min-width:340px;min-height:260px;max-width:96vw;max-height:94vh;display:flex;flex-direction:column;background:#fff;border:1px solid #d9cfc4;border-radius:14px;box-shadow:0 24px 60px -14px rgba(40,10,10,.5),0 4px 14px rgba(0,0,0,.18);resize:both;overflow:hidden;font-family:'Manrope',system-ui,sans-serif;color:#2a1c14}
 #subWin .swHead{flex:none;display:flex;align-items:center;gap:10px;padding:11px 12px 11px 16px;background:linear-gradient(180deg,#7a1a2b,#5e1120);color:#fff;cursor:move;user-select:none;touch-action:none}
 #subWin .swTitle{flex:1;min-width:0}
@@ -4347,15 +4350,31 @@ function positionTooltipArrow(dir,cellCY,cellRect,left,top,w,h){
   else{ arrow.style.left=(left+w)+'px'; arrow.style.top=(ay-9)+'px'; }
 }
 /* Bir kişinin o gündeki oyunlardaki görevlerini listeler (yeşil/kırmızı fark etmez) */
-function ttRoleLines(games, p){
-  let out='';
+function ttRoleLines(games, p, mineG){
+  let out='', first='';
   for(const g of games){
     const cw = crewOf(g.key); const rec = cw && cw[p];
     if(!rec) continue;
     const roles = (rec.roles||[]).join(', ') || '-';
-    out += '<div class="ttRole">↳ '+escapeHtml(g.raw)+(g.time?' ('+escapeHtml(g.time)+')':'')+' → <b>'+escapeHtml(roles)+'</b></div>';
+    const isHere = !!mineG && g===mineG;
+    const line = '<div class="ttRole'+(isHere?' ttHereRole':'')+'">↳ '+escapeHtml(g.raw)+(g.time?' ('+escapeHtml(g.time)+')':'')+' → <b>'+escapeHtml(roles)+'</b>'+(isHere?' <span class="ttHere">bu hücre</span>':'')+'</div>';
+    if(isHere) first += line; else out += line;
   }
-  return out;
+  return first + out;
+}
+/* Çakışan kişileri iki gruba ayırır: balonun açıldığı oyunu ilgilendirenler (üstte) ve
+   aynı günün DİĞER oyunları arasındaki çakışmalar (altta, soluk, ayrı başlıkla). */
+function ttPeopleHtml(conflict, games, mineG, isMine, attnSet, altMap){
+  const ents = Object.entries(conflict.people).sort(ttPersonSortFor(attnSet));
+  const own = ents.filter(e=>isMine(e[0])), other = ents.filter(e=>!isMine(e[0]));
+  let h='';
+  for(const [p,info] of own){ h += ttPersonLine(p, info, attnSet, altMap); h += ttRoleLines(games, p, mineG); }
+  if(other.length){
+    h += '<div class="ttSectionLabel">Aynı günün diğer oyunları arasındaki çakışmalar — bu oyunu ilgilendirmez</div><div class="ttOther">';
+    for(const [p,info] of other){ h += ttPersonLine(p, info, attnSet, altMap); h += ttRoleLines(games, p, mineG); }
+    h += '</div>';
+  }
+  return h;
 }
 /* Çakışma listesinde bir kişi satırını (renkli nokta + isim + varsa "X'in
    kastı" notu) üretir — kırmızı/yeşil/kritik olmayan "Kast" (yedek) kişiler
@@ -4554,6 +4573,9 @@ function showTooltipFor(r,c,ev){
   const timeText = timeTextOfRow(m,r);
   const sessLabel = sessionLabelForRow(m,r);
   const stage = stageHeaderText(m,c);
+  const mineG = games.find(g=>g.row===r && g.col===c) || null;
+  const mineCrew = mineG ? (crewOf(mineG.key)||null) : null;
+  const ttIsMine = q => !mineCrew || String(q).indexOf('__ret_')===0 || !!mineCrew[q];
 
   let html = '';
   html += '<div class="ttHead">'+escapeHtml(raw)+'</div>';
@@ -4561,7 +4583,7 @@ function showTooltipFor(r,c,ev){
   if(stage) html += '<div>Sahne: '+escapeHtml(stage)+'</div>';
   if(cell.note){ html += '<div class="ttNote"><b>Not</b><span>'+escapeHtml(cell.note)+'</span></div>'; }
   html += '<hr>';
-  { const an = Object.keys(conflict.people).filter(q=>attnSet.has(q)).map(q=>conflict.people[q].name||q);
+  { const an = Object.keys(conflict.people).filter(q=>attnSet.has(q) && ttIsMine(q)).map(q=>conflict.people[q].name||q);
     if(an.length) html += '<div class="ttWarn">❗ DİKKAT — bu hücrede kritik işaretli çakışma: <b>'+escapeHtml(an.join(', '))+'</b></div>'; }
   if(games.length<=1){
     html += '<div class="ttOk">Uygun ✅ (bu tarihte tek oyun)</div>';
@@ -4573,18 +4595,14 @@ function showTooltipFor(r,c,ev){
       html += '<div class="ttOk">Uygun ✅ Çakışan kişi yok.</div>';
     } else if(!conflict.hasCritical){
       html += '<div class="ttOk">🟢 Ortak kişi(ler) var ama Oyuncu/Figüran çakışması yok:</div>';
-      for(const [p,info] of Object.entries(conflict.people).sort(ttPersonSortFor(attnSet))){
-        html += ttPersonLine(p, info, attnSet, altMap);
-        html += ttRoleLines(games, p);
-      }
+      html += ttPeopleHtml(conflict, games, mineG, ttIsMine, attnSet, altMap);
     } else {
       html += cell.ignoreConflict
         ? '<div class="ttOk">🟢 Çakışma bu hücrede yok sayıldı (aşağıdaki kayıt bilgi amaçlı)</div>'
-        : '<div class="ttWarn">⚠️ Çakışma var</div>';
-      for(const [p,info] of Object.entries(conflict.people).sort(ttPersonSortFor(attnSet))){
-        html += ttPersonLine(p, info, attnSet, altMap);
-        html += ttRoleLines(games, p);
-      }
+        : (Object.entries(conflict.people).some(([q,i])=>ttIsMine(q)&&i.critical)
+            ? '<div class="ttWarn">⚠️ Çakışma var</div>'
+            : '<div class="ttOk">🟢 Bu oyunu ilgilendiren çakışma yok — aynı günün diğer oyunları arasındaki çakışma aşağıda (bilgi amaçlı):</div>');
+      html += ttPeopleHtml(conflict, games, mineG, ttIsMine, attnSet, altMap);
     }
   }
   if(cell.ignoreConflict){ html += '<hr><div class="ttOk">Bu hücre için çakışma uyarısı kapalı.</div>'; }
