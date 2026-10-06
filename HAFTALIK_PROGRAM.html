@@ -289,6 +289,9 @@ body{letter-spacing:0}#weekTitle{letter-spacing:0}
 .print-signs{padding-top:1.5mm}
 @media print{#weeklyTip{display:none!important}#printPage{align-items:flex-start!important;padding:0!important;height:190mm!important;max-height:190mm!important;width:280mm!important;overflow:hidden!important}#printInner{transform-origin:top center}}
 
+.mp-st{font-size:12px;padding:4px 8px;border-radius:6px;margin:0 0 6px;background:#e9f5ec;color:#1d5c2b}.mp-st.warn{background:#fff3cd;color:#7a5200}.mp-st.none{background:#eee;color:#555}
+.mp-miss{font-size:12px;margin:2px 0 8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}.mp-miss.okk{color:#1d5c2b}.cov{font-size:11px;font-weight:700;margin-left:6px}.cov.ok{color:#1d7a3a}.cov.no{color:#b45309}
+.print-foot{display:flex;justify-content:space-between;align-items:flex-start;gap:8mm;margin-top:2.5mm}.print-foot .print-notes{margin:0;flex:1 1 0;min-width:0}.print-foot .print-signs{padding:.5mm 6mm 0 0;flex:none;gap:14mm}
 </style>
 
 </head>
@@ -854,6 +857,13 @@ function monthlyIndex(months){
   return idx;
 }
 let MIDX={};
+function weekMonths(){const mon=fromIso(S.cur),out=[],seen=new Set();
+  for(let d=0;d<7;d++){const x=addDays(mon,d),name=AY[x.getMonth()]+' '+x.getFullYear();if(seen.has(name))continue;seen.add(name);
+    let sm=null;SHEET_MONTHS.forEach((v,k)=>{if(nk(k)===nk(name))sm=v;});
+    const loc=(M.months||[]).some(m=>nk(m.name)===nk(name));
+    out.push({name,kind:sm?sm.kind:(loc?'local':'none')});}
+  return out;}
+function covered(d,it,list){const pn=nk(playName(it.text));return (list||items()).some(x=>x.day===d&&nk(x.task).includes(pn));}
 function playName(t){return String(t).replace(/\*|\(.*?\)/g,'').replace(/★.*$/,'').trim();}
 function crewOfPlay(play){const k=nk(playName(play));return (M.crew||[]).filter(c=>nk(c.play)===k);}
 /* bir gün aylık programda görevli personel: shortKey -> [oyun] */
@@ -914,6 +924,7 @@ function conflicts(){
         if(busy[k]){info.add(it.r);msgs.push({c:'inf',t:`${gn}: <b>${esc(p)}</b> aylık programda ${esc(busy[k].join(', '))} görevinde.`});}
         const person=S.staff.find(s=>nk(s.s)===k);const absence=person&&unavailable(person,iso(addDays(mon,d)));if(absence){bad.add(it.r);msgs.push({c:'bad',t:`${gn}: <b>${esc(p)}</b> ${esc(absence)}; görevlendirmeyi kontrol edin.`});}if(!person)msgs.push({c:'inf',t:`${gn}: <b>${esc(p)}</b> personel listesinde yok.`});
       });});});
+  weekMonths().forEach(m=>{if(m.kind==='draft')msgs.push({c:'inf',t:`<b>${esc(m.name)}</b> aylık programı henüz <b>kesinleşmedi</b> (taslak); kesinleşince değişebilir, görevlendirmeleri sonra yeniden kontrol edin.`});});
   const seen=new Set();return {bad,info,msgs:msgs.filter(m=>!seen.has(m.t)&&seen.add(m.t))};
 }
 
@@ -929,11 +940,14 @@ function renderSide(){
   $('#warnN').textContent=c.msgs.length;
   $('#mSrc').textContent='Kaynak: '+M.src+'. ▶ ile oyun adını seçili satıra ekleyin.';
   const mon=fromIso(S.cur);let h='';
+  h+=weekMonths().map(m=>m.kind==='pub'?`<div class="mp-st">${esc(m.name)} · ✓ Kesinleşmiş aylık program</div>`:m.kind==='draft'?`<div class="mp-st warn">${esc(m.name)} · ⚠ Taslak — aylık program henüz kesinleşmedi</div>`:m.kind==='local'?`<div class="mp-st none">${esc(m.name)} · yüklenen dosyadan (kesinleşme durumu bilinmiyor)</div>`:`<div class="mp-st none">${esc(m.name)} · aylık programda bulunamadı</div>`).join('');
+  {let tot=0,miss=0;GUN.forEach((g,d)=>(MIDX[iso(addDays(mon,d))]||[]).forEach(it=>{if(unitCrew(it.text).length){tot++;if(!covered(d,it,its))miss++;}}));
+   if(tot)h+=miss?`<div class="mp-miss"><span>${tot} oyundan <b>${miss}</b> tanesi için haftalıkta iş girilmedi.</span><button class="btn sm gold" id="addMiss">Eksikleri taslak ekle</button></div>`:`<div class="mp-miss okk">✓ Birimi ilgilendiren ${tot} oyunun hepsi için iş girildi.</div>`;}
   GUN.forEach((g,d)=>{const di=iso(addDays(mon,d)),items_=MIDX[di]||[];
     h+=`<div class="mp-day"><b>${dmy(addDays(mon,d))} ${g}</b>`;
     if(!items_.length)h+=`<div class="mp-it"><small>— kayıt yok —</small></div>`;
     items_.forEach(it=>{const cr=unitCrew(it.text);
-      h+=`<div class="mp-it"><div>${esc(it.text)} <small>${esc(it.stage)}${it.time?' · '+esc(it.time):''}</small>${cr.length?`<small class="mp-crew">${cr.map(c=>esc(shortOf(c.person))+' ('+esc(c.role||c.category)+')').join(', ')}</small>`:''}</div><button class="btn sm" data-ins="${esc(playName(it.text))}" data-d="${d}" title="Seçili satıra (yoksa bu güne yeni satır) ekle">▶</button></div>`;});
+      h+=`<div class="mp-it"><div>${esc(it.text)} <small>${esc(it.stage)}${it.time?' · '+esc(it.time):''}</small>${cr.length?(covered(d,it,its)?'<span class="cov ok" title="Haftalık programda bu gün için iş var">✓ iş var</span>':'<span class="cov no" title="Haftalık programda bu gün için bu oyuna iş girilmemiş">○ iş yok</span>'):''}${cr.length?`<small class="mp-crew">${cr.map(c=>esc(shortOf(c.person))+' ('+esc(c.role||c.category)+')').join(', ')}</small>`:''}</div><button class="btn sm" data-ins="${esc(playName(it.text))}" data-d="${d}" title="Seçili satıra (yoksa bu güne yeni satır) ekle">▶</button></div>`;});
     h+='</div>';});
   $('#mp').innerHTML=h;
 }
@@ -1086,7 +1100,7 @@ $('#staff').addEventListener('click',e=>{
   const s=S.staff[+c.dataset.st];if(unavailable(s,dayIso(it.day))&&!splitPeople(it.people).some(p=>nk(p)===nk(s.s)))return toast('Bu tarihte izinli / raporlu veya pasif: görevlendirilemez');snap();let ps=splitPeople(it.people);const k=nk(s.s);
   ps=ps.some(p=>nk(p)===k)?ps.filter(p=>nk(p)!==k):ps.concat(s.s);setV(it.r,L.col.ppl,{t:ps.join(SEP)});save();refresh();
 });
-$('#mp').addEventListener('click',e=>{const b=e.target.closest('[data-ins]');if(!b)return;const L=layout(G());if(!L||L.col.task==null)return toast('Tabloda “TARİH/GÜN” başlığı bulunamadı');
+$('#mp').addEventListener('click',e=>{if(e.target.closest('#addMiss')){commitEdit();snap();draftFromMonthly(true);save();refresh();return;}const b=e.target.closest('[data-ins]');if(!b)return;const L=layout(G());if(!L||L.col.task==null)return toast('Tabloda “TARİH/GÜN” başlığı bulunamadı');
   const d=+b.dataset.d,txt='“'+b.dataset.ins+'” ';snap();let it=curItem(),r;
   if(it&&it.day===d)r=it.r;else{r=emptyRowOfDay(d);if(r==null)r=addRowForDay(d);}
   setV(r,L.col.task,{t:(vtext(G(),r,L.col.task).trim()+' '+txt).trim()+' '});anc=tail={r,c:L.col.task};setSel(r,L.col.task,r,L.col.task);
@@ -1283,8 +1297,8 @@ $('#prevW').onclick=()=>goto(iso(addDays(fromIso(S.cur),-7)));
 $('#nextW').onclick=()=>goto(iso(addDays(fromIso(S.cur),7)));
 $('#newW').onclick=()=>{const last=Object.keys(S.weeks).sort().pop();const def=iso(addDays(fromIso(last),7));
   ask('Yeni hafta',`<p>Haftanın herhangi bir gününü seçin (Pazartesi’ye yuvarlanır):<br><input type="date" id="nW" value="${def}"></p><label><input type="checkbox" id="nA" checked> Aylık programdaki oyunları satır olarak öner (dekor kur/sök taslağı)</label>`,()=>{if(!validIso($('#nW').value))return toast('Geçerli bir tarih seçin'),false;const k=iso(monday(fromIso($('#nW').value)));if(S.weeks[k]){goto(k);return toast('Bu hafta zaten var');}snap();S.weeks[k]=blankWeek(k);S.cur=k;sel=null;if($('#nA').checked)draftFromMonthly();save();render();});};
-function draftFromMonthly(){const g=G(),L=layout(g);if(!L)return toast('Tabloda “TARİH/GÜN” başlığı bulunamadı');MIDX=monthlyIndex();const mon=fromIso(S.cur);let n=0;const C=L.col;
-  GUN.forEach((gn,d)=>{(MIDX[iso(addDays(mon,d))]||[]).filter(it=>unitCrew(it.text).length).forEach(it=>{
+function draftFromMonthly(onlyMissing){const g=G(),L=layout(g);if(!L)return toast('Tabloda “TARİH/GÜN” başlığı bulunamadı');MIDX=monthlyIndex();const mon=fromIso(S.cur),have=onlyMissing?items():[];let n=0;const C=L.col;
+  GUN.forEach((gn,d)=>{(MIDX[iso(addDays(mon,d))]||[]).filter(it=>unitCrew(it.text).length&&!(onlyMissing&&covered(d,it,have))).forEach(it=>{
     const pl=playName(it.text),cr=unitCrew(it.text).map(c=>S.staff.find(s=>sameStaff(s,c.person))).filter(s=>s&&!unavailable(s,dayIso(d))).map(s=>s.s).filter((v,i,a)=>a.indexOf(v)===i);
     const yer=/KARŞIYAKA/i.test(it.stage)?'KŞYK':/BKSM|BOZKURT/i.test(it.stage)?'BKM':/URLA/i.test(it.stage)?'URLA':trUp(it.stage);
     let r=emptyRowOfDay(d);if(r==null)r=addRowForDay(d);
@@ -1468,7 +1482,7 @@ function prepareWorkPrint(){
     h+='<tr class="'+(!n?'day-start':'')+'">'+(!n?'<td class="date '+(day.weekend?'weekend':'')+'" rowspan="'+day.rows.length+'">'+esc(day.label)+'</td>':'');
     for(const role of ['time','place','task','ppl']){const c=row.cells[role];if(c.skip)continue;h+='<td class="'+role+'"'+(c.span>1?' rowspan="'+c.span+'"':'')+'>'+esc(c.t)+'</td>';}
     h+='</tr>';});
-  h+='</tbody></table><ul class="print-notes">'+D.notes.map(t=>'<li>'+esc(t)+'</li>').join('')+'</ul><div class="print-signs">'+D.signs.map(s=>{const l=s.split('\n');return '<div><b>'+esc(l.shift())+'</b>'+esc(l.join('\n'))+'</div>';}).join('')+'</div></div>';
+  h+='</tbody></table><div class="print-foot"><ul class="print-notes">'+D.notes.map(t=>'<li>'+esc(t)+'</li>').join('')+'</ul><div class="print-signs">'+D.signs.map(s=>{const l=s.split('\n');return '<div><b>'+esc(l.shift())+'</b>'+esc(l.join('\n'))+'</div>';}).join('')+'</div></div></div>';
   page.innerHTML=h;document.body.classList.add('print-measuring');
   const inner=$('#printInner'),maxH=190*96/25.4,scale=Math.min(1,maxH/inner.getBoundingClientRect().height);
   page.style.setProperty('--print-scale',String(scale));document.body.classList.remove('print-measuring');
