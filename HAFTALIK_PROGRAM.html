@@ -19,6 +19,8 @@ header.app h1{margin:0;font-family:'Fraunces',Georgia,serif;font-size:19px}
 .btn.danger{color:#a30000}.btn.sm{padding:3px 7px;font-size:12px}
 select,input[type=date],input[type=text]{font:600 13px 'Manrope',sans-serif;padding:5px 8px;border:1px solid var(--border);border-radius:6px;background:#fff;color:var(--ink)}
 .spacer{flex:1}
+.syncchip{font:700 12px 'Manrope',sans-serif;padding:4px 10px;border-radius:999px;background:#efe6d5;color:#5a4a36;cursor:pointer;white-space:nowrap;border:1px solid rgba(0,0,0,.12)}
+.syncchip.ok{background:#dff0df;color:#1e5e22}.syncchip.syncing{background:#fff3c4;color:#6a4a00}.syncchip.err{background:#ffd9d9;color:#8a1b1b}.syncchip.warn{background:#ffe08a;color:#5a3a00}
 .layout{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:14px;padding:14px;align-items:start}
 @media(max-width:1100px){.layout{grid-template-columns:1fr}}
 .sheet{background:#fff;border:1px solid var(--border);border-radius:8px;padding:18px 22px;overflow:auto;box-shadow:0 2px 10px rgba(0,0,0,.05)}
@@ -118,6 +120,7 @@ td.c{position:relative}
   <button class="btn" id="copyW" title="Önceki haftanın işlerini bu haftaya kopyala">Önceki haftayı kopyala</button>
   <button class="btn danger" id="delW">Haftayı sil</button>
   <span class="spacer"></span>
+  <span class="syncchip" id="syncState" title="E-Tablo eşitleme durumu — tıklayınca şimdi eşitler">☁ E-Tablo: bağlanıyor…</span>
   <button class="btn" id="undoB" title="Geri al (Ctrl+Z)">↶ Geri al</button>
   <button class="btn" id="impX">Excel yükle</button>
   <button class="btn" id="expX">Excel indir</button>
@@ -164,8 +167,9 @@ td.c{position:relative}
     <div class="card" data-tab="sheets">
       <h3>Google E-Tablolar</h3>
       <div class="hint" id="sheetInfo">Bağlanıyor…</div>
-      <div class="taskbtns"><button class="btn sm" id="shRefresh">↻ Personeli yenile</button><button class="btn sm" id="shSave">☁ Haftaları kaydet</button><button class="btn sm" id="shLoad">⬇ Haftaları yükle</button></div>
-      <div class="hint" style="margin-top:8px">Personel / oyun kadrosu <b>BÜTÜN OYUNLAR</b> sekmesinden okunur. Haftalar <b>HAFTALIK PROGRAM</b> sekmesine kaydedilir (sekme E-Tablo’da önceden açık olmalı).</div>
+      <div class="hint" id="syncInfo" style="margin-top:4px"></div>
+      <div class="taskbtns"><button class="btn sm" id="shRefresh">↻ Personeli yenile</button><button class="btn sm" id="shSave" title="Tüm haftaları şimdi E-Tabloya yaz">☁ Şimdi kaydet</button><button class="btn sm" id="shLoad" title="E-Tablodaki haftaları bu tarayıcıya yükle (üzerine yazar)">⬇ E-Tablodan yükle</button></div>
+      <div class="hint" style="margin-top:8px">Haftalar her değişiklikten birkaç saniye sonra <b>otomatik</b> E-Tabloya kaydedilir; sayfa açılışında, sekmeye dönüşte ve 5 dakikada bir E-Tablodaki güncel haftalar otomatik çekilir (her hafta ayrı kayıt). Kayıt yeri: <b>HAFTALIK PROGRAM</b> sekmesi (yoksa <b>AYLIK PROGRAM</b> sekmesi). Personel / oyun kadrosu <b>BÜTÜN OYUNLAR</b> sekmesinden, aylık program ise <b>AYLIK PROGRAM</b> sekmesinden (kesinleşmiş ya da taslak, hangisi yeniyse) okunur.</div>
     </div>
   </aside>
 </div>
@@ -206,7 +210,8 @@ function load(){const st=load0();for(const w of Object.values(st.weeks||{}))if(w
 function load0(){try{const r=localStorage.getItem(LS);if(r)return JSON.parse(r);
   const o=localStorage.getItem('idt_haftalik_program_v1');if(o){const old=JSON.parse(o),st=JSON.parse(JSON.stringify(SEED.state));if(old.staff)st.staff=old.staff;return st;}}catch(e){}
   return JSON.parse(JSON.stringify(SEED.state));}
-function save(){try{localStorage.setItem(LS,JSON.stringify(S));}catch(e){toast('Kaydedilemedi: depolama dolu');}}
+function save(){try{localStorage.setItem(LS,JSON.stringify(S));}catch(e){toast('Kaydedilemedi: depolama dolu');}
+  try{scheduleSync();}catch(e){}}
 function snap(){hist.push(JSON.stringify(S));if(hist.length>80)hist.shift();}
 function undo(){if(!hist.length)return toast('Geri alınacak işlem yok');S=JSON.parse(hist.pop());sel=null;editing=null;save();render();}
 S=load();
@@ -313,15 +318,7 @@ async function fetchCrew(){sheetInfo('Personel okunuyor…');
     for(const row of d.rows||[]){const play=String(row[0]||'').trim();if(!play||/^OYUN ADI$/i.test(play))continue;for(const p of String(row[3]||'').split(',').map(x=>x.trim()).filter(Boolean))out.push({play,category:String(row[1]||'').trim(),role:String(row[2]||'').trim(),person:p});}
     if(out.length){M.crew=out;sheetInfo('✓ Bağlı: '+tab+' ('+out.length+' kadro kaydı, '+new Date().toLocaleTimeString('tr')+')');renderSide();return;}}catch(e){}}
   sheetInfo('✗ E-Tabloya ulaşılamadı — gömülü/yerel kadro kullanılıyor.');}
-async function sheetsSave(){commitEdit();const ver=Date.now(),data=JSON.stringify({weeks:S.weeks,staff:S.staff}),N=40000,parts=[];
-  for(let i=0;i<data.length;i+=N)parts.push(data.slice(i,i+N));
-  try{const old=await (await fetch(SHEET_API+encodeURIComponent(WEEK_TAB)+'?fresh=1',{cache:'no-store'})).json();
-    for(let i=0;i<parts.length;i++){const r=await fetch(SHEET_API+encodeURIComponent(WEEK_TAB)+'/row',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({values:['HP|'+ver,new Date().toISOString(),i,parts.length,parts[i]]})});if(!r.ok)throw new Error('HTTP '+r.status);}
-    const del=(old.rows||[]).map((r,i)=>({r,i})).filter(x=>String(x.r[0]||'').startsWith('HP|')).sort((a,b)=>b.i-a.i);
-    for(const x of del)await fetch(SHEET_API+encodeURIComponent(WEEK_TAB)+'/row/'+x.i,{method:'DELETE'});
-    toast('Haftalar E-Tabloya kaydedildi');sheetInfo('✓ Kaydedildi: '+new Date().toLocaleTimeString('tr'));}
-  catch(e){toast('Kaydedilemedi — “HAFTALIK PROGRAM” sekmesi E-Tablo’da var mı?');}}
-async function sheetsLoad(){
+async function sheetsLoadLegacy(){
   try{const d=await (await fetch(SHEET_API+encodeURIComponent(WEEK_TAB)+'?fresh=1',{cache:'no-store'})).json();const by={};
     (d.rows||[]).forEach(r=>{const id=String(r[0]||'');if(id.startsWith('HP|'))(by[id]=by[id]||[]).push(r);});
     const ids=Object.keys(by).sort().reverse();let data=null;
@@ -329,7 +326,218 @@ async function sheetsLoad(){
     if(!data)return toast('E-Tabloda kayıtlı hafta bulunamadı');const o=JSON.parse(data);if(!o.weeks)throw 0;
     ask('Haftaları yükle',`<p>E-Tablodaki ${Object.keys(o.weeks).length} haftalık kayıt bu tarayıcıdakilerin yerine yüklenecek.</p>`,()=>{snap();S.weeks=o.weeks;if(o.staff)S.staff=o.staff;if(!S.weeks[S.cur])S.cur=Object.keys(S.weeks).sort().pop();sel=null;save();render();toast('Haftalar yüklendi');});}
   catch(e){toast('Yüklenemedi — “HAFTALIK PROGRAM” sekmesi var mı?');}}
-$('#shRefresh').onclick=fetchCrew;$('#shSave').onclick=sheetsSave;$('#shLoad').onclick=sheetsLoad;
+
+/* =====================================================================
+   E-TABLO EŞİTLEME  (Aylık Program ile aynı mantık)
+   • Her hafta kendi satır grubunda tutulur:  hweek_<pazartesi>_<zaman>
+       satır = [kimlik, zaman, parça no, parça sayısı, base64 veri]
+   • Silinen hafta  → hdel_<pazartesi>_<zaman>  (silindi işareti)
+   • Personel / başlık / dipnot / imzalar → hmeta_<zaman>
+   • ÖNCE yeni veri eksiksiz yazılır, SONRA eski satırlar silinir
+     (yazma sırasında kesinti olsa bile eski dolu sürüm kaybolmaz).
+   • Değişiklikten 3,5 sn sonra otomatik: önce sunucu okunur (başka
+     bilgisayar daha yeni değiştirdiyse çakışma sorulur), sonra yazılır.
+   • Açılışta / sekmeye dönüşte / 5 dk'da bir sunucudaki yeni haftalar çekilir.
+   • Aylık program, E-Tablodaki "AYLIK PROGRAM" sekmesinden (kesinleşmiş
+     "apub_" ya da taslak "adraft_", hangisi yeniyse) okunur.
+   ===================================================================== */
+const WK_TABS=['HAFTALIK PROGRAM','AYLIK PROGRAM'], MONTH_TAB='AYLIK PROGRAM';
+const WK_CHUNK=30000, WK_DEBOUNCE=3500, WK_POLL=5*60*1000, SYNC_LS='idt_haftalik_sync_v1';
+let SY=(()=>{const d={ts:{},sent:{},metaTs:0,metaSent:'',tab:'',last:0};try{return Object.assign(d,JSON.parse(localStorage.getItem(SYNC_LS)||'{}'));}catch(e){return d;}})();
+function saveSY(){try{localStorage.setItem(SYNC_LS,JSON.stringify(SY));}catch(e){}}
+function persistQuiet(){try{localStorage.setItem(LS,JSON.stringify(S));}catch(e){}}
+function hsh(s){let x=5381;for(let i=0;i<s.length;i++)x=((x<<5)+x+s.charCodeAt(i))|0;return x+':'+s.length;}
+function nwNorm(w){const c=JSON.parse(JSON.stringify(w));if(c.g)for(const x of Object.values(c.g.cells))if(/^(SAYI|KONU)\s*:/.test(x.t||''))x.nw=1;return c;}
+const metaOf=s=>({staff:s.staff,header:s.header,footer:s.footer,signs:s.signs});
+const wHash=k=>S.weeks[k]?hsh(JSON.stringify(S.weeks[k])):null;
+const mHash=()=>hsh(JSON.stringify(metaOf(S)));
+/* gömülü (hiç dokunulmamış) başlangıç verisi "değiştirilmemiş" sayılır — yeni bir bilgisayar ilk açılışta çakışma sormasın */
+const SEED_H=(()=>{const o={};try{for(const[k,w]of Object.entries(SEED.state.weeks||{}))o[k]=hsh(JSON.stringify(nwNorm(w)));}catch(e){}return o;})();
+const SEED_MH=(()=>{try{return hsh(JSON.stringify(metaOf(SEED.state)));}catch(e){return '';}})();
+function utf8ToB64(t){const b=new TextEncoder().encode(t);let s='';for(let i=0;i<b.length;i+=0x8000)s+=String.fromCharCode(...b.subarray(i,i+0x8000));return btoa(s);}
+function b64ToUtf8(b){const s=atob(b),u=new Uint8Array(s.length);for(let i=0;i<s.length;i++)u[i]=s.charCodeAt(i);return new TextDecoder().decode(u);}
+const clock=()=>new Date().toLocaleTimeString('tr',{hour:'2-digit',minute:'2-digit'});
+function chip(st,text,title){const e=$('#syncState');if(!e)return;e.className='syncchip '+(st||'');e.textContent=text;if(title)e.title=title;}
+function syncInfo(){const e=$('#syncInfo');if(e)e.textContent='Haftalar: '+Object.keys(S.weeks).length+(SY.tab?' · sekme: '+SY.tab:'')+(SY.last?' · son eşitleme '+new Date(SY.last).toLocaleTimeString('tr'):'');}
+
+/* kayıt sekmesini bul: önce HAFTALIK PROGRAM, yoksa ortak AYLIK PROGRAM sekmesi */
+async function wkTab(){
+  if(SY.tab)return SY.tab;
+  for(const t of WK_TABS){try{const r=await fetch(SHEET_API+encodeURIComponent(t)+'?fresh=1',{cache:'no-store'});if(r.ok){SY.tab=t;saveSY();return t;}}catch(e){}}
+  throw new Error('E-Tablo sekmesi bulunamadı');}
+async function wkRows(){
+  const tab=await wkTab();
+  const r=await fetch(SHEET_API+encodeURIComponent(tab)+'?fresh=1',{cache:'no-store'});
+  if(!r.ok){SY.tab='';throw new Error('HTTP '+r.status);}
+  return {tab,rows:(await r.json()).rows||[]};}
+/* satırları gruplayıp her hafta için en yeni EKSİKSİZ grubu seç */
+function wkGroups(rows){
+  const g=new Map(),out={weeks:new Map(),dels:new Map(),meta:null};
+  rows.forEach(r=>{const id=String(r[0]||'');if(/^h(week|del|meta)_/.test(id)){if(!g.has(id))g.set(id,[]);g.get(id).push(r);}});
+  for(const[id,rs]of g){
+    const total=+rs[0][3]||rs.length;if(new Set(rs.map(r=>+r[2])).size<total)continue; /* parça eksik: güvenilmez */
+    const txt=()=>rs.slice().sort((a,b)=>a[2]-b[2]).map(r=>String(r[4]||'')).join('');
+    let m;
+    if((m=id.match(/^hweek_(\d{4}-\d{2}-\d{2})_(\d+)$/))){const ts=+m[2],c=out.weeks.get(m[1]);if(!c||ts>c.ts)out.weeks.set(m[1],{ts,txt});}
+    else if((m=id.match(/^hdel_(\d{4}-\d{2}-\d{2})_(\d+)$/))){const ts=+m[2],c=out.dels.get(m[1]);if(!c||ts>c.ts)out.dels.set(m[1],{ts});}
+    else if((m=id.match(/^hmeta_(\d+)$/))){const ts=+m[1];if(!out.meta||ts>out.meta.ts)out.meta={ts,txt};}
+  }
+  return out;}
+async function wkWrite(tab,id,ts,text){
+  const enc=utf8ToB64(text),parts=[];for(let i=0;i<enc.length;i+=WK_CHUNK)parts.push(enc.slice(i,i+WK_CHUNK));if(!parts.length)parts.push('');
+  for(let i=0;i<parts.length;i++){
+    const r=await fetch(SHEET_API+encodeURIComponent(tab)+'/row',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({values:[id,ts,i,parts.length,parts[i]]})});
+    if(!r.ok)throw new Error('Yazılamadı (HTTP '+r.status+')');}}
+/* eski satırları sil (taze oku; index kaymışsa baştan dene — Aylık Program ile aynı) */
+async function wkDelete(tab,prefixes,keepId){
+  for(let a=1;a<=3;a++){
+    const r=await fetch(SHEET_API+encodeURIComponent(tab)+'?fresh=1',{cache:'no-store'});
+    const rows=r.ok?((await r.json()).rows||[]):[];
+    const hit=rows.map((x,i)=>({id:String(x[0]||''),i})).filter(x=>prefixes.some(p=>x.id.startsWith(p))&&x.id!==keepId).sort((p,q)=>q.i-p.i);
+    if(!hit.length)return;
+    let bad=false;
+    for(const h of hit){const d=await fetch(SHEET_API+encodeURIComponent(tab)+'/row/'+h.i,{method:'DELETE'});if(!d.ok){bad=true;break;}}
+    if(!bad)return;}}
+
+let CONF=new Set(), _confOpen=false;
+function ensureCur(){
+  if(!Object.keys(S.weeks).length){const k=iso(monday(new Date()));S.weeks[k]=blankWeek(k);}
+  if(!S.weeks[S.cur])S.cur=Object.keys(S.weeks).sort().pop();sel=null;}
+/* sunucudan çek: değişmemiş haftalar sessizce güncellenir, iki tarafta da değişmiş olanlar için sorulur */
+async function wkPull(opt={}){
+  const {rows}=await wkRows(),G_=wkGroups(rows),conflicts=[];let applied=0,found=0;
+  for(const k of new Set([...G_.weeks.keys(),...G_.dels.keys()])){
+    const w=G_.weeks.get(k),d=G_.dels.get(k),isDel=!!d&&(!w||d.ts>w.ts),sTs=isDel?d.ts:w.ts,base=SY.ts[k]||0;
+    found++;
+    if(sTs<=base&&!opt.force)continue;
+    const loc=S.weeks[k],lh=loc?wHash(k):null;
+    const untouched=loc?(SY.sent[k]===lh||(SY.sent[k]===undefined&&SEED_H[k]===lh)):(SY.sent[k]===undefined);
+    if(isDel){
+      if(!loc){SY.ts[k]=sTs;delete SY.sent[k];continue;}
+      if(untouched||opt.force){delete S.weeks[k];SY.ts[k]=sTs;delete SY.sent[k];applied++;}
+      else conflicts.push({k,kind:'del',sTs});
+      continue;}
+    let obj;try{obj=JSON.parse(b64ToUtf8(w.txt()));}catch(e){continue;}
+    const oh=hsh(JSON.stringify(obj));
+    if(loc&&oh===lh){SY.ts[k]=sTs;SY.sent[k]=lh;continue;} /* zaten aynı */
+    if(untouched||opt.force){S.weeks[k]=obj;SY.ts[k]=sTs;SY.sent[k]=oh;applied++;}
+    else conflicts.push({k,kind:'week',sTs,obj});}
+  /* personel / başlık / dipnot / imzalar: yerelde bekleyen değişiklik yoksa güncelle (varsa yerel korunur, yazılırken son yazan kazanır) */
+  if(G_.meta&&(G_.meta.ts>SY.metaTs||opt.force)){
+    const mh=mHash();
+    if(opt.force||SY.metaSent===mh||(!SY.metaSent&&mh===SEED_MH)){
+      try{const o=JSON.parse(b64ToUtf8(G_.meta.txt()));['staff','header','footer','signs'].forEach(f=>{if(o[f]!==undefined)S[f]=o[f];});SY.metaTs=G_.meta.ts;SY.metaSent=mHash();applied++;}catch(e){}}}
+  if(applied){ensureCur();persistQuiet();}
+  saveSY();
+  if(applied&&!editing)render();
+  return {applied,conflicts,found};}
+
+function wkAskConflicts(list){
+  if(_confOpen||!list.length)return;_confOpen=true;
+  const dlg=$('#dlg');dlg.addEventListener('close',()=>{_confOpen=false;},{once:true});
+  const body='<p>Aşağıdaki haftalar hem bu tarayıcıda hem E-Tabloda (başka bir bilgisayarda) <b>farklı</b> değişmiş:</p><ul>'+
+    list.map(c=>'<li><b>'+weekLabel(c.k)+'</b>'+(c.kind==='del'?' — E-Tabloda silinmiş':'')+'</li>').join('')+'</ul><p>Hangisi korunsun?</p>';
+  ask('Hafta çakışması',body,null,[
+    ['E-Tablodakini al',()=>{
+      list.forEach(c=>{if(c.kind==='del'){delete S.weeks[c.k];delete SY.sent[c.k];}else{S.weeks[c.k]=c.obj;SY.sent[c.k]=hsh(JSON.stringify(c.obj));}SY.ts[c.k]=c.sTs;CONF.delete(c.k);});
+      ensureCur();persistQuiet();saveSY();render();toast('E-Tablodaki sürüm yüklendi');},''],
+    ['Benimkini koru',()=>{
+      list.forEach(c=>{SY.ts[c.k]=c.sTs;CONF.delete(c.k);}); /* taban sunucuya yükselir → yazılırken daha yeni zaman damgası alır */
+      saveSY();scheduleSync(0);toast('Bu tarayıcıdaki sürüm korunacak');},'gold']]);}
+
+/* değişen haftaları (ve silinenleri) yaz */
+async function wkPush(opt={}){
+  const tab=await wkTab();let n=0;
+  const gone=Object.keys(SY.sent).filter(k=>!S.weeks[k]&&!CONF.has(k));
+  for(const k of Object.keys(S.weeks)){
+    if(CONF.has(k))continue;
+    const txt=JSON.stringify(S.weeks[k]),h=hsh(txt);
+    if(!opt.force&&SY.sent[k]===h)continue;
+    const ts=Math.max(Date.now(),(SY.ts[k]||0)+1),id='hweek_'+k+'_'+ts;
+    await wkWrite(tab,id,ts,txt);
+    SY.ts[k]=ts;SY.sent[k]=h;saveSY();
+    try{await wkDelete(tab,['hweek_'+k+'_','hdel_'+k+'_'],id);}catch(e){}
+    n++;}
+  for(const k of gone){
+    const ts=Math.max(Date.now(),(SY.ts[k]||0)+1),id='hdel_'+k+'_'+ts;
+    await wkWrite(tab,id,ts,'');
+    SY.ts[k]=ts;delete SY.sent[k];saveSY();
+    try{await wkDelete(tab,['hweek_'+k+'_','hdel_'+k+'_'],id);}catch(e){}
+    n++;}
+  const mtxt=JSON.stringify(metaOf(S)),mh=hsh(mtxt);
+  if(opt.force||SY.metaSent!==mh){
+    const ts=Math.max(Date.now(),SY.metaTs+1),id='hmeta_'+ts;
+    await wkWrite(tab,id,ts,mtxt);
+    SY.metaTs=ts;SY.metaSent=mh;saveSY();
+    try{await wkDelete(tab,['hmeta_'],id);}catch(e){}
+    n++;}
+  return n;}
+
+let _wkBusy=false,_wkAgain=false,_wkTimer=null;
+function scheduleSync(ms){clearTimeout(_wkTimer);_wkTimer=setTimeout(()=>syncNow(),ms==null?WK_DEBOUNCE:ms);chip('syncing','☁ kaydedilecek…');}
+async function syncNow(opt={}){
+  if(_wkBusy){_wkAgain=true;return;}
+  if(editing){scheduleSync();return;} /* hücre yazılırken dokunma */
+  _wkBusy=true;clearTimeout(_wkTimer);_wkTimer=null;chip('syncing','☁ eşitleniyor…');
+  let ok=false;
+  try{
+    const p=await wkPull({});
+    CONF=new Set(p.conflicts.map(c=>c.k));
+    const n=await wkPush({force:!!opt.forcePush});
+    SY.last=Date.now();saveSY();syncInfo();ok=true;
+    if(p.conflicts.length){chip('warn','⚠ çakışma — tıklayın','Başka bir bilgisayarda değişen hafta var');wkAskConflicts(p.conflicts);}
+    else chip('ok','☁ eşitlendi '+clock(),'Tüm haftalar E-Tablo ile aynı');
+    if(opt.manual)toast(p.applied||n?('Eşitlendi — '+p.applied+' hafta alındı, '+n+' kayıt yazıldı'):'Zaten güncel');
+  }catch(e){
+    chip('err','☁ bağlantı yok — tekrar denenecek',String(e&&e.message||e));
+    clearTimeout(_wkTimer);_wkTimer=setTimeout(()=>syncNow(),30000);
+    if(opt.manual)toast('E-Tabloya ulaşılamadı');
+  }finally{_wkBusy=false;if(_wkAgain){_wkAgain=false;scheduleSync();}}
+  return ok;}
+
+/* aylık programı E-Tablodan oku (kesinleşmiş ya da taslak — hangisi yeniyse) */
+var SHEET_MONTHS=new Map();
+function applySheetMonths(){
+  if(!SHEET_MONTHS||!SHEET_MONTHS.size)return;
+  const by=new Map((M.months||[]).map(m=>[m.name,m]));
+  SHEET_MONTHS.forEach((v,name)=>by.set(name,v.m));
+  M.months=[...by.values()];
+  M.src='E-Tablo · Aylık Program ('+[...SHEET_MONTHS.keys()].join(', ')+')';}
+async function pullMonths(){
+  try{
+    const r=await fetch(SHEET_API+encodeURIComponent(MONTH_TAB)+'?fresh=1',{cache:'no-store'});if(!r.ok)return;
+    const rows=(await r.json()).rows||[],g=new Map();
+    rows.forEach(x=>{const id=String(x[0]||'');if(/^a(pub|draft)_/.test(id)){if(!g.has(id))g.set(id,[]);g.get(id).push(x);}});
+    const best=new Map();
+    for(const[id,rs]of g){
+      const m=id.match(/^a(pub|draft)_(.+)_(\d+)$/);if(!m)continue;
+      const total=+rs[0][3]||rs.length;if(new Set(rs.map(x=>+x[2])).size<total)continue;
+      const ts=+m[3],c=best.get(m[2]);if(!c||ts>c.ts)best.set(m[2],{ts,rs,kind:m[1]});}
+    let changed=false;
+    for(const[,b]of best){
+      try{const d=JSON.parse(b64ToUtf8(b.rs.slice().sort((p,q)=>p[2]-q[2]).map(x=>String(x[4]||'')).join('')));
+        if(!d.month||!d.month.name)continue;
+        const prev=SHEET_MONTHS.get(d.month.name);
+        if(!prev||prev.ts<b.ts){SHEET_MONTHS.set(d.month.name,{m:d.month,ts:b.ts,kind:b.kind});changed=true;}
+      }catch(e){}}
+    if(changed){applySheetMonths();if(!editing)render();}
+  }catch(e){}}
+
+$('#shRefresh').onclick=()=>{fetchCrew();pullMonths();};
+$('#shSave').onclick=()=>{commitEdit();syncNow({forcePush:true,manual:true});};
+$('#shLoad').onclick=()=>ask('E-Tablodan yükle','<p>E-Tablodaki haftalar bu tarayıcıdakilerin <b>üzerine</b> yazılacak (E-Tabloda silinmiş haftalar da silinir; E-Tabloda hiç olmayan haftalara dokunulmaz).</p>',async()=>{
+  try{chip('syncing','☁ yükleniyor…');const r=await wkPull({force:true});
+    if(!r.found){chip('ok','☁ E-Tabloda hafta yok');return sheetsLoadLegacy();}
+    CONF=new Set();SY.last=Date.now();saveSY();syncInfo();chip('ok','☁ eşitlendi '+clock());toast(r.applied+' kayıt E-Tablodan yüklendi');}
+  catch(e){chip('err','☁ bağlantı yok');toast('Yüklenemedi — E-Tabloya ulaşılamadı');}});
+$('#syncState').onclick=()=>{commitEdit();syncNow({manual:true});};
+/* otomatik tetikleyiciler: sekmeye dönüş, sekme gizlenirken (bekleyen kaydı hemen yaz), 5 dk'da bir */
+let _wkFocusAt=0;
+function wkAuto(){if(document.hidden)return;if(Date.now()-_wkFocusAt<15000)return;_wkFocusAt=Date.now();syncNow();pullMonths();}
+document.addEventListener('visibilitychange',()=>{if(document.hidden){if(_wkTimer&&!_wkBusy){clearTimeout(_wkTimer);syncNow();}}else wkAuto();});
+window.addEventListener('focus',wkAuto);
+setInterval(()=>{if(!document.hidden){syncNow();pullMonths();if(!editing)fetchCrew();}},WK_POLL);
+
 /* menü / çekmece */
 function openTab(n){const d=$('#drawer');const same=d.classList.contains('open')&&d.dataset.tab===n;
   if(same)d.classList.remove('open');else{d.dataset.tab=n;d.classList.add('open');}
@@ -674,11 +882,11 @@ $('#fileM').onchange=async e=>{const f=e.target.files[0];if(!f)return;e.target.v
     S.monthly={months,crew:crew.length?crew:M.crew};M={months,crew:S.monthly.crew,src:'yüklenen aylık program dosyası ('+months.map(m=>m.name).join(', ')+')'};save();render();toast('Aylık program yüklendi');}
   catch(err){toast('Dosya tanınmadı — aylık programın JSON yedeğini veya HTML dosyasını seçin');}};
 $('#dataB').onclick=()=>ask('Yedek',`<p>Tüm haftalar, personel listesi ve başlıklar.</p>`,null,[['JSON indir',()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(S,null,1)],{type:'application/json'}));a.download='haftalik-program-yedek.json';a.click();}],['JSON yükle',()=>{const i=document.createElement('input');i.type='file';i.accept='.json';i.onchange=async()=>{try{const d=JSON.parse(await i.files[0].text());if(!d.weeks)throw 0;snap();S=d;for(const[k,w]of Object.entries(S.weeks))if(!w.g){w.g=templateGrid(k,w.rows||[]);delete w.rows;}sel=null;save();render();toast('Yedek yüklendi');}catch(e){toast('Geçersiz yedek dosyası');}};i.click();}]]);
-window.addEventListener('storage',e=>{if(e.key===MLS){readMonthlyLS();render();}});
+window.addEventListener('storage',e=>{if(e.key===MLS){readMonthlyLS();applySheetMonths();render();}});
 
 
 
-render();fetchCrew();
+render();fetchCrew();pullMonths();syncInfo();setTimeout(()=>syncNow(),700);
 </script>
 </body>
 </html>
