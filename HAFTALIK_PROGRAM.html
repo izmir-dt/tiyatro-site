@@ -398,7 +398,7 @@ body.tmode .sheet{padding:0;height:var(--sheetH,70vh);overflow:auto;border-radiu
     <input type="file" id="fileM" accept=".html,.htm,.json" hidden>
     <div id="weekTitleRow">
       <div><h2 id="weekTitle"></h2><div class="wsub" id="weekSub"></div></div>
-      <div class="tbtns"><button class="titlebar-btn" id="printB">🖨 Yazdır / PDF</button><button class="titlebar-btn" id="expX">Excel indir</button></div>
+      <div class="tbtns"><button class="titlebar-btn" id="printB">🖨 Yazdır / PDF</button><button class="titlebar-btn" id="expX">Excel indir</button><button class="titlebar-btn" id="expJ" title="Haftalık programı resim (JPG) olarak indir">JPG indir</button></div>
     </div>
     <div class="sheet"><div class="doc" id="doc"></div></div>
     <div class="hint" style="margin:8px 2px">Çift tıklayın veya yazmaya başlayın · Enter: alt hücre · Alt+Enter: hücre içi satır · Tab: sağ hücre · Sürükleyerek veya Shift ile çoklu seçim · Ctrl+C / Ctrl+V Excel ile uyumlu · Sütun başlığının kenarını sürükleyerek genişlik ayarlayın.</div>
@@ -1690,6 +1690,86 @@ $('#printB').onclick=()=>{commitEdit();setTimeout(()=>window.print(),50);};
 window.addEventListener('beforeprint',prepareWorkPrint);
 window.addEventListener('afterprint',()=>{document.body.classList.remove('print-measuring');});
 $('#expX').onclick=exportWeeklyExcel;
+/* ---------- JPG çıktı: yazdırmayla aynı model (weeklyDoc), kütüphanesiz canvas çizimi ---------- */
+async function exportWeeklyJpg(){
+  const btn=$('#expJ');btn.disabled=true;const old=btn.textContent;btn.textContent='Hazırlanıyor…';
+  try{
+    const D=weeklyDoc();try{await document.fonts.ready;}catch(e){}
+    const logo=await new Promise(res=>{const im=new Image();im.onload=()=>res(im);im.onerror=()=>res(null);im.src=LOGO;});
+    const W=2600,u=W/1100,M=Math.round(34*u),TW=W-2*M,FF=(getComputedStyle(document.documentElement).getPropertyValue('--tf')||"Calibri,Arial,sans-serif").trim()||"Calibri,Arial,sans-serif";
+    const cv=document.createElement('canvas'),ctx=cv.getContext('2d');
+    const font=(px,b)=>(b?'700 ':'400 ')+Math.round(px)+'px '+FF;
+    const wrap=(t,w,px,b)=>{ctx.font=font(px,b);const out=[];
+      String(t||'').split('\n').forEach(par=>{if(!par.trim()){out.push('');return;}let line='';
+        par.split(/(\s+)/).forEach(tok=>{if(!tok)return;const test=line+tok;
+          if(ctx.measureText(test).width<=w||!line.trim()){line=test;}else{out.push(line.trim());line=tok.trimStart();}
+          while(ctx.measureText(line).width>w&&line.length>1){let k=line.length-1;while(k>1&&ctx.measureText(line.slice(0,k)).width>w)k--;out.push(line.slice(0,k));line=line.slice(k);}});
+        out.push(line.trim());});
+      return out;};
+    /* sütunlar */
+    const pr=[11,9,9.5,42.5,28],tot=pr.reduce((a,b)=>a+b,0),cw=pr.map(x=>Math.round(TW*x/tot)),cx=[0];cw.forEach((w,i)=>cx.push(cx[i]+w));
+    const FS=12.5*u,LH=FS*1.32,PAD=6*u,roles=['time','place','task','ppl'];
+    /* satır yükseklikleri */
+    const flat=[];D.days.forEach((day,di)=>day.rows.forEach((row,ri)=>flat.push({day,di,row,ri})));
+    const rh=flat.map(()=>LH+2*PAD);
+    const need=(c,ci,b)=>wrap(c.t,cw[ci]-2*PAD,FS,b).length*LH+2*PAD;
+    flat.forEach((f,i)=>{roles.forEach((role,k)=>{const c=f.row.cells[role];if(c.skip||(c.span||1)>1)return;rh[i]=Math.max(rh[i],need(c,k+1,role==='time'||role==='place'));});});
+    flat.forEach((f,i)=>{roles.forEach((role,k)=>{const c=f.row.cells[role];if(c.skip||(c.span||1)<=1)return;const n=need(c,k+1,role==='time'||role==='place');let sum=0;for(let j=i;j<i+c.span;j++)sum+=rh[j];if(sum<n)rh[i+c.span-1]+=n-sum;});});
+    D.days.forEach(day=>{const idx=flat.map((f,i)=>f.day===day?i:-1).filter(i=>i>=0);const n=wrap(day.label,cw[0]-2*PAD,FS,false).length*LH+2*PAD;let sum=0;idx.forEach(i=>sum+=rh[i]);if(sum<n)rh[idx[idx.length-1]]+=n-sum;});
+    /* üst bilgi */
+    const kurum=String(D.kurum||'').split('\n'),HFS=11*u,headH=Math.max(kurum.length*HFS*1.45,70*u);
+    const noteW=TW*0.62,notes=D.notes.map(t=>wrap('• '+t,noteW,FS*0.9,false));
+    const noteH=notes.reduce((a,l)=>a+l.length*FS*0.9*1.35+4*u,0);
+    const signs=(D.signs||[]).map(x=>String(x).split('\n'));
+    const signH=signs.length?Math.max(...signs.map(l=>l.length))*FS*1.45+24*u:0;
+    const tableH=rh.reduce((a,b)=>a+b,0)+LH+2*PAD;
+    const H=Math.round(M+headH+18*u+(FS*1.5)+(FS*1.2)+14*u+tableH+16*u+Math.max(noteH,signH)+M);
+    cv.width=W;cv.height=H;ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);ctx.fillStyle='#000';ctx.textBaseline='top';
+    let y=M;
+    /* başlık satırı: logo + sayı/konu | kurum | tarih */
+    let lx=M;if(logo){const lw=62*u,lh=lw*logo.naturalHeight/logo.naturalWidth;ctx.drawImage(logo,M,y,lw,lh);lx=M+lw+10*u;}
+    ctx.font=font(HFS,false);ctx.textAlign='left';
+    [D.sayi,D.konu].forEach((t,i)=>ctx.fillText(t||'',lx,y+(i?1.6:0.3)*HFS*1.45));
+    ctx.textAlign='center';ctx.font=font(HFS,true);kurum.forEach((t,i)=>ctx.fillText(t,W/2,y+i*HFS*1.45));
+    ctx.textAlign='right';ctx.font=font(HFS,false);ctx.fillText(D.tarih||'',W-M,y+0.3*HFS*1.45);
+    y+=headH+18*u;
+    ctx.textAlign='center';ctx.font=font(FS*1.45,true);ctx.fillText(D.title||'',W/2,y);y+=FS*1.5;
+    ctx.font=font(FS*1.1,true);ctx.fillText(D.week||'',W/2,y);y+=FS*1.2+14*u;
+    /* tablo */
+    const X=M,line='#222';ctx.strokeStyle=line;ctx.lineWidth=Math.max(1.5,u*0.7);
+    const cell=(x,yy,w,h,txt,o={})=>{if(o.bg){ctx.fillStyle=o.bg;ctx.fillRect(x,yy,w,h);}ctx.strokeRect(x,yy,w,h);ctx.fillStyle='#000';ctx.font=font(o.px||FS,o.b);
+      const ls=wrap(txt,w-2*PAD,o.px||FS,o.b),th=ls.length*LH;let ty=o.top?yy+PAD:yy+Math.max(PAD,(h-th)/2);
+      ctx.textAlign=o.al==='c'?'center':'left';const tx=o.al==='c'?x+w/2:x+PAD;ls.forEach(l=>{ctx.fillText(l,tx,ty);ty+=LH;});};
+    const heads=['TARİH / GÜN','SAAT','YER','YAPILACAK İŞ','GÖREVLİLER'],hh=LH+2*PAD;
+    heads.forEach((t,i)=>cell(X+cx[i],y,cw[i],hh,t,{b:true,al:'c',bg:'#e9e9e9',px:FS*0.95}));y+=hh;
+    let i=0;
+    D.days.forEach(day=>{const idx=[];flat.forEach((f,j)=>{if(f.day===day)idx.push(j);});
+      const y0=y,hs=idx.map(j=>rh[j]),total=hs.reduce((a,b)=>a+b,0);
+      cell(X,y0,cw[0],total,day.label,{al:'c',bg:day.weekend?'#f6e3e3':null});
+      let yy=y0;idx.forEach((j,n)=>{const row=flat[j].row;
+        roles.forEach((role,k)=>{const c=row.cells[role];if(c.skip)return;const span=c.span||1;let h=0;for(let q=0;q<span;q++)h+=rh[j+q]||0;
+          cell(X+cx[k+1],yy,cw[k+1],h,c.t,{al:(role==='time'||role==='place')?'c':'l',b:role==='time'||role==='place',top:role==='task'||role==='ppl'});});
+        yy+=rh[j];});
+      ctx.lineWidth=Math.max(2.5,u*1.2);ctx.strokeRect(X,y0,TW,total);ctx.lineWidth=Math.max(1.5,u*0.7);
+      y=y0+total;});
+    y+=16*u;
+    /* dipnotlar + imzalar */
+    ctx.textAlign='left';ctx.fillStyle='#000';ctx.font=font(FS*0.9,false);let ny=y;
+    notes.forEach(ls=>{ls.forEach(l=>{ctx.fillText(l,M,ny);ny+=FS*0.9*1.35;});ny+=4*u;});
+    if(signs.length){const sw=Math.min(300*u,(TW-noteW)/Math.max(1,signs.length)-10*u);let sx=W-M;
+      for(let k=signs.length-1;k>=0;k--){const ls=signs[k],cxm=sx-sw/2;ctx.textAlign='center';
+        ls.forEach((l,n)=>{ctx.font=font(FS*(n?1:1.05),n===0);ctx.fillText(l,cxm,y+4*u+n*FS*1.45);});sx-=sw+24*u;}}
+    const blob=await new Promise(r=>cv.toBlob(r,'image/jpeg',0.92));
+    if(!blob)throw new Error('Resim oluşturulamadı');
+    const name=(String(S.unit||UNIT.name)+' Haftalık Program '+weekLabel(S.cur)).replace(/[\\/:*?"<>|]+/g,'').replace(/\s+/g,'_')+'.jpg';
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();
+    setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},4000);
+    toast('JPG indirildi');
+  }catch(e){toast('JPG oluşturulamadı: '+(e&&e.message||e));}
+  finally{btn.disabled=false;btn.textContent=old;}
+}
+$('#expJ').onclick=exportWeeklyJpg;
+
 $('#impX').onclick=()=>$('#fileX').click();
 $('#fileX').onchange=async e=>{const f=e.target.files[0];if(!f)return;e.target.value='';
   try{const sh=(await readSheets(f)).sheets[0];
