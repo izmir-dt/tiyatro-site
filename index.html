@@ -726,6 +726,7 @@ html{scroll-behavior:smooth}
   <section class="panel" id="p-arsiv"><div class="wrap single"><div id="arsiv"></div></div></section>
   <section class="panel" id="p-yonetim"><div class="wrap single"><div id="yonetim"></div></div></section>
   <section class="panel" id="p-program"><div class="wrap single"><div id="program"></div></div></section>
+  <section class="panel" id="p-haftalik"><div class="wrap single"><div id="haftalik"></div></div></section>
 </main>
 
 <div class="modal-bg" id="ui-modal"><div class="modal">
@@ -3343,7 +3344,7 @@ window.exportPDF = function(title, headers, data){
     if(!nav) return;
     const main = [
       ["panel","Ana Panel"],["kisiler","Kişiler"],["dagilim","Dağılım"],["sorgu","Sorgulama"],
-      ["grafik","İstatistik"],["figuran","Figüran"],["program","Aylık Program"]
+      ["grafik","İstatistik"],["figuran","Figüran"],["program","Aylık Program"],["haftalik","Haftalık Program"]
     ];
     const admin = [["gorevsiz","Görevli Olmayan"],["arsiv","Arşiv Oyunlar"],["yonetim","Yönetim"]];
     const cur = (location.hash||"#panel").slice(1);
@@ -4358,5 +4359,213 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 })();
 </script>
 
+
+<!-- ═══════════════ HAFTALIK PROGRAM ÖNİZLEME · birimlerin onaylı haftalık programları ═══════════════ -->
+<style>
+.hp-unit{margin-top:18px}
+.hp-unit:first-child{margin-top:0}
+.hp-unit-h{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:0 0 10px}
+.hp-unit-h h4{margin:0;font-family:var(--font-d);font-weight:800;font-size:16px;display:flex;align-items:center;gap:8px}
+.hp-unit-h h4::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--accent)}
+.hp-empty{padding:12px 14px;border:1px dashed var(--line);border-radius:12px;color:var(--muted);font-size:13px;background:var(--surface-2)}
+.hp-more{margin-top:10px}
+.hp-doc{max-width:1100px;margin:0 auto;padding:14px 4px 4px}
+.hp-doc .hp-head{display:flex;justify-content:space-between;gap:14px;align-items:flex-start;font-size:12px;line-height:1.35;color:var(--text)}
+.hp-doc .hp-head .c{text-align:center;font-weight:700;white-space:pre-line;flex:1}
+.hp-doc .hp-head .l{white-space:pre-line;min-width:150px}
+.hp-doc .hp-head .r{text-align:right;min-width:150px}
+.hp-doc h2{text-align:center;font-family:var(--font-d);font-size:17px;margin:14px 0 2px}
+.hp-doc .wk{text-align:center;font-weight:700;color:var(--accent);margin:0 0 10px;font-size:13px}
+.hp-doc table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:12.5px}
+.hp-doc th,.hp-doc td{border:1px solid var(--aph-grid,#b09a96);padding:5px 7px;vertical-align:top;white-space:pre-line;word-break:break-word}
+.hp-doc th{background:var(--surface-2);font-size:11px;letter-spacing:.04em;text-align:center}
+.hp-doc td.date{text-align:center;font-weight:700}
+.hp-doc td.date.we{background:color-mix(in srgb,var(--accent) 12%,var(--surface))}
+.hp-doc td.time,.hp-doc td.place{text-align:center}
+.hp-doc tr.ds td{border-top:2px solid var(--aph-grid,#b09a96)}
+.hp-doc ul{margin:12px 0 0;padding-left:18px;font-size:11.5px;color:var(--muted)}
+.hp-doc .signs{display:flex;justify-content:flex-end;gap:48px;margin-top:16px;font-size:12px;text-align:center;white-space:pre-line}
+.hp-doc .signs b{display:block}
+@media(max-width:700px){.hp-doc table{font-size:11.5px}.hp-doc .hp-head{flex-direction:column}.hp-doc .hp-head .r,.hp-doc .hp-head .l{text-align:left}}
+</style>
+<script>
+(function(){
+  const API = "https://tiyatro-backend.vercel.app/api/sheets/" + encodeURIComponent("HAFTALIK PROGRAM") + "?fresh=1";
+  const UNITS = [["dekor","Dekor Aksesuar Birimi"],["kondvit","Kondüvit Birimi"],["isik","Işık Birimi"],
+                 ["erkek","Erkek Terzi Birimi"],["kadin","Kadın Terzi Birimi"],["peruka","Peruka Birimi"]];
+  const SHOW_FIRST = 4;
+  let DATA = {};            /* birim kodu -> [{week,label,ts,doc}] (yeniden eskiye) */
+  let OPEN = null;          /* açık önizleme: {key, week} */
+  let EXPAND = {};          /* birim kodu -> hepsi gösteriliyor mu */
+  let LAST = null;
+
+  const hesc = s => String(s==null?"":s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+  function b64u(b){ const bin=atob(b), u=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i); return new TextDecoder().decode(u); }
+  function tsLabel(ts){
+    try{ return new Date(ts).toLocaleString("tr-TR",{timeZone:"Europe/Istanbul",day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"}).replace(","," saat:"); }
+    catch(e){ return ""; }
+  }
+
+  async function load(){
+    const res = await fetch(API,{cache:"no-store"});
+    if(!res.ok) throw new Error("HTTP "+res.status);
+    const rows = (await res.json()).rows || [];
+    const groups = new Map();
+    rows.forEach(r=>{
+      const id = String(r[0]||"");
+      if(!/^hpub_[a-z]+_\d{4}-\d{2}-\d{2}_\d+$/.test(id)) return;
+      if(!groups.has(id)) groups.set(id,[]);
+      groups.get(id).push(r);
+    });
+    /* her birim+hafta için en yeni EKSİKSİZ kayıt */
+    const best = new Map();
+    for(const [id,rs] of groups){
+      const total = +rs[0][3] || rs.length;
+      if(new Set(rs.map(r=>+r[2])).size < total) continue;
+      const m = id.match(/^hpub_([a-z]+)_(\d{4}-\d{2}-\d{2})_(\d+)$/);
+      const k = m[1]+"|"+m[2], ts = +m[3], cur = best.get(k);
+      if(cur && cur.ts >= ts) continue;
+      try{
+        const txt = rs.slice().sort((a,b)=>a[2]-b[2]).map(r=>String(r[4]||"")).join("");
+        const o = JSON.parse(b64u(txt));
+        if(o && o.doc) best.set(k,{ts,key:m[1],week:m[2],label:o.label||m[2],doc:o.doc});
+      }catch(e){}
+    }
+    const out = {};
+    UNITS.forEach(([k])=>out[k]=[]);
+    for(const v of best.values()){ (out[v.key] = out[v.key] || []).push(v); }
+    Object.values(out).forEach(a=>a.sort((x,y)=> y.week<x.week ? -1 : y.week>x.week ? 1 : 0));
+    return out;
+  }
+
+  function statsOf(doc){
+    let isSayi=0, doluGun=0; const kisi=new Set();
+    (doc.days||[]).forEach(d=>{
+      let any=false;
+      (d.rows||[]).forEach(r=>{
+        const task=(r.cells&&r.cells.task&&r.cells.task.t||"").trim();
+        const ppl=(r.cells&&r.cells.ppl&&r.cells.ppl.t||"");
+        if(task){ isSayi++; any=true; }
+        ppl.split(/[–—,\-\n]+/).map(x=>x.trim()).filter(Boolean).forEach(x=>kisi.add(x));
+      });
+      if(any) doluGun++;
+    });
+    return {isSayi,doluGun,kisi:kisi.size};
+  }
+
+  function weekCard(unitKey,w){
+    const st = statsOf(w.doc);
+    return `<div class="aph-card">
+      <div class="month-kicker">Haftalık program</div>
+      <div class="ttl">${hesc(w.label)}</div>
+      <div class="meta" title="Bu hafta bu tarih ve saatte onaylandı">Onay: ${hesc(tsLabel(w.ts))}</div>
+      <div class="stat">
+        <div title="Haftalık programa girilen iş sayısı"><b>${st.isSayi}</b><span>iş</span><small>yapılacak iş</small></div>
+        <div title="En az bir iş girilen gün sayısı"><b>${st.doluGun}</b><span>dolu gün</span><small>gün sayısı</small></div>
+        <div title="Görevli olarak yazılan farklı kişi/kısaltma sayısı"><b>${st.kisi}</b><span>görevli</span><small>kişi sayısı</small></div>
+      </div>
+      <div class="acts"><button class="btn sm aph-preview-btn" onclick="hpOpen('${unitKey}','${w.week}')">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="14" rx="2"></rect><path d="m8 21 2-3h4l2 3"></path><path d="m10 9 4 2-4 2z"></path></svg>
+        Programı önizle</button></div>
+    </div>`;
+  }
+
+  function unitSection([key,name]){
+    const list = DATA[key] || [];
+    const shown = EXPAND[key] ? list : list.slice(0,SHOW_FIRST);
+    return `<div class="hp-unit">
+      <div class="hp-unit-h"><h4>${hesc(name)}</h4><span class="chip${list.length?" gold":""}">${list.length} onaylı hafta</span></div>
+      ${list.length ? `<div class="aph-months">${shown.map(w=>weekCard(key,w)).join("")}</div>` : `<div class="hp-empty">Bu birim için henüz onaylanmış haftalık program yok.</div>`}
+      ${list.length>SHOW_FIRST ? `<div class="hp-more"><button class="btn sm" onclick="hpToggle('${key}')">${EXPAND[key]?"Önceki haftaları gizle":"Önceki haftaları göster ("+(list.length-SHOW_FIRST)+")"}</button></div>` : ""}
+    </div>`;
+  }
+
+  function docHtml(doc){
+    const days = (doc.days||[]).map(d=>{
+      const n = (d.rows||[]).length;
+      return (d.rows||[]).map((row,i)=>{
+        let h = `<tr class="${i===0?"ds":""}">`;
+        if(i===0) h += `<td class="date${d.weekend?" we":""}" rowspan="${n}">${hesc(d.label)}</td>`;
+        ["time","place","task","ppl"].forEach(role=>{
+          const c = (row.cells&&row.cells[role])||{t:""};
+          if(c.skip) return;
+          h += `<td class="${role}"${c.span>1?` rowspan="${c.span}"`:""}>${hesc(c.t)}</td>`;
+        });
+        return h+"</tr>";
+      }).join("");
+    }).join("");
+    const signs = (doc.signs||[]).map(s=>{ const l=String(s).split("\n"); return `<div><b>${hesc(l.shift())}</b>${hesc(l.join("\n"))}</div>`; }).join("");
+    return `<div class="hp-doc">
+      <div class="hp-head"><div class="l">${hesc(doc.sayi||"")}\n${hesc(doc.konu||"")}</div><div class="c">${hesc(doc.kurum||"")}</div><div class="r">${hesc(doc.tarih||"")}</div></div>
+      <h2>${hesc(doc.title||"HAFTALIK İŞ PLANI ÇİZELGESİ")}</h2><div class="wk">${hesc(doc.week||"")}</div>
+      <table><colgroup><col style="width:12%"><col style="width:9%"><col style="width:10%"><col style="width:41%"><col style="width:28%"></colgroup>
+        <thead><tr><th>TARİH / GÜN</th><th>SAAT</th><th>YER</th><th>YAPILACAK İŞ</th><th>GÖREVLİLER</th></tr></thead><tbody>${days}</tbody></table>
+      ${(doc.notes&&doc.notes.length)?`<ul>${doc.notes.map(t=>`<li>${hesc(t)}</li>`).join("")}</ul>`:""}
+      ${signs?`<div class="signs">${signs}</div>`:""}
+    </div>`;
+  }
+
+  function overlay(){
+    document.querySelectorAll("body > .hp-ov").forEach(n=>n.remove());
+    if(!OPEN) return;
+    const w = (DATA[OPEN.key]||[]).find(x=>x.week===OPEN.week);
+    if(!w){ OPEN=null; return; }
+    const uname = (UNITS.find(u=>u[0]===OPEN.key)||[,""])[1];
+    const ov = document.createElement("div");
+    ov.className = "aph-ov hp-ov";
+    ov.setAttribute("role","dialog"); ov.setAttribute("aria-modal","true");
+    ov.onclick = e => { if(e.target===ov) hpClose(); };
+    ov.innerHTML = `<div class="win">
+      <div class="top"><div class="t">${hesc(uname)} · ${hesc(w.label)}</div>
+        <div style="display:flex;gap:8px;align-items:center"><span class="chip">Onay: ${hesc(tsLabel(w.ts))}</span>
+        <button class="btn sm" onclick="window.print()" title="Yazdır / PDF">🖨 Yazdır</button>
+        <button class="btn sm" data-hp-close onclick="hpClose()">Kapat ✕</button></div></div>
+      <div class="aph-prev" style="padding-top:8px">${docHtml(w.doc)}</div></div>`;
+    document.body.appendChild(ov);
+    ov.querySelector("[data-hp-close]")?.focus();
+  }
+  document.addEventListener("keydown", e => { if(e.key==="Escape" && OPEN) hpClose(); });
+
+  function paint(error){
+    const box = document.getElementById("haftalik");
+    if(!box) return;
+    const total = Object.values(DATA).reduce((n,a)=>n+a.length,0);
+    box.innerHTML = `<div class="card">
+      <div class="card-h aph-head">
+        <div><h3><span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="16" rx="2"></rect><path d="M8 2.5v4M16 2.5v4M3 9.5h18"></path><path d="m8 14 2 2 5-5"></path></svg></span> Haftalık Program</h3></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <span class="chip gold">${total} onaylı hafta</span>
+          <span class="chip" title="Bu ekran en son bu saatte yenilendi">Ekran yenilendi: ${LAST?LAST.toLocaleTimeString("tr-TR",{timeZone:"Europe/Istanbul",hour:"2-digit",minute:"2-digit"}):""}</span>
+          <button class="btn sm" onclick="renderHaftalik()">Yenile</button>
+        </div>
+      </div>
+      <div class="card-b" style="padding:16px">
+        ${error?`<div class="aph-note" style="background:var(--danger-wash);border-color:var(--danger);border-left-color:var(--danger);color:var(--danger)">Haftalık programlar okunamadı (${hesc(error)}). Bir süre sonra <b>Yenile</b>'ye basın.</div>`:""}
+        ${UNITS.map(unitSection).join("")}
+      </div></div>`;
+    overlay();
+  }
+
+  window.renderHaftalik = async function(){
+    const box = document.getElementById("haftalik");
+    if(!box) return;
+    if(!LAST) box.innerHTML = `<div class="card"><div class="card-b" style="padding:16px;color:var(--muted)">Haftalık programlar yükleniyor…</div></div>`;
+    let err = "";
+    try{ DATA = await load(); }catch(e){ err = e && e.message || "bağlantı hatası"; if(!LAST) UNITS.forEach(([k])=>DATA[k]=DATA[k]||[]); }
+    LAST = new Date();
+    paint(err);
+  };
+  window.hpOpen   = (key,week) => { OPEN={key,week}; overlay(); };
+  window.hpClose  = () => { OPEN=null; overlay(); };
+  window.hpToggle = key => { EXPAND[key]=!EXPAND[key]; paint(""); };
+
+  const _go = window.go;
+  window.go = function(id){
+    _go(id);
+    if(id === "haftalik") renderHaftalik();
+  };
+  if((location.hash||"").slice(1) === "haftalik") setTimeout(() => window.go("haftalik"), 150);
+})();
+</script>
 </body>
 </html>
