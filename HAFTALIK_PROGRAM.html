@@ -1542,8 +1542,14 @@ function prepareWorkPrint(){
     h+='</tr>';});
   h+='</tbody></table><div class="print-foot"><ul class="print-notes">'+D.notes.map(t=>'<li>'+esc(t)+'</li>').join('')+'</ul><div class="print-signs">'+D.signs.map(s=>{const l=s.split('\n');return '<div><b>'+esc(l.shift())+'</b>'+esc(l.join('\n'))+'</div>';}).join('')+'</div></div></div>';
   page.innerHTML=h;document.body.classList.add('print-measuring');
-  const inner=$('#printInner'),maxH=190*96/25.4,scale=Math.min(1,maxH/inner.getBoundingClientRect().height);
-  page.style.setProperty('--print-scale',String(scale));document.body.classList.remove('print-measuring');
+  /* Sayfayı hem yatayda hem dikeyde doldur: belge, ölçek s iken 276/s mm genişlikte yerleştirilir;
+     s büyütülürken yükseklik 190 mm'yi aşmayan en büyük s ikili aramayla bulunur. */
+  const inner=$('#printInner'),maxH=190*96/25.4,heightAt=s=>{inner.style.width=(276/s)+'mm';return inner.getBoundingClientRect().height;};
+  let lo=0.3,hi=1,best=0.3;
+  if(heightAt(1)<=maxH)best=1;
+  else{for(let i=0;i<14;i++){const mid=(lo+hi)/2;if(heightAt(mid)*mid<=maxH){best=mid;lo=mid;}else hi=mid;}}
+  inner.style.width=(276/best)+'mm';
+  page.style.setProperty('--print-scale',String(best));document.body.classList.remove('print-measuring');
 }
 
 /* ---------- Excel: yazdırmayla aynı model, satır yüksekliği gerçek metin ölçümüyle ---------- */
