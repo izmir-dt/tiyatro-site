@@ -335,7 +335,7 @@ body.tmode .sheet{padding:0;height:var(--sheetH,70vh);overflow:auto;border-radiu
     <button type="button" data-menu="tasks">🧰 Hazır işler</button>
     <button type="button" data-menu="warns">⚠ Uyarılar <span class="n" id="warnN">0</span></button>
     <button type="button" data-menu="month">📅 Aylık program</button>
-    <button type="button" data-menu="leave">📋 İzin / rapor</button><button type="button" id="tipToggle" aria-pressed="true" title="Bilgi balonlarını aç / kapat">ⓘ Bilgi balonu</button>
+    <button type="button" data-menu="leave">📋 İzin / rapor</button>
     <button type="button" data-menu="sheets">☁ Sheets</button>
   </nav>
 </header>
@@ -1331,8 +1331,8 @@ function checkFinal(){
     if((A.m[name]||0)>=v.ts)return;
     if(!CREW_LIVE)return; /* kadro E-Tablodan gelmeden ilgili mi diye karar verme */
     const hits=relevance(v.m);if(hits.length)pend.push({name,ts:v.ts,hits});else A.m[name]=v.ts;});
-  ackPut(A);const was=NOTES.length;NOTES=pend;renderNotice();if(NOTES.length>was)toast('📣 Aylık program kesinleşti — birimi ilgilendiren kayıtlar var');}
-function renderNotice(){const e=$('#notice');if(!e)return;
+  ackPut(A);const was=NOTES.length;NOTES=pend;renderNotice();}
+function renderNotice(){const e=$('#notice');if(e)e.innerHTML='';return;
   e.innerHTML=NOTES.map((n,i)=>`<div class="nt"><div class="tx">📣 <b>${esc(n.name)}</b> aylık programı <b>kesinleşti</b> — ${esc(S.unit||'Dekor Aksesuar')} birimini ilgilendiren ${n.hits.length} kayıt var.<small>${n.hits.slice(0,6).map(h=>dmy(fromIso(h.d)).slice(0,5)+' '+esc(h.p)).join(' · ')}${n.hits.length>6?' …':''}</small><small>İlgili haftaları kontrol edin; çakışmalar “Uyarılar”da görünür.</small></div><button class="btn sm" data-nw="1">⚠ Uyarılar</button><button class="btn sm gold" data-nk="${i}">Tamam, gördüm</button></div>`).join('');}
 $('#notice').addEventListener('click',e=>{const k=e.target.closest('[data-nk]'),w=e.target.closest('[data-nw]');
   if(k){const n=NOTES[+k.dataset.nk];if(!n)return;const A=ackGet()||{m:{}};A.m[n.name]=n.ts;ackPut(A);NOTES.splice(+k.dataset.nk,1);renderNotice();}
@@ -1730,7 +1730,7 @@ doc.addEventListener('click',e=>{
 });
 
 let tips=true,tipTimer=null;const tip=document.createElement('div');tip.id='weeklyTip';tip.setAttribute('role','tooltip');document.body.appendChild(tip);
-$('#tipToggle').onclick=()=>{tips=!tips;$('#tipToggle').setAttribute('aria-pressed',String(tips));tip.style.display='none';};
+
 function hideWeeklyTip(){clearTimeout(tipTimer);tip.style.display='none';}
 function showWeeklyTip(td,event){if(!tips||editing||dragging)return;const L=layout(G());if(!L||L.col.ppl==null||+td.dataset.c!==L.col.ppl)return;const r=+td.dataset.r,it=items().find(i=>i.r===r);if(!it||it.day<0)return;const date=dayIso(it.day),busy=busyOn(date);let h='';splitPeople(it.people).forEach(p=>{const st=S.staff.find(x=>nk(x.s)===nk(p)||nk(x.full)===nk(p)),a=st&&unavailable(st,date),b=busy[nk(p)];if(a)h+='<p><b>'+esc(st.full||p)+'</b> · '+esc(a)+'</p>';else if(b)h+='<p><b>'+esc(st?st.full||p:p)+'</b> · aylık programda: '+esc(b.join(', '))+'</p>';});if(!h)return;tip.innerHTML=h;tip.style.display='block';const bx=td.getBoundingClientRect(),x=event?event.clientX:bx.left,y=event?event.clientY:bx.bottom;tip.style.left=Math.max(8,Math.min(x+14,innerWidth-tip.offsetWidth-10))+'px';tip.style.top=Math.max(8,Math.min(y+18,innerHeight-tip.offsetHeight-10))+'px';}
 doc.addEventListener('pointerover',e=>{const td=e.target.closest('td.c');if(!td)return;clearTimeout(tipTimer);tipTimer=setTimeout(()=>showWeeklyTip(td,e),300);});doc.addEventListener('pointerout',hideWeeklyTip);doc.addEventListener('pointerdown',hideWeeklyTip);window.addEventListener('scroll',hideWeeklyTip,true);document.addEventListener('keydown',e=>{if(e.key==='Escape')hideWeeklyTip();});
