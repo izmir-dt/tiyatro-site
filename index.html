@@ -4364,6 +4364,8 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 .prg-switch{display:inline-flex;gap:4px;padding:4px;margin:0 0 14px;border:1px solid var(--line);border-radius:12px;background:var(--surface-2)}
 .prg-switch button{border:0;background:transparent;padding:8px 16px;border-radius:9px;font:700 13px var(--font-d,inherit);color:var(--muted);cursor:pointer}
 .prg-switch button.on{background:var(--accent);color:var(--accent-ink,#fff)}
+.hp-note{display:flex;gap:8px;align-items:flex-start;max-width:1100px;margin:0 auto 10px;padding:10px 12px;border:1px solid color-mix(in srgb,var(--accent) 32%,var(--line));border-left:3px solid var(--accent);border-radius:10px;background:color-mix(in srgb,var(--accent) 7%,var(--surface));color:var(--text-dim);font-size:13px;line-height:1.45;white-space:pre-line}
+.hp-note::before{content:"i";display:grid;place-items:center;flex:0 0 auto;width:18px;height:18px;border-radius:50%;background:var(--accent);color:var(--accent-ink);font-size:11px;font-weight:800}
 .hp-unit{margin-top:18px}
 .hp-unit:first-child{margin-top:0}
 .hp-unit-h{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:0 0 10px}
@@ -4400,6 +4402,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
   let OPEN = null;          /* açık önizleme: {key, week} */
   let EXPAND = {};          /* birim kodu -> hepsi gösteriliyor mu */
   let LAST = null;
+  let LIST = null;         /* haftaları listelenen birim kodu */
 
   const hesc = s => String(s==null?"":s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
   function b64u(b){ const bin=atob(b), u=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i); return new TextDecoder().decode(u); }
@@ -4432,7 +4435,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
       try{
         const txt = rs.slice().sort((a,b)=>a[2]-b[2]).map(r=>String(r[4]||"")).join("");
         const o = JSON.parse(b64u(txt));
-        if(o && o.doc) best.set(k,{ts,key:m[1],week:m[2],label:o.label||m[2],doc:o.doc});
+        if(o && o.doc) best.set(k,{ts,key:m[1],week:m[2],label:o.label||m[2],doc:o.doc,note:String(o.note||"").trim()});
       }catch(e){}
     }
     const out = {};
@@ -4457,6 +4460,29 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
     return {isSayi,doluGun,kisi:kisi.size};
   }
 
+  function statHtml(st){
+    return `<div class="stat">
+        <div title="Haftalık programa girilen iş sayısı"><b>${st.isSayi}</b><span>iş</span><small>yapılacak iş</small></div>
+        <div title="En az bir iş girilen gün sayısı"><b>${st.doluGun}</b><span>dolu gün</span><small>gün sayısı</small></div>
+        <div title="Görevli olarak yazılan farklı kişi/kısaltma sayısı"><b>${st.kisi}</b><span>görevli</span><small>kişi sayısı</small></div>
+      </div>`;
+  }
+  /* birim penceresindeki hafta kartı (kart içinde kart) */
+  function weekCard(key,w){
+    return `<div class="aph-card">
+      <div class="month-kicker">Haftalık program</div>
+      <div class="ttl">${hesc(w.label)}</div>
+      <div class="meta">Onay: ${hesc(tsLabel(w.ts))}</div>
+      ${statHtml(statsOf(w.doc))}
+      ${w.note?`<div class="note">${hesc(w.note)}</div>`:""}
+      <div class="acts">
+        <button class="btn sm aph-preview-btn" onclick="hpOpen('${key}','${w.week}')">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="14" rx="2"></rect><path d="m8 21 2-3h4l2 3"></path><path d="m10 9 4 2-4 2z"></path></svg>
+          Programı önizle</button>
+      </div>
+    </div>`;
+  }
+
   function unitCard([key,name]){
     const list = DATA[key] || [];
     if(!list.length) return `<div class="aph-card" style="opacity:.8">
@@ -4466,22 +4492,17 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
       <div class="note">Birim haftalık programı onayladığında burada görünür.</div>
     </div>`;
     const w = list[0], st = statsOf(w.doc);
-    const older = list.slice(1);
     return `<div class="aph-card">
       <div class="month-kicker">Haftalık program</div>
       <div class="ttl">${hesc(name)}</div>
       <div class="meta" title="En son onaylanan hafta">${hesc(w.label)} · Onay: ${hesc(tsLabel(w.ts))}</div>
-      <div class="stat">
-        <div title="Haftalık programa girilen iş sayısı"><b>${st.isSayi}</b><span>iş</span><small>yapılacak iş</small></div>
-        <div title="En az bir iş girilen gün sayısı"><b>${st.doluGun}</b><span>dolu gün</span><small>gün sayısı</small></div>
-        <div title="Görevli olarak yazılan farklı kişi/kısaltma sayısı"><b>${st.kisi}</b><span>görevli</span><small>kişi sayısı</small></div>
-      </div>
+      ${statHtml(st)}
+      ${w.note?`<div class="note">${hesc(w.note)}</div>`:""}
       <div class="acts">
         <button class="btn sm aph-preview-btn" onclick="hpOpen('${key}','${w.week}')">
           <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="14" rx="2"></rect><path d="m8 21 2-3h4l2 3"></path><path d="m10 9 4 2-4 2z"></path></svg>
           Programı önizle</button>
-        ${older.length ? `<select class="btn sm" style="width:100%" onchange="if(this.value){hpOpen('${key}',this.value);this.selectedIndex=0}" aria-label="Önceki haftalar">
-          <option value="">Önceki haftalar (${older.length})</option>${older.map(o=>`<option value="${o.week}">${hesc(o.label)}</option>`).join("")}</select>` : ""}
+        <button class="btn sm" style="width:100%" onclick="hpList('${key}')" aria-label="Bu birimin tüm onaylı haftaları">Tüm haftalar (${list.length})</button>
       </div>
     </div>`;
   }
@@ -4525,11 +4546,30 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
         <div style="display:flex;gap:8px;align-items:center"><span class="chip">Onay: ${hesc(tsLabel(w.ts))}</span>
         <button class="btn sm" onclick="window.print()" title="Yazdır / PDF">🖨 Yazdır</button>
         <button class="btn sm" data-hp-close onclick="hpClose()">Kapat ✕</button></div></div>
-      <div class="aph-prev" style="padding-top:8px">${docHtml(w.doc)}</div></div>`;
+      <div class="aph-prev" style="padding-top:8px">${w.note?`<div class="hp-note">${hesc(w.note)}</div>`:""}${docHtml(w.doc)}</div></div>`;
     document.body.appendChild(ov);
     ov.querySelector("[data-hp-close]")?.focus();
   }
-  document.addEventListener("keydown", e => { if(e.key==="Escape" && OPEN) hpClose(); });
+  document.addEventListener("keydown", e => { if(e.key!=="Escape") return; if(OPEN) hpClose(); else if(LIST) hpListClose(); });
+
+  function listOverlay(){
+    document.querySelectorAll("body > .hp-ovl").forEach(n=>n.remove());
+    if(!LIST) return;
+    const u = UNITS.find(x=>x[0]===LIST), arr = DATA[LIST]||[];
+    if(!u || !arr.length){ LIST=null; return; }
+    const ov = document.createElement("div");
+    ov.className = "aph-ov hp-ovl";
+    ov.setAttribute("role","dialog"); ov.setAttribute("aria-modal","true");
+    ov.onclick = e => { if(e.target===ov) hpListClose(); };
+    ov.innerHTML = `<div class="win" style="display:flex;flex-direction:column">
+      <div class="top"><div class="t">${hesc(u[1])} · Haftalık programlar</div>
+        <div style="display:flex;gap:8px;align-items:center"><span class="chip gold">${arr.length} onaylı hafta</span>
+        <button class="btn sm" data-hp-lclose onclick="hpListClose()">Kapat ✕</button></div></div>
+      <div class="aph-prev" style="flex:1;min-height:0;overflow:auto;padding-top:8px">
+        <div class="aph-months" style="grid-template-columns:repeat(auto-fill,minmax(270px,1fr))">${arr.map(w=>weekCard(LIST,w)).join("")}</div></div></div>`;
+    document.body.appendChild(ov);
+    ov.querySelector("[data-hp-lclose]")?.focus();
+  }
 
   function paint(error){
     const box = document.getElementById("haftalik");
@@ -4548,6 +4588,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
         ${error?`<div class="aph-note" style="background:var(--danger-wash);border-color:var(--danger);border-left-color:var(--danger);color:var(--danger)">Haftalık programlar okunamadı (${hesc(error)}). Bir süre sonra <b>Yenile</b>'ye basın.</div>`:""}
         <div class="aph-months">${UNITS.map(unitCard).join("")}</div>
       </div></div>`;
+    listOverlay();
     overlay();
   }
 
@@ -4562,6 +4603,8 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
   };
   window.hpOpen   = (key,week) => { OPEN={key,week}; overlay(); };
   window.hpClose  = () => { OPEN=null; overlay(); };
+  window.hpList   = key => { LIST=key; listOverlay(); };
+  window.hpListClose = () => { LIST=null; listOverlay(); };
 
   let VIEW = "aylik";
   function applyView(){
