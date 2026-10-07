@@ -335,6 +335,7 @@ body.tmode .sheet{padding:0;height:var(--sheetH,70vh);overflow:auto;border-radiu
     <button type="button" data-menu="staff">👥 Personel</button>
     <button type="button" data-menu="tasks">🧰 Hazır işler</button>
     <button type="button" data-menu="warns">⚠ Uyarılar <span class="n" id="warnN">0</span></button>
+    <button type="button" id="noteB" title="Aylık programdan gelen bildirimler">🔔 Bildirimler <span class="n" id="noteN" style="display:none">0</span></button>
     <button type="button" data-menu="month">📅 Aylık program</button>
     <button type="button" data-menu="leave">📋 İzin / rapor</button>
     <button type="button" data-menu="sheets">☁ Sheets</button>
@@ -2002,6 +2003,8 @@ html,body{background:var(--mobile-bg);color:var(--mobile-ink);font-family:Inter,
 .m-form textarea#mTaskTime{height:76px;min-height:76px}
 .m-detail{display:grid;gap:16px}.m-d-row span{display:block;font-size:10px;color:var(--mobile-muted);margin-bottom:4px}.m-d-row b{font-size:14px;font-weight:600;line-height:1.5}.m-d-people div{display:flex;justify-content:space-between;gap:8px;padding:9px 0;border-bottom:1px solid var(--mobile-border);font-size:13px;margin:0}.m-d-people span{display:inline;font-size:13px;color:var(--mobile-ink);margin:0}.m-d-people small{color:var(--mobile-danger);font-size:10px}
 .m-quick{display:flex;gap:8px;margin:0 4px 14px}.m-quick button{flex:1;min-height:40px;display:flex;align-items:center;justify-content:center;gap:6px;border:1px solid var(--mobile-border);background:var(--mobile-surface);color:var(--mobile-deep);border-radius:12px;font-size:12px;font-weight:600}.m-quick .m-icon{width:16px;height:16px}
+#dlg,#drawer{bottom:var(--kb,0px)!important;max-height:min(90dvh,calc(var(--vvh,100dvh) - 12px))!important;overflow-y:auto!important;overscroll-behavior:contain}#dlg{transition:bottom .15s}#toast{bottom:calc(94px + var(--kb,0px))}body.m-kb .m-bottom{display:none}body.m-kb .m-main{padding-bottom:40px}
+.m-quick{gap:6px}.m-quick button{padding:0 6px;font-size:11.5px;min-width:0}.m-quick .hot{background:var(--mobile-warn);border-color:var(--mobile-gold);color:var(--mobile-deep)}
 }
 @media print{#mobileApp,#mobileShade{display:none!important}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
@@ -2024,7 +2027,7 @@ function mrender(){
  const all=mitems(),di=all.filter(i=>i.day===md),keys=Object.keys(S.weeks).sort(),cf=conflicts(),dat=addDays(fromIso(S.cur),md);
  ma.innerHTML='<header class="m-header"><div class="m-brand"><div><p class="m-eyebrow">İzmir Devlet Tiyatrosu</p><h1>'+esc(S.unit||UNIT.name).replace(' Aksesuar',' &amp; Aksesuar')+'</h1></div><div class="m-count"><b>'+all.length+'</b>Görev</div></div><div class="m-week"><button data-m="prev" aria-label="Önceki hafta">'+mic('left')+'</button><div class="m-week-center"><small>Haftalık çalışma programı</small><strong>'+esc(weekLabel(S.cur))+'</strong><select id="mWeekSelect" aria-label="Hafta seçimi">'+keys.map(k=>'<option value="'+k+'" '+(k===S.cur?'selected':'')+'>'+esc(weekLabel(k))+'</option>').join('')+'</select></div><button data-m="next" aria-label="Sonraki hafta">'+mic('right')+'</button></div><nav class="m-days" aria-label="Günler">'+GUN.map((d,i)=>'<button class="m-day '+(md===i?'active':'')+'" data-day="'+i+'" aria-label="'+d+'" aria-pressed="'+(md===i)+'"><span>'+d.slice(0,3)+'</span><b>'+addDays(fromIso(S.cur),i).getDate()+'</b><i '+(all.some(x=>x.day===i)?'':'style="visibility:hidden"')+'></i></button>').join('')+'</nav><div class="m-status" id="mSync"><span></span><label>'+esc($('#syncState').textContent.replace('☁','').trim())+'</label></div></header><main class="m-main" id="mMain"></main><nav class="m-bottom" aria-label="Ana menü">'+[['program','calendar','Program'],['staff','people','Personel'],['tools','tools','Araçlar']].map(([v,icon,l])=>'<button data-view="'+v+'" class="'+(mview===v?'active':'')+'" aria-current="'+(mview===v?'page':'false')+'">'+mic(icon)+'<span>'+l+'</span></button>').join('')+'</nav>';
  const main=$('#mMain');
- if(mview==='program')main.innerHTML='<div class="m-quick"><button data-trigger="newW">'+mic('plus')+'Yeni hafta</button><button data-trigger="expJ">'+mic('download')+'JPG indir</button></div><div class="m-section"><h2>'+GUN[md]+' <small>· '+di.length+' görev</small></h2><small>'+dat.toLocaleDateString('tr-TR',{day:'numeric',month:'long'})+'</small></div>'+(di.length?di.map(it=>{const ps=splitPeople(it.people),time=it.time.split(/\n/),title=mheading(it.task);return '<article class="m-task '+(cf.bad.has(it.r)?'conflict':'')+'" data-r="'+it.r+'"><div class="m-task-grid"><div class="m-time"><strong>'+esc(time[0]||'—')+'</strong>'+(time[1]?'<small>'+esc(time.slice(1).join(' '))+'</small>':'')+'</div><div class="m-content"><div class="m-task-title"><h3>'+esc(title)+'</h3><button class="m-edit" data-edit="'+it.r+'" aria-label="Görevi düzenle">'+mic('edit')+'</button></div><p class="m-place">'+mic('pin')+esc(it.place||'Yer belirtilmedi')+'</p>'+(it.task!==title?'<p class="m-description">'+esc(it.task)+'</p>':'')+'<button class="m-crew" data-crew="'+it.r+'" aria-label="Görevlileri seç"><span class="m-avatars">'+ps.slice(0,3).map(p=>'<span class="m-avatar" title="'+esc(p)+'">'+esc(minitial(p))+'</span>').join('')+(ps.length>3?'<span class="m-avatar">+'+(ps.length-3)+'</span>':'')+'</span><span>'+ps.length+' görevli</span>'+mic('plus')+'</button>'+(cf.bad.has(it.r)?'<p class="m-alert">Görevlendirme çakışması</p>':'')+'</div></div></article>';}).join(''):'<div class="m-empty">Bu gün için görev bulunmuyor.</div>')+'<button class="m-add" data-m="add">'+mic('plus')+'Yeni görev ekle</button>';
+ if(mview==='program')main.innerHTML='<div class="m-quick"><button data-trigger="newW">'+mic('plus')+'Yeni hafta</button><button data-trigger="expJ">'+mic('download')+'JPG indir</button><button data-trigger="noteB" class="'+((window.NOTE_PENDING||0)?'hot':'')+'">'+mic('note')+'Bildirim'+((window.NOTE_PENDING||0)?' · '+window.NOTE_PENDING:'')+'</button></div><div class="m-section"><h2>'+GUN[md]+' <small>· '+di.length+' görev</small></h2><small>'+dat.toLocaleDateString('tr-TR',{day:'numeric',month:'long'})+'</small></div>'+(di.length?di.map(it=>{const ps=splitPeople(it.people),time=it.time.split(/\n/),title=mheading(it.task);return '<article class="m-task '+(cf.bad.has(it.r)?'conflict':'')+'" data-r="'+it.r+'"><div class="m-task-grid"><div class="m-time"><strong>'+esc(time[0]||'—')+'</strong>'+(time[1]?'<small>'+esc(time.slice(1).join(' '))+'</small>':'')+'</div><div class="m-content"><div class="m-task-title"><h3>'+esc(title)+'</h3><button class="m-edit" data-edit="'+it.r+'" aria-label="Görevi düzenle">'+mic('edit')+'</button></div><p class="m-place">'+mic('pin')+esc(it.place||'Yer belirtilmedi')+'</p>'+(it.task!==title?'<p class="m-description">'+esc(it.task)+'</p>':'')+'<button class="m-crew" data-crew="'+it.r+'" aria-label="Görevlileri seç"><span class="m-avatars">'+ps.slice(0,3).map(p=>'<span class="m-avatar" title="'+esc(p)+'">'+esc(minitial(p))+'</span>').join('')+(ps.length>3?'<span class="m-avatar">+'+(ps.length-3)+'</span>':'')+'</span><span>'+ps.length+' görevli</span>'+mic('plus')+'</button>'+(cf.bad.has(it.r)?'<p class="m-alert">Görevlendirme çakışması</p>':'')+'</div></div></article>';}).join(''):'<div class="m-empty">Bu gün için görev bulunmuyor.</div>')+'<button class="m-add" data-m="add">'+mic('plus')+'Yeni görev ekle</button>';
  if(mview==='staff')mstaff();
  if(mview==='tools'){
  const tool=(id,icon,l,danger='')=>'<button class="m-tool '+danger+'" data-'+(id.startsWith('tab:')?'tab="'+id.slice(4):'trigger="'+id)+'">'+mic(icon)+'<span>'+l+'</span>'+mic('right')+'</button>';
@@ -2086,6 +2089,15 @@ function mcrew(r){const it=items().find(x=>x.r===r);if(!it)return;mselect(r);con
   if(e.target.id==='mCrewQ'){e.preventDefault();const c=[...B.querySelectorAll('.m-choice')].find(l=>l.style.display!=='none'&&!l.querySelector('input').disabled);if(c){const i=c.querySelector('input');i.checked=!i.checked;e.target.value='';e.target.dispatchEvent(new Event('input',{bubbles:true}));}}});
 })();
 ma.addEventListener('click',e=>{const b=e.target.closest('button');if(!b){const c=e.target.closest('.m-task');if(c&&c.dataset.r!=null)mdetail(+c.dataset.r);return;}if(b.dataset.day!=null){md=+b.dataset.day;sel=null;mrender();}if(b.dataset.view){mview=b.dataset.view;sel=null;mrender();window.scrollTo(0,0);}if(b.dataset.m==='prev')$('#prevW').click();if(b.dataset.m==='next')$('#nextW').click();if(b.dataset.m==='add')medit(null);if(b.dataset.edit!=null)medit(+b.dataset.edit);if(b.dataset.crew!=null)mcrew(+b.dataset.crew);if(b.dataset.person!=null)editStaff(+b.dataset.person);if(b.dataset.trigger)$('#'+b.dataset.trigger).click();if(b.dataset.tab){if(b.dataset.tab==='tasks'&&!curItem()){const it=mitems().find(x=>x.day===md);if(it)mselect(it.r);else return toast('Önce bir görev ekleyin');}openTab(b.dataset.tab);}});
+/* klavye açılınca pencereler ve alt menü görünür alana uyar */
+(function(){const vv=window.visualViewport;if(!vv)return;const root=document.documentElement;
+ function upd(){if(!mq.matches){root.style.removeProperty('--kb');root.style.removeProperty('--vvh');document.body.classList.remove('m-kb');return;}
+  const kb=Math.max(0,Math.round(innerHeight-vv.height-vv.offsetTop));
+  root.style.setProperty('--kb',kb+'px');root.style.setProperty('--vvh',Math.round(vv.height)+'px');document.body.classList.toggle('m-kb',kb>80);
+  const a=document.activeElement;if(kb>80&&a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))setTimeout(()=>{try{a.scrollIntoView({block:'center',behavior:'smooth'});}catch(e){}},80);}
+ vv.addEventListener('resize',upd);vv.addEventListener('scroll',upd);mq.addEventListener('change',upd);document.addEventListener('focusin',()=>setTimeout(upd,300));
+})();
+window.addEventListener('wk-notes',()=>mrender());
 const origRefresh=refresh;refresh=function(){origRefresh();mrender();};
 new MutationObserver(()=>{const label=$('#mSync label');if(label)label.textContent=$('#syncState').textContent.replace('☁','').trim();}).observe($('#syncState'),{childList:true,subtree:true});
 new MutationObserver(()=>{ms.style.display=$('#dlg').open?'block':'none';}).observe($('#dlg'),{attributes:true,attributeFilter:['open']});ms.onclick=()=>$('#dlg').close();
@@ -2093,5 +2105,83 @@ mrender();mq.addEventListener('change',mrender);
 }
 
 </script>
+<script>
+/* === Aylık programdan gelen bildirimler (birime özel) — "Tamamlandı" yanıtı aylık programa döner ===
+   Ortak "AYLIK PROGRAM" sekmesindeki anot_ (bildirim) ve anotok_ (yanıt) satırlarını kullanır. */
+(function(){
+  if(!window.UNIT)return;
+  const API=SHEET_API, TAB=MONTH_TAB, KEY=UNIT.key;
+  const SEEN_LS='wk_note_seen_'+KEY, BY_LS='wk_note_by_'+KEY;
+  let NT=[], DN=new Map(), busy=false;
+  const lsGet=(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d;}catch(e){return d;}};
+  const lsSet=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}};
+  const fmtTs=ts=>new Date(ts).toLocaleString('tr-TR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+  const fmtDate=iso=>{if(!iso)return '';const d=new Date(iso+'T12:00:00');return isNaN(d)?iso:d.toLocaleDateString('tr-TR',{day:'numeric',month:'long',weekday:'long'});};
+
+  function paint(){
+    const n=NT.filter(x=>!DN.has(x.id)).length,el=$('#noteN'),b=$('#noteB');
+    if(el){el.textContent=n;el.style.display=n?'':'none';}
+    if(b)b.classList.toggle('hot',n>0);
+    if(window.NOTE_PENDING!==n){window.NOTE_PENDING=n;window.dispatchEvent(new Event('wk-notes'));}
+  }
+  async function pull(){
+    if(busy)return;busy=true;
+    try{
+      const r=await fetch(API+encodeURIComponent(TAB)+'?fresh=1',{cache:'no-store'});if(!r.ok)return;
+      const rows=(await r.json()).rows||[],n=[],d=new Map();
+      rows.forEach(x=>{const id=String(x[0]||'');try{
+        if(id.startsWith('anot_')){const o=JSON.parse(b64ToUtf8(String(x[4]||'')));if(o&&o.id&&Array.isArray(o.units)&&o.units.includes(KEY))n.push(o);}
+        else if(id.startsWith('anotok_')){const o=JSON.parse(b64ToUtf8(String(x[4]||'')));if(o&&o.nid&&o.unit===KEY)d.set(o.nid,o);}
+      }catch(e){}});
+      n.sort((a,b)=>b.ts-a.ts);NT=n;DN=d;paint();
+      const seen=new Set(lsGet(SEEN_LS,[])),fresh=n.filter(x=>!d.has(x.id)&&!seen.has(x.id));
+      if(fresh.length){toast('Aylık programdan '+fresh.length+' yeni bildirim var');fresh.forEach(x=>seen.add(x.id));lsSet(SEEN_LS,[...seen].slice(-300));}
+      const dlg=$('#dlg');if(dlg&&dlg.open&&dlg.querySelector('.nt-wrap'))$('#dlgB').innerHTML=bodyHtml();
+    }catch(e){}finally{busy=false;}
+  }
+  function card(x){
+    const o=DN.get(x.id),label=(x.date?fmtDate(x.date)+' · ':'')+(x.month||'');
+    return '<div class="nt-card'+(o?' ok':'')+'"><div class="nt-meta"><b>'+esc(label)+'</b><span class="'+(o?'nt-ok':'nt-wait')+'">'+(o?'✓ Tamamlandı':'Bekliyor')+'</span></div><p>'+esc(x.text).replace(/\n/g,'<br>')+'</p>'+
+      (o?'<small>'+esc(o.by||'')+' · '+esc(fmtTs(o.ts))+'</small>':'<button type="button" class="btn gold" data-nok="'+esc(x.id)+'">Tamamlandı</button>')+'</div>';
+  }
+  function bodyHtml(){
+    const pend=NT.filter(x=>!DN.has(x.id)),done=NT.filter(x=>DN.has(x.id)).slice(0,10),by=lsGet(BY_LS,'');
+    const who=pend.length?'<label class="nt-who">İşi yapan kişi<select id="nPerson"><option value="">— kişi seçin —</option>'+(S.staff||[]).map(p=>{const nm=pName(p);return '<option '+(nm===by?'selected':'')+'>'+esc(nm)+'</option>';}).join('')+'</select></label>':'';
+    return '<div class="nt-wrap">'+who+(NT.length?pend.concat(done).map(card).join(''):'<p>Aylık programdan gelen bildirim yok.</p>')+'</div>';
+  }
+  async function openDlg(){
+    await pull();
+    ask('Aylık programdan bildirimler',bodyHtml(),null);
+    const c=$('#dlgF').lastElementChild;if(c)c.textContent='Kapat';
+  }
+  async function complete(nid){
+    const sel=$('#nPerson'),by=sel?sel.value:'';
+    if(!by)return toast('Önce işi yapan kişiyi seçin');
+    const o={nid,unit:KEY,by,ts:Date.now()};
+    try{
+      const res=await fetch(API+encodeURIComponent(TAB)+'/row',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({values:['anotok_'+nid+'_'+KEY,o.ts,0,1,utf8ToB64(JSON.stringify(o))]})});
+      if(!res.ok)throw new Error('HTTP '+res.status);
+      lsSet(BY_LS,by);DN.set(nid,o);paint();
+      $('#dlgB').innerHTML=bodyHtml();toast('Tamamlandı olarak işaretlendi — aylık programa iletildi');
+    }catch(e){toast('Gönderilemedi, tekrar deneyin');}
+  }
+  document.addEventListener('click',e=>{
+    const t=e.target.closest&&e.target.closest('#noteB');if(t)return openDlg();
+    const k=e.target.closest&&e.target.closest('[data-nok]');if(k)complete(k.dataset.nok);
+  });
+  setTimeout(pull,1800);
+  setInterval(()=>{if(!document.hidden)pull();},120000);
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)pull();});
+  const st=document.createElement('style');st.textContent=`
+  #tabbar button.hot{background:#ffe08a;color:#4a3200;border-color:#b8892b;font-weight:800}
+  .nt-wrap{display:grid;gap:10px}.nt-who{font-size:12.5px;font-weight:600;display:block}.nt-who select{width:100%;margin-top:5px;min-height:44px;font-size:16px;padding:8px 10px;border:1px solid var(--border);border-radius:8px}
+  .nt-card{border:1px solid var(--border);border-left:5px solid #e0a82e;border-radius:10px;padding:12px 14px;background:#fff}.nt-card.ok{border-left-color:#2e7d32;background:#f6fbf6}
+  .nt-meta{display:flex;justify-content:space-between;gap:8px;align-items:flex-start;font-size:13px}
+  .nt-ok{color:#1e5e22;font-size:12px;font-weight:700;white-space:nowrap}.nt-wait{color:#8a5a00;font-size:12px;font-weight:700;white-space:nowrap}
+  .nt-card p{margin:8px 0 10px;font-size:14px;line-height:1.55}.nt-card small{color:var(--muted);font-size:12px}.nt-card .btn{width:100%;min-height:44px}`;
+  document.head.appendChild(st);
+})();
+</script>
+
 </body>
 </html>
