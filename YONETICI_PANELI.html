@@ -62,6 +62,28 @@ main{max-width:1180px;margin:auto;padding:20px 16px}
 .chips{display:flex;gap:6px;flex-wrap:wrap}.chip{font-size:11.5px;font-weight:700;border-radius:20px;padding:3px 10px}
 .chip.ok{background:var(--okbg);color:var(--ok)}.chip.w{background:var(--ambbg);color:var(--amb)}.chip.late{background:var(--redbg);color:var(--red)}
 .banner{background:var(--redbg);color:var(--red);border-radius:10px;padding:10px 14px;font-weight:700;margin-bottom:14px;display:none}
+/* iş yükü */
+.wl{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:14px 16px}
+.seg{display:inline-flex;background:var(--greybg);border-radius:12px;padding:3px;gap:2px;margin-bottom:12px;flex-wrap:wrap}
+.seg button{border:0;background:none;padding:8px 14px;border-radius:10px;font-weight:800;color:var(--grey);min-height:38px}
+.seg button.on{background:var(--teal);color:#fff}
+.ctl{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.ctl label{display:flex;flex-direction:column;font-size:11.5px;font-weight:800;color:var(--muted);gap:3px;min-width:150px;flex:1}
+.ctl select{font:600 16px Manrope,sans-serif;padding:9px 10px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--ink)}
+.verdict{border-radius:12px;padding:12px 14px;margin-bottom:12px;font-size:14px;line-height:1.55}
+.verdict b{font-weight:800}.verdict.ok{background:var(--okbg);color:var(--ok)}.verdict.mid{background:var(--ambbg);color:var(--amb)}.verdict.bad{background:var(--redbg);color:var(--red)}
+.lr{border-top:1px solid #efe8d6;padding:8px 0;cursor:pointer}.lr:first-of-type{border-top:0}
+.lr .top{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,2fr) auto;gap:10px;align-items:center}
+.lr .nm{font-weight:800;overflow-wrap:anywhere}.lr .nm small{display:block;font-weight:600;color:var(--muted);font-size:11.5px}
+.bar{height:14px;background:#f0eadb;border-radius:8px;overflow:hidden}.bar i{display:block;height:100%;border-radius:8px}
+.lr.hi .bar i{background:var(--red)}.lr.ok .bar i{background:#3d9a4b}.lr.lo .bar i{background:#3a78b8}.lr.zero .bar i{background:#b9b2a2}
+.num{font:800 20px 'Bricolage Grotesque',serif;min-width:34px;text-align:right}
+.lt{font-size:11px;font-weight:800;border-radius:20px;padding:2px 9px;margin-left:6px;white-space:nowrap}
+.hi .lt{background:var(--redbg);color:var(--red)}.ok .lt{background:var(--okbg);color:var(--ok)}.lo .lt{background:#e3eefb;color:#245f9e}.zero .lt{background:var(--greybg);color:var(--grey)}
+.det{display:none;margin:8px 0 2px;padding:8px 10px;background:#faf6ea;border-radius:10px;font-size:12.5px;line-height:1.7}
+.lr.open .det{display:block}
+.hint{color:var(--muted);font-size:12px;margin-top:10px}
+@media(max-width:700px){.lr .top{grid-template-columns:1fr auto}.lr .bar{grid-column:1/3;grid-row:2}}
 footer{max-width:1180px;margin:20px auto 0;padding:0 18px;color:var(--muted);font-size:12px}
 @media(max-width:700px){.kpis{grid-template-columns:repeat(2,1fr)}header h1{font-size:19px}.w{grid-template-columns:6px 1fr}.w .tag{grid-column:2;justify-self:start;margin:0 0 10px}}
 </style>
@@ -79,6 +101,8 @@ footer{max-width:1180px;margin:20px auto 0;padding:0 18px;color:var(--muted);fon
 <main>
   <div class="banner" id="banner">E-Tabloya ulaşılamadı — son bilinen veriler gösteriliyor.</div>
   <div class="kpis" id="kpis"></div>
+  <div class="sec"><h2>İş yükü — kim ne kadar çalışıyor</h2><small id="wlSub"></small></div>
+  <div class="wl" id="work"></div>
   <div class="sec"><h2>Dikkat gerektirenler</h2><small id="wCount"></small></div>
   <div class="warns" id="warns"></div>
   <div class="sec"><h2>Birimler</h2><small id="uCount"></small></div>
@@ -98,6 +122,7 @@ const SOON_H=48;                          /* süreye bu kadar saat kala "yaklaş
 const NOTE_WARN_H=12, NOTE_LATE_H=48;     /* yanıtsız bildirim: sarı / kırmızı eşiği (saat) */
 const IDLE_DAYS=14;                       /* bu kadar gündür hiç hareket yoksa bilgi uyarısı */
 const REFRESH_MS=60000;
+const CAST_TAB='BÜTÜN OYUNLAR', PASIF_TAB='PASIF_KISILER';   /* repertuvar sistemindeki kadro ve pasif kişi sayfaları */
 const UNITS=[['dekor','Dekor Aksesuar'],['kondvit','Kondüvit'],['isik','Işık'],['erkek','Erkek Terzi'],['kadin','Kadın Terzi'],['peruka','Peruka']];
 const AY=['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
 
@@ -126,7 +151,8 @@ function enter(){$('#gate').style.display='none';start();}
 
 /* ================= VERİ OKUMA ================= */
 let DATA=null,LAST_OK=0,busy=false;
-async function getRows(tab){const r=await fetch(API+encodeURIComponent(tab)+'?fresh=1',{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);return (await r.json()).rows||[];}
+async function getSheet(tab){const r=await fetch(API+encodeURIComponent(tab)+'?fresh=1',{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);return await r.json();}
+async function getRows(tab){return (await getSheet(tab)).rows||[];}
 /* parçalı kayıtları birleştir: id → {ts,text()}  (eksik parçalı kayıtlar güvenilmez, atlanır) */
 function groupRows(rows){const g=new Map();rows.forEach(r=>{const id=String(r[0]||'');if(!id)return;(g.get(id)||g.set(id,[]).get(id)).push(r);});
   const out=new Map();for(const [id,rs] of g){const total=+rs[0][3]||rs.length;if(new Set(rs.map(r=>+r[2])).size<total)continue;
@@ -150,6 +176,136 @@ function parseMonthly(rows){
     else if(id.startsWith('anotok_')){const o=JSON.parse(v.text());if(o&&o.nid&&o.unit){if(!done.has(o.nid))done.set(o.nid,{});const c=done.get(o.nid)[o.unit];if(!c||(o.ts||0)>=(c.ts||0))done.get(o.nid)[o.unit]=o;}}
   }catch(e){}}
   notes.sort((a,b)=>b.ts-a.ts);return {notes,done};}
+
+
+/* ================= İŞ YÜKÜ ================= */
+const AYU=AY.map(a=>a.toLocaleUpperCase('tr'));
+const nk=t=>String(t||'').replace(/\u00A0/g,' ').replace(/[İIı]/g,'I').replace(/i/g,'I').replace(/[Şş]/g,'S').replace(/[Ğğ]/g,'G').replace(/[Üü]/g,'U').replace(/[Öö]/g,'O').replace(/[Çç]/g,'C').toUpperCase().replace(/[^A-Z0-9]+/g,' ').trim();
+const playName=t=>String(t).replace(/\*|\(.*?\)/g,'').replace(/★.*$/,'').trim();
+const FIGTAG=/\(\s*fig[üu]ran\s*\)/i;
+const cellText=v=>v&&typeof v==='object'?String(v.v??v.t??''):String(v??'');
+function parseCast(d){
+  if(!d)return null;const hs=(d.headers||[]).map(nk),ix=(k,f)=>{const i=hs.findIndex(h=>h.includes(k));return i>=0?i:f;};
+  const iO=ix('OYUN',0),iK=ix('KATEGORI',1),iG=ix('GOREV',2),iP=ix('KISI',3),out=[];
+  (d.rows||[]).forEach(r=>{const play=String(r[iO]||'').trim();if(!play||/^OYUN ADI$/i.test(play))return;
+    const kat=String(r[iK]||'').trim(),gor=String(r[iG]||'').trim();
+    const persons=String(r[iP]||'').split(',').map(x=>x.trim()).filter(Boolean).filter(x=>!FIGTAG.test(x)&&!/fig[üu]ran/i.test(kat));
+    out.push({play,pk:nk(playName(play)),role:gor||kat,persons});});
+  return out;}
+function parsePasif(d){const all=new Set(),per=new Set();if(!d)return {all,per};
+  (d.rows||[]).forEach(r=>{const n=nk(r[0]);if(!n)return;if(String(r[1]||'').trim())per.add(n+'|'+nk(r[1]));else all.add(n);});return {all,per};}
+/* kesinleşmiş (apub_) aylar → temsil listesi */
+function normCells(cells){const out=[];if(!cells)return out;
+  if(Array.isArray(cells)){const a0=cells.find(x=>x!=null);
+    if((Array.isArray(a0)&&a0.length>=3&&typeof a0[0]==='number')||(a0&&!Array.isArray(a0)&&typeof a0==='object'&&('r' in a0||'row' in a0))){
+      cells.forEach(x=>{if(!x)return;if(Array.isArray(x))out.push([+x[0],+x[1],cellText(x[2])]);else out.push([+(x.r??x.row),+(x.c??x.col),cellText(x.v!==undefined?x.v:x)]);});}
+    else cells.forEach((row,r)=>{if(!row)return;if(Array.isArray(row))row.forEach((v,c)=>{const t=cellText(v);if(t!=='')out.push([r,c,t]);});});
+  }else if(typeof cells==='object'){Object.entries(cells).forEach(([k,v])=>{const m=k.match(/^(\d+)\D+(\d+)$/);if(m)out.push([+m[1],+m[2],cellText(v)]);});}
+  return out.filter(x=>Number.isFinite(x[0])&&Number.isFinite(x[1])&&String(x[2]).trim()!=='');}
+function normMerges(mg){const L=Array.isArray(mg)?mg:(mg&&typeof mg==='object'?Object.values(mg):[]);
+  return L.map(x=>{if(Array.isArray(x))return x.slice(0,4).map(Number);
+    if(x&&typeof x==='object'){if('r1' in x)return [x.r1,x.c1,x.r2,x.c2].map(Number);const r=x.r??x.row,c=x.c??x.col,rs=x.rs??x.rowspan??1,cs=x.cs??x.colspan??1;if(r!=null&&c!=null)return [+r,+c,+r+(+rs)-1,+c+(+cs)-1];}
+    return null;}).filter(x=>x&&x.length===4&&x.every(Number.isFinite));}
+function perfsOfMonth(m){
+  const out=[],grid={};normCells(m.cells).forEach(([r,c,v])=>{(grid[r]=grid[r]||{})[c]=v;});
+  normMerges(m.merges).forEach(([r1,c1,r2,c2])=>{const v=grid[r1]&&grid[r1][c1];if(v==null)return;for(let r=r1;r<=r2;r++)for(let c=c1;c<=c2;c++){(grid[r]=grid[r]||{});if(grid[r][c]==null)grid[r][c]=v;}});
+  let hdr={},cur=null;
+  for(const r of Object.keys(grid).map(Number).sort((a,b)=>a-b)){const g=grid[r];
+    if(Object.values(g).some(v=>/SAHNES|TURNE/i.test(v))&&!/\d{1,2}\s+\S+\s+\d{4}/.test(g[0]||'')){Object.entries(g).forEach(([c,v])=>hdr[c]=v);continue;}
+    const dm=String(g[0]||'').match(/(\d{1,2})\s+([A-ZÇĞİÖŞÜa-zçğıöşü]+)\s+(\d{4})/);
+    if(dm){const mi=AYU.indexOf(dm[2].toLocaleUpperCase('tr'));if(mi>=0)cur=iso(new Date(+dm[3],mi,+dm[1]));}else if(r<2)continue;
+    if(!cur)continue;const maxC=Math.max(...Object.keys(g).map(Number));
+    for(const [c,v] of Object.entries(g)){const ci=+c;if(ci<2||ci===maxC&&/\d{4}/.test(v))continue;const t=String(v).trim();
+      if(!t||/^(\/\/|#|!|>|\+)/.test(t)||/^[\(\[].*[\)\]]$/.test(t)||/^[\*★]?\s*PR[ÖO]M[İI]YER$/i.test(t))continue;
+      if(!out.some(x=>x.iso===cur&&x.text===t&&x.stage===(hdr[c]||'')&&x.time===(g[1]||'')))out.push({iso:cur,stage:hdr[c]||'',text:t,time:g[1]||'',pk:nk(playName(t))});}}
+  return out;}
+function parseMonths(rows){
+  const G=groupRows(rows),by=new Map();
+  for(const [id,v] of G){const m=id.match(/^apub_(.+)_(\d+)$/);if(!m)continue;const ts=+m[2],c=by.get(m[1]);if(!c||ts>c.ts)by.set(m[1],{ts,v});}
+  const out=[];for(const [,o] of by){try{const d=JSON.parse(o.v.text());const list=d&&d.month?[d.month]:(d&&Array.isArray(d.months)?d.months:[]);
+    list.forEach(m=>{try{const perfs=perfsOfMonth(m);if(perfs.length)out.push({name:String(m.name||'Ay'),perfs,first:perfs.map(x=>x.iso).sort()[0]});}catch(e){}});}catch(e){}}
+  return out.sort((a,b)=>a.first<b.first?-1:1);}
+/* haftalık onaylı programlardaki görevliler (birim personeli) */
+function weeklyDocs(){
+  if(DATA.wdocs)return DATA.wdocs;const G=groupRows(DATA.wrows),best=new Map(),out=[];
+  for(const [id,v] of G){const m=id.match(/^hpub_([a-z]+)_(\d{4}-\d{2}-\d{2})_(\d+)$/);if(!m)continue;const k=m[1]+'|'+m[2],ts=+m[3],c=best.get(k);if(!c||ts>c.ts)best.set(k,{ts,key:m[1],week:m[2],v});}
+  for(const [,o] of best){try{const d=JSON.parse(o.v.text());out.push({key:o.key,week:o.week,doc:d.doc||{}});}catch(e){}}
+  DATA.wdocs=out.sort((a,b)=>a.week<b.week?-1:1);return DATA.wdocs;}
+const splitPeople=s=>String(s||'').split(/\s*[–—,]\s*|\s*-\s*/).map(x=>x.trim()).filter(x=>x&&x.length<=32);
+
+const WL={tab:'temsil',role:null,period:null,share:false,unit:'ALL',wper:'4',open:null};
+const fmtN=n=>Number.isInteger(n)?String(n):n.toFixed(1).replace('.',',');
+const isSA=lbl=>/SAHNE AMIR/.test(nk(lbl));
+function curMonthName(){const d=new Date(),a=nk(AY[d.getMonth()]),y=String(d.getFullYear());return (DATA.months||[]).find(m=>{const n=nk(m.name);return n.includes(a)&&n.includes(y);})?.name||null;}
+/* ortak: [{name,load,items[],sub}] → liste + yorum */
+function stats(list){const v=list.map(x=>x.load),n=v.length,avg=n?v.reduce((a,b)=>a+b,0)/n:0,max=n?Math.max(...v):0,min=n?Math.min(...v):0,spread=avg?(max-min)/avg:0;return {n,avg,max,min,spread};}
+function computeTemsil(roleKey,period,share){
+  const cast=(DATA.cast||[]),pas=DATA.pasif||{all:new Set(),per:new Set()},isP=(n,pk)=>pas.all.has(nk(n))||pas.per.has(nk(n)+'|'+pk);
+  const rows=cast.filter(r=>roleKey==='ALL'||nk(r.role)===roleKey),people=new Map();
+  const get=n=>{const k=nk(n);if(!people.has(k))people.set(k,{name:n,load:0,items:[],roles:new Set()});return people.get(k);};
+  rows.forEach(r=>r.persons.forEach(n=>{if(!isP(n,r.pk)){const o=get(n);o.roles.add(r.role);}}));
+  const byPlay=new Map();rows.forEach(r=>{if(!byPlay.has(r.pk))byPlay.set(r.pk,[]);byPlay.get(r.pk).push(r);});
+  const find=pk=>{if(byPlay.has(pk))return pk;if(pk.length>3)for(const k of byPlay.keys())if(k.length>3&&(k.startsWith(pk)||pk.startsWith(k)))return k;return null;};
+  const months=(DATA.months||[]).filter(m=>period==='ALL'||m.name===period);let total=0;
+  months.forEach(m=>m.perfs.forEach(pf=>{const k=find(pf.pk);if(!k)return;const ps=new Set();byPlay.get(k).forEach(r=>r.persons.forEach(n=>{if(!isP(n,r.pk))ps.add(nk(n));}));if(!ps.size)return;total++;
+    ps.forEach(pn=>{const o=people.get(pn);if(!o)return;o.load+=share?1/ps.size:1;
+      const d=fromIso(pf.iso);o.items.push(String(d.getDate()).padStart(2,'0')+'.'+String(d.getMonth()+1).padStart(2,'0')+' '+['Paz','Pzt','Sal','Çar','Per','Cum','Cmt'][d.getDay()]+(pf.time?' '+String(pf.time).replace(/\s+/g,' ').slice(0,12):'')+' · '+playName(pf.text)+(pf.stage?' · '+pf.stage:''));});}));
+  const list=[...people.values()].map(o=>({name:o.name,load:o.load,items:o.items,sub:roleKey==='ALL'?[...o.roles].slice(0,2).join(', '):''}));
+  return {list,total,unit:'temsil'};}
+function computeUnit(unit,wper){
+  let docs=weeklyDocs().filter(d=>unit==='ALL'||d.key===unit);
+  const weeks=[...new Set(docs.map(d=>d.week))].sort();const use=wper==='ALL'?weeks:weeks.slice(-(+wper));docs=docs.filter(d=>use.includes(d.week));
+  const people=new Map();
+  docs.forEach(d=>(d.doc.days||[]).forEach(day=>(day.rows||[]).forEach(row=>{const c=row.cells||{},ppl=c.ppl&&c.ppl.t,task=c.task&&c.task.t;if(!ppl||!String(ppl).trim())return;
+    splitPeople(ppl).forEach(n=>{const k=nk(n);if(!k)return;if(!people.has(k))people.set(k,{name:n,load:0,items:[],units:new Set()});const o=people.get(k);o.load++;o.units.add(d.key);
+      o.items.push(String(day.label||'').replace(/\n/g,' ')+' · '+String(task||'').replace(/\s+/g,' ').slice(0,70));});})));
+  const nm=k=>(UNITS.find(u=>u[0]===k)||[k,k])[1];
+  const list=[...people.values()].map(o=>({name:o.name,load:o.load,items:o.items,sub:unit==='ALL'?[...o.units].map(nm).join(', '):''}));
+  return {list,total:docs.length,unit:'görev',weeks:use.length};}
+function verdict(st,what,who){
+  if(st.n<2)return {cls:'mid',html:'Karşılaştırma için en az iki kişi gerekir.'};
+  if(!st.max)return {cls:'mid',html:'Bu dönemde hiç '+what+' görünmüyor.'};
+  const r=st.min>0?st.max/st.min:null;
+  const cls=st.spread<.5?'ok':st.spread<1?'mid':'bad',head=st.spread<.5?'Dağılım dengeli.':st.spread<1?'Dağılım biraz dengesiz.':'Dağılım dengesiz.';
+  return {cls,html:'<b>'+head+'</b> '+st.n+' '+who+', kişi başı ortalama <b>'+fmtN(Math.round(st.avg*10)/10)+'</b> '+what+'. '+(r?'En çok çalışan, en az çalışanın <b>'+(Math.round(r*10)/10).toString().replace('.',',')+' katı</b> kadar çalışıyor.':'En az çalışan kişide hiç '+what+' yok.')};}
+function renderWork(){
+  const el=$('#work');if(!el||!DATA)return;
+  const tabs='<div class="seg"><button data-wt="temsil" class="'+(WL.tab==='temsil'?'on':'')+'">Temsil görevleri</button><button data-wt="birim" class="'+(WL.tab==='birim'?'on':'')+'">Birim personeli</button></div>';
+  let ctl='',res,what,who,sub='',hint='';
+  if(WL.tab==='temsil'){
+    if(!DATA.cast||!DATA.cast.length){el.innerHTML=tabs+'<div class="empty" style="background:var(--greybg);color:var(--grey)">Repertuvar kadro sayfası (“'+esc(CAST_TAB)+'”) okunamadı.</div>';return;}
+    if(!DATA.months.length){el.innerHTML=tabs+'<div class="empty" style="background:var(--greybg);color:var(--grey)">Kesinleşmiş aylık program bulunamadı; temsil sayısı hesaplanamıyor.</div>';return;}
+    const cnt=new Map();DATA.cast.forEach(r=>{const k=nk(r.role);if(!k)return;const o=cnt.get(k)||{label:r.role,p:new Set()};r.persons.forEach(n=>o.p.add(nk(n)));cnt.set(k,o);});
+    const roles=[...cnt.entries()].sort((a,b)=>(isSA(b[1].label)-isSA(a[1].label))||b[1].p.size-a[1].p.size);
+    if(!WL.role||(WL.role!=='ALL'&&!cnt.has(WL.role)))WL.role=(roles.find(r=>isSA(r[1].label))||roles[0]||['ALL'])[0];
+    if(!WL.period||(WL.period!=='ALL'&&!DATA.months.some(m=>m.name===WL.period)))WL.period=curMonthName()||'ALL';
+    ctl='<div class="ctl"><label>Görev<select data-w="role">'+roles.map(([k,o])=>`<option value="${esc(k)}"${WL.role===k?' selected':''}>${esc(o.label)} (${o.p.size} kişi)</option>`).join('')+`<option value="ALL"${WL.role==='ALL'?' selected':''}>Tüm kadro</option></select></label>`+
+      '<label>Dönem<select data-w="period"><option value="ALL"'+(WL.period==='ALL'?' selected':'')+'>Tüm kesinleşmiş aylar</option>'+DATA.months.map(m=>`<option value="${esc(m.name)}"${WL.period===m.name?' selected':''}>${esc(m.name)}</option>`).join('')+'</select></label>'+
+      '<label>Aynı oyunda birden çok kişi varsa<select data-w="share"><option value="0"'+(!WL.share?' selected':'')+'>Hepsine tam say</option><option value="1"'+(WL.share?' selected':'')+'>Eşit paylaştır</option></select></label></div>';
+    res=computeTemsil(WL.role,WL.period,WL.share);what='temsil';who='kişi';
+    sub=res.total+' temsil';
+    hint='Hesap: kişinin <b>kadroda yazılı olduğu oyunların</b>, seçilen dönemdeki <b>temsil sayısı</b>. Sistemde “hangi temsile hangi sahne amiri girdi” kaydı olmadığı için, bir oyunda aynı görevde birden fazla kişi yazılıysa “Hepsine tam say” azami yükü, “Eşit paylaştır” nöbetleşe çalıştıklarını varsayan tahmini gösterir. Pasif kişiler hesaba katılmaz.';
+  }else{
+    const keys=new Set(weeklyDocs().map(d=>d.key));
+    if(!keys.size){el.innerHTML=tabs+'<div class="empty" style="background:var(--greybg);color:var(--grey)">Onaylanmış haftalık program bulunamadı.</div>';return;}
+    ctl='<div class="ctl"><label>Birim<select data-w="unit"><option value="ALL"'+(WL.unit==='ALL'?' selected':'')+'>Tüm birimler</option>'+UNITS.filter(u=>keys.has(u[0])).map(u=>`<option value="${u[0]}"${WL.unit===u[0]?' selected':''}>${esc(u[1])}</option>`).join('')+'</select></label>'+
+      '<label>Dönem<select data-w="wper">'+[['4','Son 4 onaylı hafta'],['8','Son 8 onaylı hafta'],['ALL','Tüm onaylı haftalar']].map(([v,l])=>`<option value="${v}"${WL.wper===v?' selected':''}>${l}</option>`).join('')+'</select></label></div>';
+    res=computeUnit(WL.unit,WL.wper);what='görev';who='kişi';sub=res.weeks+' hafta';
+    hint='Hesap: onaylanan haftalık programlarda kişinin <b>Görevliler</b> sütununda adının geçtiği satır sayısı. Yalnızca “Haftalık programı onayla” ile gönderilen haftalar sayılır.';}
+  const list=res.list.slice().sort((a,b)=>b.load-a.load||a.name.localeCompare(b.name,'tr')),st=stats(list),vd=verdict(st,what,who);
+  $('#wlSub').textContent=sub;
+  const rows=list.map((x,i)=>{
+    const rel=st.avg?x.load/st.avg:0,cls=!x.load?'zero':rel>1.25?'hi':rel<.75?'lo':'ok',tag=!x.load?'Hiç yok':rel>1.25?'Çok yüklü':rel<.75?'Az':'Dengeli',w=st.max?Math.max(2,x.load/st.max*100):0,key=WL.tab+'|'+nk(x.name);
+    return `<div class="lr ${cls}${WL.open===key?' open':''}" data-lr="${esc(key)}"><div class="top"><div class="nm">${esc(x.name)}${x.sub?'<small>'+esc(x.sub)+'</small>':''}</div><div class="bar"><i style="width:${w}%"></i></div><div style="display:flex;align-items:center"><span class="num">${fmtN(Math.round(x.load*10)/10)}</span><span class="lt">${tag}</span></div></div>`+
+      `<div class="det">${x.items.length?x.items.map(esc).join('<br>'):'Bu dönemde kayıt yok.'}</div></div>`;}).join('');
+  el.innerHTML=tabs+ctl+`<div class="verdict ${vd.cls}">${vd.html}</div>`+(rows||'<div class="hint">Gösterilecek kişi yok.</div>')+'<div class="hint">Bir kişiye dokunun → hangi günler çalıştığını görün. Renkler ortalamaya göredir: kırmızı ortalamanın %125 üstü, mavi %75 altı.<br>'+hint+'</div>';
+  window.__work={list,st,role:WL.role};
+}
+$('#work').addEventListener('click',e=>{
+  const t=e.target.closest('[data-wt]');if(t){WL.tab=t.dataset.wt;WL.open=null;return renderWork();}
+  const r=e.target.closest('[data-lr]');if(r&&!e.target.closest('select')){WL.open=WL.open===r.dataset.lr?null:r.dataset.lr;r.classList.toggle('open',WL.open===r.dataset.lr);document.querySelectorAll('#work .lr.open').forEach(x=>{if(x!==r)x.classList.remove('open');});}});
+$('#work').addEventListener('change',e=>{const k=e.target.dataset.w;if(!k)return;const v=e.target.value;
+  if(k==='share')WL.share=v==='1';else WL[k]=v;WL.open=null;renderWork();});
 
 /* ================= UYARILARI ÜRET ================= */
 const deadlineOf=wk=>{/* önceki haftanın Cuma günü */
@@ -176,6 +332,11 @@ function analyse(){
     if(!u.act)add(0,'never','Birim sisteme henüz veri girmemiş','E-Tabloda bu birime ait kayıt bulunamadı');
     else if(now-u.act>IDLE_DAYS*864e5)add(0,'idle',IDLE_DAYS+' gündür hareket yok','Son işlem: '+fmtTs(u.act));
     units.push(card);});
+  try{if(DATA.cast&&DATA.months&&DATA.months.length){
+    const roleKeys=[...new Set(DATA.cast.map(r=>nk(r.role)))],sa=roleKeys.find(k=>/SAHNE AMIR/.test(k));
+    if(sa){const per=curMonthName()||'ALL',res=computeTemsil(sa,per,false),st=stats(res.list);
+      if(st.n>=2&&st.max&&st.spread>=1){const top=res.list.slice().sort((a,b)=>b.load-a.load)[0],low=res.list.slice().sort((a,b)=>a.load-b.load)[0];
+        warns.push({id:'work|sa|'+per,level:1,unit:'Sahne amirleri',key:'work',title:'İş yükü dengesiz',detail:top.name+' '+fmtN(Math.round(top.load*10)/10)+' temsil, '+low.name+' '+fmtN(Math.round(low.load*10)/10)+' temsil ('+(per==='ALL'?'tüm kesinleşmiş aylar':per)+')'});}}}}catch(e){}
   warns.sort((a,b)=>b.level-a.level);
   return {warns,units,weeks,now};}
 
@@ -183,6 +344,7 @@ function analyse(){
 let NEWSET=new Set(),KNOWN=null,FIRST=true;
 const LV=['Bilgi','Yaklaşıyor','Gecikti'];
 function render(){
+  renderWork();
   const A=analyse(),{warns,units,weeks,now}=A;
   /* yeni uyarıları işaretle (önceki ziyarete göre) */
   const ids=warns.map(w=>w.id);
@@ -253,8 +415,8 @@ $('#bCopy').onclick=async()=>{
 async function refresh(){
   if(busy)return;busy=true;$('#bRefresh').disabled=true;
   try{
-    const [wr,mr]=await Promise.all([getRows(WEEK_TAB),getRows(MONTH_TAB)]);
-    DATA={weekly:parseWeekly(wr),monthly:parseMonthly(mr)};LAST_OK=Date.now();$('#banner').style.display='none';
+    const [wr,mr,cs,ps]=await Promise.all([getRows(WEEK_TAB),getRows(MONTH_TAB),getSheet(CAST_TAB).catch(()=>null),getSheet(PASIF_TAB).catch(()=>null)]);
+    DATA={weekly:parseWeekly(wr),monthly:parseMonthly(mr),cast:parseCast(cs),pasif:parsePasif(ps),months:parseMonths(mr),wdocs:null,wrows:wr};LAST_OK=Date.now();$('#banner').style.display='none';
   }catch(e){$('#banner').style.display='block';}
   finally{busy=false;$('#bRefresh').disabled=false;}
   if(DATA){render();$('#stamp').textContent='Son güncelleme: '+new Date(LAST_OK).toLocaleTimeString('tr-TR')+' · her dakika otomatik yenilenir';}
