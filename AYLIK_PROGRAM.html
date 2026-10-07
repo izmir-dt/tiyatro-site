@@ -8686,13 +8686,15 @@ body.idt-locked main{pointer-events:none;user-select:none;opacity:.5;filter:gray
     const rows=(await r.json()).rows||[],notes=[],done=new Map();
     rows.forEach(x=>{const id=String(x[0]||'');try{
       if(id.startsWith('anot_')){const d=JSON.parse(b64ToUtf8(String(x[4]||'')));if(d&&d.id&&Array.isArray(d.units))notes.push(d);}
-      else if(id.startsWith('anotok_')){const d=JSON.parse(b64ToUtf8(String(x[4]||'')));if(d&&d.nid&&d.unit){if(!done.has(d.nid))done.set(d.nid,{});done.get(d.nid)[d.unit]=d;}}
+      else if(id.startsWith('anotok_')){const d=JSON.parse(b64ToUtf8(String(x[4]||'')));if(d&&d.nid&&d.unit){if(!done.has(d.nid))done.set(d.nid,{});const cu=done.get(d.nid)[d.unit];if(!cu||(d.ts||0)>=(cu.ts||0))done.get(d.nid)[d.unit]=d;}}
     }catch(e){}});
     notes.sort((a,b)=>b.ts-a.ts);NOTES=notes;DONE=done;
   }
-  function newCount(){const sn=seenSet();let n=0;NOTES.forEach(nt=>Object.values(DONE.get(nt.id)||{}).forEach(o=>{if(!sn.has(nt.id+'|'+o.unit))n++;}));return n;}
+  /* yanıt güncellenirse (upd) yeniden "yeni" sayılsın; eski kayıtların anahtarı değişmez */
+  function skey(nt,o){return nt.id+'|'+o.unit+(o.upd?'|'+o.ts:'');}
+  function newCount(){const sn=seenSet();let n=0;NOTES.forEach(nt=>Object.values(DONE.get(nt.id)||{}).forEach(o=>{if(!sn.has(skey(nt,o)))n++;}));return n;}
   function badge(){const n=newCount(),b=$('unBadge');if(b){b.textContent=n;b.style.display=n?'inline-block':'none';}}
-  function markSeen(){const sn=seenSet();NOTES.forEach(nt=>Object.values(DONE.get(nt.id)||{}).forEach(o=>sn.add(nt.id+'|'+o.unit)));saveSeen(sn);}
+  function markSeen(){const sn=seenSet();NOTES.forEach(nt=>Object.values(DONE.get(nt.id)||{}).forEach(o=>sn.add(skey(nt,o))));saveSeen(sn);}
 
   function render(){
     const list=$('unList');if(!list)return;
@@ -8701,8 +8703,8 @@ body.idt-locked main{pointer-events:none;user-select:none;opacity:.5;filter:gray
     $('unCount').textContent=rows.length+' bildirim';
     list.innerHTML=rows.length?rows.map(nt=>{
       const d=DONE.get(nt.id)||{},k=nt.units.filter(u=>d[u]).length,all=k===nt.units.length;
-      const chips=nt.units.map(u=>{const nm=(NU.find(x=>x.key===u)||{name:u}).name,o=d[u],isNew=o&&!sn.has(nt.id+'|'+u);
-        return o?'<span class="un-chip ok'+(isNew?' new':'')+'">✓ '+esc(nm)+' · '+esc(fmtTs(o.ts))+(isNew?' <b>yeni</b>':'')+'<span class="un-reply">'+((o.reply||o.by)?esc(o.reply||o.by).replace(/\n/g,'<br>'):'<i style="font-weight:400;opacity:.7">(yanıt yazılmadı)</i>')+'</span>'+'</span>'
+      const chips=nt.units.map(u=>{const nm=(NU.find(x=>x.key===u)||{name:u}).name,o=d[u],isNew=o&&!sn.has(skey(nt,o));
+        return o?'<span class="un-chip ok'+(isNew?' new':'')+'">✓ '+esc(nm)+' · '+esc(fmtTs(o.ts))+(o.upd?' <i>(güncellendi)</i>':'')+(isNew?' <b>yeni</b>':'')+'<span class="un-reply">'+((o.reply||o.by)?esc(o.reply||o.by).replace(/\n/g,'<br>'):'<i style="font-weight:400;opacity:.7">(yanıt yazılmadı)</i>')+'</span>'+'</span>'
                 :'<span class="un-chip wait">⏳ '+esc(nm)+' — bekliyor</span>';}).join('');
       return '<div class="un-card'+(all?' all':'')+'"><div class="un-head"><div><b>'+esc(nt.month||'')+(nt.date?' · '+esc(fmtDate(nt.date)):'')+'</b><small>Gönderim: '+esc(fmtTs(nt.ts))+' · '+k+'/'+nt.units.length+' birim tamamladı</small></div><button type="button" class="btn small danger" data-undel="'+esc(nt.id)+'">🗑 Sil</button></div><p>'+esc(nt.text).replace(/\n/g,'<br>')+'</p><div class="un-chips">'+chips+'</div></div>';
     }).join(''):'<div style="padding:24px;color:var(--muted)">Henüz bildirim yok.</div>';
