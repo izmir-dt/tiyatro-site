@@ -73,17 +73,22 @@ main{max-width:1180px;margin:auto;padding:20px 16px}
 .verdict{border-radius:12px;padding:12px 14px;margin-bottom:12px;font-size:14px;line-height:1.55}
 .verdict b{font-weight:800}.verdict.ok{background:var(--okbg);color:var(--ok)}.verdict.mid{background:var(--ambbg);color:var(--amb)}.verdict.bad{background:var(--redbg);color:var(--red)}
 .lr{border-top:1px solid #efe8d6;padding:8px 0;cursor:pointer}.lr:first-of-type{border-top:0}
-.lr .top{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,2fr) auto;gap:10px;align-items:center}
+.lr .top{display:grid;grid-template-columns:210px minmax(0,1fr) 150px;gap:14px;align-items:center}
+.lr .rt{display:flex;align-items:center;justify-content:flex-end;gap:8px}
+.bar{position:relative}.bar u{position:absolute;top:-3px;bottom:-3px;width:2px;background:#1d1a16;opacity:.55;border-radius:2px}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin:2px 0 8px}.legend span::before{content:'';display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px;background:var(--c)}
+.chk{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;margin:0 0 12px;color:var(--ink)}.chk input{width:18px;height:18px}
+details.how{margin-top:12px;font-size:12.5px;color:var(--muted)}details.how summary{cursor:pointer;font-weight:700}
 .lr .nm{font-weight:800;overflow-wrap:anywhere}.lr .nm small{display:block;font-weight:600;color:var(--muted);font-size:11.5px}
 .bar{height:14px;background:#f0eadb;border-radius:8px;overflow:hidden}.bar i{display:block;height:100%;border-radius:8px}
 .lr.hi .bar i{background:var(--red)}.lr.ok .bar i{background:#3d9a4b}.lr.lo .bar i{background:#3a78b8}.lr.zero .bar i{background:#b9b2a2}
-.num{font:800 20px 'Bricolage Grotesque',serif;min-width:34px;text-align:right}
-.lt{font-size:11px;font-weight:800;border-radius:20px;padding:2px 9px;margin-left:6px;white-space:nowrap}
+.num{font:800 22px 'Bricolage Grotesque',serif;min-width:30px;text-align:right}
+.lt{font-size:11px;font-weight:800;border-radius:20px;padding:3px 9px;white-space:nowrap;min-width:64px;text-align:center}
 .hi .lt{background:var(--redbg);color:var(--red)}.ok .lt{background:var(--okbg);color:var(--ok)}.lo .lt{background:#e3eefb;color:#245f9e}.zero .lt{background:var(--greybg);color:var(--grey)}
 .det{display:none;margin:8px 0 2px;padding:8px 10px;background:#faf6ea;border-radius:10px;font-size:12.5px;line-height:1.7}
 .lr.open .det{display:block}
 .hint{color:var(--muted);font-size:12px;margin-top:10px}
-@media(max-width:700px){.lr .top{grid-template-columns:1fr auto}.lr .bar{grid-column:1/3;grid-row:2}}
+@media(max-width:700px){.lr .top{grid-template-columns:1fr auto}.lr .bar{grid-column:1/3;grid-row:2}.lr .rt{min-width:0}}
 footer{max-width:1180px;margin:20px auto 0;padding:0 18px;color:var(--muted);font-size:12px}
 @media(max-width:700px){.kpis{grid-template-columns:repeat(2,1fr)}header h1{font-size:19px}.w{grid-template-columns:6px 1fr}.w .tag{grid-column:2;justify-self:start;margin:0 0 10px}}
 </style>
@@ -100,7 +105,6 @@ footer{max-width:1180px;margin:20px auto 0;padding:0 18px;color:var(--muted);fon
 
 <main>
   <div class="banner" id="banner">E-Tabloya ulaşılamadı — son bilinen veriler gösteriliyor.</div>
-  <div class="kpis" id="kpis"></div>
   <div class="sec"><h2>İş yükü — kim ne kadar çalışıyor</h2><small id="wlSub"></small></div>
   <div class="wl" id="work"></div>
   <div class="sec"><h2>Dikkat gerektirenler</h2><small id="wCount"></small></div>
@@ -262,12 +266,17 @@ function computeUnit(unit,wper){
   const nm=k=>(UNITS.find(u=>u[0]===k)||[k,k])[1];
   const list=[...people.values()].map(o=>({name:o.name,load:o.load,items:o.items,sub:unit==='ALL'?[...o.units].map(nm).join(', '):''}));
   return {list,total:docs.length,unit:'görev',weeks:use.length};}
-function verdict(st,what,who){
+function verdict(st,what,who,list){
   if(st.n<2)return {cls:'mid',html:'Karşılaştırma için en az iki kişi gerekir.'};
   if(!st.max)return {cls:'mid',html:'Bu dönemde hiç '+what+' görünmüyor.'};
-  const r=st.min>0?st.max/st.min:null;
+  const f=x=>fmtN(Math.round(x*10)/10),by=list.slice().sort((a,b)=>b.load-a.load),top=by[0],low=by[by.length-1];
+  const hi=list.filter(x=>x.load>st.avg*1.25).length,lo=list.filter(x=>x.load<st.avg*.75).length,zero=list.filter(x=>!x.load);
   const cls=st.spread<.5?'ok':st.spread<1?'mid':'bad',head=st.spread<.5?'Dağılım dengeli.':st.spread<1?'Dağılım biraz dengesiz.':'Dağılım dengesiz.';
-  return {cls,html:'<b>'+head+'</b> '+st.n+' '+who+', kişi başı ortalama <b>'+fmtN(Math.round(st.avg*10)/10)+'</b> '+what+'. '+(r?'En çok çalışan, en az çalışanın <b>'+(Math.round(r*10)/10).toString().replace('.',',')+' katı</b> kadar çalışıyor.':'En az çalışan kişide hiç '+what+' yok.')};}
+  const r=low.load>0?Math.round(top.load/low.load*10)/10:null;
+  let h='<b>'+head+'</b><br>En çok: <b>'+esc(top.name)+'</b> ('+f(top.load)+' '+what+') · En az: <b>'+esc(low.name)+'</b> ('+f(low.load)+' '+what+')';
+  if(r)h+=' · Aradaki fark <b>'+String(r).replace('.',',')+' kat</b>';
+  h+='<br><span style="font-weight:600">Kişi başı ortalama '+f(st.avg)+' '+what+'. '+hi+' kişi ortalamanın çok üstünde, '+lo+' kişi çok altında.'+(zero.length?' Hiç görevi olmayan: '+zero.map(x=>esc(x.name)).join(', ')+'.':'')+'</span>';
+  return {cls,html:h};}
 function renderWork(){
   const el=$('#work');if(!el||!DATA)return;
   const tabs='<div class="seg"><button data-wt="temsil" class="'+(WL.tab==='temsil'?'on':'')+'">Temsil görevleri</button><button data-wt="birim" class="'+(WL.tab==='birim'?'on':'')+'">Birim personeli</button></div>';
@@ -281,7 +290,7 @@ function renderWork(){
     if(!WL.period||(WL.period!=='ALL'&&!DATA.months.some(m=>m.name===WL.period)))WL.period=curMonthName()||'ALL';
     ctl='<div class="ctl"><label>Görev<select data-w="role">'+roles.map(([k,o])=>`<option value="${esc(k)}"${WL.role===k?' selected':''}>${esc(o.label)} (${o.p.size} kişi)</option>`).join('')+`<option value="ALL"${WL.role==='ALL'?' selected':''}>Tüm kadro</option></select></label>`+
       '<label>Dönem<select data-w="period"><option value="ALL"'+(WL.period==='ALL'?' selected':'')+'>Tüm kesinleşmiş aylar</option>'+DATA.months.map(m=>`<option value="${esc(m.name)}"${WL.period===m.name?' selected':''}>${esc(m.name)}</option>`).join('')+'</select></label>'+
-      '<label>Aynı oyunda birden çok kişi varsa<select data-w="share"><option value="0"'+(!WL.share?' selected':'')+'>Hepsine tam say</option><option value="1"'+(WL.share?' selected':'')+'>Eşit paylaştır</option></select></label></div>';
+      '</div><label class="chk"><input type="checkbox" data-w="share"'+(WL.share?' checked':'')+'> Aynı oyunda iki kişi yazılıysa yükü aralarında paylaştır (nöbetleşe çalışıyorlarsa)</label>';
     res=computeTemsil(WL.role,WL.period,WL.share);what='temsil';who='kişi';
     sub=res.total+' temsil';
     hint='Hesap: kişinin <b>kadroda yazılı olduğu oyunların</b>, seçilen dönemdeki <b>temsil sayısı</b>. Sistemde “hangi temsile hangi sahne amiri girdi” kaydı olmadığı için, bir oyunda aynı görevde birden fazla kişi yazılıysa “Hepsine tam say” azami yükü, “Eşit paylaştır” nöbetleşe çalıştıklarını varsayan tahmini gösterir. Pasif kişiler hesaba katılmaz.';
@@ -292,20 +301,20 @@ function renderWork(){
       '<label>Dönem<select data-w="wper">'+[['4','Son 4 onaylı hafta'],['8','Son 8 onaylı hafta'],['ALL','Tüm onaylı haftalar']].map(([v,l])=>`<option value="${v}"${WL.wper===v?' selected':''}>${l}</option>`).join('')+'</select></label></div>';
     res=computeUnit(WL.unit,WL.wper);what='görev';who='kişi';sub=res.weeks+' hafta';
     hint='Hesap: onaylanan haftalık programlarda kişinin <b>Görevliler</b> sütununda adının geçtiği satır sayısı. Yalnızca “Haftalık programı onayla” ile gönderilen haftalar sayılır.';}
-  const list=res.list.slice().sort((a,b)=>b.load-a.load||a.name.localeCompare(b.name,'tr')),st=stats(list),vd=verdict(st,what,who);
+  const list=res.list.slice().sort((a,b)=>b.load-a.load||a.name.localeCompare(b.name,'tr')),st=stats(list),vd=verdict(st,what,who,list);
   $('#wlSub').textContent=sub;
   const rows=list.map((x,i)=>{
-    const rel=st.avg?x.load/st.avg:0,cls=!x.load?'zero':rel>1.25?'hi':rel<.75?'lo':'ok',tag=!x.load?'Hiç yok':rel>1.25?'Çok yüklü':rel<.75?'Az':'Dengeli',w=st.max?Math.max(2,x.load/st.max*100):0,key=WL.tab+'|'+nk(x.name);
-    return `<div class="lr ${cls}${WL.open===key?' open':''}" data-lr="${esc(key)}"><div class="top"><div class="nm">${esc(x.name)}${x.sub?'<small>'+esc(x.sub)+'</small>':''}</div><div class="bar"><i style="width:${w}%"></i></div><div style="display:flex;align-items:center"><span class="num">${fmtN(Math.round(x.load*10)/10)}</span><span class="lt">${tag}</span></div></div>`+
+    const rel=st.avg?x.load/st.avg:0,cls=!x.load?'zero':rel>1.25?'hi':rel<.75?'lo':'ok',tag=!x.load?'Hiç yok':rel>1.25?'Fazla':rel<.75?'Az':'Normal',w=st.max?Math.max(2,x.load/st.max*100):0,key=WL.tab+'|'+nk(x.name);
+    return `<div class="lr ${cls}${WL.open===key?' open':''}" data-lr="${esc(key)}"><div class="top"><div class="nm">${esc(x.name)}${x.sub?'<small>'+esc(x.sub)+'</small>':''}</div><div class="bar"><i style="width:${w}%"></i><u style="left:${st.max?st.avg/st.max*100:0}%" title="Ortalama"></u></div><div class="rt"><span class="num">${fmtN(Math.round(x.load*10)/10)}</span><span class="lt">${tag}</span></div></div>`+
       `<div class="det">${x.items.length?x.items.map(esc).join('<br>'):'Bu dönemde kayıt yok.'}</div></div>`;}).join('');
-  el.innerHTML=tabs+ctl+`<div class="verdict ${vd.cls}">${vd.html}</div>`+(rows||'<div class="hint">Gösterilecek kişi yok.</div>')+'<div class="hint">Bir kişiye dokunun → hangi günler çalıştığını görün. Renkler ortalamaya göredir: kırmızı ortalamanın %125 üstü, mavi %75 altı.<br>'+hint+'</div>';
+  el.innerHTML=tabs+ctl+`<div class="verdict ${vd.cls}">${vd.html}</div><div class="legend"><span style="--c:var(--red)">Fazla (ortalamanın %25+ üstü)</span><span style="--c:#3d9a4b">Normal</span><span style="--c:#3a78b8">Az (ortalamanın %25+ altı)</span><span style="--c:#1d1a16">│ ortalama çizgisi</span></div>`+(rows||'<div class="hint">Gösterilecek kişi yok.</div>')+'<div class="hint">Bir kişiye dokunarak hangi günler çalıştığını görebilirsiniz.</div><details class="how"><summary>Bu sayılar nasıl hesaplanıyor?</summary><p>'+hint+'</p></details>';
   window.__work={list,st,role:WL.role};
 }
 $('#work').addEventListener('click',e=>{
   const t=e.target.closest('[data-wt]');if(t){WL.tab=t.dataset.wt;WL.open=null;return renderWork();}
   const r=e.target.closest('[data-lr]');if(r&&!e.target.closest('select')){WL.open=WL.open===r.dataset.lr?null:r.dataset.lr;r.classList.toggle('open',WL.open===r.dataset.lr);document.querySelectorAll('#work .lr.open').forEach(x=>{if(x!==r)x.classList.remove('open');});}});
 $('#work').addEventListener('change',e=>{const k=e.target.dataset.w;if(!k)return;const v=e.target.value;
-  if(k==='share')WL.share=v==='1';else WL[k]=v;WL.open=null;renderWork();});
+  if(k==='share')WL.share=e.target.checked;else WL[k]=v;WL.open=null;renderWork();});
 
 /* ================= UYARILARI ÜRET ================= */
 const deadlineOf=wk=>{/* önceki haftanın Cuma günü */
@@ -354,11 +363,7 @@ function render(){
   if(!FIRST)notify(warns.filter(w=>fresh.includes(w.id)&&w.level>=1));
   ids.forEach(i=>KNOWN.add(i));lsSet('idt_mgr_known',[...KNOWN].slice(-400));FIRST=false;
 
-  const red=warns.filter(w=>w.level===2).length,amb=warns.filter(w=>w.level===1).length,
-        okU=units.filter(c=>c.weeks.every(w=>w.state==='ok')).length,pend=units.reduce((s,c)=>s+c.pending.length,0);
-  $('#kpis').innerHTML=
-   `<div class="kpi red"><b>${red}</b><span>Geciken</span></div><div class="kpi amb"><b>${amb}</b><span>Süresi yaklaşan</span></div>`+
-   `<div class="kpi"><b>${pend}</b><span>Yanıt bekleyen bildirim</span></div><div class="kpi ok"><b>${okU}/${units.length}</b><span>Her iki haftası onaylı birim</span></div>`;
+  const red=warns.filter(w=>w.level===2).length;
   document.title=(red?'('+red+') ':'')+'Yönetici Takip Paneli';
 
   const row=w=>`<div class="w l${w.level}"><i></i><div><b>${esc(w.unit)} · ${esc(w.title)}${NEWSET.has(w.id)?'<em class="new">YENİ</em>':''}</b><span>${esc(w.detail)}</span></div><span class="tag">${LV[w.level]}</span></div>`;
