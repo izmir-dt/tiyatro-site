@@ -725,8 +725,7 @@ html{scroll-behavior:smooth}
   <section class="panel" id="p-gorevsiz"><div class="wrap single"><div id="gorevsiz"></div></div></section>
   <section class="panel" id="p-arsiv"><div class="wrap single"><div id="arsiv"></div></div></section>
   <section class="panel" id="p-yonetim"><div class="wrap single"><div id="yonetim"></div></div></section>
-  <section class="panel" id="p-program"><div class="wrap single"><div id="program"></div></div></section>
-  <section class="panel" id="p-haftalik"><div class="wrap single"><div id="haftalik"></div></div></section>
+  <section class="panel" id="p-program"><div class="wrap single"><div class="prg-switch" id="prgSwitch"><button type="button" data-v="aylik" class="on" onclick="setProgView('aylik')">Aylık Program</button><button type="button" data-v="haftalik" onclick="setProgView('haftalik')">Haftalık Program</button></div><div id="program"></div><div id="haftalik" style="display:none"></div></div></section>
 </main>
 
 <div class="modal-bg" id="ui-modal"><div class="modal">
@@ -3344,7 +3343,7 @@ window.exportPDF = function(title, headers, data){
     if(!nav) return;
     const main = [
       ["panel","Ana Panel"],["kisiler","Kişiler"],["dagilim","Dağılım"],["sorgu","Sorgulama"],
-      ["grafik","İstatistik"],["figuran","Figüran"],["program","Aylık Program"],["haftalik","Haftalık Program"]
+      ["grafik","İstatistik"],["figuran","Figüran"],["program","Programlar"]
     ];
     const admin = [["gorevsiz","Görevli Olmayan"],["arsiv","Arşiv Oyunlar"],["yonetim","Yönetim"]];
     const cur = (location.hash||"#panel").slice(1);
@@ -4362,6 +4361,9 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 
 <!-- ═══════════════ HAFTALIK PROGRAM ÖNİZLEME · birimlerin onaylı haftalık programları ═══════════════ -->
 <style>
+.prg-switch{display:inline-flex;gap:4px;padding:4px;margin:0 0 14px;border:1px solid var(--line);border-radius:12px;background:var(--surface-2)}
+.prg-switch button{border:0;background:transparent;padding:8px 16px;border-radius:9px;font:700 13px var(--font-d,inherit);color:var(--muted);cursor:pointer}
+.prg-switch button.on{background:var(--accent);color:var(--accent-ink,#fff)}
 .hp-unit{margin-top:18px}
 .hp-unit:first-child{margin-top:0}
 .hp-unit-h{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:0 0 10px}
@@ -4496,7 +4498,6 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
     }).join("");
     const signs = (doc.signs||[]).map(s=>{ const l=String(s).split("\n"); return `<div><b>${hesc(l.shift())}</b>${hesc(l.join("\n"))}</div>`; }).join("");
     return `<div class="hp-doc">
-      <div class="hp-head"><div class="l">${hesc(doc.sayi||"")}\n${hesc(doc.konu||"")}</div><div class="c">${hesc(doc.kurum||"")}</div><div class="r">${hesc(doc.tarih||"")}</div></div>
       <h2>${hesc(doc.title||"HAFTALIK İŞ PLANI ÇİZELGESİ")}</h2><div class="wk">${hesc(doc.week||"")}</div>
       <table><colgroup><col style="width:12%"><col style="width:9%"><col style="width:10%"><col style="width:41%"><col style="width:28%"></colgroup>
         <thead><tr><th>TARİH / GÜN</th><th>SAAT</th><th>YER</th><th>YAPILACAK İŞ</th><th>GÖREVLİLER</th></tr></thead><tbody>${days}</tbody></table>
@@ -4559,12 +4560,22 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
   window.hpClose  = () => { OPEN=null; overlay(); };
   window.hpToggle = key => { EXPAND[key]=!EXPAND[key]; paint(""); };
 
+  let VIEW = "aylik";
+  function applyView(){
+    const am=document.getElementById("program"), hf=document.getElementById("haftalik");
+    if(am) am.style.display = VIEW==="aylik" ? "" : "none";
+    if(hf) hf.style.display = VIEW==="haftalik" ? "" : "none";
+    document.querySelectorAll("#prgSwitch button").forEach(b=>b.classList.toggle("on", b.dataset.v===VIEW));
+  }
+  window.setProgView = v => { VIEW=v; applyView(); if(v==="haftalik") renderHaftalik(); else if(window.renderProgram) renderProgram(); };
   const _go = window.go;
   window.go = function(id){
+    if(id === "haftalik"){ VIEW="haftalik"; id="program"; }
     _go(id);
-    if(id === "haftalik") renderHaftalik();
+    if(id === "program"){ applyView(); if(VIEW==="haftalik") renderHaftalik(); }
   };
-  if((location.hash||"").slice(1) === "haftalik") setTimeout(() => window.go("haftalik"), 150);
+  const h0=(location.hash||"").slice(1);
+  if(h0 === "haftalik") setTimeout(() => window.go("haftalik"), 150);
 })();
 </script>
 </body>
