@@ -352,6 +352,7 @@ body.tmode .sheet{padding:0;height:var(--sheetH,70vh);overflow:auto;border-radiu
           <div class="monthnav"><button class="navbtn" id="prevW" title="Önceki hafta" aria-label="Önceki hafta">&#9664;</button><select id="weekSel" aria-label="Hafta seçimi"></select><button class="navbtn" id="nextW" title="Sonraki hafta" aria-label="Sonraki hafta">&#9654;</button></div>
         </div>
         <div class="cmd-right">
+          <button class="btn" id="pubB" title="Bu haftanın programını onayla; ana sitedeki Haftalık Program bölümünde görünür" style="background:#9b2335;color:#fff;border-color:#9b2335">✔ Haftalığı Onayla</button>
           <button class="btn gold" id="newW">+ YENİ HAFTA</button>
           <button class="btn" id="copyW" title="Önceki haftanın işlerini bu haftaya kopyala">Önceki haftayı kopyala</button>
           <button class="btn danger" id="delW">Haftayı sil</button>
@@ -1733,6 +1734,55 @@ $('#tipToggle').onclick=()=>{tips=!tips;$('#tipToggle').setAttribute('aria-press
 function hideWeeklyTip(){clearTimeout(tipTimer);tip.style.display='none';}
 function showWeeklyTip(td,event){if(!tips||editing||dragging)return;const L=layout(G());if(!L||L.col.ppl==null||+td.dataset.c!==L.col.ppl)return;const r=+td.dataset.r,it=items().find(i=>i.r===r);if(!it||it.day<0)return;const date=dayIso(it.day),busy=busyOn(date);let h='';splitPeople(it.people).forEach(p=>{const st=S.staff.find(x=>nk(x.s)===nk(p)||nk(x.full)===nk(p)),a=st&&unavailable(st,date),b=busy[nk(p)];if(a)h+='<p><b>'+esc(st.full||p)+'</b> · '+esc(a)+'</p>';else if(b)h+='<p><b>'+esc(st?st.full||p:p)+'</b> · aylık programda: '+esc(b.join(', '))+'</p>';});if(!h)return;tip.innerHTML=h;tip.style.display='block';const bx=td.getBoundingClientRect(),x=event?event.clientX:bx.left,y=event?event.clientY:bx.bottom;tip.style.left=Math.max(8,Math.min(x+14,innerWidth-tip.offsetWidth-10))+'px';tip.style.top=Math.max(8,Math.min(y+18,innerHeight-tip.offsetHeight-10))+'px';}
 doc.addEventListener('pointerover',e=>{const td=e.target.closest('td.c');if(!td)return;clearTimeout(tipTimer);tipTimer=setTimeout(()=>showWeeklyTip(td,e),300);});doc.addEventListener('pointerout',hideWeeklyTip);doc.addEventListener('pointerdown',hideWeeklyTip);window.addEventListener('scroll',hideWeeklyTip,true);document.addEventListener('keydown',e=>{if(e.key==='Escape')hideWeeklyTip();});
+
+
+/* =====================================================================
+   HAFTALIK PROGRAMI ONAYLA  →  ana sitedeki (index.html) "Haftalık Program" bölümü
+   • Onaylanan hafta E-Tablodaki "HAFTALIK PROGRAM" sekmesine ayrı kayıt olarak yazılır:
+       hpub_<birim-kodu>_<pazartesi>_<zaman>   (satır = [kimlik, zaman, parça no, parça sayısı, base64 veri])
+   • Aynı birim + aynı hafta tekrar onaylanırsa yeni kayıt ESKİSİNİN yerine geçer (önce yeni yazılır, sonra eski silinir).
+   • "Onayı geri al" o haftanın kaydını siler → ana sitede görünmez.
+   • Mevcut eşitleme (hweek_/hdel_/hmeta_) bu kayıtlara dokunmaz.
+   ===================================================================== */
+const PUB_UNITS=[['dekor','Dekor Aksesuar Birimi'],['kondvit','Kondüvit Birimi'],['isik','Işık Birimi'],['erkek','Erkek Terzi Birimi'],['kadin','Kadın Terzi Birimi'],['peruka','Peruka Birimi']];
+const PUB_UNIT_LS='idt_haftalik_pub_unit';
+function guessPubUnit(){
+  const u=String(S.unit||'').toLocaleLowerCase('tr');
+  if(/aksesuar|dekor/.test(u))return 0;if(/kond/.test(u))return 1;if(/ışık|isik/.test(u))return 2;
+  if(/erkek/.test(u))return 3;if(/kadın|kadin/.test(u))return 4;if(/peruk/.test(u))return 5;
+  try{const v=+localStorage.getItem(PUB_UNIT_LS);if(v>=0&&v<PUB_UNITS.length)return v;}catch(e){}
+  return 0;}
+async function publishWeek(ui){
+  const [key,name]=PUB_UNITS[ui],ts=Date.now(),wk=S.cur,id='hpub_'+key+'_'+wk+'_'+ts;
+  const payload=JSON.stringify({v:1,key,unit:name,week:wk,label:weekLabel(wk),ts,doc:weeklyDoc()});
+  const tab=await wkTab();
+  await wkWrite(tab,id,ts,payload);                              /* önce yeni kayıt eksiksiz yazılır */
+  await wkDelete(tab,['hpub_'+key+'_'+wk+'_'],id);               /* sonra aynı haftanın eski onayı silinir */
+  try{localStorage.setItem(PUB_UNIT_LS,String(ui));}catch(e){}}
+async function unpublishWeek(ui){
+  const [key]=PUB_UNITS[ui],tab=await wkTab();
+  await wkDelete(tab,['hpub_'+key+'_'+S.cur+'_'],null);}
+async function pubStatus(ui){
+  try{const {rows}=await wkRows(),pre='hpub_'+PUB_UNITS[ui][0]+'_'+S.cur+'_';
+    const ts=rows.map(r=>String(r[0]||'')).filter(i=>i.startsWith(pre)).map(i=>+i.slice(pre.length)).filter(Boolean);
+    return ts.length?Math.max(...ts):0;}catch(e){return -1;}}
+$('#pubB').onclick=()=>{
+  commitEdit();
+  const g=guessPubUnit(),opts=PUB_UNITS.map(([k,n],i)=>'<option value="'+i+'"'+(i===g?' selected':'')+'>'+esc(n)+'</option>').join('');
+  const fmt=t=>new Date(t).toLocaleString('tr',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  ask('Haftalık programı onayla',
+    '<p><b>'+esc(weekLabel(S.cur))+'</b> haftasının programı onaylanınca ana sitedeki <b>Haftalık Program</b> bölümünde, seçtiğiniz birimin altında görünür.</p>'+
+    '<p>Birim:<br><select id="pubU" style="width:100%">'+opts+'</select></p>'+
+    '<p class="hint" id="pubSt">Durum denetleniyor…</p>'+
+    '<p class="hint">Aynı birim ve haftayı tekrar onaylarsanız yeni onay eskisinin yerine geçer.</p>',
+    ()=>{const ui=+$('#pubU').value;toast('Onaylanıyor…');
+      publishWeek(ui).then(()=>toast('✓ Onaylandı — ana sitede Haftalık Program bölümünde görünür')).catch(e=>toast('Onaylanamadı: '+(e&&e.message||e)));},
+    [['Onayı geri al',()=>{const ui=+$('#pubU').value;toast('Onay geri alınıyor…');
+      unpublishWeek(ui).then(()=>toast('Onay geri alındı — ana siteden kalktı')).catch(e=>toast('Geri alınamadı: '+(e&&e.message||e)));},'danger']]);
+  const refresh=async()=>{const el=$('#pubSt'),sel=$('#pubU');if(!el||!sel)return;const t=await pubStatus(+sel.value);
+    el.textContent=t<0?'Durum alınamadı (E-Tabloya ulaşılamadı).':t?('✓ Bu hafta bu birim için onaylı — son onay: '+fmt(t)):'Bu hafta bu birim için henüz onaylanmadı.';};
+  setTimeout(()=>{refresh();const sel=$('#pubU');if(sel)sel.onchange=refresh;},0);
+};
 
 try{if(fixSigns(G()))save();}catch(e){}
 document.querySelector('.brand-mark img').src=LOGO; render();fetchCrew();pullMonths();syncInfo();setTimeout(()=>syncNow(),700);
