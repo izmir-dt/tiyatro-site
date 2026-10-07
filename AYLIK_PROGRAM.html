@@ -1435,6 +1435,7 @@ table.sheet td.cell{min-width:86px;height:29px}
     <button type="button" role="tab" aria-selected="false" aria-controls="showings" data-tab="showings">📅 Gösterim Takvimi</button>
     <button type="button" role="tab" aria-selected="false" aria-controls="avail" data-tab="avail">Müsaitlik</button>
     <button type="button" role="tab" aria-selected="false" aria-controls="notes" data-tab="notes">Serbest Notlar<span id="freeNotesBadge" class="tabBadge" style="display:none"></span></button>
+    <button type="button" role="tab" aria-selected="false" aria-controls="unotes" data-tab="unotes">🔔 Birim Bildirimleri<span id="unBadge" class="tabBadge" style="display:none"></span></button>
     <button type="button" role="tab" aria-selected="false" aria-controls="print" data-tab="print">Yatay Yazdır</button>
   </nav>
 </header>
@@ -1775,6 +1776,29 @@ table.sheet td.cell{min-width:86px;height:29px}
     <span id="freeNotesFilterCount" style="color:var(--muted);font-size:12px;margin-left:auto"></span>
   </div>
   <div id="freeNotesList"></div>
+</section>
+
+<section id="unotes" role="tabpanel">
+  <div class="controls">
+    <b style="font-size:13px;color:var(--muted)">Haftalık programdaki birimlere uyarı mesajı gönderin. Birim işi yapınca “Tamamlandı” der ve yanıtı burada görürsünüz; bildirimi dilediğiniz zaman silebilirsiniz.</b>
+  </div>
+  <div class="un-box">
+    <div class="un-lbl">Birimler <button type="button" class="btn small" id="unAll">Tümünü seç / kaldır</button></div>
+    <div id="unUnits" class="un-units"></div>
+    <div class="un-two">
+      <label>Ay<select id="unMonth"></select></label>
+      <label>Tarih <small>(isteğe bağlı)</small><input type="date" id="unDate"></label>
+    </div>
+    <label class="un-lbl">Mesaj<textarea id="unText" rows="3" placeholder="Örn: “KANLI NİGAR” dekoru 12 Kasım'a kadar Urla sahnesine taşınacak."></textarea></label>
+    <div class="un-actions"><button type="button" class="btn" id="unSend">📨 Gönder</button><span id="unStatus" class="un-status"></span></div>
+  </div>
+  <div class="controls">
+    <b style="font-size:13px">Gönderilen bildirimler</b>
+    <select id="unFilter" aria-label="Duruma göre filtrele"><option value="">Tümü</option><option value="wait">Bekleyen</option><option value="done">Yanıt gelen</option></select>
+    <button type="button" class="btn small" id="unRefresh">↻ Yenile</button>
+    <span id="unCount" style="color:var(--muted);font-size:12px;margin-left:auto"></span>
+  </div>
+  <div id="unList"></div>
 </section>
 
 <section id="print" role="tabpanel">
@@ -8243,6 +8267,7 @@ document.querySelectorAll('#tabbar button').forEach(b=>b.onclick=()=>{
   if(b.dataset.tab==='categories') renderCategories();
   if(b.dataset.tab==='avail') renderAvailability();
   if(b.dataset.tab==='notes') renderFreeNotesTab();
+  if(b.dataset.tab==='unotes' && window.unotesOpen) window.unotesOpen();
 });
 document.addEventListener('keydown', e=>{
   if(e.target.isContentEditable) return;
@@ -8633,6 +8658,138 @@ body.idt-locked main{pointer-events:none;user-select:none;opacity:.5;filter:gray
   }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',moveShortcutMenu);
   else moveShortcutMenu();
+})();
+</script>
+<script>
+/* === Birim Bildirimleri: aylık programdan birimlere uyarı → birimden "Tamamlandı" yanıtı ===
+   Ortak "AYLIK PROGRAM" sekmesinde iki yeni satır önekiyle çalışır (yeni sekme gerekmez):
+     anot_<kimlik>            → gönderilen bildirim (birimler, ay, tarih, mesaj)
+     anotok_<kimlik>_<birim>  → birimin "Tamamlandı" yanıtı
+   Mevcut apub_/adraft_ satırlarına dokunmaz. */
+(function(){
+  const NU=[{key:'dekor',name:'Dekor Aksesuar'},{key:'kondvit',name:'Kondüvit'},{key:'isik',name:'Işık'},{key:'erkek',name:'Erkek Terzi'},{key:'kadin',name:'Kadın Terzi'},{key:'peruka',name:'Peruka'}];
+  const SEEN_LS='ap_unotes_seen_v1', $=id=>document.getElementById(id);
+  let NOTES=[], DONE=new Map(), busy=false;
+  const esc=s=>escapeHtml(s);
+  function seenSet(){try{return new Set(JSON.parse(localStorage.getItem(SEEN_LS)||'[]'));}catch(e){return new Set();}}
+  function saveSeen(s){try{localStorage.setItem(SEEN_LS,JSON.stringify([...s].slice(-800)));}catch(e){}}
+  function ym(name){const s=String(name||'').toLocaleUpperCase('tr');let mi=-1;AY_ADLARI.forEach((n,i)=>{if(mi<0&&s.includes(n))mi=i;});const y=(s.match(/(20\d{2})/)||[])[1];return(mi<0||!y)?null:{y:+y,m:mi};}
+  const p2=n=>String(n).padStart(2,'0');
+  function fmtDate(iso){if(!iso)return '';const d=new Date(iso+'T12:00:00');return isNaN(d)?iso:d.toLocaleDateString('tr-TR',{day:'numeric',month:'long',weekday:'long'});}
+  function fmtTs(ts){return new Date(ts).toLocaleString('tr-TR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});}
+  function say(t,kind){const e=$('unStatus');if(!e)return;e.textContent=t;e.className='un-status '+(kind||'');clearTimeout(say._t);say._t=setTimeout(()=>{e.textContent='';},4000);}
+  const active=()=>$('unotes')&&$('unotes').classList.contains('active');
+
+  async function fetchNotes(){
+    const r=await fetch(PUBLISH_API+'/'+encodeURIComponent(PUBLISH_SHEET)+'?fresh=1',{cache:'no-store'});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    const rows=(await r.json()).rows||[],notes=[],done=new Map();
+    rows.forEach(x=>{const id=String(x[0]||'');try{
+      if(id.startsWith('anot_')){const d=JSON.parse(b64ToUtf8(String(x[4]||'')));if(d&&d.id&&Array.isArray(d.units))notes.push(d);}
+      else if(id.startsWith('anotok_')){const d=JSON.parse(b64ToUtf8(String(x[4]||'')));if(d&&d.nid&&d.unit){if(!done.has(d.nid))done.set(d.nid,{});done.get(d.nid)[d.unit]=d;}}
+    }catch(e){}});
+    notes.sort((a,b)=>b.ts-a.ts);NOTES=notes;DONE=done;
+  }
+  function newCount(){const sn=seenSet();let n=0;NOTES.forEach(nt=>Object.values(DONE.get(nt.id)||{}).forEach(o=>{if(!sn.has(nt.id+'|'+o.unit))n++;}));return n;}
+  function badge(){const n=newCount(),b=$('unBadge');if(b){b.textContent=n;b.style.display=n?'inline-block':'none';}}
+  function markSeen(){const sn=seenSet();NOTES.forEach(nt=>Object.values(DONE.get(nt.id)||{}).forEach(o=>sn.add(nt.id+'|'+o.unit)));saveSeen(sn);}
+
+  function render(){
+    const list=$('unList');if(!list)return;
+    const f=$('unFilter').value,sn=seenSet();
+    const rows=NOTES.filter(nt=>{const d=DONE.get(nt.id)||{},k=nt.units.filter(u=>d[u]).length;return f==='wait'?k<nt.units.length:f==='done'?k>0:true;});
+    $('unCount').textContent=rows.length+' bildirim';
+    list.innerHTML=rows.length?rows.map(nt=>{
+      const d=DONE.get(nt.id)||{},k=nt.units.filter(u=>d[u]).length,all=k===nt.units.length;
+      const chips=nt.units.map(u=>{const nm=(NU.find(x=>x.key===u)||{name:u}).name,o=d[u],isNew=o&&!sn.has(nt.id+'|'+u);
+        return o?'<span class="un-chip ok'+(isNew?' new':'')+'">✓ '+esc(nm)+' — '+esc(o.by||'')+' · '+esc(fmtTs(o.ts))+(isNew?' <b>yeni</b>':'')+'</span>'
+                :'<span class="un-chip wait">⏳ '+esc(nm)+' — bekliyor</span>';}).join('');
+      return '<div class="un-card'+(all?' all':'')+'"><div class="un-head"><div><b>'+esc(nt.month||'')+(nt.date?' · '+esc(fmtDate(nt.date)):'')+'</b><small>Gönderim: '+esc(fmtTs(nt.ts))+' · '+k+'/'+nt.units.length+' birim tamamladı</small></div><button type="button" class="btn small danger" data-undel="'+esc(nt.id)+'">🗑 Sil</button></div><p>'+esc(nt.text).replace(/\n/g,'<br>')+'</p><div class="un-chips">'+chips+'</div></div>';
+    }).join(''):'<div style="padding:24px;color:var(--muted)">Henüz bildirim yok.</div>';
+  }
+
+  function fillMonths(){
+    const sel=$('unMonth');if(!sel)return;const keep=sel.value;
+    const names=sortedMonthIdx().map(i=>state.months[i].name);
+    const cm=(typeof curMonth==='function')?curMonth():null,cur=cm?cm.name:'';
+    sel.innerHTML=names.map(n=>'<option '+((keep?n===keep:n===cur)?'selected':'')+'>'+esc(n)+'</option>').join('');
+    limitDate();
+  }
+  function limitDate(){
+    const inp=$('unDate'),v=ym($('unMonth').value);if(!inp)return;
+    if(!v){inp.removeAttribute('min');inp.removeAttribute('max');return;}
+    const last=new Date(v.y,v.m+1,0).getDate();
+    inp.min=v.y+'-'+p2(v.m+1)+'-01';inp.max=v.y+'-'+p2(v.m+1)+'-'+p2(last);
+    if(inp.value&&(inp.value<inp.min||inp.value>inp.max))inp.value='';
+  }
+  function fillUnits(){
+    const box=$('unUnits');if(!box||box.dataset.ok)return;box.dataset.ok='1';
+    box.innerHTML=NU.map(u=>'<label class="un-u"><input type="checkbox" value="'+u.key+'"> '+esc(u.name)+'</label>').join('');
+  }
+
+  async function refresh(quiet){
+    if(busy)return;busy=true;
+    try{await fetchNotes();badge();}
+    catch(e){if(!quiet)say('Sunucuya ulaşılamadı','err');}
+    finally{busy=false;}
+  }
+  window.unotesOpen=async function(){
+    fillUnits();fillMonths();await refresh(false);render();markSeen();badge();
+  };
+
+  async function send(){
+    const units=[...document.querySelectorAll('#unUnits input:checked')].map(i=>i.value),month=$('unMonth').value,date=$('unDate').value,text=$('unText').value.trim();
+    if(!units.length)return say('En az bir birim seçin','err');
+    if(!month)return say('Ay seçin','err');
+    if(!text)return say('Mesajı yazın','err');
+    const id=Date.now().toString(36).padStart(9,'0')+Math.random().toString(36).slice(2,6).padEnd(4,'0'),ts=Date.now();
+    const btn=$('unSend');btn.disabled=true;
+    try{
+      const res=await fetch(PUBLISH_API+'/'+encodeURIComponent(PUBLISH_SHEET)+'/row',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({values:['anot_'+id,ts,0,1,utf8ToB64(JSON.stringify({id,units,month,date,text,ts}))]})});
+      if(!res.ok)throw new Error('HTTP '+res.status);
+      $('unText').value='';say('Gönderildi ✓','ok');
+      await fetchNotes();render();markSeen();badge();
+    }catch(e){say('Gönderilemedi: '+(e.message||e),'err');}
+    finally{btn.disabled=false;}
+  }
+  async function remove(nid){
+    if(!confirm('Bu bildirim ve birimlerin “Tamamlandı” yanıtları silinsin mi?'))return;
+    try{await deleteRowsByPrefixes(['anot_'+nid,'anotok_'+nid+'_'],'Bildirim');say('Bildirim silindi','ok');}
+    catch(e){say('Silinemedi: '+(e.message||e),'err');}
+    await refresh(true);render();badge();
+  }
+
+  document.addEventListener('click',e=>{
+    const d=e.target.closest&&e.target.closest('[data-undel]');if(d){remove(d.dataset.undel);return;}
+    if(e.target.id==='unSend')send();
+    if(e.target.id==='unRefresh'){refresh(false).then(()=>{render();markSeen();badge();});}
+    if(e.target.id==='unAll'){const cb=[...document.querySelectorAll('#unUnits input')],all=cb.every(c=>c.checked);cb.forEach(c=>c.checked=!all);}
+  });
+  document.addEventListener('change',e=>{if(e.target.id==='unMonth')limitDate();if(e.target.id==='unFilter')render();});
+  setTimeout(()=>refresh(true),2500);
+  setInterval(()=>{if(document.hidden)return;refresh(true).then(()=>{if(active()){render();markSeen();}});},60000);
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh(true).then(()=>{if(active())render();});});
+
+  const st=document.createElement('style');st.textContent=`
+  .un-box{background:#fff;border:1px solid var(--border,#d8cdb4);border-radius:10px;padding:14px 16px;margin:10px 0 14px;display:grid;gap:12px;max-width:900px}
+  .un-box label,.un-lbl{font-size:12.5px;font-weight:600;color:var(--muted,#6b5b4a);display:block}
+  .un-box select,.un-box input[type=date],.un-box textarea{width:100%;margin-top:5px;padding:8px 10px;border:1px solid var(--border,#d8cdb4);border-radius:8px;font:inherit;font-size:14px}
+  .un-box textarea{resize:vertical}
+  .un-units{display:flex;flex-wrap:wrap;gap:8px}
+  .un-u{display:flex!important;align-items:center;gap:6px;border:1px solid var(--border,#d8cdb4);border-radius:8px;padding:7px 11px;background:#faf6ec;cursor:pointer;color:inherit!important;font-weight:600}
+  .un-two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .un-actions{display:flex;align-items:center;gap:12px}
+  .un-status{font-size:13px;font-weight:600}.un-status.ok{color:#1e6b3a}.un-status.err{color:#b42318}
+  #unList{display:grid;gap:10px;max-width:900px;padding:0 0 30px}
+  .un-card{background:#fff;border:1px solid var(--border,#d8cdb4);border-left:5px solid #e0a82e;border-radius:10px;padding:12px 14px}
+  .un-card.all{border-left-color:#2e7d32;background:#f6fbf6}
+  .un-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.un-head small{display:block;color:var(--muted,#6b5b4a);font-size:12px;margin-top:2px}
+  .un-card p{margin:10px 0;font-size:14px;line-height:1.55}
+  .un-chips{display:flex;flex-wrap:wrap;gap:6px}
+  .un-chip{font-size:12px;border-radius:999px;padding:4px 10px;border:1px solid transparent}
+  .un-chip.ok{background:#e3f4e5;color:#1e5e22;border-color:#b7dfba}.un-chip.wait{background:#fff3c4;color:#6a4a00;border-color:#ecd78a}.un-chip.new{box-shadow:0 0 0 2px #2e7d32 inset}
+  @media(max-width:700px){.un-two{grid-template-columns:1fr}}`;
+  document.head.appendChild(st);
 })();
 </script>
 </body>
