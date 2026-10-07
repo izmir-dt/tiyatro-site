@@ -386,7 +386,8 @@ body.tmode .sheet{padding:0;height:var(--sheetH,70vh);overflow:auto;border-radiu
         <div class="menu"><button type="button" class="menu-trigger" data-mm>Belge <span class="caret">&#9662;</span></button>
           <div class="menu-panel"><div class="mp-title">Logo &amp; imza</div>
             <button class="btn" id="logoB" title="DT logosunu taşı / boyutlandır (sürükle veya ok tuşları)">🖼 Logoyu konumlandır</button>
-            <button class="btn" id="signB" title="Tablonun altındaki imza bloğunu düzenle">✍ İmzacıları düzenle</button></div></div>
+            <button class="btn" id="signB" title="Tablonun altındaki imza bloğunu düzenle">✍ İmzacıları düzenle</button>
+            <button class="btn" id="footB" title="Tablonun altındaki açıklamaları birim şablonu olarak düzenle">📝 Alt açıklamalar (şablon)</button></div></div>
         <div class="menu"><button type="button" class="menu-trigger" data-mm>Veri <span class="caret">&#9662;</span></button>
           <div class="menu-panel"><div class="mp-title">Dosya</div>
             <button class="btn" id="impX">Excel yükle</button><button class="btn" id="dataB">Yedek (JSON)</button></div></div>
@@ -408,7 +409,7 @@ body.tmode .sheet{padding:0;height:var(--sheetH,70vh);overflow:auto;border-radiu
     <div class="card" data-tab="staff">
       <h3><span>Birim Personeli <small id="staffVisible" style="font:600 11px Manrope,sans-serif;color:var(--muted)"></small></span> <span style="display:flex;gap:4px"><button class="btn sm" id="staffExcelB" type="button">Excel’den kişi ekle</button><button class="btn sm" id="addStaffX" title="Google E-Tablodaki personel listesinden bu birime kişi ekle">☁ E-Tablodan ekle</button><button class="btn sm" id="addStaff">+ Kişi</button></span></h3>
       <div class="hint">Önce tablodan bir satır (veya görevliler hücresi) seçin, sonra isme tıklayın: kişi o satırın <b>Görevliler</b> hücresine eklenir (tekrar tıklarsanız çıkarılır). Sayı = haftalık görev sayısı. Sarı çerçeve = seçili gün aylık programda bir oyunda görevli.</div>
-      <div class="staff-tools"><input type="text" id="staffSearch" placeholder="Görevli ara: ad, soyad veya kısa ad…" autocomplete="off"><button class="btn sm" id="staffClear" type="button">Temizle</button></div><div class="chips" id="staff"></div><input type="file" id="staffExcelFile" accept=".xlsx,.csv" hidden><div id="staffImport"></div>
+      <div class="staff-tools"><input type="text" id="staffSearch" placeholder="Görevli ara: ad, soyad veya kısa ad…" autocomplete="off"><button class="btn sm" id="staffClear" type="button">Temizle</button></div><div class="staff-tools" style="margin-top:6px;align-items:center;gap:8px"><label style="font:600 12px Manrope,sans-serif;color:var(--muted);display:flex;align-items:center;gap:6px">Tabloya yazılış<select id="nameMode" title="Personel çipine tıklayınca / otomatik doldururken tabloya yazılacak isim biçimi"><option value="short">Kısa ad (C.DENİZ)</option><option value="full">Tam ad (Canan Mızrak Deniz)</option></select></label></div><div class="chips" id="staff"></div><input type="file" id="staffExcelFile" accept=".xlsx,.csv" hidden><div id="staffImport"></div>
     </div>
     <div class="card" data-tab="tasks">
       <h3>Hazır işler <span style="display:flex;gap:4px;flex-wrap:wrap"><button class="btn sm" id="saveTplB" title="Seçili satırın Yapılacak iş metnini şablon yap">💾 Seçiliyi kaydet</button><button class="btn sm" id="histTplB" title="Kayıtlı tüm haftalardaki yazılanlardan şablon çıkar">🕘 Geçmişten</button><button class="btn sm" id="addTpl">+ Şablon</button></span></h3>
@@ -516,6 +517,9 @@ function monday(d){const x=new Date(d.getFullYear(),d.getMonth(),d.getDate());co
 function dmy(d){return String(d.getDate()).padStart(2,'0')+'.'+String(d.getMonth()+1).padStart(2,'0')+'.'+d.getFullYear();}
 function weekLabel(k){const a=fromIso(k),b=addDays(a,6);return a.getMonth()===b.getMonth()?`${a.getDate()}-${b.getDate()} ${AY[a.getMonth()]} ${a.getFullYear()}`:`${a.getDate()} ${AY[a.getMonth()]} - ${b.getDate()} ${AY[b.getMonth()]} ${b.getFullYear()}`;}
 function shortOf(full){const p=String(full).trim().split(/\s+/);if(p.length<2)return trUp(full);return trUp(p[0][0])+'.'+trUp(p[p.length-1]);}
+/* isim modu: 'short' (C.DENİZ) veya 'full' (Canan Mızrak Deniz) — tabloya yazılış biçimi */
+function pName(s){return (S.nameMode==='full'&&s.full&&String(s.full).trim())?String(s.full).trim():s.s;}
+function pk(p){const k=nk(p),st=(S.staff||[]).find(x=>nk(x.s)===k||(x.full&&nk(x.full)===k));return st?nk(st.s):k;}
 function splitPeople(s){return String(s||'').split(/\s*[–—,]\s*|\s*-\s*/).map(x=>x.trim()).filter(Boolean);}
 function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('on'),2200);}
 
@@ -617,7 +621,7 @@ function blankWeek(k){
   delRows(g,L.first,L.end);insRows(g,L.first,7);
   for(let d=0;d<7;d++){const r=L.first+d;cset(g,r,L.col.date,{t:dateLabel(addDays(mon,d),d),al:'c'});
     if(L.col.time!=null)cset(g,r,L.col.time,{b:1,al:'c'});if(L.col.place!=null)cset(g,r,L.col.place,{b:1,al:'c'});}
-  setHeaderDate(g,k);try{fixSigns(g);}catch(e){}return {g};}
+  setHeaderDate(g,k);try{fixSigns(g);}catch(e){}try{applyFooter(g,S.footer);}catch(e){}return {g};}
 var USER_NAV=false;
 function pickOpenWeek(){const nowK=iso(monday(new Date())),ks=Object.keys(S.weeks).sort();if(!ks.length){S.weeks[nowK]=blankWeek(nowK);S.cur=nowK;return;}if(S.weeks[nowK]){S.cur=nowK;return;}const past=ks.filter(k=>k<=nowK);S.cur=past.length?past.pop():ks[0];}
 pickOpenWeek();
@@ -670,7 +674,7 @@ function saveSY(){try{localStorage.setItem(SYNC_LS,JSON.stringify(SY));}catch(e)
 function persistQuiet(){try{localStorage.setItem(LS,JSON.stringify(S));}catch(e){}}
 function hsh(s){let x=5381;for(let i=0;i<s.length;i++)x=((x<<5)+x+s.charCodeAt(i))|0;return x+':'+s.length;}
 function nwNorm(w){const c=JSON.parse(JSON.stringify(w));if(c.g)for(const x of Object.values(c.g.cells))if(/^(SAYI|KONU)\s*:/.test(x.t||''))x.nw=1;return c;}
-const metaOf=s=>({staff:s.staff,header:s.header,footer:s.footer,signs:s.signs,signCat:s.signCat,logo:s.logo,unit:s.unit,font:s.font,tc:s.tc,tpl:s.tpl});
+const metaOf=s=>({staff:s.staff,header:s.header,footer:s.footer,signs:s.signs,signCat:s.signCat,logo:s.logo,unit:s.unit,font:s.font,tc:s.tc,tpl:s.tpl,nameMode:s.nameMode});
 const wHash=k=>S.weeks[k]?hsh(JSON.stringify(S.weeks[k])):null;
 const mHash=()=>hsh(JSON.stringify(metaOf(S)));
 /* gömülü (hiç dokunulmamış) başlangıç verisi "değiştirilmemiş" sayılır — yeni bir bilgisayar ilk açılışta çakışma sormasın */
@@ -752,7 +756,7 @@ async function wkPull(opt={}){
   if(G_.meta&&(G_.meta.ts>SY.metaTs||opt.force)){
     const mh=mHash();
     if(opt.force||SY.metaSent===mh||(!SY.metaSent&&mh===SEED_MH)){
-      try{const o=JSON.parse(b64ToUtf8(G_.meta.txt()));['staff','header','footer','signs','signCat','logo','unit','font','tc','tpl'].forEach(f=>{if(o[f]!==undefined)S[f]=o[f];});SY.metaTs=G_.meta.ts;SY.metaSent=mHash();applied++;}catch(e){}}}
+      try{const o=JSON.parse(b64ToUtf8(G_.meta.txt()));['staff','header','footer','signs','signCat','logo','unit','font','tc','tpl','nameMode'].forEach(f=>{if(o[f]!==undefined)S[f]=o[f];});SY.metaTs=G_.meta.ts;SY.metaSent=mHash();applied++;}catch(e){}}}
   if(applied){ensureCur();persistQuiet();}
   saveSY();
   if(applied&&!editing)render();
@@ -963,7 +967,7 @@ function busyOn(dateIso){
 
 /* ---------- çizim ---------- */
 function refresh(){renderDoc();renderSide();}
-function render(){acHide();MIDX=monthlyIndex();applyFont();renderUnit();renderSelect();refresh();}
+function render(){acHide();MIDX=monthlyIndex();applyFont();renderUnit();renderSelect();refresh();try{syncNameMode();}catch(e){}}
 function renderSelect(){
   {const wt=$('#weekTitle');if(wt){wt.textContent=weekLabel(S.cur);$('#weekSub').textContent=(S.unit||'Dekor Aksesuar')+' birimi · '+Object.keys(S.weeks).length+' hafta kayıtlı';}
    const a=(id,x)=>{const e=$(id);if(e)e.textContent=x;};a('#chipStaff','👥 '+S.staff.length+' personel');a('#chipWeeks','🗓 '+Object.keys(S.weeks).length+' hafta');a('#chipMonth',(M.src||'').startsWith('E-Tablo')?'📅 Aylık program bağlı':'📅 Aylık program: yerel kopya');}
@@ -1008,7 +1012,7 @@ function conflicts(){
   const bad=new Set(),info=new Set(),msgs=[],its=items(),mon=fromIso(S.cur);
   GUN.forEach((gn,d)=>{const busy=busyOn(iso(addDays(mon,d))),byTime={};
     its.filter(i=>i.day===d).forEach(it=>{const t=nk(it.time).match(/\d+\s?\d*/),tk=t?t[0]:'';
-      splitPeople(it.people).forEach(p=>{const k=nk(p);if(!k)return;
+      splitPeople(it.people).forEach(p=>{const k=pk(p);if(!k)return;
         if(tk){const key=tk+'|'+k;if(byTime[key]!==undefined&&byTime[key]!==it.r){bad.add(it.r);bad.add(byTime[key]);msgs.push({c:'bad',t:`${gn} ${esc(it.time.replace(/\D*$/,'').trim())}: <b>${esc(p)}</b> aynı saatte iki işte görünüyor.`});}else byTime[key]=it.r;}
         if(busy[k]){info.add(it.r);msgs.push({c:'inf',t:`${gn}: <b>${esc(p)}</b> aylık programda ${esc(busy[k].join(', '))} görevinde.`});}
         const person=S.staff.find(s=>nk(s.s)===k);const absence=person&&unavailable(person,iso(addDays(mon,d)));if(absence){bad.add(it.r);msgs.push({c:'bad',t:`${gn}: <b>${esc(p)}</b> ${esc(absence)}; görevlendirmeyi kontrol edin.`});}if(!person)msgs.push({c:'inf',t:`${gn}: <b>${esc(p)}</b> personel listesinde yok.`});
@@ -1019,8 +1023,8 @@ function conflicts(){
 
 /* ---------- yan panel ---------- */
 function renderSide(){
-  const its=items(),cnt={};its.forEach(i=>splitPeople(i.people).forEach(p=>{const k=nk(p);cnt[k]=(cnt[k]||0)+1;}));
-  const ar=curItem(),inRow=new Set(ar?splitPeople(ar.people).map(nk):[]);
+  const its=items(),cnt={};its.forEach(i=>splitPeople(i.people).forEach(p=>{const k=pk(p);cnt[k]=(cnt[k]||0)+1;}));
+  const ar=curItem(),inRow=new Set(ar?splitPeople(ar.people).map(pk):[]);
   const busy=ar&&ar.day>=0?busyOn(iso(addDays(fromIso(S.cur),ar.day))):{};
   $('#staff').innerHTML=S.staff.map((s,i)=>{const k=nk(s.s);return `<span class="chip ${inRow.has(k)?'in':''} ${busy[k]?'busy':''} ${s.off?'off':''}" data-st="${i}" title="${esc(s.full||s.s)}${busy[k]?' — aylık programda: '+esc(busy[k].join(', ')):''}${s.off?' (izinli/pasif)':''}">${esc(s.full||s.s)}</span>`;}).join('');
   renderTasks();
@@ -1186,8 +1190,8 @@ window.addEventListener('resize',syncHdr);if(window.ResizeObserver)new ResizeObs
 $('#staff').addEventListener('click',e=>{
   const sx=e.target.closest('[data-sx]');if(sx){e.stopPropagation();editStaff(+sx.dataset.sx);return;}
   const c=e.target.closest('[data-st]');if(!c)return;const it=curItem(),L=layout(G());if(!it)return toast('Önce tablodan bir satır seçin');
-  const s=S.staff[+c.dataset.st];if(unavailable(s,dayIso(it.day))&&!splitPeople(it.people).some(p=>nk(p)===nk(s.s)))return toast('Bu tarihte izinli / raporlu veya pasif: görevlendirilemez');snap();let ps=splitPeople(it.people);const k=nk(s.s);
-  ps=ps.some(p=>nk(p)===k)?ps.filter(p=>nk(p)!==k):ps.concat(s.s);setV(it.r,L.col.ppl,{t:ps.join(SEP)});save();refresh();
+  const s=S.staff[+c.dataset.st];if(unavailable(s,dayIso(it.day))&&!splitPeople(it.people).some(p=>pk(p)===nk(s.s)))return toast('Bu tarihte izinli / raporlu veya pasif: görevlendirilemez');snap();let ps=splitPeople(it.people);const k=nk(s.s);
+  ps=ps.some(p=>pk(p)===k)?ps.filter(p=>pk(p)!==k):ps.concat(pName(s));setV(it.r,L.col.ppl,{t:ps.join(SEP)});save();refresh();
 });
 $('#mp').addEventListener('click',e=>{if(e.target.closest('#addMiss')){commitEdit();snap();draftFromMonthly(true);save();refresh();return;}const b=e.target.closest('[data-ins]');if(!b)return;const L=layout(G());if(!L||L.col.task==null)return toast('Tabloda “TARİH/GÜN” başlığı bulunamadı');
   const d=+b.dataset.d,txt='“'+b.dataset.ins+'” ';snap();let it=curItem(),r;
@@ -1234,7 +1238,7 @@ function applyTpl(i,replace){
   else add=fillTpl(tpl,o1,o2);
   snap();setV(it.r,L.col.task,{t:(txt+' '+add).trim()});
   if(TPV.ppl&&L.col.ppl!=null&&!it.people.trim()){const names=[];
-    [o1,o2].filter(Boolean).forEach(p=>crewOfPlay(p).filter(c=>/dekor|aksesuar/i.test(c.category+' '+c.role)).forEach(c=>{const s=S.staff.find(x=>nk(x.s)===nk(shortOf(c.person))&&!unavailable(x,dayIso(it.day)));if(s&&!names.includes(s.s))names.push(s.s);}));
+    [o1,o2].filter(Boolean).forEach(p=>crewOfPlay(p).filter(c=>/dekor|aksesuar/i.test(c.category+' '+c.role)).forEach(c=>{const s=S.staff.find(x=>nk(x.s)===nk(shortOf(c.person))&&!unavailable(x,dayIso(it.day)));if(s&&!names.includes(pName(s)))names.push(pName(s));}));
     if(names.length)setV(it.r,L.col.ppl,{t:names.join(SEP)});}
   if(L.col.place!=null&&!it.place.trim()&&o1&&it.day>=0){const itm=(MIDX[dayIso(it.day)]||[]).find(x=>nk(playName(x.text))===nk(o1));if(itm&&itm.stage)setV(it.r,L.col.place,{t:yerOf(itm.stage),b:1,al:'c'});}
   save();refresh();toast(o1?'Şablon eklendi — kontrol edin':'Şablon eklendi — oyun adını yazın');}
@@ -1287,12 +1291,12 @@ function acUpdate(){
   if(c===L.col.ppl){
     let ts=0,m;SEPRE.lastIndex=0;while((m=SEPRE.exec(before)))ts=m.index+m[0].length;
     const tok=before.slice(ts).replace(/^\s+/,''),tokStart=pos-tok.length,key=nk(tok);if(!tok||!key)return acHide();
-    const have=new Set(splitPeople(before.slice(0,tokStart)+' – '+after).map(nk));
+    const have=new Set(splitPeople(before.slice(0,tokStart)+' – '+after).map(pk));
     const busy=day>=0?busyOn(dayIso(day)):{};
     list=S.staff.filter(s=>!have.has(nk(s.s))).map(s=>({s,H:' '+nk(s.s)+' '+nk(s.full||'')+' '})).filter(x=>x.H.includes(' '+key))
       .sort((a,b)=>(a.s.off?1:0)-(b.s.off?1:0)||((nk(a.s.s).startsWith(key)?0:1)-(nk(b.s.s).startsWith(key)?0:1))||a.s.s.localeCompare(b.s.s,'tr')).slice(0,8)
       .map(x=>{const bz=busy[nk(x.s.s)];return {label:x.s.s,warn:!!bz,sub:(x.s.full||'')+(x.s.off?' · izinli/pasif':'')+(bz?' · ⚠ aylıkta: '+bz.join(', '):''),
-        apply:()=>{const tail=after.replace(/^\s*(?:[–—,]|-)\s*/,'').trim(),pre=before.slice(0,tokStart),head=pre+x.s.s+SEP;return {text:head+tail,pos:head.length};}};});
+        apply:()=>{const tail=after.replace(/^\s*(?:[–—,]|-)\s*/,'').trim(),pre=before.slice(0,tokStart),head=pre+pName(x.s)+SEP;return {text:head+tail,pos:head.length};}};});
   }else{
     const mm=before.match(/([“"]?)([^\s“”"]*)$/),q=mm?mm[1]:'',tok=mm?mm[2]:'',key=nk(tok);if(key.length<2)return acHide();
     const tokStart=pos-q.length-tok.length,pre=before.slice(0,tokStart),dp=day>=0?dayPlaysOf(day):[];
@@ -1334,6 +1338,44 @@ function fixSigns(g){
   if(g.rows>last+1){g.rows=last+1;g.merges=g.merges.filter(m=>m[0]<g.rows);}
   return JSON.stringify([g.cells,g.merges,g.rows])!==before;}
 $('#signB').onclick=()=>signDlg();
+
+/* ---------- alt açıklamalar: birime özgü şablon ---------- */
+function footerRowsOf(g,L){const out=[];for(let r=L.end+1;r<g.rows;r++){const m=mergeAt(g,r,0);if(m&&m[0]===r&&m[3]>m[1]&&ctext(g,r,0).trim())out.push(r);}return out;}
+function footerOfGrid(g){const L=layout(g);return L?footerRowsOf(g,L).map(r=>ctext(g,r,0).trim()):[];}
+function applyFooter(g,texts){
+  texts=(texts||[]).map(t=>String(t).trim()).filter(Boolean);const L=layout(g);if(!L)return false;
+  let rows=footerRowsOf(g,L);
+  if(!rows.length){if(!texts.length)return false;const at=L.end+2;insRows(g,at,texts.length);rows=texts.map((_,i)=>at+i);rows.forEach(r=>g.merges.push([r,0,r,3]));}
+  else{
+    if(texts.length>rows.length){const n=texts.length-rows.length,last=rows[rows.length-1],at=last+1,st=g.cells[last+',0']||{};insRows(g,at,n);
+      for(let i=0;i<n;i++){const r=at+i;g.merges.push([r,0,r,3]);if(st.sz)cset(g,r,0,{sz:st.sz});rows.push(r);}}
+    else if(texts.length<rows.length){for(let i=rows.length-1;i>=texts.length;i--)delRows(g,rows[i],rows[i]);rows=rows.slice(0,texts.length);}
+  }
+  texts.forEach((t,i)=>cset(g,rows[i],0,{t}));return true;}
+function footDlg(){
+  const cur=(S.footer||[]).join('\n');
+  ask('Alt açıklamalar — '+(S.unit||UNIT.name)+' birimi şablonu',
+   `<p style="margin:0 0 6px">Tablonun altında yazan açıklamalar. Her satır ayrı bir açıklamadır. Bu şablon yeni açılan haftalara otomatik uygulanır; her birim kendi şablonunu düzenleyebilir.</p>
+    <textarea id="ftT" rows="6" style="width:100%;font:13px/1.4 Manrope,sans-serif">${esc(cur)}</textarea>
+    <label style="display:block;margin-top:6px"><input type="checkbox" id="ftA" checked> Açık haftaya da uygula</label>`,
+   ()=>{const arr=$('#ftT').value.split('\n').map(x=>x.trim()).filter(Boolean),ap=$('#ftA').checked;snap();S.footer=arr;
+     if(ap&&S.cur&&W()&&W().g)applyFooter(G(),arr);save();refresh();toast('Alt açıklama şablonu kaydedildi');},
+   [['Bu haftadan şablon al',()=>{const t=footerOfGrid(G());if(!t.length)return toast('Bu haftada alt açıklama bulunamadı');snap();S.footer=t;save();toast('Şablon bu haftadaki açıklamalardan alındı');}]]);}
+$('#footB').onclick=()=>footDlg();
+
+/* ---------- isim yazılış modu ---------- */
+function syncNameMode(){const e=$('#nameMode');if(e)e.value=S.nameMode==='full'?'full':'short';}
+function convertNames(){const g=G(),L=layout(g);if(!L||L.col.ppl==null)return 0;let n=0;
+  items().forEach(it=>{const ps=splitPeople(it.people);if(!ps.length)return;
+    const out=ps.map(p=>{const k=nk(p),st=S.staff.find(x=>nk(x.s)===k||(x.full&&nk(x.full)===k));return st?pName(st):p;});
+    if(out.join(SEP)!==ps.join(SEP)){setV(it.r,L.col.ppl,{t:out.join(SEP)});n++;}});
+  return n;}
+$('#nameMode').onchange=e=>{S.nameMode=e.target.value==='full'?'full':'short';save();
+  let has=false;try{has=items().some(i=>i.people.trim());}catch(_){}
+  if(!has)return toast(S.nameMode==='full'?'Yeni eklenen isimler tam ad olarak yazılacak':'Yeni eklenen isimler kısa ad olarak yazılacak');
+  ask('İsim biçimi',`<p>Bundan sonra eklenen isimler <b>${S.nameMode==='full'?'tam ad':'kısa ad'}</b> olarak yazılacak.</p><p>Bu haftadaki mevcut isimler de ${S.nameMode==='full'?'tam ada':'kısa ada'} çevrilsin mi?</p>`,
+   ()=>{snap();const n=convertNames();save();refresh();toast(n+' satırdaki isimler güncellendi');},[]);};
+
 
 /* --- yazı tipi, birim adı, logo --- */
 function signHtml(){const sg=(S.signs||[]).filter(s=>String(s).trim());if(!sg.length)return '<div class="signbox signempty" title="İmzacı seçmek için çift tıklayın"><div class="sg"><span>✍ İmzacı seçmek için çift tıklayın</span></div></div>';
@@ -1426,7 +1468,7 @@ $('#newW').onclick=()=>{const last=Object.keys(S.weeks).sort().pop();const def=i
   ask('Yeni hafta',`<p>Haftanın herhangi bir gününü seçin (Pazartesi’ye yuvarlanır):<br><input type="date" id="nW" value="${def}"></p><label><input type="checkbox" id="nA" checked> Aylık programdaki oyunları satır olarak öner (dekor kur/sök taslağı)</label>`,()=>{if(!validIso($('#nW').value))return toast('Geçerli bir tarih seçin'),false;const k=iso(monday(fromIso($('#nW').value)));if(S.weeks[k]){goto(k);return toast('Bu hafta zaten var');}snap();S.weeks[k]=blankWeek(k);S.cur=k;sel=null;if($('#nA').checked)draftFromMonthly();save();render();});};
 function draftFromMonthly(onlyMissing){const g=G(),L=layout(g);if(!L)return toast('Tabloda “TARİH/GÜN” başlığı bulunamadı');MIDX=monthlyIndex();const mon=fromIso(S.cur),have=onlyMissing?items():[];let n=0;const C=L.col;
   GUN.forEach((gn,d)=>{(MIDX[iso(addDays(mon,d))]||[]).filter(it=>unitCrew(it.text).length&&!(onlyMissing&&covered(d,it,have))).forEach(it=>{
-    const pl=playName(it.text),cr=unitCrew(it.text).map(c=>S.staff.find(s=>sameStaff(s,c.person))).filter(s=>s&&!unavailable(s,dayIso(d))).map(s=>s.s).filter((v,i,a)=>a.indexOf(v)===i);
+    const pl=playName(it.text),cr=unitCrew(it.text).map(c=>S.staff.find(s=>sameStaff(s,c.person))).filter(s=>s&&!unavailable(s,dayIso(d))).map(s=>pName(s)).filter((v,i,a)=>a.indexOf(v)===i);
     const yer=/KARŞIYAKA/i.test(it.stage)?'KŞYK':/BKSM|BOZKURT/i.test(it.stage)?'BKM':/URLA/i.test(it.stage)?'URLA':trUp(it.stage);
     let r=emptyRowOfDay(d);if(r==null)r=addRowForDay(d);
     if(C.time!=null)setV(r,C.time,{t:'09:00',b:1,al:'c'});if(C.place!=null)setV(r,C.place,{t:yer,b:1,al:'c'});
@@ -1783,7 +1825,7 @@ $('#fileX').onchange=async e=>{const f=e.target.files[0];if(!f)return;e.target.v
     for(let c=0;c<g.cols;c++)cset(g,L.hr,c,{b:1,al:'c',sz:12});
     for(let r=L.first;r<=L.end;r++)[L.col.date,L.col.time,L.col.place].forEach((c,i)=>{if(c!=null)cset(g,r,c,{al:'c',b:i?1:0});});
     const k=iso(first);snap();S.weeks[k]={g};S.cur=k;sel=null;
-    items().forEach(it=>splitPeople(it.people).forEach(p=>{if(!S.staff.some(s=>nk(s.s)===nk(p)))S.staff.push({s:p,full:''});}));
+    items().forEach(it=>splitPeople(it.people).forEach(p=>{if(!S.staff.some(s=>nk(s.s)===nk(p)||(s.full&&nk(s.full)===nk(p))))S.staff.push({s:p,full:''});}));
     save();render();toast(weekLabel(k)+' yüklendi');}
   catch(err){toast(err instanceof Error?err.message:'Excel okunamadı — “TARİH/GÜN” başlığı bulunamadı');}};
 $('#loadM').onclick=()=>$('#fileM').click();
@@ -1887,7 +1929,7 @@ doc.addEventListener('click',e=>{
 let tips=true,tipTimer=null;const tip=document.createElement('div');tip.id='weeklyTip';tip.setAttribute('role','tooltip');document.body.appendChild(tip);
 
 function hideWeeklyTip(){clearTimeout(tipTimer);tip.style.display='none';}
-function showWeeklyTip(td,event){if(!tips||editing||dragging)return;const L=layout(G());if(!L||L.col.ppl==null||+td.dataset.c!==L.col.ppl)return;const r=+td.dataset.r,it=items().find(i=>i.r===r);if(!it||it.day<0)return;const date=dayIso(it.day),busy=busyOn(date);let h='';splitPeople(it.people).forEach(p=>{const st=S.staff.find(x=>nk(x.s)===nk(p)||nk(x.full)===nk(p)),a=st&&unavailable(st,date),b=busy[nk(p)];if(a)h+='<p><b>'+esc(st.full||p)+'</b> · '+esc(a)+'</p>';else if(b)h+='<p><b>'+esc(st?st.full||p:p)+'</b> · aylık programda: '+esc(b.join(', '))+'</p>';});if(!h)return;tip.innerHTML=h;tip.style.display='block';const bx=td.getBoundingClientRect(),x=event?event.clientX:bx.left,y=event?event.clientY:bx.bottom;tip.style.left=Math.max(8,Math.min(x+14,innerWidth-tip.offsetWidth-10))+'px';tip.style.top=Math.max(8,Math.min(y+18,innerHeight-tip.offsetHeight-10))+'px';}
+function showWeeklyTip(td,event){if(!tips||editing||dragging)return;const L=layout(G());if(!L||L.col.ppl==null||+td.dataset.c!==L.col.ppl)return;const r=+td.dataset.r,it=items().find(i=>i.r===r);if(!it||it.day<0)return;const date=dayIso(it.day),busy=busyOn(date);let h='';splitPeople(it.people).forEach(p=>{const st=S.staff.find(x=>nk(x.s)===nk(p)||nk(x.full)===nk(p)),a=st&&unavailable(st,date),b=busy[pk(p)];if(a)h+='<p><b>'+esc(st.full||p)+'</b> · '+esc(a)+'</p>';else if(b)h+='<p><b>'+esc(st?st.full||p:p)+'</b> · aylık programda: '+esc(b.join(', '))+'</p>';});if(!h)return;tip.innerHTML=h;tip.style.display='block';const bx=td.getBoundingClientRect(),x=event?event.clientX:bx.left,y=event?event.clientY:bx.bottom;tip.style.left=Math.max(8,Math.min(x+14,innerWidth-tip.offsetWidth-10))+'px';tip.style.top=Math.max(8,Math.min(y+18,innerHeight-tip.offsetHeight-10))+'px';}
 doc.addEventListener('pointerover',e=>{const td=e.target.closest('td.c');if(!td)return;clearTimeout(tipTimer);tipTimer=setTimeout(()=>showWeeklyTip(td,e),300);});doc.addEventListener('pointerout',hideWeeklyTip);doc.addEventListener('pointerdown',hideWeeklyTip);window.addEventListener('scroll',hideWeeklyTip,true);document.addEventListener('keydown',e=>{if(e.key==='Escape')hideWeeklyTip();});
 
 
