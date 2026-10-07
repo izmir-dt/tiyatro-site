@@ -410,11 +410,12 @@ body.tmode .sheet{padding:0;height:var(--sheetH,70vh);overflow:auto;border-radiu
   <aside id="drawer" role="complementary" aria-label="Program araçları" data-tab="staff"><div class="float-title" id="drawerGrip"><span id="drawerTitle">Program araçları</span><button class="btn sm" id="dClose">✕ Kapat</button></div>
     <div class="card" data-tab="staff">
       <h3><span>Birim Personeli <small id="staffVisible" style="font:600 11px Manrope,sans-serif;color:var(--muted)"></small></span> <span style="display:flex;gap:4px"><button class="btn sm" id="staffExcelB" type="button">Excel’den kişi ekle</button><button class="btn sm" id="addStaffX" title="Google E-Tablodaki personel listesinden bu birime kişi ekle">☁ E-Tablodan ekle</button><button class="btn sm" id="addStaff">+ Kişi</button></span></h3>
+      <div class="mgrline" id="mgrLine"><span id="mgrTxt"></span><button class="btn sm" id="mgrB" type="button">👤 Birim sorumlusu</button></div>
       <div class="hint">Önce tablodan bir satır (veya görevliler hücresi) seçin, sonra isme tıklayın: kişi o satırın <b>Görevliler</b> hücresine eklenir (tekrar tıklarsanız çıkarılır). Sayı = haftalık görev sayısı. Sarı çerçeve = seçili gün aylık programda bir oyunda görevli.</div>
       <div class="staff-tools"><input type="text" id="staffSearch" placeholder="Görevli ara: ad, soyad veya kısa ad…" autocomplete="off"><button class="btn sm" id="staffClear" type="button">Temizle</button></div><div class="staff-tools" style="margin-top:6px;align-items:center;gap:8px"><label style="font:600 12px Manrope,sans-serif;color:var(--muted);display:flex;align-items:center;gap:6px">Tabloya yazılış<select id="nameMode" title="Personel çipine tıklayınca / otomatik doldururken tabloya yazılacak isim biçimi"><option value="short">Kısa ad (C.DENİZ)</option><option value="full">Tam ad (Canan Mızrak Deniz)</option></select></label></div><div class="chips" id="staff"></div><input type="file" id="staffExcelFile" accept=".xlsx,.csv" hidden><div id="staffImport"></div>
     </div>
     <div class="card" data-tab="tasks">
-      <h3>Hazır işler <span style="display:flex;gap:4px;flex-wrap:wrap"><button class="btn sm" id="saveTplB" title="Seçili satırın Yapılacak iş metnini şablon yap">💾 Seçiliyi kaydet</button><button class="btn sm" id="histTplB" title="Kayıtlı tüm haftalardaki yazılanlardan şablon çıkar">🕘 Geçmişten</button><button class="btn sm" id="addTpl">+ Şablon</button></span></h3>
+      <h3>Hazır işler <span style="display:flex;gap:4px;flex-wrap:wrap"><button class="btn sm" id="saveTplB" title="Seçili satırın Yapılacak iş metnini şablon yap">💾 Seçiliyi kaydet</button><button class="btn sm" id="histTplB" title="Kayıtlı tüm haftalardaki yazılanlardan şablon çıkar">🕘 Geçmişten</button><button class="btn sm" id="resetTpl" title="Bu birimin şablonlarını başlangıç listesine döndür">↺ Başlangıç</button><button class="btn sm" id="addTpl">+ Şablon</button></span></h3>
       <div class="hint">Önce tablodan bir satır seçin. Şablona tıklayınca o günün aylık programındaki oyun adı otomatik yazılır (görevliler ve yer boşsa onlar da önerilir). Shift+tık: satırın mevcut metnini değiştirir. Görev hücresinde yazarken de oyun adı ve şablonlar önerilir.</div>
       <div id="tpSel"></div>
       <div class="taskbtns" id="tasks"></div>
@@ -458,6 +459,7 @@ body.tmode .sheet{padding:0;height:var(--sheetH,70vh);overflow:auto;border-radiu
 #gate .pw button{font:700 13.5px 'Manrope',sans-serif;padding:8px 16px;border:0;border-radius:7px;background:#b8892b;color:#fff;cursor:pointer}
 @media print{.signempty{display:none!important}}
 .signempty{opacity:.55;border:1px dashed #c9b98f;border-radius:8px;padding:8px 12px;margin-right:56px}
+#drawer .mgrline{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:2px 0 8px;padding:6px 8px;border:1px dashed var(--border);border-radius:8px;font-size:12.5px}.mgrline #mgrTxt b{font-weight:800}
 #gate .err{color:#c0392b;font-size:13px;font-weight:700;min-height:18px;margin-top:8px}
 </style>
 <script>
@@ -1213,7 +1215,17 @@ $('#addStaff').onclick=()=>{
    v2: görevli / iş yazarken öneri, hazır işler, imza eşitleme,
        E-Tablodan personel ekleme, kesinleşen aylık program bildirimi
    ===================================================================== */
-const TPL0=['“{oyun}” oyununun dekoru kurulacaktır.','“{oyun}” oyununun dekoru sökülecektir.','“{oyun}” oyununun dekoru kurulacak prova sonrası sökülecektir.','“{oyun}” oyununun dekoru kurulacak temsil sonrası sökülecektir.','“{oyun}” oyununun dekoru sökülecek “{oyun2}” oyununun dekoru kurulacaktır.','“{oyun}” oyununun dekoru Karşıyaka’ya taşınacaktır.','“{oyun}” oyununun dekoru Bornova’ya taşınacaktır.','“{oyun}” aksesuarları Karşıyaka’ya taşınacaktır.','“{oyun}” oyununun dekoru (fuaye) kurulacaktır.','“{oyun}” oyununun dekoru (fuaye) indirilecek “{oyun2}” oyununun dekoru yüklenecektir.','Turne kamyonu yüklenecektir.','Turne kamyonu indirilecektir.'];
+const TPL_DEKOR=['“{oyun}” oyununun dekoru kurulacaktır.','“{oyun}” oyununun dekoru sökülecektir.','“{oyun}” oyununun dekoru kurulacak prova sonrası sökülecektir.','“{oyun}” oyununun dekoru kurulacak temsil sonrası sökülecektir.','“{oyun}” oyununun dekoru sökülecek “{oyun2}” oyununun dekoru kurulacaktır.','“{oyun}” oyununun dekoru Karşıyaka’ya taşınacaktır.','“{oyun}” oyununun dekoru Bornova’ya taşınacaktır.','“{oyun}” aksesuarları Karşıyaka’ya taşınacaktır.','“{oyun}” oyununun dekoru (fuaye) kurulacaktır.','“{oyun}” oyununun dekoru (fuaye) indirilecek “{oyun2}” oyununun dekoru yüklenecektir.','Turne kamyonu yüklenecektir.','Turne kamyonu indirilecektir.'];
+/* her birimin kendi başlangıç şablonu vardır; sonrasında “Hazır işler” panelinden birim kendi listesini düzenler (S.tpl) */
+const TPL_BY_UNIT={
+ dekor:TPL_DEKOR,
+ isik:['“{oyun}” oyununun ışık düzeni kurulacaktır.','“{oyun}” oyununun ışık düzeni sökülecektir.','“{oyun}” oyunu ışık provası yapılacaktır.','“{oyun}” oyununun ışık düzeni Karşıyaka’ya taşınacaktır.','“{oyun}” oyununun ışık düzeni Bornova’ya taşınacaktır.'],
+ erkek:['“{oyun}” oyunu erkek kostüm provası yapılacaktır.','“{oyun}” oyunu kostümleri hazırlanacaktır.','“{oyun}” oyunu kostümleri teslim edilecektir.'],
+ kadin:['“{oyun}” oyunu kadın kostüm provası yapılacaktır.','“{oyun}” oyunu kostümleri hazırlanacaktır.','“{oyun}” oyunu kostümleri teslim edilecektir.'],
+ peruka:['“{oyun}” oyunu peruka provası yapılacaktır.','“{oyun}” oyunu perukaları hazırlanacaktır.','“{oyun}” oyunu perukaları teslim edilecektir.'],
+ kondvit:['“{oyun}” oyunu için hazırlık yapılacaktır.','“{oyun}” oyunu için prova çalışması yapılacaktır.']
+};
+const TPL0=TPL_BY_UNIT[UNIT.key]||['“{oyun}” oyunu için çalışma yapılacaktır.'];
 const TPL=()=>S.tpl||TPL0;
 let TPV={o1:'',o2:'',ppl:true,row:''};
 function fillTpl(s,o1,o2){return s.replace(/\{oyun2\}/g,o2||'OYUN ADI').replace(/\{oyun\}/g,o1||'OYUN ADI');}
@@ -1247,6 +1259,7 @@ function applyTpl(i,replace){
 function tplDlg(i){const nw=i==null,cur=nw?'“{oyun}” oyununun dekoru ':TPL()[i];
   ask(nw?'Yeni hazır iş':'Hazır işi düzenle',`<p>Metin — oyun adı yeri için <b>{oyun}</b>, ikinci oyun için <b>{oyun2}</b> yazın:<br><input type="text" id="tT" style="width:100%" value="${esc(cur)}"></p>`,()=>{const v=$('#tT').value.trim();if(!v)return;snap();const a=(S.tpl||TPL0).slice();if(nw)a.push(v);else a[i]=v;S.tpl=a;save();renderSide();},nw?[]:[['Sil',()=>{snap();const a=(S.tpl||TPL0).slice();a.splice(i,1);S.tpl=a;save();renderSide();},'danger']]);}
 $('#addTpl').onclick=()=>tplDlg();
+$('#resetTpl').onclick=()=>ask('Şablonları sıfırla','<p><b>'+esc(S.unit||UNIT.name)+'</b> biriminin hazır işleri başlangıç listesine dönecek. Eklediğiniz şablonlar silinir.</p>',()=>{snap();delete S.tpl;save();renderSide();toast('Şablonlar başlangıç listesine döndü');});
 /* --- v6b: yakınlaştırma + tablo modu (tercihler yalnızca bu tarayıcıda) --- */
 var UI=(()=>{let o={};try{o=JSON.parse(localStorage.getItem('wk_ui')||'{}');}catch(e){}return {zoom:o.zoom||1,tmode:o.tmode!==false};})();
 function saveUI(){try{localStorage.setItem('wk_ui',JSON.stringify(UI));}catch(e){}}
@@ -1364,6 +1377,34 @@ function footDlg(){
      if(ap&&S.cur&&W()&&W().g)applyFooter(G(),arr);save();refresh();toast('Alt açıklama şablonu kaydedildi');},
    [['Bu haftadan şablon al',()=>{const t=footerOfGrid(G());if(!t.length)return toast('Bu haftada alt açıklama bulunamadı');snap();S.footer=t;save();toast('Şablon bu haftadaki açıklamalardan alındı');}]]);}
 $('#footB').onclick=()=>footDlg();
+
+/* ---------- birim sorumlusu: her birimin kendi sorumlusu (S.manager) ---------- */
+const mgrSignText=m=>m&&m.name?normSign(m.name+'\n'+(m.title||'Birim Sorumlusu')):'';
+function paintMgr(){const e=$('#mgrTxt');if(!e)return;const m=S.manager;
+  e.innerHTML=m&&m.name?'Birim sorumlusu: <b>'+esc(m.name)+'</b>'+(m.title?' <small>('+esc(m.title)+')</small>':''):'<span style="color:var(--muted)">Birim sorumlusu seçilmedi</span>';
+  const t=$('#unitTag');if(t)t.title=m&&m.name?'Birim sorumlusu: '+m.name:'Çalıştığınız birim';}
+function mgrDlg(){
+  const staff=(S.staff||[]).map(s=>({v:(s.full&&s.full.trim())||s.s,l:(s.full&&s.full.trim())?s.full.trim()+' ('+s.s+')':s.s})),cur=S.manager||{},names=staff.map(x=>x.v);
+  const inList=cur.name&&names.some(n=>nk(n)===nk(cur.name));
+  ask('Birim sorumlusu — '+(S.unit||UNIT.name),
+   `<p class="hint" style="display:block;margin:0 0 8px">Bu birimin sorumlusunu personel listesinden seçin; listede yoksa adını elle yazın. Her birimin sorumlusu ayrıdır.</p>
+    <p style="margin:0 0 6px">Personelden seç:<br><select id="mgS" style="width:100%"><option value="">— seçilmedi —</option>${staff.map(x=>`<option value="${esc(x.v)}"${cur.name&&nk(x.v)===nk(cur.name)?' selected':''}>${esc(x.l)}</option>`).join('')}<option value="__other"${cur.name&&!inList?' selected':''}>Listede yok — elle yaz…</option></select></p>
+    <p style="margin:0 0 6px;${cur.name&&!inList?'':'display:none'}" id="mgOW">Ad Soyad:<br><input type="text" id="mgN" style="width:100%" value="${cur.name&&!inList?esc(cur.name):''}"></p>
+    <p style="margin:0 0 6px">Unvan:<br><input type="text" id="mgT" style="width:100%" value="${esc(cur.title||'')}" placeholder="${esc((S.unit||UNIT.name)+' Birim Sorumlusu')}"></p>
+    <label style="display:flex;gap:6px;align-items:center;margin-top:6px"><input type="checkbox" id="mgSg" ${S.mgrSign?'checked':''}> Tabloda <b>sol imzacı</b> olarak kullan</label>`,
+   ()=>{const sv=$('#mgS').value,name=(sv==='__other'?$('#mgN').value:sv).trim(),title=$('#mgT').value.trim()||(S.unit||UNIT.name)+' Birim Sorumlusu',use=$('#mgSg').checked;
+     snap();const old=mgrSignText(S.manager);
+     S.manager=name?{name,title}:null;S.mgrSign=!!(name&&use);
+     const nw=mgrSignText(S.manager);let sg=(S.signs||[]).filter(x=>String(x).trim()&&(!old||nk(normSign(x))!==nk(old)));
+     if(nw){S.signCat=[...(S.signCat||[]).filter(t=>!old||nk(normSign(t))!==nk(old)),nw];if(S.mgrSign)sg=[nw,...sg.filter(x=>nk(normSign(x))!==nk(nw)&&!/birim sorumlusu/i.test(normSign(x).split('\n').slice(1).join(' ')))].slice(0,2);}
+     S.signs=sg;save();paintMgr();try{renderDoc();}catch(e){}toast(name?'Birim sorumlusu kaydedildi':'Birim sorumlusu kaldırıldı');return true;},
+   []);
+  const sel=$('#mgS');sel.onchange=()=>{const o=sel.value==='__other';$('#mgOW').style.display=o?'':'none';};
+}
+$('#mgrB').onclick=()=>mgrDlg();
+{const _rs=renderSide;renderSide=function(){_rs.apply(this,arguments);paintMgr();};}
+paintMgr();
+
 
 /* ---------- isim yazılış modu ---------- */
 function syncNameMode(){const e=$('#nameMode');if(e)e.value=S.nameMode==='full'?'full':'short';}
@@ -1489,7 +1530,7 @@ function ask(title,body,ok,extra=[]){const d=$('#dlg');$('#dlgT').textContent=ti
   extra.forEach(([l,fn,c])=>{const b=document.createElement('button');b.className='btn '+(c||'');b.textContent=l;b.onclick=()=>{d.close();fn();};f.appendChild(b);});
   const c=document.createElement('button');c.className='btn';c.textContent='Vazgeç';c.onclick=()=>d.close();f.appendChild(c);
   if(ok){const o=document.createElement('button');o.className='btn gold';o.textContent='Tamam';o.onclick=()=>{if(ok()!==false)d.close();};f.appendChild(o);}
-  document.body.appendChild(d);d.style.removeProperty('left');d.style.removeProperty('top');d.style.removeProperty('transform');d.style.setProperty('top',floatTop()+'px');if(!d.open)d.show();const inp=d.querySelector('input,select,textarea');inp&&inp.focus();}
+  document.body.appendChild(d);d.style.removeProperty('left');d.style.removeProperty('top');d.style.removeProperty('transform');d.style.setProperty('top',floatTop()+'px');if(!d.open)d.show();const inp=d.querySelector('input,select,textarea');if(inp)try{inp.focus({preventScroll:true});}catch(e){inp.focus();}}
 
 
 
@@ -2003,7 +2044,7 @@ html,body{background:var(--mobile-bg);color:var(--mobile-ink);font-family:Inter,
 .m-form textarea#mTaskTime{height:76px;min-height:76px}
 .m-detail{display:grid;gap:16px}.m-d-row span{display:block;font-size:10px;color:var(--mobile-muted);margin-bottom:4px}.m-d-row b{font-size:14px;font-weight:600;line-height:1.5}.m-d-people div{display:flex;justify-content:space-between;gap:8px;padding:9px 0;border-bottom:1px solid var(--mobile-border);font-size:13px;margin:0}.m-d-people span{display:inline;font-size:13px;color:var(--mobile-ink);margin:0}.m-d-people small{color:var(--mobile-danger);font-size:10px}
 .m-quick{display:flex;gap:8px;margin:0 4px 14px}.m-quick button{flex:1;min-height:40px;display:flex;align-items:center;justify-content:center;gap:6px;border:1px solid var(--mobile-border);background:var(--mobile-surface);color:var(--mobile-deep);border-radius:12px;font-size:12px;font-weight:600}.m-quick .m-icon{width:16px;height:16px}
-#dlg,#drawer{bottom:var(--kb,0px)!important;max-height:min(90dvh,calc(var(--vvh,100dvh) - 12px))!important;overflow-y:auto!important;overscroll-behavior:contain}#dlg{transition:bottom .15s}#toast{bottom:calc(94px + var(--kb,0px))}body.m-kb .m-bottom{display:none}body.m-kb .m-main{padding-bottom:40px}
+#dlg,#drawer{bottom:var(--kb,0px)!important;max-height:min(90dvh,calc(var(--vvh,100dvh) - 12px))!important;overflow-y:auto!important;overscroll-behavior:contain}#dlg{transition:none}html{scroll-behavior:auto!important}#toast{bottom:calc(94px + var(--kb,0px))}body.m-kb .m-bottom{visibility:hidden;pointer-events:none}body.m-kb .m-header{backdrop-filter:none;-webkit-backdrop-filter:none}
 .m-quick{gap:6px}.m-quick button{padding:0 6px;font-size:11.5px;min-width:0}.m-quick .hot{background:var(--mobile-warn);border-color:var(--mobile-gold);color:var(--mobile-deep)}
 }
 @media print{#mobileApp,#mobileShade{display:none!important}}
@@ -2091,11 +2132,23 @@ function mcrew(r){const it=items().find(x=>x.r===r);if(!it)return;mselect(r);con
 ma.addEventListener('click',e=>{const b=e.target.closest('button');if(!b){const c=e.target.closest('.m-task');if(c&&c.dataset.r!=null)mdetail(+c.dataset.r);return;}if(b.dataset.day!=null){md=+b.dataset.day;sel=null;mrender();}if(b.dataset.view){mview=b.dataset.view;sel=null;mrender();window.scrollTo(0,0);}if(b.dataset.m==='prev')$('#prevW').click();if(b.dataset.m==='next')$('#nextW').click();if(b.dataset.m==='add')medit(null);if(b.dataset.edit!=null)medit(+b.dataset.edit);if(b.dataset.crew!=null)mcrew(+b.dataset.crew);if(b.dataset.person!=null)editStaff(+b.dataset.person);if(b.dataset.trigger)$('#'+b.dataset.trigger).click();if(b.dataset.tab){if(b.dataset.tab==='tasks'&&!curItem()){const it=mitems().find(x=>x.day===md);if(it)mselect(it.r);else return toast('Önce bir görev ekleyin');}openTab(b.dataset.tab);}});
 /* klavye açılınca pencereler ve alt menü görünür alana uyar */
 (function(){const vv=window.visualViewport;if(!vv)return;const root=document.documentElement;
- function upd(){if(!mq.matches){root.style.removeProperty('--kb');root.style.removeProperty('--vvh');document.body.classList.remove('m-kb');return;}
-  const kb=Math.max(0,Math.round(innerHeight-vv.height-vv.offsetTop));
-  root.style.setProperty('--kb',kb+'px');root.style.setProperty('--vvh',Math.round(vv.height)+'px');document.body.classList.toggle('m-kb',kb>80);
-  const a=document.activeElement;if(kb>80&&a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))setTimeout(()=>{try{a.scrollIntoView({block:'center',behavior:'smooth'});}catch(e){}},80);}
- vv.addEventListener('resize',upd);vv.addEventListener('scroll',upd);mq.addEventListener('change',upd);document.addEventListener('focusin',()=>setTimeout(upd,300));
+ /* titreme düzeltmesi: olaylar kare başına bir kez işlenir, değişmeyen değer yazılmaz, klavye eşiği iki yönlü (histerezis),
+    odaklı alana kaydırma klavye oturunca yalnızca bir kez ve yalnızca alan görünmüyorsa yapılır */
+ let raf=0,lastKb=-1,lastH=-1,kbOn=false,st=0;
+ function reveal(){const a=document.activeElement;if(!a||!/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))return;
+  const r=a.getBoundingClientRect(),top=vv.offsetTop+8,bot=vv.offsetTop+vv.height-8;
+  if(r.top>=top&&r.bottom<=bot)return;try{a.scrollIntoView({block:'center'});}catch(e){}}
+ function apply(){raf=0;
+  if(!mq.matches){root.style.removeProperty('--kb');root.style.removeProperty('--vvh');document.body.classList.remove('m-kb');lastKb=lastH=-1;kbOn=false;return;}
+  const kb=Math.max(0,Math.round(innerHeight-vv.height-vv.offsetTop)),h=Math.round(vv.height);
+  if(lastKb<0||Math.abs(kb-lastKb)>=3){lastKb=kb;root.style.setProperty('--kb',kb+'px');}
+  if(lastH<0||Math.abs(h-lastH)>=3){lastH=h;root.style.setProperty('--vvh',h+'px');}
+  const on=kbOn?kb>60:kb>120;if(on!==kbOn){kbOn=on;document.body.classList.toggle('m-kb',on);}
+  if(on){clearTimeout(st);st=setTimeout(reveal,250);}}
+ const sched=()=>{if(!raf)raf=requestAnimationFrame(apply);};
+ vv.addEventListener('resize',sched);vv.addEventListener('scroll',sched);mq.addEventListener('change',sched);
+ document.addEventListener('focusin',()=>{clearTimeout(st);st=setTimeout(()=>{sched();reveal();},320);});
+ document.addEventListener('focusout',()=>setTimeout(sched,120));
 })();
 window.addEventListener('wk-notes',()=>mrender());
 const origRefresh=refresh;refresh=function(){origRefresh();mrender();};
@@ -2112,7 +2165,7 @@ mrender();mq.addEventListener('change',mrender);
   if(!window.UNIT)return;
   const API=SHEET_API, TAB=MONTH_TAB, KEY=UNIT.key;
   const SEEN_LS='wk_note_seen_'+KEY, BY_LS='wk_note_by_'+KEY;
-  let NT=[], DN=new Map(), busy=false;
+  let NT=[], DN=new Map(), busy=false; const EDIT=new Set();
   const lsGet=(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d;}catch(e){return d;}};
   const lsSet=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}};
   const fmtTs=ts=>new Date(ts).toLocaleString('tr-TR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
@@ -2131,7 +2184,7 @@ mrender();mq.addEventListener('change',mrender);
       const rows=(await r.json()).rows||[],n=[],d=new Map();
       rows.forEach(x=>{const id=String(x[0]||'');try{
         if(id.startsWith('anot_')){const o=JSON.parse(b64ToUtf8(String(x[4]||'')));if(o&&o.id&&Array.isArray(o.units)&&o.units.includes(KEY))n.push(o);}
-        else if(id.startsWith('anotok_')){const o=JSON.parse(b64ToUtf8(String(x[4]||'')));if(o&&o.nid&&o.unit===KEY)d.set(o.nid,o);}
+        else if(id.startsWith('anotok_')){const o=JSON.parse(b64ToUtf8(String(x[4]||'')));if(o&&o.nid&&o.unit===KEY){const p=d.get(o.nid);if(!p||(o.ts||0)>=(p.ts||0))d.set(o.nid,o);}}
       }catch(e){}});
       n.sort((a,b)=>b.ts-a.ts);NT=n;DN=d;paint();
       const seen=new Set(lsGet(SEEN_LS,[])),fresh=n.filter(x=>!d.has(x.id)&&!seen.has(x.id));
@@ -2139,11 +2192,19 @@ mrender();mq.addEventListener('change',mrender);
       const dlg=$('#dlg');if(dlg&&dlg.open&&dlg.querySelector('.nt-wrap')&&![...dlg.querySelectorAll('textarea')].some(t=>t.value||t===document.activeElement))$('#dlgB').innerHTML=bodyHtml();
     }catch(e){}finally{busy=false;}
   }
+  /* her birimin kendi hızlı yanıt şablonları (birime özel, E-Tabloya senkronlanır) */
+  const REPLY0=['Tamamlandı','Görevlendirme yapıldı','Programa işlendi'];
+  const replyTpl=()=>Array.isArray(S.replyTpl)&&S.replyTpl.length?S.replyTpl:REPLY0;
   function card(x){
-    const o=DN.get(x.id),label=(x.date?fmtDate(x.date)+' · ':'')+(x.month||''),rep=o&&(o.reply||o.by)||'';
-    return '<div class="nt-card'+(o?' ok':'')+'"><div class="nt-meta"><b>'+esc(label)+'</b><span class="'+(o?'nt-ok':'nt-wait')+'">'+(o?'✓ Tamamlandı':'Bekliyor')+'</span></div><p>'+esc(x.text).replace(/\n/g,'<br>')+'</p>'+
-      (o?(rep?'<p class="nt-rep"><b>Yanıtınız:</b> '+esc(rep).replace(/\n/g,'<br>')+'</p>':'')+'<small>'+esc(fmtTs(o.ts))+'</small>'
-        :'<textarea class="nt-reply" data-nreply="'+esc(x.id)+'" rows="2" placeholder="Yanıt yazın (isteğe bağlı) — Enter: alt satır"></textarea><button type="button" class="btn gold" data-nok="'+esc(x.id)+'">Tamamlandı</button>')+'</div>';
+    const o=DN.get(x.id),ed=EDIT.has(x.id),label=(x.date?fmtDate(x.date)+' · ':'')+(x.month||''),rep=o&&(o.reply||o.by)||'';
+    const form=(prefill)=>'<textarea class="nt-reply" data-nreply="'+esc(x.id)+'" rows="2" placeholder="Yanıt yazın (isteğe bağlı) — Enter: alt satır">'+esc(prefill)+'</textarea>'+
+      '<div class="nt-tpl">'+replyTpl().map((t,i)=>'<button type="button" class="nt-chip" data-ntpl="'+i+'" data-for="'+esc(x.id)+'">'+esc(t)+'</button>').join('')+'<button type="button" class="nt-chip nt-edt" data-ntpled="1" title="Bu birimin hızlı yanıtlarını düzenle">✎</button></div>';
+    let body;
+    if(o&&!ed) body=(rep?'<p class="nt-rep"><b>Yanıtınız:</b> '+esc(rep).replace(/\n/g,'<br>')+'</p>':'')+'<small>'+esc(fmtTs(o.ts))+(o.upd?' · güncellendi':'')+'</small>'+
+      '<button type="button" class="btn nt-upd" data-nedit="'+esc(x.id)+'">✎ Yanıtı güncelle</button>';
+    else if(o&&ed) body=form(o.reply||'')+'<button type="button" class="btn gold" data-nok="'+esc(x.id)+'">Güncelle</button><button type="button" class="btn nt-upd" data-ncancel="'+esc(x.id)+'">Vazgeç</button>';
+    else body=form('')+'<button type="button" class="btn gold" data-nok="'+esc(x.id)+'">Tamamlandı</button>';
+    return '<div class="nt-card'+(o?' ok':'')+'"><div class="nt-meta"><b>'+esc(label)+'</b><span class="'+(o?'nt-ok':'nt-wait')+'">'+(o?'✓ Tamamlandı':'Bekliyor')+'</span></div><p>'+esc(x.text).replace(/\n/g,'<br>')+'</p>'+body+'</div>';
   }
   function bodyHtml(){
     const pend=NT.filter(x=>!DN.has(x.id)),done=NT.filter(x=>DN.has(x.id)).slice(0,10);
@@ -2154,19 +2215,29 @@ mrender();mq.addEventListener('change',mrender);
     ask('Aylık programdan bildirimler',bodyHtml(),null);
     const c=$('#dlgF').lastElementChild;if(c)c.textContent='Kapat';
   }
+  function replyTplDlg(){
+    const keep=[...document.querySelectorAll('#dlgB textarea[data-nreply]')].map(t=>[t.dataset.nreply,t.value]);
+    ask('Hızlı yanıtlar — '+(S.unit||UNIT.name)+' birimi','<p style="margin:0 0 6px">Her satır bir hızlı yanıttır. Bu liste yalnızca bu birime aittir.</p><textarea id="rtT" rows="6" style="width:100%;font:16px/1.4 inherit">'+esc(replyTpl().join('\n'))+'</textarea>',
+      ()=>{const arr=$('#rtT').value.split('\n').map(x=>x.trim()).filter(Boolean);snap();S.replyTpl=arr.length?arr:null;save();setTimeout(()=>{openDlg();},0);return true;},
+      [['Başlangıç listesine dön',()=>{snap();S.replyTpl=null;save();setTimeout(()=>{openDlg();},0);}]]);
+  }
   async function complete(nid){
     const ta=[...document.querySelectorAll('#dlgB textarea[data-nreply]')].find(t=>t.dataset.nreply===nid),reply=ta?ta.value.trim():'';
-    const o={nid,unit:KEY,reply,ts:Date.now()};
+    const prev=DN.get(nid),o={nid,unit:KEY,reply,ts:Date.now()};if(prev){o.upd=(prev.upd||0)+1;o.first=prev.first||prev.ts;}
     try{
       const res=await fetch(API+encodeURIComponent(TAB)+'/row',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({values:['anotok_'+nid+'_'+KEY,o.ts,0,1,utf8ToB64(JSON.stringify(o))]})});
       if(!res.ok)throw new Error('HTTP '+res.status);
-      DN.set(nid,o);paint();
-      $('#dlgB').innerHTML=bodyHtml();toast('Tamamlandı — yanıtınız aylık programa iletildi');
+      DN.set(nid,o);EDIT.delete(nid);paint();
+      $('#dlgB').innerHTML=bodyHtml();toast(prev?'Yanıt güncellendi — aylık programa iletildi':'Tamamlandı — yanıtınız aylık programa iletildi');
     }catch(e){toast('Gönderilemedi, tekrar deneyin');}
   }
   document.addEventListener('click',e=>{
     const t=e.target.closest&&e.target.closest('#noteB');if(t)return openDlg();
-    const k=e.target.closest&&e.target.closest('[data-nok]');if(k)complete(k.dataset.nok);
+    const k=e.target.closest&&e.target.closest('[data-nok]');if(k)return complete(k.dataset.nok);
+    const ed=e.target.closest&&e.target.closest('[data-nedit]');if(ed){EDIT.add(ed.dataset.nedit);$('#dlgB').innerHTML=bodyHtml();const ta=[...document.querySelectorAll('#dlgB textarea[data-nreply]')].find(t=>t.dataset.nreply===ed.dataset.nedit);if(ta){try{ta.focus({preventScroll:true});}catch(_){}ta.setSelectionRange(ta.value.length,ta.value.length);}return;}
+    const cn=e.target.closest&&e.target.closest('[data-ncancel]');if(cn){EDIT.delete(cn.dataset.ncancel);$('#dlgB').innerHTML=bodyHtml();return;}
+    const tp=e.target.closest&&e.target.closest('[data-ntpl]');if(tp){const ta=[...document.querySelectorAll('#dlgB textarea[data-nreply]')].find(t=>t.dataset.nreply===tp.dataset.for);if(ta){const t=replyTpl()[+tp.dataset.ntpl]||'';ta.value=ta.value.trim()?ta.value.trim()+'\n'+t:t;ta.focus({preventScroll:true});}return;}
+    if(e.target.closest&&e.target.closest('[data-ntpled]'))return replyTplDlg();
   });
   setTimeout(pull,1800);
   setInterval(()=>{if(!document.hidden)pull();},120000);
@@ -2177,7 +2248,7 @@ mrender();mq.addEventListener('change',mrender);
   .nt-card{border:1px solid var(--border);border-left:5px solid #e0a82e;border-radius:10px;padding:12px 14px;background:#fff}.nt-card.ok{border-left-color:#2e7d32;background:#f6fbf6}
   .nt-meta{display:flex;justify-content:space-between;gap:8px;align-items:flex-start;font-size:13px}
   .nt-ok{color:#1e5e22;font-size:12px;font-weight:700;white-space:nowrap}.nt-wait{color:#8a5a00;font-size:12px;font-weight:700;white-space:nowrap}
-  .nt-card p{margin:8px 0 10px;font-size:14px;line-height:1.55}.nt-card small{color:var(--muted);font-size:12px}.nt-card .btn{width:100%;min-height:44px}.nt-reply{width:100%;min-height:64px;font-size:16px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;margin:0 0 8px;resize:vertical;font-family:inherit}.nt-rep{background:#eef7ee;border-radius:8px;padding:8px 10px;margin:8px 0 6px}`;
+  .nt-card p{margin:8px 0 10px;font-size:14px;line-height:1.55}.nt-card small{color:var(--muted);font-size:12px}.nt-card .btn{width:100%;min-height:44px}.nt-reply{width:100%;min-height:64px;font-size:16px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;margin:0 0 8px;resize:vertical;font-family:inherit}.nt-tpl{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px}.nt-chip{min-height:36px;border:1px solid var(--border);background:#fff;border-radius:18px;padding:4px 12px;font-size:13px}.nt-upd{margin-top:8px}.nt-card .btn+.btn{margin-top:6px}.nt-rep{background:#eef7ee;border-radius:8px;padding:8px 10px;margin:8px 0 6px}`;
   document.head.appendChild(st);
 })();
 </script>
