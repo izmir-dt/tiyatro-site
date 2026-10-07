@@ -1758,9 +1758,9 @@ function guessPubUnit(){
   if(/erkek/.test(u))return 3;if(/kadın|kadin/.test(u))return 4;if(/peruk/.test(u))return 5;
   try{const v=+localStorage.getItem(PUB_UNIT_LS);if(v>=0&&v<PUB_UNITS.length)return v;}catch(e){}
   return 0;}
-async function publishWeek(ui){
+async function publishWeek(ui,note){
   const [key,name]=PUB_UNITS[ui],ts=Date.now(),wk=S.cur,id='hpub_'+key+'_'+wk+'_'+ts;
-  const payload=JSON.stringify({v:1,key,unit:name,week:wk,label:weekLabel(wk),ts,doc:weeklyDoc()});
+  const payload=JSON.stringify({v:1,key,unit:name,week:wk,label:weekLabel(wk),ts,note:String(note||'').trim(),doc:weeklyDoc()});
   const tab=await wkTab();
   await wkWrite(tab,id,ts,payload);                              /* önce yeni kayıt eksiksiz yazılır */
   await wkDelete(tab,['hpub_'+key+'_'+wk+'_'],id);               /* sonra aynı haftanın eski onayı silinir */
@@ -1779,10 +1779,11 @@ $('#pubB').onclick=()=>{
   ask('Haftalık programı onayla',
     '<p><b>'+esc(weekLabel(S.cur))+'</b> haftasının programı onaylanınca ana sitedeki <b>Haftalık Program</b> bölümünde, seçtiğiniz birimin altında görünür.</p>'+
     '<p>Birim:<br><select id="pubU" style="width:100%">'+opts+'</select></p>'+
+    '<p>Not <span class="hint">(isteğe bağlı — sitede haftanın kartında ve önizlemede görünür)</span><br><textarea id="pubNote" rows="3" maxlength="600" style="width:100%" placeholder="Örn: Cuma günü servis saati değişebilir."></textarea></p>'+
     '<p class="hint" id="pubSt">Durum denetleniyor…</p>'+
     '<p class="hint">Aynı birim ve haftayı tekrar onaylarsanız yeni onay eskisinin yerine geçer.</p>',
-    ()=>{const ui=+$('#pubU').value;toast('Onaylanıyor…');
-      publishWeek(ui).then(()=>toast('✓ Onaylandı — ana sitede Haftalık Program bölümünde görünür')).catch(e=>toast('Onaylanamadı: '+(e&&e.message||e)));},
+    ()=>{const ui=+$('#pubU').value,note=$('#pubNote').value;toast('Onaylanıyor…');
+      publishWeek(ui,note).then(()=>toast('✓ Onaylandı — ana sitede Haftalık Program bölümünde görünür')).catch(e=>toast('Onaylanamadı: '+(e&&e.message||e)));},
     [['Onayı geri al',()=>{const ui=+$('#pubU').value;toast('Onay geri alınıyor…');
       unpublishWeek(ui).then(()=>toast('Onay geri alındı — ana siteden kalktı')).catch(e=>toast('Geri alınamadı: '+(e&&e.message||e)));},'danger']]);
   const refresh=async()=>{const el=$('#pubSt'),sel=$('#pubU');if(!el||!sel)return;const t=await pubStatus(+sel.value);
