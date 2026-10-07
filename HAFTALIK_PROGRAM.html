@@ -915,9 +915,11 @@ function normMerges(mg){
     }
     return null;}).filter(x=>x&&x.length===4&&x.every(Number.isFinite));
 }
+/* haftalık programa YALNIZCA kesinleşip bu siteye gönderilmiş (apub_) aylık programlar kaynak olur; taslak/dosya/yerel kayıt asla */
+function finalMonths(){const o=[];SHEET_MONTHS.forEach(v=>{if(v.kind==='pub')o.push(v.m);});return o;}
 function monthlyIndex(months){
   const idx={};
-  for(const m of (months||M.months||[])){
+  for(const m of (months||finalMonths())){
    try{
     const grid={};normCells(m.cells).forEach(([r,c,v])=>{(grid[r]=grid[r]||{})[c]=v;});
     const merges=normMerges(m.merges);
@@ -942,8 +944,7 @@ let MIDX={};
 function weekMonths(){const mon=fromIso(S.cur),out=[],seen=new Set();
   for(let d=0;d<7;d++){const x=addDays(mon,d),name=AY[x.getMonth()]+' '+x.getFullYear();if(seen.has(name))continue;seen.add(name);
     let sm=null;SHEET_MONTHS.forEach((v,k)=>{if(nk(k)===nk(name))sm=v;});
-    const loc=(M.months||[]).some(m=>nk(m.name)===nk(name));
-    out.push({name,kind:sm?sm.kind:(loc?'local':'none')});}
+    out.push({name,kind:sm?sm.kind:'none'});}
   return out;}
 function covered(d,it,list){const pn=nk(playName(it.text));return (list||items()).some(x=>x.day===d&&nk(x.task).includes(pn));}
 function playName(t){return String(t).replace(/\*|\(.*?\)/g,'').replace(/★.*$/,'').trim();}
@@ -1025,7 +1026,7 @@ function renderSide(){
   $('#warnN').textContent=c.msgs.length;
   $('#mSrc').textContent='Kaynak: '+M.src+'. ▶ ile oyun adını seçili satıra ekleyin.';
   const mon=fromIso(S.cur);let h='';
-  h+=weekMonths().map(m=>m.kind==='pub'?`<div class="mp-st">${esc(m.name)} · ✓ Kesinleşmiş aylık program</div>`:m.kind==='draft'?`<div class="mp-st warn">${esc(m.name)} · ⚠ Taslak — aylık program henüz kesinleşmedi</div>`:m.kind==='local'?`<div class="mp-st none">${esc(m.name)} · yüklenen dosyadan (kesinleşme durumu bilinmiyor)</div>`:`<div class="mp-st none">${esc(m.name)} · aylık programda bulunamadı</div>`).join('');
+  h+=weekMonths().map(m=>m.kind==='pub'?`<div class="mp-st">${esc(m.name)} · ✓ Kesinleşmiş aylık program</div>`:m.kind==='draft'?`<div class="mp-st warn">${esc(m.name)} · ⚠ Taslak — aylık program henüz kesinleşmedi</div>`:m.kind==='local'?`<div class="mp-st none">${esc(m.name)} · yüklenen dosyadan (kesinleşme durumu bilinmiyor)</div>`:`<div class="mp-st none">${esc(m.name)} · için kesinleşmiş aylık program yok — taslak alınmaz</div>`).join('');
   {let tot=0,miss=0;GUN.forEach((g,d)=>(MIDX[iso(addDays(mon,d))]||[]).forEach(it=>{if(unitCrew(it.text).length){tot++;if(!covered(d,it,its))miss++;}}));
    if(tot)h+=miss?`<div class="mp-miss"><span>${tot} oyundan <b>${miss}</b> tanesi için haftalıkta iş girilmedi.</span><button class="btn sm gold" id="addMiss">Eksikleri taslak ekle</button></div>`:`<div class="mp-miss okk">✓ Birimi ilgilendiren ${tot} oyunun hepsi için iş girildi.</div>`;}
   GUN.forEach((g,d)=>{const di=iso(addDays(mon,d)),items_=MIDX[di]||[];
@@ -1415,7 +1416,7 @@ function draftFromMonthly(onlyMissing){const g=G(),L=layout(g);if(!L)return toas
     let r=emptyRowOfDay(d);if(r==null)r=addRowForDay(d);
     if(C.time!=null)setV(r,C.time,{t:'09:00',b:1,al:'c'});if(C.place!=null)setV(r,C.place,{t:yer,b:1,al:'c'});
     if(C.task!=null)setV(r,C.task,{t:`“${pl}” oyununun dekoru kurulacak temsil sonrası sökülecektir.`});if(C.ppl!=null)setV(r,C.ppl,{t:cr.join(SEP)});n++;});});
-  toast(n?n+' taslak satır eklendi — kontrol edin':'Aylık programda bu hafta için oyun bulunamadı');}
+  toast(n?n+' taslak satır eklendi — kontrol edin':'Kesinleşmiş aylık programda bu hafta için oyun bulunamadı');}
 $('#copyW').onclick=()=>{const pk=iso(addDays(fromIso(S.cur),-7)),p=S.weeks[pk];if(!p)return toast('Önceki hafta kaydı yok');
   ask('Önceki haftayı kopyala',`<p>${weekLabel(pk)} haftasının tablosu bu haftanın yerine kopyalanacak (tarihler güncellenir).</p><label><input type="checkbox" id="cP" checked> Görevlileri de kopyala</label>`,()=>{snap();const keep=$('#cP').checked;
     const g=JSON.parse(JSON.stringify(p.g));W().g=g;shiftDates(g,S.cur);try{fixSigns(g);}catch(e){}const L=layout(g);
