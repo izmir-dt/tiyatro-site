@@ -765,7 +765,7 @@ async function syncNow(opt={}){
   }finally{_wkBusy=false;if(_wkAgain){_wkAgain=false;scheduleSync();}}
   return ok;}
 
-/* aylık programı E-Tablodan oku (kesinleşmiş ya da taslak — hangisi yeniyse) */
+/* aylık programı E-Tablodan oku — SADECE kesinleşmiş (apub_) kayıtlar; taslak (adraft_) kayıtlar haftalık programa yansımaz */
 var SHEET_MONTHS=new Map();
 function applySheetMonths(){
   if(!SHEET_MONTHS||!SHEET_MONTHS.size)return;
@@ -777,10 +777,10 @@ async function pullMonths(){
   try{
     const r=await fetch(SHEET_API+encodeURIComponent(MONTH_TAB)+'?fresh=1',{cache:'no-store'});if(!r.ok)return;
     const rows=(await r.json()).rows||[],g=new Map();
-    rows.forEach(x=>{const id=String(x[0]||'');if(/^a(pub|draft)_/.test(id)){if(!g.has(id))g.set(id,[]);g.get(id).push(x);}});
+    rows.forEach(x=>{const id=String(x[0]||'');if(/^apub_/.test(id)){if(!g.has(id))g.set(id,[]);g.get(id).push(x);}});
     const best=new Map();
     for(const[id,rs]of g){
-      const m=id.match(/^a(pub|draft)_(.+)_(\d+)$/);if(!m)continue;
+      const m=id.match(/^a(pub)_(.+)_(\d+)$/);if(!m)continue;
       const total=+rs[0][3]||rs.length;if(new Set(rs.map(x=>+x[2])).size<total)continue;
       const ts=+m[3],c=best.get(m[2]);if(!c||ts>c.ts)best.set(m[2],{ts,rs,kind:m[1]});}
     let changed=false;
@@ -811,7 +811,7 @@ setInterval(()=>{if(!document.hidden){syncNow();pullMonths();if(!editing)fetchCr
 
 /* menü / çekmece */
 function openTab(n){const d=$('#drawer');const labels={staff:'Birim Personeli',tasks:'Hazır işler',warns:'Uyarılar',month:'Aylık Programdan Bu Hafta',leave:'İzin ve rapor',sheets:'Google E-Tablolar'};$('#drawerTitle').textContent=labels[n]||'Program araçları';const same=d.classList.contains('open')&&d.dataset.tab===n;
-  if(same)d.classList.remove('open');else{d.dataset.tab=n;d.classList.add('open');}
+  if(same)d.classList.remove('open');else{const was=d.classList.contains('open');d.dataset.tab=n;d.classList.add('open');if(!was)placeDrawer();}
   d.querySelectorAll('.card').forEach(c=>c.classList.toggle('show',c.dataset.tab===d.dataset.tab));
   document.querySelectorAll('[data-menu]').forEach(b=>b.classList.toggle('on',d.classList.contains('open')&&b.dataset.menu===d.dataset.tab));}
 document.querySelectorAll('[data-menu]').forEach(b=>b.addEventListener('click',()=>openTab(b.dataset.menu)));
@@ -1375,7 +1375,7 @@ function ask(title,body,ok,extra=[]){const d=$('#dlg');$('#dlgT').textContent=ti
   extra.forEach(([l,fn,c])=>{const b=document.createElement('button');b.className='btn '+(c||'');b.textContent=l;b.onclick=()=>{d.close();fn();};f.appendChild(b);});
   const c=document.createElement('button');c.className='btn';c.textContent='Vazgeç';c.onclick=()=>d.close();f.appendChild(c);
   if(ok){const o=document.createElement('button');o.className='btn gold';o.textContent='Tamam';o.onclick=()=>{if(ok()!==false)d.close();};f.appendChild(o);}
-  document.body.appendChild(d);d.style.removeProperty('left');d.style.removeProperty('top');d.style.removeProperty('transform');if(!d.open)d.show();const inp=d.querySelector('input,select,textarea');inp&&inp.focus();}
+  document.body.appendChild(d);d.style.removeProperty('left');d.style.removeProperty('top');d.style.removeProperty('transform');d.style.setProperty('top',floatTop()+'px');if(!d.open)d.show();const inp=d.querySelector('input,select,textarea');inp&&inp.focus();}
 
 
 
@@ -1700,6 +1700,34 @@ $('#leaveList').onclick=e=>{const ed=e.target.closest('[data-le]'),del=e.target.
 /* Floating window drag handles; resizing uses native CSS resize. */
 function movable(el,grip){let drag=null;grip.addEventListener('pointerdown',e=>{if(e.target.closest('button')||e.button!==0)return;const b=el.getBoundingClientRect();drag={x:e.clientX,y:e.clientY,left:b.left,top:b.top};el.style.left=b.left+'px';el.style.setProperty('top',b.top+'px','important');el.style.transform='none';grip.setPointerCapture(e.pointerId);e.preventDefault();});grip.addEventListener('pointermove',e=>{if(!drag)return;el.style.left=Math.max(0,Math.min(innerWidth-80,drag.left+e.clientX-drag.x))+'px';el.style.setProperty('top',Math.max(0,Math.min(innerHeight-60,drag.top+e.clientY-drag.y))+'px','important');});grip.addEventListener('pointerup',()=>drag=null);grip.addEventListener('pointercancel',()=>drag=null);}
 movable($('#drawer'),$('#drawerGrip'));movable($('#dlg'),$('#dlgT'));
+/* ---- Yüzen pencere konumlandırma: hep başlığın hemen altında; Görevliler hücresinden açılırsa hücreyi kapatmayacak şekilde ---- */
+function floatTop(){const h=document.querySelector('header.app');return Math.max(8,Math.round((h?h.getBoundingClientRect().bottom:0)+10));}
+function placeDrawer(anchor){
+  const d=$('#drawer');if(!d||innerWidth<=600)return;
+  const vw=innerWidth,vh=innerHeight,m=12,w=Math.min(510,vw-2*m);
+  let top=floatTop(),left=vw-w-m,h=Math.min(560,vh-top-m);
+  if(anchor){
+    const below=vh-(anchor.bottom+8)-m,above=anchor.top-8-floatTop();
+    if(below>=240){top=anchor.bottom+8;h=Math.min(560,below);}
+    else if(above>=240){h=Math.min(560,above);top=anchor.top-8-h;}
+    left=Math.max(m,Math.min(vw-w-m,Math.round(anchor.left+anchor.width/2-w/2)));
+  }
+  d.style.width=w+'px';d.style.height=Math.max(200,h)+'px';d.style.left=left+'px';
+  d.style.setProperty('top',top+'px','important');d.style.transform='none';
+}
+function openStaffForCell(td){
+  const d=$('#drawer'),r=td.getBoundingClientRect();
+  if(!(d.classList.contains('open')&&d.dataset.tab==='staff')){openTab('staff');placeDrawer(r);return;}
+  const b=d.getBoundingClientRect();
+  if(!(b.right<r.left||b.left>r.right||b.bottom<r.top||b.top>r.bottom))placeDrawer(r);
+}
+/* GÖREVLİLER hücresine tek tıklayınca Birim Personeli açılır: isme tıklayarak hızlı ekle/çıkar */
+doc.addEventListener('click',e=>{
+  const td=e.target.closest('td.c');if(!td||td===editing||e.detail>1||e.shiftKey||e.ctrlKey||e.metaKey)return;
+  const L=layout(G());if(!L||L.col.ppl==null||+td.dataset.c!==L.col.ppl)return;
+  if(!curItem())return;openStaffForCell(td);
+});
+
 let tips=true,tipTimer=null;const tip=document.createElement('div');tip.id='weeklyTip';tip.setAttribute('role','tooltip');document.body.appendChild(tip);
 $('#tipToggle').onclick=()=>{tips=!tips;$('#tipToggle').setAttribute('aria-pressed',String(tips));tip.style.display='none';};
 function hideWeeklyTip(){clearTimeout(tipTimer);tip.style.display='none';}
