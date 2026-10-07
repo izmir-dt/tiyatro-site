@@ -2136,18 +2136,18 @@ mrender();mq.addEventListener('change',mrender);
       n.sort((a,b)=>b.ts-a.ts);NT=n;DN=d;paint();
       const seen=new Set(lsGet(SEEN_LS,[])),fresh=n.filter(x=>!d.has(x.id)&&!seen.has(x.id));
       if(fresh.length){toast('Aylık programdan '+fresh.length+' yeni bildirim var');fresh.forEach(x=>seen.add(x.id));lsSet(SEEN_LS,[...seen].slice(-300));}
-      const dlg=$('#dlg');if(dlg&&dlg.open&&dlg.querySelector('.nt-wrap'))$('#dlgB').innerHTML=bodyHtml();
+      const dlg=$('#dlg');if(dlg&&dlg.open&&dlg.querySelector('.nt-wrap')&&![...dlg.querySelectorAll('textarea')].some(t=>t.value||t===document.activeElement))$('#dlgB').innerHTML=bodyHtml();
     }catch(e){}finally{busy=false;}
   }
   function card(x){
-    const o=DN.get(x.id),label=(x.date?fmtDate(x.date)+' · ':'')+(x.month||'');
+    const o=DN.get(x.id),label=(x.date?fmtDate(x.date)+' · ':'')+(x.month||''),rep=o&&(o.reply||o.by)||'';
     return '<div class="nt-card'+(o?' ok':'')+'"><div class="nt-meta"><b>'+esc(label)+'</b><span class="'+(o?'nt-ok':'nt-wait')+'">'+(o?'✓ Tamamlandı':'Bekliyor')+'</span></div><p>'+esc(x.text).replace(/\n/g,'<br>')+'</p>'+
-      (o?'<small>'+esc(o.by||'')+' · '+esc(fmtTs(o.ts))+'</small>':'<button type="button" class="btn gold" data-nok="'+esc(x.id)+'">Tamamlandı</button>')+'</div>';
+      (o?(rep?'<p class="nt-rep"><b>Yanıtınız:</b> '+esc(rep).replace(/\n/g,'<br>')+'</p>':'')+'<small>'+esc(fmtTs(o.ts))+'</small>'
+        :'<textarea class="nt-reply" data-nreply="'+esc(x.id)+'" rows="2" placeholder="Yanıt yazın (isteğe bağlı) — Enter: alt satır"></textarea><button type="button" class="btn gold" data-nok="'+esc(x.id)+'">Tamamlandı</button>')+'</div>';
   }
   function bodyHtml(){
-    const pend=NT.filter(x=>!DN.has(x.id)),done=NT.filter(x=>DN.has(x.id)).slice(0,10),by=lsGet(BY_LS,'');
-    const who=pend.length?'<label class="nt-who">İşi yapan kişi<select id="nPerson"><option value="">— kişi seçin —</option>'+(S.staff||[]).map(p=>{const nm=pName(p);return '<option '+(nm===by?'selected':'')+'>'+esc(nm)+'</option>';}).join('')+'</select></label>':'';
-    return '<div class="nt-wrap">'+who+(NT.length?pend.concat(done).map(card).join(''):'<p>Aylık programdan gelen bildirim yok.</p>')+'</div>';
+    const pend=NT.filter(x=>!DN.has(x.id)),done=NT.filter(x=>DN.has(x.id)).slice(0,10);
+    return '<div class="nt-wrap">'+(NT.length?pend.concat(done).map(card).join(''):'<p>Aylık programdan gelen bildirim yok.</p>')+'</div>';
   }
   async function openDlg(){
     await pull();
@@ -2155,14 +2155,13 @@ mrender();mq.addEventListener('change',mrender);
     const c=$('#dlgF').lastElementChild;if(c)c.textContent='Kapat';
   }
   async function complete(nid){
-    const sel=$('#nPerson'),by=sel?sel.value:'';
-    if(!by)return toast('Önce işi yapan kişiyi seçin');
-    const o={nid,unit:KEY,by,ts:Date.now()};
+    const ta=[...document.querySelectorAll('#dlgB textarea[data-nreply]')].find(t=>t.dataset.nreply===nid),reply=ta?ta.value.trim():'';
+    const o={nid,unit:KEY,reply,ts:Date.now()};
     try{
       const res=await fetch(API+encodeURIComponent(TAB)+'/row',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({values:['anotok_'+nid+'_'+KEY,o.ts,0,1,utf8ToB64(JSON.stringify(o))]})});
       if(!res.ok)throw new Error('HTTP '+res.status);
-      lsSet(BY_LS,by);DN.set(nid,o);paint();
-      $('#dlgB').innerHTML=bodyHtml();toast('Tamamlandı olarak işaretlendi — aylık programa iletildi');
+      DN.set(nid,o);paint();
+      $('#dlgB').innerHTML=bodyHtml();toast('Tamamlandı — yanıtınız aylık programa iletildi');
     }catch(e){toast('Gönderilemedi, tekrar deneyin');}
   }
   document.addEventListener('click',e=>{
@@ -2178,7 +2177,7 @@ mrender();mq.addEventListener('change',mrender);
   .nt-card{border:1px solid var(--border);border-left:5px solid #e0a82e;border-radius:10px;padding:12px 14px;background:#fff}.nt-card.ok{border-left-color:#2e7d32;background:#f6fbf6}
   .nt-meta{display:flex;justify-content:space-between;gap:8px;align-items:flex-start;font-size:13px}
   .nt-ok{color:#1e5e22;font-size:12px;font-weight:700;white-space:nowrap}.nt-wait{color:#8a5a00;font-size:12px;font-weight:700;white-space:nowrap}
-  .nt-card p{margin:8px 0 10px;font-size:14px;line-height:1.55}.nt-card small{color:var(--muted);font-size:12px}.nt-card .btn{width:100%;min-height:44px}`;
+  .nt-card p{margin:8px 0 10px;font-size:14px;line-height:1.55}.nt-card small{color:var(--muted);font-size:12px}.nt-card .btn{width:100%;min-height:44px}.nt-reply{width:100%;min-height:64px;font-size:16px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;margin:0 0 8px;resize:vertical;font-family:inherit}.nt-rep{background:#eef7ee;border-radius:8px;padding:8px 10px;margin:8px 0 6px}`;
   document.head.appendChild(st);
 })();
 </script>
