@@ -4624,5 +4624,248 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
   if(h0 === "haftalik") setTimeout(() => window.go("haftalik"), 150);
 })();
 </script>
+<!-- ═══════════ KÜNYE GÖRÜNÜMÜ: kişi kartları, açılır kategoriler, kişi bilgi kartı, arşiv görevleri ═══════════ -->
+<style id="kunye-css">
+.kn-tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:2px 0 12px}
+.kn-tools .sp{flex:1}
+.kn-cat{border:1px solid var(--line-strong);border-radius:14px;background:var(--surface);margin-bottom:10px;overflow:hidden}
+.kn-cat>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;padding:12px 15px;background:var(--surface-2);
+  font:800 12.5px var(--font-d);letter-spacing:.08em;text-transform:uppercase;user-select:none}
+.kn-cat>summary::-webkit-details-marker{display:none}
+.kn-cat>summary::before{content:"▶";font-size:10px;color:var(--muted);transition:transform .18s}
+.kn-cat[open]>summary::before{transform:rotate(90deg)}
+.kn-cat[open]>summary{border-bottom:1px solid var(--line)}
+.kn-cat>summary .sp{flex:1}
+.kn-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:10px;padding:14px}
+.kn-p{display:flex;align-items:center;gap:11px;text-align:left;width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:12px;
+  background:var(--surface);cursor:pointer;transition:border-color .15s,box-shadow .15s,transform .15s}
+.kn-p:hover{border-color:var(--accent-soft);box-shadow:var(--shadow);transform:translateY(-1px)}
+.kn-av{flex:0 0 auto;width:38px;height:38px;border-radius:50%;display:grid;place-items:center;background:var(--accent-wash);color:var(--accent);
+  font:800 14px var(--font-d);border:1px solid var(--accent-soft)}
+.kn-t{min-width:0;display:flex;flex-direction:column;gap:1px}
+.kn-role{font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);overflow-wrap:anywhere}
+.kn-name{font-weight:700;font-size:14px;line-height:1.25;overflow-wrap:anywhere}
+.kn-p.pas{opacity:.6}
+.kn-p .chip{align-self:flex-start;margin-top:3px;font-size:10px;padding:1px 7px}
+.kn-note{padding:11px 13px;border:1px dashed var(--line-strong);border-radius:12px;color:var(--muted);font-size:13px;background:var(--surface-2);
+  display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.kn-ov{position:fixed;inset:0;z-index:9000;background:rgba(20,8,8,.55);display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(2px)}
+.kn-win{width:min(560px,100%);max-height:88vh;display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line-strong);
+  border-radius:18px;box-shadow:var(--shadow);overflow:hidden}
+.kn-win .hd{display:flex;align-items:center;gap:13px;padding:16px 18px;background:var(--surface-2);border-bottom:1px solid var(--line)}
+.kn-win .hd .kn-av{width:48px;height:48px;font-size:18px}
+.kn-win .hd h3{font:800 17px var(--font-d);line-height:1.25;overflow-wrap:anywhere}
+.kn-win .hd .mt{font-size:12px;color:var(--muted)}
+.kn-win .hd .x{margin-left:auto;border:1px solid var(--line-strong);background:var(--surface);border-radius:9px;width:32px;height:32px;cursor:pointer;font-size:14px}
+.kn-win .bd{padding:14px 18px;overflow:auto;display:flex;flex-direction:column;gap:14px}
+.kn-win .ft{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;padding:12px 18px;border-top:1px solid var(--line);background:var(--surface-2)}
+.kn-sec h4{font:800 11.5px var(--font-d);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 7px}
+.kn-pl{display:flex;align-items:flex-start;gap:10px;padding:9px 11px;border:1px solid var(--line);border-radius:11px;background:var(--surface);margin-bottom:6px}
+.kn-pl.go{cursor:pointer}
+.kn-pl.go:hover{border-color:var(--accent-soft)}
+.kn-pl .nm{font-weight:700;font-size:13.5px}
+.kn-pl .mt{font-size:12px;color:var(--muted)}
+.kn-pl .chip{margin-left:auto;flex:0 0 auto}
+.kn-pl>div:first-child{min-width:0;flex:1}
+</style>
+<script>
+(function(){
+  /* ---------- açık/kapalı durumu (yeniden çizimde korunur) ---------- */
+  const OPEN = new Map();
+  window.knToggle = function(el, key, cat){
+    const s = OPEN.get(key); if(!s) return;
+    if(el.open) s.add(cat); else s.delete(cat);
+  };
+  window.knAll = function(key, open){
+    document.querySelectorAll("[data-kn]").forEach(c => {
+      if(c.dataset.kn === key) c.querySelectorAll("details.kn-cat").forEach(d => { d.open = open; });
+    });
+  };
+
+  const initial = n => (String(n).trim().charAt(0) || "?").toLocaleUpperCase("tr");
+
+  /* rows: [{kategori, gorev, kisi}]  ·  opt: {oyun, scope, pas(name) -> "" | "Pasif" | "Bu oyunda pasif"} */
+  window.kunyeHtml = function(key, rows, opt){
+    const byCat = new Map();
+    rows.forEach(r => {
+      const k = String(r.kategori || "").trim() || "Diğer";
+      if(!byCat.has(k)) byCat.set(k, []);
+      byCat.get(k).push(r);
+    });
+    if(!byCat.size) return `<div class="kn-note">Bu oyunda kayıt yok.</div>`;
+    if(!OPEN.has(key)) OPEN.set(key, new Set([...byCat.keys()].slice(0, 1)));   /* ilk kategori açık gelir */
+    const open = OPEN.get(key);
+    const cats = [...byCat.entries()].map(([cat, rs]) => {
+      const cards = [];
+      rs.forEach(r => names(String(r.kisi || "")).forEach(raw => {
+        const nm = stripTag(raw); if(!nm) return;
+        const pas = opt.pas ? opt.pas(nm) : "";
+        cards.push(`<button type="button" class="kn-p${pas ? " pas" : ""}" onclick="knPerson(${jq(nm)},${jq(opt.oyun)},${jq(opt.scope)})">
+          <span class="kn-av">${esc(initial(nm))}</span>
+          <span class="kn-t"><span class="kn-role">${esc(r.gorev || "Kadro")}</span><span class="kn-name">${esc(nm)}</span>
+          ${pas ? `<span class="chip">${esc(pas)}</span>` : ""}</span></button>`);
+      }));
+      return `<details class="kn-cat"${open.has(cat) ? " open" : ""} ontoggle="knToggle(this,${jq(key)},${jq(cat)})">
+        <summary><span>${esc(cat)}</span><span class="sp"></span><span class="chip ${isFig(cat) ? "crim" : ""}">${cards.length} kişi</span></summary>
+        <div class="kn-grid">${cards.join("") || `<div class="kn-note" style="grid-column:1/-1">Kayıtlı kişi yok.</div>`}</div></details>`;
+    }).join("");
+    return `<div data-kn="${esc(key)}">
+      <div class="kn-tools"><button class="btn sm" onclick="knAll(${jq(key)},true)">▾ Tümünü aç</button>
+        <button class="btn sm" onclick="knAll(${jq(key)},false)">▸ Tümünü kapat</button></div>${cats}</div>`;
+  };
+
+  /* ---------- Arşiv verisi yardımcıları ---------- */
+  function arsivCols(){
+    const h = ARSIV.heads, f = k => h.findIndex(x => has(x, k));
+    let ik = f("kategori"), ig = f("görev"), ip = f("kişi");
+    if(ik < 0) ik = 1; if(ig < 0) ig = 2; if(ip < 0) ip = h.length - 1;
+    return {ik, ig, ip};
+  }
+  async function ensureArsiv(){
+    if(ARSIV.loaded) return;
+    const d = await sheet(ARSIV_SHEET);
+    const heads = (d.headers && d.headers.length ? d.headers : ["Oyun Adı"]).filter(h => String(h || "").trim());
+    ARSIV = {heads, rows:(d.rows || []).filter(r => r.some(c => String(c || "").trim())), loaded:true};
+  }
+  function personArsiv(name){
+    const {ik, ig, ip} = arsivCols(), by = new Map();
+    ARSIV.rows.forEach(r => {
+      if(!names(unent(String(r[ip] ?? ""))).some(x => stripTag(x) === name)) return;
+      const oyun = unent(String(r[0] ?? "").trim()) || "Belirtilmemiş";
+      if(!by.has(oyun)) by.set(oyun, []);
+      by.get(oyun).push({kategori:unent(String(r[ik] ?? "")), gorev:unent(String(r[ig] ?? ""))});
+    });
+    return by;
+  }
+  const roleText = rs => rs.map(r => [r.gorev, r.kategori].filter(Boolean)[0]).filter(Boolean).filter((v,i,a) => a.indexOf(v) === i).join(" · ");
+
+  /* Arşiv bölümünü doldurur (şifre açıksa) */
+  async function fillArsiv(id, name, curOyun, scope){
+    let el = document.getElementById(id); if(!el) return;
+    if(!unlocked()){
+      el.innerHTML = `<div class="kn-note">Arşivdeki görevleri görmek için yönetim şifresi gerekir.
+        <button class="btn sm" onclick="knClose();go('arsiv')">Şifre gir</button></div>`;
+      return;
+    }
+    el.innerHTML = `<div class="kn-note">Arşiv yükleniyor…</div>`;
+    try{ await ensureArsiv(); }catch(e){ el = document.getElementById(id); if(el) el.innerHTML = `<div class="kn-note">Arşiv okunamadı.</div>`; return; }
+    el = document.getElementById(id); if(!el) return;
+    const by = personArsiv(name);
+    const cur = (scope === "arsiv") ? by.get(curOyun) : null;
+    const curBox = document.getElementById("kn-cur");
+    if(cur && curBox) curBox.innerHTML = `<h4>Bu oyundaki görevi (arşiv)</h4><div class="kn-pl"><div><div class="nm">${esc(curOyun)}</div><div class="mt">${esc(roleText(cur))}</div></div><span class="chip">Arşiv</span></div>`;
+    const list = [...by.entries()].filter(([o]) => !(scope === "arsiv" && o === curOyun)).sort((a,b) => sortTr(a[0], b[0]));
+    el.innerHTML = list.length ? list.map(([o, rs]) => `<div class="kn-pl"><div><div class="nm">${esc(o)}</div><div class="mt">${esc(roleText(rs))}</div></div><span class="chip">Arşiv</span></div>`).join("")
+      : `<div class="kn-note">Arşiv oyunlarında kaydı yok.</div>`;
+  }
+
+  /* ---------- Kişi bilgi kartı ---------- */
+  window.knClose = function(){ document.getElementById("kn-ov")?.remove(); };
+  document.addEventListener("keydown", e => { if(e.key === "Escape") knClose(); });
+
+  window.knPerson = function(name, oyun, scope){
+    knClose();
+    const p = PEOPLE.find(x => x.name === name);
+    const rows = DATA.filter(r => names(r.kisi).some(x => stripTag(x) === name));
+    const by = new Map(); rows.forEach(r => { if(!by.has(r.oyun)) by.set(r.oyun, []); by.get(r.oyun).push({kategori:r.kategori, gorev:r.gorev}); });
+    const figOyun = new Set(FIGROWS.filter(r => r.kisi === name).map(r => r.oyun));
+    const globalPas = isPasif(name);
+    const curRep = scope === "rep" ? by.get(oyun) : null;
+    const others = [...by.entries()].filter(([o]) => !(scope === "rep" && o === oyun)).sort((a,b) => sortTr(a[0], b[0]));
+    const chips = [globalPas ? `<span class="chip">Pasif</span>` : "", figOyun.size ? `<span class="chip crim">Figüran</span>` : ""].join(" ");
+    const ov = document.createElement("div");
+    ov.className = "kn-ov"; ov.id = "kn-ov";
+    ov.onclick = e => { if(e.target === ov) knClose(); };
+    ov.innerHTML = `<div class="kn-win" role="dialog" aria-modal="true">
+      <div class="hd"><span class="kn-av">${esc(initial(name))}</span>
+        <div style="min-width:0"><h3>${esc(name)}</h3>
+          <div class="mt">Repertuvarda ${by.size} oyun · ${rows.length} kayıt${figOyun.size ? ` · ${figOyun.size} figüran görevi` : ""}</div>
+          <div style="margin-top:4px">${chips}</div></div>
+        <button class="x" onclick="knClose()" aria-label="Kapat">✕</button></div>
+      <div class="bd">
+        ${curRep ? `<div class="kn-sec"><h4>Bu oyundaki görevi</h4><div class="kn-pl"><div><div class="nm">${esc(oyun)}</div><div class="mt">${esc(roleText(curRep))}</div></div>
+          ${!globalPas && isPasifInPlay(name, oyun) ? `<span class="chip">Bu oyunda pasif</span>` : ""}</div></div>` : ""}
+        <div class="kn-sec" id="kn-cur"></div>
+        <div class="kn-sec"><h4>${curRep ? "Repertuvardaki diğer oyunları" : "Repertuvardaki oyunları"} (${others.length})</h4>
+          ${others.length ? others.map(([o, rs]) => `<div class="kn-pl go" onclick="knClose();openPlay=${jq(o)};go('panel')">
+            <div><div class="nm">${esc(o)}</div><div class="mt">${esc(roleText(rs))}</div></div>
+            ${!globalPas && isPasifInPlay(name, o) ? `<span class="chip">Pasif</span>` : ""}</div>`).join("") : `<div class="kn-note">Başka oyunda görevi yok.</div>`}</div>
+        <div class="kn-sec"><h4>Arşiv oyunlar</h4><div id="kn-arsiv"></div></div>
+      </div>
+      <div class="ft"><button class="btn sm" onclick="knClose();openPerson=${jq(name)};go('kisiler')">Kişi sayfasını aç</button>
+        <button class="btn sm pri" onclick="knClose()">Kapat</button></div></div>`;
+    document.body.appendChild(ov);
+    fillArsiv("kn-arsiv", name, oyun, scope);
+  };
+
+  /* ---------- Oyun detayı: künye (Pasife al / turne yazıları yok) ---------- */
+  window.playDetail = function(name){
+    const rows = DATA.filter(r => r.oyun === name);
+    const cats = new Set(rows.map(r => r.kategori || "Diğer"));
+    const people = new Set(); rows.forEach(r => names(r.kisi).forEach(n => people.add(stripTag(n))));
+    const aktifSet = [...people].filter(n => !isPasifInPlay(n, name));
+    const figs = new Set(FIGROWS.filter(r => r.oyun === name).map(r => r.kisi));
+    const pas = n => isPasif(n) ? "Pasif" : (isPasifInPlay(n, name) ? "Bu oyunda pasif" : "");
+    return `<button class="back" onclick="openPlay=null;renderPlays()">← Oyun listesi</button>
+    <div class="card"><div class="card-h"><div><h3>${esc(name)}</h3>
+      <div class="mt" style="font-size:12px;color:var(--muted)">${aktifSet.length} aktif kişi${people.size-aktifSet.length ? ` · ${people.size-aktifSet.length} pasif` : ""} · ${figs.size} figüran · ${rows.length} kayıt · ${cats.size} kategori</div></div>
+      <div class="tools"><button class="btn sm" onclick="exportExcel(playExportRows(${jq(name)}),'kadro')">Excel</button>
+        <button class="btn sm" onclick="exportPDF(${jq(name+' — Kadro')},['Oyun','Kategori','Görev','Kişi'],playExportRows(${jq(name)}))">PDF</button>
+        <button class="btn sm dan" onclick="archivePlay(${jq(name)})">📦 Arşive Al</button></div></div>
+      ${seasonStrip(name)}</div>
+    ${kunyeHtml("rep|" + name, rows, {oyun:name, scope:"rep", pas})}`;
+  };
+
+  /* ---------- Kişi detayı: arşiv görevleri de eklendi ---------- */
+  window.personDetail = function(name){
+    const rows = DATA.filter(r => names(r.kisi).some(x => stripTag(x) === name));
+    const p = PEOPLE.find(x => x.name === name);
+    const byPlay = new Map();
+    rows.forEach(r => { if(!byPlay.has(r.oyun)) byPlay.set(r.oyun, []); byPlay.get(r.oyun).push(r); });
+    const figOyun = new Set(FIGROWS.filter(r => r.kisi === name).map(r => r.oyun));
+    setTimeout(() => fillArsiv("pd-arsiv", name, "", "rep"), 0);
+    return `<button class="back" onclick="openPerson=null;renderPeople()">← Kişi listesi</button>
+    <div class="card"><div class="card-h"><div><h3>${esc(name)}</h3>
+      <div class="mt" style="font-size:12px;color:var(--muted)">${byPlay.size} oyun · ${rows.length} kayıt${figOyun.size ? ` · ${figOyun.size} figüran görevi` : ""}</div></div>
+      <div class="tools">${p && !p.aktif ? '<span class="chip">Pasif</span>' : ""}${figOyun.size ? '<span class="chip crim">Figüran</span>' : ""}
+        <button class="btn sm ${p && p.aktif ? "dan" : "pri"}" onclick="setPersonActive(${jq(name)},${p && p.aktif ? "false" : "true"})">${p && p.aktif ? "Pasife al" : "Aktife al"}</button>
+        <button class="btn sm" onclick="exportExcel([['Oyun','Kategori','Görev']].concat(${jq(rows.map(r => [r.oyun, r.kategori, r.gorev]))}),'kisi')">Excel</button>
+        <button class="btn sm" onclick="exportPDF(${jq(name)},['Oyun','Kategori','Görev'],${jq(rows.map(r => [r.oyun, r.kategori, r.gorev]))})">PDF</button></div></div>
+      <div class="card-b"><div class="kn-sec" style="padding:12px 14px 4px"><h4>Repertuvardaki oyunlar</h4></div>${[...byPlay.entries()].sort((a,b) => sortTr(a[0], b[0])).map(([play, rs]) => `
+        <div class="row" onclick="openPlay=${jq(play)};go('panel')">
+          <div style="min-width:0"><div class="nm">${esc(play)}</div>
+            <div class="mt">${esc(rs.map(r => r.gorev || r.kategori).filter(Boolean).join(" · "))}</div></div>
+          <div class="tag-row">${[...new Set(rs.map(r => r.kategori).filter(Boolean))].map(c => `<span class="chip ${isFig(c) ? "crim" : ""}">${esc(c)}</span>`).join("")}</div>
+        </div>`).join("")}</div></div>
+    <div class="card"><div class="card-h"><h3 style="font-size:12.5px;letter-spacing:.08em;text-transform:uppercase">Arşiv oyunlar</h3>
+      <span class="chip">Repertuvardan kaldırılanlar</span></div><div class="card-b" style="padding:12px 14px" id="pd-arsiv"></div></div>`;
+  };
+
+  /* ---------- Arşiv sayfası: oyun başına künye ---------- */
+  window.renderArsivList = function(){
+    const box = document.getElementById("arsiv-list");
+    if(!box) return;
+    const groups = arsivGroups(), heads = ARSIV.heads, {ik, ig, ip} = arsivCols();
+    document.getElementById("arsiv-count").textContent = groups.length + " oyun · " + groups.reduce((s, g) => s + g[1].length, 0) + " kayıt";
+    box.innerHTML = groups.length ? groups.map(([name, rs]) => {
+      const open = arsivOpen === name;
+      const people = new Set();
+      rs.forEach(r => names(unent(String(r[ip] ?? ""))).forEach(n => { const c = stripTag(n); if(c) people.add(c); }));
+      const body = open ? kunyeHtml("arsiv|" + name, rs.map(r => ({kategori:unent(String(r[ik] ?? "")), gorev:unent(String(r[ig] ?? "")), kisi:unent(String(r[ip] ?? ""))})),
+        {oyun:name, scope:"arsiv"}) : "";
+      return `<div class="play-card${open ? " open" : ""}">
+        <div class="play-head" onclick="toggleArsiv(${jq(name)})">
+          <span class="caret">${open ? "▼" : "▶"}</span>
+          <span class="pname">${esc(name)}</span>
+          <span class="chip">${rs.length} kayıt</span>
+          <span class="chip gold">${people.size} kişi</span>
+          <button class="btn sm" onclick="event.stopPropagation();exportPDF(${jq(name + ' — Arşiv Kadro')},${jq(heads)},arsivAoA(${jq(name)}))">PDF</button>
+        </div>
+        <div class="play-body"><div style="padding:14px">${body}</div></div></div>`;
+    }).join("") : `<div class="card"><div class="empty">Eşleşen arşiv oyunu bulunamadı.</div></div>`;
+  };
+})();
+</script>
+
 </body>
 </html>
