@@ -392,12 +392,12 @@ body.tmode .sheet{padding:0;height:var(--sheetH,70vh);overflow:auto;border-radiu
             <button class="btn" id="footB" title="Tablonun altındaki açıklamaları birim şablonu olarak düzenle">📝 Alt açıklamalar (şablon)</button></div></div>
         <div class="menu"><button type="button" class="menu-trigger" data-mm>Veri <span class="caret">&#9662;</span></button>
           <div class="menu-panel"><div class="mp-title">Dosya</div>
-            <button class="btn" id="impX">Excel yükle</button><button class="btn" id="dataB">Yedek (JSON)</button></div></div>
+            <button class="btn" id="impX">Excel / Word yükle</button><button class="btn" id="dataB">Yedek (JSON)</button></div></div>
         <span class="menu-spacer"></span>
         <div class="iconpair"><button class="navbtn" id="zOut" title="Küçült">−</button><span id="zVal" style="font:700 12px Manrope,sans-serif;min-width:42px;text-align:center;cursor:pointer" title="%100'e döndür">100%</span><button class="navbtn" id="zIn" title="Büyüt">+</button><button class="navbtn" id="tmodeB" title="Tabloyu Excel gibi tam alanda göster">⛶ Tablo modu</button><button class="navbtn" id="undoB" title="Geri al (Ctrl+Z)">↶ Geri al</button></div>
       </div>
     </div>
-    <input type="file" id="fileX" accept=".xlsx" hidden>
+    <input type="file" id="fileX" accept=".xlsx,.docx" hidden>
     <input type="file" id="fileM" accept=".html,.htm,.json" hidden>
     <div id="weekTitleRow">
       <div><h2 id="weekTitle"></h2><div class="wsub" id="weekSub"></div></div>
@@ -1654,6 +1654,44 @@ async function read(buf){
   if(!sheets.length)throw new Error('sayfa yok');
   return {sheets};
 }
+/* ---- okuyucu: .docx → {sheets:[{name,rows,merges,cols,ncols}]}  (Word tablosu → Excel ile aynı model) ---- */
+async function readDocx(buf){
+  const z=await unzip(buf),fl=z['word/document.xml'];if(!fl)throw new Error('docx');
+  const xml=dec.decode(fl.method===0?fl.data:await inflate(fl.data));
+  const d=new DOMParser().parseFromString(xml,'application/xml');
+  const body=[...d.getElementsByTagName('*')].find(n=>n.localName==='body');if(!body)throw new Error('docx');
+  const ln=n=>n.localName,kids=el=>[...el.children];
+  const flat=el=>kids(el).flatMap(n=>ln(n)==='sdt'?flat(kids(n).find(x=>ln(x)==='sdtContent')||n):ln(n)==='ins'||ln(n)==='smartTag'?flat(n):[n]);
+  const SKIP=new Set(['delText','instrText','pPr','rPr','tblPr','trPr','tcPr']);
+  const ptext=p=>{let s='';const walk=n=>{for(const c of n.childNodes){if(c.nodeType!==1)continue;const t=ln(c);
+      if(t==='t')s+=c.textContent;else if(t==='tab')s+=' ';else if(t==='br'||t==='cr'){if(c.getAttribute('w:type')!=='page')s+='\n';}else if(t==='noBreakHyphen')s+='-';else if(!SKIP.has(t))walk(c);}};walk(p);return s.replace(/\u00a0/g,' ');};
+  const cellTx=tc=>flat(tc).filter(n=>ln(n)==='p').map(ptext).join('\n').replace(/[ \t]+\n/g,'\n').replace(/\n[ \t]+/g,'\n').trim()
+    .replace(/^(\d{1,2}\.\d{1,2}\.\d{4})[ \t]+([A-Za-zÇĞİÖŞÜçğıöşü]+)$/,'$1\n$2');
+  const tables=flat(body).filter(n=>ln(n)==='tbl'),main=tables.find(t=>/TAR[İI]H\s*\/\s*G[ÜU]N/i.test(t.textContent));
+  if(!main)throw new Error('Word belgesinde “TARİH/GÜN” başlıklı tablo bulunamadı');
+  const rows=[],merges=[],pRows=[],cols=[];let ncols=0;
+  const put=(r,c,v)=>{(rows[r]||(rows[r]=[]))[c]=v;};
+  const grid=kids(main).find(n=>ln(n)==='tblGrid');if(grid)kids(grid).filter(n=>ln(n)==='gridCol').forEach((g,i)=>{const w=+g.getAttribute('w:w');if(w)cols[i]=Math.max(40,Math.round(w/15));});
+  const addTable=tb=>{const open={};
+    for(const tr of flat(tb).filter(n=>ln(n)==='tr')){
+      const r=rows.length;rows.push([]);let c=0;
+      for(const tc of flat(tr).filter(n=>ln(n)==='tc')){
+        const pr=kids(tc).find(n=>ln(n)==='tcPr'),gs=pr&&kids(pr).find(n=>ln(n)==='gridSpan'),vm=pr&&kids(pr).find(n=>ln(n)==='vMerge');
+        const span=gs?(+gs.getAttribute('w:val')||1):1,vv=vm?(vm.getAttribute('w:val')||'continue'):null;
+        if(vv==='continue'){if(open[c]!=null)merges[open[c]][2]=r;}
+        else{const tx=cellTx(tc);if(tx)put(r,c,tx);
+          if(vv==='restart'){merges.push([r,c,r,c+span-1]);for(let i=0;i<span;i++)open[c+i]=merges.length-1;}
+          else{for(let i=0;i<span;i++)delete open[c+i];if(span>1)merges.push([r,c,r,c+span-1]);}}
+        c+=span;ncols=Math.max(ncols,c);}}};
+  for(const n of flat(body)){const t=ln(n);
+    if(t==='tbl')addTable(n);
+    else if(t==='p'){const tx=ptext(n).trim();if(tx){const r=rows.length;rows.push([]);put(r,0,tx);pRows.push(r);}}}
+  ncols=Math.max(ncols,5);
+  pRows.forEach(r=>merges.push([r,0,r,ncols-1]));
+  const fm=merges.filter(m=>m[0]!==m[2]||m[1]!==m[3]);
+  const out=rows.map(row=>{const o=[];for(let c=0;c<ncols;c++)o.push((row&&row[c])??'');return o;});
+  return {sheets:[{name:'Word',rows:out,merges:fm,cols,ncols}]};
+}
 /* CSV (; , veya sekme ayracı) */
 function csv(text){
   const first=text.split(/\r?\n/)[0]||'',d=[';',',','\t'].map(s=>[s,first.split(s).length]).sort((a,b)=>b[1]-a[1])[0][0];
@@ -1664,7 +1702,7 @@ function csv(text){
   if(f!==''||row.length){row.push(f.replace(/\r$/,''));rows.push(row);}
   return {sheets:[{name:'CSV',rows,merges:[],cols:[],ncols:Math.max(0,...rows.map(r=>r.length))}]};
 }
-return {write,read,csv};
+return {write,read,csv,readDocx};
 })();
 
 /* ---------- ortak belge modeli: yazdırma ve Excel AYNI yerden beslenir ---------- */
@@ -1778,6 +1816,8 @@ function exportWeeklyExcel(){
 /* ---------- Excel okuma (içe aktarma) ---------- */
 async function readSheets(f){
   if(/\.csv$/i.test(f.name))return XL.csv(await f.text());
+  if(/\.docx$/i.test(f.name)){try{return await XL.readDocx(await f.arrayBuffer());}catch(e){throw new Error(e&&/TARİH/.test(e.message)?e.message:'Word belgesi okunamadı — dosya .docx olmalı');}}
+  if(/\.doc$/i.test(f.name))throw new Error('Eski .doc biçimi desteklenmiyor — Word’de “Farklı Kaydet” ile .docx yapın');
   try{return await XL.read(await f.arrayBuffer());}
   catch(e){throw new Error(/\.xls$/i.test(f.name)?'Eski .xls biçimi desteklenmiyor — dosyayı .xlsx olarak kaydedin':'Excel dosyası okunamadı');}
 }
@@ -1882,7 +1922,7 @@ $('#fileX').onchange=async e=>{const f=e.target.files[0];if(!f)return;e.target.v
     const k=iso(first);snap();S.weeks[k]={g};S.cur=k;sel=null;
     items().forEach(it=>splitPeople(it.people).forEach(p=>{if(!S.staff.some(s=>nk(s.s)===nk(p)||(s.full&&nk(s.full)===nk(p))))S.staff.push({s:p,full:''});}));
     save();render();toast(weekLabel(k)+' yüklendi');}
-  catch(err){toast(err instanceof Error?err.message:'Excel okunamadı — “TARİH/GÜN” başlığı bulunamadı');}};
+  catch(err){toast(err instanceof Error?err.message:'Dosya okunamadı — “TARİH/GÜN” başlığı bulunamadı');}};
 $('#loadM').onclick=()=>$('#fileM').click();
 $('#fileM').onchange=async e=>{const f=e.target.files[0];if(!f)return;e.target.value='';const t=await f.text();
   try{let d;if(/^\s*[{[]/.test(t))d=JSON.parse(t);else{const i=t.indexOf('const DEFAULT_DATA = ');if(i<0)throw 0;d=JSON.parse(t.slice(i+21,t.indexOf('\n',i)).replace(/;\s*$/,''));}
@@ -2084,7 +2124,7 @@ function mrender(){
  if(mview==='staff')mstaff();
  if(mview==='tools'){
  const tool=(id,icon,l,danger='')=>'<button class="m-tool '+danger+'" data-'+(id.startsWith('tab:')?'tab="'+id.slice(4):'trigger="'+id)+'">'+mic(icon)+'<span>'+l+'</span>'+mic('right')+'</button>';
- main.innerHTML='<div class="m-section"><h2>Program araçları</h2><small>'+keys.length+' hafta</small></div><div class="m-tools-group"><h3>HAFTA</h3>'+tool('pubB','check','Haftalık programı onayla')+tool('newW','plus','Yeni hafta')+tool('copyW','copy','Önceki haftayı kopyala')+tool('undoB','undo','Geri al')+'<h3>GÖREVLENDİRME</h3>'+tool('tab:tasks','tools','Hazır işler')+tool('tab:warns','warning','Uyarılar · '+cf.msgs.length)+tool('tab:month','calendar','Aylık program')+tool('tab:leave','note','İzin / rapor')+'<h3>DOSYALAR</h3>'+tool('printB','print','Yazdır / PDF')+tool('expX','download','Excel indir')+tool('expJ','download','JPG indir')+tool('impX','upload','Excel yükle')+tool('dataB','copy','Yedek / geri yükle (JSON)')+'<h3>AYARLAR</h3>'+tool('tab:sheets','cloud','Google E-Tablolar')+tool('signB','edit','İmzacıları düzenle')+tool('footB','note','Alt açıklamaları düzenle')+tool('switchUnit','switch','Birim değiştir')+tool('delW','trash','Haftayı sil','danger')+'</div>';
+ main.innerHTML='<div class="m-section"><h2>Program araçları</h2><small>'+keys.length+' hafta</small></div><div class="m-tools-group"><h3>HAFTA</h3>'+tool('pubB','check','Haftalık programı onayla')+tool('newW','plus','Yeni hafta')+tool('copyW','copy','Önceki haftayı kopyala')+tool('undoB','undo','Geri al')+'<h3>GÖREVLENDİRME</h3>'+tool('tab:tasks','tools','Hazır işler')+tool('tab:warns','warning','Uyarılar · '+cf.msgs.length)+tool('tab:month','calendar','Aylık program')+tool('tab:leave','note','İzin / rapor')+'<h3>DOSYALAR</h3>'+tool('printB','print','Yazdır / PDF')+tool('expX','download','Excel indir')+tool('expJ','download','JPG indir')+tool('impX','upload','Excel / Word yükle')+tool('dataB','copy','Yedek / geri yükle (JSON)')+'<h3>AYARLAR</h3>'+tool('tab:sheets','cloud','Google E-Tablolar')+tool('signB','edit','İmzacıları düzenle')+tool('footB','note','Alt açıklamaları düzenle')+tool('switchUnit','switch','Birim değiştir')+tool('delW','trash','Haftayı sil','danger')+'</div>';
  }
  $('#mWeekSelect').onchange=e=>goto(e.target.value);
 }
