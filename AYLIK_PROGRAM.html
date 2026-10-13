@@ -3577,10 +3577,12 @@ function prevMonthOf(m){
   if(pos <= 0) return null;
   return state.months[order[pos-1]];
 }
-function tourCarryFromPrev(m, c){
+function tourCarryFromPrev(m, c, ctx){
   const pm = prevMonthOf(m);
   if(!pm) return null;
-  const pt = computeTours(pm);
+  /* Önceki ayın turne hesabı her sütun için baştan yapılırsa süre ay sayısıyla üstel artar (site donar); çağrı başına bir kez hesapla. */
+  let pt;
+  if(ctx){ if(!ctx.pt) ctx.pt = computeTours(pm); pt = ctx.pt; } else pt = computeTours(pm);
   const lastRow = pm.rows - 1;
   const isOpenAtMonthEnd = g => {
     if(g.returnKey) return false; /* zaten o ayda kapanmışsa taşınmaz */
@@ -3632,9 +3634,10 @@ function tourDisplayHead(g){
 }
 function computeTours(m){
   const map={}, byId={}, groups=[];
+  const carryCtx = {};
   tourColsOf(m).forEach(c=>{
     let cur=null, gap=[];
-    const carry = tourCarryFromPrev(m, c);
+    const carry = tourCarryFromPrev(m, c, carryCtx);
     if(carry){
       cur = {id:'carry_'+carry.id, col:c, headKey:null, headRow:null, headText:carry.headText,
              members:[], returnKey:null, locked:false, carried:true, carriedLastPlay:carry.lastPlay||'', legs:(carry.legs||[]).slice()};
