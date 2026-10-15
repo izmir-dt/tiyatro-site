@@ -536,8 +536,9 @@ function load0(){try{const r=localStorage.getItem(LS);if(r)return JSON.parse(r);
   const o=UP?null:localStorage.getItem('idt_haftalik_program_v1');if(o){const old=JSON.parse(o),st=JSON.parse(JSON.stringify(SEED.state));if(old.staff)st.staff=old.staff;return st;}}catch(e){}
   return UP?blankUnitState():JSON.parse(JSON.stringify(SEED.state));}
 function blankUnitState(){const h=SEED.state.header;return {cur:'',weeks:{},staff:[],unit:UNIT.name,header:{sayi:h.sayi,konu:h.konu,kurum:h.kurum,title:trUp(UNIT.name)+' BİRİMİ HAFTALIK ÇALIŞMA PROGRAMI'},footer:SEED.state.footer.slice(0,2).map(t=>t.replace('Sahne Makinistliğine',UNIT.name+' birimine')),signs:SIGN_BASE.slice()};}
-function save(){try{localStorage.setItem(LS,JSON.stringify(S));}catch(e){toast('Kaydedilemedi: depolama dolu');}
-  try{scheduleSync();}catch(e){}}
+let _saveT=null;function saveFlush(){if(_saveT){clearTimeout(_saveT);_saveT=null;}try{localStorage.setItem(LS,JSON.stringify(S));}catch(e){toast('Kaydedilemedi: depolama dolu');}}
+function save(){clearTimeout(_saveT);_saveT=setTimeout(saveFlush,250);try{scheduleSync();}catch(e){}}
+window.addEventListener('beforeunload',()=>{if(_saveT)saveFlush();});document.addEventListener('visibilitychange',()=>{if(document.hidden&&_saveT)saveFlush();});
 function snap(){hist.push(JSON.stringify(S));if(hist.length>80)hist.shift();}
 function undo(){if(!hist.length)return toast('Geri alınacak işlem yok');S=JSON.parse(hist.pop());sel=null;editing=null;save();render();}
 S=load();
@@ -984,12 +985,12 @@ function renderDoc(){
   try{if(fixSigns(G()))persistQuiet();}catch(e){}
   const g=G(),L=layout(g),cf=conflicts();
   const LV=leaveRows();
-  const cov={};g.merges.forEach(([a,b,x,y])=>{for(let r=a;r<=x;r++)for(let c=b;c<=y;c++)if(r!==a||c!==b)cov[r+','+c]=1;});
+  const cov={};g.merges.forEach(([a,b,x,y])=>{for(let r=a;r<=x;r++)for(let c=b;c<=y;c++)if(r!==a||c!==b)cov[r+','+c]=1;});const mStart={};g.merges.forEach(m=>{mStart[m[0]+','+m[1]]=m;});
   let h='<table class="xl"><colgroup><col style="width:34px">'+g.colw.map(w=>`<col style="width:${w}px">`).join('')+'</colgroup><thead><tr><th class="corner"></th>'
     +Array.from({length:g.cols},(_,i)=>`<th class="ch" data-ch="${i}">${colName(i)}<i class="cres" data-cr="${i}"></i></th>`).join('')+'</tr></thead><tbody>';
   for(let r=0;r<g.rows;r++){h+=`<tr data-row="${r}" style="${g.rowh&&g.rowh[r]?'height:'+g.rowh[r]+'px':''}"><th class="rh" data-rh="${r}">${r+1}</th>`;
     for(let c=0;c<g.cols;c++){const k=r+','+c;if(cov[k])continue;
-      const m=g.merges.find(m=>m[0]===r&&m[1]===c),x=g.cells[k]||{};
+      const m=mStart[k],x=g.cells[k]||{};
       const bd=L&&r>=L.hr-1&&r<=L.end;
       const head=L&&r<L.hr-1;
       const cls=['c',bd?'bd':'',head?'doc-head-cell':'',head&&r===0?'doc-head-top':'',head&&r===L.hr-2?'doc-head-bottom':'',head&&c===0?'doc-head-left':'',head&&c===g.cols-1?'doc-head-right':'',L&&c===L.col.ppl&&cf.bad.has(r)?'conf':'',L&&r===L.hr-1?'bdt':'',L&&r===L.hr-2?'bda':'',L&&c===L.col.ppl&&LV.has(r)?'leave':'',L&&c===L.col.ppl&&cf.info.has(r)?'info':''].join(' ');
@@ -997,8 +998,9 @@ function renderDoc(){
       h+=`<td class="${cls}" data-r="${r}" data-c="${c}"${m?` rowspan="${m[2]-m[0]+1}" colspan="${m[3]-m[1]+1}"`:''} style="${st.join(';')}">${r===0&&c===0?logoHtml():''}${esc(x.t||'')}</td>`;}
     h+='</tr>';}
   h+='</tbody></table>'+signHtml();
-  $('#doc').innerHTML=h;$('#doc').classList.toggle('logo-edit',logoEdit);paintSel();centerTitle();
+  $('#doc').innerHTML=h;$('#doc').classList.toggle('logo-edit',logoEdit);paintSel();centerTitle();clearLogo();
 }
+function clearLogo(){try{const q=logoGeo(),pad=q.x+q.w+10;doc.querySelectorAll('td.c.doc-head-left').forEach(td=>{if(td.offsetTop<q.y+q.h&&td.textContent.trim()&&td.style.textAlign!=='center'&&td.style.textAlign!=='right'){const cur=parseFloat(getComputedStyle(td).paddingLeft)||0;if(cur<pad)td.style.paddingLeft=pad+'px';}});}catch(e){}}
 function centerTitle(){try{const L=layout(G());if(!L||L.col.task==null)return;const tt=doc.querySelector('td.c[data-r="'+(L.hr-1)+'"][data-c="0"]'),dd=doc.querySelector('td.c[data-r="'+L.hr+'"][data-c="'+L.col.task+'"]');if(!tt||!dd||tt.colSpan<2)return;tt.style.paddingLeft=tt.style.paddingRight='';const off=(dd.offsetLeft+dd.offsetWidth/2)-(tt.offsetLeft+tt.offsetWidth/2);if(Math.abs(off)<1)return;if(off>0)tt.style.paddingLeft=(2*off+7)+'px';else tt.style.paddingRight=(-2*off+7)+'px';}catch(e){}}
 function leaveRows(){const out=new Set();try{items().forEach(it=>{if(it.day<0)return;const date=dayIso(it.day);splitPeople(it.people).forEach(p=>{const st=S.staff.find(x=>nk(x.s)===nk(p)||nk(x.full)===nk(p)),a=st&&unavailable(st,date);if(a&&a!=='pasif')out.add(it.r);});});}catch(e){}return out;}
 function paintSel(){document.querySelectorAll('#doc td.c').forEach(td=>{const r=+td.dataset.r,c=+td.dataset.c,rs=td.rowSpan,cs=td.colSpan;
@@ -1656,7 +1658,8 @@ async function readDocx(buf){
   const body=[...d.getElementsByTagName('*')].find(n=>n.localName==='body');if(!body)throw new Error('docx');
   const ln=n=>n.localName,kids=el=>[...el.children];
   const flat=el=>kids(el).flatMap(n=>ln(n)==='sdt'?flat(kids(n).find(x=>ln(x)==='sdtContent')||n):ln(n)==='ins'||ln(n)==='smartTag'?flat(n):[n]);
-  const SKIP=new Set(['delText','instrText','pPr','rPr','tblPr','trPr','tcPr']);
+  const SKIP=new Set(['delText','instrText','pPr','rPr','tblPr','trPr','tcPr','drawing','pict','object','AlternateContent','txbxContent','del','moveFrom','footnoteReference','endnoteReference','commentReference','fldChar']);
+  const boxes=p=>{const out=[];const walk=n=>{for(const c of n.children){const t=ln(c);if(t==='Fallback')continue;if(t==='txbxContent'){out.push(...[...c.getElementsByTagName('*')].filter(x=>ln(x)==='p').map(x=>ptext(x).trim()).filter(Boolean));continue;}walk(c);}};walk(p);return out;};
   const ptext=p=>{let s='';const walk=n=>{for(const c of n.childNodes){if(c.nodeType!==1)continue;const t=ln(c);
       if(t==='t')s+=c.textContent;else if(t==='tab')s+=' ';else if(t==='br'||t==='cr'){if(c.getAttribute('w:type')!=='page')s+='\n';}else if(t==='noBreakHyphen')s+='-';else if(!SKIP.has(t))walk(c);}};walk(p);return s.replace(/\u00a0/g,' ');};
   const cellTx=tc=>flat(tc).filter(n=>ln(n)==='p').map(ptext).join('\n').replace(/[ \t]+\n/g,'\n').replace(/\n[ \t]+/g,'\n').trim()
@@ -1679,7 +1682,7 @@ async function readDocx(buf){
         c+=span;ncols=Math.max(ncols,c);}}};
   for(const n of flat(body)){const t=ln(n);
     if(t==='tbl')addTable(n);
-    else if(t==='p'){const tx=ptext(n).trim();if(tx){const r=rows.length;rows.push([]);put(r,0,tx);pRows.push(r);}}}
+    else if(t==='p'){const seen=new Set(),add=tx=>{tx=tx.replace(/[ \t]{2,}/g,'   ').trim();if(!tx||seen.has(tx))return;seen.add(tx);const r=rows.length;rows.push([]);put(r,0,tx);pRows.push(r);};boxes(n).forEach(add);add(ptext(n));}}
   ncols=Math.max(ncols,5);
   pRows.forEach(r=>merges.push([r,0,r,ncols-1]));
   const fm=merges.filter(m=>m[0]!==m[2]||m[1]!==m[3]);
@@ -1817,7 +1820,7 @@ async function readSheets(f){
 }
 
 /* ---------- yazdır / excel ---------- */
-$('#printB').onclick=()=>{commitEdit();setTimeout(()=>window.print(),50);};
+$('#printB').onclick=()=>{commitEdit();if(typeof saveFlush==='function')saveFlush();setTimeout(()=>{try{printViaFrame();}catch(e){console.error(e);window.print();}},30);};
 window.addEventListener('beforeprint',prepareWorkPrint);
 window.addEventListener('afterprint',()=>{document.body.classList.remove('print-measuring');});
 $('#expX').onclick=exportWeeklyExcel;
@@ -2100,10 +2103,35 @@ $('#pubB').onclick=()=>{
 
 try{if(fixSigns(G()))save();}catch(e){}
 if(UP&&SY.sent[S.cur]===undefined)SEED_H[S.cur]=wHash(S.cur);
+(function(){
+  let gen=0,pend=false;const tick=()=>{if(!pend){pend=true;queueMicrotask(()=>{pend=false;gen++;});}};
+  const memo=(fn,key)=>{let g=-1,c=new Map();return function(...a){if(g!==gen){g=gen;c.clear();}const k=key(...a);if(c.has(k))return c.get(k);const v=fn.apply(this,a);c.set(k,v);tick();return v;};};
+  const fp=g=>g?[g.rows,g.cols,g.merges.length,Object.keys(g.cells).length,S.cur].join('|'):'';
+  const _cset=cset;cset=function(){gen++;return _cset.apply(this,arguments);};
+  ['insRows','delRows','insCols','delCols','insBelow','undo'].forEach(n=>{try{const f=window[n];if(typeof f==='function')window[n]=function(){gen++;const r=f.apply(this,arguments);gen++;return r;};}catch(e){}});
+  const _layout=layout;layout=memo(_layout,g=>fp(g));
+  const _items=items;items=function(){const r=memo1();return r.slice();};const memo1=memo(()=>_items(),()=>fp(G()));
+  const _busy=busyOn;busyOn=memo(_busy,d=>d);
+  const _rs=renderSide;let rsF=0;renderSide=function(){if(rsF)return;rsF=requestAnimationFrame(()=>{rsF=0;try{_rs();}catch(e){console.error(e);}});};
+  const _ref=refresh;refresh=function(){gen++;return _ref.apply(this,arguments);};
+  const _render=render;render=function(){gen++;return _render.apply(this,arguments);};
+})();
+function printViaFrame(){
+  prepareWorkPrint();const page=$('#printPage');if(!page)return window.print();
+  const css=[...document.querySelectorAll('style')].map(s=>s.textContent).join('\n');
+  let f=$('#printFrame');if(f)f.remove();f=document.createElement('iframe');f.id='printFrame';
+  f.style.cssText='position:fixed;right:0;bottom:0;width:1100px;height:800px;border:0;opacity:0;pointer-events:none;z-index:-1';
+  document.body.appendChild(f);const d=f.contentDocument;
+  d.open();d.write('<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>'+esc(weekLabel(S.cur))+' HAFTALIK PROGRAM</title><style>'+css+'</style><style>#mobileApp,#mobileShade{display:none!important}</style></head><body>'+page.outerHTML+'</body></html>');d.close();
+  const go=()=>{try{f.contentWindow.focus();f.contentWindow.print();}catch(e){window.print();}setTimeout(()=>{f.remove();},60000);};
+  const imgs=[...d.images];Promise.all(imgs.map(i=>i.complete?1:new Promise(r=>{i.onload=i.onerror=r;}))).then(()=>setTimeout(go,120));
+}
+window.addEventListener('afterprint',()=>{setTimeout(()=>{try{document.body.classList.remove('print-measuring');render();}catch(e){}},50);});
 document.querySelector('.brand-mark img').src=LOGO; render();fetchCrew();pullMonths();syncInfo();setTimeout(()=>syncNow(),700);
 
 </script>
 
+<style>@media screen and (min-width:761px){#mobileApp,#mobileShade{display:none!important}}</style>
 <style>@media screen and (max-width:760px){
 :root{--mobile-bg:oklch(.958 .008 151);--mobile-ink:oklch(.254 .025 172);--mobile-brand:oklch(.536 .089 178);--mobile-deep:oklch(.427 .071 179);--mobile-gold:oklch(.75 .125 82);--mobile-surface:oklch(1 0 0);--mobile-muted:oklch(.53 .022 168);--mobile-border:oklch(.89 .017 162);--mobile-soft:oklch(.927 .025 170);--mobile-warn:oklch(.97 .04 85);--mobile-danger:oklch(.51 .17 25);--mobile-shade:oklch(.2 .02 170 / .3);--mobile-shadow:0 12px 40px oklch(.25 .02 170 / .08);--bg:var(--mobile-bg);--ink:var(--mobile-ink);--primary:var(--mobile-brand);--accent:var(--mobile-gold);--border:var(--mobile-border);--muted:var(--mobile-muted)}
 html,body{background:var(--mobile-bg);color:var(--mobile-ink);font-family:Inter,system-ui,sans-serif;letter-spacing:0!important}body{margin:0;overflow-x:hidden}*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}button,input,select,textarea{font:inherit}button{touch-action:manipulation;cursor:pointer}button:focus-visible{outline:2px solid var(--mobile-brand);outline-offset:3px}button:disabled{opacity:.45;cursor:default}
