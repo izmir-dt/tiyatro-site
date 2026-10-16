@@ -2181,8 +2181,10 @@ document.addEventListener('mousedown',e=>{const d=$('#drawer');if(innerWidth<=60
 new MutationObserver(()=>{const d=$('#drawer'),ar=$('#drawerArrow');if(ar&&!(d.classList.contains('open')&&d.dataset.tab==='staff'))ar.hidden=true;}).observe($('#drawer'),{attributes:true,attributeFilter:['class','data-tab']});
 /* ---- Yüzen pencere konumlandırma: hep başlığın hemen altında; Görevliler hücresinden açılırsa hücreyi kapatmayacak şekilde ---- */
 function floatTop(){const h=document.querySelector('header.app');return Math.max(8,Math.round((h?h.getBoundingClientRect().bottom:0)+10));}
+let cellAnchorTd=null;
 function placeDrawer(anchor){
   const d=$('#drawer');if(!d||innerWidth<=600)return;
+  if(!anchor&&d.dataset.mode==='cell'&&cellAnchorTd&&cellAnchorTd.isConnected)anchor=cellAnchorTd.getBoundingClientRect();
   const ar=$('#drawerArrow');
   if(d.dataset.tab==='staff'){placeBubble(anchor);return;}
   if(ar)ar.hidden=true;d.style.maxHeight='';
@@ -2205,6 +2207,15 @@ function placeBubble(anchor){
   const menu=d.dataset.mode==='menu';
   d.style.width=w+'px';d.style.height='auto';d.style.maxHeight='none';d.style.transform='none';d.style.left='0px';d.style.setProperty('top','0px','important');
   const H=d.offsetHeight,below=vh-(a.bottom+gap)-m,above=a.top-gap-m;
+  /* satıra tıklanınca: balon hücrenin SOL tarafında, satırla hizalı açılır */
+  if(!menu&&anchor&&a.left-gap-w>=m){
+    const ft=floatTop(),room=Math.max(200,vh-ft-m),h2=Math.min(H,room),cy=(a.top+a.bottom)/2;
+    const top2=Math.max(ft,Math.min(Math.round(cy-h2/2),vh-m-h2));
+    d.style.left=Math.round(a.left-gap-w)+'px';d.style.setProperty('top',top2+'px','important');
+    d.style.maxHeight=h2+'px';d.style.height=h2<H?h2+'px':'auto';
+    if(ar){ar.hidden=false;ar.className='right';ar.style.left=Math.round(a.left-gap-7)+'px';
+      ar.style.top=Math.round(Math.max(top2+18,Math.min(cy-7,top2+h2-30)))+'px';}
+    return;}
   let top,h=H,up=true;
   if(H<=below){top=a.bottom+gap;}
   else if(H<=above){top=a.top-gap-H;up=false;}
@@ -2218,7 +2229,7 @@ function placeBubble(anchor){
     ar.style.top=(up?Math.max(m,top)-7:Math.max(m,top)+Math.min(H,h)-7)+'px';}
 }
 function openStaffForCell(td){
-  const d=$('#drawer'),r=td.getBoundingClientRect();
+  const d=$('#drawer'),r=td.getBoundingClientRect();cellAnchorTd=td;
   if(innerWidth>600){d.dataset.mode='cell';if(!(d.classList.contains('open')&&d.dataset.tab==='staff'))openTab('staff');placeDrawer(r);return;}
   if(!(d.classList.contains('open')&&d.dataset.tab==='staff')){openTab('staff');placeDrawer(r);return;}
   const b=d.getBoundingClientRect();
@@ -2642,6 +2653,7 @@ mrender();mq.addEventListener('change',mrender);
 }
 #drawerArrow{position:fixed;z-index:86;width:14px;height:14px;background:#fff;transform:rotate(45deg);pointer-events:none}
 #drawerArrow.up{border-left:1px solid #cfc3a3;border-top:1px solid #cfc3a3}
+#drawerArrow.right{border-right:1px solid #cfc3a3;border-top:1px solid #cfc3a3}
 #drawerArrow.down{border-right:1px solid #cfc3a3;border-bottom:1px solid #cfc3a3}
 @media(max-width:600px){#drawerArrow{display:none}}
 .hd-grid{width:100%!important}
