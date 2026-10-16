@@ -322,7 +322,7 @@ body.tmode .sheet{padding:0;height:var(--sheetH,70vh);overflow:auto;border-radiu
 </style>
 
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" media="(max-width:760px)">
-</head>
+<script defer src="/__l5e/events.124894084da8c432.js" data-artifact-kind="live_preview" data-artifact-id="8ffeea01af9d69468ca2a946ca5ebde4a89ed081" data-commit-sha="8ffeea01af9d69468ca2a946ca5ebde4a89ed081" data-context-token="v1.eyJwcm9qZWN0X2lkIjoibG92cF8ycGg1amRuMGV3OHQyczVheHF6MmEzNTZiZSIsImFydGlmYWN0X2tpbmQiOiJsaXZlX3ByZXZpZXciLCJhcnRpZmFjdF9pZCI6IjhmZmVlYTAxYWY5ZDY5NDY4Y2EyYTk0NmNhNWViZGU0YTg5ZWQwODEiLCJjb21taXRfc2hhIjoiOGZmZWVhMDFhZjlkNjk0NjhjYTJhOTQ2Y2E1ZWJkZTRhODllZDA4MSIsImV4cCI6MTc5MjE2NzUwOX0.nmABkY_UyqwxhR8loVvSz7yo-JmSuK4T5GGmE4zO2Po"></script></head>
 <body>
 <header class="app">
   <div class="brand-lockup">
@@ -707,6 +707,8 @@ function chip(st,text,title){const e=$('#syncState');if(!e)return;e.className='s
 function syncInfo(){const e=$('#syncInfo');if(e)e.textContent='Haftalar: '+Object.keys(S.weeks).length+(SY.tab?' · sekme: '+SY.tab:'')+(SY.last?' · son eşitleme '+new Date(SY.last).toLocaleTimeString('tr'):'');}
 
 /* kayıt sekmesini bul: önce HAFTALIK PROGRAM, yoksa ortak AYLIK PROGRAM sekmesi */
+/* E-Tablonun 1. satırı başlık sanılıp kayıt kayboluyordu: veri gibi görünen başlık satırını geri ekle */
+function allRows(d){const r=(d&&d.rows)||[],h=d&&d.headers;if(Array.isArray(h)&&/^(h(week|del|meta|pub)|apub|adraft|a[a-z]+)_/.test(String(h[0]||'')))return [h].concat(r);return r;}
 async function wkTab(){
   /* eski sürüm haftaları AYLIK PROGRAM sekmesine yazıyordu: bir kez HAFTALIK PROGRAM'a taşı */
   if(SY.tab&&SY.tab!==WK_TABS[0]){SY.old=SY.old||SY.tab;SY.tab='';SY.ts={};SY.sent={};SY.metaTs=0;SY.metaSent='';saveSY();}
@@ -717,7 +719,7 @@ async function wkRows(){
   const tab=await wkTab();
   const r=await fetch(SHEET_API+encodeURIComponent(tab)+'?fresh=1',{cache:'no-store'});
   if(!r.ok){SY.tab='';throw new Error('HTTP '+r.status);}
-  return {tab,rows:(await r.json()).rows||[]};}
+  return {tab,rows:allRows(await r.json())};}
 /* satırları gruplayıp her hafta için en yeni EKSİKSİZ grubu seç */
 function wkGroups(rows){
   const g=new Map(),out={weeks:new Map(),dels:new Map(),meta:null};
@@ -759,7 +761,7 @@ async function wkPull(opt={}){
   for(const k of new Set([...G_.weeks.keys(),...G_.dels.keys()])){
     const w=G_.weeks.get(k),d=G_.dels.get(k),isDel=!!d&&(!w||d.ts>w.ts),sTs=isDel?d.ts:w.ts,base=SY.ts[k]||0;
     found++;
-    if(sTs<=base&&!opt.force)continue;
+    if(sTs<=base&&!opt.force&&(isDel?!S.weeks[k]:!!S.weeks[k]))continue; /* yerelde olmayan hafta her zaman E-Tablodan alınır */
     const loc=S.weeks[k],lh=loc?wHash(k):null;
     const untouched=loc?(SY.sent[k]===lh||(SY.sent[k]===undefined&&SEED_H[k]===lh)):(SY.sent[k]===undefined);
     if(isDel){
@@ -857,7 +859,7 @@ function applySheetMonths(){
 async function pullMonths(){
   try{
     const r=await fetch(SHEET_API+encodeURIComponent(MONTH_TAB)+'?fresh=1',{cache:'no-store'});if(!r.ok)return;
-    const rows=(await r.json()).rows||[],g=new Map();
+    const rows=allRows(await r.json()),g=new Map();
     rows.forEach(x=>{const id=String(x[0]||'');if(/^apub_/.test(id)){if(!g.has(id))g.set(id,[]);g.get(id).push(x);}});
     const best=new Map();
     for(const[id,rs]of g){
