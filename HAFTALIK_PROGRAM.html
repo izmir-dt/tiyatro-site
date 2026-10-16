@@ -717,7 +717,7 @@ function syncInfo(){const e=$('#syncInfo');if(e)e.textContent='Haftalar: '+Objec
 
 /* kayıt sekmesini bul: önce HAFTALIK PROGRAM, yoksa ortak AYLIK PROGRAM sekmesi */
 /* E-Tablonun 1. satırı başlık sanılıp kayıt kayboluyordu: veri gibi görünen başlık satırını geri ekle */
-function allRows(d){const r=(d&&d.rows)||[],h=d&&d.headers;if(Array.isArray(h)&&/^(h(week|del|meta|pub)|apub|adraft|a[a-z]+)_/.test(String(h[0]||'')))return [h].concat(r);return r;}
+function allRows(d){const r=(d&&d.rows)||[],h=d&&d.headers;if(Array.isArray(h)&&/^(h(week|del|meta|pub|staff)|apub|adraft|a[a-z]+)_/.test(String(h[0]||'')))return [h].concat(r);return r;}
 async function wkTab(){
   /* eski sürüm haftaları AYLIK PROGRAM sekmesine yazıyordu: bir kez HAFTALIK PROGRAM'a taşı */
   if(SY.tab&&SY.tab!==WK_TABS[0]){SY.old=SY.old||SY.tab;SY.tab='';SY.ts={};SY.sent={};SY.metaTs=0;SY.metaSent='';saveSY();}
@@ -760,6 +760,48 @@ async function wkDelete(tab,prefixes,keepId){
     for(const h of hit){const d=await fetch(SHEET_API+encodeURIComponent(tab)+'/row/'+h.i,{method:'DELETE'});if(!d.ok){bad=true;break;}}
     if(!bad)return;}}
 
+
+/* ---------- personel listesi → E-Tablo (birim birim, otomatik) ----------
+   1) "HAFTALIK PROGRAM PERSONELİ" sekmesi varsa (BİRİM | KISA AD | TAM AD | DURUM) oraya,
+   2) yoksa kurulum gerektirmeden mevcut "HAFTALIK PROGRAM" sekmesine okunaklı satırlar (hstaff_<birim>_NN) olarak yazılır. */
+const PERS_TAB='HAFTALIK PROGRAM PERSONELİ';
+const rosterRows=()=>(S.staff||[]).filter(x=>String(x.s||'').trim()).map(x=>[UNIT.name,String(x.s).trim(),String(x.full||'').trim(),x.off?'Pasif':'Aktif']);
+const rosterHash=()=>hsh(JSON.stringify(rosterRows()));
+const _isUnitName=v=>UNITS.some(u=>nk(u.name)===nk(v)||nk(u.full)===nk(v));
+async function rosterIO(){
+  const url=SHEET_API+encodeURIComponent(PERS_TAB);
+  try{const r=await fetch(url+'?fresh=1',{cache:'no-store'});
+    if(r.ok){const d=await r.json(),rows=d.rows||[],hd=d.headers;
+      if(!(Array.isArray(hd)&&_isUnitName(hd[0]))){ /* başlık satırı var (ya da sekme boş) */
+        const mine=rows.map((x,i)=>({x,i})).filter(o=>_isUnitName(o.x[0])&&nk(o.x[0])===nk(UNIT.name)||nk(o.x[0])===nk(UNIT.full)).filter(o=>String(o.x[1]||'').trim());
+        return {remote:mine.map(o=>({s:String(o.x[1]).trim(),full:String(o.x[2]||'').trim(),off:/^pasif/i.test(String(o.x[3]||'').trim())})),
+          async write(list){
+            for(const o of mine.slice().sort((a,b)=>b.i-a.i)){const dr=await fetch(url+'/row/'+o.i,{method:'DELETE'});if(!dr.ok)throw new Error('Personel satırı silinemedi (HTTP '+dr.status+')');}
+            for(const v of list){const pr=await fetch(url+'/row',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({values:v})});if(!pr.ok)throw new Error('Personel yazılamadı (HTTP '+pr.status+')');}}};}}
+  }catch(e){}
+  /* yedek yol: HAFTALIK PROGRAM sekmesi */
+  const tab=await wkTab(),pre='hstaff_'+UNIT.key+'_';
+  const r=await fetch(SHEET_API+encodeURIComponent(tab)+'?fresh=1',{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);
+  const rows=allRows(await r.json()).filter(x=>String(x[0]||'').startsWith(pre)).sort((a,b)=>String(a[0]).localeCompare(String(b[0])));
+  return {remote:rows.map(x=>{const t=String(x[4]||'').split('|').map(z=>z.trim());return {s:t[0]||'',full:t[1]||'',off:/^pasif/i.test(t[2]||'')};}).filter(o=>o.s),
+    async write(list){
+      await wkDelete(tab,[pre],'');
+      for(let i=0;i<list.length;i++){const v=list[i],id=pre+String(i+1).padStart(2,'0'),ts=Date.now();
+        const pr=await fetch(SHEET_API+encodeURIComponent(tab)+'/row',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({values:[id,ts,0,1,v[1]+' | '+v[2]+' | '+v[3]+' | '+v[0]]})});
+        if(!pr.ok)throw new Error('Personel yazılamadı (HTTP '+pr.status+')');}}};}
+async function rosterSync(){
+  const io=await rosterIO(),remote=io.remote;
+  const lh=rosterHash(),rh=hsh(JSON.stringify(remote.map(o=>[UNIT.name,o.s,o.full,o.off?'Pasif':'Aktif'])));
+  if(lh===rh){SY.rosterSent=lh;saveSY();return 0;}
+  const localPending=SY.rosterSent!==lh;
+  if(!localPending&&remote.length){ /* yerelde bekleyen değişiklik yok → E-Tablodaki liste esas alınır */
+    const old=new Map((S.staff||[]).map(x=>[nk(x.s),x]));
+    S.staff=remote.map(o=>{const e=old.get(nk(o.s));const x=e?Object.assign(e,{s:o.s,full:o.full}):{s:o.s,full:o.full};if(o.off)x.off=true;else delete x.off;return x;});
+    SY.rosterSent=rosterHash();saveSY();persistQuiet();render();return 1;}
+  if(!SY.rosterSent&&remote.length){ /* ilk eşleşme: iki listeyi birleştir */
+    remote.forEach(o=>{if(!S.staff.some(x=>nk(x.s)===nk(o.s))){const x={s:o.s,full:o.full};if(o.off)x.off=true;S.staff.push(x);}});}
+  await io.write(rosterRows());
+  SY.rosterSent=rosterHash();saveSY();persistQuiet();return 1;}
 let CONF=new Set(), _confOpen=false;
 function ensureCur(){
   if(!Object.keys(S.weeks).length){const k=iso(monday(new Date()));S.weeks[k]=blankWeek(k);}
@@ -847,6 +889,7 @@ async function syncNow(opt={}){
     const p=await wkPull({});
     CONF=new Set(p.conflicts.map(c=>c.k));
     const n=await wkPush({force:!!opt.forcePush});
+    try{await rosterSync();}catch(e){chip('warn','☁ personel listesi yazılamadı',String(e&&e.message||e));}
     if(SY.old){try{await wkDelete(SY.old,['hweek_','hdel_','hmeta_'],'');SY.old='';saveSY();}catch(e){}} /* eski kayıtlar AYLIK PROGRAM sekmesinden temizlenir */
     SY.last=Date.now();saveSY();syncInfo();ok=true;
     if(p.conflicts.length){chip('warn','⚠ çakışma — tıklayın','Başka bir bilgisayarda değişen hafta var');wkAskConflicts(p.conflicts);}
@@ -905,8 +948,11 @@ setInterval(()=>{if(!document.hidden){syncNow();pullMonths();if(!editing)fetchCr
 
 /* menü / çekmece */
 function openTab(n){const d=$('#drawer');const labels={staff:'Birim Personeli',tasks:'Hazır işler',warns:'Uyarılar',month:'Aylık Programdan Bu Hafta',leave:'İzin ve rapor',sheets:'Google E-Tablolar'};$('#drawerTitle').textContent=labels[n]||'Program araçları';const same=d.classList.contains('open')&&d.dataset.tab===n;
-  if(same)d.classList.remove('open');else{const was=d.classList.contains('open');d.dataset.tab=n;d.classList.add('open');if(!was)placeDrawer();}
+  let _was=false;
+  if(same)d.classList.remove('open');else{_was=d.classList.contains('open');d.dataset.tab=n;d.classList.add('open');}
   d.querySelectorAll('.card').forEach(c=>c.classList.toggle('show',c.dataset.tab===d.dataset.tab));
+  /* içerik görünür olduktan SONRA ölç/konumla (aksi halde ilk açılışta yükseklik yanlış ölçülüp pencere kesiliyordu) */
+  if(!same&&!_was){placeDrawer();requestAnimationFrame(()=>{if(d.classList.contains('open'))placeDrawer();});}
   document.querySelectorAll('[data-menu]').forEach(b=>b.classList.toggle('on',d.classList.contains('open')&&b.dataset.menu===d.dataset.tab));}
 document.querySelectorAll('[data-menu]').forEach(b=>b.addEventListener('click',()=>{const d=$('#drawer'),prev=d.dataset.tab,was=d.classList.contains('open');d.dataset.mode='menu';openTab(b.dataset.menu);if(was&&d.classList.contains('open')&&(prev==='staff'||d.dataset.tab==='staff'))placeDrawer();}));
 $('#dClose').onclick=()=>{$('#drawer').classList.remove('open');document.querySelectorAll('[data-menu]').forEach(b=>b.classList.remove('on'));};
@@ -2132,7 +2178,7 @@ function placeBubble(anchor){
   else{h=Math.max(220,above);top=a.top-gap-h;up=false;}
   const l=Math.max(a.left,0),r=Math.min(a.right,vw),cx=(l+r)/2;
   let left=menu?Math.min(vw-w-m,Math.max(m,a.right-w)):Math.min(vw-w-m,Math.max(m,Math.round(cx-w/2)));
-  d.style.left=left+'px';d.style.setProperty('top',Math.max(m,top)+'px','important');d.style.maxHeight=h+'px';d.style.height=h<H?h+'px':'auto';
+  d.style.left=left+'px';d.style.setProperty('top',Math.max(m,top)+'px','important');{const room=Math.max(160,vh-Math.max(m,top)-m);h=Math.min(h,room);}d.style.maxHeight=h+'px';d.style.height=h<H?h+'px':'auto';
   if(ar){ar.hidden=false;ar.className=up?'up':'down';
     ar.style.left=Math.min(left+w-26,Math.max(left+18,Math.round(cx-7)))+'px';
     ar.style.top=(up?Math.max(m,top)-7:Math.max(m,top)+Math.min(H,h)-7)+'px';}
