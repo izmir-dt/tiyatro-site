@@ -400,7 +400,7 @@ header.app nav .dd-trigger.on{background:#d39a3d;border-color:#d39a3d;color:#2b1
           <button class="btn approve" id="pubB" title="Bu haftanın programını onayla; ana sitedeki Haftalık Program bölümünde görünür">✔ Haftalığı Onayla</button>
           <button class="btn gold" id="newW">+ YENİ HAFTA</button>
           <button class="btn" id="draftB" title="Aylık programdaki bu haftanın oyunlarını taslak satır olarak ekler (yalnızca siz isteyince)">📅 Aylık programdan taslak</button>
-          <button class="btn" id="copyW" title="Seçtiğiniz haftanın işlerini bu haftaya kopyala">Haftayı kopyala</button>
+          <button class="btn" id="copyW" title="Bu haftanın tablosunu, seçeceğiniz tarihteki yeni haftaya kopyala">Haftayı kopyala</button>
           <button class="btn danger" id="delW">Haftayı sil</button>
 </div>
       </div>
@@ -1685,15 +1685,17 @@ function draftFromMonthly(onlyMissing){const g=G(),L=layout(g);if(!L)return toas
     if(C.task!=null)setV(r,C.task,{t:`“${pl}” oyununun dekoru kurulacak temsil sonrası sökülecektir.`});if(C.ppl!=null)setV(r,C.ppl,{t:cr.join(SEP)});n++;});});
   toast(n?n+' taslak satır eklendi — kontrol edin':'Kesinleşmiş aylık programda bu hafta için oyun bulunamadı');}
 $('#copyW').onclick=()=>{commitEdit();
-  const keys=Object.keys(S.weeks).filter(k=>k!==S.cur&&S.weeks[k]&&S.weeks[k].g).sort();
-  if(!keys.length)return toast('Kopyalanacak başka hafta kaydı yok');
-  const prev=iso(addDays(fromIso(S.cur),-7)),def=keys.includes(prev)?prev:(keys.filter(k=>k<S.cur).pop()||keys[keys.length-1]);
-  ask('Haftayı kopyala',`<p><b>${weekLabel(S.cur)}</b> haftasına hangi haftanın tablosu kopyalansın? Bu haftanın şimdiki içeriği yerine geçer; tarihler otomatik güncellenir.</p><p>Kopyalanacak hafta:<br><select id="cW" style="width:100%">${keys.slice().reverse().map(k=>'<option value="'+k+'"'+(k===def?' selected':'')+'>'+weekLabel(k)+(k===prev?' (önceki hafta)':'')+'</option>').join('')}</select></p><label><input type="checkbox" id="cP" checked> Görevlileri de kopyala</label>`,()=>{
-    const src=S.weeks[$('#cW').value];if(!src||!src.g)return toast('Seçilen hafta bulunamadı'),false;
-    snap();const keep=$('#cP').checked;
-    const g=JSON.parse(JSON.stringify(src.g));W().g=g;shiftDates(g,S.cur);try{fixSigns(g);}catch(e){}const L=layout(g);
+  const def=iso(addDays(fromIso(S.cur),7));
+  ask('Haftayı kopyala',`<p><b>${weekLabel(S.cur)}</b> haftasının tablosu, seçeceğiniz tarihteki yeni haftaya kopyalanır. Tarihler otomatik güncellenir.</p><p>Yeni haftanın tarihi (haftanın herhangi bir günü, Pazartesi’ye yuvarlanır):<br><input type="date" id="cD" value="${def}"></p><label><input type="checkbox" id="cP" checked> Görevlileri de kopyala</label>`,()=>{
+    if(!validIso($('#cD').value))return toast('Geçerli bir tarih seçin'),false;
+    const k=iso(monday(fromIso($('#cD').value)));
+    if(k===S.cur)return toast('Aynı haftaya kopyalanamaz; farklı bir tarih seçin'),false;
+    if(S.weeks[k]&&!confirm(weekLabel(k)+' haftası zaten var. İçeriği bu tabloyla değiştirilsin mi?'))return false;
+    snap();const keep=$('#cP').checked,g=JSON.parse(JSON.stringify(W().g));
+    if(!S.weeks[k]){S.weeks[k]=blankWeek(k);markBorn(k);}
+    S.weeks[k].g=g;shiftDates(g,k);try{fixSigns(g);}catch(e){}const L=layout(g);
     if(!keep&&L&&L.col.ppl!=null)for(let r=L.first;r<=L.end;r++){const m=mergeAt(g,r,L.col.ppl);if(!m||m[0]===r)cset(g,r,L.col.ppl,{t:''});}
-    sel=null;save();render();toast('Hafta kopyalandı');});};
+    S.cur=k;sel=null;save();render();toast('Hafta kopyalandı: '+weekLabel(k));});};
 $('#delW').onclick=()=>{if(Object.keys(S.weeks).length<2)return toast('Son hafta silinemez');ask('Haftayı sil',`<p><b>${weekLabel(S.cur)}</b> haftası silinsin mi? (Geri al ile dönebilirsiniz)</p>`,()=>{snap();delete S.weeks[S.cur];S.cur=Object.keys(S.weeks).sort().pop();sel=null;save();render();});};
 $('#undoB').onclick=undo;
 function markBorn(k){try{SY.born=SY.born||{};SY.born[k]=Date.now();saveSY();}catch(e){}}
