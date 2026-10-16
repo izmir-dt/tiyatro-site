@@ -319,6 +319,21 @@ body.tmode .statusrow,body.tmode #notice,body.tmode #weekTitleRow{display:none}
 body.tmode .controls{margin-bottom:0}
 body.tmode .sheet{padding:0;height:var(--sheetH,70vh);overflow:auto;border-radius:0 0 12px 12px;border-top:0}
 #tmodeB.on{background:var(--primary);color:#fff;border-color:var(--primary)}
+
+/* standart belge üst/alt bilgisi */
+.dh{display:grid;grid-template-columns:1fr 1.5fr 1fr;align-items:start;gap:12px;padding:6px 4px 10px;font-family:var(--tf,'Source Sans 3',Calibri,Arial,sans-serif);color:var(--tc,#1a1a1a);font-size:15px;cursor:default}
+.dh-l{display:flex;gap:12px;align-items:center}.dh-logo{width:64px;height:auto;flex:none}.dh-meta{line-height:1.6}
+.dh-c{text-align:center;font-weight:700;line-height:1.45;font-size:16px}.dh-c div:first-child{letter-spacing:.5px}
+.dh-r{text-align:right;line-height:1.6}
+.dh-title{text-align:center;font:800 21px/1.25 var(--tf,'Source Sans 3',Calibri,Arial,sans-serif);letter-spacing:.4px;margin:6px 0 2px;color:var(--tc,#1a1a1a)}
+.dh-week{text-align:center;font:700 16px var(--tf,'Source Sans 3',Calibri,Arial,sans-serif);color:var(--primary);margin-bottom:12px;letter-spacing:.6px}
+.dh:hover,.dh-title:hover,.dh-week:hover,.df-notes:hover{outline:1px dashed var(--border);outline-offset:3px;border-radius:4px}
+.df-notes{margin:14px 0 0;padding-left:20px;font:14px/1.5 var(--tf,'Source Sans 3',Calibri,Arial,sans-serif);color:var(--tc,#1a1a1a)}
+.hd-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px 14px;width:min(560px,78vw)}
+.hd-grid label{display:flex;flex-direction:column;gap:4px;font:700 12px Manrope,sans-serif;color:var(--muted)}
+.hd-grid .full{grid-column:1/-1}.hd-grid input,.hd-grid select,.hd-grid textarea{width:100%;font:500 14px/1.4 Manrope,sans-serif;padding:7px 9px;border:1px solid var(--border);border-radius:6px;color:var(--ink)}
+table.xl td.c[data-r="0"]{text-align:center!important;font-weight:700;background:#f1f4f4}
+@media print{.dh:hover,.dh-title:hover,.df-notes:hover{outline:none}}
 </style>
 
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" media="(max-width:760px)">
@@ -358,6 +373,7 @@ body.tmode .sheet{padding:0;height:var(--sheetH,70vh);overflow:auto;border-radiu
         <div class="cmd-right">
           <button class="btn" id="pubB" title="Bu haftanın programını onayla; ana sitedeki Haftalık Program bölümünde görünür" style="background:#9b2335;color:#fff;border-color:#9b2335">✔ Haftalığı Onayla</button>
           <button class="btn gold" id="newW">+ YENİ HAFTA</button>
+          <button class="btn" id="draftB" title="Aylık programdaki bu haftanın oyunlarını taslak satır olarak ekler (yalnızca siz isteyince)">📅 Aylık programdan taslak</button>
           <button class="btn" id="copyW" title="Önceki haftanın işlerini bu haftaya kopyala">Önceki haftayı kopyala</button>
           <button class="btn danger" id="delW">Haftayı sil</button>
         </div>
@@ -390,7 +406,7 @@ body.tmode .sheet{padding:0;height:var(--sheetH,70vh);overflow:auto;border-radiu
           <div class="menu-panel"><div class="mp-title">Logo &amp; imza</div>
             <button class="btn" id="logoB" title="DT logosunu taşı / boyutlandır (sürükle veya ok tuşları)">🖼 Logoyu konumlandır</button>
             <button class="btn" id="signB" title="Tablonun altındaki imza bloğunu düzenle">✍ İmzacıları düzenle</button>
-            <button class="btn" id="footB" title="Tablonun altındaki açıklamaları birim şablonu olarak düzenle">📝 Alt açıklamalar (şablon)</button></div></div>
+            <button class="btn" id="hdrB" title="Sayı, konu, kurum, başlık ve tarih">🏛 Üst bilgi (şablon)</button><button class="btn" id="footB" title="Tablonun altındaki açıklamalar">📝 Alt bilgi (şablon)</button></div></div>
         <div class="menu"><button type="button" class="menu-trigger" data-mm>Veri <span class="caret">&#9662;</span></button>
           <div class="menu-panel"><div class="mp-title">Dosya</div>
             <button class="btn" id="impX">Excel / Word yükle</button><button class="btn" id="dataB">Yedek (JSON)</button></div></div>
@@ -533,7 +549,7 @@ let logoEdit=false, logoDrag=null;
 let S, hist=[], sel=null, anc=null, tail=null, editing=null, dragging=false, cresDrag=null;
 const DEF_W=[157,147,82,431,439];
 const LOGO='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAFEAAABJCAMAAABy1DryAAAAAXNSR0IArs4c6QAAAAlwSFlzAAAOxAAADsQBlSsOGwAAAqxQTFRFAAAAExMTERERDg4ODAwMBAQEAQEBEhISAwMDAgICHBwcDw8PCAgICQkJDQ0NBwcHBgYGDA0NAQICCwcHDAYIBQYGEgoIDwoLAwQDAgMDFQwNAgQEFAwMDgoKGxsbFxcXGBgYGRsbAAECFBYWAAICAAMDEgsMCwsLExcVERUVCw8NAAMEBwsLEhYVERUUDxMTAQUGAAMCAAQDEQwLDwoKAwYGAgQDAQUFAgMEBAUGFAsLBwYIAwQEBQQFAQMEAAIBAAEBNBMTLREQLBAQLBERLBEQLhERKRAPICAgNjY2KCgoPDw8Ly8vNDQ0Pz8/OTk5Nzc3PT09LS0tLi4uOjo6TBwcXV1dQEBAV1dXWFhYQ0NDVFRUUFBQQkJCUlJSREREW1tbXFxcSUlJRkZGSEhIWlpaTU1NUVJSR0dHSkpKVlZWenp6fX19f39/bW1tZWVlYmJiZGRkbm5udXV1cnJyYWFha2xtd3d3jx4fjh4fjh4ejx8gmSkqkiknjyAhjyAgkiIjlSQllSUllSUmlCQllCUlnConhYWFl5eXlpaWiIiImJiYg4ODk5aWjY2NgICAkJCQvjExtjAwtzAvry8vty8vsC8wtjAxsS8vsS8wqC4wvb29rKysr6+vrq6ut7e3tra2uLi4sLCwo6OjtLS0tLSzs7OzsrW1sbGxra6uoaGhvsDAzDQz1zg51Tc21DY31TY30zY2yzU01tbW0tLS09PT39/f1dXVxcXFw8PDwsLC2traxMTEycnJyMjI0NDQzMzMysrKy8vL29vb3d3d3d/f3d7f3N7e09TU3t7e3t/g3uDg8fHx5OTk5eXl5ubm+vr69PT07Ozs4uLi5+fn/v7+8vLy7e3t9vb2/Pz88/Pz+Pj49fX14ODg7+/v+/v79/f38PDw4eHh////63qFBwAAAqdJREFUWMNjeExtwADEZ86eoxI4fwFiYjszI3UAk8dmiInZDNQCLFsgJuYwsFIHsLFvHTVx1MRRE0dNHHgTOTixAw6cMggV2E1kw1WQchIsarGbyObZ0YkNdHR5tWOXgYHuXBZObCYyhOGo3S6GXyJQ/11mZ8NqYgQO9Ve8txEwcTsT56iJcBMj6WPiVYSJ13bs3LUbSWrzrp17ruMzkYMrKu8GXPmF2XPmzpuz6yaSiXu5WTnzkeyK5mTlmY/PRFYGBp9biEToC8oLfreRfL2Pl4GhAMnEGAYGjgV4TWRl8L8IV38ngIGNjSEW2cS9fJwMhUgmxjFw8C8kwUR/oChDPNjEwCtgof3M6CZy8u8CM+8ysZFk4vmgRQcOHjx0YDELB7qJAj0LlyxdtrxXkDQ33iuMSACCsCgBVjQTWVk52diEWIVFRFlJMfHq1cf3LwDBzRUCHNhMZBCrqRWXIMmNMLCAH9NEIJCUmjhJXJosE5fgMFFm8hTZoWsiap4JBuWZEGQTVwAFEpFMTALyOfCZyCkXX/QArv5BXlRyclTxBSQTdwIF+pBM7I9KCeTlwGMievl4FYyQ+LtvowoAeYfl2fCZGIm/EHw44SaG2BH8JkbgN3FOKqbYbkpMvOEbR2UTS7CFCgETU/GYd7iUAVsL4ZECXhPTTh89hgUcP35iZZkigxJD+il0+dOrlVWkVdWmTsNuoqi6hiZ2oAVMytqqqjq6aOJ6uvoGhkaqxtNnmGA10dSxrqISK6hvaGxqbmpqqKxCk6iqbmlqbW5bM9PEDJuJ5qFr15EO1m/YsHHTLHELbCZaWjk5u5ABXF3d3K1tsJloa2dvb69COrC3d1AZ7SuMmjhq4qiJoyYSZWI51UZd+fdDTFyVkUkdkJJ1EmIiFQGw7QYAp92goq3M1JIAAAAASUVORK5CYII=';
-function load(){const st=load0();for(const w of Object.values(st.weeks||{}))if(w.g)stdHeader(w.g);return st;}
+var PRE_H={};function load(){const st=load0();for(const[k,w]of Object.entries(st.weeks||{}))if(w.g){const h0=hsh(JSON.stringify(w));if(stdHeader(w.g))PRE_H[k]=[h0,hsh(JSON.stringify(w))];}return st;}
 function load0(){try{const r=localStorage.getItem(LS);if(r)return JSON.parse(r);
   const o=UP?null:localStorage.getItem('idt_haftalik_program_v1');if(o){const old=JSON.parse(o),st=JSON.parse(JSON.stringify(SEED.state));if(old.staff)st.staff=old.staff;return st;}}catch(e){}
   return UP?blankUnitState():JSON.parse(JSON.stringify(SEED.state));}
@@ -574,19 +590,16 @@ function insBelow(g,r,n){const L=layout(g);insRows(g,r+1,n);
 
 /* başlık satırından sütun rollerini bul (sütun eklense de yeri değişse de çalışır) */
 /* ---- standart başlık: logo A1:A4, SAYI/KONU logonun sağında (B:C), kurum ortada, TARİH sağda ---- */
-function stdHeader(g){
-  try{
-    if(!g||!g.cells||g.cols<5||g.rows<6)return false;
-    if(!/^SAYI\s*:/.test(ctext(g,1,1))||!/^KONU\s*:/.test(ctext(g,2,1)))return false;
-    for(let r=0;r<4;r++)if(ctext(g,r,0)||ctext(g,r,2))return false;
-    const want=[[0,0,3,0],[1,1,1,2],[2,1,2,2]];let ch=false;
-    const has=m=>g.merges.some(x=>x.join()===m.join());
-    if(!want.every(has)){g.merges=g.merges.filter(m=>!(m[0]<=3&&m[1]<=2));want.forEach(m=>g.merges.push(m.slice()));ch=true;}
-    [[1,1],[2,1]].forEach(([r,c])=>{const x=cget(g,r,c);if(!x)return;if(x.nw){delete x.nw;ch=true;}if(x.sz!==12){x.sz=12;ch=true;}if(x.al){delete x.al;ch=true;}});
-    const d=cget(g,1,4);if(d&&/^TARİH\s*:/.test(d.t||'')&&(d.sz!==12||d.al!=='r')){d.sz=12;d.al='r';ch=true;}
-    return ch;
-  }catch(e){return false;}
-}
+/* Üst/alt bilgi artık tabloda değil: sabit şablon (S.header / S.footer / S.signs) olarak tablonun üstünde ve altında çizilir.
+   Tablodan "TARİH/GÜN" satırının üstündeki ve tablo bitişinin altındaki satırlar temizlenir. */
+function stdHeader(g){return stripDoc(g);}
+function stripDoc(g){
+  try{if(!g||!g.cells)return false;const L=layout(g);if(!L)return false;let ch=false;
+    const rh=g.rowh;
+    if(L.end+1<g.rows){delRows(g,L.end+1,g.rows-1);ch=true;}
+    if(L.hr>0){delRows(g,0,L.hr-1);ch=true;}
+    if(ch&&rh){const o={};for(const[k,v]of Object.entries(rh)){const r=+k;if(r>=L.hr&&r<=L.end)o[r-L.hr]=v;}g.rowh=o;}
+    return ch;}catch(e){return false;}}
 function layout(g){let hr=-1;
   for(let r=0;r<g.rows&&hr<0;r++)for(let c=0;c<g.cols;c++)if(/TARİH\s*\/\s*GÜN/i.test(ctext(g,r,c))){hr=r;break;}
   if(hr<0)return null;const col={};
@@ -614,19 +627,13 @@ function addRowForDay(d){const g=G(),L=layout(g),dm=rowDayMap(g,L);let last=-1;f
 
 /* şablon: Excel dosyasındaki düzen (T.C. başlığı, tablo, dipnotlar, imzalar) */
 function templateGrid(k,rows){
-  const mon=fromIso(k),H=S.header,g={rows:0,cols:5,cells:{},merges:[],colw:DEF_W.slice()};
+  const mon=fromIso(k),g={rows:0,cols:5,cells:{},merges:[],colw:DEF_W.slice()};
   const put=(r,c,t,o)=>{if(t!==''&&t!=null)cset(g,r,c,Object.assign({t},o||{}));g.rows=Math.max(g.rows,r+1);};
-  H.kurum.split('\n').forEach((t,i)=>put(i,3,t,{al:'c',sz:12}));
-  put(1,1,'SAYI : '+H.sayi,{sz:12});put(2,1,'KONU : '+H.konu,{sz:12});put(1,4,'TARİH :'+dmy(addDays(mon,4)).replace(/\./g,'/'),{al:'r',sz:12});
-  put(4,0,H.title,{b:1,sz:12,al:'c'});g.merges.push([4,0,4,4]);
-  ['TARİH/GÜN','SAAT','YER','YAPILACAK İŞ','GÖREVLİLER'].forEach((t,c)=>put(5,c,t,{b:1,sz:12,al:'c'}));
-  let r=6;const list=rows||[];
+  ['TARİH/GÜN','SAAT','YER','YAPILACAK İŞ','GÖREVLİLER'].forEach((t,c)=>put(0,c,t,{b:1,sz:12,al:'c'}));
+  let r=1;const list=rows||[];
   for(let d=0;d<7;d++){const rs=list.filter(x=>x.day===d);const use=rs.length?rs:[{time:'',place:'',task:'',people:''}];const r0=r;
     use.forEach(x=>{put(r,1,x.time,{b:1,al:'c'});put(r,2,x.place,{b:1,al:'c'});put(r,3,x.task);put(r,4,x.people);r++;});
     put(r0,0,dateLabel(addDays(mon,d),d),{al:'c'});if(r-1>r0)g.merges.push([r0,0,r-1,0]);}
-  r++;S.footer.forEach(t=>{put(r,0,t,{sz:11});g.merges.push([r,0,r,3]);r++;});r++;
-  S.signs.forEach((s,ci)=>s.split('\n').forEach((t,i)=>put(r+i,3+ci,t,{al:'c',sz:9,b:i===0?1:0})));
-  stdHeader(g);try{fixSigns(g);}catch(e){}
   return g;}
 function setHeaderDate(g,k){const t='TARİH :'+dmy(addDays(fromIso(k),4)).replace(/\./g,'/');let ch=false;
   for(const x of Object.values(g.cells))if(/^TARİH\s*:/.test(x.t||'')&&x.t!==t){x.t=t;ch=true;}return ch;}
@@ -641,7 +648,7 @@ function blankWeek(k){
   delRows(g,L.first,L.end);insRows(g,L.first,7);
   for(let d=0;d<7;d++){const r=L.first+d;cset(g,r,L.col.date,{t:dateLabel(addDays(mon,d),d),al:'c'});
     if(L.col.time!=null)cset(g,r,L.col.time,{b:1,al:'c'});if(L.col.place!=null)cset(g,r,L.col.place,{b:1,al:'c'});}
-  setHeaderDate(g,k);try{fixSigns(g);}catch(e){}try{applyFooter(g,S.footer);}catch(e){}return {g};}
+  stripDoc(g);return {g};}
 var USER_NAV=false;
 function pickOpenWeek(){const nowK=iso(monday(new Date())),ks=Object.keys(S.weeks).sort();if(!ks.length){S.weeks[nowK]=blankWeek(nowK);S.cur=nowK;return;}if(S.weeks[nowK]){S.cur=nowK;return;}const past=ks.filter(k=>k<=nowK);S.cur=past.length?past.pop():ks[0];}
 pickOpenWeek();
@@ -691,6 +698,7 @@ const WK_TABS=['HAFTALIK PROGRAM'], MONTH_TAB='AYLIK PROGRAM';
 const WK_CHUNK=30000, WK_DEBOUNCE=3500, WK_POLL=5*60*1000, SYNC_LS='idt_haftalik_sync_v1'+USUF;
 let SY=(()=>{const d={ts:{},sent:{},metaTs:0,metaSent:'',tab:'',last:0};try{return Object.assign(d,JSON.parse(localStorage.getItem(SYNC_LS)||'{}'));}catch(e){return d;}})();
 function saveSY(){try{localStorage.setItem(SYNC_LS,JSON.stringify(SY));}catch(e){}}
+try{let ch=0;for(const[k,[a,b]]of Object.entries(PRE_H))if(SY.sent[k]===a){SY.sent[k]=b;ch=1;}if(ch)saveSY();if(Object.keys(PRE_H).length)localStorage.setItem(LS,JSON.stringify(S));}catch(e){}
 function persistQuiet(){try{localStorage.setItem(LS,JSON.stringify(S));}catch(e){}}
 function hsh(s){let x=5381;for(let i=0;i<s.length;i++)x=((x<<5)+x+s.charCodeAt(i))|0;return x+':'+s.length;}
 function nwNorm(w){const c=JSON.parse(JSON.stringify(w));if(c.g)stdHeader(c.g);return c;}
@@ -766,6 +774,8 @@ async function wkPull(opt={}){
     const untouched=loc?(SY.sent[k]===lh||(SY.sent[k]===undefined&&SEED_H[k]===lh)):(SY.sent[k]===undefined);
     if(isDel){
       if(!loc){SY.ts[k]=sTs;delete SY.sent[k];continue;}
+      /* silme bu tarayıcıda zaten biliniyordu ya da hafta silmeden SONRA yeniden açıldı: yeniden açılan yerel hafta esas alınır, çakışma sorulmaz */
+      if(sTs<=base||((SY.born||{})[k]||0)>sTs){if(!(SY.ts[k]>=sTs))SY.ts[k]=sTs;continue;}
       if(untouched||opt.force){delete S.weeks[k];SY.ts[k]=sTs;delete SY.sent[k];applied++;}
       else conflicts.push({k,kind:'del',sTs});
       continue;}
@@ -1006,6 +1016,33 @@ function logoHtml(){const q=logoGeo();return `<img class="logo" src="${LOGO}" al
 function applyLogo(){const q=logoGeo(),im=$('#doc').querySelector('img.logo'),h=$('#doc').querySelector('.lh');if(im){im.style.left=q.x+'px';im.style.top=q.y+'px';im.style.width=q.w+'px';}if(h){h.style.left=(q.x+q.w-6)+'px';h.style.top=(q.y+q.h-6)+'px';}}
 function boldPlays(h){return String(h).replace(/“[^”\n]*”/g,m=>'<b>'+m+'</b>');}
 function bumpText(g){let ch=false;for(const k in g.cells){const x=g.cells[k],r=+k.split(',')[0];if(x.sz===8){x.sz=11;ch=true;}else if(r<4&&x.sz===10){x.sz=12;ch=true;}}return ch;}
+/* ---------- standart üst / alt bilgi şablonu ---------- */
+const DATE_MODES={prevFri:['Haftadan önceki Cuma',-3],mon:['Haftanın Pazartesi günü',0],fri:['Haftanın Cuma günü',4]};
+function docDateIso(k){const w=S.weeks[k];if(w&&w.tarih&&validIso(w.tarih))return w.tarih;const H=S.header||{},m=DATE_MODES[H.dateMode]||DATE_MODES.prevFri;return iso(addDays(fromIso(k),m[1]));}
+function docHead(k){const H=S.header||{};const dd=dmy(fromIso(docDateIso(k))).replace(/\./g,'/');
+  return {sayi:'SAYI : '+String(H.sayi||'').trim(),konu:'KONU : '+String(H.konu||'').trim(),kurum:String(H.kurum||'').replace('TURİZİM','TURİZM').split('\n').map(x=>x.trim()).filter(Boolean).join('\n'),
+    tarih:'TARİH : '+dd,title:String(H.title||'HAFTALIK ÇALIŞMA PROGRAMI').trim(),week:weekLabel(k),notes:(S.footer||[]).map(t=>String(t).trim()).filter(Boolean)};}
+function docHeadHtml(){const D=docHead(S.cur);
+  return '<div class="dh" data-hdr title="Başlığı düzenlemek için çift tıklayın"><div class="dh-l"><img class="dh-logo" src="'+LOGO+'" alt="DT"><div class="dh-meta"><div>'+esc(D.sayi)+'</div><div>'+esc(D.konu)+'</div></div></div>'+
+    '<div class="dh-c">'+D.kurum.split('\n').map(t=>'<div>'+esc(t)+'</div>').join('')+'</div><div class="dh-r">'+esc(D.tarih)+'</div></div>'+
+    '<div class="dh-title" data-hdr>'+esc(D.title)+'</div><div class="dh-week" data-hdr>'+esc(D.week)+'</div>';}
+function docFootHtml(){const n=docHead(S.cur).notes;return n.length?'<ul class="df-notes" data-hdr title="Alt bilgileri düzenlemek için çift tıklayın">'+n.map(t=>'<li>'+esc(t)+'</li>').join('')+'</ul>':'';}
+function hdrDlg(){const H=S.header||{},w=W(),mode=H.dateMode||'prevFri';
+  ask('Üst ve alt bilgi şablonu — '+(S.unit||UNIT.name),
+  `<p class="hint" style="display:block;margin:0 0 8px">Bu bilgiler tüm haftalarda aynı ve standarttır; ekranda, Yazdır/PDF, Excel ve JPG çıktılarında aynen kullanılır.</p>
+   <div class="hd-grid">
+   <label>Sayı<input type="text" id="hdS" value="${esc(H.sayi||'')}"></label>
+   <label>Konu<input type="text" id="hdK" value="${esc(H.konu||'')}"></label>
+   <label class="full">Kurum (ortada, her satır ayrı)<textarea id="hdU" rows="4">${esc(H.kurum||'')}</textarea></label>
+   <label class="full">Belge başlığı (ortalı)<input type="text" id="hdT" value="${esc(H.title||'')}"></label>
+   <label>Tarih kuralı<select id="hdM">${Object.entries(DATE_MODES).map(([k,v])=>'<option value="'+k+'"'+(k===mode?' selected':'')+'>'+v[0]+'</option>').join('')}</select></label>
+   <label>Bu hafta için özel tarih <span class="hint">(boş = kurala göre)</span><input type="date" id="hdD" value="${esc((w&&w.tarih)||'')}"></label>
+   <label class="full">Alt bilgiler (tablonun altında, her satır ayrı madde)<textarea id="hdF" rows="5">${esc((S.footer||[]).join('\n'))}</textarea></label>
+   </div>`,()=>{snap();
+    S.header=Object.assign({},S.header,{sayi:$('#hdS').value.trim(),konu:$('#hdK').value.trim(),kurum:normSign($('#hdU').value),title:$('#hdT').value.trim(),dateMode:$('#hdM').value});
+    S.footer=$('#hdF').value.split('\n').map(x=>x.trim()).filter(Boolean);
+    const dv=$('#hdD').value;if(w){if(dv&&validIso(dv))w.tarih=dv;else delete w.tarih;}
+    save();refresh();toast('Üst / alt bilgi şablonu kaydedildi');});}
 function renderDoc(){
   try{const a=fixSigns(G()),b=stdHeader(G()),c=bumpText(G()),d=setHeaderDate(G(),S.cur);if(a||b||c||d)persistQuiet();}catch(e){}
   const g=G(),L=layout(g),cf=conflicts();
@@ -1020,10 +1057,10 @@ function renderDoc(){
       const head=L&&r<L.hr-1;
       const cls=['c',bd?'bd':'',head?'doc-head-cell':'',head&&r===0?'doc-head-top':'',head&&r===L.hr-2?'doc-head-bottom':'',head&&c===0?'doc-head-left':'',head&&c===g.cols-1?'doc-head-right':'',L&&c===L.col.ppl&&cf.bad.has(r)?'conf':'',L&&r===L.hr-1?'bdt':'',L&&r===L.hr-2?'bda':'',L&&c===L.col.ppl&&LV.has(r)?'leave':'',L&&c===L.col.ppl&&cf.info.has(r)?'info':''].join(' ');
       const st=[];if(x.al)st.push('text-align:'+{l:'left',c:'center',r:'right'}[x.al]);if(x.b)st.push('font-weight:700');if(x.sz)st.push('font-size:'+(x.sz*4/3)+'px');if(x.bg)st.push('background:'+x.bg);if(x.fg)st.push('color:'+x.fg);if(x.nw)st.push('white-space:nowrap;overflow:visible');
-      h+=`<td class="${cls}" data-r="${r}" data-c="${c}"${m?` rowspan="${m[2]-m[0]+1}" colspan="${m[3]-m[1]+1}"`:''} style="${st.join(';')}">${r===0&&c===0?logoHtml():''}${L&&c===L.col.task&&r>=L.first&&r<=L.end?boldPlays(esc(x.t||'')):esc(x.t||'')}</td>`;}
+      h+=`<td class="${cls}" data-r="${r}" data-c="${c}"${m?` rowspan="${m[2]-m[0]+1}" colspan="${m[3]-m[1]+1}"`:''} style="${st.join(';')}">${L&&c===L.col.task&&r>=L.first&&r<=L.end?boldPlays(esc(x.t||'')):esc(x.t||'')}</td>`;}
     h+='</tr>';}
-  h+='</tbody></table>'+signHtml();
-  $('#doc').innerHTML=h;$('#doc').classList.toggle('logo-edit',logoEdit);fitCols();paintSel();centerTitle();clearLogo();requestAnimationFrame(()=>{fitCols();centerTitle();});
+  h+='</tbody></table>'+docFootHtml()+signHtml();
+  $('#doc').innerHTML=docHeadHtml()+h;$('#doc').classList.toggle('logo-edit',logoEdit);fitCols();paintSel();centerTitle();clearLogo();requestAnimationFrame(()=>{fitCols();centerTitle();});
 }
 var COLSCALE=1;
 function fitCols(){try{const t=doc.querySelector('table.xl'),sh=document.querySelector('.sheet');if(!t||!sh)return;const g=G(),cs=getComputedStyle(sh);
@@ -1393,7 +1430,8 @@ $('#signB').onclick=()=>signDlg();
 /* ---------- alt açıklamalar: birime özgü şablon ---------- */
 function footerRowsOf(g,L){const out=[];for(let r=L.end+1;r<g.rows;r++){const m=mergeAt(g,r,0);if(m&&m[0]===r&&m[3]>m[1]&&ctext(g,r,0).trim())out.push(r);}return out;}
 function footerOfGrid(g){const L=layout(g);return L?footerRowsOf(g,L).map(r=>ctext(g,r,0).trim()):[];}
-function applyFooter(g,texts){
+function applyFooter(g,texts){return false;}
+function applyFooterOld(g,texts){
   texts=(texts||[]).map(t=>String(t).trim()).filter(Boolean);const L=layout(g);if(!L)return false;
   let rows=footerRowsOf(g,L);
   if(!rows.length){if(!texts.length)return false;const at=L.end+2;insRows(g,at,texts.length);rows=texts.map((_,i)=>at+i);rows.forEach(r=>g.merges.push([r,0,r,3]));}
@@ -1412,7 +1450,8 @@ function footDlg(){
    ()=>{const arr=$('#ftT').value.split('\n').map(x=>x.trim()).filter(Boolean),ap=$('#ftA').checked;snap();S.footer=arr;
      if(ap&&S.cur&&W()&&W().g)applyFooter(G(),arr);save();refresh();toast('Alt açıklama şablonu kaydedildi');},
    [['Bu haftadan şablon al',()=>{const t=footerOfGrid(G());if(!t.length)return toast('Bu haftada alt açıklama bulunamadı');snap();S.footer=t;save();toast('Şablon bu haftadaki açıklamalardan alındı');}]]);}
-$('#footB').onclick=()=>footDlg();
+$('#footB').onclick=()=>hdrDlg();
+$('#hdrB').onclick=()=>hdrDlg();
 
 /* ---------- birim sorumlusu: her birimin kendi sorumlusu (S.manager) ---------- */
 const mgrSignText=m=>m&&m.name?normSign(m.name+'\n'+(m.title||'Birim Sorumlusu')):'';
@@ -1480,7 +1519,7 @@ function signDlg(){
     const nw=normSign($('#sgN').value);
     if(nw){if(!signCatalog().some(t=>nk(t)===nk(nw)))S.signCat=[...(S.signCat||[]),nw];if($('#sgNP').value==='L')l=nw;else r=nw;}
     S.signs=[l,r].filter(Boolean);save();renderDoc();});}
-doc.addEventListener('dblclick',e=>{if(e.target.closest('.signbox'))signDlg();});
+doc.addEventListener('dblclick',e=>{if(e.target.closest('.signbox'))signDlg();else if(e.target.closest('[data-hdr]'))hdrDlg();});
 function applyFont(){const f=S.font||'Source Sans 3';document.documentElement.style.setProperty('--tf',"'"+f+"',Calibri,Arial,sans-serif");document.documentElement.style.setProperty('--tc',S.tc||'#1a1a1a');const tc=$('#xtc');if(tc)tc.value=S.tc||'#1a1a1a';const s=$('#xfont');if(s)s.value=f;}
 $('#xfont').onchange=e=>{S.font=e.target.value;save();applyFont();};
 $('#xtc').onchange=e=>{S.tc=e.target.value;save();applyFont();};
@@ -1546,11 +1585,11 @@ $('#notice').addEventListener('click',e=>{const k=e.target.closest('[data-nk]'),
 
 /* ---------- haftalar ---------- */
 $('#weekSel').onchange=e=>{USER_NAV=true;commitEdit();S.cur=e.target.value;sel=null;save();render();};
-function goto(k){USER_NAV=true;commitEdit();if(!S.weeks[k]){snap();S.weeks[k]=blankWeek(k);}S.cur=k;sel=null;save();render();}
+function goto(k){USER_NAV=true;commitEdit();if(!S.weeks[k]){snap();S.weeks[k]=blankWeek(k);markBorn(k);}S.cur=k;sel=null;save();render();}
 $('#prevW').onclick=()=>goto(iso(addDays(fromIso(S.cur),-7)));
 $('#nextW').onclick=()=>goto(iso(addDays(fromIso(S.cur),7)));
 $('#newW').onclick=()=>{const last=Object.keys(S.weeks).sort().pop();const def=iso(addDays(fromIso(last),7));
-  ask('Yeni hafta',`<p>Haftanın herhangi bir gününü seçin (Pazartesi’ye yuvarlanır):<br><input type="date" id="nW" value="${def}"></p><label><input type="checkbox" id="nA" checked> Aylık programdaki oyunları satır olarak öner (dekor kur/sök taslağı)</label>`,()=>{if(!validIso($('#nW').value))return toast('Geçerli bir tarih seçin'),false;const k=iso(monday(fromIso($('#nW').value)));if(S.weeks[k]){goto(k);return toast('Bu hafta zaten var');}snap();S.weeks[k]=blankWeek(k);S.cur=k;sel=null;if($('#nA').checked)draftFromMonthly();save();render();});};
+  ask('Yeni hafta',`<p>Haftanın herhangi bir gününü seçin (Pazartesi’ye yuvarlanır):<br><input type="date" id="nW" value="${def}"></p><label><input type="checkbox" id="nA"> Aylık programdaki oyunları satır olarak öner (dekor kur/sök taslağı)</label>`,()=>{if(!validIso($('#nW').value))return toast('Geçerli bir tarih seçin'),false;const k=iso(monday(fromIso($('#nW').value)));if(S.weeks[k]){goto(k);return toast('Bu hafta zaten var');}snap();S.weeks[k]=blankWeek(k);markBorn(k);S.cur=k;sel=null;if($('#nA').checked)draftFromMonthly();save();render();});};
 function draftFromMonthly(onlyMissing){const g=G(),L=layout(g);if(!L)return toast('Tabloda “TARİH/GÜN” başlığı bulunamadı');MIDX=monthlyIndex();const mon=fromIso(S.cur),have=onlyMissing?items():[];let n=0;const C=L.col;
   GUN.forEach((gn,d)=>{(MIDX[iso(addDays(mon,d))]||[]).filter(it=>unitCrew(it.text).length&&!(onlyMissing&&covered(d,it,have))).forEach(it=>{
     const pl=playName(it.text),cr=unitCrew(it.text).map(c=>S.staff.find(s=>sameStaff(s,c.person))).filter(s=>s&&!unavailable(s,dayIso(d))).map(s=>pName(s)).filter((v,i,a)=>a.indexOf(v)===i);
@@ -1566,6 +1605,8 @@ $('#copyW').onclick=()=>{const pk=iso(addDays(fromIso(S.cur),-7)),p=S.weeks[pk];
     sel=null;save();render();});};
 $('#delW').onclick=()=>{if(Object.keys(S.weeks).length<2)return toast('Son hafta silinemez');ask('Haftayı sil',`<p><b>${weekLabel(S.cur)}</b> haftası silinsin mi? (Geri al ile dönebilirsiniz)</p>`,()=>{snap();delete S.weeks[S.cur];S.cur=Object.keys(S.weeks).sort().pop();sel=null;save();render();});};
 $('#undoB').onclick=undo;
+function markBorn(k){try{SY.born=SY.born||{};SY.born[k]=Date.now();saveSY();}catch(e){}}
+$('#draftB').onclick=()=>ask('Aylık programdan taslak ekle','<p><b>'+weekLabel(S.cur)+'</b> haftası için aylık programdaki oyunlar, tabloda henüz olmayanlar taslak satır olarak eklenecek. Mevcut satırlara dokunulmaz.</p>',()=>{commitEdit();snap();draftFromMonthly(true);save();refresh();});
 
 /* ---------- dialog ---------- */
 function ask(title,body,ok,extra=[]){const d=$('#dlg');$('#dlgT').textContent=title;$('#dlgB').innerHTML=body;const f=$('#dlgF');f.innerHTML='';
@@ -1761,8 +1802,9 @@ function weeklyDoc(){
     days.push({label:dateLabel(addDays(fromIso(S.cur),d),d),weekend:d>4,rows});
   }
   const notes=[];if(L)for(let r=L.end+1;r<g.rows;r++){const t=ctext(g,r,0).trim();if(t)notes.push(t);}
-  return {title,sayi:find(/^SAYI\s*:/),konu:find(/^KONU\s*:/),kurum:(H.kurum||'').replace('TURİZİM','TURİZM'),tarih:find(/^TARİH\s*:/),week:weekLabel(S.cur),
-    days,notes:notes.length?notes:(S.footer||[]),signs:S.signs||[]};
+  const HD=docHead(S.cur);
+  return {title:HD.title,sayi:HD.sayi,konu:HD.konu,kurum:HD.kurum,tarih:HD.tarih,week:HD.week,
+    days,notes:HD.notes,signs:(S.signs||[]).filter(x=>String(x).trim())};
 }
 
 /* ---------- yazdırma ---------- */
