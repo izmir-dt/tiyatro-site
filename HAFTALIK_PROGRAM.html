@@ -337,7 +337,7 @@ table.xl td.c[data-r="0"]{text-align:center!important;font-weight:700;background
 </style>
 
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" media="(max-width:760px)">
-<script defer src="/__l5e/events.124894084da8c432.js" data-artifact-kind="live_preview" data-artifact-id="8ffeea01af9d69468ca2a946ca5ebde4a89ed081" data-commit-sha="8ffeea01af9d69468ca2a946ca5ebde4a89ed081" data-context-token="v1.eyJwcm9qZWN0X2lkIjoibG92cF8ycGg1amRuMGV3OHQyczVheHF6MmEzNTZiZSIsImFydGlmYWN0X2tpbmQiOiJsaXZlX3ByZXZpZXciLCJhcnRpZmFjdF9pZCI6IjhmZmVlYTAxYWY5ZDY5NDY4Y2EyYTk0NmNhNWViZGU0YTg5ZWQwODEiLCJjb21taXRfc2hhIjoiOGZmZWVhMDFhZjlkNjk0NjhjYTJhOTQ2Y2E1ZWJkZTRhODllZDA4MSIsImV4cCI6MTc5MjE2NzUwOX0.nmABkY_UyqwxhR8loVvSz7yo-JmSuK4T5GGmE4zO2Po"></script></head>
+</head>
 <body>
 <header class="app">
   <div class="brand-lockup">
@@ -354,6 +354,7 @@ table.xl td.c[data-r="0"]{text-align:center!important;font-weight:700;background
     <button type="button" id="noteB" title="Aylık programdan gelen bildirimler">🔔 Bildirimler <span class="n" id="noteN" style="display:none">0</span></button>
     <button type="button" data-menu="month">📅 Aylık program</button>
     <button type="button" data-menu="leave">📋 İzin / rapor</button>
+    <button type="button" id="monthRepB" title="Aylık görev raporu PDF">📊 Aylık rapor</button>
     <button type="button" data-menu="sheets">☁ Sheets</button>
     <button type="button" id="switchUnit" title="Başka bir birime geç">⇄ Birim değiştir</button>
   </nav>
@@ -1017,8 +1018,8 @@ function applyLogo(){const q=logoGeo(),im=$('#doc').querySelector('img.logo'),h=
 function boldPlays(h){return String(h).replace(/“[^”\n]*”/g,m=>'<b>'+m+'</b>');}
 function bumpText(g){let ch=false;for(const k in g.cells){const x=g.cells[k],r=+k.split(',')[0];if(x.sz===8){x.sz=11;ch=true;}else if(r<4&&x.sz===10){x.sz=12;ch=true;}}return ch;}
 /* ---------- standart üst / alt bilgi şablonu ---------- */
-const DATE_MODES={prevFri:['Haftadan önceki Cuma',-3],mon:['Haftanın Pazartesi günü',0],fri:['Haftanın Cuma günü',4]};
-function docDateIso(k){const w=S.weeks[k];if(w&&w.tarih&&validIso(w.tarih))return w.tarih;const H=S.header||{},m=DATE_MODES[H.dateMode]||DATE_MODES.prevFri;return iso(addDays(fromIso(k),m[1]));}
+const DATE_MODES={fri:['Haftanın Cuma günü',4]};
+function docDateIso(k){const w=S.weeks[k];if(w&&w.tarih&&validIso(w.tarih))return w.tarih;const H=S.header||{},m=DATE_MODES.fri;return iso(addDays(fromIso(k),m[1]));}
 function docHead(k){const H=S.header||{};const dd=dmy(fromIso(docDateIso(k))).replace(/\./g,'/');
   return {sayi:'SAYI : '+String(H.sayi||'').trim(),konu:'KONU : '+String(H.konu||'').trim(),kurum:String(H.kurum||'').replace('TURİZİM','TURİZM').split('\n').map(x=>x.trim()).filter(Boolean).join('\n'),
     tarih:'TARİH : '+dd,title:String(H.title||'HAFTALIK ÇALIŞMA PROGRAMI').trim(),week:weekLabel(k),notes:(S.footer||[]).map(t=>String(t).trim()).filter(Boolean)};}
@@ -1027,15 +1028,15 @@ function docHeadHtml(){const D=docHead(S.cur);
     '<div class="dh-c">'+D.kurum.split('\n').map(t=>'<div>'+esc(t)+'</div>').join('')+'</div><div class="dh-r">'+esc(D.tarih)+'</div></div>'+
     '<div class="dh-title" data-hdr>'+esc(D.title)+'</div><div class="dh-week" data-hdr>'+esc(D.week)+'</div>';}
 function docFootHtml(){const n=docHead(S.cur).notes;return n.length?'<ul class="df-notes" data-hdr title="Alt bilgileri düzenlemek için çift tıklayın">'+n.map(t=>'<li>'+esc(t)+'</li>').join('')+'</ul>':'';}
-function hdrDlg(){const H=S.header||{},w=W(),mode=H.dateMode||'prevFri';
-  ask('Üst ve alt bilgi şablonu — '+(S.unit||UNIT.name),
+function hdrDlg(){const H=S.header||{},w=W(),mode='fri';
+  wideDlg();ask('Üst ve alt bilgi şablonu — '+(S.unit||UNIT.name),
   `<p class="hint" style="display:block;margin:0 0 8px">Bu bilgiler tüm haftalarda aynı ve standarttır; ekranda, Yazdır/PDF, Excel ve JPG çıktılarında aynen kullanılır.</p>
    <div class="hd-grid">
    <label>Sayı<input type="text" id="hdS" value="${esc(H.sayi||'')}"></label>
    <label>Konu<input type="text" id="hdK" value="${esc(H.konu||'')}"></label>
    <label class="full">Kurum (ortada, her satır ayrı)<textarea id="hdU" rows="4">${esc(H.kurum||'')}</textarea></label>
    <label class="full">Belge başlığı (ortalı)<input type="text" id="hdT" value="${esc(H.title||'')}"></label>
-   <label>Tarih kuralı<select id="hdM">${Object.entries(DATE_MODES).map(([k,v])=>'<option value="'+k+'"'+(k===mode?' selected':'')+'>'+v[0]+'</option>').join('')}</select></label>
+   <label>Tarih kuralı <span class="hint">(her hafta otomatik)</span><select id="hdM">${Object.entries(DATE_MODES).map(([k,v])=>'<option value="'+k+'"'+(k===mode?' selected':'')+'>'+v[0]+'</option>').join('')}</select></label>
    <label>Bu hafta için özel tarih <span class="hint">(boş = kurala göre)</span><input type="date" id="hdD" value="${esc((w&&w.tarih)||'')}"></label>
    <label class="full">Alt bilgiler (tablonun altında, her satır ayrı madde)<textarea id="hdF" rows="5">${esc((S.footer||[]).join('\n'))}</textarea></label>
    </div>`,()=>{snap();
@@ -2551,7 +2552,74 @@ mrender();mq.addEventListener('change',mrender);
 #drawerArrow.up{border-left:1px solid #cfc3a3;border-top:1px solid #cfc3a3}
 #drawerArrow.down{border-right:1px solid #cfc3a3;border-bottom:1px solid #cfc3a3}
 @media(max-width:600px){#drawerArrow{display:none}}
+.hd-grid{width:100%!important}
+dialog#dlg.wide{width:min(900px,calc(100vw - 32px))!important;max-width:calc(100vw - 32px)!important;padding:24px 28px!important}
+dialog#dlg.wide #dlgB{width:100%}
+dialog#dlg.wide .hd-grid textarea{min-height:96px;resize:vertical}
+@media (max-width:640px){dialog#dlg.wide .hd-grid{grid-template-columns:1fr}}
 </style>
 <div id="drawerArrow" hidden></div>
+
+<script>
+function wideDlg(){const d=document.getElementById('dlg');d.classList.add('wide');d.addEventListener('close',()=>d.classList.remove('wide'),{once:true});}
+/* ---------- aylık görev raporu ---------- */
+function monthReportDlg(){const cm=(S.cur||iso(new Date())).slice(0,7);
+  wideDlg();ask('Aylık görev raporu — '+(S.unit||UNIT.name),
+  '<div class="hd-grid"><label>Rapor ayı<input type="month" id="mrM" value="'+cm+'"></label>'+
+  '<label>Düzenleme tarihi<input type="date" id="mrD" value="'+iso(new Date())+'"></label>'+
+  '<label class="full" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="mrX" checked style="width:auto"> Kişi bazında ayrıntılı görev dökümü ekle</label>'+
+  '<label>Hazırlayan (ad soyad / unvan)<textarea id="mrP" rows="2">'+esc(localStorage.getItem('mrP')||'')+'</textarea></label>'+
+  '<label>Onaylayan (ad soyad / unvan)<textarea id="mrO" rows="2">'+esc(localStorage.getItem('mrO')||'')+'</textarea></label></div>'+
+  '<p class="hint" style="display:block;margin:10px 0 0">Kayıtlı tüm haftalar taranır; seçilen aya düşen günlerdeki görevler kişi bazında sayılır. Açılan pencerede “PDF olarak kaydet” seçin.</p>',
+  ()=>{const m=document.getElementById('mrM').value;if(!/^\d{4}-\d{2}$/.test(m)){toast('Ay seçin');return false;}
+    localStorage.setItem('mrP',document.getElementById('mrP').value);localStorage.setItem('mrO',document.getElementById('mrO').value);
+    printMonthReport(m,document.getElementById('mrX').checked,document.getElementById('mrD').value,document.getElementById('mrP').value,document.getElementById('mrO').value);});}
+function monthStats(m){const keep=S.cur,per=new Map(),staffKey=p=>{const st=S.staff.find(x=>nk(x.s)===nk(p)||nk(x.full)===nk(p));return st?{k:nk(st.s),name:st.full||st.s,short:st.s,st}:{k:nk(p),name:p,short:p,st:null};};
+  let total=0;const days=new Set();
+  try{for(const k of Object.keys(S.weeks).sort()){const a=fromIso(k);if(iso(addDays(a,6)).slice(0,7)<m||k.slice(0,7)>m)continue;
+    S.cur=k;let its=[];try{its=items();}catch(e){continue;}
+    its.forEach(it=>{if(it.day==null||it.day<0)return;const d=iso(addDays(a,it.day));if(d.slice(0,7)!==m)return;
+      const ppl=[...new Set(splitPeople(it.people).filter(p=>/[A-Za-zÇĞİÖŞÜçğıöşü]{2}/.test(p)))];if(!ppl.length&&!it.task.trim())return;
+      if(it.task.trim()){total++;days.add(d);}
+      ppl.forEach(p=>{const s=staffKey(p);let o=per.get(s.k);if(!o){o={name:s.name,short:s.short,st:s.st,n:0,days:new Set(),we:0,list:[]};per.set(s.k,o);}
+        const wd=(new Date(d+'T00:00:00').getDay()+6)%7;o.n++;o.days.add(d);if(wd>=5)o.we++;o.list.push({d,time:it.time,place:it.place,task:it.task});});});}}
+  finally{S.cur=keep;}
+  S.staff.forEach(st=>{const k=nk(st.s);if(!per.has(k)&&!st.off)per.set(k,{name:st.full||st.s,short:st.s,st,n:0,days:new Set(),we:0,list:[]});});
+  const last=new Date(+m.slice(0,4),+m.slice(5),0).getDate();
+  per.forEach(o=>{let lv=0,rp=0;if(o.st)(o.st.absences||[]).forEach(a=>{for(let i=1;i<=last;i++){const d=m+'-'+String(i).padStart(2,'0');if(d>=a.start&&d<=a.end){if(a.type==='rapor')rp++;else lv++;}}});o.lv=lv;o.rp=rp;o.list.sort((x,y)=>(x.d+x.time).localeCompare(y.d+y.time));});
+  const rows=[...per.values()].sort((a,b)=>b.n-a.n||a.name.localeCompare(b.name,'tr'));
+  return {rows,total,days:days.size};}
+function printMonthReport(m,detail,ddate,prep,appr){const R=monthStats(m),H=S.header||{},y=+m.slice(0,4),mo=+m.slice(5)-1;
+  const AYU=['OCAK','ŞUBAT','MART','NİSAN','MAYIS','HAZİRAN','TEMMUZ','AĞUSTOS','EYLÜL','EKİM','KASIM','ARALIK'];
+  const kurum=String(H.kurum||'T.C.\nKÜLTÜR ve TURİZM BAKANLIĞI\nDEVLET TİYATROLARI GENEL MÜDÜRLÜĞÜ').replace('TURİZİM','TURİZM').split('\n').map(x=>x.trim()).filter(Boolean);
+  const dd=ddate?ddate.split('-').reverse().join('/'):'';const fd=d=>d.split('-').reverse().join('.');
+  const GUN=['Pzt','Sal','Çar','Per','Cum','Cmt','Paz'];const gun=d=>GUN[(new Date(d+'T00:00:00').getDay()+6)%7];
+  const tot=R.rows.reduce((a,o)=>a+o.n,0),mx=Math.max(1,...R.rows.map(o=>o.n));
+  const sign=(t,v)=>'<div class="sg"><b>'+t+'</b><div class="sl"></div><div>'+esc(v||'').replace(/\n/g,'<br>')+'</div></div>';
+  const head='<div class="hd"><div class="hl"><img src="'+LOGO+'"><div>SAYI : '+esc(H.sayi||'')+'<br>KONU : Aylık Görev Raporu</div></div><div class="hc">'+kurum.map(esc).join('<br>')+'</div><div class="hr">TARİH : '+esc(dd)+'</div></div>';
+  let h='<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>Aylık Görev Raporu - '+AYU[mo]+' '+y+'</title><style>'+
+  '@page{size:A4 portrait;margin:14mm 13mm 16mm}*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}body{font-family:"Times New Roman",Times,serif;color:#111;font-size:10.5pt;margin:0}'+
+  '.hd{display:grid;grid-template-columns:62mm 1fr 32mm;align-items:center;gap:3mm;font-size:10pt}.hl{display:flex;gap:3mm;align-items:center;line-height:1.5}.hl img{width:14mm}.hc{text-align:center;font-weight:700;line-height:1.35;font-size:9.5pt}.hl div{white-space:nowrap;font-size:9.5pt}.hr{text-align:right}'+
+  'h1{text-align:center;font-size:13pt;margin:6mm 0 1mm;letter-spacing:.3px}h2{text-align:center;font-size:11pt;margin:0 0 4mm;font-weight:700}h3{font-size:11pt;margin:6mm 0 2mm;border-bottom:.4mm solid #111;padding-bottom:1mm}'+
+  '.sum{display:flex;gap:3mm;margin:0 0 4mm}.sum div{flex:1;border:.3mm solid #111;padding:2mm;text-align:center}.sum b{display:block;font-size:14pt}'+
+  'table{width:100%;border-collapse:collapse}th,td{border:.25mm solid #111;padding:1.4mm 2mm;vertical-align:middle}th{background:#e6e6e6;font-size:9.5pt}td.n{text-align:center}tr{break-inside:avoid}tfoot td{font-weight:700;background:#f2f2f2}'+
+  '.bar{height:2.2mm;background:#555;display:inline-block;vertical-align:middle}.small td{font-size:9pt}.nm{font-weight:700;background:#f2f2f2}'+
+  '.signs{display:flex;justify-content:space-between;margin-top:14mm;break-inside:avoid}.sg{width:62mm;text-align:center;line-height:1.4}.sl{height:14mm}'+
+  '.pb{break-before:page}</style></head><body>'+head+
+  '<h1>'+esc((S.unit||UNIT.name||'').toLocaleUpperCase('tr'))+' BİRİMİ AYLIK GÖREV RAPORU</h1><h2>'+AYU[mo]+' '+y+'</h2>'+
+  '<div class="sum"><div><b>'+R.total+'</b>Toplam iş kalemi</div><div><b>'+R.days+'</b>Çalışılan gün</div><div><b>'+R.rows.filter(o=>o.n).length+'</b>Görev alan personel</div><div><b>'+tot+'</b>Toplam kişi-görev</div></div>'+
+  '<table><thead><tr><th style="width:9mm">S.No</th><th>Adı Soyadı</th><th style="width:20mm">Görev Sayısı</th><th style="width:20mm">Görevli Gün</th><th style="width:20mm">Hafta Sonu Görev</th><th style="width:15mm">İzinli Gün</th><th style="width:15mm">Raporlu Gün</th><th style="width:30mm">Dağılım</th></tr></thead><tbody>'+
+  R.rows.map((o,i)=>'<tr><td class="n">'+(i+1)+'</td><td>'+esc(o.name)+(o.st?'':' <i style="font-size:8pt">(listede yok)</i>')+'</td><td class="n"><b>'+o.n+'</b></td><td class="n">'+o.days.size+'</td><td class="n">'+o.we+'</td><td class="n">'+(o.lv||'-')+'</td><td class="n">'+(o.rp||'-')+'</td><td><span class="bar" style="width:'+Math.round(26*o.n/mx)+'mm"></span></td></tr>').join('')+
+  '</tbody><tfoot><tr><td></td><td>TOPLAM</td><td class="n">'+tot+'</td><td class="n">'+R.days+'</td><td class="n">'+R.rows.reduce((a,o)=>a+o.we,0)+'</td><td class="n">'+R.rows.reduce((a,o)=>a+o.lv,0)+'</td><td class="n">'+R.rows.reduce((a,o)=>a+o.rp,0)+'</td><td></td></tr></tfoot></table>'+
+  '<p style="font-size:9pt;margin:2mm 0 0">Görev sayısı: kişinin haftalık çalışma programlarında görevli olarak yazıldığı iş kalemi sayısıdır. Hafta sonu: Cumartesi ve Pazar günleri.</p>'+
+  '<div class="signs">'+sign('HAZIRLAYAN',prep)+sign('ONAYLAYAN',appr)+'</div>';
+  if(detail){h+='<div class="pb"></div>'+head+'<h1>KİŞİ BAZINDA GÖREV DÖKÜMÜ</h1><h2>'+AYU[mo]+' '+y+'</h2>';
+    R.rows.filter(o=>o.n).forEach(o=>{h+='<table class="small" style="margin-bottom:4mm"><thead><tr><td class="nm" colspan="4">'+esc(o.name)+' — '+o.n+' görev / '+o.days.size+' gün</td></tr><tr><th style="width:30mm">Tarih</th><th style="width:20mm">Saat</th><th style="width:18mm">Yer</th><th>Yapılan İş</th></tr></thead><tbody>'+
+      o.list.map(x=>'<tr><td class="n" style="white-space:nowrap">'+fd(x.d)+' '+gun(x.d)+'</td><td class="n">'+esc(x.time).replace(/\n/g,'<br>')+'</td><td class="n">'+esc(x.place)+'</td><td>'+esc(x.task)+'</td></tr>').join('')+'</tbody></table>';});}
+  h+='<script>window.onload=function(){setTimeout(function(){window.print();},300)}<\/script></body></html>';
+  const w=window.open('','_blank');if(w){w.document.open();w.document.write(h);w.document.close();return;}
+  const f=document.createElement('iframe');f.style.cssText='position:fixed;width:0;height:0;border:0';document.body.appendChild(f);f.contentDocument.open();f.contentDocument.write(h);f.contentDocument.close();setTimeout(()=>f.remove(),60000);}
+setTimeout(()=>{const b=document.getElementById('monthRepB');if(b&&!b._w){b._w=1;b.onclick=e=>{e.stopPropagation();monthReportDlg();};}},0);
+</script>
 </body>
 </html>
