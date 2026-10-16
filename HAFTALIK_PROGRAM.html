@@ -399,12 +399,9 @@ header.app nav .dd-trigger.on{background:#d39a3d;border-color:#d39a3d;color:#2b1
         <div class="cmd-right">
           <button class="btn approve" id="pubB" title="Bu haftanın programını onayla; ana sitedeki Haftalık Program bölümünde görünür">✔ Haftalığı Onayla</button>
           <button class="btn gold" id="newW">+ YENİ HAFTA</button>
-          <div class="dd"><button type="button" class="btn dd-trigger" aria-haspopup="true" aria-expanded="false">⋯ Hafta işlemleri <span class="caret">▾</span></button><div class="dd-panel" role="menu">
-            <button type="button" class="ddi" id="draftB" title="Aylık programdaki bu haftanın oyunlarını taslak satır olarak ekler (yalnızca siz isteyince)">📅 Aylık programdan taslak</button>
-            <button type="button" class="ddi" id="copyW" title="Önceki haftanın işlerini bu haftaya kopyala">Önceki haftayı kopyala</button>
-            <hr>
-            <button type="button" class="ddi danger" id="delW">Haftayı sil</button>
-          </div></div>
+          <button class="btn" id="draftB" title="Aylık programdaki bu haftanın oyunlarını taslak satır olarak ekler (yalnızca siz isteyince)">📅 Aylık programdan taslak</button>
+          <button class="btn" id="copyW" title="Seçtiğiniz haftanın işlerini bu haftaya kopyala">Haftayı kopyala</button>
+          <button class="btn danger" id="delW">Haftayı sil</button>
 </div>
       </div>
       <div class="menubar" id="xbar">
@@ -447,7 +444,7 @@ header.app nav .dd-trigger.on{background:#d39a3d;border-color:#d39a3d;color:#2b1
     <input type="file" id="fileM" accept=".html,.htm,.json" hidden>
     <div id="weekTitleRow">
       <div><h2 id="weekTitle"></h2><div class="wsub" id="weekSub"></div></div>
-      <div class="tbtns"><button class="titlebar-btn" id="printB">🖨 Yazdır / PDF</button><div class="dd"><button type="button" class="titlebar-btn dd-trigger" aria-haspopup="true" aria-expanded="false">⬇ Dışa aktar <span class="caret">▾</span></button><div class="dd-panel" role="menu"><button type="button" class="ddi" id="expX">Excel (.xlsx)</button><button type="button" class="ddi" id="expJ" title="Haftalık programı resim (JPG) olarak indir">Resim (.jpg)</button></div></div></div>
+      <div class="tbtns"><button class="titlebar-btn" id="printB">🖨 Yazdır / PDF</button><button class="titlebar-btn" id="expX">Excel indir</button><button class="titlebar-btn" id="expJ" title="Haftalık programı resim (JPG) olarak indir">JPG indir</button></div>
     </div>
     <div class="sheet"><div class="doc" id="doc"></div></div>
     <div class="hint" style="margin:8px 2px">Çift tıklayın veya yazmaya başlayın · Enter: alt hücre · Alt+Enter: hücre içi satır · Tab: sağ hücre · Sürükleyerek veya Shift ile çoklu seçim · Ctrl+C / Ctrl+V Excel ile uyumlu · Sütun başlığının kenarını sürükleyerek genişlik ayarlayın.</div>
@@ -1687,11 +1684,16 @@ function draftFromMonthly(onlyMissing){const g=G(),L=layout(g);if(!L)return toas
     if(C.time!=null)setV(r,C.time,{t:'09:00',b:1,al:'c'});if(C.place!=null)setV(r,C.place,{t:yer,b:1,al:'c'});
     if(C.task!=null)setV(r,C.task,{t:`“${pl}” oyununun dekoru kurulacak temsil sonrası sökülecektir.`});if(C.ppl!=null)setV(r,C.ppl,{t:cr.join(SEP)});n++;});});
   toast(n?n+' taslak satır eklendi — kontrol edin':'Kesinleşmiş aylık programda bu hafta için oyun bulunamadı');}
-$('#copyW').onclick=()=>{const pk=iso(addDays(fromIso(S.cur),-7)),p=S.weeks[pk];if(!p)return toast('Önceki hafta kaydı yok');
-  ask('Önceki haftayı kopyala',`<p>${weekLabel(pk)} haftasının tablosu bu haftanın yerine kopyalanacak (tarihler güncellenir).</p><label><input type="checkbox" id="cP" checked> Görevlileri de kopyala</label>`,()=>{snap();const keep=$('#cP').checked;
-    const g=JSON.parse(JSON.stringify(p.g));W().g=g;shiftDates(g,S.cur);try{fixSigns(g);}catch(e){}const L=layout(g);
+$('#copyW').onclick=()=>{commitEdit();
+  const keys=Object.keys(S.weeks).filter(k=>k!==S.cur&&S.weeks[k]&&S.weeks[k].g).sort();
+  if(!keys.length)return toast('Kopyalanacak başka hafta kaydı yok');
+  const prev=iso(addDays(fromIso(S.cur),-7)),def=keys.includes(prev)?prev:(keys.filter(k=>k<S.cur).pop()||keys[keys.length-1]);
+  ask('Haftayı kopyala',`<p><b>${weekLabel(S.cur)}</b> haftasına hangi haftanın tablosu kopyalansın? Bu haftanın şimdiki içeriği yerine geçer; tarihler otomatik güncellenir.</p><p>Kopyalanacak hafta:<br><select id="cW" style="width:100%">${keys.slice().reverse().map(k=>'<option value="'+k+'"'+(k===def?' selected':'')+'>'+weekLabel(k)+(k===prev?' (önceki hafta)':'')+'</option>').join('')}</select></p><label><input type="checkbox" id="cP" checked> Görevlileri de kopyala</label>`,()=>{
+    const src=S.weeks[$('#cW').value];if(!src||!src.g)return toast('Seçilen hafta bulunamadı'),false;
+    snap();const keep=$('#cP').checked;
+    const g=JSON.parse(JSON.stringify(src.g));W().g=g;shiftDates(g,S.cur);try{fixSigns(g);}catch(e){}const L=layout(g);
     if(!keep&&L&&L.col.ppl!=null)for(let r=L.first;r<=L.end;r++){const m=mergeAt(g,r,L.col.ppl);if(!m||m[0]===r)cset(g,r,L.col.ppl,{t:''});}
-    sel=null;save();render();});};
+    sel=null;save();render();toast('Hafta kopyalandı');});};
 $('#delW').onclick=()=>{if(Object.keys(S.weeks).length<2)return toast('Son hafta silinemez');ask('Haftayı sil',`<p><b>${weekLabel(S.cur)}</b> haftası silinsin mi? (Geri al ile dönebilirsiniz)</p>`,()=>{snap();delete S.weeks[S.cur];S.cur=Object.keys(S.weeks).sort().pop();sel=null;save();render();});};
 $('#undoB').onclick=undo;
 function markBorn(k){try{SY.born=SY.born||{};SY.born[k]=Date.now();saveSY();}catch(e){}}
