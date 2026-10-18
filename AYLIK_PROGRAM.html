@@ -1613,6 +1613,12 @@ table.sheet td.cell{min-width:86px;height:29px}
       <button type="button" class="titlebar-btn" id="previewTabBtn" title="Bu ayın programını, çakışma ve not özetiyle birlikte yeni sekmede önizle">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
         Program Önizleme</button>
+      <button type="button" class="titlebar-btn" id="monthReportBtn" title="Bu ayın gösterim, sahne, not ve çakışma raporu (PDF)">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 16v-4M12 16V8M17 16v-7"/></svg>
+        Aylık Rapor</button>
+      <button type="button" class="titlebar-btn" id="yearReportBtn" title="Bu yılın tüm aylarını kapsayan yıllık rapor (PDF)">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+        Yıllık Rapor</button>
       <button type="button" id="cbTip" aria-pressed="true" title="Hücre üzerine gelince çıkan bilgi balonunu aç/kapat (F9)">💬 Bilgi Balonu: Açık</button>
       <div style="position:relative;display:inline-flex">
         <button type="button" class="titlebar-btn" id="notesPopBtn" title="Sağ tık ile eklediğiniz hücre notlarını göster">
@@ -8031,7 +8037,7 @@ document.getElementById('printBtn').onclick = ()=>printProgram();
    "son kullanılan" kâğıt boyutu ve ay seçimiyle aynen çalışır — ayrı bir
    ayar tutmaz, sadece o menüyü açmadan doğrudan tetikler. */
 
-/* ===== Yeni sekmede program önizleme: tablo + çakışma ve not özeti ===== */
+/* ===== Yeni sekmede program önizleme + aylık / yıllık rapor (PDF) ===== */
 function _pvIcon(name){
   const p = {
     calendar:'<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
@@ -8042,38 +8048,84 @@ function _pvIcon(name){
     users:'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/>',
     theater:'<path d="M3 5h18v6a9 9 0 0 1-18 0Z"/><path d="M8 9h.01M16 9h.01M9 14a4 4 0 0 0 6 0"/>',
     clock:'<circle cx="12" cy="12" r="10"/><path d="M12 7v5l3 2"/>',
+    chart:'<path d="M3 3v18h18"/><path d="M7 16v-4M12 16V8M17 16v-7"/>',
     print:'<path d="M6 9V3h12v6"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="7" rx="1"/>'
   }[name] || '';
   return '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true">'+p+'</svg>';
 }
+/* Çakışmalar GÜN bazında tekilleştirilir (matine/akşam satırları aynı günü
+   tekrar saymasın). Notlar: yalnızca "Not ekle / düzenle" ile elle girilenler. */
 function monthPreviewData(m){
-  const critical=[], soft=[], notes=[];
+  const critical=[], soft=[], notes=[], seen=new Set();
   for(let r=2;r<m.rows;r++){
     const games = rowGames(m,r);
-    if(games.length>=2){
-      const cf = buildConflict(games);
-      const people = Object.entries(cf.people).map(([k,i])=>({key:k,name:i.name||k,critical:!!i.critical}));
-      if(people.length){
-        const ignored = games.every(g=>((m.cells[g.row+'_'+g.col]||{}).ignoreConflict));
-        const item = {
-          date: dateTextOfRow(m,r) || '-',
-          games: games.map(g=>({raw:g.raw, time:g.time||timeTextOfRow(m,r)||'', stage:stageHeaderText(m,g.col)||''})),
-          people, ignored
-        };
-        if(cf.hasCritical && people.some(p=>p.critical) && !ignored) critical.push(item); else soft.push(item);
-      }
-    }
+    if(games.length<2) continue;
+    const dkey = normNameKey(dateTextOfRow(m,r)) || ('r'+r);
+    if(seen.has(dkey)) continue;
+    const cf = buildConflict(games);
+    const people = Object.entries(cf.people).map(([k,i])=>({key:k,name:i.name||k,critical:!!i.critical}));
+    if(!people.length) continue;
+    seen.add(dkey);
+    const ignored = games.every(g=>((m.cells[g.row+'_'+g.col]||{}).ignoreConflict));
+    const item = {
+      date: dateTextOfRow(m,r) || '-',
+      games: games.map(g=>({raw:g.raw, time:g.time||timeTextOfRow(m,g.row)||'', stage:stageHeaderText(m,g.col)||''})),
+      people, ignored
+    };
+    if(cf.hasCritical && people.some(p=>p.critical) && !ignored) critical.push(item); else soft.push(item);
   }
   Object.keys(m.cells||{}).forEach(key=>{
     const cell=m.cells[key]||{};
-    const inline=parseGame(cell.v||'').inlineNote||'';
-    if(!cell.note && !cell.freeText && !inline) return;
+    if(!cell.note || !String(cell.note).trim()) return;
     const [r,c]=key.split('_').map(Number);
     if(r<2) return;
-    notes.push({date:dateTextOfRow(m,r)||'-', time:timeTextOfRow(m,r)||'', stage:stageHeaderText(m,c)||'',
-      text:cell.v||'', note:cell.note||inline, free:!!cell.freeText});
+    notes.push({r,c,date:dateTextOfRow(m,r)||'-', time:timeTextOfRow(m,r)||'', stage:stageHeaderText(m,c)||'',
+      text:cell.v||'', note:String(cell.note)});
   });
+  notes.sort((a,b)=>a.r-b.r||a.c-b.c);
   return {critical, soft, notes};
+}
+function _pvBaseCss(){
+  return ''+
+  ':root{--wine:#6b1220;--wine2:#8a1c2e;--gold:#b8892b;--ink:#1f1410;--mut:#7a6a58;--line:#e6dccb;--bg:#f7f3ec;--crit:#b3121f;--ok:#1f7a5c}'+
+  '*{box-sizing:border-box}'+
+  'body{margin:0;background:var(--bg);font-family:Manrope,system-ui,sans-serif;color:var(--ink);-webkit-print-color-adjust:exact;print-color-adjust:exact}'+
+  '.ic{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0;vertical-align:-3px}'+
+  '.pv-top{position:sticky;top:0;z-index:50;background:linear-gradient(90deg,var(--wine),var(--wine2));color:#fff;box-shadow:0 2px 10px rgba(0,0,0,.18)}'+
+  '.pv-bar{display:flex;align-items:center;gap:14px;padding:10px 22px;flex-wrap:wrap}'+
+  '.pv-bar h1{font-family:Fraunces,Georgia,serif;margin:0;font-size:20px;letter-spacing:.2px}'+
+  '.pv-bar .sub{font-size:11.5px;opacity:.8;letter-spacing:.4px;text-transform:uppercase}'+
+  '.kpis{display:flex;gap:8px;margin-left:auto;flex-wrap:wrap}'+
+  '.kpi{display:flex;align-items:center;gap:7px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);border-radius:8px;padding:5px 11px;font-size:12px}'+
+  '.kpi b{font-size:16px}.kpi.crit b{color:#ffb3b3}.kpi.soft b{color:#a8ecd2}.kpi.note b{color:#ffe1a1}'+
+  '.pbtn{display:inline-flex;align-items:center;gap:6px;background:var(--gold);border:none;color:#fff;padding:8px 14px;border-radius:7px;font:inherit;font-weight:700;font-size:13px;cursor:pointer}'+
+  '.pbtn:hover{filter:brightness(1.08)}'+
+  '.tabs{display:flex;gap:2px;padding:0 22px;background:rgba(0,0,0,.12)}'+
+  '.tabs button{background:none;border:none;color:rgba(255,255,255,.75);font:inherit;font-size:13px;font-weight:700;padding:9px 16px;cursor:pointer;border-bottom:3px solid transparent;display:inline-flex;align-items:center;gap:6px}'+
+  '.tabs button.on{color:#fff;border-bottom-color:var(--gold)}'+
+  '.tabs .cnt{background:rgba(255,255,255,.18);border-radius:999px;padding:0 7px;font-size:11px}'+
+  '.wrap{padding:16px 22px 40px;max-width:1500px;margin:0 auto}'+
+  '.sec{background:#fff;border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:16px}'+
+  '.sec h2{font-family:Fraunces,Georgia,serif;font-size:16px;margin:0 0 10px;color:var(--wine);display:flex;align-items:center;gap:8px}'+
+  '.sec h2 small{font-family:Manrope,sans-serif;font-size:12px;color:var(--mut);font-weight:600}'+
+  'table.t{width:100%;border-collapse:collapse;font-size:12.5px}'+
+  'table.t th{background:#f3ede0;color:#5a4630;text-align:left;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.4px;padding:6px 8px;border-bottom:2px solid var(--line)}'+
+  'table.t td{padding:5px 8px;border-bottom:1px solid #f0e9dc;vertical-align:top}'+
+  'table.t tr:nth-child(even) td{background:#fcfaf6}'+
+  'table.t td.n,table.t th.n{text-align:right;font-variant-numeric:tabular-nums}'+
+  'table.t tr.tot td{font-weight:800;background:#f3ede0;border-top:2px solid var(--line)}'+
+  '.nowrap{white-space:nowrap}.mut{color:var(--mut)}'+
+  '.tag{display:inline-block;font-size:10.5px;font-weight:700;border-radius:4px;padding:1px 6px;margin:1px 2px 1px 0}'+
+  '.tag.crit{background:#ffe3e3;color:#8c1010}.tag.ok{background:#e4f4ec;color:#14614a}.tag.n{background:#f3ede0;color:#6b5a3e}'+
+  'tr.rc td:first-child{box-shadow:inset 4px 0 0 var(--crit)}tr.rs td:first-child{box-shadow:inset 4px 0 0 var(--ok)}'+
+  '.empty{padding:10px 12px;border:1px dashed #d8ccb6;border-radius:8px;color:var(--mut);font-size:13px;display:flex;gap:8px;align-items:center}'+
+  '.foot{text-align:center;font-size:10.5px;color:var(--mut);margin-top:10px}'+
+  '@media print{@page{size:A4 landscape;margin:8mm}body{background:#fff}.pv-top{position:static;box-shadow:none}.tabs,.pbtn,.noprint{display:none!important}'+
+    '.pv-bar{padding:6px 10px}.wrap{padding:6px 0;max-width:none}.sec{border:none;padding:0;margin:0 0 10px;display:block!important}'+
+    '.pb{break-before:page}table.t tr{break-inside:avoid}table.t thead{display:table-header-group}.sec h2{break-after:avoid}}';
+}
+function _pvFonts(){
+  return '<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,700&family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet">';
 }
 function openMonthPreviewTab(){
   const m = curMonth();
@@ -8088,108 +8140,168 @@ function openMonthPreviewTab(){
     cl.querySelectorAll('.attnBadge').forEach(x=>x.remove());
     cl.querySelectorAll('.attn-mark,.alt-ok').forEach(x=>x.classList.remove('attn-mark','alt-ok'));
     return cl.outerHTML; })();
-  const card = (item, crit)=>{
-    const badge = crit
-      ? '<span class="pill crit">'+_pvIcon('alert')+' Kritik çakışma</span>'
-      : '<span class="pill soft">'+_pvIcon('info')+' Bilgi — kritik değil</span>';
-    const lead = crit
-      ? 'Bu oyunlarda aynı kişi(ler) aynı tarihte kritik rolde: çözülmeden yazdırma/kesinleştirme yapılamaz.'
-      : (item.ignored ? 'Bu çakışma kullanıcı tarafından bilinçli olarak yok sayıldı; program akışını engellemez.'
-                      : 'Bu oyunlarda ortak kişi var ama kritik rol çakışması yok — program yürüyebilir.');
-    return '<article class="card '+(crit?'c-crit':'c-soft')+'">'+
-      '<header>'+_pvIcon('calendar')+'<b>'+esc(item.date)+'</b>'+badge+'</header>'+
-      '<p class="lead">'+lead+'</p>'+
-      '<div class="rowlist">'+item.games.map(g=>'<div class="g">'+_pvIcon('theater')+'<span>'+esc(g.raw)+'</span>'+
-        (g.time?'<span class="meta">'+_pvIcon('clock')+esc(g.time)+'</span>':'')+
-        (g.stage?'<span class="meta">'+esc(g.stage)+'</span>':'')+'</div>').join('')+'</div>'+
-      '<div class="people">'+_pvIcon('users')+item.people.map(p=>'<span class="who '+(p.critical?'crit':'ok')+'">'+esc(p.name)+(p.critical?' · kritik rol':' · yan görev')+'</span>').join('')+'</div>'+
-    '</article>';
-  };
   const notesHtml = d.notes.length
-    ? d.notes.map(n=>'<article class="card c-note"><header>'+_pvIcon('note')+'<b>'+esc(n.date)+'</b>'+
-        (n.time?'<span class="pill neutral">'+_pvIcon('clock')+esc(n.time)+'</span>':'')+
-        (n.free?'<span class="pill neutral">Serbest metin</span>':'')+'</header>'+
-        (n.stage?'<p class="meta-line">'+esc(n.stage)+'</p>':'')+
-        (n.text?'<p class="lead"><b>'+esc(n.text)+'</b></p>':'')+
-        (n.note?'<p class="lead">'+esc(n.note)+'</p>':'')+'</article>').join('')
-    : '<div class="empty">'+_pvIcon('check')+' Bu ay için not girilmemiş.</div>';
+    ? '<table class="t"><thead><tr><th style="width:17%">Tarih</th><th style="width:6%">Saat</th><th style="width:17%">Sahne</th><th style="width:18%">Oyun / Hücre</th><th>Not</th></tr></thead><tbody>'+
+      d.notes.map(n=>'<tr><td class="nowrap"><b>'+esc(n.date)+'</b></td><td class="nowrap">'+esc(n.time)+'</td><td class="mut">'+esc(n.stage)+'</td><td><b>'+esc(n.text)+'</b></td><td>'+esc(n.note)+'</td></tr>').join('')+
+      '</tbody></table>'
+    : '<div class="empty">'+_pvIcon('check')+' Bu ay için "Not ekle / düzenle" ile girilmiş not yok.</div>';
+  const cRow = (i,crit)=>'<tr class="'+(crit?'rc':'rs')+'"><td class="nowrap"><b>'+esc(i.date)+'</b><br>'+
+      (crit?'<span class="tag crit">KRİTİK</span>':(i.ignored?'<span class="tag n">Yok sayıldı</span>':'<span class="tag ok">Kritik değil</span>'))+'</td>'+
+    '<td>'+i.games.map(g=>'<div><b>'+esc(g.raw)+'</b> <span class="mut">'+esc([g.time,g.stage].filter(Boolean).join(' · '))+'</span></div>').join('')+'</td>'+
+    '<td>'+i.people.map(p=>'<span class="tag '+(p.critical?'crit':'n')+'">'+esc(p.name)+(p.critical?' · kritik':'')+'</span>').join(' ')+'</td></tr>';
+  const confHtml = (d.critical.length || d.soft.length)
+    ? '<table class="t"><thead><tr><th style="width:17%">Tarih / Durum</th><th style="width:38%">Oyunlar</th><th>Ortak kişiler</th></tr></thead><tbody>'+
+      d.critical.map(i=>cRow(i,true)).join('')+d.soft.map(i=>cRow(i,false)).join('')+'</tbody></table>'
+    : '<div class="empty">'+_pvIcon('check')+' Bu ayda çakışma bulunmuyor — program temiz.</div>';
+  const stamp = new Date().toLocaleString('tr-TR');
   const html = '<!doctype html><html lang="tr"><head><meta charset="utf-8">'+
     '<title>'+esc(m.name)+' — Program Önizleme</title>'+
-    '<meta name="viewport" content="width=device-width,initial-scale=1">'+
-    '<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,700&family=Manrope:wght@400;600;700&display=swap" rel="stylesheet">'+
-    '<style>'+styles+'</style>'+
-    '<style>'+
-      'body{background:#faf7f2;font-family:Manrope,system-ui,sans-serif;color:#1a0f0a}'+
-      '.pv-head{background:#6b1220;color:#fff;padding:16px 22px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}'+
-      '.pv-head h1{font-family:Fraunces,Georgia,serif;margin:0;font-size:22px}'+
-      '.pv-head .sub{opacity:.85;font-size:13px}'+
-      '.pv-head button{margin-left:auto;display:inline-flex;align-items:center;gap:6px;background:#b8892b;border:none;color:#fff;padding:8px 14px;border-radius:6px;font:inherit;font-weight:700;cursor:pointer}'+
-      '.wrap{padding:18px 22px 60px;max-width:1400px;margin:0 auto}'+
-      '.stats{display:flex;gap:12px;flex-wrap:wrap;margin:0 0 18px}'+
-      '.stat{flex:1 1 180px;background:#fff;border:1px solid #e2d7bf;border-left:5px solid #b8892b;border-radius:10px;padding:12px 14px;display:flex;align-items:center;gap:10px}'+
-      '.stat.crit{border-left-color:#c1121f}.stat.soft{border-left-color:#1f7a5c}.stat.note{border-left-color:#8a6d1f}'+
-      '.stat b{font-size:22px;display:block;line-height:1.1}.stat span{font-size:12.5px;color:#7a6a58}'+
-      'h2.sec{font-family:Fraunces,Georgia,serif;font-size:18px;margin:26px 0 10px;display:flex;align-items:center;gap:8px}'+
-      '.card{background:#fff;border:1px solid #e2d7bf;border-radius:10px;padding:12px 14px;margin-bottom:10px}'+
-      '.card.c-crit{border-left:5px solid #c1121f}.card.c-soft{border-left:5px solid #1f7a5c}.card.c-note{border-left:5px solid #8a6d1f}'+
-      '.card>header{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:14px;background:transparent;color:#1a0f0a;padding:0;margin:0}'+
-      '.pill{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;border-radius:999px;padding:3px 10px}'+
-      '.pill.crit{background:#ffe6e6;color:#8c1010}.pill.soft{background:#e6f6ef;color:#14614a}.pill.neutral{background:#f3ede0;color:#6b5a3e}'+
-      '.lead{margin:8px 0 6px;font-size:13.5px;color:#4a3a2c;line-height:1.5}'+
-      '.meta-line{margin:2px 0;font-size:12.5px;color:#7a6a58}'+
-      '.rowlist .g{display:flex;align-items:center;gap:8px;font-size:13.5px;padding:3px 0;flex-wrap:wrap}'+
-      '.rowlist .meta{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:#7a6a58}'+
-      '.people{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:8px}'+
-      '.who{font-size:12.5px;border-radius:6px;padding:3px 8px;background:#f4efe4}'+
-      '.who.crit{background:#ffe1e1;color:#8c1010;font-weight:700}.who.ok{background:#e9f5ef;color:#215c48}'+
-      '.empty{display:flex;align-items:center;gap:8px;background:#fff;border:1px dashed #cdbf9d;border-radius:10px;padding:14px;color:#5c4f3d;font-size:13.5px}'+
-      '.ic{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;flex:none}'+
-      '.sheetbox{background:#fff;border:1px solid #e2d7bf;border-radius:10px;padding:10px;overflow:hidden}'+
-      '#sheetFit{transform-origin:top left}'+
-      '.sheetbox td.cell{cursor:default}'+
-      '@media print{.pv-head button{display:none}}'+
-    '</style></head><body>'+
-    '<div class="pv-head"><div>'+_pvIcon('calendar')+'</div><div><h1>'+esc(m.name)+' — Program Önizleme</h1>'+
-      '<div class="sub">İzmir Devlet Tiyatrosu Müdürlüğü · yalnızca görüntüleme</div></div>'+
-      '<button type="button" onclick="window.print()">'+_pvIcon('print')+' Yazdır / PDF</button></div>'+
+    '<meta name="viewport" content="width=device-width,initial-scale=1">'+_pvFonts()+
+    '<style>'+styles+'</style><style>'+_pvBaseCss()+
+      '.sheetbox{overflow:hidden;position:relative}#sheetFit{transform-origin:top left;display:inline-block}'+
+      'body.only-program #s-notes,body.only-program #s-conf,body.only-notes #s-program,body.only-notes #s-conf,body.only-conf #s-program,body.only-conf #s-notes{display:none}'+
+      '@media print{#s-program{break-after:page}}'+
+    '</style></head><body class="only-all">'+
+    '<div class="pv-top"><div class="pv-bar"><div><div class="sub">İzmir Devlet Tiyatrosu Müdürlüğü</div><h1>'+esc(m.name)+' · Aylık Program</h1></div>'+
+      '<div class="kpis">'+
+        '<div class="kpi crit">'+_pvIcon('alert')+'<b>'+d.critical.length+'</b> Kritik çakışma</div>'+
+        '<div class="kpi soft">'+_pvIcon('info')+'<b>'+d.soft.length+'</b> Diğer çakışma</div>'+
+        '<div class="kpi note">'+_pvIcon('note')+'<b>'+d.notes.length+'</b> Not</div>'+
+      '</div>'+
+      '<button type="button" class="pbtn" onclick="window.print()">'+_pvIcon('print')+' Yazdır / PDF</button></div>'+
+      '<div class="tabs">'+
+        '<button data-v="all" class="on">Tümü</button>'+
+        '<button data-v="program">'+_pvIcon('calendar')+' Aylık Program</button>'+
+        '<button data-v="notes">'+_pvIcon('note')+' Notlar <span class="cnt">'+d.notes.length+'</span></button>'+
+        '<button data-v="conf">'+_pvIcon('alert')+' Çakışmalar <span class="cnt">'+(d.critical.length+d.soft.length)+'</span></button>'+
+      '</div></div>'+
     '<div class="wrap">'+
-      '<div class="stats">'+
-        '<div class="stat crit">'+_pvIcon('alert')+'<div><b>'+d.critical.length+'</b><span>Kritik çakışma</span></div></div>'+
-        '<div class="stat soft">'+_pvIcon('info')+'<div><b>'+d.soft.length+'</b><span>Kritik olmayan çakışma</span></div></div>'+
-        '<div class="stat note">'+_pvIcon('note')+'<div><b>'+d.notes.length+'</b><span>Not / serbest metin</span></div></div>'+
-      '</div>'+
-      '<div id="notesSec">'+
-        '<h2 class="sec" style="margin-top:0">'+_pvIcon('note')+' Notlar</h2>'+notesHtml+
-      '</div>'+
-      '<h2 class="sec">'+_pvIcon('calendar')+' Aylık Program Tablosu</h2>'+
-      '<div class="sheetbox"><div id="sheetFit">'+sheet+'</div></div>'+
-      '<h2 class="sec">'+_pvIcon('alert')+' Çakışmalar</h2>'+
-      (d.critical.length || d.soft.length
-        ? d.critical.map(i=>card(i,true)).join('')+d.soft.map(i=>card(i,false)).join('')
-        : '<div class="empty">'+_pvIcon('check')+' Bu ayda çakışma bulunmuyor — program temiz.</div>')+
+      '<div class="sec" id="s-program"><h2>'+_pvIcon('calendar')+' Aylık Program Tablosu</h2><div class="sheetbox"><div id="sheetFit">'+sheet+'</div></div></div>'+
+      '<div class="sec" id="s-notes"><h2>'+_pvIcon('note')+' Notlar <small>"Not ekle / düzenle" ile girilenler · '+d.notes.length+' adet</small></h2>'+notesHtml+'</div>'+
+      '<div class="sec" id="s-conf"><h2>'+_pvIcon('alert')+' Çakışmalar <small>'+d.critical.length+' kritik · '+d.soft.length+' kritik olmayan</small></h2>'+confHtml+'</div>'+
+      '<div class="foot">Oluşturulma: '+esc(stamp)+'</div>'+
     '</div>'+
     '<'+'script>'+
       '(function(){'+
+        'var printing=false;'+
         'function fitSheet(){'+
-          'var box=document.querySelector(".sheetbox");'+
-          'var fit=document.getElementById("sheetFit");'+
-          'if(!box||!fit) return;'+
-          'fit.style.transform="none";'+
-          'var natW=fit.scrollWidth, natH=fit.scrollHeight;'+
-          'var avail=box.clientWidth;'+
-          'if(!natW||!avail) return;'+
-          'var sc=Math.min(1, avail/natW);'+
-          'fit.style.transform="scale("+sc+")";'+
-          'box.style.height=Math.ceil(natH*sc)+"px";'+
+          'var box=document.querySelector(".sheetbox"),fit=document.getElementById("sheetFit");'+
+          'if(!box||!fit||box.offsetParent===null) return;'+
+          'fit.style.transform="none";box.style.height="";'+
+          'var natW=fit.scrollWidth,natH=fit.scrollHeight;'+
+          'var avail=printing?1080:box.clientWidth;'+
+          'var sc=Math.min(1,avail/natW);'+
+          'if(printing){sc=Math.min(sc,720/natH);}'+
+          'fit.style.transform="scale("+sc+")";box.style.height=Math.ceil(natH*sc)+"px";box.style.width=printing?Math.ceil(natW*sc)+"px":"";'+
         '}'+
-        'window.addEventListener("load",fitSheet);'+
-        'window.addEventListener("resize",fitSheet);'+
-        'window.addEventListener("beforeprint",fitSheet);'+
-        'setTimeout(fitSheet,50);'+
+        'document.querySelectorAll(".tabs button").forEach(function(b){b.onclick=function(){'+
+          'document.querySelectorAll(".tabs button").forEach(function(x){x.classList.toggle("on",x===b)});'+
+          'document.body.className="only-"+b.dataset.v;window.scrollTo(0,0);setTimeout(fitSheet,10);};});'+
+        'window.addEventListener("load",fitSheet);window.addEventListener("resize",fitSheet);'+
+        'window.addEventListener("beforeprint",function(){printing=true;fitSheet();});'+
+        'window.addEventListener("afterprint",function(){printing=false;fitSheet();});'+
+        'setTimeout(fitSheet,50);setTimeout(fitSheet,600);'+
       '})();'+
-    '<'+'/script>'+
-    '</body></html>';
+    '<'+'/script></body></html>';
   w.document.open(); w.document.write(html); w.document.close();
+}
+
+/* ---------- Aylık / Yıllık rapor ---------- */
+function _repStageGroup(st){ const s=String(st||'').trim(); return s.includes('TURNE') ? 'TURNE' : (s || 'Diğer'); }
+function _repYearOf(name){ const mm=String(name||'').match(/(20\d\d)/); return mm?mm[1]:''; }
+const _REP_MONTHS=['OCAK','ŞUBAT','MART','NİSAN','MAYIS','HAZİRAN','TEMMUZ','AĞUSTOS','EYLÜL','EKİM','KASIM','ARALIK'];
+function _repMonthOrder(name){ const u=String(name||'').toLocaleUpperCase('tr'); const i=_REP_MONTHS.findIndex(x=>u.includes(x)); return i<0?99:i; }
+function _repMonthStats(mi){
+  const m=state.months[mi];
+  const shows=collectShowings().filter(s=>s.mi===mi);
+  const byPlay={}, byStage={}, days=new Set();
+  shows.forEach(s=>{
+    const st=_repStageGroup(s.stage);
+    byPlay[s.play]=byPlay[s.play]||{total:0,stages:{}};
+    byPlay[s.play].total++; byPlay[s.play].stages[st]=(byPlay[s.play].stages[st]||0)+1;
+    byStage[st]=(byStage[st]||0)+1;
+    if(s.date) days.add(normNameKey(s.date));
+  });
+  const pd=monthPreviewData(m);
+  return {m, name:m.name, shows, byPlay, byStage, days:days.size, crit:pd.critical.length, soft:pd.soft.length, notes:pd.notes, pd};
+}
+function _repOpen(title, body){
+  const w=window.open('','_blank');
+  if(!w){ siteMessage('Tarayıcı yeni sekmeyi engelledi. Açılır pencere iznini verin.','warn','Rapor'); return; }
+  const esc=escapeHtml;
+  const html='<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>'+esc(title)+'</title>'+
+    '<meta name="viewport" content="width=device-width,initial-scale=1">'+_pvFonts()+'<style>'+_pvBaseCss()+
+    '.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:16px}'+
+    '.cardk{background:#fff;border:1px solid var(--line);border-top:4px solid var(--gold);border-radius:10px;padding:10px 14px}'+
+    '.cardk b{display:block;font-size:24px;font-family:Fraunces,Georgia,serif;color:var(--wine)}.cardk span{font-size:11.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.4px;font-weight:700}'+
+    '.cardk.crit{border-top-color:var(--crit)}.cardk.ok{border-top-color:var(--ok)}'+
+    '.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}@media(max-width:900px){.grid2{grid-template-columns:1fr}}'+
+    '.bar{display:flex;align-items:center;gap:8px;font-size:12.5px;margin:4px 0}.bar .l{width:38%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'+
+    '.bar .b{flex:1;height:12px;background:#f3ede0;border-radius:6px;overflow:hidden}.bar .b i{display:block;height:100%;background:linear-gradient(90deg,var(--wine),var(--gold))}'+
+    '.bar .v{width:34px;text-align:right;font-weight:800}'+
+    '@media print{.cards{grid-template-columns:repeat(6,1fr)}.cardk{padding:6px 10px}.cardk b{font-size:18px}.grid2{grid-template-columns:1fr 1fr}}'+
+    '</style></head><body>'+
+    '<div class="pv-top"><div class="pv-bar"><div><div class="sub">İzmir Devlet Tiyatrosu Müdürlüğü</div><h1>'+esc(title)+'</h1></div>'+
+    '<button type="button" class="pbtn" style="margin-left:auto" onclick="window.print()">'+_pvIcon('print')+' PDF olarak kaydet</button></div></div>'+
+    '<div class="wrap">'+body+'<div class="foot">Oluşturulma: '+esc(new Date().toLocaleString('tr-TR'))+'</div></div></body></html>';
+  w.document.open(); w.document.write(html); w.document.close();
+}
+function _repBars(obj){
+  const arr=Object.entries(obj).sort((a,b)=>b[1]-a[1]); const max=Math.max(1,...arr.map(x=>x[1]));
+  return arr.length ? arr.map(([k,v])=>'<div class="bar"><span class="l" title="'+escapeHtml(k)+'">'+escapeHtml(k)+'</span><span class="b"><i style="width:'+(v/max*100).toFixed(1)+'%"></i></span><span class="v">'+v+'</span></div>').join('') : '<div class="empty">Kayıt yok.</div>';
+}
+function _repKpis(list){
+  return '<div class="cards">'+list.map(k=>'<div class="cardk '+(k[2]||'')+'"><span>'+escapeHtml(k[0])+'</span><b>'+k[1]+'</b></div>').join('')+'</div>';
+}
+function openMonthlyReport(){
+  const m=curMonth(); if(!m){ siteMessage('Ay bulunamadı.','warn','Aylık rapor'); return; }
+  const s=_repMonthStats(state.activeIdx), esc=escapeHtml;
+  const stages=Object.keys(s.byStage).sort((a,b)=>s.byStage[b]-s.byStage[a]);
+  const plays=Object.entries(s.byPlay).sort((a,b)=>b[1].total-a[1].total);
+  const playTable = plays.length
+    ? '<table class="t"><thead><tr><th>#</th><th>Oyun</th>'+stages.map(st=>'<th class="n">'+esc(st)+'</th>').join('')+'<th class="n">Toplam</th></tr></thead><tbody>'+
+      plays.map(([p,o],i)=>'<tr><td class="mut">'+(i+1)+'</td><td><b>'+esc(p)+'</b></td>'+stages.map(st=>'<td class="n">'+(o.stages[st]||'')+'</td>').join('')+'<td class="n"><b>'+o.total+'</b></td></tr>').join('')+
+      '<tr class="tot"><td></td><td>TOPLAM</td>'+stages.map(st=>'<td class="n">'+s.byStage[st]+'</td>').join('')+'<td class="n">'+s.shows.length+'</td></tr></tbody></table>'
+    : '<div class="empty">Bu ayda gösterim yok.</div>';
+  const notes = s.notes.length
+    ? '<table class="t"><thead><tr><th>Tarih</th><th>Sahne</th><th>Oyun</th><th>Not</th></tr></thead><tbody>'+s.notes.map(n=>'<tr><td class="nowrap"><b>'+esc(n.date)+'</b> '+esc(n.time)+'</td><td class="mut">'+esc(n.stage)+'</td><td>'+esc(n.text)+'</td><td>'+esc(n.note)+'</td></tr>').join('')+'</tbody></table>'
+    : '<div class="empty">'+_pvIcon('check')+' Not yok.</div>';
+  const confs=[...s.pd.critical.map(i=>[i,true]),...s.pd.soft.map(i=>[i,false])];
+  const conf = confs.length
+    ? '<table class="t"><thead><tr><th>Tarih</th><th>Durum</th><th>Oyunlar</th><th>Ortak kişi</th></tr></thead><tbody>'+confs.map(([i,c])=>'<tr class="'+(c?'rc':'rs')+'"><td class="nowrap"><b>'+esc(i.date)+'</b></td><td>'+(c?'<span class="tag crit">Kritik</span>':'<span class="tag ok">Kritik değil</span>')+'</td><td>'+i.games.map(g=>esc(g.raw)).join(' + ')+'</td><td class="n">'+i.people.length+'</td></tr>').join('')+'</tbody></table>'
+    : '<div class="empty">'+_pvIcon('check')+' Çakışma yok.</div>';
+  _repOpen(m.name+' · Aylık Faaliyet Raporu',
+    _repKpis([['Toplam gösterim',s.shows.length],['Oyun sayısı',plays.length],['Gösterim günü',s.days],['Turne gösterimi',s.byStage['TURNE']||0],['Kritik çakışma',s.crit,'crit'],['Not',s.notes.length,'ok']])+
+    '<div class="grid2"><div class="sec"><h2>'+_pvIcon('chart')+' Sahnelere göre</h2>'+_repBars(s.byStage)+'</div>'+
+    '<div class="sec"><h2>'+_pvIcon('theater')+' Oyunlara göre</h2>'+_repBars(Object.fromEntries(plays.map(([p,o])=>[p,o.total])))+'</div></div>'+
+    '<div class="sec"><h2>'+_pvIcon('theater')+' Oyun × Sahne dağılımı</h2>'+playTable+'</div>'+
+    '<div class="sec pb"><h2>'+_pvIcon('note')+' Notlar <small>'+s.notes.length+'</small></h2>'+notes+'</div>'+
+    '<div class="sec"><h2>'+_pvIcon('alert')+' Çakışmalar <small>'+s.crit+' kritik · '+s.soft+' kritik olmayan</small></h2>'+conf+'</div>');
+}
+function openYearlyReport(){
+  const cm=curMonth(); const year=_repYearOf(cm&&cm.name);
+  const idx=(state.months||[]).map((m,i)=>i).filter(i=>!year || _repYearOf(state.months[i].name)===year)
+    .sort((a,b)=>_repMonthOrder(state.months[a].name)-_repMonthOrder(state.months[b].name));
+  if(!idx.length){ siteMessage('Rapor için ay bulunamadı.','warn','Yıllık rapor'); return; }
+  const esc=escapeHtml, stats=idx.map(_repMonthStats);
+  const byPlay={}, byStage={}; let total=0, crit=0, soft=0, notes=0, days=0;
+  stats.forEach((s,k)=>{ total+=s.shows.length; crit+=s.crit; soft+=s.soft; notes+=s.notes.length; days+=s.days;
+    Object.entries(s.byStage).forEach(([st,v])=>byStage[st]=(byStage[st]||0)+v);
+    Object.entries(s.byPlay).forEach(([p,o])=>{ byPlay[p]=byPlay[p]||{total:0,months:{}}; byPlay[p].total+=o.total; byPlay[p].months[k]=o.total; }); });
+  const short=n=>esc(String(n).replace(/\s*20\d\d\s*/,'').slice(0,3));
+  const monthTable='<table class="t"><thead><tr><th>Ay</th><th class="n">Gösterim</th><th class="n">Oyun</th><th class="n">Gösterim günü</th><th class="n">Turne</th><th class="n">Kritik çakışma</th><th class="n">Diğer çakışma</th><th class="n">Not</th></tr></thead><tbody>'+
+    stats.map(s=>'<tr><td><b>'+esc(s.name)+'</b></td><td class="n"><b>'+s.shows.length+'</b></td><td class="n">'+Object.keys(s.byPlay).length+'</td><td class="n">'+s.days+'</td><td class="n">'+(s.byStage['TURNE']||0)+'</td><td class="n">'+(s.crit?'<span class="tag crit">'+s.crit+'</span>':'0')+'</td><td class="n">'+s.soft+'</td><td class="n">'+s.notes.length+'</td></tr>').join('')+
+    '<tr class="tot"><td>TOPLAM</td><td class="n">'+total+'</td><td class="n">'+Object.keys(byPlay).length+'</td><td class="n">'+days+'</td><td class="n">'+(byStage['TURNE']||0)+'</td><td class="n">'+crit+'</td><td class="n">'+soft+'</td><td class="n">'+notes+'</td></tr></tbody></table>';
+  const plays=Object.entries(byPlay).sort((a,b)=>b[1].total-a[1].total);
+  const matrix=plays.length?'<table class="t"><thead><tr><th>Oyun</th>'+stats.map(s=>'<th class="n">'+short(s.name)+'</th>').join('')+'<th class="n">Toplam</th></tr></thead><tbody>'+
+    plays.map(([p,o])=>'<tr><td><b>'+esc(p)+'</b></td>'+stats.map((s,k)=>'<td class="n">'+(o.months[k]||'<span class="mut">·</span>')+'</td>').join('')+'<td class="n"><b>'+o.total+'</b></td></tr>').join('')+
+    '<tr class="tot"><td>TOPLAM</td>'+stats.map(s=>'<td class="n">'+s.shows.length+'</td>').join('')+'<td class="n">'+total+'</td></tr></tbody></table>':'<div class="empty">Gösterim yok.</div>';
+  _repOpen((year||'Tüm')+' · Yıllık Faaliyet Raporu',
+    _repKpis([['Toplam gösterim',total],['Farklı oyun',plays.length],['Ay sayısı',stats.length],['Turne gösterimi',byStage['TURNE']||0],['Kritik çakışma',crit,'crit'],['Not',notes,'ok']])+
+    '<div class="sec"><h2>'+_pvIcon('calendar')+' Aylara göre özet</h2>'+monthTable+'</div>'+
+    '<div class="grid2"><div class="sec"><h2>'+_pvIcon('chart')+' Aylık gösterim</h2>'+_repBars(Object.fromEntries(stats.map(s=>[s.name,s.shows.length])))+'</div>'+
+    '<div class="sec"><h2>'+_pvIcon('chart')+' Sahnelere göre</h2>'+_repBars(byStage)+'</div></div>'+
+    '<div class="sec pb"><h2>'+_pvIcon('theater')+' Oyun × Ay gösterim tablosu</h2>'+matrix+'</div>');
 }
 
 /* Hızlı butonlar HER ZAMAN sadece görüntülenen ayı işler; kâğıt/boyut
@@ -8206,6 +8318,8 @@ function withCurrentMonthOnly(selId, fn){
 document.getElementById('quickPrintBtn').onclick = ()=>withCurrentMonthOnly('printMonthSel', ()=>printProgram());
 document.getElementById('quickExcelBtn').onclick = ()=>withCurrentMonthOnly('expExcelMonth', ()=>exportExcel());
 document.getElementById('previewTabBtn').onclick = ()=>openMonthPreviewTab();
+document.getElementById('monthReportBtn').onclick = ()=>openMonthlyReport();
+document.getElementById('yearReportBtn').onclick = ()=>openYearlyReport();
 document.getElementById('printPreviewBtn').onclick = ()=>printProgram(document.getElementById('printSizePreview')?.value);
 document.getElementById('printSize').onchange = e=>{
   setPrintSize(e.target.value);
