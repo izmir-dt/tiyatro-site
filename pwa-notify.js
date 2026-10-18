@@ -28,7 +28,7 @@
   }
 
   function check(force) {
-    if (!("Notification" in window) || Notification.permission !== "granted") return;
+    if (!("Notification" in window) || Notification.permission !== "granted" || st().off) return;
     const list = todayItems();
     if (list == null) return;
     const body = list.length
@@ -45,27 +45,63 @@
 
   function btnLabel(b) {
     const p = "Notification" in window ? Notification.permission : "denied";
-    b.textContent = p === "granted" ? "🔔 Bildirim açık" : p === "denied" ? "🔕 Bildirim kapalı" : "🔔 Bildirimleri aç";
+    const off = st().off;
+    b.textContent = p === "granted" && !off ? "🔔 Bildirim açık" : p === "granted" && off ? "🔕 Bildirim kapalı" : p === "denied" ? "🔕 Bildirim engelli" : "🔔 Bildirimleri aç";
+    b.title = p === "granted" && !off ? "Bildirimleri kapatmak için dokunun" : "Bildirimleri açmak için dokunun";
+  }
+  function refreshBtns() { document.querySelectorAll(".hpNotifyBtn").forEach(btnLabel); }
+
+  async function toggleNotify() {
+    if (!("Notification" in window)) return alert("Bu tarayıcı bildirimleri desteklemiyor.");
+    if (Notification.permission === "denied") return alert("Bildirimler tarayıcıdan engellenmiş. Chrome ayarlarında bu site için bildirimlere izin verin.");
+    if (Notification.permission === "granted") {
+      if (st().off) { put({ off: false }); refreshBtns(); check(true); }   // tekrar aç
+      else { put({ off: true }); refreshBtns(); }                          // kapat
+      return;
+    }
+    const p = await Notification.requestPermission();
+    if (p === "granted") put({ off: false });
+    refreshBtns();
+    if (p === "granted") check(true);
   }
 
-  function addButton() {
+  function makeBtn(id, cls) {
+    const b = document.createElement("button");
+    b.id = id; b.type = "button"; b.className = "hpNotifyBtn " + cls;
+    btnLabel(b);
+    b.onclick = toggleNotify;
+    return b;
+  }
+
+  function addButton() {            // masaüstü: Araçlar'ın sağı
     const h = document.querySelector("header.app");
     if (!h || document.getElementById("hpNotifyBtn")) return;
-    const b = document.createElement("button");
-    b.id = "hpNotifyBtn"; b.className = "btn sm";
-    btnLabel(b);
-    b.onclick = async () => {
-      if (!("Notification" in window)) return alert("Bu tarayıcı bildirimleri desteklemiyor.");
-      if (Notification.permission === "denied") return alert("Bildirimler engellenmiş. Chrome ayarlarından bu site için bildirimlere izin verin.");
-      const p = Notification.permission === "granted" ? "granted" : await Notification.requestPermission();
-      btnLabel(b);
-      if (p === "granted") check(true);
-    };
-    h.appendChild(b);
+    h.appendChild(makeBtn("hpNotifyBtn", "btn sm"));
+  }
+
+  function addMobileButton() {      // telefon: üst başlıktaki durum satırının sağı
+    const row = document.querySelector("#mobileApp .m-status");
+    if (!row || row.querySelector(".hpNotifyBtnM")) return;
+    const b = makeBtn("hpNotifyBtnM", "hpNotifyBtnM");
+    row.appendChild(b);
+  }
+
+  (function () {
+    const st0 = document.createElement("style");
+    st0.textContent = ".hpNotifyBtnM{margin-left:auto;min-height:32px;padding:0 12px;border:1px solid var(--mobile-border,#ccd);border-radius:16px;background:var(--mobile-surface,#fff);color:var(--mobile-deep,#0e4a57);font:600 11px/1 inherit;white-space:nowrap;cursor:pointer}";
+    document.head.appendChild(st0);
+  })();
+
+  function watchMobile() {          // telefon ekranı her çizimde yenilendiği için butonu geri ekle
+    const root = document.getElementById("mobileApp");
+    if (!root) return setTimeout(watchMobile, 500);
+    addMobileButton();
+    new MutationObserver(addMobileButton).observe(root, { childList: true, subtree: true });
   }
 
   window.addEventListener("load", () => {
     addButton();
+    watchMobile();
     setTimeout(() => check(false), 4000);       // Tablolardan veri gelsin
     setInterval(() => check(false), 5 * 60e3);   // açıkken 5 dk'da bir kontrol
   });
