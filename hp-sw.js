@@ -1,6 +1,6 @@
 // Service worker: makes the app installable, caches the page shell (never Sheets data)
-const CACHE = "hp-haftalik-v2"; // yalnızca "hp-haftalik-" ile başlayan önbelleklere dokunur
-const SHELL = ["./", "index.html", "hp.webmanifest", "hp-icon-192.png", "hp-icon-512.png"];
+const CACHE = "hp-haftalik-v3"; // yalnızca "hp-haftalik-" ile başlayan önbelleklere dokunur
+const SHELL = ["HAFTALIK_PROGRAM.html", "hp.webmanifest", "hp-icon-192.png", "hp-icon-512.png"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)));
@@ -30,7 +30,7 @@ self.addEventListener("notificationclick", (e) => {
   e.waitUntil(
     self.clients.matchAll({ type: "window" }).then((cs) => {
       for (const c of cs) if ("focus" in c) return c.focus();
-      return self.clients.openWindow("./");
+      return self.clients.openWindow("HAFTALIK_PROGRAM.html");
     })
   );
 });
