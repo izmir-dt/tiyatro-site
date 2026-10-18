@@ -4,7 +4,7 @@
   const preview = window.self !== window.top || /^(id-)?preview--/.test(h) || /lovableproject(-dev)?\.com$/.test(h) || /[?&]sw=off/.test(location.search);
   if ("serviceWorker" in navigator) {
     if (preview) navigator.serviceWorker.getRegistrations().then((rs) => rs.forEach((r) => r.unregister()));
-    else navigator.serviceWorker.register("hp-sw.js", { scope: "./" }).catch(() => {});
+    else navigator.serviceWorker.register("hp-sw.js", { scope: "./HAFTALIK_PROGRAM.html" }).catch(() => {});
   }
 
   const LS = "hp_notify";
