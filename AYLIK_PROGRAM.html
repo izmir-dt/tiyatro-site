@@ -9183,7 +9183,7 @@ function render(){
   const main=app.querySelector('#mMain');
   if(view==='program'){
     const e=d?stat[d.key]:{res:[]};
-    main.innerHTML='<div class="m-quick"><button data-a="today">'+ic('today')+'Bugün</button><button data-t="undoBtn">'+ic('undo')+'Geri al</button><button data-t="quickPrintBtn">'+ic('print')+'Yazdır</button><button data-t="publishBtn">'+ic('check')+'Kesinleştir</button></div>'+
+    main.innerHTML='<div class="m-quick"><button data-t="undoBtn">'+ic('undo')+'Geri al</button><button data-t="quickPrintBtn">'+ic('print')+'Yazdır</button><button data-t="publishBtn">'+ic('check')+'Kesinleştir</button></div>'+
     cfBar(m,ds,stat,e)+
     '<div class="m-sec"><h2>'+E(d?d.dn||'Gün':'—')+' <small>· '+e.res.length+' kayıt</small></h2><small>'+E(d?d.num+' '+String(m.name).split(' ')[0]:'')+'</small></div>'+
     (e.res.length?e.res.map(card).join(''):'<div class="m-empty">Bu gün için programda kayıt yok.</div>')+
@@ -9267,11 +9267,12 @@ function editCell(r,c){
 function addToDay(){
   const m=curMonth(),d=days(m).find(x=>x.key===dayKey);if(!d)return;
   const slots=[];for(const r of d.rows)for(const c of programCols(m))if(!isCovered(m,r,c))slots.push({r,c,used:!!String((m.cells[r+'_'+c]||{}).v||'').trim()});
-  const free=slots.filter(s=>!s.used);
+  const free=slots.slice().sort((a,b)=>(a.used-b.used));
   if(!free.length){openSheet('<h2>Boş yer yok</h2><p>Bu günün tüm sahne hücreleri dolu. Yeni satır eklemek için masaüstü görünümünü kullanın.</p><div class="acts"><button data-s="x">Tamam</button></div>');sheet.onclick=ev=>{if(ev.target.closest('[data-s]'))closeSheet();};return;}
-  openSheet('<h2>Oyun ekle</h2><p>'+E(d.key)+'</p><label>SAHNE / SEANS</label><select id="mSl">'+free.map((s,i)=>'<option value="'+i+'">'+E(stageHeaderText(m,s.c)||colName(s.c))+' · '+E(timeTextOfRow(m,s.r)||'saat yok')+'</option>').join('')+'</select><label>OYUN</label><input id="mEdV" list="oyunList" autocomplete="off" placeholder="Oyun adı"><div class="acts"><button data-s="x">Vazgeç</button><button class="pri" data-s="ok">Ekle</button></div>');
+  openSheet('<h2>Oyun ekle</h2><p>'+E(d.key)+'</p><label>SAHNE / SEANS</label><select id="mSl">'+free.map((s,i)=>'<option value="'+i+'">'+E(stageHeaderText(m,s.c)||colName(s.c))+' · '+E(timeTextOfRow(m,s.r)||'saat yok')+(s.used?' · DOLU: '+E(String((m.cells[s.r+'_'+s.c]||{}).v||'').slice(0,30)):'')+'</option>').join('')+'</select><label>OYUN</label><input id="mEdV" list="oyunList" autocomplete="off" placeholder="Oyun adı"><div class="acts"><button data-s="x">Vazgeç</button><button class="pri" data-s="ok">Ekle</button></div>');
   sheet.onclick=ev=>{const b=ev.target.closest('[data-s]');if(!b)return;if(b.dataset.s==='x')return closeSheet();
     const s=free[+sheet.querySelector('#mSl').value],nv=sheet.querySelector('#mEdV').value.trim();if(!nv)return;
+    if(s.used&&!confirm('Bu sahne/seans dolu ('+String((m.cells[s.r+'_'+s.c]||{}).v||'')+'). Üzerine yazılsın mı?'))return;
     if(save(mm=>{mm.cells[s.r+'_'+s.c]={...(mm.cells[s.r+'_'+s.c]||{}),v:nv};}))closeSheet();render();};
 }
 function goMonth(i){if(i<0||i>=state.months.length)return;const sel=document.getElementById('monthSel');state.activeIdx=i;dayKey=null;
