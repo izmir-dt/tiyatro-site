@@ -9023,6 +9023,12 @@ body.idt-locked main{pointer-events:none;user-select:none;opacity:.5;filter:gray
  body:not(.m-desk) #idtBridgeBar{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom));width:calc(100% - 24px);max-width:456px;z-index:39;border:1px solid var(--m-border);border-radius:14px;padding:6px 8px;box-shadow:var(--m-shadow);flex-wrap:nowrap;overflow-x:auto}
  body:not(.m-desk) #idtBridgeBar #idtBridgeInfo{flex-wrap:nowrap!important;min-width:0}
  body:not(.m-desk) #idtLockBanner{display:none!important}
+ .m-cnote{margin:8px 0 0;font-size:12px;padding:6px 8px;border-radius:10px;background:oklch(.97 .02 250);color:oklch(.35 .05 250);border:1px solid oklch(.88 .03 250);white-space:pre-wrap}
+ #mSheet textarea{width:100%;box-sizing:border-box;font:inherit;padding:10px;border:1px solid var(--m-border);border-radius:12px}
+ .m-ppl{display:grid;gap:6px;margin-bottom:6px}.m-pp{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 8px;border-radius:10px;font-size:13px;border:1px solid var(--m-border)}
+ .m-pp.r{background:oklch(.96 .03 25)}.m-pp.y{background:oklch(.97 .06 95)}.m-pp.g{background:oklch(.97 .03 150)}
+ .m-pp button{flex:none;min-height:34px;border-radius:999px;border:1px solid var(--m-border);background:oklch(1 0 0);font:700 12px inherit;padding:0 12px}
+ .m-pp button.on{background:var(--m-danger);color:oklch(1 0 0);border-color:var(--m-danger)}
  .m-soft{margin-top:8px;display:grid;gap:4px}.m-soft p{margin:0;font-size:12px;line-height:1.35;padding:6px 8px;border-radius:10px}
  .m-soft p.y{background:oklch(.96 .07 95);color:oklch(.42 .09 80);border:1px solid oklch(.86 .11 90)}
  .m-soft p.g{background:oklch(.96 .04 150);color:oklch(.4 .09 150);border:1px solid oklch(.85 .07 150)}
@@ -9215,9 +9221,9 @@ function showCfList(){
   sheet.onclick=ev=>{const b=ev.target.closest('[data-s]');if(!b)return;if(b.dataset.s==='go'){dayKey=b.dataset.day;view='program';}closeSheet();render();window.scrollTo(0,0);};
 }
 function card(x){
-  if(x.free)return '<button class="m-card free" data-cell="'+x.r+'_'+x.c+'"><div class="m-c"><p class="m-stage">'+ic('note')+E(x.stage)+'</p><h3>'+E(x.v)+'</h3></div></button>';
+  if(x.free)return '<button class="m-card free" data-cell="'+x.r+'_'+x.c+'"><div class="m-c"><p class="m-stage">'+ic('note')+E(x.stage)+'</p><h3>'+E(x.v)+'</h3>'+(x.cell&&x.cell.note?'<p class="m-cnote">💬 '+E(x.cell.note)+'</p>':'')+'</div></button>';
   const tags=(x.prem?'<span class="m-tag r">PRÖMİYER</span>':'')+(x.bad?'<span class="m-tag r">ÇAKIŞMA</span>':'')+(/TURNE/.test(x.stage)?'<span class="m-tag">TURNE</span>':'');
-  return '<button class="m-card'+(x.prem?' prem':'')+(x.bad?' bad':'')+'" data-cell="'+x.r+'_'+x.c+'"><div class="m-time"><strong>'+E(x.time||'—')+'</strong><small>'+(parseInt(x.time)<18?'Matine':'Suare')+'</small></div><div class="m-c"><h3>'+E(x.g.key||x.v)+'</h3><p class="m-stage">'+ic('pin')+E(x.stage)+'</p>'+(x.g.inlineNote?'<p class="m-note">'+E(x.g.inlineNote)+'</p>':'')+tags+(x.bad?cfBox(x):'')+(x.ign?'<span class="m-tag">ÇAKIŞMA YOK SAYILDI</span>':'')+softBox(x)+'</div></button>';
+  return '<button class="m-card'+(x.prem?' prem':'')+(x.bad?' bad':'')+'" data-cell="'+x.r+'_'+x.c+'"><div class="m-time"><strong>'+E(x.time||'—')+'</strong><small>'+(parseInt(x.time)<18?'Matine':'Suare')+'</small></div><div class="m-c"><h3>'+E(x.g.key||x.v)+'</h3><p class="m-stage">'+ic('pin')+E(x.stage)+'</p>'+(x.g.inlineNote?'<p class="m-note">'+E(x.g.inlineNote)+'</p>':'')+tags+(x.bad?cfBox(x):'')+(x.ign?'<span class="m-tag">ÇAKIŞMA YOK SAYILDI</span>':'')+softBox(x)+(x.cell&&x.cell.note?'<p class="m-cnote">💬 '+E(x.cell.note)+'</p>':'')+(x.cell&&Array.isArray(x.cell.attn)&&x.cell.attn.length?'<span class="m-tag r">❗ KRİTİK İŞARETLİ ('+x.cell.attn.length+')</span>':'')+'</div></button>';
 }
 function softBox(x){
   const y=x.yellow||[],g=x.green||[];if(!y.length&&!g.length)return '';
@@ -9242,14 +9248,21 @@ function editCell(r,c){
   let cf=null;try{cf=buildConflict(rowGames(m,r));}catch(e){}
   const ci=mConf(m,r,c,cell,cf,typeof isFreeTextCell==='function'&&isFreeTextCell(cell));
   const cfHtml=ci.bad?'<div class="m-cf big">'+(ci.people.length?'<p><b>⚠ Kırmızı çakışma — çakışan kişi'+(ci.people.length>1?'ler':'')+':</b> '+E(ci.people.join(', '))+'</p>':'<p><b>⚠ Kırmızı çakışma</b></p>')+(ci.with.length?'<p><b>Çakıştığı oyun:</b> '+E(ci.with.join(' · '))+'</p>':'')+'<button data-s="ign" class="m-ign">Çakışmayı yok say</button></div>':(ci.ign?'<div class="m-cf ok"><p>Bu hücrede çakışma yok sayılıyor.</p><button data-s="ign" class="m-ign">Çakışma uyarısını geri aç</button></div>':'');
-  openSheet('<h2>'+E(g.key||'Kayıt')+'</h2><p>'+E(dateTextOfRow(m,r))+' · '+E(stageHeaderText(m,c))+'</p>'+cfHtml+'<label>HÜCRE METNİ</label><input id="mEdV" value="'+E(v)+'" list="oyunList" autocomplete="off"><p style="margin-top:6px">Prömiyer için başına * ekleyin; not için parantez kullanın.</p>'+
+  let ppl=[];try{if(cf&&cf.people&&crew){const aset=(typeof rowAttnSet==='function')?rowAttnSet(m,rowGames(m,r)):new Set(cell.attn||[]);
+    for(const pp in cf.people){if(pp.indexOf('__ret_')===0||!crew[pp])continue;const inf=cf.people[pp];
+      const col=(inf.kast||(!inf.critical&&inf.kastCovered))?'y':(inf.critical?'r':'g');ppl.push({pp,name:inf.kast&&inf.kastOf?inf.kastOf+' kastı: '+(inf.name||pp):(inf.name||pp),col,on:aset.has(pp)});}}}catch(e){}
+  ppl.sort((a,b)=>({r:0,y:1,g:2}[a.col]-{r:0,y:1,g:2}[b.col]));
+  const pplHtml=ppl.length?'<label>ÇAKIŞAN KİŞİLER — KRİTİK SEÇİMİ</label><div class="m-ppl">'+ppl.map(o=>'<div class="m-pp '+o.col+'"><span>'+({r:'🔴',y:'🟡',g:'🟢'}[o.col])+' '+E(o.name)+'</span><button data-s="attn" data-p="'+E(o.pp)+'" class="'+(o.on?'on':'')+'">'+(o.on?'❗ Kritik':'Kritik değil')+'</button></div>').join('')+'</div>':'';
+  openSheet('<h2>'+E(g.key||'Kayıt')+'</h2><p>'+E(dateTextOfRow(m,r))+' · '+E(stageHeaderText(m,c))+'</p>'+cfHtml+pplHtml+'<label>HÜCRE NOTU</label><textarea id="mEdN" rows="2" placeholder="Not yok">'+E(cell.note||'')+'</textarea><label>HÜCRE METNİ</label><input id="mEdV" value="'+E(v)+'" list="oyunList" autocomplete="off"><p style="margin-top:6px">Prömiyer için başına * ekleyin; not için parantez kullanın.</p>'+
   (crew?'<div class="crew"><b>Kadro</b>'+Object.keys(crew).slice(0,40).map(k=>{const p=crew[k];return '<div>'+E(p.name||k)+(p.role?' <small>· '+E(p.role)+'</small>':'')+'</div>';}).join('')+'</div>':'')+
   '<div class="acts"><button class="del" data-s="del">Sil</button><button data-s="x">Vazgeç</button><button class="pri" data-s="ok">Kaydet</button></div>');
   sheet.onclick=ev=>{const b=ev.target.closest('[data-s]');if(!b)return;const a=b.dataset.s;
     if(a==='x')return closeSheet();
+    if(a==='attn'){if(typeof toggleAttnPerson==='function'){toggleAttnPerson(r,c,b.dataset.p);}closeSheet();render();setTimeout(()=>editCell(r,c),60);return;}
     if(a==='ign'){if(save(mm=>{const k=r+'_'+c;const cur={...(mm.cells[k]||{v:''})};if(cur.ignoreConflict)delete cur.ignoreConflict;else cur.ignoreConflict=true;mm.cells[k]=cur;}))closeSheet();render();return;}
     const nv=a==='del'?'':sheet.querySelector('#mEdV').value;
-    if(save(mm=>{const k=r+'_'+c;if(nv)mm.cells[k]={...(mm.cells[k]||{}),v:nv};else delete mm.cells[k];}))closeSheet();render();};
+    const nn=a==='del'?'':(sheet.querySelector('#mEdN')||{value:''}).value.trim();
+    if(save(mm=>{const k=r+'_'+c;if(nv){const cur={...(mm.cells[k]||{}),v:nv};if(nn)cur.note=nn;else delete cur.note;mm.cells[k]=cur;}else delete mm.cells[k];}))closeSheet();render();};
 }
 function addToDay(){
   const m=curMonth(),d=days(m).find(x=>x.key===dayKey);if(!d)return;
