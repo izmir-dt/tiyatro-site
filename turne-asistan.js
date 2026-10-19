@@ -1,12 +1,12 @@
 /* ════════════════════════════════════════════════════════════════
-   TURNE ASİSTANI v5.7
+   TURNE ASİSTANI v5.8
    İzmir Devlet Tiyatrosu
    YENİ: Turne düzenleme · Hatırlatıcı · Detaylı istatistik
    ═══════════════════════════════════════════════════════════════ */
 (function () {
-  if (window.__turneAsistanLoaded === 'v5.7') return;
+  if (window.__turneAsistanLoaded === 'v5.8') return;
   ["ta-fab", "ta-panel", "ta-toast", "ta-prompt-modal", "ta-style"].forEach(id => document.getElementById(id)?.remove());
-  window.__turneAsistanLoaded = 'v5.7';
+  window.__turneAsistanLoaded = 'v5.8';
 
   const API = "https://turne-backend.vercel.app/api/sheets";
   const TURNE_SHEET = "TURNE_KAYITLARI";
@@ -1318,7 +1318,8 @@
   // Genişletme dispatcher — answer() başında çağrılır
   function _taX(Q, T, F, ds, qRaw) {
     /* ── KİŞİ İSTATİSTİĞİ — "Sami Öztürk istatistik" → yol (gün/şehir) + oyunlar + program ── */
-    if (/(istatistik|istat\b|istatistiği|sayısal|sayisal|rakam)/.test(Q) && !/(whatsapp|wp\b|\boda)/.test(Q)) {
+    const _istKw=/(istatistik|istat\b|istatistiği|sayısal|sayisal|rakam)/.test(Q);
+    if ((_istKw || (Q.split(" ").length<=5)) && !/(whatsapp|wp\b|\boda|karne|profil)/.test(Q)) {
       const _fold = s => (s||"").toLocaleLowerCase("tr").replace(/ç/g,"c").replace(/ğ/g,"g").replace(/ı/g,"i").replace(/ö/g,"o").replace(/ş/g,"s").replace(/ü/g,"u").replace(/i̇/g,"i").replace(/\s+/g," ").trim();
       const Qf = _fold(Q);
       // Kişi bul: tam ad (≥2 kelime) önce, sonra tek parça (≥4 harf); Türkçe karakter farkı tolere edilir
@@ -1326,7 +1327,15 @@
       for (const t of T) for (const k of (t.katilimcilar||[])) { const key=_fold(k.kisi); if (key && !kisiMap.has(key)) kisiMap.set(key,k); }
       let kisi = null;
       for (const [key,k] of kisiMap) if (key.split(" ").length>=2 && Qf.includes(key)) { kisi=k; break; }
-      if (!kisi) {
+      // İstatistik kelimesi yoksa: sadece ad (+ turne/liste/program/yol/oyun gibi dolgu kelimeler) yazılmışsa devam et
+      if (!_istKw) {
+        if (!kisi) kisi=null;
+        else {
+          const kalan=Qf.replace(_fold(kisi.kisi),"").replace(/\b(turne|turneleri|turnesi|listesi|liste|program|programi|yol|yolu|oyun|oyunlar|oyunlari|bilgi|bilgileri|kac|kaç|kim|ne)\b/g,"").replace(/[?.!]/g,"").trim();
+          if (kalan) kisi=null;
+        }
+      }
+      if (!kisi && _istKw) {
         const adaylar=[...kisiMap.entries()].filter(([key])=>key.split(" ").filter(p=>p.length>=4).some(p=>Qf.split(" ").includes(p)));
         if (adaylar.length===1) kisi=adaylar[0][1];
         else if (adaylar.length>1) {
@@ -3183,7 +3192,7 @@
   }
 
   // Bir kişinin belirli bir turnede tek/çift/münferit odada kalıp kalmadığını tespit eder.
-  // v5.7+: Hem oda planlarını hem de katılımcı JSON içindeki odaTip/odaEsi alanlarını okur.
+  // v5.8+: Hem oda planlarını hem de katılımcı JSON içindeki odaTip/odaEsi alanlarını okur.
   // Plan anahtarları norm() ile karşılaştırılır (büyük/küçük harf, boşluk, "İ/I" farklarını yutar).
   // Ayrıca kişi başkasının "odaEsi" değeri olarak geçiyorsa da çift oda olarak sayılır.
   function odaDurumTespit(t, hedefNorm) {
