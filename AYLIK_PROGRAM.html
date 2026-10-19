@@ -9019,10 +9019,15 @@ body.idt-locked main{pointer-events:none;user-select:none;opacity:.5;filter:gray
  .m-cflist button{width:100%;display:block;text-align:left;padding:10px 12px;margin-bottom:6px;border-radius:12px;border:1px solid var(--m-border);background:var(--m-bg);color:var(--m-ink);font:500 13px 'Manrope',sans-serif}
  .m-cflist b{display:block;color:var(--m-danger);font-size:12px}.m-cflist small{color:var(--m-muted)}
  .m-day.active{background:var(--m-brand);border-color:var(--m-brand);color:oklch(.95 .02 30)}.m-day.active b{color:oklch(1 0 0)}.m-day.active i{background:oklch(1 0 0)}
- .m-main{flex:1;padding:16px 14px calc(190px + env(safe-area-inset-bottom))}
+ .m-main{flex:1;padding:16px 14px calc(120px + env(safe-area-inset-bottom))}
  body:not(.m-desk) #idtBridgeBar{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom));width:calc(100% - 24px);max-width:456px;z-index:39;border:1px solid var(--m-border);border-radius:14px;padding:6px 8px;box-shadow:var(--m-shadow);flex-wrap:nowrap;overflow-x:auto}
  body:not(.m-desk) #idtBridgeBar #idtBridgeInfo{flex-wrap:nowrap!important;min-width:0}
  body:not(.m-desk) #idtLockBanner{display:none!important}
+ .m-soft{margin-top:8px;display:grid;gap:4px}.m-soft p{margin:0;font-size:12px;line-height:1.35;padding:6px 8px;border-radius:10px}
+ .m-soft p.y{background:oklch(.96 .07 95);color:oklch(.42 .09 80);border:1px solid oklch(.86 .11 90)}
+ .m-soft p.g{background:oklch(.96 .04 150);color:oklch(.4 .09 150);border:1px solid oklch(.85 .07 150)}
+ body:not(.m-desk) #idtBridgeBar{display:none!important}
+ body:not(.m-desk) #mBridgeSlot #idtBridgeBar{display:flex!important;position:static!important;transform:none!important;width:100%!important;max-width:none!important;margin:0 0 14px;box-shadow:none}
  body:not(.m-desk) #idtBridgeBar{overflow:hidden;justify-content:space-between;gap:6px}
  body:not(.m-desk) #idtBridgeBar .idt-chip{font-size:0;gap:4px;padding:0 9px;height:32px}
  body:not(.m-desk) #idtBridgeBar .idt-chip b{font-size:12.5px}
@@ -9108,7 +9113,7 @@ function entries(m,d){
       const g=parseGame(v),free=isFreeTextCell(cell);
       const ci=mConf(m,r,c,cell,cf,free);const isBad=ci.bad;
       if(isBad)bad=true;
-      res.push({r,c,v,g,free,cell:cell||{},cpeople:ci.people,cwith:ci.with,ign:ci.ign,time:gameTimeOf(m,r,v)||timeTextOfRow(m,r),stage:stageHeaderText(m,c)||colName(c),bad:isBad,prem:g.isPremiere||(cell&&cell.premiere)});
+      res.push({r,c,v,g,free,cell:cell||{},cpeople:ci.people,cwith:ci.with,ign:ci.ign,yellow:ci.yellow,green:ci.green,time:gameTimeOf(m,r,v)||timeTextOfRow(m,r),stage:stageHeaderText(m,c)||colName(c),bad:isBad,prem:g.isPremiere||(cell&&cell.premiere)});
     }
   }
   res.sort((a,b)=>(a.time||'99').localeCompare(b.time||'99'));
@@ -9116,8 +9121,15 @@ function entries(m,d){
 }
 /* Masaüstündeki td.cell.conflict kuralının birebir aynısı */
 function mConf(m,r,c,cell,cf,free){
-  const out={bad:false,people:[],with:[],ign:false};
+  const out={bad:false,people:[],with:[],ign:false,yellow:[],green:[]};
   cell=cell||{};
+  if(r>=2&&cf&&cf.people&&!free&&(cell.v||cell.tourReturn)){try{
+    const gs=rowGames(m,r);const mm=gs.find(x=>x.row===r&&x.col===c);
+    const cw=mm&&typeof crewOf==='function'?(crewOf(mm.key)||{}):{};
+    for(const pp in cf.people){if(pp.indexOf('__ret_')===0||!cw[pp])continue;const inf=cf.people[pp];if(!inf||inf.critical)continue;
+      const nm=inf.kast&&inf.kastOf?inf.kastOf+' kastı: '+(inf.name||pp):(inf.name||pp);
+      if(inf.kast||inf.kastCovered){if(!out.yellow.includes(nm))out.yellow.push(nm);}else if(!out.green.includes(nm))out.green.push(nm);}
+  }catch(e){}}
   if(r<2||!cf||!cf.hasCritical||!cf.cells||!cf.cells.has(r+'_'+c))return out;
   if(free||(typeof isArchiveCell==='function'&&isArchiveCell(cell)))return out;
   if(!(cell.v||cell.tourReturn))return out;
@@ -9148,8 +9160,10 @@ function save(fn){
   snapshot();fn(m);saveState();try{renderAll();}catch(e){renderSheet();}return true;
 }
 
+function parkBridge(){const bb=document.getElementById('idtBridgeBar'),h=document.querySelector('header');if(bb&&bb.closest('#mApp')&&h)h.insertAdjacentElement('afterend',bb);}
 function render(){
-  if(!mq.matches||document.body.classList.contains('m-desk'))return;
+  if(!mq.matches||document.body.classList.contains('m-desk')){parkBridge();return;}
+  parkBridge();
   const m=curMonth();if(!m)return;
   const ds=days(m);
   if(!dayKey||!ds.some(d=>d.key===dayKey))dayKey=(todayKey(m,ds)||{}).key;
@@ -9178,10 +9192,11 @@ function render(){
   if(view==='tools'){
     const t=(id,i,l,c)=>document.getElementById(id)?'<button class="m-tool'+(c?' '+c:'')+'" data-t="'+id+'">'+ic(i)+'<span>'+l+'</span>'+ic('right')+'</button>':'';
     main.innerHTML='<div class="m-sec"><h2>Araçlar</h2><small>'+state.months.length+' ay</small></div><div class="m-tg">'+
-    '<h3>BU AY</h3>'+t('publishBtn','check','Kesinleştir (bu ay)')+t('lockToggleBtn','lock',locked?'Kilidi aç':'Ayı kilitle')+t('undoBtn','undo','Geri al')+t('redoBtn','redo','Yinele')+t('addMonthTop','plus','Yeni ay ekle')+
+    '<h3>DURUM</h3><div id="mBridgeSlot"></div>'+'<h3>BU AY</h3>'+t('publishBtn','check','Kesinleştir (bu ay)')+t('lockToggleBtn','lock',locked?'Kilidi aç':'Ayı kilitle')+t('undoBtn','undo','Geri al')+t('redoBtn','redo','Yinele')+t('addMonthTop','plus','Yeni ay ekle')+
     '<h3>DOSYALAR</h3>'+t('quickPrintBtn','print','Yazdır / PDF')+t('quickExcelBtn','down','Excel indir')+t('expJson','down','Yedek indir (JSON)')+t('backupBtn','undo','Yedeklerden geri yükle')+
     '<h3>RAPORLAR</h3>'+t('monthReportBtn','note','Aylık rapor')+t('yearReportBtn','note','Yıllık rapor')+
     '<h3>GÖRÜNÜM</h3><button class="m-tool" data-a="desk">'+ic('desk')+'<span>Masaüstü görünümü (tüm sekmeler)</span>'+ic('right')+'</button></div>';
+    const bb=document.getElementById('idtBridgeBar'),sl=main.querySelector('#mBridgeSlot');if(bb&&sl)sl.appendChild(bb);
   }
   const ad=app.querySelector('.m-day.active');if(ad)ad.scrollIntoView({inline:'center',block:'nearest'});
 }
@@ -9202,7 +9217,12 @@ function showCfList(){
 function card(x){
   if(x.free)return '<button class="m-card free" data-cell="'+x.r+'_'+x.c+'"><div class="m-c"><p class="m-stage">'+ic('note')+E(x.stage)+'</p><h3>'+E(x.v)+'</h3></div></button>';
   const tags=(x.prem?'<span class="m-tag r">PRÖMİYER</span>':'')+(x.bad?'<span class="m-tag r">ÇAKIŞMA</span>':'')+(/TURNE/.test(x.stage)?'<span class="m-tag">TURNE</span>':'');
-  return '<button class="m-card'+(x.prem?' prem':'')+(x.bad?' bad':'')+'" data-cell="'+x.r+'_'+x.c+'"><div class="m-time"><strong>'+E(x.time||'—')+'</strong><small>'+(parseInt(x.time)<18?'Matine':'Suare')+'</small></div><div class="m-c"><h3>'+E(x.g.key||x.v)+'</h3><p class="m-stage">'+ic('pin')+E(x.stage)+'</p>'+(x.g.inlineNote?'<p class="m-note">'+E(x.g.inlineNote)+'</p>':'')+tags+(x.bad?cfBox(x):'')+(x.ign?'<span class="m-tag">ÇAKIŞMA YOK SAYILDI</span>':'')+'</div></button>';
+  return '<button class="m-card'+(x.prem?' prem':'')+(x.bad?' bad':'')+'" data-cell="'+x.r+'_'+x.c+'"><div class="m-time"><strong>'+E(x.time||'—')+'</strong><small>'+(parseInt(x.time)<18?'Matine':'Suare')+'</small></div><div class="m-c"><h3>'+E(x.g.key||x.v)+'</h3><p class="m-stage">'+ic('pin')+E(x.stage)+'</p>'+(x.g.inlineNote?'<p class="m-note">'+E(x.g.inlineNote)+'</p>':'')+tags+(x.bad?cfBox(x):'')+(x.ign?'<span class="m-tag">ÇAKIŞMA YOK SAYILDI</span>':'')+softBox(x)+'</div></button>';
+}
+function softBox(x){
+  const y=x.yellow||[],g=x.green||[];if(!y.length&&!g.length)return '';
+  const L=a=>E(a.slice(0,8).join(', '))+(a.length>8?' +'+(a.length-8):'');
+  return '<div class="m-soft">'+(y.length?'<p class="y"><b>🟡 Kast ile karşılanan:</b> '+L(y)+'</p>':'')+(g.length?'<p class="g"><b>🟢 Ortak (kritik olmayan):</b> '+L(g)+'</p>':'')+'</div>';
 }
 function cfBox(x){
   return '<div class="m-cf">'+(x.cpeople.length?'<p><b>⚠ Çakışan kişi'+(x.cpeople.length>1?'ler':'')+':</b> '+E(x.cpeople.slice(0,8).join(', '))+(x.cpeople.length>8?' +'+(x.cpeople.length-8):'')+'</p>':'')+
