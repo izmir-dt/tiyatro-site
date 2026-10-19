@@ -9076,6 +9076,18 @@ body.idt-locked main{pointer-events:none;user-select:none;opacity:.5;filter:gray
  #mSheet input,#mSheet select,#mSheet textarea{width:100%;font:500 15px 'Manrope',sans-serif;padding:11px 12px;border:1px solid var(--m-border);border-radius:12px;background:var(--m-bg);color:var(--m-ink)}
  #mSheet .acts{display:flex;gap:8px;margin-top:16px}#mSheet .acts button{flex:1;min-height:46px;border-radius:14px;border:1px solid var(--m-border);background:var(--m-surface);color:var(--m-deep);font:700 14px 'Manrope',sans-serif}
  #mSheet .acts .pri{background:var(--m-brand);border-color:var(--m-brand);color:oklch(1 0 0)}#mSheet .acts .del{color:var(--m-danger);flex:0 0 auto;padding:0 16px}
+ #mSheet .mcrew{margin-top:18px;background:var(--m-bg);border:1px solid var(--m-border);border-radius:18px;padding:14px 12px 6px}
+ #mSheet .mcrew-h{display:flex;align-items:baseline;justify-content:space-between;padding:0 4px 10px}
+ #mSheet .mcrew-h span{font:700 17px 'Fraunces',serif;color:var(--m-deep)}#mSheet .mcrew-h em{font:600 11px 'Manrope',sans-serif;font-style:normal;color:var(--m-muted);background:var(--m-surface);border:1px solid var(--m-border);padding:3px 9px;border-radius:99px}
+ #mSheet .mcrew-g{margin-bottom:12px}
+ #mSheet .mcrew-cat{display:flex;align-items:center;gap:6px;font:700 10.5px 'Manrope',sans-serif;letter-spacing:.09em;text-transform:uppercase;color:var(--m-brand);padding:4px 4px 6px}
+ #mSheet .mcrew-cat i{font-style:normal;font-weight:600;color:var(--m-muted);letter-spacing:0}
+ #mSheet .mcrew-p{display:flex;align-items:center;gap:11px;background:var(--m-surface);border-radius:12px;padding:8px 10px;margin-bottom:5px;box-shadow:0 1px 2px oklch(.2 .03 20 / .06)}
+ #mSheet .mcrew-av{flex:0 0 34px;height:34px;border-radius:50%;display:grid;place-items:center;font:700 12px 'Manrope',sans-serif;color:var(--m-brand);background:color-mix(in oklab,var(--m-brand) 12%,var(--m-surface))}
+ #mSheet .mcrew-p.kast .mcrew-av{color:oklch(.55 .12 80);background:oklch(.95 .06 90)}
+ #mSheet .mcrew-t{display:flex;flex-direction:column;min-width:0}
+ #mSheet .mcrew-t b{font:600 14px 'Manrope',sans-serif;color:var(--m-ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+ #mSheet .mcrew-t small{font-size:11.5px;color:var(--m-muted);margin-top:1px}
  #mSheet .crew{margin-top:12px;border-top:1px solid var(--m-border);padding-top:10px;font-size:13px}#mSheet .crew div{padding:5px 0;border-bottom:1px solid var(--m-soft)}#mSheet .crew small{color:var(--m-muted)}
  .m-back-desk{display:none}
  body.m-desk .m-back-desk{display:flex;position:fixed;right:12px;bottom:12px;z-index:9999;background:var(--m-brand);color:oklch(1 0 0);border:0;border-radius:999px;padding:10px 14px;font:700 12px 'Manrope',sans-serif;box-shadow:var(--m-shadow)}
@@ -9243,6 +9255,15 @@ function list(ds,stat){
 function openSheet(html){sheet.innerHTML='<div class="grab"></div>'+html;sheet.classList.add('on');shade.classList.add('on');}
 function closeSheet(){sheet.classList.remove('on');shade.classList.remove('on');}
 shade.onclick=closeSheet;
+function mCrewHtml(crew){
+  const groups={},order=[];
+  Object.keys(crew).forEach(k=>{const p=crew[k];const r0=(p.roles&&p.roles[0])||'';const parts=r0.split(' / ');
+    const cat=(parts[0]||'Diğer').trim()||'Diğer';const role=parts.slice(1).join(' / ')||((p.roles||[]).slice(1).join(', '));
+    if(!groups[cat]){groups[cat]=[];order.push(cat);}groups[cat].push({name:p.name||k,role,kast:p.kast,kastOf:p.kastOf,crit:p.critical});});
+  const ini=n=>String(n).trim().split(/\s+/).filter(Boolean).map(w=>w[0]).slice(0,2).join('').toLocaleUpperCase('tr');
+  const total=Object.keys(crew).length;
+  return '<div class="mcrew"><div class="mcrew-h"><span>Kadro</span><em>'+total+' kişi</em></div>'+order.map(cat=>'<div class="mcrew-g"><div class="mcrew-cat">'+E(cat)+'<i>'+groups[cat].length+'</i></div>'+groups[cat].map(o=>'<div class="mcrew-p'+(o.kast?' kast':'')+'"><span class="mcrew-av">'+E(ini(o.name))+'</span><span class="mcrew-t"><b>'+E(o.name)+'</b>'+((o.role||o.kast)?'<small>'+E(o.role||'')+(o.kast&&o.kastOf?(o.role?' · ':'')+'Kast: '+E(o.kastOf):'')+'</small>':'')+'</span></div>').join('')+'</div>').join('')+'</div>';
+}
 function editCell(r,c){
   const m=curMonth(),cell=m.cells[r+'_'+c]||{},v=cell.v||'',g=parseGame(v),crew=g.key&&typeof crewOf==='function'?crewOf(g.key):null;
   let cf=null;try{cf=buildConflict(rowGames(m,r));}catch(e){}
@@ -9254,7 +9275,7 @@ function editCell(r,c){
   ppl.sort((a,b)=>({r:0,y:1,g:2}[a.col]-{r:0,y:1,g:2}[b.col]));
   const pplHtml=ppl.length?'<label>ÇAKIŞAN KİŞİLER — KRİTİK SEÇİMİ</label><div class="m-ppl">'+ppl.map(o=>'<div class="m-pp '+o.col+'"><span>'+({r:'🔴',y:'🟡',g:'🟢'}[o.col])+' '+E(o.name)+'</span><button data-s="attn" data-p="'+E(o.pp)+'" class="'+(o.on?'on':'')+'">'+(o.on?'❗ Kritik':'Kritik değil')+'</button></div>').join('')+'</div>':'';
   openSheet('<h2>'+E(g.key||'Kayıt')+'</h2><p>'+E(dateTextOfRow(m,r))+' · '+E(stageHeaderText(m,c))+'</p>'+cfHtml+pplHtml+'<label>HÜCRE NOTU</label><textarea id="mEdN" rows="2" placeholder="Not yok">'+E(cell.note||'')+'</textarea><label>HÜCRE METNİ</label><input id="mEdV" value="'+E(v)+'" list="oyunList" autocomplete="off"><p style="margin-top:6px">Prömiyer için başına * ekleyin; not için parantez kullanın.</p>'+
-  (crew?'<div class="crew"><b>Kadro</b>'+Object.keys(crew).slice(0,40).map(k=>{const p=crew[k];return '<div>'+E(p.name||k)+(p.role?' <small>· '+E(p.role)+'</small>':'')+'</div>';}).join('')+'</div>':'')+
+  (crew?mCrewHtml(crew):'')+
   '<div class="acts"><button class="del" data-s="del">Sil</button><button data-s="x">Vazgeç</button><button class="pri" data-s="ok">Kaydet</button></div>');
   sheet.onclick=ev=>{const b=ev.target.closest('[data-s]');if(!b)return;const a=b.dataset.s;
     if(a==='x')return closeSheet();
