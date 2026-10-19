@@ -1,12 +1,12 @@
 /* ════════════════════════════════════════════════════════════════
-   TURNE ASİSTANI v5.6
+   TURNE ASİSTANI v5.7
    İzmir Devlet Tiyatrosu
    YENİ: Turne düzenleme · Hatırlatıcı · Detaylı istatistik
    ═══════════════════════════════════════════════════════════════ */
 (function () {
-  if (window.__turneAsistanLoaded === 'v5.6') return;
+  if (window.__turneAsistanLoaded === 'v5.7') return;
   ["ta-fab", "ta-panel", "ta-toast", "ta-prompt-modal", "ta-style"].forEach(id => document.getElementById(id)?.remove());
-  window.__turneAsistanLoaded = 'v5.6';
+  window.__turneAsistanLoaded = 'v5.7';
 
   const API = "https://turne-backend.vercel.app/api/sheets";
   const TURNE_SHEET = "TURNE_KAYITLARI";
@@ -3183,7 +3183,7 @@
   }
 
   // Bir kişinin belirli bir turnede tek/çift/münferit odada kalıp kalmadığını tespit eder.
-  // v5.6+: Hem oda planlarını hem de katılımcı JSON içindeki odaTip/odaEsi alanlarını okur.
+  // v5.7+: Hem oda planlarını hem de katılımcı JSON içindeki odaTip/odaEsi alanlarını okur.
   // Plan anahtarları norm() ile karşılaştırılır (büyük/küçük harf, boşluk, "İ/I" farklarını yutar).
   // Ayrıca kişi başkasının "odaEsi" değeri olarak geçiyorsa da çift oda olarak sayılır.
   function odaDurumTespit(t, hedefNorm) {
