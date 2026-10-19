@@ -1317,6 +1317,77 @@
 
   // Genişletme dispatcher — answer() başında çağrılır
   function _taX(Q, T, F, ds, qRaw) {
+    /* ── KİŞİ İSTATİSTİĞİ — "Sami Öztürk istatistik" → yol (gün/şehir) + oyunlar + program ── */
+    if (/(istatistik|istat\b|istatistiği|sayısal|sayisal|rakam)/.test(Q) && !/(whatsapp|wp\b|\boda)/.test(Q)) {
+      const _fold = s => (s||"").toLocaleLowerCase("tr").replace(/ç/g,"c").replace(/ğ/g,"g").replace(/ı/g,"i").replace(/ö/g,"o").replace(/ş/g,"s").replace(/ü/g,"u").replace(/i̇/g,"i").replace(/\s+/g," ").trim();
+      const Qf = _fold(Q);
+      // Kişi bul: tam ad (≥2 kelime) önce, sonra tek parça (≥4 harf); Türkçe karakter farkı tolere edilir
+      const kisiMap = new Map();
+      for (const t of T) for (const k of (t.katilimcilar||[])) { const key=_fold(k.kisi); if (key && !kisiMap.has(key)) kisiMap.set(key,k); }
+      let kisi = null;
+      for (const [key,k] of kisiMap) if (key.split(" ").length>=2 && Qf.includes(key)) { kisi=k; break; }
+      if (!kisi) {
+        const adaylar=[...kisiMap.entries()].filter(([key])=>key.split(" ").filter(p=>p.length>=4).some(p=>Qf.split(" ").includes(p)));
+        if (adaylar.length===1) kisi=adaylar[0][1];
+        else if (adaylar.length>1) {
+          let o=`👥 **Birden fazla kişi bulundu — hangisi?**\n\n`;
+          for (const [,k] of adaylar.slice(0,8)) o+=`• <button class="ta-inline-copy" style="font-size:12px;padding:3px 9px;" onclick="window.__taSubmit('${String(k.kisi).replace(/'/g,"\\'")} istatistik')">${esc(k.kisi)}</button>\n`;
+          return {html:o};
+        }
+      }
+      if (kisi) {
+        const hedef=_fold(kisi.kisi);
+        const hepsi=T.filter(t=>(t.katilimcilar||[]).some(k=>_fold(k.kisi)===hedef));
+        const iptalSayi=hepsi.filter(t=>(t.statu||"").includes("iptal")).length;
+        const list=hepsi.filter(t=>!(t.statu||"").includes("iptal")).sort((a,b)=>(parseDate(a.baslangic)||0)-(parseDate(b.baslangic)||0));
+        if (!list.length) return {html:`**${esc(kisi.kisi)}** için aktif turne kaydı bulunamadı.${iptalSayi?` (${iptalSayi} iptal kayıt var)`:""}`};
+        const now=new Date();
+        const gun=benzersizGunSay(list);
+        const temsil=list.reduce((s,t)=>s+(Number(t.sayi)||0),0);
+        const sehirSet=new Map(); list.forEach(t=>collectUniqueCitiesFromTour(t).forEach(il=>{ if(il&&!sehirSet.has(norm(il))) sehirSet.set(norm(il),il); }));
+        // Oyun kırılımı
+        const oyunMap=new Map();
+        for (const t of list) {
+          const key=norm(t.oyun||"—"); if(!oyunMap.has(key)) oyunMap.set(key,{ad:t.oyun||"—",turne:0,gun:0,temsil:0,iller:new Set()});
+          const g=oyunMap.get(key); g.turne++; g.gun+=turneGun(t); g.temsil+=Number(t.sayi)||0;
+          collectUniqueCitiesFromTour(t).forEach(il=>il&&g.iller.add(il));
+        }
+        const oyunlar=[...oyunMap.values()].sort((a,b)=>b.turne-a.turne||b.gun-a.gun);
+        const tamam=list.filter(t=>(t.statu||"").startsWith("tamamlan")).length;
+        const yarida=list.filter(t=>t.statu==="yarida-kesildi").length;
+        const planli=list.filter(t=>{const d=parseDate(t.baslangic);return d&&d>now;}).length;
+        const ucak=list.filter(t=>/(uçak|ucak|thy|pegasus|sunexpress|hava)/i.test(t.gidisUlasim||"")).length;
+        const ulasimIco=u=>/(uçak|ucak|thy|pegasus|sunexpress|hava)/i.test(u||"")?"✈️":"🚌";
+        const stIco=t=>(t.statu||"").includes("tamamlan")?"✅":t.statu==="yarida-kesildi"?"⚠️":(parseDate(t.baslangic)>now?"📅":"🟢");
+        const ilk=parseDate(list[0].baslangic), son=parseDate(list[list.length-1].bitis||list[list.length-1].baslangic);
+
+        let o=`<div style="background:#FBE8EB;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:12px;font-weight:700;color:#7A0E1E;">📊 ${esc(kisi.kisi)} — İstatistik${kisi.gorev?` <span style="font-weight:500;opacity:.75">· ${esc(kisi.gorev)}</span>`:""}</div>`;
+        o+=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;"><div class="ta-kpi"><div class="ta-kpi-val">${list.length}</div><div class="ta-kpi-lbl">Turne</div></div><div class="ta-kpi"><div class="ta-kpi-val">${gun}</div><div class="ta-kpi-lbl">Gün Yolda</div></div><div class="ta-kpi"><div class="ta-kpi-val">${sehirSet.size}</div><div class="ta-kpi-lbl">Şehir</div></div><div class="ta-kpi"><div class="ta-kpi-val">${oyunlar.length}</div><div class="ta-kpi-lbl">Oyun</div></div></div>`;
+        o+=`<div style="font-size:12px;line-height:1.9;margin-bottom:10px;">🎫 Toplam temsil: <strong>${temsil}</strong><br>✅ Tamamlanan: <strong>${tamam}</strong> &nbsp;·&nbsp; 📅 Planlı: <strong>${planli}</strong>${yarida?` &nbsp;·&nbsp; ⚠️ Yarıda kesilen: <strong>${yarida}</strong>`:""}<br>✈️ Uçakla: <strong>${ucak}</strong> &nbsp;·&nbsp; 🚌 Karayolu/diğer: <strong>${list.length-ucak}</strong><br>🗓 İlk turne: <strong>${ilk?fmtTarih(ilk.toISOString().slice(0,10)):"—"}</strong> &nbsp;·&nbsp; Son: <strong>${son?fmtTarih(son.toISOString().slice(0,10)):"—"}</strong></div>`;
+
+        // 🛣️ YOL — şehirler
+        o+=`<div style="font-size:12px;font-weight:800;color:#A0192E;margin:8px 0 4px;">🛣️ Yol — Gittiği Şehirler (${sehirSet.size})</div>`;
+        o+=`<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px;">${[...sehirSet.values()].map(il=>`<span class="ta-badge">${esc(il)}</span>`).join("")}</div>`;
+
+        // 🎭 OYUNLAR
+        o+=`<div style="font-size:12px;font-weight:800;color:#A0192E;margin:8px 0 4px;">🎭 Oyunlar (${oyunlar.length})</div>`;
+        for (const g of oyunlar) {
+          o+=`<div style="border:1px solid #E0D5CC;border-radius:8px;padding:6px 10px;margin-bottom:5px;font-size:12px;line-height:1.6;"><strong>${esc(g.ad)}</strong><br><span style="color:#6A6560">${g.turne} turne · ${g.gun} gün · ${g.temsil} temsil · 📍 ${[...g.iller].slice(0,6).map(esc).join(", ")}${g.iller.size>6?"…":""}</span></div>`;
+        }
+
+        // 📅 PROGRAM
+        o+=`<div style="font-size:12px;font-weight:800;color:#A0192E;margin:10px 0 4px;">📅 Program (${list.length} turne)</div>`;
+        for (const t of list.slice().reverse().slice(0,25)) {
+          const yol=[t.il,...(t.duraklar||[]).map(d=>d.il)].filter(Boolean);
+          const yolStr=[...new Set(yol)].join(" → ");
+          o+=`<div style="border-left:3px solid #A0192E;padding:2px 0 2px 8px;margin-bottom:6px;font-size:12px;line-height:1.55;">${stIco(t)} <strong>${esc(t.oyun||"—")}</strong><br><span style="color:#6A6560">📅 ${fmtTarihAralik(t.baslangic,t.bitis)} · ${turneGun(t)} gün · 🛣️ ${esc(yolStr||"—")}${t.gidisUlasim?` · ${ulasimIco(t.gidisUlasim)} ${esc(t.gidisUlasim)}`:""}</span></div>`;
+        }
+        if (list.length>25) o+=`<div style="font-size:11px;color:#8A857C">… ve ${list.length-25} turne daha (en yeni 25 gösteriliyor)</div>`;
+        if (iptalSayi>0) o+=`<div style="font-size:11px;color:#8A857C;margin-top:4px">(İptal edilen ${iptalSayi} turne sayıma dahil değil.)</div>`;
+        return {html:o};
+      }
+    }
+
     /* ── BRİFİNG / GÜNAYDIN BRİFİNG ── */
     if (/(sabah brifing|brifing modu|brifing|günlük özet|gunluk ozet)/.test(Q)) {
       const now=_bugun();
