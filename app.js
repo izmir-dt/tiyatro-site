@@ -166,7 +166,7 @@ const panelList = () => {
 function gridHtml(){
   const l = panelList();
   return l.length ? `<div class="pgrid">${l.map((p,i) => `<a class="pc" style="--i:${Math.min(i,24)}" href="#panel/${encodeURIComponent(p.name)}"><div class="im">${posterHtml(p)}</div>
-    <div class="nm">${esc(p.name)}<div class="mt">${p.kisi} kişi${p.fig ? " · " + p.fig + " figüran" : ""}</div></div></a>`).join("")}</div>`
+    ${p.cocuk ? '<span class="badge">Çocuk</span>' : ""}<div class="nm">${esc(p.name)}<div class="mt">${p.kisi} kişi${p.fig ? " · " + p.fig + " figüran" : ""}</div></div></a>`).join("")}</div>`
     : `<div class="empty"><h2>Eşleşen oyun yok</h2><p>Aramayı veya türü değiştirin.</p></div>`;
 }
 function kunyeHtml(p){
@@ -180,7 +180,12 @@ function kunyeHtml(p){
   const nm = ts => ts.map(t => { const n = stripTag(t);
     return n ? `<span>${esc(n)}${FIGTAG.test(t) ? '<i class="tag">Figüran</i>' : ""}${PD.pasif(n,p.name) ? '<i class="tag">Pasif</i>' : ""}</span>` : ""; }).join("");
   const cnt = g => [...g.values()].reduce((s,ts) => s + ts.filter(t => stripTag(t)).length, 0);
-  return [...cats].sort((x,y) => isFigCat(x[0]) - isFigCat(y[0])).map(([k,g]) => {
+  const grp = k => { const t = norm(k); return isFigCat(k) ? 2 : (t.includes("oyuncu") || t.includes("kadro") || t.includes("rol")) ? 0 : 1; };
+  const GN = ["Oyuncular","Sanat ve teknik ekip","Figüranlar"];
+  const tabs = [0,1,2].map(i => ({i, cs:[...cats].filter(c => grp(c[0]) === i)})).filter(x => x.cs.length);
+  const pc = cs => cs.reduce((s,[,g]) => s + cnt(g), 0);
+  return `<div class="ptabs">${tabs.map(x => `<button type="button" data-jump="kg${x.i}"><b>${pc(x.cs)}</b>${GN[x.i]}</button>`).join("")}</div>` +
+    tabs.map(x => `<div class="kgroup" id="kg${x.i}"><h2 class="kg-h">${GN[x.i]}<span>${pc(x.cs)} kişi</span></h2>${x.cs.map(([k,g]) => {
     const fig = isFigCat(k);
     return `<section class="kcard${fig ? " fig" : ""}"><h3>${esc(k)}${fig ? `<i class="tag">${cnt(g)} kişi</i>` : ""}</h3>${[...g].map(([gr, ts]) => {
       const n = ts.filter(t => stripTag(t)).length;
@@ -188,7 +193,7 @@ function kunyeHtml(p){
         ? `<div class="kr bulk">${gr !== "—" ? `<div class="g">${esc(gr)} <i class="tag">${n}</i></div>` : ""}<div class="names">${nm(ts)}</div></div>`
         : `<div class="kr"><div class="g">${esc(gr)}</div><div class="p">${nm(ts)}</div></div>`;
     }).join("")}</section>`;
-  }).join("");
+  }).join("")}</div>`).join("");
 }
 function viewPanel(){
   const refresh = `<button class="btn" type="button" data-act="refresh">Yenile</button>`;
@@ -223,14 +228,14 @@ function skel(grid){ return grid ? `<div class="pgrid">${Array.from({length:12},
   : `<div class="sheet sk"><i></i><i></i>${Array.from({length:7},() => "<b></b>").join("")}</div>`; }
 function render(){ $("#main").innerHTML = `<div class="view">${cur === "panel" ? viewPanel() : viewProgramlar()}</div>`; }
 function buildNav(){
-  $("#nav").innerHTML = NAV.map(g => {
-    const on = g.items.some(i => i[1] === "#" + cur);
-    return `<div class="dd${on?" on":""}"><button class="dd-b" type="button" aria-expanded="false">${g.g}</button><div class="dd-m">${g.items.map(([l,h,ext]) => {
-      const here = h === "#" + cur, c = [here ? "on" : "", ext ? "ext" : ""].filter(Boolean).join(" ");
-      return `<a href="${h}"${c ? ` class="${c}"` : ""}${here ? ' aria-current="page"' : ""}${ext ? ' target="_blank" rel="noopener"' : ""}>${l}</a>`;
-    }).join("")}</div></div>`;
-  }).join("");
+  const quick = [["Ana panel","#panel"],["Haftalık program","#programlar"]].map(([l,h]) => `<a class="q${h === "#" + cur ? " on" : ""}" href="${h}">${l}</a>`).join("");
+  $("#nav").innerHTML = quick;
+  let ov = $("#ov");
+  if (!ov) { ov = document.createElement("div"); ov.id = "ov"; ov.setAttribute("aria-hidden","true"); document.body.appendChild(ov); }
+  ov.innerHTML = `<div class="ov-in">${NAV.map((g,gi) => `<section style="--d:${gi}"><h4>${g.g}</h4>${g.items.map(([l,h,ext]) =>
+    `<a href="${h}"${h === "#" + cur ? ' class="on" aria-current="page"' : ""}${ext ? ' target="_blank" rel="noopener"' : ""}>${l}${ext ? " ↗" : ""}</a>`).join("")}</section>`).join("")}</div>`;
 }
+function setOv(o){ document.body.classList.toggle("ov-open", o); $("#menu").setAttribute("aria-expanded", o); $("#ov").setAttribute("aria-hidden", !o); }
 function closeMenus(){ document.querySelectorAll(".dd.open").forEach(d => { d.classList.remove("open"); d.firstChild.setAttribute("aria-expanded","false"); }); }
 async function refresh(){
   LOADERR = ""; DATA = null; render();
@@ -239,11 +244,13 @@ async function refresh(){
 }
 
 document.addEventListener("click", e => {
-  if (e.target.closest("#nav a")) { $("#nav").classList.remove("open"); $("#menu").setAttribute("aria-expanded","false"); closeMenus(); return; }
+  if (e.target.closest("#nav a, #ov a")) { setOv(false); return; }
+  if (e.target.id === "ov") { setOv(false); return; }
   if (!e.target.closest(".dd")) closeMenus();
   const t = e.target.closest("button"); if (!t) return;
-  if (t.id === "menu") { const o = $("#nav").classList.toggle("open"); t.setAttribute("aria-expanded", o); return; }
+  if (t.id === "menu") { setOv(!document.body.classList.contains("ov-open")); return; }
   if (t.classList.contains("dd-b")) { const d = t.parentNode, was = d.classList.contains("open"); closeMenus(); if (!was) { d.classList.add("open"); t.setAttribute("aria-expanded","true"); } return; }
+  if (t.dataset.jump) { document.getElementById(t.dataset.jump)?.scrollIntoView({behavior:"smooth"}); return; }
   if (t.dataset.unit) { location.hash = "#programlar/" + t.dataset.unit; }
   else if (t.dataset.week) { location.hash = "#programlar/" + unit + "/" + t.dataset.week; }
   else if (t.dataset.act === "print") window.print();
@@ -251,7 +258,7 @@ document.addEventListener("click", e => {
   else if (t.dataset.act === "refresh") { if (cur === "panel") loadPanel(true); else refresh(); }
 });
 document.addEventListener("input", e => { if (e.target.id === "pq") { pq = e.target.value; const g = $("#pgrid"); if (g) g.innerHTML = gridHtml(); } });
-document.addEventListener("keydown", e => { if (e.key === "Escape") closeMenus(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape") { closeMenus(); setOv(false); } });
 window.addEventListener("hashchange", route);
 window.addEventListener("scroll", () => $(".top").classList.toggle("scrolled", scrollY > 6), {passive:true});
 route(); refresh();
