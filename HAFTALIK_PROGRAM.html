@@ -438,7 +438,7 @@ header.app nav .dd-trigger.on{background:#d39a3d;border-color:#d39a3d;color:#2b1
           <div class="menu-panel"><div class="mp-title">Dosya</div>
             <button class="btn" id="impX">Excel / Word yükle</button><button class="btn" id="dataB">Yedek (JSON)</button></div></div>
         <span class="menu-spacer"></span>
-        <div class="iconpair"><button class="navbtn" id="zOut" title="Küçült">−</button><span id="zVal" style="font:700 12px Manrope,sans-serif;min-width:42px;text-align:center;cursor:pointer" title="%100'e döndür">100%</span><button class="navbtn" id="zIn" title="Büyüt">+</button><button class="navbtn" id="tmodeB" title="Tabloyu Excel gibi tam alanda göster">⛶ Tablo modu</button><button class="navbtn" id="undoB" title="Geri al (Ctrl+Z)">↶ Geri al</button></div>
+        <div class="iconpair"><button class="navbtn" id="zOut" title="Küçült">−</button><span id="zVal" style="font:700 12px Manrope,sans-serif;min-width:42px;text-align:center;cursor:pointer" title="%100'e döndür">100%</span><button class="navbtn" id="zIn" title="Büyüt">+</button><button class="navbtn" id="tmodeB" title="Tabloyu Excel gibi tam alanda göster">⛶ Tablo modu</button><button class="navbtn" id="undoB" title="Geri al (Ctrl+Z)">↶ Geri al</button><button class="navbtn" id="redoB" title="Yinele (Ctrl+Y)">↷ Yinele</button></div>
       </div>
     </div>
     <input type="file" id="fileX" accept=".xlsx,.docx" hidden>
@@ -584,9 +584,13 @@ function blankUnitState(){const h=SEED.state.header;return {cur:'',weeks:{},staf
 let _saveT=null;function saveFlush(){if(_saveT){clearTimeout(_saveT);_saveT=null;}try{localStorage.setItem(LS,JSON.stringify(S));}catch(e){toast('Kaydedilemedi: depolama dolu');}}
 function save(){clearTimeout(_saveT);_saveT=setTimeout(saveFlush,250);try{scheduleSync();}catch(e){}}
 window.addEventListener('beforeunload',()=>{if(_saveT)saveFlush();});document.addEventListener('visibilitychange',()=>{if(document.hidden&&_saveT)saveFlush();});
-function snap(){hist.push(JSON.stringify(S));if(hist.length>80)hist.shift();}
-function undo(){if(!hist.length)return toast('Geri alınacak işlem yok');S=JSON.parse(hist.pop());sel=null;editing=null;save();render();}
-S=load();
+let redoH=[],_hT=null;const HLS=LS+'_hist';
+function persistHist(){clearTimeout(_hT);_hT=setTimeout(()=>{try{let tot=0,out=[];for(let i=hist.length-1;i>=0&&out.length<40;i--){tot+=hist[i].length;if(tot>900000)break;out.unshift(hist[i]);}localStorage.setItem(HLS,JSON.stringify(out));}catch(e){try{localStorage.removeItem(HLS);}catch(_){}}},600);}
+function loadHist(){try{const a=JSON.parse(localStorage.getItem(HLS)||'[]');return Array.isArray(a)?a:[];}catch(e){return [];}}
+function snap(){hist.push(JSON.stringify(S));if(hist.length>80)hist.shift();redoH=[];persistHist();}
+function undo(){if(!hist.length)return toast('Geri alınacak işlem yok');redoH.push(JSON.stringify(S));S=JSON.parse(hist.pop());if(!S.weeks[S.cur])S.cur=Object.keys(S.weeks).sort().pop()||S.cur;sel=null;editing=null;save();persistHist();render();toast('Geri alındı ('+hist.length+' adım daha var)');}
+function redo(){if(!redoH.length)return toast('Yinelenecek işlem yok');hist.push(JSON.stringify(S));S=JSON.parse(redoH.pop());if(!S.weeks[S.cur])S.cur=Object.keys(S.weeks).sort().pop()||S.cur;sel=null;editing=null;save();persistHist();render();toast('Yinelendi');}
+S=load();hist=loadHist();
 function W(){return S.weeks[S.cur];}
 function G(){return W().g;}
 
@@ -1249,7 +1253,8 @@ document.addEventListener('keydown',e=>{
     else if(e.key==='Tab'){e.preventDefault();commitEdit();move(0,e.shiftKey?-1:1);}
     return;}
   const k=e.key,mod=e.ctrlKey||e.metaKey;
-  if(mod&&k.toLowerCase()==='z'){e.preventDefault();undo();return;}
+  if(mod&&k.toLowerCase()==='z'){e.preventDefault();if(e.shiftKey)redo();else undo();return;}
+  if(mod&&k.toLowerCase()==='y'){e.preventDefault();redo();return;}
   if(!sel)return;
   if(mod){if(k.toLowerCase()==='b'){e.preventDefault();styleOp('b');}return;}
   const A={ArrowUp:[-1,0],ArrowDown:[1,0],ArrowLeft:[0,-1],ArrowRight:[0,1]};
@@ -1698,7 +1703,7 @@ $('#copyW').onclick=()=>{commitEdit();
     if(!keep&&L&&L.col.ppl!=null)for(let r=L.first;r<=L.end;r++){const m=mergeAt(g,r,L.col.ppl);if(!m||m[0]===r)cset(g,r,L.col.ppl,{t:''});}
     S.cur=k;sel=null;save();render();toast('Hafta kopyalandı: '+weekLabel(k));});};
 $('#delW').onclick=()=>{if(Object.keys(S.weeks).length<2)return toast('Son hafta silinemez');ask('Haftayı sil',`<p><b>${weekLabel(S.cur)}</b> haftası silinsin mi? (Geri al ile dönebilirsiniz)</p>`,()=>{snap();delete S.weeks[S.cur];S.cur=Object.keys(S.weeks).sort().pop();sel=null;save();render();});};
-$('#undoB').onclick=undo;
+$('#undoB').onclick=undo;$('#redoB').onclick=redo;
 function markBorn(k){try{SY.born=SY.born||{};SY.born[k]=Date.now();saveSY();}catch(e){}}
 $('#draftB').onclick=()=>ask('Aylık programdan taslak ekle','<p><b>'+weekLabel(S.cur)+'</b> haftası için aylık programdaki oyunlar, tabloda henüz olmayanlar taslak satır olarak eklenecek. Mevcut satırlara dokunulmaz.</p>',()=>{commitEdit();snap();draftFromMonthly(true);save();refresh();});
 
@@ -2372,7 +2377,7 @@ function mrender(){
  if(mview==='staff')mstaff();
  if(mview==='tools'){
  const tool=(id,icon,l,danger='')=>'<button class="m-tool '+danger+'" data-'+(id.startsWith('tab:')?'tab="'+id.slice(4):'trigger="'+id)+'">'+mic(icon)+'<span>'+l+'</span>'+mic('right')+'</button>';
- main.innerHTML='<div class="m-section"><h2>Program araçları</h2><small>'+keys.length+' hafta</small></div><div class="m-tools-group"><h3>HAFTA</h3>'+tool('pubB','check','Haftalık programı onayla')+tool('newW','plus','Yeni hafta')+tool('copyW','copy','Önceki haftayı kopyala')+tool('undoB','undo','Geri al')+'<h3>GÖREVLENDİRME</h3>'+tool('tab:tasks','tools','Hazır işler')+tool('tab:warns','warning','Uyarılar · '+cf.msgs.length)+tool('tab:month','calendar','Aylık program')+tool('tab:leave','note','İzin / rapor')+'<h3>DOSYALAR</h3>'+tool('printB','print','Yazdır / PDF')+tool('expX','download','Excel indir')+tool('expJ','download','JPG indir')+tool('impX','upload','Excel / Word yükle')+tool('dataB','copy','Yedek / geri yükle (JSON)')+'<h3>AYARLAR</h3>'+tool('tab:sheets','cloud','Google E-Tablolar')+tool('signB','edit','İmzacıları düzenle')+tool('footB','note','Alt açıklamaları düzenle')+tool('switchUnit','switch','Birim değiştir')+tool('delW','trash','Haftayı sil','danger')+'</div>';
+ main.innerHTML='<div class="m-section"><h2>Program araçları</h2><small>'+keys.length+' hafta</small></div><div class="m-tools-group"><h3>HAFTA</h3>'+tool('pubB','check','Haftalık programı onayla')+tool('newW','plus','Yeni hafta')+tool('copyW','copy','Önceki haftayı kopyala')+tool('undoB','undo','Geri al')+tool('redoB','undo','Yinele')+'<h3>GÖREVLENDİRME</h3>'+tool('tab:tasks','tools','Hazır işler')+tool('tab:warns','warning','Uyarılar · '+cf.msgs.length)+tool('tab:month','calendar','Aylık program')+tool('tab:leave','note','İzin / rapor')+'<h3>DOSYALAR</h3>'+tool('printB','print','Yazdır / PDF')+tool('expX','download','Excel indir')+tool('expJ','download','JPG indir')+tool('impX','upload','Excel / Word yükle')+tool('dataB','copy','Yedek / geri yükle (JSON)')+'<h3>AYARLAR</h3>'+tool('tab:sheets','cloud','Google E-Tablolar')+tool('signB','edit','İmzacıları düzenle')+tool('footB','note','Alt açıklamaları düzenle')+tool('switchUnit','switch','Birim değiştir')+tool('delW','trash','Haftayı sil','danger')+'</div>';
  }
  $('#mWeekSelect').onchange=e=>goto(e.target.value);
 }
