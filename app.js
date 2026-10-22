@@ -174,9 +174,18 @@ function kunyeHtml(p){
     const g = cats.get(k); if (!g.has(gk)) g.set(gk, []);
     names(r.kisi).forEach(t => g.get(gk).push(t));
   });
-  return [...cats].map(([k,g]) => `<section class="kcard"><h3>${esc(k)}</h3>${[...g].map(([gr, ts]) =>
-    `<div class="kr"><div class="g">${esc(gr)}</div><div class="p">${ts.map(t => { const n = stripTag(t);
-      return n ? `<span>${esc(n)}${FIGTAG.test(t) ? '<i class="tag">Figüran</i>' : ""}${PD.pasif(n,p.name) ? '<i class="tag">Pasif</i>' : ""}</span>` : ""; }).join("")}</div></div>`).join("")}</section>`).join("");
+  const nm = ts => ts.map(t => { const n = stripTag(t);
+    return n ? `<span>${esc(n)}${FIGTAG.test(t) ? '<i class="tag">Figüran</i>' : ""}${PD.pasif(n,p.name) ? '<i class="tag">Pasif</i>' : ""}</span>` : ""; }).join("");
+  const cnt = g => [...g.values()].reduce((s,ts) => s + ts.filter(t => stripTag(t)).length, 0);
+  return [...cats].sort((x,y) => isFigCat(x[0]) - isFigCat(y[0])).map(([k,g]) => {
+    const fig = isFigCat(k);
+    return `<section class="kcard${fig ? " fig" : ""}"><h3>${esc(k)}${fig ? `<i class="tag">${cnt(g)} kişi</i>` : ""}</h3>${[...g].map(([gr, ts]) => {
+      const n = ts.filter(t => stripTag(t)).length;
+      return (fig || n > 6)
+        ? `<div class="kr bulk">${gr !== "—" ? `<div class="g">${esc(gr)} <i class="tag">${n}</i></div>` : ""}<div class="names">${nm(ts)}</div></div>`
+        : `<div class="kr"><div class="g">${esc(gr)}</div><div class="p">${nm(ts)}</div></div>`;
+    }).join("")}</section>`;
+  }).join("");
 }
 function viewPanel(){
   const refresh = `<button class="btn" type="button" data-act="refresh">Yenile</button>`;
