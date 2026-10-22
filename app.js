@@ -1,10 +1,11 @@
 "use strict";
 const OLD = "eski.html";
-const API = "https://tiyatro-backend.vercel.app/api/sheets/" + encodeURIComponent("HAFTALIK PROGRAM") + "?fresh=1";
+const BASE = "https://tiyatro-backend.vercel.app/api/sheets";
+const API = BASE + "/" + encodeURIComponent("HAFTALIK PROGRAM") + "?fresh=1";
 const UNITS = [["dekor","Dekor Aksesuar"],["kondvit","Kondüvit"],["isik","Işık"],["erkek","Erkek Terzi"],["kadin","Kadın Terzi"],["peruka","Peruka"]];
 /* Henüz taşınmamış ekranlar eski siteye gider (eski.html); taşındıkça burada #hash'e dönüşür. */
 const NAV = [
-  {g:"Repertuvar", items:[["Ana panel",OLD+"#panel"],["Dağılım",OLD+"#dagilim"],["İstatistik",OLD+"#grafik"]]},
+  {g:"Repertuvar", items:[["Ana panel","#panel"],["Dağılım",OLD+"#dagilim"],["İstatistik",OLD+"#grafik"]]},
   {g:"Kadro", items:[["Kişiler",OLD+"#kisiler"],["Figüran",OLD+"#figuran"],["Sorgulama",OLD+"#sorgu"]]},
   {g:"Programlar", items:[["Haftalık program","#programlar"],["Aylık program",OLD+"#program"]]},
   {g:"Yönetim", items:[["Görevli olmayan",OLD+"#gorevsiz"],["Arşiv oyunlar",OLD+"#arsiv"],["Yönetim",OLD+"#yonetim"],["Turne takip","turne.html",true]]}
@@ -14,7 +15,7 @@ const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp
 const b64u = b => { const bin = atob(b), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return new TextDecoder().decode(u); };
 const tsLabel = ts => { try { return new Date(ts).toLocaleString("tr-TR",{timeZone:"Europe/Istanbul",day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"}); } catch(e){ return ""; } };
 
-let DATA = null, LOADERR = "", unit = "dekor", week = null;
+let DATA = null, LOADERR = "", unit = "dekor", week = null, cur = "programlar";
 
 /* ---- veri: her birim+hafta için en yeni eksiksiz kayıt ---- */
 async function load(){
@@ -82,22 +83,137 @@ function viewProgramlar(){
     ${list.length ? `<div class="seg" role="group" aria-label="Hafta"><span class="lbl">Hafta</span>${weeks}</div>` : ""}</div>${content}`;
 }
 
+/* ---- Ana panel: oyunlar, afiş ve künye ---- */
+const trLower = s => String(s == null ? "" : s).replace(/İ/g,"i").replace(/I/g,"ı").toLowerCase();
+const norm = s => trLower(String(s || "").trim());
+const unent = s => String(s == null ? "" : s).replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&nbsp;/g," ");
+const FIGTAG = /\(\s*fig[üu]ran\s*\)/i;
+const stripTag = s => s.replace(/\(\s*fig[üu]ran\s*\)/ig,"").replace(/^"+|"+$/g,"").trim();
+const names = s => s.split(",").map(x => x.trim()).filter(Boolean);
+const isCocuk = n => n.includes("Ç.O") || n.includes("(Ç)");
+const isFigCat = c => { const t = norm(c); return t.includes("figüran") || t.includes("figuran"); };
+const sortTr = (a,b) => String(a).localeCompare(String(b),"tr");
+const figNames = r => {
+  const t = names(r.kisi), tg = t.filter(x => FIGTAG.test(x));
+  if (tg.length) return new Set(tg.map(stripTag).filter(Boolean));
+  return isFigCat(r.kategori) ? new Set(t.map(stripTag).filter(Boolean)) : new Set();
+};
+
+let PD = null, PERR = "", PBUSY = false, pq = "", pf = "tumu", openPlay = null;
+async function getSheet(name, fresh){
+  const res = await fetch(BASE + "/" + encodeURIComponent(name) + (fresh ? "?fresh=1" : ""), {cache:"no-store"});
+  if (!res.ok) throw new Error("HTTP " + res.status);
+  return res.json();
+}
+const soft = (name, fresh) => getSheet(name, fresh).catch(() => ({headers:[],rows:[]}));
+async function loadPanel(fresh){
+  if (PBUSY) return;
+  PBUSY = true; PERR = ""; PD = null; render();
+  try {
+    const [main, img, sez, pas] = await Promise.all([getSheet("BÜTÜN OYUNLAR", fresh), soft("RESİMLER", fresh), soft("2025-2026 SEZONU", fresh), soft("PASIF_KISILER", fresh)]);
+    PD = buildPanel(main, img, sez, pas);
+  } catch(e){ PERR = (e && e.message) || "bilinmeyen"; }
+  PBUSY = false; render();
+}
+function buildPanel(main, img, sez, pas){
+  const H = (main.headers || []).map(h => trLower(h).trim());
+  const ix = (k,d) => { const i = H.findIndex(h => h === k || h.startsWith(k)); return i < 0 ? d : i; };
+  const C = {o:ix("oyun",0), k:ix("kategori",1), g:ix("görev",2), p:ix("kişi",3)};
+  const cell = (r,i) => unent(String(r[i] == null ? "" : r[i]).trim());
+  const rows = (main.rows || []).map(r => ({oyun:cell(r,C.o), kategori:cell(r,C.k), gorev:cell(r,C.g), kisi:cell(r,C.p)})).filter(r => r.oyun);
+
+  const pg = new Set(), pp = new Set();
+  (pas.rows || []).forEach(r => { const n = norm(unent(r[0])), o = norm(unent(r[1])); if (!n) return; if (o) pp.add(n + "|" + o); else pg.add(n); });
+  const pasif = (n, oyun) => pg.has(norm(n)) || pp.has(norm(n) + "|" + norm(oyun));
+
+  const ih = (img.headers || []).map(h => trLower(h)), io = Math.max(0, ih.findIndex(h => h.includes("oyun")));
+  const posters = new Map();
+  (img.rows || []).forEach(r => {
+    const nm = unent(r[io]).trim(), u = (r.filter((_,i) => i !== io).join(" ").match(/https?:\/\/[^\s"'<>\[\]]+/) || [])[0];
+    if (nm && u) posters.set(norm(nm), u);
+  });
+
+  const sh = (sez.headers || []).map(h => trLower(h).trim()), si = k => sh.findIndex(h => h.includes(k));
+  const sO = Math.max(0, si("oyun")), sT = si("prömiyer tarihi"), sS = si("prömiyer sezonu"), sN = si("sezon sayısı") >= 0 ? si("sezon sayısı") : si("temsil");
+  const season = new Map(), sv = (r,i) => i >= 0 ? String(r[i] == null ? "" : r[i]).trim() : "";
+  (sez.rows || []).forEach(r => { const n = unent(r[sO]).trim(); if (n) season.set(norm(n), {tar:sv(r,sT), sez:sv(r,sS), say:sv(r,sN)}); });
+
+  const map = new Map();
+  rows.forEach(r => { if (!map.has(r.oyun)) map.set(r.oyun, []); map.get(r.oyun).push(r); });
+  const plays = [...map.entries()].map(([name, rs]) => {
+    const all = new Set(), figs = new Set();
+    rs.forEach(r => { names(r.kisi).forEach(n => { const c = stripTag(n); if (c) all.add(c); }); figNames(r).forEach(c => figs.add(c)); });
+    return {name, rows:rs, kisi:[...all].filter(n => !pasif(n,name)).length, fig:[...figs].filter(n => !pasif(n,name)).length,
+      poster:posters.get(norm(name)) || "", season:season.get(norm(name)) || null, cocuk:isCocuk(name)};
+  }).sort((a,b) => sortTr(a.name,b.name));
+
+  const ppl = new Set(), fg = new Set();
+  rows.forEach(r => { names(r.kisi).forEach(n => { const c = stripTag(n); if (c && !pg.has(norm(c))) ppl.add(c); }); figNames(r).forEach(c => fg.add(c)); });
+  return {plays, pasif, nPeople:ppl.size, nFig:fg.size, nPoster:plays.filter(p => p.poster).length};
+}
+
+function imgFail(i){ const d = document.createElement("div"); d.className = "ph"; d.textContent = "Afiş açılamadı"; i.replaceWith(d); }
+const posterHtml = p => p.poster
+  ? `<img src="${esc(p.poster)}" alt="${esc(p.name)} afişi" loading="lazy" referrerpolicy="no-referrer" onerror="imgFail(this)">`
+  : `<div class="ph">Afiş eklenmedi</div>`;
+const panelList = () => {
+  const q = trLower(pq.trim());
+  return PD.plays.filter(p => (!q || trLower(p.name).includes(q)) && (pf === "tumu" || (pf === "cocuk") === p.cocuk));
+};
+function gridHtml(){
+  const l = panelList();
+  return l.length ? `<div class="pgrid">${l.map(p => `<a class="pc" href="#panel/${encodeURIComponent(p.name)}"><div class="im">${posterHtml(p)}</div>
+    <div class="nm">${esc(p.name)}<div class="mt">${p.kisi} kişi${p.fig ? " · " + p.fig + " figüran" : ""}</div></div></a>`).join("")}</div>`
+    : `<div class="empty"><h2>Eşleşen oyun yok</h2><p>Aramayı veya türü değiştirin.</p></div>`;
+}
+function kunyeHtml(p){
+  const cats = new Map();
+  p.rows.forEach(r => {
+    const k = r.kategori || "Diğer", gk = r.gorev || "—";
+    if (!cats.has(k)) cats.set(k, new Map());
+    const g = cats.get(k); if (!g.has(gk)) g.set(gk, []);
+    names(r.kisi).forEach(t => g.get(gk).push(t));
+  });
+  return [...cats].map(([k,g]) => `<section class="kcard"><h3>${esc(k)}</h3>${[...g].map(([gr, ts]) =>
+    `<div class="kr"><div class="g">${esc(gr)}</div><div class="p">${ts.map(t => { const n = stripTag(t);
+      return n ? `<span>${esc(n)}${FIGTAG.test(t) ? '<i class="tag">Figüran</i>' : ""}${PD.pasif(n,p.name) ? '<i class="tag">Pasif</i>' : ""}</span>` : ""; }).join("")}</div></div>`).join("")}</section>`).join("");
+}
+function viewPanel(){
+  const refresh = `<button class="btn" type="button" data-act="refresh">Yenile</button>`;
+  if (PERR) return `<div class="pagehead"><div><h1>Ana panel</h1></div><div>${refresh}</div></div><div class="empty err"><h2>Oyunlar okunamadı</h2><p>Bağlantı hatası (${esc(PERR)}). Biraz sonra Yenile'ye basın.</p></div>`;
+  if (!PD) return `<div class="pagehead"><div><h1>Ana panel</h1><p class="sub">Oyunlar yükleniyor…</p></div></div>`;
+  const p = openPlay && PD.plays.find(x => x.name === openPlay);
+  if (p) {
+    const s = p.season, facts = s ? [["Prömiyer tarihi",s.tar],["Prömiyer sezonu",s.sez],["Temsil edilen sezon sayısı",s.say]].filter(x => x[1] !== "").map(([l,v]) => `<div><span>${l}</span><b>${esc(v)}</b></div>`).join("") : "";
+    return `<div class="pagehead"><div><a class="back" href="#panel">← Tüm oyunlar</a><h1>${esc(p.name)}</h1>
+      <p class="sub">${p.kisi} kişi${p.fig ? " · " + p.fig + " figüran" : ""} · ${p.rows.length} kayıt</p></div><div>${refresh}</div></div>
+      <div class="play"><div class="poster"><div class="pbox">${posterHtml(p)}</div></div>
+      <div class="kunye">${facts ? `<div class="facts">${facts}</div>` : ""}${kunyeHtml(p)}</div></div>`;
+  }
+  const seg = [["tumu","Tümü"],["cocuk","Çocuk oyunları"],["yetiskin","Yetişkin oyunları"]].map(([k,l]) => `<button type="button" aria-pressed="${pf === k}" data-pf="${k}">${l}</button>`).join("");
+  return `<div class="pagehead"><div><h1>Ana panel</h1><p class="sub">${PD.plays.length} oyun · ${PD.nPeople} kişi · ${PD.nFig} figüran</p></div><div>${refresh}</div></div>
+    ${PD.nPoster ? "" : `<div class="note">Afişler henüz görünmüyor. e-Tabloda «RESİMLER» sayfasına Oyun ve Afiş bağlantısı sütunlarını ekleyin.</div>`}
+    <div class="controls"><input id="pq" class="search" type="search" placeholder="Oyun ara…" value="${esc(pq)}" autocomplete="off"><div class="seg" role="group" aria-label="Tür">${seg}</div></div>
+    <div id="pgrid">${gridHtml()}</div>`;
+}
+
 /* ---- yönlendirme: #programlar/<birim>/<hafta> ---- */
 function route(){
-  const [page, u, wk] = (location.hash || "#programlar").slice(1).split("/");
-  if (u && UNITS.some(x => x[0] === u)) unit = u;
-  week = wk || null;
-  if (page !== "programlar") { location.hash = "#programlar"; return; }
-  render();
+  const parts = (location.hash || "#programlar").slice(1).split("/"), page = parts[0];
+  if (page === "programlar") { if (parts[1] && UNITS.some(x => x[0] === parts[1])) unit = parts[1]; week = parts[2] || null; }
+  else if (page === "panel") { try { openPlay = parts[1] ? decodeURIComponent(parts[1]) : null; } catch(e){ openPlay = null; } }
+  else { location.hash = "#programlar"; return; }
+  cur = page; buildNav(); render(); window.scrollTo(0,0);
+  if (page === "panel" && !PD && !PBUSY) loadPanel();
 }
-function render(){
-  $("#main").innerHTML = viewProgramlar();
-}
+function render(){ $("#main").innerHTML = cur === "panel" ? viewPanel() : viewProgramlar(); }
 function buildNav(){
   $("#nav").innerHTML = NAV.map(g => {
-    const on = g.items.some(i => i[1] === "#programlar");
-    return `<div class="dd${on?" on":""}"><button class="dd-b" type="button" aria-expanded="false">${g.g}</button><div class="dd-m">${g.items.map(([l,h,ext]) =>
-      `<a href="${h}"${(h==="#programlar"?" aria-current=\"page\"":"")+(" class=\""+[h==="#programlar"?"on":"",ext?"ext":""].join(" ").trim()+"\"")}${ext?' target="_blank" rel="noopener"':""}>${l}</a>`).join("")}</div></div>`;
+    const on = g.items.some(i => i[1] === "#" + cur);
+    return `<div class="dd${on?" on":""}"><button class="dd-b" type="button" aria-expanded="false">${g.g}</button><div class="dd-m">${g.items.map(([l,h,ext]) => {
+      const here = h === "#" + cur, c = [here ? "on" : "", ext ? "ext" : ""].filter(Boolean).join(" ");
+      return `<a href="${h}"${c ? ` class="${c}"` : ""}${here ? ' aria-current="page"' : ""}${ext ? ' target="_blank" rel="noopener"' : ""}>${l}</a>`;
+    }).join("")}</div></div>`;
   }).join("");
 }
 function closeMenus(){ document.querySelectorAll(".dd.open").forEach(d => { d.classList.remove("open"); d.firstChild.setAttribute("aria-expanded","false"); }); }
@@ -116,8 +232,10 @@ document.addEventListener("click", e => {
   if (t.dataset.unit) { location.hash = "#programlar/" + t.dataset.unit; }
   else if (t.dataset.week) { location.hash = "#programlar/" + unit + "/" + t.dataset.week; }
   else if (t.dataset.act === "print") window.print();
-  else if (t.dataset.act === "refresh") refresh();
+  else if (t.dataset.pf) { pf = t.dataset.pf; render(); }
+  else if (t.dataset.act === "refresh") { if (cur === "panel") loadPanel(true); else refresh(); }
 });
+document.addEventListener("input", e => { if (e.target.id === "pq") { pq = e.target.value; const g = $("#pgrid"); if (g) g.innerHTML = gridHtml(); } });
 document.addEventListener("keydown", e => { if (e.key === "Escape") closeMenus(); });
 window.addEventListener("hashchange", route);
-buildNav(); route(); refresh();
+route(); refresh();
