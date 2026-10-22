@@ -401,6 +401,7 @@ header.app nav .dd-trigger.on{background:#d39a3d;border-color:#d39a3d;color:#2b1
           <button class="btn approve" id="pubB" title="Bu haftanın programını onayla; ana sitedeki Haftalık Program bölümünde görünür">✔ Haftalığı Onayla</button>
           <button class="btn gold" id="newW">+ YENİ HAFTA</button>
           <button class="btn" id="draftB" title="Aylık programdaki bu haftanın oyunlarını taslak satır olarak ekler (yalnızca siz isteyince)">📅 Aylık programdan taslak</button>
+          <button class="btn" id="addDayB" title="Tabloda eksik olan günü (örn. yanlışlıkla silinen Pazar) yerine ekle">+ Gün ekle</button>
           <button class="btn" id="copyW" title="Bu haftanın tablosunu, seçeceğiniz tarihteki yeni haftaya kopyala">Haftayı kopyala</button>
           <button class="btn danger" id="delW">Haftayı sil</button>
 </div>
@@ -1704,6 +1705,22 @@ $('#copyW').onclick=()=>{commitEdit();
     S.cur=k;sel=null;save();render();toast('Hafta kopyalandı: '+weekLabel(k));});};
 $('#delW').onclick=()=>{if(Object.keys(S.weeks).length<2)return toast('Son hafta silinemez');ask('Haftayı sil',`<p><b>${weekLabel(S.cur)}</b> haftası silinsin mi? (Geri al ile dönebilirsiniz)</p>`,()=>{snap();delete S.weeks[S.cur];S.cur=Object.keys(S.weeks).sort().pop();sel=null;save();render();});};
 $('#undoB').onclick=undo;$('#redoB').onclick=redo;
+/* ---------- gün ekle: tabloda eksik günleri doğru sıraya ekler ---------- */
+function missingDays(){const g=G(),L=layout(g);if(!L||L.col.date==null)return null;const dm=rowDayMap(g,L),have=new Set();
+  for(let r=L.first;r<=L.end;r++){const t=vtext(g,r,L.col.date).match(DATE_RE);if(t&&dm[r]>=0)have.add(dm[r]);}
+  return {L,have,miss:[0,1,2,3,4,5,6].filter(d=>!have.has(d))};}
+function insertDayRow(d){const g=G(),L=layout(g),dm=rowDayMap(g,L),mon=fromIso(S.cur);let at=L.end+1;
+  for(let r=L.first;r<=L.end;r++){const t=vtext(g,r,L.col.date).match(DATE_RE);if(t&&dm[r]>d){at=r;break;}}
+  insRows(g,at,1);cset(g,at,L.col.date,{t:dateLabel(addDays(mon,d),d),al:'c'});
+  if(L.col.time!=null)cset(g,at,L.col.time,{b:1,al:'c'});if(L.col.place!=null)cset(g,at,L.col.place,{b:1,al:'c'});return at;}
+function addDayDlg(){commitEdit();const m=missingDays();if(!m)return toast('Tabloda “TARİH/GÜN” başlığı bulunamadı');
+  if(!m.miss.length)return toast('Bu haftada 7 gün de tabloda var');const mon=fromIso(S.cur);
+  ask('Gün ekle','<p>Tabloda bulunmayan günler:</p>'+m.miss.map(d=>'<label style="display:block;margin:6px 0"><input type="checkbox" class="adD" value="'+d+'" checked> '+dmy(addDays(mon,d))+' '+GUN[d]+'</label>').join('')+'<p style="font-size:12px;opacity:.7">Seçilen günler tarih sırasına göre tabloya boş satır olarak eklenir. Geri al ile geri alınabilir.</p>',()=>{
+    const ds=[...document.querySelectorAll('.adD:checked')].map(x=>+x.value).sort((a,b)=>a-b);if(!ds.length)return toast('Gün seçilmedi'),false;
+    snap();let last=null;ds.forEach(d=>{last=insertDayRow(d);});save();refresh();
+    const L=layout(G());if(L&&L.col.task!=null&&last!=null)setSel(last,L.col.task,last,L.col.task);toast(ds.length+' gün eklendi');});}
+$('#addDayB').onclick=addDayDlg;
+
 function markBorn(k){try{SY.born=SY.born||{};SY.born[k]=Date.now();saveSY();}catch(e){}}
 $('#draftB').onclick=()=>ask('Aylık programdan taslak ekle','<p><b>'+weekLabel(S.cur)+'</b> haftası için aylık programdaki oyunlar, tabloda henüz olmayanlar taslak satır olarak eklenecek. Mevcut satırlara dokunulmaz.</p>',()=>{commitEdit();snap();draftFromMonthly(true);save();refresh();});
 
@@ -2377,7 +2394,7 @@ function mrender(){
  if(mview==='staff')mstaff();
  if(mview==='tools'){
  const tool=(id,icon,l,danger='')=>'<button class="m-tool '+danger+'" data-'+(id.startsWith('tab:')?'tab="'+id.slice(4):'trigger="'+id)+'">'+mic(icon)+'<span>'+l+'</span>'+mic('right')+'</button>';
- main.innerHTML='<div class="m-section"><h2>Program araçları</h2><small>'+keys.length+' hafta</small></div><div class="m-tools-group"><h3>HAFTA</h3>'+tool('pubB','check','Haftalık programı onayla')+tool('newW','plus','Yeni hafta')+tool('copyW','copy','Önceki haftayı kopyala')+tool('undoB','undo','Geri al')+tool('redoB','undo','Yinele')+'<h3>GÖREVLENDİRME</h3>'+tool('tab:tasks','tools','Hazır işler')+tool('tab:warns','warning','Uyarılar · '+cf.msgs.length)+tool('tab:month','calendar','Aylık program')+tool('tab:leave','note','İzin / rapor')+'<h3>DOSYALAR</h3>'+tool('printB','print','Yazdır / PDF')+tool('expX','download','Excel indir')+tool('expJ','download','JPG indir')+tool('impX','upload','Excel / Word yükle')+tool('dataB','copy','Yedek / geri yükle (JSON)')+'<h3>AYARLAR</h3>'+tool('tab:sheets','cloud','Google E-Tablolar')+tool('signB','edit','İmzacıları düzenle')+tool('footB','note','Alt açıklamaları düzenle')+tool('switchUnit','switch','Birim değiştir')+tool('delW','trash','Haftayı sil','danger')+'</div>';
+ main.innerHTML='<div class="m-section"><h2>Program araçları</h2><small>'+keys.length+' hafta</small></div><div class="m-tools-group"><h3>HAFTA</h3>'+tool('pubB','check','Haftalık programı onayla')+tool('newW','plus','Yeni hafta')+tool('addDayB','plus','Gün ekle')+tool('copyW','copy','Önceki haftayı kopyala')+tool('undoB','undo','Geri al')+tool('redoB','undo','Yinele')+'<h3>GÖREVLENDİRME</h3>'+tool('tab:tasks','tools','Hazır işler')+tool('tab:warns','warning','Uyarılar · '+cf.msgs.length)+tool('tab:month','calendar','Aylık program')+tool('tab:leave','note','İzin / rapor')+'<h3>DOSYALAR</h3>'+tool('printB','print','Yazdır / PDF')+tool('expX','download','Excel indir')+tool('expJ','download','JPG indir')+tool('impX','upload','Excel / Word yükle')+tool('dataB','copy','Yedek / geri yükle (JSON)')+'<h3>AYARLAR</h3>'+tool('tab:sheets','cloud','Google E-Tablolar')+tool('signB','edit','İmzacıları düzenle')+tool('footB','note','Alt açıklamaları düzenle')+tool('switchUnit','switch','Birim değiştir')+tool('delW','trash','Haftayı sil','danger')+'</div>';
  }
  $('#mWeekSelect').onchange=e=>goto(e.target.value);
 }
