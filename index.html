@@ -4187,6 +4187,12 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
             'else if(e.key==="Escape"&&!document.fullscreenElement){window.close();}});' +
           'if(document.fonts&&document.fonts.ready)document.fonts.ready.then(autoFit);' +
           'requestAnimationFrame(function(){requestAnimationFrame(autoFit);});' +
+          'var PW=1047,PH=712;' +
+          'window.addEventListener("beforeprint",function(){if(!fit)return;fit.style.transform="none";apply(1);var z=1;' +
+            'for(var i=0;i<12;i++){fit.style.zoom=z;fit.style.width=(PW/z)+"px";fit.style.maxWidth="none";var h=fit.offsetHeight*z;' +
+              'if(h<=PH)break;z=Math.max(.3,z*PH/h*.985);}});' +
+          'window.addEventListener("afterprint",function(){if(!fit)return;fit.style.zoom="";fit.style.width="";fit.style.maxWidth="";' +
+            'if(manual)shrinkToFit();else autoFit();});' +
         '})();' +
       '<\/script></body></html>';
     popup.document.open();
@@ -4945,7 +4951,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 /* Yazdırma: yalnızca belge, A4 yatay */
 @media print{
   @page{size:A4 landscape;margin:12mm}
-  body > *:not(.hp-ov){display:none!important}
+  body:not(.aph-fullscreen-body) > *:not(.hp-ov){display:none!important}
   .hp-ov{position:static!important;background:none!important;padding:0!important;backdrop-filter:none}
   .hp-ov .win{border:0!important;box-shadow:none!important;height:auto!important}
   .hp-ov .top{display:none!important}
@@ -4955,5 +4961,92 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
   .hp-doc td.date.we{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
 </style>
+
+<!-- ═══════ v8: Önizlemeler ekrana, çıktılar tek A4 sayfasına sığar ═══════ -->
+<style>
+/* Haftalık belge: daha derli toplu ölçüler */
+.hp-ov .aph-prev{padding:18px 20px 22px!important;overflow:auto}
+.hp-doc{padding:30px 36px 28px}
+.hp-doc .wk{margin:10px auto 18px}
+.hp-doc th,.hp-doc td{padding:8px 11px;line-height:1.42}
+.hp-doc th{padding:9px 11px}
+.hp-doc .signs{margin-top:26px}
+.aph-fit-z{transform-origin:top center}
+@media print{
+  html,body{height:auto!important;overflow:visible!important;background:#fff!important}
+  @page{size:A4 landscape;margin:10mm}
+  .hp-ov{display:block!important;inset:auto!important}
+  .hp-ov .win{animation:none!important}
+  .hp-doc{margin:0!important;break-inside:avoid}
+  .hp-doc table,.hp-doc tr{break-inside:avoid}
+  .hp-doc th,.hp-doc td{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .aph-fullscreen-html,.aph-fullscreen-body{height:auto!important;overflow:visible!important}
+  .aph-fullscreen-shell{display:block!important;width:auto!important;height:auto!important;overflow:visible!important}
+  .aph-fullscreen-stage{display:block!important}
+  .aph-fullscreen-fit{margin:0 auto;break-inside:avoid}
+  .aph-fullscreen-fit .aph-prev table{box-shadow:none!important}
+  .aph-fullscreen-fit .aph-prev td{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+html.hp-printing .hp-doc{padding:0!important;border:0!important;box-shadow:none!important;max-width:none!important}
+</style>
+<script>
+(function(){
+  /* 1) Ekran: önizleme içeriğini kaydırma gerektirmeden pencereye sığdır */
+  function fitPrev(prev){
+    if(window.innerWidth < 760) { prev.querySelectorAll(".aph-fit-z").forEach(n=>{n.style.zoom="";}); return; }
+    const isWeek = !!prev.closest(".hp-ov");
+    if(!isWeek){ [...prev.children].forEach(n=>{n.style.zoom="";n.classList.remove("aph-fit-z");}); return; } /* aylık: okunaklı boyut korunur */
+    const targets = isWeek ? [...prev.querySelectorAll(":scope > .hp-doc")] : [...prev.children].filter(n=>n.nodeType===1);
+    if(!targets.length) return;
+    targets.forEach(t=>{t.classList.add("aph-fit-z");t.style.zoom="";});
+    const cs = getComputedStyle(prev);
+    const avail = prev.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom) - 2;
+    let z = 1;
+    for(let i=0;i<10;i++){
+      const total = prev.scrollHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+      if(total <= avail + 1) break;
+      const fixedH = isWeek ? [...prev.children].filter(n=>!targets.includes(n)).reduce((a,n)=>a+n.offsetHeight+10,0) : 0;
+      const contentH = total - fixedH;
+      const room = avail - fixedH;
+      if(room <= 0 || contentH <= 0) break;
+      z = Math.max(.5, z * (room/contentH) * .99);
+      targets.forEach(t=>t.style.zoom = z.toFixed(3));
+      if(z <= .5) break;
+    }
+  }
+  function fitAll(){ document.querySelectorAll(".aph-ov .aph-prev").forEach(fitPrev); }
+  let raf = 0;
+  const schedule = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(()=>requestAnimationFrame(fitAll)); };
+  new MutationObserver(muts=>{
+    if(muts.some(m=>[...m.addedNodes].some(n=>n.nodeType===1 && (n.matches(".aph-ov,.aph-prev,table,.hp-doc") || n.querySelector && n.querySelector(".aph-ov,.aph-prev"))))) schedule();
+  }).observe(document.body,{childList:true,subtree:true});
+  window.addEventListener("resize", schedule);
+  if(document.fonts && document.fonts.ready) document.fonts.ready.then(schedule);
+
+  /* 2) Yazdırma: haftalık program tek A4 yatay sayfaya sığar */
+  const PW = 1047, PH = 712; /* A4 yatay, 10 mm kenar boşluğu (96 dpi) */
+  let saved = null;
+  window.addEventListener("beforeprint", ()=>{
+    const doc = document.querySelector("body > .hp-ov .hp-doc");
+    if(!doc) return;
+    const note = document.querySelector("body > .hp-ov .hp-note");
+    const noteH = note ? note.offsetHeight + 10 : 0;
+    saved = {doc, zoom:doc.style.zoom, width:doc.style.width};
+    document.documentElement.classList.add("hp-printing");
+    let z = 1;
+    for(let i=0;i<12;i++){
+      doc.style.zoom = z; doc.style.width = (PW/z) + "px";
+      const h = doc.offsetHeight * z + noteH;
+      if(h <= PH) break;
+      z = Math.max(.35, z * (PH - noteH) / (h - noteH) * .985);
+    }
+  });
+  window.addEventListener("afterprint", ()=>{
+    document.documentElement.classList.remove("hp-printing");
+    if(saved){ saved.doc.style.zoom = saved.zoom; saved.doc.style.width = saved.width; saved = null; }
+    schedule();
+  });
+})();
+</script>
 </body>
 </html>
