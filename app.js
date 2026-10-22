@@ -95,9 +95,13 @@ function render(){
   document.title = "Haftalık program · İzmir Devlet Tiyatrosu";
 }
 function buildNav(){
-  $("#nav").innerHTML = NAV.map(g => `<div class="grp"><h2>${g.g}</h2>${g.items.map(([l,h,ext]) =>
-    `<a href="${h}"${h==="#programlar"?' class="on" aria-current="page"':""}${ext?' class="ext" target="_blank" rel="noopener"':""}>${l}</a>`).join("")}</div>`).join("");
+  $("#nav").innerHTML = NAV.map(g => {
+    const on = g.items.some(i => i[1] === "#programlar");
+    return `<div class="dd${on?" on":""}"><button class="dd-b" type="button" aria-expanded="false">${g.g}</button><div class="dd-m">${g.items.map(([l,h,ext]) =>
+      `<a href="${h}"${(h==="#programlar"?" aria-current=\"page\"":"")+(" class=\""+[h==="#programlar"?"on":"",ext?"ext":""].join(" ").trim()+"\"")}${ext?' target="_blank" rel="noopener"':""}>${l}</a>`).join("")}</div></div>`;
+  }).join("");
 }
+function closeMenus(){ document.querySelectorAll(".dd.open").forEach(d => { d.classList.remove("open"); d.firstChild.setAttribute("aria-expanded","false"); }); }
 async function refresh(){
   LOADERR = ""; DATA = null; render();
   try { DATA = await load(); } catch(e){ LOADERR = (e && e.message) || "bilinmeyen"; }
@@ -105,12 +109,16 @@ async function refresh(){
 }
 
 document.addEventListener("click", e => {
+  if (e.target.closest("#nav a")) { $("#nav").classList.remove("open"); $("#menu").setAttribute("aria-expanded","false"); closeMenus(); return; }
+  if (!e.target.closest(".dd")) closeMenus();
   const t = e.target.closest("button"); if (!t) return;
-  if (t.id === "menu") { const o = $("#side").classList.toggle("open"); t.setAttribute("aria-expanded", o); return; }
+  if (t.id === "menu") { const o = $("#nav").classList.toggle("open"); t.setAttribute("aria-expanded", o); return; }
+  if (t.classList.contains("dd-b")) { const d = t.parentNode, was = d.classList.contains("open"); closeMenus(); if (!was) { d.classList.add("open"); t.setAttribute("aria-expanded","true"); } return; }
   if (t.dataset.unit) { location.hash = "#programlar/" + t.dataset.unit; }
   else if (t.dataset.week) { location.hash = "#programlar/" + unit + "/" + t.dataset.week; }
   else if (t.dataset.act === "print") window.print();
   else if (t.dataset.act === "refresh") refresh();
 });
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeMenus(); });
 window.addEventListener("hashchange", route);
 buildNav(); route(); refresh();
