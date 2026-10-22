@@ -1,18 +1,10 @@
 "use strict";
-const OLD = "eski.html";
 const BASE = "https://tiyatro-backend.vercel.app/api/sheets";
 const API = BASE + "/" + encodeURIComponent("HAFTALIK PROGRAM") + "?fresh=1";
 const UNITS = [["dekor","Dekor Aksesuar"],["kondvit","Kondüvit"],["isik","Işık"],["erkek","Erkek Terzi"],["kadin","Kadın Terzi"],["peruka","Peruka"]];
 const NAV = [
-  {g:"Repertuvar", items:[["Ana panel","#panel"],["Dağılım",OLD+"#dagilim"],["İstatistik",OLD+"#grafik"]]},
-  {g:"Kadro", items:[["Kişiler",OLD+"#kisiler"],["Figüran",OLD+"#figuran"],["Sorgulama",OLD+"#sorgu"]]},
-  {g:"Programlar", items:[["Haftalık program","#programlar"],["Aylık program",OLD+"#program"]]},
-  {g:"Yönetim", items:[["Görevli olmayan",OLD+"#gorevsiz"],["Arşiv oyunlar",OLD+"#arsiv"],["Yönetim",OLD+"#yonetim"],["Turne takip","turne.html",true]]}
+  {g:"BÖLÜMLER", items:[["Ana panel","#panel"],["Haftalık program","#programlar"]]}
 ];
-const OLDIDS = ["dagilim","grafik","kisiler","figuran","sorgu","program","gorevsiz","arsiv","yonetim"];
-let MISSING = "";
-/* 404 sayfası eski.html'i bulamayıp ana sayfaya attıysa döngüye girmeden bildir */
-(function(){ try { const r = sessionStorage.redirect; if (r) { delete sessionStorage.redirect; if (/eski\.html/.test(r)) MISSING = (r.split("#")[1] || ""); } } catch(e){} })();
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const b64u = b => { const bin = atob(b), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return new TextDecoder().decode(u); };
@@ -80,7 +72,7 @@ function viewProgramlar(){
   else if (LOADERR) content = `<div class="empty err"><h2>Programlar okunamadı</h2><p>İnternet bağlantınızı kontrol edip <b>Yenile</b>\'ye basın.</p></div>`;
   else if (!w) content = `<div class="empty"><h2>${esc(uname)} için onaylı hafta yok</h2><p>Bu birimin programı yayımlandığında burada görünecek.</p></div>`;
   else content = (w.note ? `<div class="note">${esc(w.note)}</div>` : "") + docHtml(w.doc);
-  return `<div class="pagehead"><div><h1>Haftalık program</h1><p class="sub">${esc(uname)} birimi${w ? " · " + esc(w.label) : ""}</p></div>
+  return `<div class="pagehead"><div><span class="eyebrow">SAHNE ARKASI · HAFTALIK PLAN</span><h1>Haftalık program</h1><p class="sub">${esc(uname)} birimi${w ? " · " + esc(w.label) : ""}</p></div>
     <div>${w ? `<span class="chip">Güncelleme: ${esc(tsLabel(w.ts))}</span> ` : ""}<button class="btn" type="button" data-act="refresh">Yenile</button> ${w ? `<button class="btn pri" type="button" data-act="print">Yazdır / PDF</button>` : ""}</div></div>
     <div class="controls"><div class="seg" role="group" aria-label="Birim"><span class="lbl">Birim</span>${units}</div>
     ${list.length ? `<div class="seg" role="group" aria-label="Hafta"><span class="lbl">Hafta</span>${weeks}</div>` : ""}</div>${content}`;
@@ -197,18 +189,18 @@ function kunyeHtml(p){
 }
 function viewPanel(){
   const refresh = `<button class="btn" type="button" data-act="refresh">Yenile</button>`;
-  if (PERR) return `<div class="pagehead"><div><h1>Ana panel</h1></div><div>${refresh}</div></div><div class="empty err"><h2>Oyunlar okunamadı</h2><p>İnternet bağlantınızı kontrol edip <b>Yenile</b>\'ye basın.</p></div>`;
-  if (!PD) return `<div class="pagehead"><div><h1>Ana panel</h1></div></div>${skel(true)}`;
+  if (PERR) return `<div class="pagehead"><div><span class="eyebrow">İZMİR DEVLET TİYATROSU</span><h1>Ana panel</h1></div><div>${refresh}</div></div><div class="empty err"><h2>Oyunlar okunamadı</h2><p>İnternet bağlantınızı kontrol edip <b>Yenile</b>\'ye basın.</p></div>`;
+  if (!PD) return `<div class="pagehead"><div><span class="eyebrow">İZMİR DEVLET TİYATROSU</span><h1>Ana panel</h1></div></div>${skel(true)}`;
   const p = openPlay && PD.plays.find(x => x.name === openPlay);
   if (p) {
     const s = p.season, facts = s ? [["Prömiyer tarihi",s.tar],["Prömiyer sezonu",s.sez],["Temsil edilen sezon sayısı",s.say]].filter(x => x[1] !== "").map(([l,v]) => `<div><span>${l}</span><b>${esc(v)}</b></div>`).join("") : "";
-    return `<div class="pagehead"><div><a class="back" href="#panel">← Tüm oyunlar</a><h1>${esc(p.name)}</h1>
+    return `<div class="pagehead"><div><a class="back" href="#panel">← Tüm oyunlar</a><span class="eyebrow">OYUN KÜNYESİ</span><h1>${esc(p.name)}</h1>
       <p class="sub">${p.kisi} kişi${p.fig ? " · " + p.fig + " figüran" : ""}</p></div><div>${refresh}</div></div>
       <div class="play"><div class="poster"><div class="pbox">${posterHtml(p)}</div></div>
       <div class="kunye">${facts ? `<div class="facts">${facts}</div>` : ""}${kunyeHtml(p)}</div></div>`;
   }
   const seg = [["tumu","Tümü"],["cocuk","Çocuk oyunları"],["yetiskin","Yetişkin oyunları"]].map(([k,l]) => `<button type="button" aria-pressed="${pf === k}" data-pf="${k}">${l}</button>`).join("");
-  return `<div class="pagehead"><div><h1>Ana panel</h1><p class="sub">${PD.plays.length} oyun · ${PD.nPeople} kişi · ${PD.nFig} figüran</p></div><div>${refresh}</div></div>
+  return `<div class="pagehead"><div><span class="eyebrow">İZMİR DEVLET TİYATROSU</span><h1>Ana panel</h1><p class="sub">${PD.plays.length} oyun · ${PD.nPeople} kişi · ${PD.nFig} figüran</p></div><div>${refresh}</div></div>
         <div class="controls"><input id="pq" class="search" type="search" placeholder="Oyun ara…" value="${esc(pq)}" autocomplete="off"><div class="seg" role="group" aria-label="Tür">${seg}</div></div>
     <div id="pgrid">${gridHtml()}</div>`;
 }
@@ -218,8 +210,6 @@ function route(){
   const parts = (location.hash || "#programlar").slice(1).split("/"), page = parts[0];
   if (page === "programlar") { if (parts[1] && UNITS.some(x => x[0] === parts[1])) unit = parts[1]; week = parts[2] || null; }
   else if (page === "panel") { try { openPlay = parts[1] ? decodeURIComponent(parts[1]) : null; } catch(e){ openPlay = null; } }
-  else if (OLDIDS.includes(page) && MISSING !== page) { location.href = OLD + "#" + page; return; }
-  else if (OLDIDS.includes(page)) { cur = page; buildNav(); $("#main").innerHTML = `<div class="view"><div class="empty err"><h2>Bu bölüm şu anda açılamıyor</h2><p>Lütfen biraz sonra tekrar deneyin.</p><a class="btn pri" href="#programlar">Haftalık programa dön</a></div></div>`; return; }
   else { location.hash = "#programlar"; return; }
   cur = page; buildNav(); render(); window.scrollTo(0,0);
   if (page === "panel" && !PD && !PBUSY) loadPanel();
