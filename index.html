@@ -4305,6 +4305,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
                       title="Tam ekran önizlemeyi yeni sekmede aç">
                       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H3v5M16 3h5v5M3 16v5h5M21 16v5h-5"></path></svg>
                     </button>
+                    <button class="btn sm" type="button" onclick="aphPrintPreview()" title="Yazdır / PDF">🖨 Yazdır</button>
                     <span class="chip gold">${infos[PREVIEW].temsil} temsil · ${infos[PREVIEW].oyunSayisi} oyun</span>
                     <div class="aph-preview-nav" aria-label="Aylar arasında geçiş">
                       <button class="btn sm" type="button" onclick="changeProgramPreview(-1)"
@@ -4988,6 +4989,35 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
   .aph-fullscreen-fit .aph-prev td{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
 html.hp-printing .hp-doc{padding:0!important;border:0!important;box-shadow:none!important;max-width:none!important}
+
+/* Aylık program önizleme penceresinden yazdırma: yalnızca tablo, tek A4 yatay sayfa */
+@media print{
+  html.aph-printing-monthly body > *{display:none!important}
+  html.aph-printing-monthly .hp-ov{display:none!important}
+  html.aph-printing-monthly body > .aph-ov[data-preview-index]{
+    display:block!important;position:static!important;inset:auto!important;
+    background:none!important;padding:0!important;backdrop-filter:none!important;
+  }
+  html.aph-printing-monthly .aph-ov[data-preview-index] .win{
+    border:0!important;box-shadow:none!important;border-radius:0!important;
+    height:auto!important;max-height:none!important;width:auto!important;max-width:none!important;
+    background:none!important;display:block!important;overflow:visible!important;
+  }
+  html.aph-printing-monthly .aph-ov[data-preview-index] .top,
+  html.aph-printing-monthly .aph-ov[data-preview-index] .aph-tools,
+  html.aph-printing-monthly .aph-ov[data-preview-index] .aph-info{display:none!important}
+  html.aph-printing-monthly .aph-ov[data-preview-index] .aph-prev{
+    background:none!important;padding:0!important;overflow:visible!important;
+    max-height:none!important;height:auto!important;display:block!important;flex:none!important;
+  }
+  html.aph-printing-monthly .aph-ov[data-preview-index] .aph-prev table{
+    box-shadow:none!important;border-radius:0!important;break-inside:avoid;
+  }
+  html.aph-printing-monthly .aph-ov[data-preview-index] .aph-prev td,
+  html.aph-printing-monthly .aph-ov[data-preview-index] .aph-prev th{
+    -webkit-print-color-adjust:exact;print-color-adjust:exact;
+  }
+}
 </style>
 <script>
 (function(){
@@ -5046,6 +5076,51 @@ html.hp-printing .hp-doc{padding:0!important;border:0!important;box-shadow:none!
     if(saved){ saved.doc.style.zoom = saved.zoom; saved.doc.style.width = saved.width; saved = null; }
     schedule();
   });
+
+  /* 3) Aylık önizleme penceresinden yazdırma: yalnızca tablo, tek A4 yatay sayfa */
+  let mParent = null, mNext = null, mSaved = null;
+  function aphMonthlyBegin(ov){
+    if(document.documentElement.classList.contains("aph-printing-monthly")) return;
+    mParent = ov.parentNode; mNext = ov.nextSibling;
+    document.body.appendChild(ov);
+    document.documentElement.classList.add("aph-printing-monthly");
+  }
+  function aphMonthlyCleanup(){
+    if(!document.documentElement.classList.contains("aph-printing-monthly")) return;
+    document.documentElement.classList.remove("aph-printing-monthly");
+    const ov = document.querySelector("body > .aph-ov[data-preview-index]");
+    if(ov && mParent && mParent.isConnected) mParent.insertBefore(ov, mNext);
+    mParent = null; mNext = null;
+    if(mSaved){
+      const t = document.querySelector(".aph-ov[data-preview-index] .aph-prev table");
+      if(t){ t.style.zoom = mSaved.zoom; t.style.width = mSaved.width; }
+      mSaved = null;
+    }
+  }
+  window.aphPrintPreview = function(){
+    const ov = document.querySelector(".aph-ov[data-preview-index]");
+    if(!ov){ window.print(); return; }
+    aphMonthlyBegin(ov);
+    setTimeout(()=>window.print(), 30);
+  };
+  window.addEventListener("beforeprint", ()=>{
+    if(document.querySelector("body > .hp-ov")) return; /* haftalık yazdırma öncelikli */
+    const ov = document.querySelector(".aph-ov[data-preview-index]");
+    if(!ov) return;
+    aphMonthlyBegin(ov);
+    const table = document.querySelector("body > .aph-ov[data-preview-index] .aph-prev table");
+    if(!table) return;
+    const MPW = 1047, MPH = 712; /* A4 yatay, 10 mm kenar boşluğu (96 dpi) */
+    mSaved = {zoom:table.style.zoom, width:table.style.width};
+    let z = 1;
+    for(let i=0;i<12;i++){
+      table.style.zoom = z; table.style.width = (MPW/z) + "px";
+      const h = table.offsetHeight * z;
+      if(h <= MPH) break;
+      z = Math.max(.35, z * MPH / h * .985);
+    }
+  });
+  window.addEventListener("afterprint", aphMonthlyCleanup);
 })();
 </script>
 </body>
