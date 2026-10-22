@@ -92,7 +92,6 @@ function route(){
 }
 function render(){
   $("#main").innerHTML = viewProgramlar();
-  document.title = "Haftalık program · İzmir Devlet Tiyatrosu";
 }
 function buildNav(){
   $("#nav").innerHTML = NAV.map(g => {
