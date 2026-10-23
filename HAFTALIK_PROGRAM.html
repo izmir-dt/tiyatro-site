@@ -478,7 +478,7 @@ header.app nav .dd-trigger.on{background:#d39a3d;border-color:#d39a3d;color:#2b1
       <h3>Google E-Tablolar</h3>
       <div class="hint" id="sheetInfo">Bağlanıyor…</div>
       <div class="hint" id="syncInfo" style="margin-top:4px"></div>
-      <div class="taskbtns"><button class="btn sm" id="shRefresh">↻ Personeli yenile</button><button class="btn sm" id="shSave" title="Tüm haftaları şimdi E-Tabloya yaz">☁ Şimdi kaydet</button><button class="btn sm" id="shLoad" title="E-Tablodaki haftaları bu tarayıcıya yükle (üzerine yazar)">⬇ E-Tablodan yükle</button></div>
+      <div class="taskbtns"><button class="btn sm" id="shRefresh">↻ Personeli yenile</button><button class="btn sm" id="shSave" title="Tüm haftaları şimdi E-Tabloya yaz">☁ Şimdi kaydet</button><button class="btn sm" id="shLoad" title="E-Tablodaki haftaları bu tarayıcıya yükle (üzerine yazar)">⬇ E-Tablodan yükle</button><button class="btn sm" id="shApproved" title="Onayladığınız (ana sitede yayınlanan) haftalardan, editörde eksik olanları geri getir">✔ Onaylı haftaları getir</button></div>
       <div class="hint" style="margin-top:8px">Haftalar her değişiklikten birkaç saniye sonra <b>otomatik</b> E-Tabloya kaydedilir; sayfa açılışında, sekmeye dönüşte ve 5 dakikada bir E-Tablodaki güncel haftalar otomatik çekilir (her hafta ayrı kayıt). Kayıt yeri: <b>HAFTALIK PROGRAM</b> sekmesi . Personel / oyun kadrosu <b>BÜTÜN OYUNLAR</b> sekmesinden, aylık program ise <b>AYLIK PROGRAM</b> sekmesinden (kesinleşmiş ya da taslak, hangisi yeniyse) okunur.</div>
     </div>
   </aside>
@@ -937,7 +937,7 @@ async function syncNow(opt={}){
     else chip('ok','☁ eşitlendi '+clock(),'Tüm haftalar E-Tablo ile aynı');
     if(opt.manual)toast(p.applied||n?('Eşitlendi — '+p.applied+' hafta alındı, '+n+' kayıt yazıldı'):'Zaten güncel');
   }catch(e){
-    chip('err','☁ bağlantı yok — tekrar denenecek',String(e&&e.message||e));
+    chip('err','☁ bağlantı yok ('+String(e&&e.message||e).slice(0,40)+') — tekrar denenecek',String(e&&e.message||e));
     clearTimeout(_wkTimer);_wkTimer=setTimeout(()=>syncNow(),30000);
     if(opt.manual)toast('E-Tabloya ulaşılamadı');
   }finally{_wkBusy=false;if(_wkAgain){_wkAgain=false;scheduleSync();}}
@@ -979,6 +979,10 @@ $('#shLoad').onclick=()=>ask('E-Tablodan yükle','<p>E-Tablodaki haftalar bu tar
     if(!r.found){chip('ok','☁ E-Tabloda hafta yok');return sheetsLoadLegacy();}
     CONF=new Set();SY.last=Date.now();saveSY();syncInfo();chip('ok','☁ eşitlendi '+clock());toast(r.applied+' kayıt E-Tablodan yüklendi');}
   catch(e){chip('err','☁ bağlantı yok');toast('Yüklenemedi — E-Tabloya ulaşılamadı');}});
+$('#shApproved').onclick=async()=>{commitEdit();chip('syncing','☁ onaylı haftalar aranıyor…');
+  try{const r=await restoreApproved();chip('ok','☁ eşitlendi '+clock());
+    toast(r.added?(r.added+' onaylı hafta geri getirildi'):(r.seen?'Onaylı haftaların hepsi zaten editörde ('+r.seen+' hafta)':'E-Tabloda bu birim için onaylı hafta bulunamadı'));}
+  catch(e){chip('err','☁ bağlantı yok ('+String(e&&e.message||e).slice(0,40)+')');toast('E-Tabloya ulaşılamadı: '+(e&&e.message||e));}};
 $('#syncState').onclick=()=>{commitEdit();syncNow({manual:true});};
 /* otomatik tetikleyiciler: sekmeye dönüş, sekme gizlenirken (bekleyen kaydı hemen yaz), 5 dk'da bir */
 let _wkFocusAt=0;
@@ -2303,6 +2307,27 @@ async function publishWeek(ui,note){
   await wkWrite(tab,id,ts,payload);                              /* önce yeni kayıt eksiksiz yazılır */
   await wkDelete(tab,['hpub_'+key+'_'+wk+'_'],id);               /* sonra aynı haftanın eski onayı silinir */
   try{localStorage.setItem(PUB_UNIT_LS,String(ui));}catch(e){}}
+/* Onaylı (hpub_) kayıtlardan editörde olmayan haftaları geri getir: yalnız EKSİK haftalar eklenir, var olanlara dokunulmaz */
+async function restoreApproved(){
+  const key=PUB_UNITS[UNIT.idx][0],{rows}=await wkRows(),g=new Map(),pre='hpub_'+key+'_';
+  rows.forEach(r=>{const id=String(r[0]||'');if(id.startsWith(pre)){if(!g.has(id))g.set(id,[]);g.get(id).push(r);}});
+  const best=new Map();
+  for(const[id,rs]of g){
+    const m=id.slice(pre.length).match(/^(\d{4}-\d{2}-\d{2})_(\d+)$/);if(!m)continue;
+    const total=+rs[0][3]||rs.length;if(new Set(rs.map(r=>+r[2])).size<total)continue;
+    const ts=+m[2],c=best.get(m[1]);if(!c||ts>c.ts)best.set(m[1],{ts,rs});}
+  let added=0,seen=best.size;
+  for(const[wk,b]of best){
+    if(S.weeks[wk])continue;
+    let o;try{o=JSON.parse(b64ToUtf8(b.rs.slice().sort((x,y)=>x[2]-y[2]).map(x=>String(x[4]||'')).join('')));}catch(e){continue;}
+    const D=o&&o.doc;if(!D||!Array.isArray(D.days))continue;
+    const list=[];
+    D.days.forEach((day,d)=>day.rows.forEach(row=>{const c=row.cells||{},t=k=>(c[k]&&!c[k].skip&&c[k].t)||'';
+      list.push({day:d,time:t('time'),place:t('place'),task:t('task'),people:t('ppl')});}));
+    S.weeks[wk]=nwNorm({g:templateGrid(wk,list)});
+    SY.born=SY.born||{};SY.born[wk]=Date.now();delete SY.sent[wk];added++;}
+  if(added){saveSY();persistQuiet();render();scheduleSync(0);}
+  return {added,seen};}
 async function unpublishWeek(ui){
   const [key]=PUB_UNITS[ui],tab=await wkTab();
   await wkDelete(tab,['hpub_'+key+'_'+S.cur+'_'],null);}
