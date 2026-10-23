@@ -546,6 +546,11 @@ SEED.crew=SEED.crew.rows.map(([p,c,r,n])=>({play:SEED.crew.plays[p],category:SEE
 const USUF=UNIT.key==='dekor'?'':'_'+UNIT.key, UP=UNIT.key==='dekor'?'':UNIT.key+'_'; /* Dekor Aksesuar eski anahtarları korur */
 const SIGN_BASE=['Murat GÜLMEZ\nMüdür Adına\nMüdür Yardımcısı']; /* tüm birimlerde hazır gelen imzacı şablonu */
 const LS = 'idt_haftalik_program_v2'+USUF, MLS = 'idt_aylik_program_v3';
+/* Bu tarayıcıda kayıt yoksa (tarayıcı verisi silindi / yeni cihaz) haftalar önce E-Tablodan geri alınır; geri alma bitene kadar E-Tabloya hiçbir şey yazılmaz */
+const RSK='idt_hp_restoring'+USUF;
+const FRESH=(()=>{try{const f=(localStorage.getItem(LS)===null&&!(!UP&&localStorage.getItem('idt_haftalik_program_v1')))||localStorage.getItem(RSK)==='1';if(f)localStorage.setItem(RSK,'1');return f;}catch(e){return false;}})();
+let RESTORE_PENDING=FRESH;
+try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist();}catch(e){}
 const CREW_API = 'https://tiyatro-backend.vercel.app/api/sheets/' + encodeURIComponent('AYLIK PROGRAM PERSONELİ');
 const GUN = ['Pazartesi','Salı','Çarşamba','Perşembe','Cuma','Cumartesi','Pazar'];
 const AY = ['OCAK','ŞUBAT','MART','NİSAN','MAYIS','HAZİRAN','TEMMUZ','AĞUSTOS','EYLÜL','EKİM','KASIM','ARALIK'];
@@ -727,9 +732,10 @@ async function sheetsLoadLegacy(){
      "apub_" ya da taslak "adraft_", hangisi yeniyse) okunur.
    ===================================================================== */
 const WK_TABS=['HAFTALIK PROGRAM'], MONTH_TAB='AYLIK PROGRAM';
-const WK_CHUNK=30000, WK_DEBOUNCE=3500, WK_POLL=5*60*1000, SYNC_LS='idt_haftalik_sync_v1'+USUF;
+const WK_CHUNK=30000, WK_DEBOUNCE=2000, WK_POLL=5*60*1000, SYNC_LS='idt_haftalik_sync_v1'+USUF;
 let SY=(()=>{const d={ts:{},sent:{},metaTs:0,metaSent:'',tab:'',last:0};try{return Object.assign(d,JSON.parse(localStorage.getItem(SYNC_LS)||'{}'));}catch(e){return d;}})();
 function saveSY(){try{localStorage.setItem(SYNC_LS,JSON.stringify(SY));}catch(e){}}
+if(FRESH){SY.ts={};SY.sent={};SY.metaTs=0;SY.metaSent='';SY.rosterSent=undefined;SY.born={};SY.tab=SY.tab||'';saveSY();}
 try{let ch=0;for(const[k,[a,b]]of Object.entries(PRE_H))if(SY.sent[k]===a){SY.sent[k]=b;ch=1;}if(ch)saveSY();if(Object.keys(PRE_H).length)localStorage.setItem(LS,JSON.stringify(S));}catch(e){}
 function persistQuiet(){try{localStorage.setItem(LS,JSON.stringify(S));}catch(e){}}
 function hsh(s){let x=5381;for(let i=0;i<s.length;i++)x=((x<<5)+x+s.charCodeAt(i))|0;return x+':'+s.length;}
@@ -839,10 +845,10 @@ function ensureCur(){
   if(!USER_NAV)pickOpenWeek();else if(!S.weeks[S.cur])S.cur=Object.keys(S.weeks).sort().pop();sel=null;}
 /* sunucudan çek: değişmemiş haftalar sessizce güncellenir, iki tarafta da değişmiş olanlar için sorulur */
 async function wkPull(opt={}){
-  const {rows}=await wkRows(),G_=wkGroups(rows),conflicts=[];let applied=0,found=0;
+  const {rows}=await wkRows(),G_=wkGroups(rows),conflicts=[],alive=new Set();let applied=0,found=0;
   for(const k of new Set([...G_.weeks.keys(),...G_.dels.keys()])){
     const w=G_.weeks.get(k),d=G_.dels.get(k),isDel=!!d&&(!w||d.ts>w.ts),sTs=isDel?d.ts:w.ts,base=SY.ts[k]||0;
-    found++;
+    found++;if(!isDel)alive.add(k);
     if(sTs<=base&&!opt.force&&(isDel?!S.weeks[k]:!!S.weeks[k]))continue; /* yerelde olmayan hafta her zaman E-Tablodan alınır */
     /* bu tarayıcıda silinmiş ama silme henüz E-Tabloya yazılmamış hafta: E-Tablodaki sürüm değişmediyse bu bir çakışma değil, bekleyen yerel silmedir (push hdel yazacak) */
     if(!isDel&&!S.weeks[k]&&!opt.force&&sTs<=base&&SY.sent[k]!==undefined)continue;
@@ -865,6 +871,7 @@ async function wkPull(opt={}){
     const mh=mHash();
     if(opt.force||SY.metaSent===mh||(!SY.metaSent&&mh===SEED_MH)){
       try{const o=JSON.parse(b64ToUtf8(G_.meta.txt()));['staffGone','staff','header','footer','signs','signCat','logo','unit','font','tc','tpl','nameMode','manager','mgrSign'].forEach(f=>{if(o[f]!==undefined)S[f]=o[f];});SY.metaTs=G_.meta.ts;SY.metaSent=mHash();applied++;}catch(e){}}}
+  if(opt.fresh&&found){for(const k of Object.keys(S.weeks))if(!alive.has(k)){delete S.weeks[k];delete SY.sent[k];applied++;}}
   if(applied){ensureCur();persistQuiet();}
   saveSY();
   if(applied&&!editing)render();
@@ -914,6 +921,7 @@ async function wkPush(opt={}){
 let _wkBusy=false,_wkAgain=false,_wkTimer=null;
 function scheduleSync(ms){clearTimeout(_wkTimer);_wkTimer=setTimeout(()=>syncNow(),ms==null?WK_DEBOUNCE:ms);chip('syncing','☁ kaydedilecek…');}
 async function syncNow(opt={}){
+  if(RESTORE_PENDING&&!opt.restore){chip('warn','☁ E-Tablodan geri yükleniyor…');return;}
   if(_wkBusy){_wkAgain=true;return;}
   if(editing){scheduleSync();return;} /* hücre yazılırken dokunma */
   _wkBusy=true;clearTimeout(_wkTimer);_wkTimer=null;chip('syncing','☁ eşitleniyor…');
@@ -2348,7 +2356,51 @@ function printViaFrame(){
   const imgs=[...d.images];Promise.all(imgs.map(i=>i.complete?1:new Promise(r=>{i.onload=i.onerror=r;}))).then(()=>setTimeout(go,120));
 }
 window.addEventListener('afterprint',()=>{setTimeout(()=>{try{document.body.classList.remove('print-measuring');render();}catch(e){}},50);});
-document.querySelector('.brand-mark img').src=LOGO; render();fetchCrew();pullMonths();syncInfo();setTimeout(()=>syncNow(),700);
+
+/* =====================================================================
+   OTOMATİK GERİ YÜKLEME — tarayıcı verisi silindiğinde ya da yeni bir cihazda açıldığında
+   tüm haftalar, personel, başlık/dipnot/imzalar E-Tablodan kendiliğinden geri gelir.
+   Geri yükleme tamamlanmadan E-Tabloya hiçbir şey yazılmaz (boş/gömülü veri E-Tablonun üzerine yazılmasın).
+   ===================================================================== */
+function rsBox(){let b=document.getElementById('rsBox');if(b)return b;
+  b=document.createElement('div');b.id='rsBox';
+  b.style.cssText='position:fixed;inset:0;z-index:2147483000;background:#f4efe3;display:flex;align-items:center;justify-content:center;padding:20px;font-family:Manrope,system-ui,sans-serif';
+  b.innerHTML='<div style="max-width:420px;width:100%;background:#fff;border:1px solid #c9b98f;border-radius:14px;padding:26px 24px;box-shadow:0 10px 40px rgba(0,0,0,.12);text-align:center">'+
+    '<div id="rsIc" style="font-size:34px;line-height:1">☁</div><h2 id="rsT" style="margin:10px 0 6px;font-size:18px;color:#0e4a57"></h2>'+
+    '<p id="rsP" style="margin:0 0 4px;color:#7a6a58;font-size:13.5px;line-height:1.5"></p>'+
+    '<div id="rsB" style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:14px"></div></div>';
+  document.body.appendChild(b);return b;}
+function rsSet(ic,t,p,btns){rsBox();document.getElementById('rsIc').textContent=ic;document.getElementById('rsT').textContent=t;document.getElementById('rsP').textContent=p||'';
+  const h=document.getElementById('rsB');h.innerHTML='';(btns||[]).forEach(([label,fn,gold])=>{const x=document.createElement('button');x.type='button';x.textContent=label;
+    x.style.cssText='font:700 13.5px Manrope,sans-serif;padding:9px 16px;border:0;border-radius:8px;cursor:pointer;color:#fff;background:'+(gold?'#b8892b':'#0e4a57');x.onclick=fn;h.appendChild(x);});}
+function rsClose(){const b=document.getElementById('rsBox');if(b)b.remove();}
+const _sl=ms=>new Promise(r=>setTimeout(r,ms));
+let _rsBG=null;
+function rsBackground(){ /* "eşitleme olmadan devam": yazma kapalı kalır, bağlantı gelince normal (çakışma kontrollü) eşitleme başlar */
+  if(_rsBG)return;chip('warn','☁ E-Tabloya ulaşılamadı — geri yükleme bekliyor');
+  _rsBG=setInterval(async()=>{try{const p=await wkPull({});RESTORE_PENDING=false;try{localStorage.removeItem(RSK);}catch(_){}clearInterval(_rsBG);_rsBG=null;
+    CONF=new Set(p.conflicts.map(c=>c.k));if(p.conflicts.length)wkAskConflicts(p.conflicts);toast('E-Tablo bağlantısı kuruldu');syncNow();}catch(e){}},30000);}
+async function wkRestore(){
+  const TRIES=4;
+  for(;;){
+    for(let a=1;a<=TRIES;a++){
+      rsSet('☁','E-Tablodan haftalar yükleniyor…',a>1?('Deneme '+a+'/'+TRIES):'Bu tarayıcıda kayıt yok; haftalar Google E-Tablolar’dan geri alınıyor.');
+      try{
+        chip('syncing','☁ geri yükleniyor…');
+        let r=await wkPull({force:true,fresh:true});
+        if(!r.found){await _sl(1500);r=await wkPull({force:true,fresh:true});} /* gerçekten boş mu, geçici boş yanıt mı */
+        CONF=new Set();SY.last=Date.now();saveSY();persistQuiet();RESTORE_PENDING=false;try{localStorage.removeItem(RSK);}catch(_){}
+        render();syncInfo();rsClose();
+        toast(r.found?(Object.keys(S.weeks).length+' hafta E-Tablodan geri yüklendi'):'E-Tabloda kayıtlı hafta yok — yeni başlangıç');
+        syncNow({restore:true});return;
+      }catch(e){chip('err','☁ geri yükleme başarısız',String(e&&e.message||e));await _sl(1200*a);}
+    }
+    const again=await new Promise(res=>{
+      rsSet('⚠','E-Tabloya ulaşılamadı','İnternet bağlantısını kontrol edin. Bağlantı gelene kadar E-Tabloya hiçbir şey yazılmaz, kayıtlı haftalarınız güvende. (Eşitleme olmadan devam ederseniz, bağlantı gelmeden sayfayı kapatırsanız o oturumdaki değişiklikler kaybolur.)',
+        [['Tekrar dene',()=>res(true),true],['Eşitleme olmadan devam et',()=>res(false)]]);});
+    if(!again){rsClose();rsBackground();return;}
+  }}
+document.querySelector('.brand-mark img').src=LOGO; render();fetchCrew();pullMonths();syncInfo();if(FRESH){rsSet('☁','E-Tablodan haftalar yükleniyor…','Haftalar Google E-Tablolar’dan geri alınıyor.');wkRestore();}else setTimeout(()=>syncNow(),700);
 
 </script>
 
