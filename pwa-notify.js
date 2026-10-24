@@ -4,10 +4,12 @@
    - Uygulama 08:00'de açıksa: sayfa içi zamanlayıcı.
    Her iki yol da aynı "bugün gösterildi" kaydını kullanır; aynı gün ikinci kez bildirim gelmez. */
 (function () {
-  const MORNING_HOUR = 8;            // sabah bildirim saati (sunucudaki cron saatiyle aynı olmalı)
-  /* Uygulama KAPALIYKEN de bildirim gelmesi için sunucu (Web Push) ayarları. README'ye bakın. */
-  const PUSH_API = "https://tiyatro-backend.vercel.app/api/push";
-  const VAPID_PUBLIC = "BURAYA_VAPID_PUBLIC_KEY";   // npx web-push generate-vapid-keys çıktısındaki Public Key
+  const MORNING_HOUR = 9;            // sabah bildirim saati (Apps Script tetikleyicisiyle aynı olmalı)
+  /* Uygulama KAPALIYKEN de bildirim gelmesi için ayarlar (Firebase Cloud Messaging + Google Apps Script). OKU_BENI.md'ye bakın. */
+  const PUSH_API = https://script.google.com/macros/s/AKfycbxo2fDAIKT-yaV2dyUqvyBI91rnaY-n3hIb1itsK5joX-UsT80P1Kme3NEF73soZogyzA/exec;   // Apps Script > Dağıt > Web uygulaması URL'si (.../exec)
+  const FB = { apiKey: AIzaSyAUiYAaA_P_p4NO9kMzyoxRwOxdptMs0P8, authDomain: haftalik-program-f33f1.firebaseapp.com, projectId: haftalik-program-f33f1, messagingSenderId: 147701286672, appId: 1:147701286672:web:0a83619cad5dd2f32dc795" };  // Firebase web uygulaması yapılandırması
+  const FB_VAPID = BH0s_wFNTlhDPcbaAsrtvqvBi3LtcvldXlM4ug64z7vPbRhcjAH0uAEA34H-qUl09VM_AMgQE1kcfUaxYVwFdys;     // Firebase > Cloud Messaging > Web Push sertifikaları > Key pair
+  const FB_SDK = "https://www.gstatic.com/firebasejs/10.14.1/";
   const DATA_CACHE = "hp-notify-v1"; // hp-sw.js ile ortak
   const h = location.hostname;
   const preview = window.self !== window.top || /^(id-)?preview--/.test(h) || /lovableproject(-dev)?\.com$/.test(h) || /[?&]sw=off/.test(location.search);
@@ -61,44 +63,47 @@
   }
 
 
-  /* ===== Sunucu bildirimi (Web Push) ===== */
-  const PUSH_READY = () => !preview && "PushManager" in window && "serviceWorker" in navigator && VAPID_PUBLIC && !/^BURAYA/.test(VAPID_PUBLIC);
+  /* ===== Sunucu bildirimi (Firebase Cloud Messaging + Apps Script) ===== */
+  const PUSH_READY = () => !preview && "PushManager" in window && "serviceWorker" in navigator &&
+    !/BURAYA/.test(PUSH_API + FB_VAPID + Object.values(FB).join(""));
   const unitKey = () => (typeof UNIT !== "undefined" && UNIT && UNIT.key) || "";
-  function b64u(s) {
-    const b = atob((s + "=".repeat((4 - (s.length % 4)) % 4)).replace(/-/g, "+").replace(/_/g, "/"));
-    return Uint8Array.from(b, (c) => c.charCodeAt(0));
-  }
-  const sameKey = (buf, arr) => { if (!buf) return false; const a = new Uint8Array(buf); return a.length === arr.length && a.every((v, i) => v === arr[i]); };
-  async function api(path, body) {
-    const r = await fetch(PUSH_API + path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    if (!r.ok) throw new Error("push api " + r.status);
-    return r.json().catch(() => ({}));
+  /* text/plain: tarayıcı ön kontrol (preflight) yapmasın; Apps Script web uygulaması bu şekilde çağrılabilir */
+  async function api(body) {
+    const r = await fetch(PUSH_API, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(body) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || j.error) throw new Error(j.error || "push api " + r.status);
+    return j;
   }
   const hash = (s) => { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return String(h); };
+  const loadScript = (src) => new Promise((ok, no) => { const s = document.createElement("script"); s.src = src; s.onload = ok; s.onerror = no; document.head.appendChild(s); });
+  let fbM = null;
+  async function fbMessaging() {
+    if (fbM) return fbM;
+    await loadScript(FB_SDK + "firebase-app-compat.js");
+    await loadScript(FB_SDK + "firebase-messaging-compat.js");
+    if (!firebase.apps.length) firebase.initializeApp(FB);
+    return (fbM = firebase.messaging());
+  }
   let pushBusy = false;
-  async function ensurePush() {            // bildirim açıksa bu cihazı sunucuya kaydet
+  async function ensurePush() {            // bildirim açıksa bu cihazın Firebase kodunu (token) sunucuya kaydet
     if (!PUSH_READY() || !enabled() || !unitKey() || pushBusy) return false;
     pushBusy = true;
     try {
       const reg = await navigator.serviceWorker.ready;
-      const key = b64u(VAPID_PUBLIC);
-      let sub = await reg.pushManager.getSubscription();
-      if (sub && !sameKey(sub.options && sub.options.applicationServerKey, key)) { await sub.unsubscribe(); sub = null; }
-      if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
-      await api("/subscribe", { unit: unitKey(), sub: sub.toJSON() });
-      put({ push: true }); pushData();
+      const m = await fbMessaging();
+      const token = await m.getToken({ vapidKey: FB_VAPID, serviceWorkerRegistration: reg });
+      if (!token) throw new Error("token yok");
+      await api({ action: "sub", unit: unitKey(), token });
+      put({ push: true, tok: token }); pushData();
       return true;
     } catch (e) { put({ push: false }); return false; }
     finally { pushBusy = false; }
   }
   async function dropPush() {              // bildirim kapatılınca bu cihazı sunucu listesinden çıkar
+    const tok = st().tok;
     put({ push: false });
-    if (!PUSH_READY()) return;
-    try {
-      const reg = await navigator.serviceWorker.ready;
-      const sub = await reg.pushManager.getSubscription();
-      if (sub) await api("/unsubscribe", { endpoint: sub.endpoint });
-    } catch (e) {}
+    if (!PUSH_READY() || !tok) return;
+    try { await api({ action: "unsub", token: tok }); } catch (e) {}
   }
   /* Program metinlerini sunucuya bırak. Yalnızca E-Tablo ile yeni eşitlenmiş cihaz yükler (eski veri ezmesin). */
   async function uploadDays(days) {
@@ -107,7 +112,7 @@
       if (typeof SY === "undefined" || !SY || !SY.last || Date.now() - SY.last > 5 * 60e3) return;
       const h = hash(JSON.stringify(days)), s0 = st();
       if (s0.upH === h && Date.now() - (s0.upT || 0) < 6 * 3600e3) return;
-      await api("/days", { unit: unitKey(), days });
+      await api({ action: "days", unit: unitKey(), days });
       put({ upH: h, upT: Date.now() });
     } catch (e) {}
   }
@@ -117,7 +122,7 @@
     const days = buildDays();
     if (!days) return;
     const unit = (typeof UNIT !== "undefined" && UNIT && UNIT.name) || "";
-    await cachePut("/__hp/data", { days, unit, hour: MORNING_HOUR, off: !enabled(), push: !!st().push, api: PUSH_API, unitKey: unitKey(), page: location.href.split("#")[0], saved: Date.now() });
+    await cachePut("/__hp/data", { days, unit, hour: MORNING_HOUR, off: !enabled(), push: !!st().push, page: location.href.split("#")[0], saved: Date.now() });
     uploadDays(days);
   }
 
