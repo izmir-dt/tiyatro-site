@@ -4,7 +4,10 @@
    - Uygulama 08:00'de açıksa: sayfa içi zamanlayıcı.
    Her iki yol da aynı "bugün gösterildi" kaydını kullanır; aynı gün ikinci kez bildirim gelmez. */
 (function () {
-  const MORNING_HOUR = 8;            // sabah bildirim saati
+  const MORNING_HOUR = 8;            // sabah bildirim saati (sunucudaki cron saatiyle aynı olmalı)
+  /* Uygulama KAPALIYKEN de bildirim gelmesi için sunucu (Web Push) ayarları. README'ye bakın. */
+  const PUSH_API = "https://tiyatro-backend.vercel.app/api/push";
+  const VAPID_PUBLIC = "BURAYA_VAPID_PUBLIC_KEY";   // npx web-push generate-vapid-keys çıktısındaki Public Key
   const DATA_CACHE = "hp-notify-v1"; // hp-sw.js ile ortak
   const h = location.hostname;
   const preview = window.self !== window.top || /^(id-)?preview--/.test(h) || /lovableproject(-dev)?\.com$/.test(h) || /[?&]sw=off/.test(location.search);
@@ -13,7 +16,7 @@
   let swReg = null;
   if ("serviceWorker" in navigator) {
     if (preview) navigator.serviceWorker.getRegistrations().then((rs) => rs.forEach((r) => r.unregister()));
-    else navigator.serviceWorker.register("hp-sw.js?v=2", { scope }).then((r) => { swReg = r; pushData(); setupPeriodic(); }).catch(() => {});
+    else navigator.serviceWorker.register("hp-sw.js?v=3", { scope }).then((r) => { swReg = r; pushData(); setupPeriodic(); ensurePush(); }).catch(() => {});
   }
 
   const LS = "hp_notify";
@@ -57,12 +60,65 @@
     try { const c = await caches.open(DATA_CACHE); await c.put(key, new Response(JSON.stringify(val), { headers: { "content-type": "application/json" } })); } catch (e) {}
   }
 
+
+  /* ===== Sunucu bildirimi (Web Push) ===== */
+  const PUSH_READY = () => !preview && "PushManager" in window && "serviceWorker" in navigator && VAPID_PUBLIC && !/^BURAYA/.test(VAPID_PUBLIC);
+  const unitKey = () => (typeof UNIT !== "undefined" && UNIT && UNIT.key) || "";
+  function b64u(s) {
+    const b = atob((s + "=".repeat((4 - (s.length % 4)) % 4)).replace(/-/g, "+").replace(/_/g, "/"));
+    return Uint8Array.from(b, (c) => c.charCodeAt(0));
+  }
+  const sameKey = (buf, arr) => { if (!buf) return false; const a = new Uint8Array(buf); return a.length === arr.length && a.every((v, i) => v === arr[i]); };
+  async function api(path, body) {
+    const r = await fetch(PUSH_API + path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    if (!r.ok) throw new Error("push api " + r.status);
+    return r.json().catch(() => ({}));
+  }
+  const hash = (s) => { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return String(h); };
+  let pushBusy = false;
+  async function ensurePush() {            // bildirim açıksa bu cihazı sunucuya kaydet
+    if (!PUSH_READY() || !enabled() || !unitKey() || pushBusy) return false;
+    pushBusy = true;
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const key = b64u(VAPID_PUBLIC);
+      let sub = await reg.pushManager.getSubscription();
+      if (sub && !sameKey(sub.options && sub.options.applicationServerKey, key)) { await sub.unsubscribe(); sub = null; }
+      if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+      await api("/subscribe", { unit: unitKey(), sub: sub.toJSON() });
+      put({ push: true }); pushData();
+      return true;
+    } catch (e) { put({ push: false }); return false; }
+    finally { pushBusy = false; }
+  }
+  async function dropPush() {              // bildirim kapatılınca bu cihazı sunucu listesinden çıkar
+    put({ push: false });
+    if (!PUSH_READY()) return;
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) await api("/unsubscribe", { endpoint: sub.endpoint });
+    } catch (e) {}
+  }
+  /* Program metinlerini sunucuya bırak. Yalnızca E-Tablo ile yeni eşitlenmiş cihaz yükler (eski veri ezmesin). */
+  async function uploadDays(days) {
+    if (!PUSH_READY() || !unitKey()) return;
+    try {
+      if (typeof SY === "undefined" || !SY || !SY.last || Date.now() - SY.last > 5 * 60e3) return;
+      const h = hash(JSON.stringify(days)), s0 = st();
+      if (s0.upH === h && Date.now() - (s0.upT || 0) < 6 * 3600e3) return;
+      await api("/days", { unit: unitKey(), days });
+      put({ upH: h, upT: Date.now() });
+    } catch (e) {}
+  }
+
   /* Program verisini arka plan çalışanına bırak (bildirim GÖSTERMEZ) */
   async function pushData() {
     const days = buildDays();
     if (!days) return;
     const unit = (typeof UNIT !== "undefined" && UNIT && UNIT.name) || "";
-    await cachePut("/__hp/data", { days, unit, hour: MORNING_HOUR, off: !enabled(), page: location.href.split("#")[0], saved: Date.now() });
+    await cachePut("/__hp/data", { days, unit, hour: MORNING_HOUR, off: !enabled(), push: !!st().push, api: PUSH_API, unitKey: unitKey(), page: location.href.split("#")[0], saved: Date.now() });
+    uploadDays(days);
   }
 
   async function setupPeriodic() {
@@ -83,7 +139,7 @@
 
   /* Sabah bildirimi: yalnızca sabah saati geldiğinde ve bugün henüz gösterilmediyse */
   async function morningNotify() {
-    if (!enabled()) return;
+    if (!enabled() || st().push) return;   // sunucu bildirimi aktifse sayfa içi bildirim gerekmez (çift bildirim olmasın)
     const t = todayIso();
     if ((await cacheGet("/__hp/shown")) === t || st().shown === t) return;
     const days = buildDays();
@@ -118,12 +174,12 @@
     if (!("Notification" in window)) return alert("Bu tarayıcı bildirimleri desteklemiyor.");
     if (Notification.permission === "denied") return alert("Bildirimler tarayıcıdan engellenmiş. Chrome ayarlarında bu site için bildirimlere izin verin.");
     if (Notification.permission === "granted") {
-      if (st().off) { put({ off: false }); refreshBtns(); pushData(); setupPeriodic(); confirmOn(); }   // tekrar aç
-      else { put({ off: true }); refreshBtns(); pushData(); }                                          // kapat
+      if (st().off) { put({ off: false }); refreshBtns(); pushData(); setupPeriodic(); ensurePush(); confirmOn(); }   // tekrar aç
+      else { put({ off: true }); refreshBtns(); pushData(); dropPush(); }                                          // kapat
       return;
     }
     const p = await Notification.requestPermission();
-    if (p === "granted") { put({ off: false }); pushData(); setupPeriodic(); confirmOn(); }
+    if (p === "granted") { put({ off: false }); pushData(); setupPeriodic(); ensurePush(); confirmOn(); }
     refreshBtns();
   }
 
