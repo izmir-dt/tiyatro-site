@@ -2497,6 +2497,7 @@ const ms=document.createElement('div');ms.id='mobileShade';ms.style.cssText='pos
 function minitial(s){const p=String(s).replace(/\./g,' ').split(/\s+/).filter(Boolean);return(p[0]?.[0]||'')+(p[p.length-1]?.[0]||'');}
 function mfull(p){const k=nk(p),st=(S.staff||[]).find(x=>nk(x.s)===k||(x.full&&nk(x.full)===k));return st&&st.full?st.full:p;}
 function mitems(){return items().filter(x=>x.day>=0&&(x.task.trim()||x.time.trim()||x.people.trim()));}
+function mtime(t){t=String(t||'').trim();const m=t.match(/^(\d{1,2}[:.]\d{2}(?:\s*[-–]\s*\d{1,2}[:.]\d{2})?)\s*([\s\S]*)$/);if(m)return m[2].trim()?[m[1].replace(/\s+/g,''),m[2].trim().replace(/\s*\n\s*/g,' ')]:[m[1].replace(/\s+/g,'')];return t.split(/\n/);}
 function mheading(t){const q=t.match(/[“"]([^”"]+)[”"]/);return q?q[1]:t.split(/[.\n]/)[0]||'Yeni görev';}
 const mq=matchMedia('(max-width:760px)');
 function mrender(){
@@ -2504,7 +2505,7 @@ function mrender(){
  const all=mitems(),di=all.filter(i=>i.day===md),keys=Object.keys(S.weeks).sort(),cf=conflicts(),dat=addDays(fromIso(S.cur),md);
  ma.innerHTML='<header class="m-header"><div class="m-brand"><div><p class="m-eyebrow">İzmir Devlet Tiyatrosu</p><h1>'+esc(S.unit||UNIT.name).replace(' Aksesuar',' &amp; Aksesuar')+'</h1></div><div class="m-head-r"><button type="button" id="mBell" class="m-bell ask" aria-label="Bildirim">'+mic('bell')+'</button><div class="m-count"><b>'+all.length+'</b>Görev</div></div></div><div class="m-week"><button data-m="prev" aria-label="Önceki hafta">'+mic('left')+'</button><div class="m-week-center"><small>Haftalık çalışma programı</small><strong>'+esc(weekLabel(S.cur))+'</strong><select id="mWeekSelect" aria-label="Hafta seçimi">'+keys.map(k=>'<option value="'+k+'" '+(k===S.cur?'selected':'')+'>'+esc(weekLabel(k))+'</option>').join('')+'</select></div><button data-m="next" aria-label="Sonraki hafta">'+mic('right')+'</button></div><nav class="m-days" aria-label="Günler">'+GUN.map((d,i)=>'<button class="m-day '+(md===i?'active':'')+'" data-day="'+i+'" aria-label="'+d+'" aria-pressed="'+(md===i)+'"><span>'+['Pzt','Sal','Çar','Per','Cum','Cmt','Paz'][i]+'</span><b>'+addDays(fromIso(S.cur),i).getDate()+'</b><i '+(all.some(x=>x.day===i)?'':'style="visibility:hidden"')+'></i></button>').join('')+'</nav><div class="m-status" id="mSync"><span></span><label>'+esc($('#syncState').textContent.replace('☁','').trim())+'</label></div></header><main class="m-main" id="mMain"></main><nav class="m-bottom" aria-label="Ana menü">'+[['program','calendar','Program'],['staff','people','Personel'],['tools','tools','Araçlar']].map(([v,icon,l])=>'<button data-view="'+v+'" class="'+(mview===v?'active':'')+'" aria-current="'+(mview===v?'page':'false')+'">'+mic(icon)+'<span>'+l+'</span></button>').join('')+'</nav>';
  const main=$('#mMain');
- if(mview==='program')main.innerHTML='<div class="m-quick"><button data-trigger="todayB">'+mic('calendar')+'Bugün</button><button data-trigger="newW">'+mic('plus')+'Yeni hafta</button><button data-trigger="expJ">'+mic('download')+'JPG indir</button><button data-trigger="noteB" class="'+((window.NOTE_PENDING||0)?'hot':'')+'">'+mic('note')+'Bildirim'+((window.NOTE_PENDING||0)?' · '+window.NOTE_PENDING:'')+'</button></div><div class="m-section"><h2>'+GUN[md]+' <small>· '+di.length+' görev</small></h2><small>'+dat.toLocaleDateString('tr-TR',{day:'numeric',month:'long'})+'</small></div>'+(di.length?di.map(it=>{const ps=splitPeople(it.people),time=it.time.split(/\n/),title=mheading(it.task);return '<article class="m-task '+(cf.bad.has(it.r)?'conflict':'')+'" data-r="'+it.r+'"><div class="m-task-grid"><div class="m-time"><strong>'+esc(time[0]||'—')+'</strong>'+(time[1]?'<small>'+esc(time.slice(1).join(' '))+'</small>':'')+'</div><div class="m-content"><div class="m-task-title"><h3>'+esc(title)+'</h3><button class="m-edit" data-edit="'+it.r+'" aria-label="Görevi düzenle">'+mic('edit')+'</button></div><p class="m-place">'+mic('pin')+esc(it.place||'Yer belirtilmedi')+'</p>'+(it.task!==title?'<p class="m-description">'+esc(it.task)+'</p>':'')+'<button class="m-crew" data-crew="'+it.r+'" aria-label="Görevlileri seç"><span class="m-names">'+(ps.length?ps.map(p=>'<span class="m-name" title="'+esc(p)+'">'+esc(mfull(p))+'</span>').join(''):'<span class="m-name none">Görevli ekle</span>')+'</span><span class="m-crew-add">'+mic('plus')+'</span></button>'+(cf.bad.has(it.r)?'<p class="m-alert">Görevlendirme çakışması</p>':'')+'</div></div></article>';}).join(''):'<div class="m-empty">Bu gün için görev bulunmuyor.</div>')+'<button class="m-add" data-m="add">'+mic('plus')+'Yeni görev ekle</button>';
+ if(mview==='program')main.innerHTML='<div class="m-quick"><button data-trigger="todayB">'+mic('calendar')+'Bugün</button><button data-trigger="newW">'+mic('plus')+'Yeni hafta</button><button data-trigger="expJ">'+mic('download')+'JPG indir</button><button data-trigger="noteB" class="'+((window.NOTE_PENDING||0)?'hot':'')+'">'+mic('note')+'Bildirim'+((window.NOTE_PENDING||0)?' · '+window.NOTE_PENDING:'')+'</button></div><div class="m-section"><h2>'+GUN[md]+' <small>· '+di.length+' görev</small></h2><small>'+dat.toLocaleDateString('tr-TR',{day:'numeric',month:'long'})+'</small></div>'+(di.length?di.map(it=>{const ps=splitPeople(it.people),time=mtime(it.time),title=mheading(it.task);return '<article class="m-task '+(cf.bad.has(it.r)?'conflict':'')+'" data-r="'+it.r+'"><div class="m-task-grid"><div class="m-time"><strong>'+esc(time[0]||'—')+'</strong>'+(time[1]?'<small>'+esc(time.slice(1).join(' '))+'</small>':'')+'</div><div class="m-content"><div class="m-task-title"><h3>'+esc(title)+'</h3><button class="m-edit" data-edit="'+it.r+'" aria-label="Görevi düzenle">'+mic('edit')+'</button></div><p class="m-place">'+mic('pin')+esc(it.place||'Yer belirtilmedi')+'</p>'+(it.task!==title?'<p class="m-description">'+esc(it.task)+'</p>':'')+'<button class="m-crew" data-crew="'+it.r+'" aria-label="Görevlileri seç"><span class="m-names">'+(ps.length?ps.map(p=>'<span class="m-name" title="'+esc(p)+'">'+esc(mfull(p))+'</span>').join(''):'<span class="m-name none">Görevli ekle</span>')+'</span><span class="m-crew-add">'+mic('plus')+'</span></button>'+(cf.bad.has(it.r)?'<p class="m-alert">Görevlendirme çakışması</p>':'')+'</div></div></article>';}).join(''):'<div class="m-empty">Bu gün için görev bulunmuyor.</div>')+'<button class="m-add" data-m="add">'+mic('plus')+'Yeni görev ekle</button>';
  if(mview==='staff')mstaff();
  if(mview==='tools'){
  const tool=(id,icon,l,danger='')=>'<button class="m-tool '+danger+'" data-'+(id.startsWith('tab:')?'tab="'+id.slice(4):'trigger="'+id)+'">'+mic(icon)+'<span>'+l+'</span>'+mic('right')+'</button>';
@@ -2945,5 +2946,88 @@ setTimeout(()=>{const b=document.getElementById('monthRepB');if(b&&!b._w){b._w=1
 </script>
 <script src="hp-config.js?v=1"></script>
 <script src="pwa-notify.js?v=6"></script>
+<style id="m-typo">
+@media screen and (max-width:760px){
+/* ===== Mobil tipografi + taşma düzeltmeleri ===== */
+#mobileApp{font-family:Inter,system-ui,-apple-system,'Segoe UI',sans-serif;font-size:15px;line-height:1.5;font-feature-settings:'cv11','ss03','tnum' 0;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;overflow-wrap:break-word;word-break:normal;hyphens:manual}
+#mobileApp *{min-width:0}
+#mobileApp h1,#mobileApp h2,#mobileApp h3,#mobileApp .m-eyebrow{font-family:'Bricolage Grotesque',Inter,system-ui,sans-serif}
+#mobileApp .m-eyebrow{font-size:11px;font-weight:600;letter-spacing:.02em;line-height:1.3}
+#mobileApp .m-header h1{font-size:24px;line-height:1.15;font-weight:600;text-wrap:balance;letter-spacing:-.01em!important}
+#mobileApp .m-count{font-size:12px;font-weight:500}
+#mobileApp .m-count b{font-size:13px;font-weight:700;font-variant-numeric:tabular-nums}
+#mobileApp .m-week-center small{font-size:11px;font-weight:500;line-height:1.3}
+#mobileApp .m-week-center strong{font-size:14px;font-weight:700;line-height:1.3;white-space:nowrap}
+#mobileApp .m-day{font-size:11px;font-weight:500}
+#mobileApp .m-day b{font-size:16px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1}
+#mobileApp .m-status{font-size:11.5px;line-height:1.4}
+#mobileApp .m-quick{gap:6px}
+#mobileApp .m-quick button{flex:1 1 0;flex-direction:column;gap:4px;min-height:54px;padding:7px 2px;font-size:12px;font-weight:600;line-height:1.15;white-space:nowrap;text-align:center}
+#mobileApp .m-quick .m-icon{width:18px;height:18px}
+#mobileApp .m-section h2{font-size:16px;font-weight:600;line-height:1.25}
+#mobileApp .m-section h2 small,#mobileApp .m-section small{font-size:12px;font-weight:500;color:var(--mobile-muted)}
+#mobileApp .m-task{padding:16px 14px}
+#mobileApp .m-task-grid{grid-template-columns:72px minmax(0,1fr);gap:12px}
+#mobileApp .m-time{padding:10px 4px 9px;overflow:hidden;display:flex;flex-direction:column;align-items:center;gap:6px}
+#mobileApp .m-time strong{font-size:16px;line-height:1.1;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
+#mobileApp .m-time small{display:block;margin:0;width:100%;font-size:9.5px;line-height:1.2;font-weight:700;letter-spacing:.02em;text-transform:uppercase;overflow-wrap:anywhere;word-break:break-word;hyphens:auto;opacity:.85}
+#mobileApp .m-task-title{grid-template-columns:minmax(0,1fr) 28px;gap:6px}
+#mobileApp .m-task h3{font-size:17px;line-height:1.3;font-weight:600;text-wrap:balance;overflow-wrap:break-word;word-break:normal;hyphens:auto}
+#mobileApp .m-task .m-edit{width:32px;height:36px}
+#mobileApp .m-place{font-size:12.5px;font-weight:500;line-height:1.35;margin:7px 0 0;align-items:flex-start}
+#mobileApp .m-place .m-icon{width:16px;height:16px;margin-top:1px}
+#mobileApp .m-description{font-size:14px;line-height:1.55;color:color-mix(in oklch,var(--mobile-ink) 72%,var(--mobile-muted));margin:9px 0 0;text-wrap:pretty;overflow-wrap:break-word;word-break:normal;hyphens:auto}
+#mobileApp .m-crew{padding:12px 0 0;gap:8px;align-items:flex-start}
+#mobileApp .m-names{gap:6px}
+#mobileApp .m-name{font-size:13px;font-weight:600;line-height:1.3;padding:6px 11px;max-width:100%;overflow-wrap:anywhere}
+#mobileApp .m-crew-add{width:32px;height:32px}
+#mobileApp .m-alert{font-size:12px;font-weight:600}
+#mobileApp .m-bottom button{font-size:11px;font-weight:500}
+#mobileApp .m-bottom button.active{font-weight:700}
+#mobileApp .m-empty{font-size:14px;line-height:1.55}
+#mobileApp .m-person strong{font-size:14.5px;font-weight:600;line-height:1.3;overflow-wrap:anywhere}
+#mobileApp .m-person small{font-size:12px;line-height:1.4;overflow-wrap:anywhere}
+#mobileApp .m-person{grid-template-columns:36px minmax(0,1fr) 44px}
+#mobileApp .m-tools-group h3{font-size:11px;font-weight:700;letter-spacing:.06em}
+#mobileApp .m-tool{font-size:14.5px;font-weight:500;line-height:1.35;grid-template-columns:24px minmax(0,1fr) 18px}
+#mobileApp .m-tool span{overflow-wrap:anywhere}
+#mobileApp .m-search{font-size:16px}
+/* pencereler / çekmece */
+#dlg,#drawer{font-family:Inter,system-ui,sans-serif;font-size:15px;line-height:1.55;overflow-wrap:break-word}
+#dlg *,#drawer *{min-width:0}
+#dlgT{font-size:21px!important;line-height:1.25;font-weight:600;text-wrap:balance}
+#dlgB{font-size:14.5px!important}
+#dlgB p,#dlgB li{overflow-wrap:break-word}
+#dlgF .btn{font-size:14px;font-weight:600;line-height:1.2}
+.m-form label{font-size:13px;font-weight:500}
+.m-form input,.m-form textarea,.m-form select{font-size:16px;line-height:1.45;font-family:Inter,sans-serif}
+.m-form .m-choice{font-size:14.5px;line-height:1.35}
+.m-form .m-choice span{overflow-wrap:anywhere}
+.m-form .m-choice small{font-size:11.5px;max-width:42vw;text-align:right;overflow-wrap:anywhere}
+.m-chip{font-size:13px;line-height:1.35;max-width:100%;overflow-wrap:anywhere;text-align:left;white-space:normal}
+.m-chip small{font-size:11px}
+.m-tpl summary{font-size:14px}
+.m-d-row span{font-size:11.5px;font-weight:600;letter-spacing:.03em;text-transform:uppercase}
+.m-d-row b{font-size:15px;line-height:1.5;overflow-wrap:anywhere}
+.m-d-task{font-size:15px!important;line-height:1.65!important;text-wrap:pretty;overflow-wrap:break-word}
+.m-d-people div{font-size:14px;align-items:flex-start;gap:10px}
+.m-d-people span{font-size:14px;overflow-wrap:anywhere}
+.m-d-people small{font-size:11.5px;white-space:nowrap}
+.nt-card p{font-size:14.5px;line-height:1.6;overflow-wrap:break-word}
+.nt-meta{font-size:13px;gap:10px;flex-wrap:wrap}
+.nt-meta b{overflow-wrap:anywhere}
+#toast{font-size:13px;line-height:1.45}
+#drawer .chip,#drawer .pc{font-size:13px;line-height:1.35;overflow-wrap:anywhere}
+#drawer .mp-it{font-size:14px;line-height:1.5}
+#drawer .mp-it small{font-size:12px;line-height:1.4;overflow-wrap:anywhere}
+#drawer .warns{font-size:13.5px;line-height:1.5}
+}
+@media screen and (max-width:360px){
+#mobileApp .m-header h1{font-size:21px}
+#mobileApp .m-task-grid{grid-template-columns:66px minmax(0,1fr);gap:10px}
+#mobileApp .m-task h3{font-size:16px}
+#mobileApp .m-quick button{font-size:11px}
+}
+</style>
 </body>
 </html>
