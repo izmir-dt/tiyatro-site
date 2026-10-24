@@ -44,30 +44,16 @@ self.addEventListener("notificationclick", (e) => {
   })());
 });
 
-/* Sunucudan gelen günlük bildirim (uygulama kapalıyken de çalışır) */
+/* Sunucudan (Firebase Cloud Messaging) gelen günlük bildirim — uygulama kapalıyken de çalışır */
 self.addEventListener("push", (e) => {
   let d = {};
   try { d = e.data ? e.data.json() : {}; } catch (_) { d = { body: e.data ? e.data.text() : "" }; }
+  const p = d.data || d.notification || d;   // FCM yükü: { data: {...} }
   e.waitUntil((async () => {
-    if (d.date) { try { await cachePut("/__hp/shown", d.date); } catch (_) {} }
-    await self.registration.showNotification(d.title || "Bugünün programı", {
-      body: d.body || "", icon: "hp-icon-192.png", badge: "hp-icon-192.png",
-      tag: d.tag || "hp-push", data: { url: d.url || self.registration.scope },
+    if (p.date) { try { await cachePut("/__hp/shown", p.date); } catch (_) {} }
+    await self.registration.showNotification(p.title || "Bugünün programı", {
+      body: p.body || "", icon: "hp-icon-192.png", badge: "hp-icon-192.png",
+      tag: p.tag || "hp-push", data: { url: p.url || self.registration.scope },
     });
-  })());
-});
-
-/* Tarayıcı abonelik anahtarını yenilerse sunucuya yeniden kaydet */
-self.addEventListener("pushsubscriptionchange", (e) => {
-  e.waitUntil((async () => {
-    const d = await cacheGet("/__hp/data");
-    if (!d || !d.api || !d.unitKey) return;
-    let sub = e.newSubscription;
-    if (!sub) {
-      const key = e.oldSubscription && e.oldSubscription.options && e.oldSubscription.options.applicationServerKey;
-      if (!key) return;
-      sub = await self.registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
-    }
-    await fetch(d.api + "/subscribe", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ unit: d.unitKey, sub: sub.toJSON() }) });
   })());
 });
