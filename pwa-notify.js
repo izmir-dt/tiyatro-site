@@ -5,10 +5,11 @@
    Her iki yol da aynı "bugün gösterildi" kaydını kullanır; aynı gün ikinci kez bildirim gelmez. */
 (function () {
   const MORNING_HOUR = 9;            // sabah bildirim saati (Apps Script tetikleyicisiyle aynı olmalı)
-  /* Uygulama KAPALIYKEN de bildirim gelmesi için ayarlar (Firebase Cloud Messaging + Google Apps Script). OKU_BENI.md'ye bakın. */
-  const PUSH_API = "https://script.google.com/macros/s/AKfycbxo2fDAIKT-yaV2dyUqvyBI91rnaY-n3hIb1itsK5joX-UsT80P1Kme3NEF73soZogyzA/exec";   // Apps Script > Dağıt > Web uygulaması URL'si (.../exec)
-  const FB = { apiKey: "AIzaSyAUiYAaA_P_p4NO9kMzyoxRwOxdptMs0P8", authDomain: "haftalik-program-f33f1.firebaseapp.com", projectId: "haftalik-program-f33f1", messagingSenderId: 147701286672, appId: "1:147701286672:web:0a83619cad5dd2f32dc795" };  // Firebase web uygulaması yapılandırması
-  const FB_VAPID = "BH0s_wFNTlhDPcbaAsrtvqvBi3LtcvldXlM4ug64z7vPbRhcjAH0uAEA34H-qUl09VM_AMgQE1kcfUaxYVwFdys";     // Firebase > Cloud Messaging > Web Push sertifikaları > Key pair
+  /* Uygulama KAPALIYKEN de bildirim gelmesi için ayarlar: hp-config.js dosyasından okunur (Firebase + Google Apps Script). OKU_BENI.md'ye bakın. */
+  const CFG = window.HP_CONFIG || {};
+  const PUSH_API = CFG.pushApi || "BURAYA";
+  const FB = CFG.firebase || { apiKey: "BURAYA", authDomain: "BURAYA", projectId: "BURAYA", messagingSenderId: "BURAYA", appId: "BURAYA" };
+  const FB_VAPID = CFG.vapid || "BURAYA";
   const FB_SDK = "https://www.gstatic.com/firebasejs/10.14.1/";
   const DATA_CACHE = "hp-notify-v1"; // hp-sw.js ile ortak
   const h = location.hostname;
@@ -77,12 +78,15 @@
   const hash = (s) => { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return String(h); };
   const loadScript = (src) => new Promise((ok, no) => { const s = document.createElement("script"); s.src = src; s.onload = ok; s.onerror = no; document.head.appendChild(s); });
   let fbM = null;
-  async function fbMessaging() {
-    if (fbM) return fbM;
-    await loadScript(FB_SDK + "firebase-app-compat.js");
-    await loadScript(FB_SDK + "firebase-messaging-compat.js");
-    if (!firebase.apps.length) firebase.initializeApp(FB);
-    return (fbM = firebase.messaging());
+  function fbMessaging() {                 // aynı anda birden çok çağrıda SDK'yı tek sefer yükle
+    return fbM || (fbM = (async () => {
+      if (!window.firebase) {
+        await loadScript(FB_SDK + "firebase-app-compat.js");
+        await loadScript(FB_SDK + "firebase-messaging-compat.js");
+      }
+      if (!firebase.apps.length) firebase.initializeApp(FB);
+      return firebase.messaging();
+    })().catch((e) => { fbM = null; throw e; }));
   }
   let pushBusy = false;
   async function ensurePush() {            // bildirim açıksa bu cihazın Firebase kodunu (token) sunucuya kaydet
@@ -169,7 +173,20 @@
     b.textContent = p === "granted" && !off ? "🔔 Bildirim açık" : p === "granted" && off ? "🔕 Bildirim kapalı" : p === "denied" ? "🔕 Bildirim engelli" : "🔔 Bildirimleri aç";
     b.title = p === "granted" && !off ? "Her sabah " + String(MORNING_HOUR).padStart(2, "0") + ":00'de o günün programı gelir. Kapatmak için dokunun" : "Her sabah o günün programını bildirim olarak almak için dokunun";
   }
-  function refreshBtns() { document.querySelectorAll(".hpNotifyBtn").forEach(btnLabel); }
+  function bellState() {
+    const p = "Notification" in window ? Notification.permission : "denied";
+    return p === "denied" ? "blocked" : p === "granted" ? (st().off ? "off" : "on") : "ask";
+  }
+  function refreshBtns() {
+    document.querySelectorAll(".hpNotifyBtn").forEach(btnLabel);
+    const b = document.getElementById("mBell");     // telefon üst başlıktaki zil simgesi
+    if (b) {
+      const s0 = bellState();
+      b.className = "m-bell " + s0;
+      const tip = { on: "Bildirim açık — kapatmak için dokunun", off: "Bildirim kapalı — açmak için dokunun", ask: "Her sabah programı bildirim olarak almak için dokunun", blocked: "Bildirim tarayıcıdan engellenmiş" }[s0];
+      b.title = tip; b.setAttribute("aria-label", tip);
+    }
+  }
 
   function confirmOn() {
     show("Bildirimler açık", "Her sabah " + String(MORNING_HOUR).padStart(2, "0") + ":00'de o günün programı bildirim olarak gelecek.", "hp-on");
@@ -188,6 +205,8 @@
     refreshBtns();
   }
 
+  window.HP_NOTIFY = { toggle: () => toggleNotify(), refresh: () => refreshBtns() };
+
   function makeBtn(id, cls) {
     const b = document.createElement("button");
     b.id = id; b.type = "button"; b.className = "hpNotifyBtn " + cls;
@@ -204,7 +223,12 @@
 
   const isMobile = () => window.matchMedia("(max-width:760px)").matches;
 
-  function addMobileButton() {      // telefon: üst başlıktaki durum satırının sağı; bulunamazsa yüzen buton
+  function addMobileButton() {      // telefon: sayfada zil simgesi (#mBell) varsa o kullanılır; yoksa eski düğme
+    if (document.getElementById("mBell")) {
+      document.querySelectorAll(".hpNotifyBtnM").forEach((e) => e.remove());
+      refreshBtns();
+      return;
+    }
     if (!isMobile()) return;
     const root = document.getElementById("mobileApp");
     const row = root && (root.querySelector(".m-status") || root.querySelector(".m-header"));
