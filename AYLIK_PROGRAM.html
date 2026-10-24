@@ -720,7 +720,7 @@ body{background:
   radial-gradient(circle at 90% -10%,rgba(197,139,50,.12),transparent 33rem),
   var(--bg);color:var(--ink);font-size:14px}
 header{
-  position:sticky;top:0;z-index:70;
+  position:sticky;top:var(--sync-h,0px);z-index:70;
   min-height:72px;padding:12px clamp(16px,3vw,42px);
   gap:22px;border-bottom:1px solid rgba(255,255,255,.12);
   box-shadow:0 4px 18px rgba(38,11,17,.16)
@@ -1428,6 +1428,141 @@ table.sheet td.cell{min-width:86px;height:29px}
 .repMenu b{display:block;font-size:14px}.repMenu small{display:block;font-size:11.5px;color:#7a6a58}
 @media print{.repMenu{display:none!important}}
 </style>
+<style id="sync-watch-css">
+#syncWatch{display:none;position:sticky;top:0;z-index:200;font-family:'Manrope',system-ui,sans-serif;color:#fff;box-shadow:0 4px 14px rgba(0,0,0,.25)}
+#syncWatch.show{display:block}
+#syncWatch.err{background:#a3121f}
+#syncWatch.warn{background:#9a6200}
+#syncWatch.ok{background:#1e6b3a}
+#syncWatch .sw-row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:10px clamp(14px,3vw,42px)}
+#syncWatch .sw-ic{font-size:20px;line-height:1}
+#syncWatch .sw-tx{flex:1 1 320px;min-width:0}
+#syncWatch .sw-tx b{display:block;font-size:14px;font-weight:800}
+#syncWatch .sw-tx span{display:block;font-size:12.5px;line-height:1.45;opacity:.95;overflow-wrap:anywhere}
+#syncWatch button{font:700 12.5px 'Manrope',sans-serif;color:#fff;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.5);border-radius:7px;padding:6px 12px;cursor:pointer;white-space:nowrap}
+#syncWatch button:hover{background:rgba(255,255,255,.3)}
+#syncWatch .sw-det{display:none;padding:0 clamp(14px,3vw,42px) 10px;font-size:12px;line-height:1.5}
+#syncWatch.open .sw-det{display:block}
+#syncWatch .sw-det div{padding:3px 0;border-top:1px solid rgba(255,255,255,.25);overflow-wrap:anywhere}
+@media(max-width:640px){#syncWatch .sw-row{padding:8px 12px}#syncWatch .sw-tx b{font-size:13.5px}}
+@media print{#syncWatch{display:none!important}}
+</style>
+<script id="sync-watch-js">
+/* === Sunucu / arka plan işlemi uyarı sistemi ===
+   tiyatro-backend (Vercel) üzerindeki TÜM istekleri (okuma, kaydetme/yazma, silme) izler.
+   Başarısız olan her işlem — kodun başka yerinde sessizce yutulsa bile — sayfanın en üstünde
+   kalıcı bir uyarı olarak gösterilir; sorun giderilene kadar kapanmaz, kendiliğinden yeniden dener. */
+(function(){
+  if(window.__syncWatch) return; 
+  const HOST='tiyatro-backend.vercel.app';
+  const origFetch=window.fetch.bind(window);
+  const FAIL=[];            /* aktif sorunlar */
+  let dismissedAt=0, okTimer=null, retryTimer=null, slowTimers=new Map(), lastOk={write:0,del:0,read:0};
+  const CLS={write:'Kaydetme / yazma',del:'Silme',read:'Okuma'};
+  const clsOf=m=>m==='GET'||m==='HEAD'?'read':m==='DELETE'?'del':'write';
+  const pad=n=>String(n).padStart(2,'0'), hhmm=t=>{const d=new Date(t);return pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds());};
+  function reason(status,err){
+    if(status===0){ if(typeof navigator!=='undefined'&&navigator.onLine===false) return 'İnternet bağlantısı yok.'; return 'Sunucuya ulaşılamadı (Vercel kapalı, ağ/DNS sorunu ya da istek engellendi).'; }
+    if(status===401||status===403) return 'Erişim reddedildi (yetki / Vercel koruması, HTTP '+status+').';
+    if(status===404) return 'Sunucuda uç nokta ya da E-Tablo sekmesi bulunamadı (HTTP 404).';
+    if(status===408||status===504) return 'Sunucu zamanında yanıt vermedi — zaman aşımı (HTTP '+status+').';
+    if(status===413) return 'Gönderilen veri sunucu için çok büyük (HTTP 413).';
+    if(status===429) return 'Çok sık istek gönderildi; Vercel / Google E-Tablo kotası dolmuş olabilir (HTTP 429).';
+    if(status>=500) return 'Vercel sunucusu ya da Google E-Tablo hata verdi (HTTP '+status+').';
+    if(status===-1) return 'Sunucu başarılı yanıt verdi ama içinde hata bildirdi'+(err?': '+err:'')+'.';
+    return 'Beklenmeyen yanıt (HTTP '+status+').';
+  }
+  function resolveOf(cls){ /* aynı sınıfta daha sonra başarı olursa o sınıftaki sorunlar kapanır */
+    let n=0;for(let i=FAIL.length-1;i>=0;i--)if(FAIL[i].cls===cls){FAIL.splice(i,1);n++;}
+    return n;
+  }
+  function fail(cls,method,status,err,url){
+    const now=Date.now();
+    FAIL.push({cls,method,status,t:now,msg:reason(status,err),path:String(url).replace(/^https?:\/\/[^/]+/,'').replace(/\?.*$/,'')});
+    if(FAIL.length>30)FAIL.shift();
+    /* yazma hataları hemen; silme/okuma kısa süre beklenir (kod kendi içinde yeniden deneyip toparlayabilir) */
+    const delay=cls==='write'?0:3500, rec=FAIL[FAIL.length-1];
+    setTimeout(()=>{ if(FAIL.includes(rec)){ dismissedAt=0; paint(); armRetry(); } },delay);
+  }
+  function success(cls){
+    lastOk[cls]=Date.now();
+    const had=FAIL.some(f=>f.cls===cls&&Date.now()-f.t>0);
+    if(resolveOf(cls)&&had){ if(!FAIL.length) recovered(); else paint(); }
+  }
+  window.fetch=async function(input,init){
+    const url=typeof input==='string'?input:(input&&input.url)||'';
+    if(url.indexOf(HOST)<0) return origFetch(input,init);
+    const method=String((init&&init.method)||(input&&input.method)||'GET').toUpperCase(), cls=clsOf(method);
+    const slow=setTimeout(()=>{ if(!document.hidden) slowNote(cls); },20000);
+    let res;
+    try{ res=await origFetch(input,init); }
+    catch(e){ clearTimeout(slow); fail(cls,method,0,e&&e.message,url); throw e; }
+    clearTimeout(slow);
+    if(!res.ok){ fail(cls,method,res.status,'',url); return res; }
+    if(cls!=='read'){ /* yazma/silme 200 dönse bile gövdede hata varsa yakala */
+      try{ const ct=res.headers.get('content-type')||''; if(ct.indexOf('json')>=0){ const j=await res.clone().json(); if(j&&typeof j==='object'&&!Array.isArray(j)&&(j.error||j.ok===false||j.success===false)){ fail(cls,method,-1,String(j.error||j.message||''),url); return res; } } }catch(_){}
+    }
+    success(cls); return res;
+  };
+  let slowShown=0;
+  function slowNote(cls){ if(Date.now()-slowShown<60000||FAIL.length)return; slowShown=Date.now(); try{ if(typeof siteMessage==='function') siteMessage('Sunucu '+CLS[cls].toLowerCase()+' işlemine 20 saniyedir yanıt vermiyor. Sayfayı kapatmayın.','warn','Sunucu yavaş'); }catch(_){} }
+  /* --- arayüz --- */
+  let el=null;
+  function ensure(){
+    if(el&&document.body.contains(el)) return el;
+    el=document.createElement('div'); el.id='syncWatch'; el.setAttribute('role','alert'); el.setAttribute('aria-live','assertive');
+    document.body.insertBefore(el,document.body.firstChild);
+    el.addEventListener('click',e=>{
+      const b=e.target.closest('button'); if(!b) return;
+      if(b.dataset.a==='det') el.classList.toggle('open');
+      else if(b.dataset.a==='close'){ dismissedAt=Date.now(); paint(); }
+      else if(b.dataset.a==='retry') retryNow(true);
+    });
+    if(window.ResizeObserver) new ResizeObserver(()=>document.documentElement.style.setProperty('--sync-h',el.classList.contains('show')?el.offsetHeight+'px':'0px')).observe(el);
+    return el;
+  }
+  function paint(){
+    const e=ensure(), hasW=FAIL.some(f=>f.cls==='write'||f.cls==='del');
+    if(!FAIL.length||(dismissedAt&&FAIL.every(f=>f.t<dismissedAt))){
+      if(!e.classList.contains('ok')){ e.className=''; document.documentElement.style.setProperty('--sync-h','0px'); }
+      document.title=document.title.replace(/^⚠ /,''); return;
+    }
+    const kinds=[...new Set(FAIL.map(f=>f.cls))].map(c=>CLS[c]).join(', ');
+    const last=FAIL[FAIL.length-1];
+    const title=hasW?'Değişiklikler sunucuya kaydedilemedi':'Sunucudan veri okunamıyor';
+    const body=(hasW?'Yaptığınız değişiklikler bu tarayıcıda yerel olarak saklı, ancak ortak sunucuya (Vercel / E-Tablo) yazılamadı; diğer bilgisayarlarda görünmez. Sekmeyi kapatmayın — otomatik yeniden denenecek. ':'Veriler güncellenemiyor, ekranda eski bilgiler görünebilir. ')+'Sorun: '+last.msg;
+    e.className='show '+(hasW?'err':'warn')+(e.classList.contains('open')?' open':'');
+    e.innerHTML='<div class="sw-row"><span class="sw-ic">'+(hasW?'⛔':'⚠️')+'</span><div class="sw-tx"><b>'+esc(title)+' <small style="font-weight:600;opacity:.85">· '+esc(kinds)+' · '+hhmm(last.t)+'</small></b><span>'+esc(body)+'</span></div>'+
+      '<button data-a="retry">↻ Şimdi dene</button><button data-a="det">Ayrıntı ('+FAIL.length+')</button><button data-a="close" title="Yeni bir hata olana kadar gizle">✕</button></div>'+
+      '<div class="sw-det">'+FAIL.slice(-8).reverse().map(f=>'<div>'+hhmm(f.t)+' · <b>'+esc(CLS[f.cls])+'</b> ('+esc(f.method)+' '+esc(f.path||'/')+') — '+esc(f.msg)+'</div>').join('')+'</div>';
+    document.title=(document.title.startsWith('⚠ ')?'':'⚠ ')+document.title;
+    document.documentElement.style.setProperty('--sync-h',e.offsetHeight+'px');
+  }
+  function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+  function recovered(){
+    const e=ensure(); clearTimeout(okTimer); dismissedAt=0;
+    e.className='show ok'; e.innerHTML='<div class="sw-row"><span class="sw-ic">✅</span><div class="sw-tx"><b>Sunucu bağlantısı düzeldi</b><span>Bekleyen değişiklikler sunucuya kaydedildi · '+hhmm(Date.now())+'</span></div></div>';
+    document.title=document.title.replace(/^⚠ /,''); document.documentElement.style.setProperty('--sync-h',e.offsetHeight+'px');
+    okTimer=setTimeout(()=>{ if(!FAIL.length){e.className='';document.documentElement.style.setProperty('--sync-h','0px');} },5000);
+  }
+  /* kendiliğinden yeniden deneme: yazma hatası varken 20 sn'de bir taslağı tekrar gönderir, okuma hatasında verileri tazeler */
+  function retryNow(manual){
+    try{
+      if(FAIL.some(f=>f.cls==='write')&&typeof pushDraft==='function') pushDraft();
+      if(FAIL.some(f=>f.cls==='read')||manual){ if(typeof loadCrewSheet==='function')loadCrewSheet(true); }
+      if(manual&&!FAIL.some(f=>f.cls==='write')&&!FAIL.some(f=>f.cls==='read')) origFetch('https://'+HOST+'/api/sheets/'+encodeURIComponent(typeof CREW_SHEET!=='undefined'?CREW_SHEET:'AYLIK PROGRAM PERSONELİ')+'?fresh=1',{cache:'no-store'}).then(r=>{ if(r.ok){ FAIL.length=0; recovered(); } }).catch(()=>{});
+    }catch(_){}
+  }
+  function armRetry(){ if(retryTimer) return; retryTimer=setInterval(()=>{ if(!FAIL.length){clearInterval(retryTimer);retryTimer=null;return;} retryNow(false); },20000); }
+  /* bağlantı geri geldiğinde hemen dene; sorun varken sekme kapatılırsa uyar */
+  window.addEventListener('online',()=>{ if(FAIL.length) retryNow(false); });
+  window.addEventListener('offline',()=>{ fail('write','—',0,'','çevrimdışı'); });
+  window.addEventListener('beforeunload',e=>{ if(FAIL.some(f=>f.cls==='write'&&!(dismissedAt&&f.t<dismissedAt&&false))){ e.preventDefault(); e.returnValue='Değişiklikler henüz sunucuya kaydedilemedi.'; return e.returnValue; } });
+  document.addEventListener('visibilitychange',()=>{ if(!document.hidden&&FAIL.length) retryNow(false); });
+  window.__syncWatch={fail:(c,m,s,e,u)=>fail(c||'write',m||'POST',s==null?0:s,e,u||''),state:()=>FAIL.slice()};
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',ensure); else ensure();
+})();
+</script>
 </head>
 <body>
 <header>
@@ -2537,9 +2672,9 @@ async function pushDraft(){
     /* localStorage'a doğrudan yaz — saveState() burada çağrılırsa yeni bir
        taslak döngüsü tetiklenir; bu son yazım zaten sunucuyla eşleşiyor. */
     try{ localStorage.setItem(LSKEY, JSON.stringify(state)); }catch(e){}
-    if(el){ el.textContent = 'Taslak: paylaşıldı · ' + new Date(ts).toLocaleTimeString('tr-TR'); el.classList.remove('syncing'); el.classList.add('ok'); }
+    if(el){ el.textContent = 'Taslak: paylaşıldı · ' + new Date(ts).toLocaleTimeString('tr-TR'); el.classList.remove('syncing'); el.classList.add('ok'); el.style.color=''; el.style.fontWeight=''; }
   }catch(e){
-    if(el){ el.textContent = 'Taslak: kaydedilemedi (bağlantı hatası)'; el.classList.remove('syncing','ok'); }
+    if(el){ el.textContent = 'Taslak: KAYDEDİLEMEDİ — '+String((e&&e.message)||'bağlantı hatası').slice(0,70); el.classList.remove('syncing','ok'); el.style.color='#b42318'; el.style.fontWeight='700'; }
   }finally{
     _draftPushing = false;
     if(_draftDirtyAgain){ _draftDirtyAgain = false; scheduleDraftSync(); }
