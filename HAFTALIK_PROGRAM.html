@@ -520,7 +520,11 @@ const UNITS=[
  {key:'peruka', name:'Peruka',         full:'Peruka Birimi',         pw:'1111'}
 ];
 (function(){
-  const SK='idt_hp_unit';let k=null;try{k=sessionStorage.getItem(SK);}catch(e){}
+  const SK='idt_hp_unit',OK='idt_hp_unit_ok';let k=null;
+  const rdOK=()=>{try{const a=JSON.parse(localStorage.getItem(OK)||'[]');return Array.isArray(a)?a:[];}catch(e){return [];}};
+  const addOK=key=>{try{const a=rdOK();if(a.indexOf(key)<0){a.push(key);localStorage.setItem(OK,JSON.stringify(a));}}catch(e){}};
+  try{k=localStorage.getItem(SK);}catch(e){}
+  if(!k){try{k=sessionStorage.getItem(SK);}catch(e){}}
   const idx=UNITS.findIndex(x=>x.key===k);
   if(idx>=0){window.UNIT=UNITS[idx];window.UNIT.idx=idx;return;}
   const g=document.createElement('div');g.id='gate';
@@ -529,9 +533,9 @@ const UNITS=[
     '</div><div class="pw" id="gPw"><b id="gName"></b><input type="password" id="gIn" placeholder="Şifre" autocomplete="off"><button type="button" id="gGo">Giriş</button></div><div class="err" id="gErr"></div></div>';
   document.body.appendChild(g);
   let cur=-1;const $g=s=>g.querySelector(s);
-  const enter=i=>{try{sessionStorage.setItem(SK,UNITS[i].key);}catch(e){}location.reload();};
+  const enter=i=>{addOK(UNITS[i].key);try{localStorage.setItem(SK,UNITS[i].key);}catch(e){}try{sessionStorage.setItem(SK,UNITS[i].key);}catch(e){}location.reload();};
   const pick=i=>{cur=i;$g('#gErr').textContent='';g.querySelectorAll('.ub').forEach(b=>b.classList.toggle('on',+b.dataset.i===i));
-    if(!UNITS[i].pw)return enter(i);
+    if(!UNITS[i].pw||rdOK().indexOf(UNITS[i].key)>=0)return enter(i);
     $g('#gPw').style.display='flex';$g('#gName').textContent=UNITS[i].full;const inp=$g('#gIn');inp.value='';inp.focus();};
   const go=()=>{if(cur<0)return;if($g('#gIn').value.trim()===UNITS[cur].pw)return enter(cur);
     $g('#gErr').textContent='Şifre hatalı.';$g('#gIn').value='';$g('#gIn').focus();};
@@ -1648,7 +1652,7 @@ $('#xtcClr').onclick=()=>{delete S.tc;save();applyFont();};
 $('#xfg').onchange=e=>styleOp('fg',e.target.value);
 $('#xfgClr').onclick=()=>styleOp('fg','');
 function renderUnit(){const e=$('#unitTag');if(e)e.textContent=S.unit||'Dekor Aksesuar';document.title='Haftalık Program · '+(S.unit||UNIT.name);}
-$('#switchUnit').onclick=()=>{try{sessionStorage.removeItem('idt_hp_unit');}catch(e){}location.reload();};
+$('#switchUnit').onclick=()=>{try{sessionStorage.removeItem('idt_hp_unit');}catch(e){}try{localStorage.removeItem('idt_hp_unit');}catch(e){}location.reload();};
 $('#logoB').onclick=()=>LOGO_ACT.logoEdit();
 document.addEventListener('keydown',e=>{if(!logoEdit||editing)return;const d={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]}[e.key];if(!d)return;e.preventDefault();e.stopImmediatePropagation();
   const q=logoGeo(),st=e.shiftKey?10:1;S.logo={v:2,x:q.x+d[0]*st,y:q.y+d[1]*st,w:q.w};save();applyLogo();},true);
