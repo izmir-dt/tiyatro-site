@@ -611,7 +611,7 @@ function mergeAt(g,r,c){return g.merges.find(m=>r>=m[0]&&r<=m[2]&&c>=m[1]&&c<=m[
 function vtext(g,r,c){const m=mergeAt(g,r,c);return m?ctext(g,m[0],m[1]):ctext(g,r,c);}
 function setV(r,c,o){const g=G(),m=mergeAt(g,r,c);cset(g,m?m[0]:r,m?m[1]:c,o);}
 function colName(i){let s='';i++;while(i>0){const m=(i-1)%26;s=String.fromCharCode(65+m)+s;i=Math.floor((i-1)/26);}return s;}
-const DATE_RE=/(\d{1,2})\.(\d{1,2})\.(\d{4})/;
+const DATE_RE=/(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})/;
 function dateLabel(d,i){return dmy(d)+'\n'+GUN[i];}
 
 /* satır / sütun ekle-sil (birleşmeleri de kaydırır) */
@@ -649,9 +649,18 @@ function layout(g){let hr=-1;
   const empty=r=>{for(let c=0;c<g.cols;c++)if(vtext(g,r,c).trim())return false;return true;};
   while(end>hr&&empty(end))end--;
   return {hr,first:hr+1,end,col};}
+/* Gün tespiti: tarih (05.10.2026, 05/10/2026, 05-10-26) ya da yalnızca gün adı (Salı) yazılmış olabilir.
+   Tarih haftanın dışındaysa (yazım hatası) gün adı/haftanın günü kullanılır; böylece görevler yanlışlıkla Pazartesi'ye yığılmaz. */
+const GUN_NK=['PAZARTESI','SALI','CARSAMBA','PERSEMBE','CUMA','CUMARTESI','PAZAR'];
+function cellDay(t,mon){t=String(t||'');
+  const m=t.match(/(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4}|\d{2})(?!\d)/);
+  const toks=nk(t).split(' '),wi=GUN_NK.findIndex(n=>toks.includes(n));
+  if(m){let y=+m[3];if(y<100)y+=2000;const dt=new Date(y,+m[2]-1,+m[1]);
+    if(dt.getMonth()===+m[2]-1){const d=Math.round((dt-mon)/864e5);if(d>=0&&d<=6)return d;return wi>=0?wi:(dt.getDay()+6)%7;}}
+  return wi>=0?wi:null;}
 function rowDayMap(g,L){const mon=fromIso(S.cur),out=[];let day=-1;
-  for(let r=L.first;r<=L.end;r++){const dt=vtext(g,r,L.col.date).match(DATE_RE);
-    if(dt){const d=Math.round((new Date(+dt[3],+dt[2]-1,+dt[1])-mon)/864e5);day=(d>=0&&d<=6)?d:-1;}out[r]=day;}
+  for(let r=L.first;r<=L.end;r++){const d=cellDay(vtext(g,r,L.col.date),mon);
+    if(d!=null)day=d;out[r]=day;}
   return out;}
 function items(){const g=G(),L=layout(g);if(!L||L.col.ppl==null||L.col.date==null)return[];const dm=rowDayMap(g,L),out=[];
   for(let r=L.first;r<=L.end;r++){const pm=mergeAt(g,r,L.col.ppl);if(pm&&pm[0]!==r)continue;
@@ -2913,6 +2922,6 @@ setTimeout(()=>{const b=document.getElementById('monthRepB');if(b&&!b._w){b._w=1
   document.addEventListener('keydown',e=>{if(e.key==='Escape')closeAll(null);});
 }catch(e){console.error(e);}})();
 </script>
-<script src="pwa-notify.js"></script>
+<script src="pwa-notify.js?v=2"></script>
 </body>
 </html>
