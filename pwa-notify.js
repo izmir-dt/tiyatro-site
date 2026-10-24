@@ -6,9 +6,9 @@
 (function () {
   const MORNING_HOUR = 9;            // sabah bildirim saati (Apps Script tetikleyicisiyle aynı olmalı)
   /* Uygulama KAPALIYKEN de bildirim gelmesi için ayarlar (Firebase Cloud Messaging + Google Apps Script). OKU_BENI.md'ye bakın. */
-  const PUSH_API = https://script.google.com/macros/s/AKfycbxo2fDAIKT-yaV2dyUqvyBI91rnaY-n3hIb1itsK5joX-UsT80P1Kme3NEF73soZogyzA/exec;   // Apps Script > Dağıt > Web uygulaması URL'si (.../exec)
-  const FB = { apiKey: AIzaSyAUiYAaA_P_p4NO9kMzyoxRwOxdptMs0P8, authDomain: haftalik-program-f33f1.firebaseapp.com, projectId: haftalik-program-f33f1, messagingSenderId: 147701286672, appId: 1:147701286672:web:0a83619cad5dd2f32dc795" };  // Firebase web uygulaması yapılandırması
-  const FB_VAPID = BH0s_wFNTlhDPcbaAsrtvqvBi3LtcvldXlM4ug64z7vPbRhcjAH0uAEA34H-qUl09VM_AMgQE1kcfUaxYVwFdys;     // Firebase > Cloud Messaging > Web Push sertifikaları > Key pair
+  const PUSH_API = "https://script.google.com/macros/s/AKfycbxo2fDAIKT-yaV2dyUqvyBI91rnaY-n3hIb1itsK5joX-UsT80P1Kme3NEF73soZogyzA/exec";   // Apps Script > Dağıt > Web uygulaması URL'si (.../exec)
+  const FB = { apiKey: "AIzaSyAUiYAaA_P_p4NO9kMzyoxRwOxdptMs0P8", authDomain: "haftalik-program-f33f1.firebaseapp.com", projectId: "haftalik-program-f33f1", messagingSenderId: 147701286672, appId: "1:147701286672:web:0a83619cad5dd2f32dc795" };  // Firebase web uygulaması yapılandırması
+  const FB_VAPID = "BH0s_wFNTlhDPcbaAsrtvqvBi3LtcvldXlM4ug64z7vPbRhcjAH0uAEA34H-qUl09VM_AMgQE1kcfUaxYVwFdys";     // Firebase > Cloud Messaging > Web Push sertifikaları > Key pair
   const FB_SDK = "https://www.gstatic.com/firebasejs/10.14.1/";
   const DATA_CACHE = "hp-notify-v1"; // hp-sw.js ile ortak
   const h = location.hostname;
