@@ -19,7 +19,7 @@ async function cachePut(key, val) {
 
 async function morningNotify() {
   const data = await cacheGet("/__hp/data");
-  if (!data || data.off || !data.days) return;
+  if (!data || data.off || data.push || !data.days) return;   // sunucu bildirimi aktifse yerel kontrol yapma
   const now = new Date(), t = isoOf(now);
   if (now.getHours() < (data.hour || 8)) return;          // sabah saatinden önce gösterme
   if ((await cacheGet("/__hp/shown")) === t) return;       // bugün zaten gösterildi
@@ -41,5 +41,33 @@ self.addEventListener("notificationclick", (e) => {
     const all = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
     for (const c of all) { if ("focus" in c) { try { await c.focus(); return; } catch (_) {} } }
     if (self.clients.openWindow) await self.clients.openWindow(url);
+  })());
+});
+
+/* Sunucudan gelen günlük bildirim (uygulama kapalıyken de çalışır) */
+self.addEventListener("push", (e) => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch (_) { d = { body: e.data ? e.data.text() : "" }; }
+  e.waitUntil((async () => {
+    if (d.date) { try { await cachePut("/__hp/shown", d.date); } catch (_) {} }
+    await self.registration.showNotification(d.title || "Bugünün programı", {
+      body: d.body || "", icon: "hp-icon-192.png", badge: "hp-icon-192.png",
+      tag: d.tag || "hp-push", data: { url: d.url || self.registration.scope },
+    });
+  })());
+});
+
+/* Tarayıcı abonelik anahtarını yenilerse sunucuya yeniden kaydet */
+self.addEventListener("pushsubscriptionchange", (e) => {
+  e.waitUntil((async () => {
+    const d = await cacheGet("/__hp/data");
+    if (!d || !d.api || !d.unitKey) return;
+    let sub = e.newSubscription;
+    if (!sub) {
+      const key = e.oldSubscription && e.oldSubscription.options && e.oldSubscription.options.applicationServerKey;
+      if (!key) return;
+      sub = await self.registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+    }
+    await fetch(d.api + "/subscribe", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ unit: d.unitKey, sub: sub.toJSON() }) });
   })());
 });
