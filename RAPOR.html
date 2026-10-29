@@ -153,7 +153,7 @@ const LIVE = [
   {be: 'tiyatro', sheet: 'BÜTÜN OYUNLAR',   key: 'kadro', ok: r => r['Oyun Adı'] && r['Kişi']},
   {be: 'turne',   sheet: 'TURNE_KAYITLARI', key: 'turne', ok: r => r['Oyun Adı'] && r['Şehir/İl']}
 ];
-const DB = {fig:[], turne:[], kadro:[]};
+const DB = {fig:[], turne:[], kadro:[], aylik:[]};
 const LOADED = {};
 
 const STAT = {tamamlandi:'Tamamlandı', taslak:'Taslak', 'yarida-kesildi':'Yarıda kesildi', iptal:'İptal'};
@@ -213,6 +213,14 @@ const REPORTS = {
     w: [20,8,14,27,31],
     title: 'Kişi bazlı', db: 'kadro', filters: ['Kişi', 'Kategori', 'Oyunlar'], multi: ['Kategori', 'Oyunlar'], prep: byKisi,
     sum: rows => rows.length + ' kişi'
+  },
+  aylik: {
+    s: 'Aylık', t: 'Tarih',
+    w: [11,19,11,21,26,12],
+    title: 'Aylık program', db: 'aylik', filters: ['Ay', 'Sahne', 'Oyun'], keep: ['Ay'],
+    empty: 'Kesinleştirilmiş aylık program bulunamadı.<br>Aylık Program sayfasında bir ayı “Kesinleştir” ile yayınlayınca burada görünür.',
+    map: r => r,
+    sum: rows => rows.length + ' kayıt · ' + new Set(rows.map(r => r['Oyun'])).size + ' oyun · ' + new Set(rows.map(r => r['Ay'])).size + ' ay'
   }
 };
 
@@ -245,8 +253,98 @@ function byKisi(raw) {
   });
 }
 
+/* ---- AYLIK PROGRAM (yalnızca KESİNLEŞTİRİLMİŞ aylar) ---------------
+   Aylık Program sayfasında “Kesinleştir” denince ay ortak sunucuya “apub_<ay>_<zaman>” satırlarıyla yazılır;
+   kesinleştirme geri alınınca bu satırlar silinir. Taslak (“adraft_”) satırları okunmaz. */
+const AY_SHEET = 'AYLIK PROGRAM';
+const AY_ADLARI = ['ocak','şubat','mart','nisan','mayıs','haziran','temmuz','ağustos','eylül','ekim','kasım','aralık'];
+function b64ToUtf8(b64) {
+  const bin = atob(b64), bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
+}
+function aylikRows(raw) {
+  const groups = new Map();
+  raw.forEach(row => {
+    const id = String(row[0] || '');
+    if (!id.startsWith('apub_')) return;
+    if (!groups.has(id)) groups.set(id, {ts: +row[1] || 0, parts: []});
+    groups.get(id).parts.push(row);
+  });
+  const bySlug = new Map();
+  for (const [id, g] of groups) {
+    const mm = id.match(/^apub_(.+)_(\d+)$/); if (!mm) continue;
+    const ex = bySlug.get(mm[1]);
+    if (!ex || g.ts > ex.ts) bySlug.set(mm[1], g); /* her ayın en güncel sürümü */
+  }
+  const months = [];
+  for (const g of bySlug.values()) {
+    const parts = g.parts.slice().sort((a, b) => (+a[2] || 0) - (+b[2] || 0));
+    const total = +parts[0][3] || parts.length;
+    if (parts.length < total) continue; /* parça eksik: güvenilmez, atla */
+    try { months.push({ts: g.ts, d: JSON.parse(b64ToUtf8(parts.slice(0, total).map(r => String(r[4] || '')).join('')))}); } catch (e) {}
+  }
+  const sk = m => {
+    const t = tr(m.d.month && m.d.month.name).split(/\s+/), i = AY_ADLARI.indexOf(t[0]), y = parseInt(t[1], 10);
+    return i >= 0 && y ? y * 12 + i : 1e9 + m.ts;
+  };
+  months.sort((a, b) => sk(a) - sk(b));
+  return months.flatMap(m => monthToRows(m.d));
+}
+function monthToRows(d) {
+  const m = d.month; if (!m || !m.rows) return [];
+  const cells = {};
+  if (Array.isArray(m.cells)) m.cells.forEach(([r, c, v]) => { cells[r + '_' + c] = {v: String(v)}; });
+  else Object.assign(cells, m.cells || {});
+  const merges = m.merges || [];
+  const covered = (r, c) => merges.some(([r1, c1, r2, c2]) => r >= r1 && r <= r2 && c >= c1 && c <= c2 && !(r === r1 && c === c1));
+  const val = (r, c) => String((cells[r + '_' + c] || {}).v || '');
+  const dateOf = r => {
+    const v = val(r, 0); if (/\d/.test(v)) return v;
+    for (const [r1, c1, r2] of merges) if (c1 === 0 && r >= r1 && r <= r2) return val(r1, 0);
+    return '';
+  };
+  const arch = new Set((d.playsArchived || []).map(x => tr(x).trim()));
+  const out = [];
+  for (let r = 2; r < m.rows; r++) {
+    const tarih = dateOf(r); if (!/\d/.test(tarih)) continue;
+    for (let c = 2; c < m.cols - 1; c++) {
+      if (covered(r, c)) continue;
+      const cell = cells[r + '_' + c] || {}; let raw = String(cell.v || '').trim(); if (!raw) continue;
+      if (cell.archive) continue;
+      const prem = raw.startsWith('*') || !!cell.premiere;
+      let body = raw.replace(/^\s*[\*★]\s*/, '');
+      const notes = [];
+      const free = !!cell.freeText || /^(\/\/|#|!|>|\+)/.test(body);
+      let oyun = body;
+      if (!free) {
+        oyun = body.replace(/[(\[][^)\]]*[)\]]/g, x => { notes.push(x.replace(/^[(\[]|[)\]]$/g, '').trim()); return ' '; });
+        const dash = oyun.match(/\s[-–—]\s*(\S.*)$/);
+        if (dash) { notes.push(dash[1].trim()); oyun = oyun.slice(0, dash.index); }
+        oyun = oyun.replace(/\s+/g, ' ').trim() || body;
+        if (arch.has(tr(oyun).trim())) continue; /* arşiv oyunlar rapora girmez */
+      } else oyun = body.replace(/^(\/\/|#|!|>|\+)\s*/, '');
+      const rng = raw.match(/(\d{1,2})[.:](\d{2})\s*[-–]\s*(\d{1,2})[.:](\d{2})/);
+      const one = raw.match(/(\d{1,2})[.:](\d{2})/) || val(r, 1).match(/(\d{1,2})[.:](\d{2})/);
+      const saat = rng ? rng[1].padStart(2, '0') + '.' + rng[2] + '–' + rng[3].padStart(2, '0') + '.' + rng[4]
+        : one ? one[1].padStart(2, '0') + '.' + one[2] : '';
+      if (prem) notes.unshift('Prömiyer');
+      out.push({'Ay': m.name, 'Tarih': tarih, 'Saat': saat,
+        'Sahne': val(1, c).trim().toLocaleUpperCase('tr') || ('Sütun ' + (c + 1)), 'Oyun': oyun, 'Not': notes.join(' · ')});
+    }
+  }
+  return out;
+}
+async function loadAylik(fresh, err) {
+  try {
+    const res = await fetch(BACKENDS.tiyatro + '/api/sheets/' + encodeURIComponent(AY_SHEET) + (fresh ? '?fresh=1' : ''), {cache: 'no-store'});
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    DB.aylik = aylikRows((await res.json()).rows || []); LOADED.aylik = 'canlı';
+  } catch (e) { err.push(AY_SHEET + ': ' + e.message); }
+}
+
 let tab = 'fig';
-const ST = {fig:{q:'', f:{}}, turne:{q:'', f:{}}, kadro:{q:'', f:{}}, gorev:{q:'', f:{}}, kisi:{q:'', f:{}}};
+const ST = {fig:{q:'', f:{}}, turne:{q:'', f:{}}, kadro:{q:'', f:{}}, gorev:{q:'', f:{}}, kisi:{q:'', f:{}}, aylik:{q:'', f:{}}};
 
 /* ---- DOSYA OKUMA -------------------------------------------------- */
 async function readFiles(files) {
@@ -268,7 +366,7 @@ function put(key, rows, file) {
 async function loadLive(fresh) {
   const btn = document.getElementById('lv'), err = [];
   btn.disabled = true; btn.textContent = 'Yükleniyor…';
-  await Promise.all(LIVE.map(async L => {
+  await Promise.all([loadAylik(fresh, err), ...LIVE.map(async L => {
     try {
       const url = BACKENDS[L.be] + '/api/sheets/' + encodeURIComponent(L.sheet) + (L.be === 'tiyatro' && fresh ? '?fresh=1' : '');
       const res = await fetch(url);
@@ -277,7 +375,7 @@ async function loadLive(fresh) {
       const rows = (d.rows || []).map(r => Object.fromEntries((d.headers || []).map((h, i) => [h, r[i] ?? ''])));
       DB[L.key] = rows.filter(L.ok); LOADED[L.key] = 'canlı';
     } catch (e) { err.push(L.sheet + ': ' + e.message); }
-  }));
+  })]);
   btn.disabled = false; btn.textContent = 'Güncelle';
   LIVE_INFO = err.length ? 'Okunamadı → ' + err.join(' · ') : 'Son güncelleme: ' + new Date().toLocaleTimeString('tr-TR', {hour:'2-digit', minute:'2-digit'});
   render();
@@ -299,7 +397,7 @@ function view() {
   const opts = {};
   R.filters.forEach(k => {
     const set = new Set(); all.forEach(r => (R.multi && R.multi.includes(k) ? parts(r[k]) : [r[k]]).forEach(v => v && set.add(v)));
-    opts[k] = [...set].sort((a, b) => a.localeCompare(b, 'tr'));
+    opts[k] = (R.keep || []).includes(k) ? [...set] : [...set].sort((a, b) => a.localeCompare(b, 'tr'));
   });
   const rows = all.filter(r =>
     R.filters.every(k => !S.f[k] || (R.multi && R.multi.includes(k) ? parts(r[k]).includes(S.f[k]) : r[k] === S.f[k])) &&
@@ -314,7 +412,7 @@ function render() {
   document.getElementById('chips').textContent = LIVE_INFO || (Object.keys(LOADED).length ? 'Kaynak: Excel dosyası' : '');
   const app = document.getElementById('app');
   if (!DB[REPORTS[tab].db].length) {
-    app.innerHTML = `<div class="drop"><b>Henüz veri yok</b>turne_site.xlsx ve BÜTÜN_OYUNLAR.xlsx dosyalarını buraya sürükleyin<br>ya da üstteki “Excel dosyalarını aç” düğmesini kullanın.</div>`;
+    app.innerHTML = REPORTS[tab].empty ? `<div class="drop"><b>Henüz veri yok</b>${REPORTS[tab].empty}</div>` : `<div class="drop"><b>Henüz veri yok</b>turne_site.xlsx ve BÜTÜN_OYUNLAR.xlsx dosyalarını buraya sürükleyin<br>ya da üstteki “Excel dosyalarını aç” düğmesini kullanın.</div>`;
     return;
   }
   const {R, S, all, rows, opts} = view();
@@ -390,7 +488,7 @@ addEventListener('keydown', e => { if (e.key === 'Escape') closeMd(); });
 function sheetHtml(fs) {
   const {R, rows} = view();
   const cols = Object.keys(rows[0]);
-  const ctr = new Set(['Sıra', 'Temsil', 'Oyun sayısı', 'Turneye gider']);
+  const ctr = new Set(['Sıra', 'Temsil', 'Oyun sayısı', 'Turneye gider', 'Saat']);
   const cls = c => ctr.has(c) ? ' class="c"' : '';
   return `<div class="sheet" style="--pfs:${fs}pt">
     <div class="hd"><div><div class="org">İZMİR DEVLET TİYATROSU MÜDÜRLÜĞÜ</div><h2>${esc(R.title)}</h2></div><div class="sm">${esc(R.sum(rows))}</div></div>
