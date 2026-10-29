@@ -40,6 +40,23 @@ th{position:sticky;top:0;background:var(--head);font-weight:700;white-space:nowr
 tr:last-child td{border-bottom:0}
 .empty{padding:28px;text-align:center;color:var(--mut)}
 #pr{display:none}
+.mg{width:52px;text-align:center}
+.mgb{border:1px solid var(--line);background:var(--card);border-radius:8px;padding:5px 9px;cursor:pointer;font-size:16px}
+.mgb:hover{border-color:var(--acc)}
+.mt{display:none}
+.md{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:20;display:flex;align-items:center;justify-content:center;padding:14px}
+.md[hidden]{display:none}
+.mc{background:var(--card);color:var(--ink);border-radius:14px;width:min(720px,100%);max-height:92vh;display:flex;flex-direction:column;overflow:hidden}
+.mh{display:flex;justify-content:space-between;gap:12px;padding:14px 16px;border-bottom:1px solid var(--line)}
+.mh b{font-size:18px}
+.mh div div{color:var(--mut);font-size:14px}
+.cnt{padding:10px 16px 0;font-size:14px;color:var(--mut)}
+.mb{overflow:auto;padding:8px 16px}
+.pp{display:grid;grid-template-columns:1fr 1fr;gap:2px 12px;padding:8px 0;border-bottom:1px solid var(--line)}
+.pp b{font-weight:600}
+.pp span{color:var(--mut);font-size:14px}
+.pp em{grid-column:1/-1;font-size:13px;color:var(--acc);font-style:normal}
+.mf{display:flex;gap:10px;padding:12px 16px;border-top:1px solid var(--line);justify-content:flex-end}
 .sh{display:none}
 .bar .act{display:flex;gap:10px}
 .btn.more{display:block;margin:12px auto}
@@ -93,6 +110,14 @@ tr:last-child td{border-bottom:0}
   .wrap td.t{order:-1;display:block;font-size:17px;font-weight:700;padding-bottom:4px}
   .wrap td.t::before,.wrap td.empty::before{content:none}
   .wrap td.empty{display:block}
+  .wrap td.mg{order:9;display:block;padding-top:8px;width:100%;text-align:left}
+  .wrap td.mg::before{content:none}
+  .wrap .mgb{width:100%;padding:11px;font-size:16px}
+  .mt{display:inline}
+  .md{padding:0;align-items:flex-end}
+  .mc{max-height:94vh;border-radius:14px 14px 0 0}
+  .mf .btn{flex:1;padding:12px 8px}
+  .pp{grid-template-columns:1fr}
 }
 </style>
 </head>
@@ -111,6 +136,7 @@ tr:last-child td{border-bottom:0}
   <div id="app"></div>
 </main>
 <div id="pr"></div>
+<div id="md" class="md" hidden onclick="if(event.target===this)closeMd()"></div>
 
 <script>
 /* ---- VERİ KAYNAĞI -------------------------------------------------
@@ -162,8 +188,8 @@ const REPORTS = {
     s: 'Turne', t: 'Oyun',
     w: [20,11,9,9,7,10,18,16],
     title: 'Turne raporu', db: 'turne', filters: ['Oyun', 'Durum'],
-    map: r => ({'Oyun': r['Oyun Adı'], 'İl': r['Şehir/İl'], 'Başlangıç': fmt(r['Başlangıç Tarihi']), 'Bitiş': fmt(r['Bitiş Tarihi']),
-      'Temsil': Number(r['Temsil Sayısı']) || 0, 'Durum': STAT[r['Statü']] || r['Statü'], 'Mekan': r['Sahne/Mekan'], 'Otel': r['Otel Adı']}),
+    map: r => Object.defineProperty({'Oyun': r['Oyun Adı'], 'İl': r['Şehir/İl'], 'Başlangıç': fmt(r['Başlangıç Tarihi']), 'Bitiş': fmt(r['Bitiş Tarihi']),
+      'Temsil': Number(r['Temsil Sayısı']) || 0, 'Durum': STAT[r['Statü']] || r['Statü'], 'Mekan': r['Sahne/Mekan'], 'Otel': r['Otel Adı']}, '_r', {value: r}),
     sum: rows => {
       const il = new Set(); rows.forEach(r => parts(r['İl']).forEach(i => il.add(i)));
       return rows.length + ' turne · ' + rows.reduce((a, r) => a + r['Temsil'], 0) + ' temsil · ' + il.size + ' il';
@@ -259,7 +285,9 @@ addEventListener('dragover', e => e.preventDefault());
 addEventListener('drop', e => { e.preventDefault(); readFiles(e.dataTransfer.files); });
 
 /* ---- ÇİZİM -------------------------------------------------------- */
+let OVR = null, MD = null, LAST = [];
 function view() {
+  if (OVR) return OVR;
   const R = REPORTS[tab], S = ST[tab];
   let raw = DB[R.db].slice();
   if (tab === 'turne') { const t = r => (toDate(r['Başlangıç Tarihi']) || 0).valueOf(); raw.sort((a, b) => t(b) - t(a)); }
@@ -289,7 +317,8 @@ function render() {
   const cols = Object.keys(rows[0] || all[0] || {});
   const sel = R.filters.map(k => `<label>${k}<select onchange="ST[tab].f['${k}']=this.value;ST[tab].n=100;render()">
       <option value="">Tümü</option>${opts[k].map(o => `<option ${S.f[k] === o ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select></label>`).join('');
-  const lim = S.n || 100, shown = rows.slice(0, lim);
+  const lim = S.n || 100, shown = rows.slice(0, lim), mg = tab === 'turne';
+  LAST = shown;
   app.innerHTML = `
     <div class="bar">
       <label class="sr">Ara<input id="q" type="search" value="${esc(S.q)}" placeholder="İsim, oyun, il…"></label>
@@ -299,8 +328,8 @@ function render() {
       <div class="act"><button class="btn" onclick="toExcel()">Excel indir</button><button class="btn main" onclick="toPdf()">PDF al / Yazdır</button></div>
     </div>
     <p class="sum">${R.sum(rows)}</p>
-    <div class="wrap"><table><thead><tr>${cols.map(c => `<th>${c}</th>`).join('')}</tr></thead><tbody>
-      ${shown.length ? shown.map(r => `<tr>${cols.map(c => `<td data-l="${esc(c)}"${c === R.t ? ' class="t"' : ''}>${esc(r[c])}</td>`).join('')}</tr>`).join('')
+    <div class="wrap"><table><thead><tr>${mg ? '<th class="mg"></th>' : ''}${cols.map(c => `<th>${c}</th>`).join('')}</tr></thead><tbody>
+      ${shown.length ? shown.map((r, i) => `<tr>${mg ? `<td class="mg"><button class="mgb" onclick="showTurne(${i})" title="Katılımcıları gör" aria-label="Katılımcıları gör">🔍<span class="mt"> Katılımcılar</span></button></td>` : ''}${cols.map(c => `<td data-l="${esc(c)}"${c === R.t ? ' class="t"' : ''}>${esc(r[c])}</td>`).join('')}</tr>`).join('')
         : `<tr><td class="empty" colspan="${cols.length}">Bu seçime uygun kayıt yok. Filtreleri temizleyin.</td></tr>`}
     </tbody></table></div>
     ${rows.length > shown.length ? `<button class="btn more" onclick="ST[tab].n=${lim}+100;render()">Daha fazla göster (${shown.length} / ${rows.length})</button>` : ''}`;
@@ -322,9 +351,35 @@ function toExcel() {
   const ws = XLSX.utils.json_to_sheet(rows);
   ws['!cols'] = Object.keys(rows[0]).map(k => ({wch: Math.min(50, Math.max(k.length, ...rows.map(r => String(r[k] ?? '').length)) + 2)}));
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, R.title.slice(0, 30));
-  XLSX.writeFile(wb, R.title.replace(/\s+/g, '_') + '_' + new Date().toISOString().slice(0, 10) + '.xlsx');
+  XLSX.utils.book_append_sheet(wb, ws, R.title.replace(/[\\/?*\[\]:]/g, ' ').slice(0, 30));
+  XLSX.writeFile(wb, R.title.replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, '_') + '_' + new Date().toISOString().slice(0, 10) + '.xlsx');
 }
+/* ---- Turne katılımcı penceresi (🔍) ---- */
+function showTurne(i) {
+  const L = LAST[i], r = L._r;
+  let ppl = [];
+  try { ppl = JSON.parse(r['Katılımcılar'] || '[]'); } catch (e) {}
+  const rows = ppl.map(x => ({'Kişi': x.kisi || '', 'Görev': x.gorev || '', 'Kategori': x.kategori || '',
+    'Not': [x.oyun, x.dis ? 'Dış katılımcı' : '', x.erkenAyrildi ? 'Erken ayrıldı' : '', x.gecAyrildi ? 'Geç ayrıldı' : ''].filter(Boolean).join(' · ')}));
+  const tarih = L['Başlangıç'] + (L['Bitiş'] && L['Bitiş'] !== L['Başlangıç'] ? ' – ' + L['Bitiş'] : '');
+  MD = {R: {title: L['Oyun'] + ' – ' + L['İl'] + ' (' + tarih + ')', w: [32, 32, 18, 18], sum: x => x.length + ' kişi'}, rows, S: {q: '', f: {}}};
+  const by = {}; rows.forEach(x => { const k = x['Kategori'] || 'Diğer'; by[k] = (by[k] || 0) + 1; });
+  const cnt = Object.entries(by).sort((a, b) => b[1] - a[1]).map(([k, n]) => k + ' ' + n).join(' · ');
+  const md = document.getElementById('md');
+  md.innerHTML = `<div class="mc" role="dialog" aria-modal="true" aria-label="Turne katılımcıları">
+    <div class="mh"><div><b>${esc(L['Oyun'])}</b><div>${esc(L['İl'])} · ${esc(tarih)} · ${esc(L['Temsil'])} temsil · ${esc(L['Durum'])}</div>
+      <div>${esc([L['Mekan'], L['Otel']].filter(Boolean).join(' · '))}</div></div>
+      <button class="btn" onclick="closeMd()">Kapat</button></div>
+    <div class="cnt"><b>${rows.length} kişi</b>${cnt ? ' — ' + esc(cnt) : ''}</div>
+    <div class="mb">${rows.length ? rows.map(x => `<div class="pp"><b>${esc(x['Kişi'])}</b><span>${esc(x['Görev'])}${x['Kategori'] ? ' · ' + esc(x['Kategori']) : ''}</span>${x['Not'] ? `<em>${esc(x['Not'])}</em>` : ''}</div>`).join('')
+      : '<p class="empty">Bu turne için katılımcı kaydı yok.</p>'}</div>
+    <div class="mf"><button class="btn" onclick="modalOut('x')">Excel indir</button><button class="btn main" onclick="modalOut('p')">PDF al / Yazdır</button></div></div>`;
+  md.hidden = false;
+}
+function closeMd() { document.getElementById('md').hidden = true; }
+function modalOut(k) { OVR = MD; try { k === 'x' ? toExcel() : toPdf(); } finally { OVR = null; } }
+addEventListener('keydown', e => { if (e.key === 'Escape') closeMd(); });
+
 /* PDF: ekrandaki tablo basılmaz; ayrı bir A4 dikey "sayfa" (#pr) kurulur.
    Kısa listeler tek sayfaya sığacak en büyük yazıyla (10→7,5 pt), uzun listeler 9 pt ile
    birden çok sayfaya yazılır (başlık her sayfada tekrar eder, satır ortadan bölünmez). */
