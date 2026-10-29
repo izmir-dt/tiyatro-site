@@ -4,7 +4,6 @@
 <meta charset="utf-8">
 <title>İzmir Devlet Tiyatrosu — Aylık Program</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<link rel="manifest" href="manifest.webmanifest">
 <script>if("serviceWorker" in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("sw.js").catch(function(){});});}</script>
 <meta name="theme-color" content="#641322">
 <link rel="icon" type="image/png" href="icon-192.png?v=2">
@@ -1493,6 +1492,8 @@ table.sheet td.cell{min-width:86px;height:29px}
     const url=typeof input==='string'?input:(input&&input.url)||'';
     if(url.indexOf(HOST)<0) return origFetch(input,init);
     const method=String((init&&init.method)||(input&&input.method)||'GET').toUpperCase(), cls=clsOf(method);
+    const quiet=!!(init&&init.quiet);
+    if(quiet) return origFetch(input,init);
     const slow=setTimeout(()=>{ if(!document.hidden) slowNote(cls); },20000);
     let res;
     try{ res=await origFetch(input,init); }
@@ -2658,14 +2659,18 @@ async function pushDraft(){
        yeni taslak zaten sunucuda tam olarak duruyor, eski satırlar sadece
        fazladan yer kaplar, veri kaybına yol açmaz. */
     try{
-      const old = await fetch(PUBLISH_API + '/' + encodeURIComponent(PUBLISH_SHEET), {cache:'no-store'});
+      /* Sessiz (quiet) temizlik: taze okuma + hata olursa DURUR (index kaymış
+         olabilir; yanlış satırı silmemek için ısrar edilmez). Başarısızlık
+         kırmızı banner üretmez; bir sonraki taslak yazımında yeniden denenir. */
+      const old = await fetch(PUBLISH_API + '/' + encodeURIComponent(PUBLISH_SHEET) + '?fresh=1', {cache:'no-store', quiet:true});
       const oldData = old.ok ? await old.json() : {rows:[]};
       const oldRows = (oldData.rows || [])
         .map((r,i)=>({r,i}))
         .filter(x=>String(x.r[0]||'').startsWith(prefix) && String(x.r[0]||'')!==version)
         .sort((a,b)=>b.i-a.i);
       for(const item of oldRows){
-        await fetch(PUBLISH_API + '/' + encodeURIComponent(PUBLISH_SHEET) + '/row/' + item.i, {method:'DELETE'});
+        const d = await fetch(PUBLISH_API + '/' + encodeURIComponent(PUBLISH_SHEET) + '/row/' + item.i, {method:'DELETE', quiet:true});
+        if(!d.ok) break;
       }
     }catch(e){ /* eski satırların temizlenememesi kritik değil, sessizce geç */ }
     state.monthDraft = state.monthDraft || {};
