@@ -39,6 +39,9 @@ th,td{padding:8px 12px;text-align:left;border-bottom:1px solid var(--line);verti
 th{position:sticky;top:0;background:var(--head);font-weight:700;white-space:nowrap}
 tr:last-child td{border-bottom:0}
 .empty{padding:28px;text-align:center;color:var(--mut)}
+.sub{display:flex;gap:6px;margin:0 0 12px;flex-wrap:wrap}
+.sub button{border:1px solid var(--line);background:var(--card);padding:7px 14px;border-radius:99px;font-weight:600;cursor:pointer;color:var(--mut)}
+.sub button.on{background:var(--acc);border-color:var(--acc);color:#fff}
 #pr{display:none}
 .mg{width:52px;text-align:center}
 .mgb{border:1px solid var(--line);background:var(--card);border-radius:8px;padding:5px 9px;cursor:pointer;font-size:16px}
@@ -153,9 +156,11 @@ const LIVE = [
   {be: 'tiyatro', sheet: 'BÜTÜN OYUNLAR',   key: 'kadro', ok: r => r['Oyun Adı'] && r['Kişi']},
   {be: 'turne',   sheet: 'TURNE_KAYITLARI', key: 'turne', ok: r => r['Oyun Adı'] && r['Şehir/İl']}
 ];
-const DB = {fig:[], turne:[], kadro:[], aylik:[]};
+const DB = {fig:[], turne:[], kadro:[], aylik:[], haftalik:[]};
 const LOADED = {};
 
+/* Yalnız gerçekleşmiş turneler: Tamamlandı ve Yarıda kesildi. Taslak ve İptal hiçbir raporda yer almaz. */
+const TURNE_OK = r => !/taslak|iptal/.test(tr(r['Statü']));
 const STAT = {tamamlandi:'Tamamlandı', taslak:'Taslak', 'yarida-kesildi':'Yarıda kesildi', iptal:'İptal'};
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const tr = s => String(s ?? '').toLocaleLowerCase('tr');
@@ -195,6 +200,14 @@ const REPORTS = {
       return rows.length + ' turne · ' + rows.reduce((a, r) => a + r['Temsil'], 0) + ' temsil · ' + il.size + ' il';
     }
   },
+  tkisi: {
+    s: 'İş yükü', t: 'Kişi',
+    w: [34,22,12,12,10,10],
+    title: 'Turne iş yükü', db: 'turne', filters: ['Sezon', 'Oyun', 'Kişi', 'Kategori'], pre: ['Sezon', 'Oyun'], desc: ['Sezon'], multi: ['Kategori'],
+    rawMap: r => ({...r, 'Sezon': sezonOf(r['Başlangıç Tarihi']), 'Oyun': r['Oyun Adı']}),
+    prep: aggTurneKisi, detail: true, dl: 'Turneler', dtip: 'Turnelerini gör',
+    sum: rows => rows.length + ' kişi · ' + rows.reduce((a, r) => a + r['Turne'], 0) + ' turne katılımı'
+  },
   kadro: {
     s: 'Kadro', t: 'Kişi',
     w: [26,15,26,21,12],
@@ -215,14 +228,26 @@ const REPORTS = {
     sum: rows => rows.length + ' kişi'
   },
   aylik: {
-    s: 'Aylık', t: 'Tarih',
-    w: [11,19,11,21,26,12],
-    title: 'Aylık program', db: 'aylik', filters: ['Ay', 'Sahne', 'Oyun'], keep: ['Ay'],
+    s: 'Aylık', t: 'Oyun',
+    w: [34,10,56],
+    title: 'Aylık program', db: 'aylik', filters: ['Ay', 'Sahne', 'Oyun'], pre: ['Ay', 'Sahne'], keep: ['Ay'],
+    prep: aggAylik, detail: true, dl: 'Temsiller', dtip: 'Temsilleri gör',
     empty: 'Kesinleştirilmiş aylık program bulunamadı.<br>Aylık Program sayfasında bir ayı “Kesinleştir” ile yayınlayınca burada görünür.',
-    map: r => r,
-    sum: rows => rows.length + ' kayıt · ' + new Set(rows.map(r => r['Oyun'])).size + ' oyun · ' + new Set(rows.map(r => r['Ay'])).size + ' ay'
+    sum: rows => rows.length + ' oyun · ' + rows.reduce((a, r) => a + r['Temsil'], 0) + ' temsil'
+  },
+  haftalik: {
+    s: 'Haftalık', t: 'Kişi',
+    w: [22,34,14,14,16],
+    title: 'Haftalık program', db: 'haftalik', filters: ['Birim', 'Hafta', 'Kişi'], pre: ['Birim', 'Hafta'], keep: ['Hafta'],
+    prep: aggHaftalik, detail: true, dl: 'Çalışmalar', dtip: 'Çalışmaları gör',
+    empty: 'Onaylanmış haftalık program bulunamadı.<br>Haftalık Program sayfasında “✔ Haftalığı Onayla” denince hafta burada görünür.',
+    sum: rows => rows.length + ' kişi · ' + new Set(rows.map(r => r['Birim'])).size + ' birim · ' + rows.reduce((a, r) => a + r['Görev'], 0) + ' görev'
   }
 };
+/* Aylık ve Haftalık raporlar tek “Programlar” başlığı altında toplanır */
+const GROUPS = {trn: {t: 'Turne', s: 'Turne', tabs: ['turne', 'tkisi']}, prog: {t: 'Programlar', s: 'Program', tabs: ['aylik', 'haftalik']}};
+const GSEL = {trn: 'turne', prog: 'aylik'}; /* her grupta en son açık sekme */
+const groupOf = k => Object.keys(GROUPS).find(g => GROUPS[g].tabs.includes(k));
 
 /* Sahne Yönetimi kategorisindeki Sahne Amirlerini ayrı kategoriye alır (Süflör vb. olduğu gibi kalır) */
 const ayirSahneAmiri = r => (tr(r['Kategori']).includes('sahne') && tr(r['Görev']).includes('amir')) ? {...r, 'Kategori': 'Sahne Amirleri'} : r;
@@ -263,6 +288,8 @@ function b64ToUtf8(b64) {
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
   return new TextDecoder().decode(bytes);
 }
+/* E-Tablonun 1. satırı başlık sanılıp kayıt kaybolmasın: veri gibi görünen başlık satırını geri ekle */
+const sheetRows = d => { const r = (d && d.rows) || [], h = d && d.headers; return Array.isArray(h) && /^(apub|hpub)_/.test(String(h[0] || '')) ? [h].concat(r) : r; };
 function aylikRows(raw) {
   const groups = new Map();
   raw.forEach(row => {
@@ -291,6 +318,20 @@ function aylikRows(raw) {
   months.sort((a, b) => sk(a) - sk(b));
   return months.flatMap(m => monthToRows(m.d));
 }
+/* Ad karşılaştırması: Aylık Program'daki normNameKey ile aynı (İ/I, Ş, Ğ… farkları ve fazla boşluk yok sayılır) */
+const nn = s => String(s || '').replace(/\u00A0/g, ' ').replace(/[İIı]/g, 'I').replace(/i/g, 'I').replace(/[Şş]/g, 'S').replace(/[Ğğ]/g, 'G')
+  .replace(/[Üü]/g, 'U').replace(/[Öö]/g, 'O').replace(/[Çç]/g, 'C').toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim();
+/* Hücre metninden oyun adı + not (Aylık Program'daki parseGame ile aynı mantık) */
+function parseKey(txt) {
+  let body = String(txt || '').trim().replace(/^\*\s*/, '');
+  const notes = [];
+  body = body.replace(/[(\[][^)\]]*[)\]]/g, x => { notes.push(x.replace(/^[(\[]|[)\]]$/g, '').trim()); return ' '; });
+  const dash = body.match(/\s[-–—]\s*(\S.*)$/);
+  if (dash) { notes.push(dash[1].trim()); body = body.slice(0, dash.index); }
+  return {key: body.replace(/\s+/g, ' ').trim(), notes: notes.filter(Boolean)};
+}
+/* Bir ayın TEMSİLLERİ: Aylık Program'ın “gösterim” kuralıyla birebir —
+   boş hücre, serbest metin (turne başlığı, “(…)”, “// …”), “PRÖMİYER” etiketi, arşiv oyun ve turne dönüş günü SAYILMAZ. */
 function monthToRows(d) {
   const m = d.month; if (!m || !m.rows) return [];
   const cells = {};
@@ -304,47 +345,157 @@ function monthToRows(d) {
     for (const [r1, c1, r2] of merges) if (c1 === 0 && r >= r1 && r <= r2) return val(r1, 0);
     return '';
   };
-  const arch = new Set((d.playsArchived || []).map(x => tr(x).trim()));
+  const arch = new Set((d.playsArchived || []).map(x => nn(parseKey(x).key || x)).filter(Boolean));
   const out = [];
   for (let r = 2; r < m.rows; r++) {
-    const tarih = dateOf(r); if (!/\d/.test(tarih)) continue;
+    const tarih = dateOf(r);
     for (let c = 2; c < m.cols - 1; c++) {
       if (covered(r, c)) continue;
-      const cell = cells[r + '_' + c] || {}; let raw = String(cell.v || '').trim(); if (!raw) continue;
-      if (cell.archive) continue;
-      const prem = raw.startsWith('*') || !!cell.premiere;
-      let body = raw.replace(/^\s*[\*★]\s*/, '');
-      const notes = [];
-      const free = !!cell.freeText || /^(\/\/|#|!|>|\+)/.test(body);
-      let oyun = body;
-      if (!free) {
-        oyun = body.replace(/[(\[][^)\]]*[)\]]/g, x => { notes.push(x.replace(/^[(\[]|[)\]]$/g, '').trim()); return ' '; });
-        const dash = oyun.match(/\s[-–—]\s*(\S.*)$/);
-        if (dash) { notes.push(dash[1].trim()); oyun = oyun.slice(0, dash.index); }
-        oyun = oyun.replace(/\s+/g, ' ').trim() || body;
-        if (arch.has(tr(oyun).trim())) continue; /* arşiv oyunlar rapora girmez */
-      } else oyun = body.replace(/^(\/\/|#|!|>|\+)\s*/, '');
+      const cell = cells[r + '_' + c] || {}, raw = String(cell.v || '').trim();
+      if (!raw || cell.archive || cell.tourReturn || cell.tourHead || cell.tourLeg) continue; /* turne başlığı / durak / dönüş günü temsil değildir */
+      const free = cell.notFree ? false : (!!cell.freeText || /^(\/\/|#|!|>|\+)/.test(raw) || /^\(.*\)$/.test(raw) || /^\[.*\]$/.test(raw));
+      if (free) continue;
+      const u = raw.toLocaleUpperCase('tr'); if (u === 'PRÖMİYER' || u === '* PRÖMİYER' || u === '*PRÖMİYER') continue;
+      const g = parseKey(raw); if (!g.key || arch.has(nn(g.key))) continue;
       const rng = raw.match(/(\d{1,2})[.:](\d{2})\s*[-–]\s*(\d{1,2})[.:](\d{2})/);
       const one = raw.match(/(\d{1,2})[.:](\d{2})/) || val(r, 1).match(/(\d{1,2})[.:](\d{2})/);
       const saat = rng ? rng[1].padStart(2, '0') + '.' + rng[2] + '–' + rng[3].padStart(2, '0') + '.' + rng[4]
         : one ? one[1].padStart(2, '0') + '.' + one[2] : '';
-      if (prem) notes.unshift('Prömiyer');
-      out.push({'Ay': m.name, 'Tarih': tarih, 'Saat': saat,
-        'Sahne': val(1, c).trim().toLocaleUpperCase('tr') || ('Sütun ' + (c + 1)), 'Oyun': oyun, 'Not': notes.join(' · ')});
+      const notes = g.notes.slice(); if (raw.startsWith('*') || cell.premiere) notes.unshift('Prömiyer'); if (cell.note) notes.push(String(cell.note));
+      out.push({'Ay': m.name, 'Tarih': tarih || ('Satır ' + (r + 1)), 'Saat': saat,
+        'Sahne': val(1, c).trim().toLocaleUpperCase('tr') || ('Sütun ' + (c + 1)), 'Oyun': g.key, 'Not': notes.join(' · ')});
     }
   }
   return out;
+}
+
+/* ---- HAFTALIK PROGRAM (yalnızca ONAYLANMIŞ haftalar) ---------------
+   Haftalık Program sayfasında “✔ Haftalığı Onayla” denince hafta “HAFTALIK PROGRAM” sekmesine
+   “hpub_<birim>_<pazartesi>_<zaman>” kaydı olarak yazılır; onay geri alınınca kayıt silinir.
+   Taslak/eşitleme kayıtları (hweek_, hdel_, hmeta_, hstaff_) okunmaz. */
+const HF_SHEET = 'HAFTALIK PROGRAM';
+const HF_BIRIM = {dekor: 'Dekor Aksesuar', kondvit: 'Kondüvit', isik: 'Işık', erkek: 'Erkek Terzi', kadin: 'Kadın Terzi', peruka: 'Peruka'};
+function haftalikRows(raw) {
+  const groups = new Map();
+  raw.forEach(row => {
+    const id = String(row[0] || '');
+    if (!id.startsWith('hpub_')) return;
+    if (!groups.has(id)) groups.set(id, []);
+    groups.get(id).push(row);
+  });
+  const best = new Map(); /* birim + hafta başına en güncel EKSİKSİZ onay */
+  for (const [id, rs] of groups) {
+    const m = id.match(/^hpub_([a-z]+)_(\d{4}-\d{2}-\d{2})_(\d+)$/); if (!m) continue;
+    const total = +rs[0][3] || rs.length;
+    if (new Set(rs.map(r => +r[2])).size < total) continue; /* parça eksik: güvenilmez, atla */
+    const k = m[1] + '|' + m[2], ts = +m[3], c = best.get(k);
+    if (!c || ts > c.ts) best.set(k, {unit: m[1], week: m[2], ts, rs});
+  }
+  const order = Object.keys(HF_BIRIM), list = [];
+  for (const b of best.values()) {
+    let o; try { o = JSON.parse(b64ToUtf8(b.rs.slice().sort((x, y) => x[2] - y[2]).map(x => String(x[4] || '')).join(''))); } catch (e) { continue; }
+    if (o && o.doc && Array.isArray(o.doc.days)) list.push({...b, o});
+  }
+  list.sort((a, b) => b.week.localeCompare(a.week) || order.indexOf(a.unit) - order.indexOf(b.unit)); /* yeni hafta üstte */
+  const out = [];
+  list.forEach(({unit, week, o}) => o.doc.days.forEach(day => (day.rows || []).forEach(row => {
+    const c = row.cells || {}, t = k => (c[k] && !c[k].skip && String(c[k].t || '').trim()) || '';
+    if (!t('time') && !t('place') && !t('task') && !t('ppl')) return;
+    out.push({'Birim': HF_BIRIM[unit] || o.unit || unit, 'Hafta': o.label || week, 'Tarih': day.label || '',
+      'Saat': t('time'), 'Yer': t('place'), 'Yapılacak iş': t('task'), 'Görevliler': t('ppl')});
+  })));
+  return out;
+}
+async function loadHaftalik(fresh, err) {
+  try {
+    const res = await fetch(BACKENDS.tiyatro + '/api/sheets/' + encodeURIComponent(HF_SHEET) + (fresh ? '?fresh=1' : ''), {cache: 'no-store'});
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    DB.haftalik = haftalikRows(sheetRows(await res.json())); LOADED.haftalik = 'canlı';
+  } catch (e) { err.push(HF_SHEET + ': ' + e.message); }
 }
 async function loadAylik(fresh, err) {
   try {
     const res = await fetch(BACKENDS.tiyatro + '/api/sheets/' + encodeURIComponent(AY_SHEET) + (fresh ? '?fresh=1' : ''), {cache: 'no-store'});
     if (!res.ok) throw new Error('HTTP ' + res.status);
-    DB.aylik = aylikRows((await res.json()).rows || []); LOADED.aylik = 'canlı';
+    DB.aylik = aylikRows(sheetRows(await res.json())); LOADED.aylik = 'canlı';
   } catch (e) { err.push(AY_SHEET + ': ' + e.message); }
 }
 
+/* ---- Programlar: özet (oyun başına temsil / kişi başına çalışma) ---- */
+const sorTr = (a, b) => String(a).localeCompare(String(b), 'tr');
+function aggAylik(raw) {
+  const m = new Map();
+  raw.forEach(r => {
+    const k = nn(r['Oyun']); if (!m.has(k)) m.set(k, {name: r['Oyun'], list: [], st: new Map()});
+    const o = m.get(k), g = String(r['Sahne']).includes('TURNE') ? 'TURNE' : r['Sahne'];
+    o.list.push(r); o.st.set(g, (o.st.get(g) || 0) + 1);
+  });
+  return [...m.values()].sort((a, b) => b.list.length - a.list.length || sorTr(a.name, b.name)).map(o => {
+    const row = {'Oyun': o.name, 'Temsil': o.list.length,
+      'Sahne dağılımı': [...o.st].sort((a, b) => b[1] - a[1]).map(([k, n]) => k + ' ' + n).join(' · ')};
+    return Object.defineProperty(row, '_d', {value: {
+      title: o.name + ' – temsiller', w: [32, 12, 32, 24], sum: x => x.length + ' temsil',
+      sub: o.list.length + ' temsil · ' + o.st.size + ' sahne · ' + new Set(o.list.map(r => r['Ay'])).size + ' ay',
+      rows: o.list.map(r => ({'Tarih': r['Tarih'], 'Saat': r['Saat'], 'Sahne': r['Sahne'], 'Not': r['Not']}))}});
+  });
+}
+function aggHaftalik(raw) {
+  const m = new Map(), ord = Object.values(HF_BIRIM), split = s => String(s || '').split(/\s*[–—,]\s*|\s*-\s*/).map(x => x.trim()).filter(Boolean);
+  raw.forEach(r => split(r['Görevliler']).forEach(p => {
+    const k = r['Birim'] + '|' + nn(p);
+    if (!m.has(k)) m.set(k, {birim: r['Birim'], name: p, list: [], days: new Set(), weeks: new Set()});
+    const o = m.get(k); o.list.push(r); o.days.add(r['Hafta'] + '|' + r['Tarih']); o.weeks.add(r['Hafta']);
+  }));
+  return [...m.values()].sort((a, b) => ord.indexOf(a.birim) - ord.indexOf(b.birim) || b.days.size - a.days.size || sorTr(a.name, b.name)).map(o => {
+    const row = {'Birim': o.birim, 'Kişi': o.name, 'Çalışılan gün': o.days.size, 'Görev': o.list.length, 'Hafta sayısı': o.weeks.size};
+    return Object.defineProperty(row, '_d', {value: {
+      title: o.name + ' – ' + o.birim, w: [18, 22, 9, 20, 31], sum: x => x.length + ' görev',
+      sub: o.days.size + ' gün · ' + o.list.length + ' görev · ' + o.weeks.size + ' hafta',
+      rows: o.list.map(r => ({'Hafta': r['Hafta'], 'Tarih': r['Tarih'], 'Saat': r['Saat'], 'Yer': r['Yer'], 'Yapılacak iş': r['Yapılacak iş']}))}});
+  });
+}
+
+/* Sezon: Eylül–Ağustos (Turne Takip ile aynı sınır) */
+function sezonOf(v) {
+  const d = toDate(v); if (!d) return '';
+  const y = d.getUTCFullYear(), m = d.getUTCMonth();
+  return m >= 8 ? y + '–' + (y + 1) : (y - 1) + '–' + y;
+}
+/* Kişi başına turne iş yükü: katıldığı turne, temsil, gün (çakışan günler bir kez), il */
+function aggTurneKisi(raw) {
+  const m = new Map(), DAY = 864e5;
+  raw.forEach((r, ti) => {
+    let ppl = []; try { ppl = JSON.parse(r['Katılımcılar'] || '[]'); } catch (e) {}
+    ppl.forEach(x => {
+      const name = String(x.kisi || '').trim(); if (!name) return;
+      const k = nn(name); if (!m.has(k)) m.set(k, {name, cat: new Set(), t: new Map()});
+      const o = m.get(k); if (x.kategori) o.cat.add(x.kategori);
+      if (!o.t.has(ti)) o.t.set(ti, {r, notes: new Set()});
+      const e = o.t.get(ti);
+      if (x.gorev) e.notes.add(x.gorev);
+      if (x.dis) e.notes.add('Dış katılımcı'); if (x.erkenAyrildi) e.notes.add('Erken ayrıldı'); if (x.gecAyrildi) e.notes.add('Geç ayrıldı');
+    });
+  });
+  const span = r => { const a = toDate(r['Başlangıç Tarihi']), b = toDate(r['Bitiş Tarihi']) || a; return a ? [a.valueOf(), Math.max(a.valueOf(), b.valueOf())] : null; };
+  return [...m.values()].map(o => {
+    const list = [...o.t.values()], iv = list.map(e => span(e.r)).filter(Boolean).sort((a, b) => a[0] - b[0]);
+    let days = 0, cur = null; /* aralık birleştirme: çakışan günler iki kez sayılmaz */
+    iv.forEach(([a, b]) => { if (cur && a <= cur[1] + DAY) cur[1] = Math.max(cur[1], b); else { if (cur) days += (cur[1] - cur[0]) / DAY + 1; cur = [a, b]; } });
+    if (cur) days += (cur[1] - cur[0]) / DAY + 1;
+    const il = new Set(); list.forEach(e => parts(e.r['Şehir/İl']).forEach(i => il.add(i)));
+    const temsil = list.reduce((a, e) => a + (Number(e.r['Temsil Sayısı']) || 0), 0);
+    const row = {'Kişi': o.name, 'Kategori': srt([...o.cat]).join(', '), 'Turne': list.length, 'Temsil': temsil, 'Gün': Math.round(days), 'İl sayısı': il.size};
+    const det = list.slice().sort((a, b) => (toDate(b.r['Başlangıç Tarihi']) || 0) - (toDate(a.r['Başlangıç Tarihi']) || 0)).map(e => ({
+      'Oyun': e.r['Oyun Adı'], 'İl': e.r['Şehir/İl'],
+      'Tarih': fmt(e.r['Başlangıç Tarihi']) + (e.r['Bitiş Tarihi'] && fmt(e.r['Bitiş Tarihi']) !== fmt(e.r['Başlangıç Tarihi']) ? ' – ' + fmt(e.r['Bitiş Tarihi']) : ''),
+      'Temsil': Number(e.r['Temsil Sayısı']) || 0, 'Durum': STAT[e.r['Statü']] || e.r['Statü'], 'Not': [...e.notes].join(' · ')}));
+    return Object.defineProperty(row, '_d', {value: {title: o.name + ' – turneler', w: [24,22,20,8,12,14], sum: x => x.length + ' turne',
+      sub: list.length + ' turne · ' + temsil + ' temsil · ' + Math.round(days) + ' gün · ' + il.size + ' il', rows: det}});
+  }).sort((a, b) => b['Turne'] - a['Turne'] || b['Gün'] - a['Gün'] || sorTr(a['Kişi'], b['Kişi']));
+}
+
 let tab = 'fig';
-const ST = {fig:{q:'', f:{}}, turne:{q:'', f:{}}, kadro:{q:'', f:{}}, gorev:{q:'', f:{}}, kisi:{q:'', f:{}}, aylik:{q:'', f:{}}};
+const ST = {fig:{q:'', f:{}}, turne:{q:'', f:{}}, tkisi:{q:'', f:{}}, kadro:{q:'', f:{}}, gorev:{q:'', f:{}}, kisi:{q:'', f:{}}, aylik:{q:'', f:{}}, haftalik:{q:'', f:{}}};
 
 /* ---- DOSYA OKUMA -------------------------------------------------- */
 async function readFiles(files) {
@@ -366,7 +517,7 @@ function put(key, rows, file) {
 async function loadLive(fresh) {
   const btn = document.getElementById('lv'), err = [];
   btn.disabled = true; btn.textContent = 'Yükleniyor…';
-  await Promise.all([loadAylik(fresh, err), ...LIVE.map(async L => {
+  await Promise.all([loadAylik(fresh, err), loadHaftalik(fresh, err), ...LIVE.map(async L => {
     try {
       const url = BACKENDS[L.be] + '/api/sheets/' + encodeURIComponent(L.sheet) + (L.be === 'tiyatro' && fresh ? '?fresh=1' : '');
       const res = await fetch(url);
@@ -391,37 +542,52 @@ function view() {
   if (OVR) return OVR;
   const R = REPORTS[tab], S = ST[tab];
   let raw = DB[R.db].slice();
+  if (R.db === 'turne') raw = raw.filter(TURNE_OK); /* taslak ve iptal edilen turneler raporlarda görünmez */
+  if (R.rawMap) raw = raw.map(R.rawMap);
   if (R.db === 'kadro') raw = raw.map(ayirSahneAmiri);
   if (tab === 'turne') { const t = r => (toDate(r['Başlangıç Tarihi']) || 0).valueOf(); raw.sort((a, b) => t(b) - t(a)); }
+  const pre = R.pre || [], optsPre = {};
+  pre.forEach(k => { const set = new Set(); raw.forEach(r => r[k] && set.add(r[k])); optsPre[k] = (R.keep || []).includes(k) ? [...set] : (R.desc || []).includes(k) ? [...set].sort(sorTr).reverse() : [...set].sort(sorTr); });
+  raw = raw.filter(r => pre.every(k => !S.f[k] || r[k] === S.f[k])); /* temsil/çalışma sayıları seçime göre yeniden hesaplanır */
   const all = R.prep ? R.prep(raw) : raw.map(R.map);
   const opts = {};
   R.filters.forEach(k => {
+    if (pre.includes(k)) { opts[k] = optsPre[k]; return; }
     const set = new Set(); all.forEach(r => (R.multi && R.multi.includes(k) ? parts(r[k]) : [r[k]]).forEach(v => v && set.add(v)));
     opts[k] = (R.keep || []).includes(k) ? [...set] : [...set].sort((a, b) => a.localeCompare(b, 'tr'));
   });
   const rows = all.filter(r =>
-    R.filters.every(k => !S.f[k] || (R.multi && R.multi.includes(k) ? parts(r[k]).includes(S.f[k]) : r[k] === S.f[k])) &&
+    R.filters.every(k => pre.includes(k) || !S.f[k] || (R.multi && R.multi.includes(k) ? parts(r[k]).includes(S.f[k]) : r[k] === S.f[k])) &&
     (!S.q || tr(Object.values(r).join(' ')).includes(tr(S.q))));
   return {R, S, all, rows, opts};
 }
 
 function render() {
-  document.getElementById('nav').innerHTML = Object.entries(REPORTS).map(([k, r]) =>
-    `<button class="${k === tab ? 'on' : ''}" onclick="tab='${k}';render()"><span class="lg">${r.title}</span><span class="sh">${r.s}</span></button>`).join('');
+  const cg = groupOf(tab); if (cg) GSEL[cg] = tab;
+  const navItems = [], seenG = new Set();
+  Object.keys(REPORTS).forEach(k => {
+    const g = groupOf(k);
+    if (!g) { navItems.push([k, REPORTS[k].title, REPORTS[k].s, k === tab, `tab='${k}'`]); return; }
+    if (seenG.has(g)) return; seenG.add(g);
+    navItems.push([g, GROUPS[g].t, GROUPS[g].s, g === cg, `tab=GSEL.${g}`]);
+  });
+  document.getElementById('nav').innerHTML = navItems.map(([k, lg, sh, on, js]) =>
+    `<button class="${on ? 'on' : ''}" onclick="${js};render()"><span class="lg">${lg}</span><span class="sh">${sh}</span></button>`).join('');
+  const sub = cg ? '<div class="sub">' + GROUPS[cg].tabs.map(k => `<button class="${k === tab ? 'on' : ''}" onclick="tab='${k}';render()">${REPORTS[k].title}</button>`).join('') + '</div>' : '';
   document.getElementById('fb').hidden = !!LIVE_ON && !/^Okunamadı/.test(LIVE_INFO);
   document.getElementById('chips').textContent = LIVE_INFO || (Object.keys(LOADED).length ? 'Kaynak: Excel dosyası' : '');
   const app = document.getElementById('app');
   if (!DB[REPORTS[tab].db].length) {
-    app.innerHTML = REPORTS[tab].empty ? `<div class="drop"><b>Henüz veri yok</b>${REPORTS[tab].empty}</div>` : `<div class="drop"><b>Henüz veri yok</b>turne_site.xlsx ve BÜTÜN_OYUNLAR.xlsx dosyalarını buraya sürükleyin<br>ya da üstteki “Excel dosyalarını aç” düğmesini kullanın.</div>`;
+    app.innerHTML = sub + (REPORTS[tab].empty ? `<div class="drop"><b>Henüz veri yok</b>${REPORTS[tab].empty}</div>` : `<div class="drop"><b>Henüz veri yok</b>turne_site.xlsx ve BÜTÜN_OYUNLAR.xlsx dosyalarını buraya sürükleyin<br>ya da üstteki “Excel dosyalarını aç” düğmesini kullanın.</div>`);
     return;
   }
   const {R, S, all, rows, opts} = view();
   const cols = Object.keys(rows[0] || all[0] || {});
   const sel = R.filters.map(k => `<label>${k}<select onchange="ST[tab].f['${k}']=this.value;ST[tab].n=100;render()">
       <option value="">Tümü</option>${opts[k].map(o => `<option ${S.f[k] === o ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select></label>`).join('');
-  const lim = S.n || 100, shown = rows.slice(0, lim), mg = tab === 'turne';
+  const lim = S.n || 100, shown = rows.slice(0, lim), mg = tab === 'turne' || !!R.detail;
   LAST = shown;
-  app.innerHTML = `
+  app.innerHTML = sub + `
     <div class="bar">
       <label class="sr">Ara<input id="q" type="search" value="${esc(S.q)}" placeholder="İsim, oyun, il…"></label>
       ${sel}
@@ -431,7 +597,7 @@ function render() {
     </div>
     <p class="sum">${R.sum(rows)}</p>
     <div class="wrap"><table><thead><tr>${mg ? '<th class="mg"></th>' : ''}${cols.map(c => `<th>${c}</th>`).join('')}</tr></thead><tbody>
-      ${shown.length ? shown.map((r, i) => `<tr>${mg ? `<td class="mg"><button class="mgb" onclick="showTurne(${i})" title="Katılımcıları gör" aria-label="Katılımcıları gör">🔍<span class="mt"> Katılımcılar</span></button></td>` : ''}${cols.map(c => `<td data-l="${esc(c)}"${c === R.t ? ' class="t"' : ''}>${esc(r[c])}</td>`).join('')}</tr>`).join('')
+      ${shown.length ? shown.map((r, i) => `<tr>${mg ? `<td class="mg"><button class="mgb" onclick="${tab === 'turne' ? 'showTurne' : 'showDetail'}(${i})" title="${R.dtip || 'Katılımcıları gör'}" aria-label="${R.dtip || 'Katılımcıları gör'}">🔍<span class="mt"> ${R.dl || 'Katılımcılar'}</span></button></td>` : ''}${cols.map(c => `<td data-l="${esc(c)}"${c === R.t ? ' class="t"' : ''}>${esc(r[c])}</td>`).join('')}</tr>`).join('')
         : `<tr><td class="empty" colspan="${cols.length}">Bu seçime uygun kayıt yok. Filtreleri temizleyin.</td></tr>`}
     </tbody></table></div>
     ${rows.length > shown.length ? `<button class="btn more" onclick="ST[tab].n=${lim}+100;render()">Daha fazla göster (${shown.length} / ${rows.length})</button>` : ''}`;
@@ -478,6 +644,18 @@ function showTurne(i) {
     <div class="mf"><button class="btn" onclick="modalOut('x')">Excel indir</button><button class="btn main" onclick="modalOut('p')">PDF al / Yazdır</button></div></div>`;
   md.hidden = false;
 }
+/* Oyun (temsiller) veya kişi (çalışmalar) için ayrıntı penceresi */
+function showDetail(i) {
+  const D = LAST[i]._d, cols = Object.keys(D.rows[0] || {}), ctr = new Set(['Saat', 'Temsil']);
+  MD = {R: {title: D.title, w: D.w, sum: D.sum}, rows: D.rows, S: {q: '', f: {}}};
+  const md = document.getElementById('md');
+  md.innerHTML = `<div class="mc" role="dialog" aria-modal="true" aria-label="${esc(D.title)}">
+    <div class="mh"><div><b>${esc(D.title)}</b><div>${esc(D.sub)}</div></div><button class="btn" onclick="closeMd()">Kapat</button></div>
+    <div class="mb">${D.rows.length ? `<table><thead><tr><th>#</th>${cols.map(c => `<th>${esc(c)}</th>`).join('')}</tr></thead><tbody>${D.rows.map((r, n) =>
+      `<tr><td>${n + 1}</td>${cols.map(c => `<td${ctr.has(c) ? ' class="c"' : ''}>${esc(r[c])}</td>`).join('')}</tr>`).join('')}</tbody></table>` : '<p class="empty">Kayıt yok.</p>'}</div>
+    <div class="mf"><button class="btn" onclick="modalOut('x')">Excel indir</button><button class="btn main" onclick="modalOut('p')">PDF al / Yazdır</button></div></div>`;
+  md.hidden = false;
+}
 function closeMd() { document.getElementById('md').hidden = true; }
 function modalOut(k) { OVR = MD; try { k === 'x' ? toExcel() : toPdf(); } finally { OVR = null; } }
 addEventListener('keydown', e => { if (e.key === 'Escape') closeMd(); });
@@ -488,7 +666,7 @@ addEventListener('keydown', e => { if (e.key === 'Escape') closeMd(); });
 function sheetHtml(fs) {
   const {R, rows} = view();
   const cols = Object.keys(rows[0]);
-  const ctr = new Set(['Sıra', 'Temsil', 'Oyun sayısı', 'Turneye gider', 'Saat']);
+  const ctr = new Set(['Sıra', 'Temsil', 'Oyun sayısı', 'Turneye gider', 'Saat', 'Temsil', 'Çalışılan gün', 'Görev', 'Hafta sayısı', 'Turne', 'Gün', 'İl sayısı']);
   const cls = c => ctr.has(c) ? ' class="c"' : '';
   return `<div class="sheet" style="--pfs:${fs}pt">
     <div class="hd"><div><div class="org">İZMİR DEVLET TİYATROSU MÜDÜRLÜĞÜ</div><h2>${esc(R.title)}</h2></div><div class="sm">${esc(R.sum(rows))}</div></div>
