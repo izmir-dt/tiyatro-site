@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>İzmir Devlet Tiyatrosu – Raporlar</title>
+<link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{--bg:#f5f6f8;--card:#fff;--ink:#1c2433;--mut:#5d6778;--line:#dfe3ea;--acc:#8a1f3d;--soft:#f3e4e8;--head:#eef0f4}
+@media (prefers-color-scheme:dark){:root{--bg:#14171d;--card:#1d222b;--ink:#e8ebf0;--mut:#9aa4b5;--line:#2e3542;--acc:#e0839c;--soft:#3a2530;--head:#252b36}}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{font-family:"Source Sans 3",system-ui,"Segoe UI",Arial,sans-serif;background:var(--bg);color:var(--ink);font-size:16px;line-height:1.45}
+header{background:var(--card);border-bottom:1px solid var(--line);padding:14px 20px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between}
+h1{font-size:20px;margin:0;font-weight:700}
+h1 small{display:block;font-size:13px;font-weight:400;color:var(--mut)}
+button,select,input{font:inherit;color:inherit}
+.btn{border:1px solid var(--line);background:var(--card);padding:8px 14px;border-radius:8px;cursor:pointer;font-weight:600}
+.btn:hover{border-color:var(--acc)}
+.btn.main{background:var(--acc);border-color:var(--acc);color:#fff}
+:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+nav{display:flex;gap:4px;padding:12px 20px 0;overflow-x:auto}
+nav button{border:0;background:none;padding:10px 16px;border-bottom:3px solid transparent;font-weight:600;color:var(--mut);cursor:pointer;white-space:nowrap}
+nav button.on{color:var(--acc);border-color:var(--acc)}
+main{padding:16px 20px 40px;max-width:1200px;margin:0 auto}
+.drop{border:2px dashed var(--line);border-radius:12px;padding:40px 20px;text-align:center;color:var(--mut);background:var(--card)}
+.drop b{display:block;color:var(--ink);font-size:18px;margin-bottom:6px}
+.chips{display:flex;gap:8px;flex-wrap:wrap;font-size:14px;color:var(--mut)}
+.chips span{background:var(--soft);color:var(--acc);padding:2px 10px;border-radius:99px;font-weight:600}
+.bar{display:flex;flex-wrap:wrap;gap:10px;align-items:end;margin:6px 0 14px}
+.bar label{display:flex;flex-direction:column;font-size:13px;color:var(--mut);gap:3px}
+.bar input,.bar select{padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--card);min-width:160px}
+.bar .sp{flex:1}
+.sum{font-weight:600;margin:0 0 8px}
+.wrap{overflow:auto;border:1px solid var(--line);border-radius:10px;background:var(--card);max-height:68vh}
+table{border-collapse:collapse;width:100%;font-size:15px}
+th,td{padding:8px 12px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+th{position:sticky;top:0;background:var(--head);font-weight:700;white-space:nowrap}
+tr:last-child td{border-bottom:0}
+.empty{padding:28px;text-align:center;color:var(--mut)}
+#ph{display:none}
+@media print{
+  :root{--bg:#fff;--card:#fff;--ink:#000;--mut:#333;--line:#999;--head:#eee}
+  header,nav,.bar,.drop,.chips{display:none!important}
+  #ph{display:block;margin-bottom:10px}
+  #ph h2{margin:0;font-size:18px}
+  main{padding:0;max-width:none}
+  .wrap{max-height:none;overflow:visible;border:0}
+  th{position:static}
+  table{font-size:var(--pfs,10px)}
+  th,td{padding:calc(var(--pfs,10px)*.35) calc(var(--pfs,10px)*.55);border:1px solid #999}
+  tr{break-inside:avoid}
+  thead{display:table-header-group}
+  @page{size:A4 portrait;margin:12mm}
+}
+.pm{position:absolute;left:-9999px;top:0;width:186mm}
+.pm table{font-size:var(--pfs);width:100%}
+.pm th,.pm td{padding:calc(var(--pfs)*.35) calc(var(--pfs)*.55);border:1px solid #999}
+</style>
+</head>
+<body>
+<header>
+  <h1>İzmir Devlet Tiyatrosu<small>Raporlar · salt okunur</small></h1>
+  <div>
+    <input type="file" id="fl" accept=".xlsx,.xls" multiple hidden>
+    <button class="btn main" id="lv" onclick="loadLive(true)" hidden>Güncelle</button>
+    <button class="btn" onclick="fl.click()">Excel dosyalarını aç</button>
+  </div>
+</header>
+<nav id="nav"></nav>
+<main>
+  <div class="chips" id="chips"></div>
+  <div id="app"></div>
+</main>
+
+<script>
+/* ---- VERİ KAYNAĞI -------------------------------------------------
+   Canlı veri: iki Vercel backend'inden SADECE OKUMA (GET) yapılır.
+   Aşağıdaki iki adresi doldur (örn. "https://xxxx.vercel.app", sonunda / olmadan).
+   Boş bırakılırsa Excel dosyası yükleme yolu kullanılır. */
+const BACKENDS = {
+  tiyatro: "https://tiyatro-backend.vercel.app",  /* BÜTÜN OYUNLAR, FİGÜRAN LİSTESİ */
+  turne: "https://turne-backend.vercel.app"       /* TURNE_KAYITLARI */
+};
+/* Sadece bu sekmeler okunur; KULLANICILAR gibi diğer sekmelere hiç istek atılmaz. */
+const LIVE = [
+  {be: 'tiyatro', sheet: 'FİGÜRAN LİSTESİ', key: 'fig',   ok: r => r['Kişi']},
+  {be: 'tiyatro', sheet: 'BÜTÜN OYUNLAR',   key: 'kadro', ok: r => r['Oyun Adı'] && r['Kişi']},
+  {be: 'turne',   sheet: 'TURNE_KAYITLARI', key: 'turne', ok: r => r['Oyun Adı'] && r['Şehir/İl']}
+];
+const DB = {fig:[], turne:[], kadro:[]};
+const LOADED = {};
+
+const STAT = {tamamlandi:'Tamamlandı', taslak:'Taslak', 'yarida-kesildi':'Yarıda kesildi', iptal:'İptal'};
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const tr = s => String(s ?? '').toLocaleLowerCase('tr');
+/* Tarih: Excel'den Date, Sheets API'den "2026-03-09" veya "09.03.2026" metni gelebilir */
+const toDate = v => {
+  if (v instanceof Date) return new Date(v.getTime() + 432e5);
+  let m = String(v || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+  m = String(v || '').match(/^(\d{1,2})[.\/](\d{1,2})[.\/](\d{4})/);
+  return m ? new Date(Date.UTC(+m[3], +m[2] - 1, +m[1])) : null;
+};
+const fmt = v => {
+  const x = toDate(v);
+  if (!x) return v || '';
+  return String(x.getUTCDate()).padStart(2,'0') + '.' + String(x.getUTCMonth()+1).padStart(2,'0') + '.' + x.getUTCFullYear();
+};
+const parts = v => String(v || '').split(',').map(s => s.trim()).filter(Boolean);
+
+/* ---- RAPOR TANIMLARI ---------------------------------------------- */
+const REPORTS = {
+  fig: {
+    title: 'Figüran listesi', db: 'fig', multi: ['Oyun'],
+    filters: ['Oyun'],
+    map: r => ({'Sıra': r['Sıra No'], 'Ad soyad': r['Kişi'], 'Görevler': r['Görevler'], 'Oyun': r['Görev Aldığı Oyunlar']}),
+    sum: rows => rows.length + ' figüran'
+  },
+  turne: {
+    title: 'Turne raporu', db: 'turne', filters: ['Oyun', 'Durum'],
+    map: r => ({'Oyun': r['Oyun Adı'], 'İl': r['Şehir/İl'], 'Başlangıç': fmt(r['Başlangıç Tarihi']), 'Bitiş': fmt(r['Bitiş Tarihi']),
+      'Temsil': Number(r['Temsil Sayısı']) || 0, 'Durum': STAT[r['Statü']] || r['Statü'], 'Mekan': r['Sahne/Mekan'], 'Otel': r['Otel Adı']}),
+    sum: rows => {
+      const il = new Set(); rows.forEach(r => parts(r['İl']).forEach(i => il.add(i)));
+      return rows.length + ' turne · ' + rows.reduce((a, r) => a + r['Temsil'], 0) + ' temsil · ' + il.size + ' il';
+    }
+  },
+  kadro: {
+    title: 'Oyun kadrosu', db: 'kadro', filters: ['Oyun', 'Kategori'],
+    map: r => ({'Oyun': r['Oyun Adı'], 'Kategori': r['Kategori'], 'Görev': r['Görev'], 'Kişi': r['Kişi'], 'Turneye gider': r['Turneye Gider']}),
+    sum: rows => new Set(rows.map(r => r['Kişi'])).size + ' kişi · ' + rows.length + ' görev'
+  },
+  gorev: {
+    title: 'Görev bazlı', db: 'kadro', filters: ['Görev', 'Kategori'], prep: byGorev,
+    sum: rows => new Set(rows.map(r => r['Görev'])).size + ' görev · ' + new Set(rows.map(r => r['Kişi'])).size + ' kişi'
+  },
+  kisi: {
+    title: 'Kişi bazlı', db: 'kadro', filters: ['Kişi', 'Kategori', 'Oyunlar'], multi: ['Kategori', 'Oyunlar'], prep: byKisi,
+    sum: rows => rows.length + ' kişi'
+  }
+};
+
+/* Kadro satırlarını görev veya kişi başına toplar (virgülle yazılmış çoklu isimler ayrılır) */
+const srt = a => a.sort((x, y) => String(x).localeCompare(String(y), 'tr'));
+function byGorev(raw) {
+  const m = new Map();
+  raw.forEach(r => parts(r['Kişi']).forEach(p => {
+    const k = r['Görev'] + '|' + p;
+    if (!m.has(k)) m.set(k, {g: r['Görev'], c: r['Kategori'], p, o: new Set()});
+    m.get(k).o.add(r['Oyun Adı']);
+  }));
+  return [...m.values()]
+    .sort((a, b) => String(a.g).localeCompare(String(b.g), 'tr') || a.p.localeCompare(b.p, 'tr'))
+    .map(x => ({'Görev': x.g, 'Kategori': x.c, 'Kişi': x.p, 'Oyun sayısı': x.o.size, 'Oyunlar': srt([...x.o]).join(', ')}));
+}
+function byKisi(raw) {
+  const m = new Map();
+  raw.forEach(r => parts(r['Kişi']).forEach(p => {
+    if (!m.has(p)) m.set(p, {o: new Set(), g: new Set(), c: new Set()});
+    const x = m.get(p); x.o.add(r['Oyun Adı']); x.g.add(r['Görev']); x.c.add(r['Kategori']);
+  }));
+  return srt([...m.keys()]).map(p => {
+    const x = m.get(p);
+    return {'Kişi': p, 'Oyun sayısı': x.o.size, 'Kategori': srt([...x.c]).join(', '),
+      'Görevler': srt([...x.g]).join(', '), 'Oyunlar': srt([...x.o]).join(', ')};
+  });
+}
+
+let tab = 'fig';
+const ST = {fig:{q:'', f:{}}, turne:{q:'', f:{}}, kadro:{q:'', f:{}}, gorev:{q:'', f:{}}, kisi:{q:'', f:{}}};
+
+/* ---- DOSYA OKUMA -------------------------------------------------- */
+async function readFiles(files) {
+  for (const f of files) {
+    const wb = XLSX.read(await f.arrayBuffer(), {type:'array', cellDates:true});
+    for (const n of wb.SheetNames) {
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[n], {defval:''});
+      const name = n.trim();
+      if (name === 'FİGÜRAN LİSTESİ') put('fig', rows.filter(r => r['Kişi']), f.name);
+      else if (name === 'TURNE_KAYITLARI') put('turne', rows.filter(r => r['Oyun Adı'] && r['Şehir/İl']), f.name);
+      else if (name === 'BÜTÜN OYUNLAR') put('kadro', rows.filter(r => r['Oyun Adı'] && r['Kişi']), f.name);
+    }
+  }
+  render();
+}
+function put(key, rows, file) {
+  if (rows.length > DB[key].length) { DB[key] = rows; LOADED[key] = file; }
+}
+async function loadLive(fresh) {
+  const btn = document.getElementById('lv'), err = [];
+  btn.disabled = true; btn.textContent = 'Yükleniyor…';
+  await Promise.all(LIVE.map(async L => {
+    try {
+      const url = BACKENDS[L.be] + '/api/sheets/' + encodeURIComponent(L.sheet) + (L.be === 'tiyatro' && fresh ? '?fresh=1' : '');
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const d = await res.json();
+      const rows = (d.rows || []).map(r => Object.fromEntries((d.headers || []).map((h, i) => [h, r[i] ?? ''])));
+      DB[L.key] = rows.filter(L.ok); LOADED[L.key] = 'canlı';
+    } catch (e) { err.push(L.sheet + ': ' + e.message); }
+  }));
+  btn.disabled = false; btn.textContent = 'Güncelle';
+  LIVE_INFO = err.length ? 'Okunamadı → ' + err.join(' · ') : 'Son güncelleme: ' + new Date().toLocaleTimeString('tr-TR', {hour:'2-digit', minute:'2-digit'});
+  render();
+}
+let LIVE_INFO = '';
+fl.onchange = e => readFiles(e.target.files);
+addEventListener('dragover', e => e.preventDefault());
+addEventListener('drop', e => { e.preventDefault(); readFiles(e.dataTransfer.files); });
+
+/* ---- ÇİZİM -------------------------------------------------------- */
+function view() {
+  const R = REPORTS[tab], S = ST[tab];
+  let raw = DB[R.db].slice();
+  if (tab === 'turne') { const t = r => (toDate(r['Başlangıç Tarihi']) || 0).valueOf(); raw.sort((a, b) => t(b) - t(a)); }
+  const all = R.prep ? R.prep(raw) : raw.map(R.map);
+  const opts = {};
+  R.filters.forEach(k => {
+    const set = new Set(); all.forEach(r => (R.multi && R.multi.includes(k) ? parts(r[k]) : [r[k]]).forEach(v => v && set.add(v)));
+    opts[k] = [...set].sort((a, b) => a.localeCompare(b, 'tr'));
+  });
+  const rows = all.filter(r =>
+    R.filters.every(k => !S.f[k] || (R.multi && R.multi.includes(k) ? parts(r[k]).includes(S.f[k]) : r[k] === S.f[k])) &&
+    (!S.q || tr(Object.values(r).join(' ')).includes(tr(S.q))));
+  return {R, S, all, rows, opts};
+}
+
+function render() {
+  document.getElementById('nav').innerHTML = Object.entries(REPORTS).map(([k, r]) =>
+    `<button class="${k === tab ? 'on' : ''}" onclick="tab='${k}';render()">${r.title}</button>`).join('');
+  document.getElementById('chips').innerHTML = Object.entries(LOADED).map(([k, f]) =>
+    `<span>${REPORTS[k].title}: ${DB[k].length} kayıt</span>`).join('') + (LIVE_INFO ? ` <em>${esc(LIVE_INFO)}</em>` : '');
+  const app = document.getElementById('app');
+  if (!DB[REPORTS[tab].db].length) {
+    app.innerHTML = `<div class="drop"><b>Henüz veri yok</b>turne_site.xlsx ve BÜTÜN_OYUNLAR.xlsx dosyalarını buraya sürükleyin<br>ya da üstteki “Excel dosyalarını aç” düğmesini kullanın.</div>`;
+    return;
+  }
+  const {R, S, all, rows, opts} = view();
+  const cols = Object.keys(rows[0] || all[0] || {});
+  const sel = R.filters.map(k => `<label>${k}<select onchange="ST[tab].f['${k}']=this.value;render()">
+      <option value="">Tümü</option>${opts[k].map(o => `<option ${S.f[k] === o ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select></label>`).join('');
+  app.innerHTML = `
+    <div class="bar">
+      <label>Ara<input id="q" type="search" value="${esc(S.q)}" placeholder="İsim, oyun, il…"></label>
+      ${sel}
+      <span class="sp"></span>
+      <button class="btn" onclick="ST[tab]={q:'',f:{}};render()">Temizle</button>
+      <button class="btn" onclick="toExcel()">Excel indir</button>
+      <button class="btn main" onclick="toPdf()">PDF al / Yazdır</button>
+    </div>
+    <p class="sum">${R.sum(rows)}</p>
+    <div id="ph"><h2>${R.title}</h2><div id="phs"></div></div>
+    <div class="wrap"><table><thead><tr>${cols.map(c => `<th>${c}</th>`).join('')}</tr></thead><tbody>
+      ${rows.length ? rows.map(r => `<tr>${cols.map(c => `<td>${esc(r[c])}</td>`).join('')}</tr>`).join('')
+        : `<tr><td class="empty" colspan="${cols.length}">Bu seçime uygun kayıt yok. Filtreleri temizleyin.</td></tr>`}
+    </tbody></table></div>`;
+  const q = document.getElementById('q');
+  q.oninput = () => { S.q = q.value; const p = q.selectionStart; render(); const n = document.getElementById('q'); n.focus(); n.setSelectionRange(p, p); };
+}
+
+/* ---- ÇIKTILAR ----------------------------------------------------- */
+const today = () => new Date().toLocaleDateString('tr-TR');
+function filterText() {
+  const {S} = view();
+  const f = Object.entries(S.f).filter(([, v]) => v).map(([k, v]) => k + ': ' + v);
+  if (S.q) f.push('Arama: ' + S.q);
+  return 'Tarih: ' + today() + (f.length ? ' · ' + f.join(' · ') : '');
+}
+function toExcel() {
+  const {R, rows} = view();
+  if (!rows.length) return alert('Aktarılacak kayıt yok.');
+  const ws = XLSX.utils.json_to_sheet(rows);
+  ws['!cols'] = Object.keys(rows[0]).map(k => ({wch: Math.min(50, Math.max(k.length, ...rows.map(r => String(r[k] ?? '').length)) + 2)}));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, R.title.slice(0, 30));
+  XLSX.writeFile(wb, R.title.replace(/\s+/g, '_') + '_' + new Date().toISOString().slice(0, 10) + '.xlsx');
+}
+function toPdf() {
+  const t = document.querySelector('.wrap table');
+  document.getElementById('phs').textContent = filterText();
+  /* Tabloyu tek A4 dikey sayfaya sığacak en büyük yazı boyutunu bul (11px → 6.5px) */
+  t.style.removeProperty('--pfs');
+  const m = document.createElement('div'), probe = document.createElement('div');
+  m.className = 'pm';
+  probe.style.cssText = 'position:absolute;left:-9999px;height:273mm';
+  document.body.append(m, probe);
+  const limit = probe.offsetHeight - 70; /* başlık payı */
+  let fs = 0;
+  for (let s = 11; s >= 6.5; s -= 0.5) {
+    m.style.setProperty('--pfs', s + 'px');
+    m.innerHTML = t.outerHTML;
+    if (m.offsetHeight <= limit) { fs = s; break; }
+  }
+  m.remove(); probe.remove();
+  t.style.setProperty('--pfs', (fs || 10) + 'px'); /* sığmazsa 10px ile birden çok sayfa */
+  window.print(); /* Yazdır penceresinde “PDF olarak kaydet” seçilir */
+}
+
+const LIVE_ON = BACKENDS.tiyatro && BACKENDS.turne;
+document.getElementById('lv').hidden = !LIVE_ON;
+render();
+if (LIVE_ON) loadLive(false); /* ilk açılışta cache'li okuma: Sheets kotasını yormaz */
+</script>
+</body>
+</html>
