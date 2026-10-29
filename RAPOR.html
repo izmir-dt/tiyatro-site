@@ -40,6 +40,9 @@ th{position:sticky;top:0;background:var(--head);font-weight:700;white-space:nowr
 tr:last-child td{border-bottom:0}
 .empty{padding:28px;text-align:center;color:var(--mut)}
 #pr{display:none}
+.sh{display:none}
+.bar .act{display:flex;gap:10px}
+.btn.more{display:block;margin:12px auto}
 .sheet{width:186mm;background:#fff;color:#000;font-family:Arial,"Segoe UI",Helvetica,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 .sheet .hd{display:flex;justify-content:space-between;align-items:flex-end;gap:8mm;border-bottom:.8mm solid #000;padding-bottom:2.5mm;margin-bottom:2mm}
 .sheet .org{font-size:9pt;font-weight:700;letter-spacing:.02em}
@@ -59,6 +62,38 @@ tr:last-child td{border-bottom:0}
   #pr{display:block}
   @page{size:A4 portrait;margin:12mm;@bottom-right{content:"Sayfa " counter(page) " / " counter(pages);font-size:8pt;color:#444}}
 }
+@media (max-width:700px){
+  body{padding-bottom:84px}
+  header{padding:10px 14px}
+  h1{font-size:17px}
+  h1 small{display:none}
+  nav{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;padding:10px 12px 0;overflow:visible}
+  nav button{padding:11px 2px;border:1px solid var(--line);border-radius:10px;background:var(--card);font-size:14px;color:var(--ink)}
+  nav button.on{background:var(--acc);border-color:var(--acc);color:#fff}
+  .lg{display:none}
+  .sh{display:inline}
+  main{padding:10px 12px 20px}
+  .chips{font-size:12px;margin-bottom:6px}
+  .bar{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .bar label{min-width:0}
+  .bar .sr{grid-column:1/-1}
+  .bar input,.bar select{width:100%;min-width:0;font-size:16px;padding:11px 10px}
+  .bar .clr{grid-column:1/-1;padding:10px}
+  .bar .sp{display:none}
+  .act{position:fixed;left:0;right:0;bottom:0;z-index:5;display:flex;gap:10px;padding:10px 12px calc(10px + env(safe-area-inset-bottom));background:var(--card);border-top:1px solid var(--line)}
+  .act .btn{flex:1;padding:13px 8px;font-size:16px}
+  .btn.more{width:100%;padding:13px}
+  .wrap{border:0;background:none;max-height:none;overflow:visible}
+  .wrap table,.wrap thead,.wrap tbody,.wrap tr,.wrap td{display:block;width:100%}
+  .wrap thead{display:none}
+  .wrap tr{display:flex;flex-direction:column;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px}
+  .wrap td{border:0;padding:2px 0;display:grid;grid-template-columns:92px 1fr;gap:8px;font-size:15px}
+  .wrap td::before{content:attr(data-l);color:var(--mut);font-size:13px}
+  .wrap td:empty{display:none}
+  .wrap td.t{order:-1;display:block;font-size:17px;font-weight:700;padding-bottom:4px}
+  .wrap td.t::before,.wrap td.empty::before{content:none}
+  .wrap td.empty{display:block}
+}
 </style>
 </head>
 <body>
@@ -67,7 +102,7 @@ tr:last-child td{border-bottom:0}
   <div>
     <input type="file" id="fl" accept=".xlsx,.xls" multiple hidden>
     <button class="btn main" id="lv" onclick="loadLive(true)" hidden>Güncelle</button>
-    <button class="btn" onclick="fl.click()">Excel dosyalarını aç</button>
+    <button class="btn" id="fb" onclick="fl.click()">Excel dosyalarını aç</button>
   </div>
 </header>
 <nav id="nav"></nav>
@@ -116,6 +151,7 @@ const parts = v => String(v || '').split(',').map(s => s.trim()).filter(Boolean)
 /* ---- RAPOR TANIMLARI ---------------------------------------------- */
 const REPORTS = {
   fig: {
+    s: 'Figüran', t: 'Ad soyad',
     w: [6,24,36,34],
     title: 'Figüran listesi', db: 'fig', multi: ['Oyun'],
     filters: ['Oyun'],
@@ -123,6 +159,7 @@ const REPORTS = {
     sum: rows => rows.length + ' figüran'
   },
   turne: {
+    s: 'Turne', t: 'Oyun',
     w: [20,11,9,9,7,10,18,16],
     title: 'Turne raporu', db: 'turne', filters: ['Oyun', 'Durum'],
     map: r => ({'Oyun': r['Oyun Adı'], 'İl': r['Şehir/İl'], 'Başlangıç': fmt(r['Başlangıç Tarihi']), 'Bitiş': fmt(r['Bitiş Tarihi']),
@@ -133,17 +170,20 @@ const REPORTS = {
     }
   },
   kadro: {
+    s: 'Kadro', t: 'Kişi',
     w: [26,15,26,21,12],
     title: 'Oyun kadrosu', db: 'kadro', filters: ['Oyun', 'Kategori'],
     map: r => ({'Oyun': r['Oyun Adı'], 'Kategori': r['Kategori'], 'Görev': r['Görev'], 'Kişi': r['Kişi'], 'Turneye gider': r['Turneye Gider']}),
     sum: rows => new Set(rows.map(r => r['Kişi'])).size + ' kişi · ' + rows.length + ' görev'
   },
   gorev: {
+    s: 'Görev', t: 'Kişi',
     w: [20,13,20,8,39],
     title: 'Görev bazlı', db: 'kadro', filters: ['Görev', 'Kategori'], prep: byGorev,
     sum: rows => new Set(rows.map(r => r['Görev'])).size + ' görev · ' + new Set(rows.map(r => r['Kişi'])).size + ' kişi'
   },
   kisi: {
+    s: 'Kişi', t: 'Kişi',
     w: [20,8,14,27,31],
     title: 'Kişi bazlı', db: 'kadro', filters: ['Kişi', 'Kategori', 'Oyunlar'], multi: ['Kategori', 'Oyunlar'], prep: byKisi,
     sum: rows => rows.length + ' kişi'
@@ -237,9 +277,9 @@ function view() {
 
 function render() {
   document.getElementById('nav').innerHTML = Object.entries(REPORTS).map(([k, r]) =>
-    `<button class="${k === tab ? 'on' : ''}" onclick="tab='${k}';render()">${r.title}</button>`).join('');
-  document.getElementById('chips').innerHTML = Object.entries(LOADED).map(([k, f]) =>
-    `<span>${REPORTS[k].title}: ${DB[k].length} kayıt</span>`).join('') + (LIVE_INFO ? ` <em>${esc(LIVE_INFO)}</em>` : '');
+    `<button class="${k === tab ? 'on' : ''}" onclick="tab='${k}';render()"><span class="lg">${r.title}</span><span class="sh">${r.s}</span></button>`).join('');
+  document.getElementById('fb').hidden = !!LIVE_ON && !/^Okunamadı/.test(LIVE_INFO);
+  document.getElementById('chips').textContent = LIVE_INFO || (Object.keys(LOADED).length ? 'Kaynak: Excel dosyası' : '');
   const app = document.getElementById('app');
   if (!DB[REPORTS[tab].db].length) {
     app.innerHTML = `<div class="drop"><b>Henüz veri yok</b>turne_site.xlsx ve BÜTÜN_OYUNLAR.xlsx dosyalarını buraya sürükleyin<br>ya da üstteki “Excel dosyalarını aç” düğmesini kullanın.</div>`;
@@ -247,24 +287,25 @@ function render() {
   }
   const {R, S, all, rows, opts} = view();
   const cols = Object.keys(rows[0] || all[0] || {});
-  const sel = R.filters.map(k => `<label>${k}<select onchange="ST[tab].f['${k}']=this.value;render()">
+  const sel = R.filters.map(k => `<label>${k}<select onchange="ST[tab].f['${k}']=this.value;ST[tab].n=100;render()">
       <option value="">Tümü</option>${opts[k].map(o => `<option ${S.f[k] === o ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select></label>`).join('');
+  const lim = S.n || 100, shown = rows.slice(0, lim);
   app.innerHTML = `
     <div class="bar">
-      <label>Ara<input id="q" type="search" value="${esc(S.q)}" placeholder="İsim, oyun, il…"></label>
+      <label class="sr">Ara<input id="q" type="search" value="${esc(S.q)}" placeholder="İsim, oyun, il…"></label>
       ${sel}
+      <button class="btn clr" onclick="ST[tab]={q:'',f:{}};render()">Temizle</button>
       <span class="sp"></span>
-      <button class="btn" onclick="ST[tab]={q:'',f:{}};render()">Temizle</button>
-      <button class="btn" onclick="toExcel()">Excel indir</button>
-      <button class="btn main" onclick="toPdf()">PDF al / Yazdır</button>
+      <div class="act"><button class="btn" onclick="toExcel()">Excel indir</button><button class="btn main" onclick="toPdf()">PDF al / Yazdır</button></div>
     </div>
     <p class="sum">${R.sum(rows)}</p>
     <div class="wrap"><table><thead><tr>${cols.map(c => `<th>${c}</th>`).join('')}</tr></thead><tbody>
-      ${rows.length ? rows.map(r => `<tr>${cols.map(c => `<td>${esc(r[c])}</td>`).join('')}</tr>`).join('')
+      ${shown.length ? shown.map(r => `<tr>${cols.map(c => `<td data-l="${esc(c)}"${c === R.t ? ' class="t"' : ''}>${esc(r[c])}</td>`).join('')}</tr>`).join('')
         : `<tr><td class="empty" colspan="${cols.length}">Bu seçime uygun kayıt yok. Filtreleri temizleyin.</td></tr>`}
-    </tbody></table></div>`;
+    </tbody></table></div>
+    ${rows.length > shown.length ? `<button class="btn more" onclick="ST[tab].n=${lim}+100;render()">Daha fazla göster (${shown.length} / ${rows.length})</button>` : ''}`;
   const q = document.getElementById('q');
-  q.oninput = () => { S.q = q.value; const p = q.selectionStart; render(); const n = document.getElementById('q'); n.focus(); n.setSelectionRange(p, p); };
+  q.oninput = () => { S.q = q.value; S.n = 100; const p = q.selectionStart; render(); const n = document.getElementById('q'); n.focus(); n.setSelectionRange(p, p); };
 }
 
 /* ---- ÇIKTILAR ----------------------------------------------------- */
