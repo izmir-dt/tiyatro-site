@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bağlantı Testi</title>
+<style>
+:root{--bg:#fff;--fg:#1a1a1a;--card:#f3f3f3;--ok:#0a7d33;--bad:#c62828;--warn:#b26a00}
+@media (prefers-color-scheme:dark){:root{--bg:#161616;--fg:#eee;--card:#262626;--ok:#5ad27f;--bad:#ff6b6b;--warn:#ffb74d}}
+body{margin:0;padding:16px;font:15px/1.45 system-ui,sans-serif;background:var(--bg);color:var(--fg)}
+h1{font-size:20px;margin:0 0 8px}
+button{font:inherit;padding:12px 16px;border:0;border-radius:10px;background:#1565c0;color:#fff;margin:6px 6px 6px 0}
+button.sec{background:#555}
+.t{background:var(--card);border-radius:10px;padding:10px 12px;margin:8px 0}
+.t b{display:block}.ok{color:var(--ok)}.bad{color:var(--bad)}.warn{color:var(--warn)}
+pre{white-space:pre-wrap;word-break:break-word;background:var(--card);padding:10px;border-radius:10px;font-size:12px}
+small{opacity:.75}
+</style>
+</head>
+<body>
+<h1>HAFTALIK PROGRAM – Bağlantı Testi</h1>
+<small>Bu sayfayı telefonda, uygulamayı açtığınız aynı adresten (GitHub Pages) açın. Önce mobil veride, sonra Wi-Fi'da çalıştırın.</small>
+<div><button id="go">Testi başlat</button><button id="cp" class="sec">Sonucu kopyala</button></div>
+<div id="out"></div>
+<pre id="env"></pre>
+<script>
+const API='https://tiyatro-backend.vercel.app/api/sheets/';
+const TAB=encodeURIComponent('HAFTALIK PROGRAM');
+const out=document.getElementById('out'),env=document.getElementById('env');
+let report=[];
+function line(title,cls,text){
+  const d=document.createElement('div');d.className='t';
+  d.innerHTML='<b class="'+cls+'">'+title+'</b>'+text;out.appendChild(d);
+  report.push(title+' → '+text.replace(/<[^>]+>/g,''));
+}
+async function timed(label,fn){
+  const t0=performance.now();
+  try{const r=await fn();const ms=Math.round(performance.now()-t0);return {ok:true,ms,r};}
+  catch(e){const ms=Math.round(performance.now()-t0);return {ok:false,ms,e:(e&&e.name?e.name+': ':'')+(e&&e.message||e)};}
+}
+function withTimeout(ms){const c=new AbortController();setTimeout(()=>c.abort(),ms);return c.signal;}
+
+async function run(){
+  out.innerHTML='';report=[];
+  const c=navigator.connection||{};
+  env.textContent=[
+    'Sayfa adresi: '+location.href,
+    'Origin: '+location.origin,
+    'Tarayıcı: '+navigator.userAgent,
+    'Çevrimiçi: '+navigator.onLine,
+    'Bağlantı: '+(c.type||'?')+' / '+(c.effectiveType||'?')+' / saveData='+(c.saveData?'evet':'hayır'),
+    'Saat: '+new Date().toISOString()
+  ].join('\n');
+  report.push(env.textContent);
+
+  // 1) İnternet genel erişim (no-cors, yalnız ulaşılabilirlik)
+  for(const [name,url] of [['GitHub Pages','https://izmir-dt.github.io/'],['Google','https://www.google.com/generate_204'],['Vercel (ana alan)','https://vercel.com/favicon.ico']]){
+    const r=await timed(name,()=>fetch(url,{mode:'no-cors',cache:'no-store',signal:withTimeout(12000)}));
+    r.ok?line('1) '+name+' erişimi','ok',r.ms+' ms – ulaşıldı'):line('1) '+name+' erişimi','bad',r.ms+' ms – '+r.e);
+  }
+
+  // 2) Arka uç: sade okuma
+  let r2=await timed('GET',()=>fetch(API+TAB,{signal:withTimeout(20000)}));
+  if(r2.ok){
+    let body='';try{body=await r2.r.clone().text();}catch(e){}
+    line('2) Arka uç GET (sade)',r2.r.ok?'ok':'warn','HTTP '+r2.r.status+' · '+r2.ms+' ms · '+body.length+' bayt'+(r2.r.ok?'':' · '+body.slice(0,120).replace(/</g,'&lt;')));
+  } else line('2) Arka uç GET (sade)','bad',r2.ms+' ms – '+r2.e);
+
+  // 3) Uygulamanın yaptığı gibi
+  let r3=await timed('GET fresh',()=>fetch(API+TAB+'?fresh=1',{cache:'no-store',signal:withTimeout(20000)}));
+  if(r3.ok) line('3) Arka uç GET (?fresh=1, no-store)',r3.r.ok?'ok':'warn','HTTP '+r3.r.status+' · '+r3.ms+' ms');
+  else line('3) Arka uç GET (?fresh=1, no-store)','bad',r3.ms+' ms – '+r3.e);
+
+  // 4) CORS mu, ağ mı? no-cors: cevabı okutmaz ama sunucuya ulaşıp ulaşmadığını söyler
+  let r4=await timed('no-cors',()=>fetch(API+TAB,{mode:'no-cors',signal:withTimeout(20000)}));
+  r4.ok?line('4) Arka uç no-cors (yalnız ulaşılabilirlik)','ok',r4.ms+' ms – sunucuya ULAŞILDI'):line('4) Arka uç no-cors (yalnız ulaşılabilirlik)','bad',r4.ms+' ms – '+r4.e);
+
+  // 5) Preflight (OPTIONS) – yazma istekleri bunu gerektirir
+  let r5=await timed('OPTIONS',()=>fetch(API+TAB+'/row',{method:'OPTIONS',signal:withTimeout(20000)}));
+  r5.ok?line('5) Preflight (OPTIONS)','ok','HTTP '+r5.r.status+' · '+r5.ms+' ms'):line('5) Preflight (OPTIONS)','warn',r5.ms+' ms – '+r5.e);
+
+  // Yorum
+  const g=report.join('\n');
+  let yorum='';
+  const net=/1\) (GitHub|Google).*→ .*ulaşıldı/.test(g);
+  if(r2.ok&&r2.r.ok&&r3.ok&&r3.r.ok) yorum='Okuma çalışıyor. Sorun yazma (POST/DELETE) ya da uygulamanın başka bir akışında olabilir; 5. satıra bakın.';
+  else if(!r2.ok&&r4.ok) yorum='Sunucuya ulaşılıyor ama cevap tarayıcıya verilmiyor → CORS / arka uç hata cevabı sorunu. Arka uçta CORS başlıkları gerekiyor.';
+  else if(!r2.ok&&!r4.ok&&net) yorum='İnternet var, ama tiyatro-backend.vercel.app\'a ulaşılamıyor → operatör/DNS/VPN/reklam engelleyici engeli ihtimali. Wi-Fi ile karşılaştırın.';
+  else if(!net) yorum='Genel internet erişimi de sorunlu görünüyor (telefonun bağlantısı).';
+  else yorum='Sonuç net değil; çıktıyı kopyalayıp gönderin.';
+  const d=document.createElement('div');d.className='t';d.innerHTML='<b>Yorum</b>'+yorum;out.appendChild(d);
+  report.push('YORUM: '+yorum);
+}
+document.getElementById('go').onclick=run;
+document.getElementById('cp').onclick=async()=>{
+  const txt=report.join('\n');
+  try{await navigator.clipboard.writeText(txt);alert('Kopyalandı');}
+  catch(e){prompt('Kopyalayın:',txt);}
+};
+</script>
+</body>
+</html>
