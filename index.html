@@ -708,6 +708,12 @@ table.ymt{width:100%;min-width:0;border-collapse:collapse;font-size:14.5px}
   <a class="brand" href="#programlar"><span class="mark" aria-hidden="true">İDT</span>İzmir Devlet Tiyatrosu</a>
   <button class="menu" id="menu" type="button" aria-label="Menüyü aç" aria-expanded="false" aria-controls="nav"><i>Menü</i><span></span><span></span><span></span></button>
   <nav id="nav" aria-label="Ana menü"></nav>
+  <div class="gs" id="gs">
+    <svg class="gs-i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+    <input id="gsq" type="search" placeholder="Oyun veya kişi ara" autocomplete="off" spellcheck="false" role="combobox" aria-expanded="false" aria-controls="gsl" aria-autocomplete="list" aria-label="Oyun veya kişi ara">
+    <kbd class="gs-k" aria-hidden="true">Ctrl K</kbd>
+    <div class="gs-d" id="gsl" role="listbox" hidden></div>
+  </div>
 </header>
 <main id="main" tabindex="-1"></main>
 <script type="text/plain" id="legacy-src"><!DOCTYPE html>
@@ -6332,10 +6338,10 @@ function viewPanel(){
       <div class="play"><div class="poster"><div class="pbox">${posterHtml(p)}</div></div>
       <div class="kunye">${facts ? `<div class="facts">${facts}</div>` : ""}${kunyeHtml(p)}</div></div>`;
   }
-  if (cur === "oyuncular") return `<div class="pagehead slim"><div><h1>Oyuncular ve ekip</h1></div><div>${refresh}</div></div>` + peopleView();
-  if (cur === "figuranlar") return `<div class="pagehead slim"><div><h1>Figüranlar</h1></div><div>${refresh}</div></div>` + figView();
+  if (cur === "oyuncular") return `<div class="pagehead slim"><div><h1>Oyuncular ve ekip</h1>${hStats()}</div><div>${refresh}</div></div>` + peopleView();
+  if (cur === "figuranlar") return `<div class="pagehead slim"><div><h1>Figüranlar</h1>${hStats()}</div><div>${refresh}</div></div>` + figView();
   const seg = [["tumu","Tümü"],["cocuk","Çocuk oyunları"],["yetiskin","Yetişkin oyunları"]].map(([k,l]) => `<button type="button" aria-pressed="${pf === k}" data-pf="${k}">${l}</button>`).join("");
-  return `<section class="allp" id="tum-oyunlar"><div class="allp-h"><h2>Tüm oyunlar</h2><div>${refresh}</div></div>
+  return `<section class="allp" id="tum-oyunlar"><div class="allp-h"><div><h2>Tüm oyunlar</h2>${hStats()}</div><div>${refresh}</div></div>
     <div class="controls"><div class="crow"><input id="pq" class="search" type="search" placeholder="Oyun ara…" value="${esc(pq)}" autocomplete="off"><div class="seg" role="group" aria-label="Tür">${seg}</div></div></div>
     <div id="pgrid">${gridHtml()}</div></section>`;
 }
@@ -6524,7 +6530,7 @@ function ymArac(){
 
 function ymView(){
   const refresh = `<button class="btn" type="button" data-act="refresh">Yenile</button>`;
-  const head = `<div class="pagehead slim"><div><h1>Yönetim paneli</h1></div><div>${refresh}</div></div>`;
+  const head = `<div class="pagehead slim"><div><h1>Yönetim paneli</h1>${hStats()}</div><div>${refresh}</div></div>`;
   if (PERR) return head + `<div class="empty err"><h2>Veriler okunamadı</h2><p>İnternet bağlantınızı kontrol edip <b>Yenile</b>’ye basın.</p></div>`;
   if (!PD) return head + skel(true);
   const tabs = YT.map(([k,l]) => `<button type="button" data-ym="${k}" aria-pressed="${ym.tab === k}">${l}</button>`).join("");
@@ -6673,6 +6679,123 @@ window.addEventListener("afterprint", () => {
   document.documentElement.classList.remove("pfit");
   if (PFIT) { PFIT.style.zoom = ""; PFIT.style.width = ""; PFIT = null; }
 });
+
+/* ======== başlık sayıları ======== */
+function hStats(){
+  if (!PD) return "";
+  const n = f => PD.plist.filter(f).length;
+  const it = [[n(o => o.oy),"oyuncu"],[n(o => o.ek),"ekip"],[PD.plays.length,"oyun"],[PD.plays.filter(p => p.cocuk).length,"çocuk oyunu"],[n(o => o.fg),"figüran"]];
+  return `<p class="hstat">${it.map(([v,l]) => `<span><b>${v}</b> ${l}</span>`).join("")}</p>`;
+}
+
+/* ======== hızlı arama (üst çubuk · Ctrl+K / "/") ======== */
+const GS = {sel:0, items:[], loading:null};
+const fold = s => trLower(noCO(s)).normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/ı/g,"i").replace(/\s+/g," ").trim();
+const gsRecent = () => { try { return JSON.parse(localStorage.getItem("idt-gs-recent") || "[]"); } catch(e){ return []; } };
+function gsRemember(it){ try { const r = gsRecent().filter(x => !(x.t === it.t && x.n === it.n)); r.unshift({t:it.t, n:it.n}); localStorage.setItem("idt-gs-recent", JSON.stringify(r.slice(0,6))); } catch(e){} }
+function gsEnsure(){
+  if (PD) return Promise.resolve(PD);
+  if (!GS.loading) GS.loading = Promise.all([getSheet("BÜTÜN OYUNLAR"), soft("RESİMLER"), soft("2025-2026 SEZONU")])
+    .then(([m,i,z]) => { if (!PD) { PD = buildPanel(m, i, z, {rows:[]}); buildNav(); } return PD; })
+    .catch(e => { GS.loading = null; throw e; });
+  return GS.loading;
+}
+function gsPersonRoles(o){ const s = new Set(); o.plays.forEach(rs => rs.forEach(r => { const g = r.gorev && r.gorev !== "—" ? r.gorev : r.kategori; if (g) s.add(noCO(g)); })); return [...s]; }
+function gsSearch(q){
+  const f = fold(q); if (!f) return null;
+  const sc = (t) => { const x = fold(t); if (x.startsWith(f)) return 3; if ((" " + x).includes(" " + f)) return 2; return x.includes(f) ? 1 : 0; };
+  const plays = PD.plays.map(p => ({p, s:sc(p.name)})).filter(x => x.s).sort((a,b) => b.s - a.s || sortTr(a.p.name,b.p.name)).slice(0,6)
+    .map(({p}) => ({t:"o", n:p.name, p}));
+  const ppl = [];
+  PD.plist.forEach(o => {
+    const roles = gsPersonRoles(o); let s = sc(o.name) * 2, hit = "";
+    if (!s) { const r = roles.find(r => sc(r)); if (r) { s = 1; hit = r; } }
+    if (s) ppl.push({t:"k", n:o.name, o, roles, hit, s});
+  });
+  ppl.sort((a,b) => b.s - a.s || b.o.plays.size - a.o.plays.size || sortTr(a.n,b.n));
+  return {plays, ppl:ppl.slice(0,8), more:Math.max(0, ppl.length - 8)};
+}
+function gsMark(t, q){
+  const f = fold(q), x = fold(t), i = f ? x.indexOf(f) : -1;
+  if (i < 0 || x.length !== noCO(t).length) return esc(t);
+  const s = noCO(t); return esc(s.slice(0,i)) + "<mark>" + esc(s.slice(i, i + f.length)) + "</mark>" + esc(s.slice(i + f.length));
+}
+function gsRowPlay(it, q, i){
+  const p = it.p, meta = [p.cocuk ? "Çocuk oyunu" : "Yetişkin oyunu", p.kisi + " kişilik kadro", p.fig ? p.fig + " figüran" : ""].filter(Boolean).join(" · ");
+  return `<a class="gs-r" role="option" id="gso${i}" data-gi="${i}" href="#panel/${encodeURIComponent(p.name)}"><span class="gs-th">${thumb(p)}</span><span class="gs-t"><b>${gsMark(p.name,q)}</b><small>${esc(meta)}</small></span><span class="gs-tag">Oyun</span></a>`;
+}
+function gsRowPerson(it, q, i){
+  const o = it.o, kind = [o.oy && "Oyuncu", o.ek && "Ekip", o.fg && "Figüran"].filter(Boolean).join(" · ");
+  const roles = it.hit ? [it.hit, ...it.roles.filter(r => r !== it.hit)] : it.roles;
+  const pl = [...o.plays.keys()].sort(sortTr), pls = pl.slice(0,3).map(esc).join(", ") + (pl.length > 3 ? ` +${pl.length - 3}` : "");
+  return `<button type="button" class="gs-r" role="option" id="gso${i}" data-gi="${i}"><span class="gs-av">${PSVG}</span><span class="gs-t"><b>${gsMark(o.name,q)}</b>
+    <small class="gs-ro">${roles.slice(0,3).map(r => it.hit === r ? `<em>${gsMark(r,q)}</em>` : esc(r)).join(" · ")}</small><small>${pl.length} oyun: ${pls}</small></span><span class="gs-tag">${esc(kind)}</span></button>`;
+}
+function gsRender(){
+  const box = $("#gsl"), inp = $("#gsq"); if (!box) return;
+  const q = inp.value;
+  if (!PD) {
+    box.innerHTML = `<div class="gs-e">Oyunlar yükleniyor…</div>`; gsShow(true);
+    gsEnsure().then(() => { if (!box.hidden) gsRender(); }).catch(() => { box.innerHTML = `<div class="gs-e">Liste okunamadı. İnternet bağlantınızı kontrol edin.</div>`; });
+    return;
+  }
+  let html = "", items = [];
+  const r = gsSearch(q);
+  if (!r) {
+    const rec = gsRecent().map(x => x.t === "o" ? (PD.playMap.get(x.n) ? {t:"o", n:x.n, p:PD.playMap.get(x.n)} : null)
+      : (PD.people.get(norm(x.n)) ? (o => ({t:"k", n:o.name, o, roles:gsPersonRoles(o), hit:""}))(PD.people.get(norm(x.n))) : null)).filter(Boolean);
+    if (rec.length) { items = rec; html = `<div class="gs-h">Son aramalar<button type="button" class="gs-clr" data-gs-clr>Temizle</button></div>` + rec.map((it,i) => it.t === "o" ? gsRowPlay(it,"",i) : gsRowPerson(it,"",i)).join(""); }
+    else html = `<div class="gs-e">Oyun adı, kişi adı ya da görev yazın — örneğin <b>gumus</b> veya <b>yönetmen</b>.</div>`;
+  } else {
+    items = [...r.plays, ...r.ppl];
+    if (!items.length) html = `<div class="gs-e">“${esc(q)}” için sonuç yok.</div>`;
+    else {
+      if (r.plays.length) html += `<div class="gs-h">Oyunlar</div>` + r.plays.map((it,i) => gsRowPlay(it,q,i)).join("");
+      if (r.ppl.length) html += `<div class="gs-h">Kişiler</div>` + r.ppl.map((it,i) => gsRowPerson(it,q,i + r.plays.length)).join("");
+      if (r.more) html += `<div class="gs-f">+${r.more} kişi daha · aramayı daraltın</div>`;
+    }
+  }
+  html += `<div class="gs-ft"><span><kbd>↑</kbd><kbd>↓</kbd> seç</span><span><kbd>Enter</kbd> aç</span><span><kbd>Esc</kbd> kapat</span></div>`;
+  GS.items = items; GS.sel = 0; box.innerHTML = html; gsShow(true); gsHi();
+}
+function gsHi(){
+  const box = $("#gsl"); box.querySelectorAll(".gs-r").forEach(el => el.classList.toggle("on", +el.dataset.gi === GS.sel));
+  const on = box.querySelector(".gs-r.on"); $("#gsq").setAttribute("aria-activedescendant", on ? on.id : "");
+  if (on) on.scrollIntoView({block:"nearest"});
+}
+function gsShow(o){ const b = $("#gsl"); if (!b) return; b.hidden = !o; $("#gsq").setAttribute("aria-expanded", o); $("#gs").classList.toggle("open", o); }
+function gsOpen(){ const i = $("#gsq"); i.focus(); i.select(); gsRender(); }
+function gsClose(blur){ gsShow(false); if (blur) $("#gsq").blur(); }
+function gsPick(i){
+  const it = GS.items[i]; if (!it) return;
+  gsRemember(it); gsClose(true); $("#gsq").value = "";
+  if (it.t === "o") location.hash = "#panel/" + encodeURIComponent(it.n);
+  else showKunye(it.n);
+}
+$("#gsq").addEventListener("focus", gsRender);
+$("#gsq").addEventListener("input", gsRender);
+$("#gsq").addEventListener("keydown", e => {
+  const n = GS.items.length;
+  if (e.key === "ArrowDown") { if (n) { GS.sel = (GS.sel + 1) % n; gsHi(); } e.preventDefault(); }
+  else if (e.key === "ArrowUp") { if (n) { GS.sel = (GS.sel - 1 + n) % n; gsHi(); } e.preventDefault(); }
+  else if (e.key === "Enter") { e.preventDefault(); gsPick(GS.sel); }
+  else if (e.key === "Escape") { e.stopPropagation(); if ($("#gsq").value) { $("#gsq").value = ""; gsRender(); } else gsClose(true); }
+});
+$("#gsl").addEventListener("mousedown", e => e.preventDefault());
+$("#gsl").addEventListener("click", e => {
+  if (e.target.closest("[data-gs-clr]")) { try { localStorage.removeItem("idt-gs-recent"); } catch(_){} gsRender(); $("#gsq").focus(); return; }
+  const r = e.target.closest(".gs-r"); if (!r) return;
+  e.preventDefault(); e.stopPropagation(); gsPick(+r.dataset.gi);
+});
+$("#gsl").addEventListener("mousemove", e => { const r = e.target.closest(".gs-r"); if (r && +r.dataset.gi !== GS.sel) { GS.sel = +r.dataset.gi; gsHi(); } });
+document.addEventListener("click", e => { if (!e.target.closest("#gs")) gsClose(false); });
+document.addEventListener("keydown", e => {
+  const typing = /^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement || {}).tagName || "") || (document.activeElement || {}).isContentEditable;
+  if ((e.ctrlKey || e.metaKey) && (e.key === "k" || e.key === "K")) { e.preventDefault(); closeKn(); gsOpen(); }
+  else if (e.key === "/" && !typing && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); closeKn(); gsOpen(); }
+}, true);
+if (/Mac|iPhone|iPad/.test(navigator.platform || "")) { const k = document.querySelector(".gs-k"); if (k) k.textContent = "⌘K"; }
+
 window.addEventListener("hashchange", route);
 window.addEventListener("scroll", () => $(".top").classList.toggle("scrolled", scrollY > 6), {passive:true});
 route(); refresh();
@@ -6840,5 +6963,51 @@ body.hero-on .top{left:var(--rail)!important}
   window.addEventListener('hashchange',sync);sync();
 })();
 </script>
+<style id="gs-css">
+/* ince sayfa başlığı + güncel sayılar */
+.pagehead.slim{flex-direction:row!important;align-items:center!important;justify-content:space-between!important;text-align:left!important;gap:12px 20px;flex-wrap:wrap;margin:0 0 22px!important;padding:22px 0 14px!important;border-bottom:1px solid var(--ln)}
+.pagehead.slim::before,.pagehead.slim::after{display:none!important}
+.pagehead.slim h1{font:600 24px/1.15 var(--f-d)!important;margin:0!important}
+.pagehead.slim > div:last-child{margin-top:0!important}
+.hstat{display:flex;flex-wrap:wrap;gap:4px 16px;margin:6px 0 0;color:var(--fg-m);font-size:13.5px}
+.hstat b{color:var(--fg);font-weight:700}
+.hstat span:not(:last-child)::after{content:"·";margin-left:16px;color:var(--ln-2,var(--fg-m))}
+.allp-h .hstat{margin-top:6px}
+/* hızlı arama */
+.gs{position:relative;flex:0 1 300px;min-width:0;margin-left:auto;display:flex;align-items:center}
+.gs + .menu,.gs ~ .menu{margin-left:8px}
+#nav .themeb{margin-left:8px!important}
+.gs-i{position:absolute;left:12px;width:16px;height:16px;color:var(--fg-m);pointer-events:none}
+.gs input{width:100%;height:36px;padding:0 64px 0 36px;border-radius:999px;border:1px solid var(--ln);background:var(--bg-2);color:var(--fg);font:500 14px var(--f-b);outline:none;transition:border-color .15s,box-shadow .15s}
+.gs input::placeholder{color:var(--fg-m)}
+.gs input::-webkit-search-cancel-button{display:none}
+.gs input:focus{border-color:var(--red);box-shadow:0 0 0 3px color-mix(in srgb,var(--red) 22%,transparent)}
+.gs-k{position:absolute;right:10px;padding:2px 7px;border-radius:6px;border:1px solid var(--ln);color:var(--fg-m);font:600 11px var(--f-b);pointer-events:none}
+.gs.open .gs-k{display:none}
+.gs-d{position:absolute;top:calc(100% + 8px);right:0;width:min(520px,calc(100vw - 24px));max-height:min(70vh,560px);overflow:auto;padding:6px;border-radius:14px;border:1px solid var(--ln);background:var(--bg-2);color:var(--fg);box-shadow:0 30px 60px -20px #000a;z-index:80;overscroll-behavior:contain}
+.gs-d[hidden]{display:none}
+.gs-h{display:flex;align-items:center;justify-content:space-between;padding:10px 10px 6px;font:700 11px var(--f-b);letter-spacing:.14em;text-transform:uppercase;color:var(--fg-m)}
+.gs-clr{background:none;border:0;color:var(--red);font:600 12px var(--f-b);letter-spacing:0;text-transform:none;cursor:pointer}
+.gs-r{display:flex;align-items:center;gap:12px;width:100%;padding:8px 10px;border-radius:10px;border:0;background:none;color:var(--fg);font:inherit;text-align:left;text-decoration:none;cursor:pointer}
+.gs-r.on{background:var(--bg-3);box-shadow:inset 3px 0 0 var(--red)}
+.gs-th{flex:none;width:34px;height:48px;border-radius:6px;overflow:hidden;background:var(--bg-3);display:grid}
+.gs-th .th,.gs-th img{width:100%;height:100%}.gs-th img{object-fit:cover;display:block}.gs-th .ph{min-height:0;padding:0;font-size:0}
+.gs-av{flex:none;display:grid;place-items:center;width:34px;height:34px;border-radius:50%;background:color-mix(in srgb,var(--red) 18%,transparent);color:var(--red)}
+.gs-av svg{width:60%;height:60%}
+.gs-t{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.gs-t b{font-weight:600;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gs-t small{font-size:12.5px;color:var(--fg-m);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gs-t small.gs-ro{color:var(--red);font-weight:600}
+.gs-t em{font-style:normal;text-decoration:underline}
+.gs-r mark{background:color-mix(in srgb,var(--gold,#d4ae5a) 40%,transparent);color:inherit;border-radius:3px;padding:0 1px}
+.gs-tag{flex:none;font:600 11px var(--f-b);color:var(--fg-m);padding:3px 8px;border-radius:999px;border:1px solid var(--ln)}
+.gs-e,.gs-f{padding:14px 12px;color:var(--fg-m);font-size:13.5px}
+.gs-f{padding:8px 12px}
+.gs-ft{display:flex;gap:14px;padding:8px 10px 4px;margin-top:4px;border-top:1px solid var(--ln);color:var(--fg-m);font-size:12px}
+.gs-ft kbd{display:inline-block;min-width:18px;margin-right:3px;padding:0 5px;border-radius:5px;border:1px solid var(--ln);font:600 11px var(--f-b);text-align:center}
+@media(max-width:900px){.gs{flex-basis:220px}.gs-k{display:none}.gs input{padding-right:12px}}
+@media(max-width:640px){.gs{flex:1 1 auto;margin-left:8px}.gs-d{position:fixed;left:12px;right:12px;top:62px;width:auto}.gs-ft{display:none}.top .brand{font-size:15px!important;margin-right:4px}}
+@media print{.gs{display:none!important}}
+</style>
 </body>
 </html>
