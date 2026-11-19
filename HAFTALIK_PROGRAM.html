@@ -380,6 +380,7 @@ header.app nav .dd-trigger.on{background:#d39a3d;border-color:#d39a3d;color:#2b1
         <button type="button" class="ddi" data-menu="leave">📋 İzin / rapor</button>
         <button type="button" class="ddi" id="monthRepB" title="Aylık görev raporu PDF">📊 Aylık rapor</button>
         <button type="button" class="ddi" id="yearRepB" title="Yıllık görev raporu PDF">📈 Yıllık rapor</button>
+        <button type="button" class="ddi" id="placeRepB" title="Oyunlara göre kişilerin görevli olduğu yerler">📍 Oyunlara göre görev yerleri</button>
         <button type="button" class="ddi" data-menu="sheets">☁ Google E-Tablolar</button>
         <hr>
         <button type="button" class="ddi" id="switchUnit" title="Başka bir birime geç">⇄ Birim değiştir</button>
@@ -2558,7 +2559,7 @@ function mrender(){
  if(mview==='staff')mstaff();
  if(mview==='tools'){
  const tool=(id,icon,l,danger='')=>'<button class="m-tool '+danger+'" data-'+(id.startsWith('tab:')?'tab="'+id.slice(4):'trigger="'+id)+'">'+mic(icon)+'<span>'+l+'</span>'+mic('right')+'</button>';
- main.innerHTML='<div class="m-section"><h2>Program araçları</h2><small>'+keys.length+' hafta</small></div><div class="m-tools-group"><h3>HAFTA</h3>'+tool('pubB','check','Haftalık programı onayla')+tool('newW','plus','Yeni hafta')+tool('addDayB','plus','Gün ekle')+tool('copyW','copy','Önceki haftayı kopyala')+tool('undoB','undo','Geri al')+tool('redoB','undo','Yinele')+'<h3>GÖREVLENDİRME</h3>'+tool('tab:tasks','tools','Hazır işler')+tool('tab:warns','warning','Uyarılar · '+cf.msgs.length)+tool('tab:month','calendar','Aylık program')+tool('tab:leave','note','İzin / rapor')+'<h3>RAPORLAR</h3>'+tool('monthRepB','download','Aylık rapor (PDF)')+tool('yearRepB','download','Yıllık rapor (PDF)')+'<h3>DOSYALAR</h3>'+tool('printB','print','Yazdır / PDF')+tool('expX','download','Excel indir')+tool('expJ','download','JPG indir')+tool('impX','upload','Excel / Word yükle')+tool('dataB','copy','Yedek / geri yükle (JSON)')+'<h3>AYARLAR</h3>'+tool('tab:sheets','cloud','Google E-Tablolar')+tool('signB','edit','İmzacıları düzenle')+tool('footB','note','Alt açıklamaları düzenle')+tool('switchUnit','switch','Birim değiştir')+tool('delW','trash','Haftayı sil','danger')+'</div>';
+ main.innerHTML='<div class="m-section"><h2>Program araçları</h2><small>'+keys.length+' hafta</small></div><div class="m-tools-group"><h3>HAFTA</h3>'+tool('pubB','check','Haftalık programı onayla')+tool('newW','plus','Yeni hafta')+tool('addDayB','plus','Gün ekle')+tool('copyW','copy','Önceki haftayı kopyala')+tool('undoB','undo','Geri al')+tool('redoB','undo','Yinele')+'<h3>GÖREVLENDİRME</h3>'+tool('tab:tasks','tools','Hazır işler')+tool('tab:warns','warning','Uyarılar · '+cf.msgs.length)+tool('tab:month','calendar','Aylık program')+tool('tab:leave','note','İzin / rapor')+'<h3>RAPORLAR</h3>'+tool('monthRepB','download','Aylık rapor (PDF)')+tool('yearRepB','download','Yıllık rapor (PDF)')+(['dekor','isik'].includes(UNIT.key)?tool('placeRepB','pin','Oyunlara göre görev yerleri'):'')+'<h3>DOSYALAR</h3>'+tool('printB','print','Yazdır / PDF')+tool('expX','download','Excel indir')+tool('expJ','download','JPG indir')+tool('impX','upload','Excel / Word yükle')+tool('dataB','copy','Yedek / geri yükle (JSON)')+'<h3>AYARLAR</h3>'+tool('tab:sheets','cloud','Google E-Tablolar')+tool('signB','edit','İmzacıları düzenle')+tool('footB','note','Alt açıklamaları düzenle')+tool('switchUnit','switch','Birim değiştir')+tool('delW','trash','Haftayı sil','danger')+'</div>';
  }
  const mb=$('#mBell');if(mb){mb.onclick=()=>{if(window.HP_NOTIFY)window.HP_NOTIFY.toggle();else{const sc=document.createElement('script');sc.src='pwa-notify.js?t='+Date.now();sc.onload=()=>{if(window.HP_NOTIFY)window.HP_NOTIFY.toggle();else alert('pwa-notify.js siteye yüklenmiş ama eski sürüm görünüyor (HP_NOTIFY yok). GitHub\'daki dosyayı zip\'teki pwa-notify.js ile değiştirin.');};sc.onerror=()=>alert('pwa-notify.js siteden indirilemedi (404). Dosyanın HAFTALIK_PROGRAM.html ile aynı klasörde olduğunu kontrol edin.');document.head.appendChild(sc);}};}
  if(window.HP_NOTIFY)window.HP_NOTIFY.refresh();
@@ -3020,6 +3021,43 @@ function printYearReport(y,ddate,prep,appr){const R=yearStats(y),H=S.header||{};
   const w=window.open('','_blank');if(w){w.document.open();w.document.write(h);w.document.close();return;}
   const f=document.createElement('iframe');f.style.cssText='position:fixed;width:0;height:0;border:0';document.body.appendChild(f);f.contentDocument.open();f.contentDocument.write(h);f.contentDocument.close();setTimeout(()=>f.remove(),60000);}
 setTimeout(()=>{const b=document.getElementById('yearRepB');if(b&&!b._w){b._w=1;b.onclick=e=>{e.stopPropagation();yearReportDlg();};}},0);
+/* ---------- oyun bazında görev yerleri (Dekor Aksesuar + Işık) ---------- */
+function placeData(from,to){const keep=S.cur,plays=new Map();
+  const skey=p=>{const st=S.staff.find(x=>nk(x.s)===nk(p)||nk(x.full)===nk(p));return st?{k:nk(st.s),name:st.full||st.s}:{k:nk(p),name:p};};
+  try{for(const wk of Object.keys(S.weeks).sort()){const a=fromIso(wk);if(from&&iso(addDays(a,6))<from)continue;if(to&&wk>to)continue;
+    S.cur=wk;let its=[];try{its=items();}catch(e){continue;}
+    its.forEach(it=>{if(it.day==null||it.day<0)return;const d=iso(addDays(a,it.day));if((from&&d<from)||(to&&d>to))return;
+      const ppl=[...new Set(splitPeople(it.people).filter(p=>/[A-Za-zÇĞİÖŞÜçğıöşü]{2}/.test(p)))];if(!ppl.length)return;
+      const task=String(it.task||'');let names=[...task.matchAll(/“([^”]+)”/g)].map(m=>trUp(m[1].replace(/\s+/g,' ').trim()));if(!names.length)names=['(OYUN ADI YAZILMAMIŞ)'];
+      let pl=String(it.place||'').replace(/\s+/g,' ').trim();if(!pl)pl='YER YAZILMAMIŞ';pl=trUp(pl);
+      [...new Set(names)].forEach(nm=>{let P=plays.get(nm);if(!P){P={name:nm,n:0,per:new Map()};plays.set(nm,P);}P.n++;
+        ppl.forEach(p=>{const s=skey(p);let o=P.per.get(s.k);if(!o){o={name:s.name,n:0,pl:new Map()};P.per.set(s.k,o);}o.n++;let q=o.pl.get(pl);if(!q){q={n:0,d:[]};o.pl.set(pl,q);}q.n++;q.d.push(d);});});});}}
+  finally{S.cur=keep;}
+  return [...plays.values()].sort((a,b)=>a.name.localeCompare(b.name,'tr'));}
+function placeReportDlg(){
+  const fd=d=>d.split('-').reverse().join('.');
+  wideDlg();ask('Oyunlara göre görev yerleri — '+(S.unit||UNIT.name),
+  '<div class="hd-grid"><label>Başlangıç<input type="date" id="plF"></label><label>Bitiş<input type="date" id="plT"></label>'+
+  '<label class="full">Oyun<select id="plS"></select></label></div>'+
+  '<p class="hint" style="display:block;margin:8px 0">Kayıtlı tüm haftalar taranır (tarih boş = tümü). Her oyun için, görevli kişilerin hangi yerde kaç kez görev aldığı listelenir.</p>'+
+  '<div id="plR" style="max-height:52vh;overflow:auto"></div>',null,[['Yazdır / PDF',()=>{printPlaceReport(cur(),$('#plF').value,$('#plT').value);return false;}]]);
+  let data=[];const sel=$('#plS');
+  const cur=()=>{const v=sel.value;return v?data.filter(p=>p.name===v):data;};
+  const table=P=>'<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th style="text-align:left;border-bottom:1px solid #bbb;padding:3px">Kişi</th><th style="text-align:left;border-bottom:1px solid #bbb;padding:3px">Görev yerleri</th><th style="border-bottom:1px solid #bbb;padding:3px">Toplam</th></tr></thead><tbody>'+
+    [...P.per.values()].sort((a,b)=>b.n-a.n||a.name.localeCompare(b.name,'tr')).map(o=>'<tr><td style="padding:4px 3px;border-bottom:1px solid #eee;font-weight:600">'+esc(o.name)+'</td><td style="padding:4px 3px;border-bottom:1px solid #eee">'+
+    [...o.pl.entries()].sort((a,b)=>b[1].n-a[1].n).map(([k,q])=>'<span title="'+esc(q.d.sort().map(fd).join(', '))+'" style="display:inline-block;background:#f3efe2;border-radius:10px;padding:1px 8px;margin:1px 3px 1px 0">'+esc(k)+' <b>×'+q.n+'</b></span>').join('')+'</td><td style="text-align:center;border-bottom:1px solid #eee">'+o.n+'</td></tr>').join('')+'</tbody></table>';
+  const draw=()=>{const v=sel.value;data=placeData($('#plF').value,$('#plT').value);
+    sel.innerHTML='<option value="">Tüm oyunlar ('+data.length+')</option>'+data.map(p=>'<option '+(p.name===v?'selected':'')+'>'+esc(p.name)+'</option>').join('');
+    const L=cur();$('#plR').innerHTML=L.length?L.map(P=>'<details '+(sel.value||L.length===1?'open':'')+' style="margin-bottom:8px"><summary style="cursor:pointer;font-weight:700;padding:5px 0">'+esc(P.name)+' <small style="font-weight:400;color:#666">· '+P.n+' görev · '+P.per.size+' kişi</small></summary>'+table(P)+'</details>').join(''):'<p>Bu aralıkta görevli yazılmış iş bulunamadı.</p>';};
+  $('#plF').onchange=$('#plT').onchange=draw;sel.onchange=()=>{const L=cur();$('#plR').innerHTML=L.map(P=>'<details '+(sel.value?'open':'')+' style="margin-bottom:8px"><summary style="cursor:pointer;font-weight:700;padding:5px 0">'+esc(P.name)+' <small style="font-weight:400;color:#666">· '+P.n+' görev · '+P.per.size+' kişi</small></summary>'+table(P)+'</details>').join('');};
+  draw();}
+function printPlaceReport(L,f,t){const fd=d=>d.split('-').reverse().join('.');
+  let h='<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>Oyunlara Göre Görev Yerleri</title><style>@page{size:A4 portrait;margin:14mm 12mm}body{font-family:"Times New Roman",serif;font-size:10pt;color:#111}h1{text-align:center;font-size:13pt;margin:0 0 1mm}h2{font-size:11pt;margin:5mm 0 1mm;border-bottom:.4mm solid #111}table{width:100%;border-collapse:collapse;margin-bottom:2mm}th,td{border:.25mm solid #111;padding:1mm 2mm;font-size:9.5pt}th{background:#e6e6e6}tr{break-inside:avoid}h2{break-after:avoid}</style></head><body><h1>'+esc((S.unit||UNIT.name).toLocaleUpperCase('tr'))+' BİRİMİ — OYUNLARA GÖRE GÖREV YERLERİ</h1><p style="text-align:center;margin:0 0 3mm">'+(f||t?esc((f?fd(f):'…')+' – '+(t?fd(t):'…')):'Tüm kayıtlı haftalar')+'</p>';
+  L.forEach(P=>{h+='<h2>'+esc(P.name)+' ('+P.n+' görev)</h2><table><thead><tr><th>Kişi</th><th>Görev yerleri</th><th style="width:15mm">Toplam</th></tr></thead><tbody>'+[...P.per.values()].sort((a,b)=>b.n-a.n||a.name.localeCompare(b.name,'tr')).map(o=>'<tr><td>'+esc(o.name)+'</td><td>'+[...o.pl.entries()].sort((a,b)=>b[1].n-a[1].n).map(([k,q])=>esc(k)+' ('+q.n+')').join(', ')+'</td><td style="text-align:center">'+o.n+'</td></tr>').join('')+'</tbody></table>';});
+  h+='<script>window.onload=function(){setTimeout(function(){window.print();},300)}<\/script></body></html>';
+  const w=window.open('','_blank');if(w){w.document.open();w.document.write(h);w.document.close();return;}
+  const fr=document.createElement('iframe');fr.style.cssText='position:fixed;width:0;height:0;border:0';document.body.appendChild(fr);fr.contentDocument.open();fr.contentDocument.write(h);fr.contentDocument.close();setTimeout(()=>fr.remove(),60000);}
+setTimeout(()=>{const b=document.getElementById('placeRepB');if(!b)return;if(!['dekor','isik'].includes(UNIT.key)){b.style.display='none';return;}if(!b._w){b._w=1;b.onclick=e=>{e.stopPropagation();placeReportDlg();};}},0);
 </script>
 <script>
 /* açılır menüler (Araçlar / Hafta işlemleri / Dışa aktar) */
