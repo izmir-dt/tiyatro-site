@@ -561,23 +561,11 @@ const UNITS=[
   const sleep=ms=>new Promise(r=>setTimeout(r,ms));
   const acquire=()=>new Promise(res=>{if(active<MAXC){active++;res();}else waitQ.push(()=>{active++;res();});});
   const release=()=>{active--;const n=waitQ.shift();if(n)n();};
-  /* Bazı ağlar vercel.app adresini engelliyor: bağlantı kurulamazsa yedek adres kullanılır ve hatırlanır */
-  const PRI='https://tiyatro-backend.vercel.app/api/sheets/',ALT='https://curious-creation-grove.lovable.app/api/public/sheets/',RK='idt_api_route';
-  let useAlt=false;try{useAlt=localStorage.getItem(RK)==='alt';}catch(e){}
-  const swap=(u,alt)=>alt?u.replace(PRI,ALT):u;
-  window.__apiAlt=()=>useAlt;
-  async function once1(u,opt,alt){
-    const ac=new AbortController(),t=setTimeout(()=>ac.abort(),opt&&opt.method&&opt.method!=='GET'?TIMEOUT*2:TIMEOUT);
-    try{return await _f(swap(u,alt),Object.assign({},opt,{signal:ac.signal}));}
-    finally{clearTimeout(t);}}
   async function once(u,opt){
-    const isGet=String((opt&&opt.method)||'GET').toUpperCase()==='GET';
-    try{const r=await once1(u,opt,useAlt);return r;}
-    catch(e){
-      /* yazmalarda (POST/DELETE) çift kayıt riski olmasın diye yalnız okumada anında diğer yola geçilir */
-      if(isGet){try{const r=await once1(u,opt,!useAlt);useAlt=!useAlt;try{localStorage.setItem(RK,useAlt?'alt':'pri');}catch(_){}return r;}catch(e2){e=e2;}}
-      else{useAlt=!useAlt;try{localStorage.setItem(RK,useAlt?'alt':'pri');}catch(_){}}
-      if(e&&e.name==='AbortError')throw new TypeError('Zaman aşımı (yavaş bağlantı)');throw e;}}
+    const ac=new AbortController(),t=setTimeout(()=>ac.abort(),opt&&opt.method&&opt.method!=='GET'?TIMEOUT*2:TIMEOUT);
+    try{return await _f(u,Object.assign({},opt,{signal:ac.signal}));}
+    catch(e){if(e&&e.name==='AbortError')throw new TypeError('Zaman aşımı (yavaş bağlantı)');throw e;}
+    finally{clearTimeout(t);}}
   async function _unused(u,opt){
     const ac=new AbortController(),t=setTimeout(()=>ac.abort(),TIMEOUT);
     try{return await _f(u,Object.assign({},opt,{signal:ac.signal}));}
